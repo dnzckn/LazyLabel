@@ -68,4 +68,4 @@ The file contains a single data key, `'mask'`, which holds a **one-hot encoded t
 
 Each channel in the tensor is a binary mask where a `1` indicates a pixel belonging to that class. All segments you assigned to the same class ID are automatically combined into that single channel, giving you a clean, ML-ready output.
 
-## ☕[If you enjoyed this repo, you can always thank me by buying me a coffee](coff.ee/dnzckn)☕
+## ☕[If you enjoyed this repo, you can always thank me by buying me a coffee]([coff.ee/dnzckn](https://buymeacoffee.com/dnzckn))☕
