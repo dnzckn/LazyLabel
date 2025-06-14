@@ -19,9 +19,9 @@ Heavy inspiration from [LabelMe](https://github.com/wkentaro/labelme?tab=readme-
 
 ## 🚀 Getting Started
 
-1.  **Dependencies**: Make sure you have the required Python libraries.
+1.  **Dependencies**: Install all required Python libraries using the provided `requirements.txt` file in the root directory:
     ```bash
-    pip install pyqt6 qdarktheme numpy opencv-python torch torchvision segment-anything scipy
+    pip install -r requirements.txt
     ```
 2.  **SAM Checkpoint**: Download a SAM model checkpoint file (e.g., `sam_vit_h_4b8939.pth`) and place it in the same directory as the script. Here's a link to the checkpoint:
     - [From META Segment Anything Repo](https://github.com/facebookresearch/segment-anything) [SAM Checkpoint](https://dl.fbaipublicfiles.com/segment_anything/sam_vit_h_4b8939.pth)
