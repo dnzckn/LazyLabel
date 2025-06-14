@@ -16,7 +16,6 @@ from reorderable_class_table import ReorderableClassTable
 
 
 class ControlPanel(QWidget):
-    # This class remains unchanged.
     def __init__(self, parent=None):
         super().__init__(parent)
         layout = QVBoxLayout(self)
@@ -57,7 +56,12 @@ class RightPanel(QWidget):
         self.file_tree = QTreeView()
         file_explorer_layout.addWidget(self.btn_open_folder)
         file_explorer_layout.addWidget(self.file_tree)
-        layout.addLayout(file_explorer_layout, 1)
+        layout.addLayout(file_explorer_layout)
+
+        # Status Label
+        self.status_label = QLabel("")
+        self.status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(self.status_label)
 
         # Segment Table
         segment_layout = QVBoxLayout()
@@ -76,7 +80,7 @@ class RightPanel(QWidget):
         self.segment_table.setSelectionBehavior(
             QAbstractItemView.SelectionBehavior.SelectRows
         )
-        self.segment_table.setSortingEnabled(True)  # Enable sorting
+        self.segment_table.setSortingEnabled(True)
         segment_layout.addWidget(self.segment_table)
 
         segment_action_layout = QHBoxLayout()

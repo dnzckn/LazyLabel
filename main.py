@@ -17,7 +17,7 @@ from PyQt6.QtWidgets import (
     QTableWidgetSelectionRange,
 )
 from PyQt6.QtGui import QPixmap, QColor, QPen, QBrush, QPolygonF, QIcon
-from PyQt6.QtCore import Qt, QPointF
+from PyQt6.QtCore import Qt, QPointF, QTimer
 from photo_viewer import PhotoViewer
 from sam_model import SamModel
 from utils import mask_to_pixmap
@@ -46,6 +46,7 @@ class MainWindow(QMainWindow):
         self.mode = "sam_points"
         self.previous_mode = "sam_points"
         self.current_image_path = None
+        self.current_file_index = None
         self.next_class_id = 0
 
         self.point_items, self.positive_points, self.negative_points = [], [], []
@@ -171,7 +172,10 @@ class MainWindow(QMainWindow):
     def load_selected_image(self, index):
         if not index.isValid():
             return
+
+        self.current_file_index = index
         path = self.file_model.filePath(index)
+
         if os.path.isfile(path) and path.lower().endswith((".png", ".jpg", ".jpeg")):
             self.current_image_path = path
             pixmap = QPixmap(self.current_image_path)
@@ -180,6 +184,7 @@ class MainWindow(QMainWindow):
                 self.viewer.set_photo(pixmap)
                 self.sam_model.set_image(self.current_image_path)
                 self.load_existing_mask()
+                self.viewer.setFocus()
 
     def reset_state(self):
         self.clear_all_points()
@@ -480,7 +485,7 @@ class MainWindow(QMainWindow):
                 else seg.get("mask")
             )
             if mask is not None:
-                pixmap = mask_to_pixmap(mask, (255, 255, 255))
+                pixmap = mask_to_pixmap(mask, (255, 255, 255))  # White highlight
                 highlight_item = self.viewer.scene().addPixmap(pixmap)
                 highlight_item.setZValue(100)
                 self.highlight_items.append(highlight_item)
@@ -516,16 +521,14 @@ class MainWindow(QMainWindow):
         unique_class_ids = sorted(
             list(
                 {
-                    seg.get("class_id")
-                    for seg in self.segments
-                    if seg.get("class_id") is not None
+                    s.get("class_id")
+                    for s in self.segments
+                    if s.get("class_id") is not None
                 }
             )
         )
         num_classes = len(unique_class_ids) if unique_class_ids else 1
-        class_id_to_hue_index = {
-            class_id: i for i, class_id in enumerate(unique_class_ids)
-        }
+        class_id_to_hue_index = {cid: i for i, cid in enumerate(unique_class_ids)}
 
         for row, (original_index, seg) in enumerate(display_segments):
             class_id = seg.get("class_id", 0)
@@ -547,9 +550,12 @@ class MainWindow(QMainWindow):
             for col in range(3):
                 table.item(row, col).setBackground(QBrush(color))
 
+        table.setSortingEnabled(False)
         for row in range(table.rowCount()):
             if table.item(row, 0).data(Qt.ItemDataRole.UserRole) in selected_indices:
                 table.selectRow(row)
+        table.setSortingEnabled(True)
+
         table.blockSignals(False)
 
     def update_class_list(self):
@@ -565,12 +571,10 @@ class MainWindow(QMainWindow):
             )
         )
         class_table.setRowCount(len(unique_class_ids))
-
         num_classes = len(unique_class_ids) if unique_class_ids else 1
         class_id_to_hue_index = {
             class_id: i for i, class_id in enumerate(unique_class_ids)
         }
-
         for row, cid in enumerate(unique_class_ids):
             item = QTableWidgetItem(str(cid))
             item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsEditable)
@@ -648,6 +652,9 @@ class MainWindow(QMainWindow):
     def save_output_to_npz(self):
         if not self.segments or not self.current_image_path:
             return
+        self.right_panel.status_label.setText("Saving...")
+        QApplication.processEvents()
+
         output_path = os.path.splitext(self.current_image_path)[0] + ".npz"
         h, w = (
             self.viewer._pixmap_item.pixmap().height(),
@@ -663,10 +670,14 @@ class MainWindow(QMainWindow):
             )
         )
         if not unique_class_ids:
+            self.right_panel.status_label.setText("Save failed: No classes.")
+            QTimer.singleShot(3000, lambda: self.right_panel.status_label.clear())
             return
+
         id_map = {old_id: new_id for new_id, old_id in enumerate(unique_class_ids)}
         num_final_classes = len(unique_class_ids)
         final_mask_tensor = np.zeros((h, w, num_final_classes), dtype=np.uint8)
+
         for seg in self.segments:
             class_id = seg.get("class_id")
             if class_id not in id_map:
@@ -681,8 +692,12 @@ class MainWindow(QMainWindow):
                 final_mask_tensor[:, :, new_channel_idx] = np.logical_or(
                     final_mask_tensor[:, :, new_channel_idx], mask
                 )
+
         np.savez_compressed(output_path, mask=final_mask_tensor.astype(np.uint8))
         self.file_model.setRootPath(self.file_model.rootPath())
+
+        self.right_panel.status_label.setText("Saved!")
+        QTimer.singleShot(3000, lambda: self.right_panel.status_label.clear())
 
     def save_current_segment(self):
         if (
