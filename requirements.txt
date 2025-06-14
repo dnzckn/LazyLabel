@@ -1,0 +1,11 @@
+pyside6==6.9.1
+opencv-python==4.11.0.86
+torch==2.7.1
+torchvision==0.22.1
+numpy==2.2.6
+segment-anything==1.0
+matplotlib==3.10.3
+scikit-image==0.25.2
+tqdm==4.67.1
+wget==3.2
+requests==2.32.3
