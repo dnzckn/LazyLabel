@@ -32,7 +32,7 @@ from numeric_table_widget_item import NumericTableWidgetItem
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("LazyLabel - SAM Segmentation Tool")
+        self.setWindowTitle("LazyLabel")
         self.setGeometry(50, 50, 1600, 900)
 
         self.sam_model = SamModel(model_type="vit_h", model_path="sam_vit_h_4b8939.pth")
