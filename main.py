@@ -401,11 +401,29 @@ class MainWindow(QMainWindow):
                 self.viewer.scene().removeItem(item)
         self.segment_items.clear()
         selected_indices = self.get_selected_segment_indices()
+
+        unique_class_ids = sorted(
+            list(
+                {
+                    seg.get("class_id")
+                    for seg in self.segments
+                    if seg.get("class_id") is not None
+                }
+            )
+        )
+        num_classes = len(unique_class_ids) if unique_class_ids else 1
+        class_id_to_hue_index = {
+            class_id: i for i, class_id in enumerate(unique_class_ids)
+        }
+
         for i, seg_dict in enumerate(self.segments):
             self.segment_items[i] = []
             class_id = seg_dict.get("class_id", 0)
-            hue = int((class_id * 360 / (self.next_class_id + 5))) % 360
+
+            hue_index = class_id_to_hue_index.get(class_id, 0)
+            hue = int((hue_index * 360 / num_classes)) % 360
             base_color = QColor.fromHsv(hue, 220, 220)
+
             if seg_dict["type"] == "Polygon":
                 poly_item = HoverablePolygonItem(QPolygonF(seg_dict["vertices"]))
                 default_brush = QBrush(
@@ -487,30 +505,48 @@ class MainWindow(QMainWindow):
                 filter_class_id = int(filter_text.split(" ")[1])
             except (ValueError, IndexError):
                 pass
+
         display_segments = []
         for i, seg in enumerate(self.segments):
             if show_all or seg.get("class_id") == filter_class_id:
                 display_segments.append((i, seg))
+
         table.setRowCount(len(display_segments))
-        hue_map = {}
+
+        unique_class_ids = sorted(
+            list(
+                {
+                    seg.get("class_id")
+                    for seg in self.segments
+                    if seg.get("class_id") is not None
+                }
+            )
+        )
+        num_classes = len(unique_class_ids) if unique_class_ids else 1
+        class_id_to_hue_index = {
+            class_id: i for i, class_id in enumerate(unique_class_ids)
+        }
+
         for row, (original_index, seg) in enumerate(display_segments):
             class_id = seg.get("class_id", 0)
-            if class_id not in hue_map:
-                hue_map[class_id] = (
-                    int((class_id * 360 / (self.next_class_id + 5))) % 360
-                )
-            color = QColor.fromHsv(hue_map[class_id], 150, 100)
+            hue_index = class_id_to_hue_index.get(class_id, 0)
+            hue = int((hue_index * 360 / num_classes)) % 360
+            color = QColor.fromHsv(hue, 150, 100)
+
             index_item = NumericTableWidgetItem(str(original_index + 1))
             class_item = NumericTableWidgetItem(str(class_id))
             type_item = QTableWidgetItem(seg["type"])
+
             index_item.setFlags(index_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
             type_item.setFlags(type_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
             index_item.setData(Qt.ItemDataRole.UserRole, original_index)
+
             table.setItem(row, 0, index_item)
             table.setItem(row, 1, class_item)
             table.setItem(row, 2, type_item)
             for col in range(3):
                 table.item(row, col).setBackground(QBrush(color))
+
         for row in range(table.rowCount()):
             if table.item(row, 0).data(Qt.ItemDataRole.UserRole) in selected_indices:
                 table.selectRow(row)
@@ -529,14 +565,18 @@ class MainWindow(QMainWindow):
             )
         )
         class_table.setRowCount(len(unique_class_ids))
-        hue_map = {
-            cid: int((cid * 360 / (self.next_class_id + 5))) % 360
-            for cid in unique_class_ids
+
+        num_classes = len(unique_class_ids) if unique_class_ids else 1
+        class_id_to_hue_index = {
+            class_id: i for i, class_id in enumerate(unique_class_ids)
         }
+
         for row, cid in enumerate(unique_class_ids):
             item = QTableWidgetItem(str(cid))
             item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsEditable)
-            color = QColor.fromHsv(hue_map[cid], 150, 100)
+            hue_index = class_id_to_hue_index.get(cid, 0)
+            hue = int((hue_index * 360 / num_classes)) % 360
+            color = QColor.fromHsv(hue, 150, 100)
             item.setBackground(QBrush(color))
             class_table.setItem(row, 0, item)
         class_table.blockSignals(False)
