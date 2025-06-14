@@ -68,4 +68,4 @@ The file contains a single data key, `'mask'`, which holds a **one-hot encoded t
 
 Each channel in the tensor is a binary mask where a `1` indicates a pixel belonging to that class. All segments you assigned to the same class ID are automatically combined into that single channel, giving you a clean, ML-ready output.
 
-## ☕[If you enjoyed using LazyLabel or found it helpful, consider supporting the project!](https://buymeacoffee.com/dnzckn)☕
+## ☕[If you found LazyLabel helpful, consider supporting the project!](https://buymeacoffee.com/dnzckn)☕
