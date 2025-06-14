@@ -1,6 +1,9 @@
 # ?? LazyLabel
+LazyLabel is a user-friendly, AI-assisted image segmentation tool designed to streamline the process of creating high-quality masks for machine learning datasets. It leverages the power of the Segment Anything Model (SAM) to provide quick and accurate segmentation, while also offering advanced polygon editing capabilities for precise control. Outputs are saved in a clean, one-hot encoded format, making it easy to integrate with your machine learning workflows.
 
-Your speedy sidekick for powerful image segmentation! LazyLabel combines the magic of Meta's Segment Anything Model (SAM) with intuitive manual tools, all wrapped in a slick, dark-mode interface. Go from raw images to perfectly classified masks faster than ever before.
+Heavy inspiration from [LabelMe](https://github.com/wkentaro/labelme?tab=readme-ov-file#installation) and [Segment-Anything-UI](https://github.com/branislavhesko/segment-anything-ui/tree/main)
+
+![LazyLabel Screenshot](demo_picture/gui.png)
 
 ## ? Core Features
 
