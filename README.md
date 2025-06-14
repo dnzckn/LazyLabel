@@ -1,11 +1,11 @@
-# ?? LazyLabel
+![LazyLabel Screenshot](demo_pictures/logo.png)
 LazyLabel is a user-friendly, AI-assisted image segmentation tool designed to streamline the process of creating high-quality masks for machine learning datasets. It leverages the power of the Segment Anything Model (SAM) to provide quick and accurate segmentation, while also offering advanced polygon editing capabilities for precise control. Outputs are saved in a clean, one-hot encoded format, making it easy to integrate with your machine learning workflows.
 
 Heavy inspiration from [LabelMe](https://github.com/wkentaro/labelme?tab=readme-ov-file#installation) and [Segment-Anything-UI](https://github.com/branislavhesko/segment-anything-ui/tree/main)
 
 ![LazyLabel Screenshot](demo_pictures/gui.PNG)
 
-## ? Core Features
+## ✨ Core Features
 
 * **AI-Powered Segmentation**: Simply left-click (positive) and right-click (negative) on an object, and let SAM generate a precise mask for you.
 * **Vector Polygon Tool**: Draw, edit, and reshape polygon segments with full control. Drag vertices or move the entire shape in Edit Mode.
@@ -17,7 +17,7 @@ Heavy inspiration from [LabelMe](https://github.com/wkentaro/labelme?tab=readme-
 * **Interactive UI**: All segments are color-coded by class. The segment list provides at-a-glance information and is sortable. Polygon segments even highlight on hover!
 * **Smart I/O**: Automatically detects existing `.npz` masks and loads them. Saves your work in a clean, one-hot encoded format.
 
-## ?? Getting Started
+## 🚀 Getting Started
 
 1.  **Dependencies**: Make sure you have the required Python libraries.
     ```bash
@@ -34,7 +34,7 @@ Heavy inspiration from [LabelMe](https://github.com/wkentaro/labelme?tab=readme-
     python main.py
     ```
 
-## ?? Controls & Keybinds
+## ⌨️ Controls & Keybinds
 
 ### Modes
 | Key | Action |
@@ -57,7 +57,7 @@ Heavy inspiration from [LabelMe](https://github.com/wkentaro/labelme?tab=readme-
 | `V` / `Delete` | **Delete** the currently selected segments. |
 | `C` | Clear all temporary points or polygon vertices from the screen. |
 
-## ?? Output Format
+## 📦 Output Format
 
 LazyLabel saves your work as a compressed NumPy array (`.npz`) with the same name as your image file.
 
@@ -68,4 +68,5 @@ The file contains a single data key, `'mask'`, which holds a **one-hot encoded t
 
 Each channel in the tensor is a binary mask where a `1` indicates a pixel belonging to that class. All segments you assigned to the same class ID are automatically combined into that single channel, giving you a clean, ML-ready output.
 
+☕
 [Tip Jar](coff.ee/dnzckn)
