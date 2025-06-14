@@ -1,9 +1,9 @@
-# <img src="demo_pictures/logo2.png" alt="LazyLabel Logo" style="height:60px; vertical-align:middle;" /> <img src="demo_pictures/logo_black.png" alt="LazyLabel Cursive" style="height:60px; vertical-align:middle;" />
+# <img src="src/lazylabel/demo_pictures/logo2.png" alt="LazyLabel Logo" style="height:60px; vertical-align:middle;" /> <img src="src/lazylabel/demo_pictures/logo_black.png" alt="LazyLabel Cursive" style="height:60px; vertical-align:middle;" />
 LazyLabel is a user-friendly, AI-assisted image segmentation tool designed to streamline the process of creating high-quality masks for machine learning datasets. It leverages the power of the Segment Anything Model (SAM) to provide quick and accurate segmentation, while also offering advanced polygon editing capabilities for precise control. Outputs are saved in a clean, one-hot encoded format, making it easy to integrate with your machine learning workflows.
 
 Heavy inspiration from [LabelMe](https://github.com/wkentaro/labelme?tab=readme-ov-file#installation) and [Segment-Anything-UI](https://github.com/branislavhesko/segment-anything-ui/tree/main)
 
-![LazyLabel Screenshot](demo_pictures/gui.PNG)
+![LazyLabel Screenshot](src/lazylabel/demo_pictures/demo_pictures/gui.PNG)
 
 ## ✨ Core Features
 
@@ -19,19 +19,27 @@ Heavy inspiration from [LabelMe](https://github.com/wkentaro/labelme?tab=readme-
 
 ## 🚀 Getting Started
 
-1.  **Dependencies**: Runs on `python==3.10`. Install all required Python libraries using the provided `requirements.txt` file in the root directory:
+### Installation
+1.  **Prerequisites**: Ensure you have Python 3.10 or newer.
+2.  **Install using pip**: Grab the repo locally then install the package using pip:
     ```bash
-    pip install -r requirements.txt
+    pip install path/to/lazylabel
     ```
-2.  **SAM Checkpoint**: Download a SAM model checkpoint file (e.g., `sam_vit_h_4b8939.pth`) and place it in the same directory as the script. Here's a link to the checkpoint:
-    - [From META Segment Anything Repo](https://github.com/facebookresearch/segment-anything) [SAM Checkpoint](https://dl.fbaipublicfiles.com/segment_anything/sam_vit_h_4b8939.pth)
-
-    Alternatively, you can use the `sam_checkpoint` parameter in the `main.py` script to specify a different path.
-
-    If you want to use a different SAM model, just replace the checkpoint file with your desired model.
-3.  **Run**: Launch the application with:
+3.  **Run**: Launch the application from your terminal:
     ```bash
-    python main.py
+    lazylabel
+    ```
+    On the first run, the application will automatically download the required SAM model checkpoint (~2.5 GB) to a local cache directory. This is a one-time download.
+
+### For Developers
+1.  **Clone the Repository**:
+    ```bash
+    git clone [https://github.com/dnzckn/LazyLabel.git](https://github.com/dnzckn/LazyLabel.git)
+    cd LazyLabel
+    ```
+2.  **Install in Editable Mode**: This will install the package and its dependencies. The `-e` flag allows you to make changes to the source code that will take effect immediately without reinstalling.
+    ```bash
+    pip install -e .
     ```
 
 ## ⌨️ Controls & Keybinds
@@ -46,18 +54,18 @@ Heavy inspiration from [LabelMe](https://github.com/wkentaro/labelme?tab=readme-
 | `Q` | Toggle **Pan Mode** (click and drag the image). |
 
 ### Actions
-| Key(s)         | Action                                                                 |
-|----------------|------------------------------------------------------------------------|
-| `L-Click`      | Add positive point (Point Mode) or polygon vertex.                     |
-| `R-Click`      | Add negative point (Point Mode).                                       |
-| `Ctrl + Z`     | Undo the last point placed (in Point or Polygon mode).                 |
-| `Spacebar`     | Finalize and save the current in-progress AI segment.                  |
-| `Enter`        | **Save final mask for the current image to a `.npz` file.**            |
-| `M`            | **Merge** selected segments into a single class.                       |
-| `V` / `Delete` | **Delete** the currently selected segments.                            |
-| `C`            | Clear all temporary points or polygon vertices from the screen.        |
-| `W/A/S/D`      | Pan the image up, left, down, or right.                                |
-| `Scroll Wheel` | Zoom-in or -out on the image.                                          |
+| Key(s) | Action |
+|---|---|
+| `L-Click` | Add positive point (Point Mode) or polygon vertex. |
+| `R-Click` | Add negative point (Point Mode). |
+| `Ctrl + Z` | Undo the last point placed (in Point or Polygon mode). |
+| `Spacebar` | Finalize and save the current in-progress AI segment. |
+| `Enter` | **Save final mask for the current image to a `.npz` file.** |
+| `M` | **Merge** selected segments into a single class. |
+| `V` / `Delete` / `Backspace`| **Delete** the currently selected segments. |
+| `C` | Clear all temporary points or polygon vertices from the screen. |
+| `W/A/S/D` | Pan the image up, left, down, or right. |
+| `Scroll Wheel` | Zoom-in or -out on the image. |
 
 ## 📦 Output Format
 

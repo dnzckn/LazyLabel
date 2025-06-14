@@ -12,7 +12,7 @@ from PyQt6.QtWidgets import (
     QHeaderView,
 )
 from PyQt6.QtCore import Qt
-from reorderable_class_table import ReorderableClassTable
+from .reorderable_class_table import ReorderableClassTable
 
 
 class ControlPanel(QWidget):

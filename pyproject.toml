@@ -1,0 +1,39 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "lazylabel"
+version = "1.0.0"
+authors = [
+  { name="Deniz N. Cakan", email="deniz.n.cakan@gmail.com" },
+]
+description = "A fast, intuitive image segmentation tool using SAM and manual editing."
+readme = "README.md"
+license = { file="LICENSE" }
+requires-python = ">=3.10"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Topic :: Scientific/Engineering :: Image Processing",
+    "Environment :: X11 Applications :: Qt",
+]
+dependencies = [
+    "PyQt6",
+    "pyqtdarktheme==2.1.0",
+    "torch",
+    "torchvision",
+    "segment-anything==1.0",
+    "numpy",
+    "opencv-python",
+    "scipy",
+    "requests",
+    "tqdm"]
+
+[project.urls]
+"Homepage" = "https://github.com/dnzckn/lazylabel"
+"Bug Tracker" = "https://github.com/dnzckn/lazylabel/issues"
+
+[project.scripts]
+lazylabel = "lazylabel.main:main"

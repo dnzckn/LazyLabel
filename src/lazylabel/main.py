@@ -18,19 +18,20 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtGui import QPixmap, QColor, QPen, QBrush, QPolygonF, QIcon
 from PyQt6.QtCore import Qt, QPointF, QTimer
-from photo_viewer import PhotoViewer
-from sam_model import SamModel
-from utils import mask_to_pixmap
-from scipy.spatial import ConvexHull
-from controls import ControlPanel, RightPanel
-from custom_file_system_model import CustomFileSystemModel
-from editable_vertex import EditableVertexItem
-from hoverable_polygon_item import HoverablePolygonItem
-from numeric_table_widget_item import NumericTableWidgetItem
+
+# Relative imports for package structure
+from .photo_viewer import PhotoViewer
+from .sam_model import SamModel
+from .utils import mask_to_pixmap
+from .controls import ControlPanel, RightPanel
+from .custom_file_system_model import CustomFileSystemModel
+from .editable_vertex import EditableVertexItem
+from .hoverable_polygon_item import HoverablePolygonItem
+from .numeric_table_widget_item import NumericTableWidgetItem
 
 
 class MainWindow(QMainWindow):
-    def __init__(self):
+    def __init__(self, sam_model):
         super().__init__()
         self.setWindowTitle("LazyLabel by DNC")
 
@@ -42,7 +43,8 @@ class MainWindow(QMainWindow):
 
         self.setGeometry(50, 50, 1600, 900)
 
-        self.sam_model = SamModel(model_type="vit_h", model_path="sam_vit_h_4b8939.pth")
+        # The SamModel instance is now passed in
+        self.sam_model = sam_model
         self.mode = "sam_points"
         self.previous_mode = "sam_points"
         self.current_image_path = None
@@ -177,9 +179,7 @@ class MainWindow(QMainWindow):
         self.current_file_index = index
         path = self.file_model.filePath(index)
 
-        if os.path.isfile(path) and path.lower().endswith(
-            (".png", ".jpg", ".jpeg", ".tiff")
-        ):
+        if os.path.isfile(path) and path.lower().endswith((".png", ".jpg", ".jpeg")):
             self.current_image_path = path
             pixmap = QPixmap(self.current_image_path)
             if not pixmap.isNull():
@@ -429,7 +429,6 @@ class MainWindow(QMainWindow):
         for i, seg_dict in enumerate(self.segments):
             self.segment_items[i] = []
             class_id = seg_dict.get("class_id", 0)
-
             hue_index = class_id_to_hue_index.get(class_id, 0)
             hue = int((hue_index * 360 / num_classes)) % 360
             base_color = QColor.fromHsv(hue, 220, 220)
@@ -567,7 +566,6 @@ class MainWindow(QMainWindow):
     def update_class_list(self):
         class_table = self.right_panel.class_table
         class_table.blockSignals(True)
-
         unique_class_ids = sorted(
             list(
                 {
@@ -578,12 +576,10 @@ class MainWindow(QMainWindow):
             )
         )
         class_table.setRowCount(len(unique_class_ids))
-
         num_classes = len(unique_class_ids) if unique_class_ids else 1
         class_id_to_hue_index = {
             class_id: i for i, class_id in enumerate(unique_class_ids)
         }
-
         for row, cid in enumerate(unique_class_ids):
             item = QTableWidgetItem(str(cid))
             item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsEditable)
@@ -592,7 +588,6 @@ class MainWindow(QMainWindow):
             color = QColor.fromHsv(hue, 150, 100)
             item.setBackground(QBrush(color))
             class_table.setItem(row, 0, item)
-
         class_table.blockSignals(False)
 
     def update_class_filter_combo(self):
@@ -856,9 +851,14 @@ class MainWindow(QMainWindow):
                 self.polygon_preview_items.append(line)
 
 
-if __name__ == "__main__":
+def main():
     app = QApplication(sys.argv)
     qdarktheme.setup_theme()
-    main_win = MainWindow()
+    sam_model = SamModel(model_type="vit_h")  # one-time check/download
+    main_win = MainWindow(sam_model)
     main_win.show()
     sys.exit(app.exec())
+
+
+if __name__ == "__main__":
+    main()
