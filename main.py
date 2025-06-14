@@ -168,6 +168,7 @@ class MainWindow(QMainWindow):
             self.right_panel.file_tree.setRootIndex(
                 self.file_model.setRootPath(folder_path)
             )
+        self.viewer.setFocus()
 
     def load_selected_image(self, index):
         if not index.isValid():
@@ -237,7 +238,7 @@ class MainWindow(QMainWindow):
             self.toggle_edit_mode()
         elif key == Qt.Key.Key_C:
             self.clear_all_points()
-        elif key == Qt.Key.Key_V:
+        elif key == Qt.Key.Key_V or key == Qt.Key.Key_Backspace:
             self.delete_selected_segments()
         elif key == Qt.Key.Key_M:
             self.assign_selected_to_class()
@@ -378,6 +379,7 @@ class MainWindow(QMainWindow):
                         )
                         table.setRangeSelected(range_to_select, not is_selected)
                         return
+        self.viewer.setFocus()
 
     def assign_selected_to_class(self):
         selected_indices = self.get_selected_segment_indices()
@@ -387,6 +389,7 @@ class MainWindow(QMainWindow):
         for i in selected_indices:
             self.segments[i]["class_id"] = target_class_id
         self.update_all_lists()
+        self.viewer.setFocus()
 
     def rasterize_polygon(self, vertices):
         if not vertices or self.viewer._pixmap_item.pixmap().isNull():
@@ -485,7 +488,7 @@ class MainWindow(QMainWindow):
                 else seg.get("mask")
             )
             if mask is not None:
-                pixmap = mask_to_pixmap(mask, (255, 255, 255))  # White highlight
+                pixmap = mask_to_pixmap(mask, (255, 255, 255))
                 highlight_item = self.viewer.scene().addPixmap(pixmap)
                 highlight_item.setZValue(100)
                 self.highlight_items.append(highlight_item)
@@ -557,10 +560,12 @@ class MainWindow(QMainWindow):
         table.setSortingEnabled(True)
 
         table.blockSignals(False)
+        self.viewer.setFocus()
 
     def update_class_list(self):
         class_table = self.right_panel.class_table
         class_table.blockSignals(True)
+
         unique_class_ids = sorted(
             list(
                 {
@@ -571,10 +576,10 @@ class MainWindow(QMainWindow):
             )
         )
         class_table.setRowCount(len(unique_class_ids))
+
         num_classes = len(unique_class_ids) if unique_class_ids else 1
-        class_id_to_hue_index = {
-            class_id: i for i, class_id in enumerate(unique_class_ids)
-        }
+        class_id_to_hue_index = {cid: i for i, cid in enumerate(unique_class_ids)}
+
         for row, cid in enumerate(unique_class_ids):
             item = QTableWidgetItem(str(cid))
             item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsEditable)
@@ -583,6 +588,7 @@ class MainWindow(QMainWindow):
             color = QColor.fromHsv(hue, 150, 100)
             item.setBackground(QBrush(color))
             class_table.setItem(row, 0, item)
+
         class_table.blockSignals(False)
 
     def update_class_filter_combo(self):
@@ -621,6 +627,7 @@ class MainWindow(QMainWindow):
                 seg["class_id"] = id_map[old_id]
         self.next_class_id = len(ordered_ids)
         self.update_all_lists()
+        self.viewer.setFocus()
 
     def handle_class_id_change(self, item):
         if item.column() != 1:
@@ -638,6 +645,7 @@ class MainWindow(QMainWindow):
             original_index = table.item(item.row(), 0).data(Qt.ItemDataRole.UserRole)
             item.setText(str(self.segments[original_index]["class_id"]))
         table.blockSignals(False)
+        self.viewer.setFocus()
 
     def get_selected_segment_indices(self):
         table = self.right_panel.segment_table
@@ -727,6 +735,7 @@ class MainWindow(QMainWindow):
         for i in sorted(selected_indices, reverse=True):
             del self.segments[i]
         self.update_all_lists()
+        self.viewer.setFocus()
 
     def load_existing_mask(self):
         if not self.current_image_path:
