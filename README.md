@@ -46,16 +46,18 @@ Heavy inspiration from [LabelMe](https://github.com/wkentaro/labelme?tab=readme-
 | `Q` | Toggle **Pan Mode** (click and drag the image). |
 
 ### Actions
-| Key(s) | Action |
-|---|---|
-| `L-Click` | Add positive point (Point Mode) or polygon vertex. |
-| `R-Click` | Add negative point (Point Mode). |
-| `Ctrl + Z` | Undo the last point placed (in Point or Polygon mode). |
-| `Spacebar` | Finalize and save the current in-progress AI segment. |
-| `Enter` | **Save final mask for the current image to a `.npz` file.** |
-| `M` | **Merge** selected segments into a single class. |
-| `V` / `Delete` | **Delete** the currently selected segments. |
-| `C` | Clear all temporary points or polygon vertices from the screen. |
+| Key(s)         | Action                                                                 |
+|----------------|------------------------------------------------------------------------|
+| `L-Click`      | Add positive point (Point Mode) or polygon vertex.                     |
+| `R-Click`      | Add negative point (Point Mode).                                       |
+| `Ctrl + Z`     | Undo the last point placed (in Point or Polygon mode).                 |
+| `Spacebar`     | Finalize and save the current in-progress AI segment.                  |
+| `Enter`        | **Save final mask for the current image to a `.npz` file.**            |
+| `M`            | **Merge** selected segments into a single class.                       |
+| `V` / `Delete` | **Delete** the currently selected segments.                            |
+| `C`            | Clear all temporary points or polygon vertices from the screen.        |
+| `W/A/S/D`      | Pan the image up, left, down, or right.                                |
+| `Scroll Wheel` | Zoom-in or -out on the image.                                          |
 
 ## 📦 Output Format
 
