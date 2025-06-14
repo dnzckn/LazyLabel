@@ -19,7 +19,7 @@ Heavy inspiration from [LabelMe](https://github.com/wkentaro/labelme?tab=readme-
 
 ## 🚀 Getting Started
 
-1.  **Dependencies**: Install all required Python libraries using the provided `requirements.txt` file in the root directory:
+1.  **Dependencies**: Runs on `python==3.10`. Install all required Python libraries using the provided `requirements.txt` file in the root directory:
     ```bash
     pip install -r requirements.txt
     ```
