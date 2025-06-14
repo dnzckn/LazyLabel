@@ -16,7 +16,7 @@ from PyQt6.QtWidgets import (
     QGraphicsPolygonItem,
     QTableWidgetSelectionRange,
 )
-from PyQt6.QtGui import QPixmap, QColor, QPen, QBrush, QPolygonF
+from PyQt6.QtGui import QPixmap, QColor, QPen, QBrush, QPolygonF, QIcon
 from PyQt6.QtCore import Qt, QPointF
 from photo_viewer import PhotoViewer
 from sam_model import SamModel
@@ -32,7 +32,14 @@ from numeric_table_widget_item import NumericTableWidgetItem
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("LazyLabel")
+        self.setWindowTitle("LazyLabel by DNC")
+
+        icon_path = os.path.join(
+            os.path.dirname(__file__), "demo_pictures", "logo2.png"
+        )
+        if os.path.exists(icon_path):
+            self.setWindowIcon(QIcon(icon_path))
+
         self.setGeometry(50, 50, 1600, 900)
 
         self.sam_model = SamModel(model_type="vit_h", model_path="sam_vit_h_4b8939.pth")
@@ -165,9 +172,7 @@ class MainWindow(QMainWindow):
         if not index.isValid():
             return
         path = self.file_model.filePath(index)
-        if os.path.isfile(path) and path.lower().endswith(
-            (".png", ".jpg", ".jpeg", ".tiff")
-        ):
+        if os.path.isfile(path) and path.lower().endswith((".png", ".jpg", ".jpeg")):
             self.current_image_path = path
             pixmap = QPixmap(self.current_image_path)
             if not pixmap.isNull():
@@ -474,7 +479,6 @@ class MainWindow(QMainWindow):
         selected_indices = self.get_selected_segment_indices()
         table.clearContents()
         table.setRowCount(0)
-
         filter_text = self.right_panel.class_filter_combo.currentText()
         show_all = filter_text == "All Classes"
         filter_class_id = -1
@@ -483,12 +487,10 @@ class MainWindow(QMainWindow):
                 filter_class_id = int(filter_text.split(" ")[1])
             except (ValueError, IndexError):
                 pass
-
         display_segments = []
         for i, seg in enumerate(self.segments):
             if show_all or seg.get("class_id") == filter_class_id:
                 display_segments.append((i, seg))
-
         table.setRowCount(len(display_segments))
         hue_map = {}
         for row, (original_index, seg) in enumerate(display_segments):
@@ -498,21 +500,17 @@ class MainWindow(QMainWindow):
                     int((class_id * 360 / (self.next_class_id + 5))) % 360
                 )
             color = QColor.fromHsv(hue_map[class_id], 150, 100)
-
             index_item = NumericTableWidgetItem(str(original_index + 1))
             class_item = NumericTableWidgetItem(str(class_id))
             type_item = QTableWidgetItem(seg["type"])
-
             index_item.setFlags(index_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
             type_item.setFlags(type_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
             index_item.setData(Qt.ItemDataRole.UserRole, original_index)
-
             table.setItem(row, 0, index_item)
             table.setItem(row, 1, class_item)
             table.setItem(row, 2, type_item)
             for col in range(3):
                 table.item(row, col).setBackground(QBrush(color))
-
         for row in range(table.rowCount()):
             if table.item(row, 0).data(Qt.ItemDataRole.UserRole) in selected_indices:
                 table.selectRow(row)
