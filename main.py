@@ -177,7 +177,9 @@ class MainWindow(QMainWindow):
         self.current_file_index = index
         path = self.file_model.filePath(index)
 
-        if os.path.isfile(path) and path.lower().endswith((".png", ".jpg", ".jpeg")):
+        if os.path.isfile(path) and path.lower().endswith(
+            (".png", ".jpg", ".jpeg", ".tiff")
+        ):
             self.current_image_path = path
             pixmap = QPixmap(self.current_image_path)
             if not pixmap.isNull():
@@ -578,7 +580,9 @@ class MainWindow(QMainWindow):
         class_table.setRowCount(len(unique_class_ids))
 
         num_classes = len(unique_class_ids) if unique_class_ids else 1
-        class_id_to_hue_index = {cid: i for i, cid in enumerate(unique_class_ids)}
+        class_id_to_hue_index = {
+            class_id: i for i, class_id in enumerate(unique_class_ids)
+        }
 
         for row, cid in enumerate(unique_class_ids):
             item = QTableWidgetItem(str(cid))
