@@ -3,7 +3,7 @@ LazyLabel is a user-friendly, AI-assisted image segmentation tool designed to st
 
 Heavy inspiration from [LabelMe](https://github.com/wkentaro/labelme?tab=readme-ov-file#installation) and [Segment-Anything-UI](https://github.com/branislavhesko/segment-anything-ui/tree/main)
 
-![LazyLabel Screenshot](src/lazylabel/demo_pictures/demo_pictures/gui.PNG)
+![LazyLabel Screenshot](src/lazylabel/demo_pictures/gui.PNG)
 
 ## ✨ Core Features
 
