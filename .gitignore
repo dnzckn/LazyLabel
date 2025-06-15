@@ -1,3 +1,4 @@
 *.pyc
 *.pth
 src/lazylabel/.DS_Store
+.DS_Store
