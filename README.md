@@ -38,7 +38,7 @@ Ensure you have **Python 3.10** or newer.
 #### For Developers (from Source)
 1.  Clone the repository:
     ```bash
-    git clone [https://github.com/dnzckn/LazyLabel.git](https://github.com/dnzckn/LazyLabel.git)
+    git clone[https://github.com/dnzckn/LazyLabel.git
     cd LazyLabel
     ```
 2.  Install in editable mode, which links the installed package to your source directory:
