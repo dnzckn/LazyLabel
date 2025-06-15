@@ -9,7 +9,9 @@ from segment_anything import sam_model_registry, SamPredictor
 
 def download_model(url, download_path):
     """Downloads file with a progress bar."""
-    print(f"SAM model not found. Downloading from Meta to: {download_path}")
+    print(
+        f"SAM model not found. Downloading from Meta's GitHub repository to: {download_path}"
+    )
     response = requests.get(url, stream=True)
     response.raise_for_status()
     total_size_in_bytes = int(response.headers.get("content-length", 0))
