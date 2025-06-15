@@ -23,7 +23,7 @@ Heavy inspiration from [LabelMe](https://github.com/wkentaro/labelme?tab=readme-
 1.  **Prerequisites**: Ensure you have Python 3.10 or newer.
 2.  **Clone the Repository**:
     ```bash
-    git clone [https://github.com/dnzckn/LazyLabel.git](https://github.com/dnzckn/LazyLabel.git)
+    git clone https://github.com/dnzckn/LazyLabel.git
     ```
 3.  **Install**:
     ```bash
