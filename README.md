@@ -28,11 +28,11 @@ Ensure you have **Python 3.10** or newer.
 #### For Users (via PyPI)
 1.  Install LazyLabel directly:
     ```bash
-    pip install lazylabel
+    pip install lazylabel-gui
     ```
 2.  Run the application:
     ```bash
-    lazylabel
+    lazylabel-gui
     ```
 
 #### For Developers (from Source)
