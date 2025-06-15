@@ -115,15 +115,24 @@ class MainWindow(QMainWindow):
         )
         self.control_panel.btn_clear_points.clicked.connect(self.clear_all_points)
 
-    def set_mode(self, mode_name, is_toggle=False):
-        # Clear selection if exiting selection mode
-        if self.mode == "selection" and mode_name != "selection":
-            self.right_panel.segment_table.clearSelection()
+    def _get_color_for_class(self, class_id, saturation, value):
+        if class_id is None:
+            return QColor.fromHsv(0, 0, 128)
 
+        hue = int((class_id * 222.4922359) % 360)
+        color = QColor.fromHsv(hue, saturation, value)
+
+        if not color.isValid():
+            return QColor(Qt.GlobalColor.white)
+        return color
+
+    def set_mode(self, mode_name, is_toggle=False):
+        if self.mode == "selection" and mode_name not in ["selection", "edit"]:
+            self.right_panel.segment_table.clearSelection()
         if self.mode == "edit" and mode_name != "edit":
             self.display_all_segments()
 
-        if not is_toggle and self.mode not in ["pan", "selection", "edit"]:
+        if not is_toggle and self.mode not in ["selection", "edit"]:
             self.previous_mode = self.mode
 
         self.mode = mode_name
@@ -147,7 +156,7 @@ class MainWindow(QMainWindow):
         if self.mode == new_mode:
             self.set_mode(self.previous_mode, is_toggle=True)
         else:
-            if self.mode not in ["pan", "selection", "edit"]:
+            if self.mode not in ["selection", "edit"]:
                 self.previous_mode = self.mode
             self.set_mode(new_mode, is_toggle=True)
 
@@ -244,12 +253,13 @@ class MainWindow(QMainWindow):
             self.toggle_pan_mode()
         elif key == Qt.Key.Key_R:
             self.toggle_edit_mode()
-        elif key == Qt.Key.Key_C:
+        elif key == Qt.Key.Key_C or key == Qt.Key.Key_Escape:
             self.clear_all_points()
         elif key == Qt.Key.Key_V or key == Qt.Key.Key_Backspace:
             self.delete_selected_segments()
         elif key == Qt.Key.Key_M:
             self.assign_selected_to_class()
+            self.right_panel.segment_table.clearSelection()
         elif key == Qt.Key.Key_Z and mods == Qt.KeyboardModifier.ControlModifier:
             self.undo_last_action()
         elif key == Qt.Key.Key_A and mods == Qt.KeyboardModifier.ControlModifier:
@@ -393,10 +403,23 @@ class MainWindow(QMainWindow):
         selected_indices = self.get_selected_segment_indices()
         if not selected_indices:
             return
-        target_class_id = self.segments[selected_indices[0]]["class_id"]
+
+        existing_class_ids = [
+            self.segments[i]["class_id"]
+            for i in selected_indices
+            if self.segments[i].get("class_id") is not None
+        ]
+
+        if existing_class_ids:
+            target_class_id = min(existing_class_ids)
+        else:
+            target_class_id = self.segments[selected_indices[0]].get("class_id")
+
         for i in selected_indices:
             self.segments[i]["class_id"] = target_class_id
+
         self.update_all_lists()
+        self.right_panel.segment_table.clearSelection()
         self.viewer.setFocus()
 
     def rasterize_polygon(self, vertices):
@@ -418,27 +441,10 @@ class MainWindow(QMainWindow):
         self.segment_items.clear()
         selected_indices = self.get_selected_segment_indices()
 
-        unique_class_ids = sorted(
-            list(
-                {
-                    seg.get("class_id")
-                    for seg in self.segments
-                    if seg.get("class_id") is not None
-                }
-            )
-        )
-        num_classes = len(unique_class_ids) if unique_class_ids else 1
-        class_id_to_hue_index = {
-            class_id: i for i, class_id in enumerate(unique_class_ids)
-        }
-
         for i, seg_dict in enumerate(self.segments):
             self.segment_items[i] = []
-            class_id = seg_dict.get("class_id", 0)
-
-            hue_index = class_id_to_hue_index.get(class_id, 0)
-            hue = int((hue_index * 360 / num_classes)) % 360
-            base_color = QColor.fromHsv(hue, 220, 220)
+            class_id = seg_dict.get("class_id")
+            base_color = self._get_color_for_class(class_id, saturation=220, value=220)
 
             if seg_dict["type"] == "Polygon":
                 poly_item = HoverablePolygonItem(QPolygonF(seg_dict["vertices"]))
@@ -529,27 +535,14 @@ class MainWindow(QMainWindow):
 
         table.setRowCount(len(display_segments))
 
-        unique_class_ids = sorted(
-            list(
-                {
-                    s.get("class_id")
-                    for s in self.segments
-                    if s.get("class_id") is not None
-                }
-            )
-        )
-        num_classes = len(unique_class_ids) if unique_class_ids else 1
-        class_id_to_hue_index = {cid: i for i, cid in enumerate(unique_class_ids)}
-
         for row, (original_index, seg) in enumerate(display_segments):
-            class_id = seg.get("class_id", 0)
-            hue_index = class_id_to_hue_index.get(class_id, 0)
-            hue = int((hue_index * 360 / num_classes)) % 360
-            color = QColor.fromHsv(hue, 150, 100)
+            class_id = seg.get("class_id")
+            color = self._get_color_for_class(class_id, saturation=180, value=200)
 
+            class_id_str = str(class_id) if class_id is not None else "N/A"
             index_item = NumericTableWidgetItem(str(original_index + 1))
-            class_item = NumericTableWidgetItem(str(class_id))
-            type_item = QTableWidgetItem(seg["type"])
+            class_item = NumericTableWidgetItem(class_id_str)
+            type_item = QTableWidgetItem(seg.get("type", "N/A"))
 
             index_item.setFlags(index_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
             type_item.setFlags(type_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
@@ -558,12 +551,15 @@ class MainWindow(QMainWindow):
             table.setItem(row, 0, index_item)
             table.setItem(row, 1, class_item)
             table.setItem(row, 2, type_item)
+
             for col in range(3):
-                table.item(row, col).setBackground(QBrush(color))
+                if table.item(row, col):
+                    table.item(row, col).setBackground(QBrush(color))
 
         table.setSortingEnabled(False)
         for row in range(table.rowCount()):
-            if table.item(row, 0).data(Qt.ItemDataRole.UserRole) in selected_indices:
+            item = table.item(row, 0)
+            if item and item.data(Qt.ItemDataRole.UserRole) in selected_indices:
                 table.selectRow(row)
         table.setSortingEnabled(True)
 
@@ -573,6 +569,8 @@ class MainWindow(QMainWindow):
     def update_class_list(self):
         class_table = self.right_panel.class_table
         class_table.blockSignals(True)
+        class_table.clearContents()
+
         unique_class_ids = sorted(
             list(
                 {
@@ -583,18 +581,16 @@ class MainWindow(QMainWindow):
             )
         )
         class_table.setRowCount(len(unique_class_ids))
-        num_classes = len(unique_class_ids) if unique_class_ids else 1
-        class_id_to_hue_index = {
-            class_id: i for i, class_id in enumerate(unique_class_ids)
-        }
+
         for row, cid in enumerate(unique_class_ids):
             item = QTableWidgetItem(str(cid))
             item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsEditable)
-            hue_index = class_id_to_hue_index.get(cid, 0)
-            hue = int((hue_index * 360 / num_classes)) % 360
-            color = QColor.fromHsv(hue, 150, 100)
+
+            color = self._get_color_for_class(cid, saturation=180, value=200)
+
             item.setBackground(QBrush(color))
             class_table.setItem(row, 0, item)
+
         class_table.blockSignals(False)
 
     def update_class_filter_combo(self):
@@ -639,19 +635,35 @@ class MainWindow(QMainWindow):
         if item.column() != 1:
             return
         table = self.right_panel.segment_table
+        index_item = table.item(item.row(), 0)
+        if not index_item:
+            return
+
         table.blockSignals(True)
         try:
-            new_class_id = int(item.text())
-            original_index = table.item(item.row(), 0).data(Qt.ItemDataRole.UserRole)
+            new_class_id_text = item.text()
+            if not new_class_id_text.strip():
+                raise ValueError("Class ID cannot be empty.")
+            new_class_id = int(new_class_id_text)
+            original_index = index_item.data(Qt.ItemDataRole.UserRole)
+
+            if original_index is None or original_index >= len(self.segments):
+                raise IndexError("Invalid segment index found in table.")
+
             self.segments[original_index]["class_id"] = new_class_id
             if new_class_id >= self.next_class_id:
                 self.next_class_id = new_class_id + 1
             self.update_all_lists()
-        except (ValueError, TypeError):
-            original_index = table.item(item.row(), 0).data(Qt.ItemDataRole.UserRole)
-            item.setText(str(self.segments[original_index]["class_id"]))
-        table.blockSignals(False)
-        self.viewer.setFocus()
+        except (ValueError, TypeError, AttributeError, IndexError) as e:
+            original_index = index_item.data(Qt.ItemDataRole.UserRole)
+            if original_index is not None and original_index < len(self.segments):
+                original_class_id = self.segments[original_index].get("class_id")
+                item.setText(
+                    str(original_class_id) if original_class_id is not None else "N/A"
+                )
+        finally:
+            table.blockSignals(False)
+            self.viewer.setFocus()
 
     def get_selected_segment_indices(self):
         table = self.right_panel.segment_table
