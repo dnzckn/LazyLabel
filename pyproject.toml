@@ -8,7 +8,7 @@ version = "1.0.0"
 authors = [
   { name="Deniz N. Cakan", email="deniz.n.cakan@gmail.com" },
 ]
-description = "A fast, intuitive image segmentation tool using SAM and manual editing."
+description = "An image segmentation GUI for generating mask tensors."
 readme = "README.md"
 license = { file="LICENSE" }
 requires-python = ">=3.10"
