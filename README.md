@@ -47,7 +47,7 @@ Ensure you have **Python 3.10** or newer.
     ```
 3.  Run the application:
     ```bash
-    lazylabel
+    lazylabel-gui
     ```
 
 **Note**: On the first run, the application will automatically download the SAM model checkpoint (~2.5 GB) from Meta's repository to a local cache. This is a one-time download.
