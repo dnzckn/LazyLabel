@@ -1,9 +1,9 @@
 # <img src="src/lazylabel/demo_pictures/logo2.png" alt="LazyLabel Logo" style="height:60px; vertical-align:middle;" /> <img src="src/lazylabel/demo_pictures/logo_black.png" alt="LazyLabel Cursive" style="height:60px; vertical-align:middle;" />
-LazyLabel is a user-friendly, AI-assisted image segmentation tool designed to streamline the process of creating high-quality masks for machine learning datasets. It leverages the power of the Segment Anything Model (SAM) to provide quick and accurate segmentation, while also offering advanced polygon editing capabilities for precise control. Outputs are saved in a clean, one-hot encoded format, making it easy to integrate with your machine learning workflows.
+LazyLabel is a user-friendly, AI-assisted image segmentation tool designed to streamline the process of creating high-quality masks for machine learning datasets. It leverages the power of Meta's Segment Anything Model (SAM) to provide quick and accurate segmentation, while also offering advanced polygon editing capabilities for precise control. Outputs are saved in a clean, one-hot encoded format, making it easy to integrate with your machine learning workflows.
 
 Heavy inspiration from [LabelMe](https://github.com/wkentaro/labelme?tab=readme-ov-file#installation) and [Segment-Anything-UI](https://github.com/branislavhesko/segment-anything-ui/tree/main)
 
-![LazyLabel Screenshot](src/lazylabel/demo_pictures/demo_pictures/gui.PNG)
+![LazyLabel Screenshot](src/lazylabel/demo_pictures/gui.PNG)
 
 ## ✨ Core Features
 
@@ -21,26 +21,19 @@ Heavy inspiration from [LabelMe](https://github.com/wkentaro/labelme?tab=readme-
 
 ### Installation
 1.  **Prerequisites**: Ensure you have Python 3.10 or newer.
-2.  **Install using pip**: Grab the repo locally then install the package using pip:
+2.  **Clone the Repository**:
+    ```bash
+    git clone https://github.com/dnzckn/LazyLabel.git
+    ```
+3.  **Install**:
     ```bash
     pip install path/to/lazylabel
     ```
-3.  **Run**: Launch the application from your terminal:
+4.  **Run**: Launch the application from your terminal:
     ```bash
     lazylabel
     ```
-    On the first run, the application will automatically download the required SAM model checkpoint (~2.5 GB) to a local cache directory. This is a one-time download.
-
-### For Developers
-1.  **Clone the Repository**:
-    ```bash
-    git clone [https://github.com/dnzckn/LazyLabel.git](https://github.com/dnzckn/LazyLabel.git)
-    cd LazyLabel
-    ```
-2.  **Install in Editable Mode**: This will install the package and its dependencies. The `-e` flag allows you to make changes to the source code that will take effect immediately without reinstalling.
-    ```bash
-    pip install -e .
-    ```
+    On the first run, the application will automatically download [(from Meta's repository)](https://github.com/facebookresearch/segment-anything) the model checkpoint (~2.5 GB) to a local cache directory. This is a one-time download.
 
 ## ⌨️ Controls & Keybinds
 
