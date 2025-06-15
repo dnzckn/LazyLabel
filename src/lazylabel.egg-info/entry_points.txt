@@ -1,2 +1,0 @@
-[console_scripts]
-lazylabel = lazylabel.main:main
