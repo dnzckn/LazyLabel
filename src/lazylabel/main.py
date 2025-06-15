@@ -19,7 +19,6 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtGui import QPixmap, QColor, QPen, QBrush, QPolygonF, QIcon
 from PyQt6.QtCore import Qt, QPointF, QTimer
 
-# Relative imports for package structure
 from .photo_viewer import PhotoViewer
 from .sam_model import SamModel
 from .utils import mask_to_pixmap
@@ -28,7 +27,6 @@ from .custom_file_system_model import CustomFileSystemModel
 from .editable_vertex import EditableVertexItem
 from .hoverable_polygon_item import HoverablePolygonItem
 from .numeric_table_widget_item import NumericTableWidgetItem
-from .reorderable_class_table import ReorderableClassTable
 
 
 class MainWindow(QMainWindow):
@@ -36,7 +34,6 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.setWindowTitle("LazyLabel by DNC")
 
-        # This path works inside a package
         icon_path = os.path.join(
             os.path.dirname(__file__), "demo_pictures", "logo2.png"
         )
@@ -119,6 +116,7 @@ class MainWindow(QMainWindow):
         self.control_panel.btn_clear_points.clicked.connect(self.clear_all_points)
 
     def set_mode(self, mode_name, is_toggle=False):
+        # Clear selection if exiting selection mode
         if self.mode == "selection" and mode_name != "selection":
             self.right_panel.segment_table.clearSelection()
 
@@ -185,7 +183,9 @@ class MainWindow(QMainWindow):
         self.current_file_index = index
         path = self.file_model.filePath(index)
 
-        if os.path.isfile(path) and path.lower().endswith((".png", ".jpg", ".jpeg")):
+        if os.path.isfile(path) and path.lower().endswith(
+            (".png", ".jpg", ".jpeg", ".tiff")
+        ):
             self.current_image_path = path
             pixmap = QPixmap(self.current_image_path)
             if not pixmap.isNull():
@@ -858,10 +858,14 @@ class MainWindow(QMainWindow):
                 self.polygon_preview_items.append(line)
 
 
-if __name__ == "__main__":
+def main():
     app = QApplication(sys.argv)
     qdarktheme.setup_theme()
-    sam_model = SamModel(model_type="vit_h")  # one-time check/download
+    sam_model = SamModel(model_type="vit_h")
     main_win = MainWindow(sam_model)
     main_win.show()
     sys.exit(app.exec())
+
+
+if __name__ == "__main__":
+    main()
