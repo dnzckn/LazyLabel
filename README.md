@@ -21,7 +21,7 @@ Inspired by [LabelMe](https://github.com/wkentaro/labelme?tab=readme-ov-file#ins
 ## 🚀 Getting Started
 
 ### Prerequisites
-Ensure you have **Python 3.10** or newer.
+**Python 3.10**
 
 ### Installation
 
