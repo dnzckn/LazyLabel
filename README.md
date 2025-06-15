@@ -25,7 +25,7 @@ Inspired by [LabelMe](https://github.com/wkentaro/labelme?tab=readme-ov-file#ins
 
 ### Installation
 
-#### For Users (via PyPI)
+#### For Users [via PyPI](https://pypi.org/project/lazylabel-gui/)
 1.  Install LazyLabel directly:
     ```bash
     pip install lazylabel-gui
