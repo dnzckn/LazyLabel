@@ -3,3 +3,4 @@
 src/lazylabel/.DS_Store
 .DS_Store
 /src/lazylabel.egg-info
+/dist
