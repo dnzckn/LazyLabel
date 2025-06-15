@@ -28,6 +28,7 @@ from .custom_file_system_model import CustomFileSystemModel
 from .editable_vertex import EditableVertexItem
 from .hoverable_polygon_item import HoverablePolygonItem
 from .numeric_table_widget_item import NumericTableWidgetItem
+from .reorderable_class_table import ReorderableClassTable
 
 
 class MainWindow(QMainWindow):
@@ -35,6 +36,7 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.setWindowTitle("LazyLabel by DNC")
 
+        # This path works inside a package
         icon_path = os.path.join(
             os.path.dirname(__file__), "demo_pictures", "logo2.png"
         )
@@ -43,7 +45,6 @@ class MainWindow(QMainWindow):
 
         self.setGeometry(50, 50, 1600, 900)
 
-        # The SamModel instance is now passed in
         self.sam_model = sam_model
         self.mode = "sam_points"
         self.previous_mode = "sam_points"
@@ -118,10 +119,15 @@ class MainWindow(QMainWindow):
         self.control_panel.btn_clear_points.clicked.connect(self.clear_all_points)
 
     def set_mode(self, mode_name, is_toggle=False):
+        if self.mode == "selection" and mode_name != "selection":
+            self.right_panel.segment_table.clearSelection()
+
         if self.mode == "edit" and mode_name != "edit":
             self.display_all_segments()
+
         if not is_toggle and self.mode not in ["pan", "selection", "edit"]:
             self.previous_mode = self.mode
+
         self.mode = mode_name
         self.control_panel.mode_label.setText(
             f"Mode: {mode_name.replace('_', ' ').title()}"
@@ -429,6 +435,7 @@ class MainWindow(QMainWindow):
         for i, seg_dict in enumerate(self.segments):
             self.segment_items[i] = []
             class_id = seg_dict.get("class_id", 0)
+
             hue_index = class_id_to_hue_index.get(class_id, 0)
             hue = int((hue_index * 360 / num_classes)) % 360
             base_color = QColor.fromHsv(hue, 220, 220)
@@ -851,14 +858,10 @@ class MainWindow(QMainWindow):
                 self.polygon_preview_items.append(line)
 
 
-def main():
+if __name__ == "__main__":
     app = QApplication(sys.argv)
     qdarktheme.setup_theme()
     sam_model = SamModel(model_type="vit_h")  # one-time check/download
     main_win = MainWindow(sam_model)
     main_win.show()
     sys.exit(app.exec())
-
-
-if __name__ == "__main__":
-    main()
