@@ -21,26 +21,19 @@ Heavy inspiration from [LabelMe](https://github.com/wkentaro/labelme?tab=readme-
 
 ### Installation
 1.  **Prerequisites**: Ensure you have Python 3.10 or newer.
-2.  **Install using pip**: Grab the repo locally then install the package using pip:
+2.  **Clone the Repository**:
+    ```bash
+    git clone [https://github.com/dnzckn/LazyLabel.git](https://github.com/dnzckn/LazyLabel.git)
+    ```
+3.  **Install**:
     ```bash
     pip install path/to/lazylabel
     ```
-3.  **Run**: Launch the application from your terminal:
+4.  **Run**: Launch the application from your terminal:
     ```bash
     lazylabel
     ```
     On the first run, the application will automatically download the required SAM model checkpoint (~2.5 GB) to a local cache directory. This is a one-time download.
-
-### For Developers
-1.  **Clone the Repository**:
-    ```bash
-    git clone [https://github.com/dnzckn/LazyLabel.git](https://github.com/dnzckn/LazyLabel.git)
-    cd LazyLabel
-    ```
-2.  **Install in Editable Mode**: This will install the package and its dependencies. The `-e` flag allows you to make changes to the source code that will take effect immediately without reinstalling.
-    ```bash
-    pip install -e .
-    ```
 
 ## ⌨️ Controls & Keybinds
 
