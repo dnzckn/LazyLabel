@@ -33,7 +33,7 @@ Heavy inspiration from [LabelMe](https://github.com/wkentaro/labelme?tab=readme-
     ```bash
     lazylabel
     ```
-    On the first run, the application will automatically download the required SAM model checkpoint (~2.5 GB) to a local cache directory. This is a one-time download.
+    On the first run, the application will automatically download [(from Meta's repository)](https://github.com/facebookresearch/segment-anything) the model checkpoint (~2.5 GB) to a local cache directory. This is a one-time download.
 
 ## ⌨️ Controls & Keybinds
 
