@@ -8,7 +8,7 @@ class CustomFileSystemModel(QFileSystemModel):
         super().__init__(parent)
         self.setFilter(QDir.Filter.NoDotAndDotDot | QDir.Filter.Files)
         self.setNameFilterDisables(False)
-        self.setNameFilters(["*.png", "*.jpg", "*.jpeg", "*.tiff"])
+        self.setNameFilters(["*.png", "*.jpg", "*.jpeg", "*.tiff", "*.tif"])
         self.highlighted_path = None
 
     def set_highlighted_path(self, path):
