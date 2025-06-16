@@ -34,9 +34,7 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.setWindowTitle("LazyLabel by DNC")
 
-        icon_path = os.path.join(
-            os.path.dirname(__file__), "demo_pictures", "logo2.png"
-        )
+        icon_path = os.path.join(os.path.dirname(__file__), "demo_pictures", "logo2.png")
         if os.path.exists(icon_path):
             self.setWindowIcon(QIcon(icon_path))
 
@@ -76,9 +74,7 @@ class MainWindow(QMainWindow):
         central_widget.setLayout(main_layout)
         self.setCentralWidget(central_widget)
 
-        self.control_panel.device_label.setText(
-            f"Device: {str(self.sam_model.device).upper()}"
-        )
+        self.control_panel.device_label.setText(f"Device: {str(self.sam_model.device).upper()}")
         self.setup_connections()
         self.set_sam_mode()
 
@@ -93,26 +89,16 @@ class MainWindow(QMainWindow):
 
         self.right_panel.btn_open_folder.clicked.connect(self.open_folder_dialog)
         self.right_panel.file_tree.doubleClicked.connect(self.load_selected_image)
-        self.right_panel.btn_merge_selection.clicked.connect(
-            self.assign_selected_to_class
-        )
-        self.right_panel.btn_delete_selection.clicked.connect(
-            self.delete_selected_segments
-        )
-        self.right_panel.segment_table.itemSelectionChanged.connect(
-            self.highlight_selected_segments
-        )
+        self.right_panel.btn_merge_selection.clicked.connect(self.assign_selected_to_class)
+        self.right_panel.btn_delete_selection.clicked.connect(self.delete_selected_segments)
+        self.right_panel.segment_table.itemSelectionChanged.connect(self.highlight_selected_segments)
         self.right_panel.segment_table.itemChanged.connect(self.handle_class_id_change)
         self.right_panel.btn_reassign_classes.clicked.connect(self.reassign_class_ids)
-        self.right_panel.class_filter_combo.currentIndexChanged.connect(
-            self.update_segment_table
-        )
+        self.right_panel.class_filter_combo.currentIndexChanged.connect(self.update_segment_table)
 
         self.control_panel.btn_sam_mode.clicked.connect(self.set_sam_mode)
         self.control_panel.btn_polygon_mode.clicked.connect(self.set_polygon_mode)
-        self.control_panel.btn_selection_mode.clicked.connect(
-            self.toggle_selection_mode
-        )
+        self.control_panel.btn_selection_mode.clicked.connect(self.toggle_selection_mode)
         self.control_panel.btn_clear_points.clicked.connect(self.clear_all_points)
 
     def _get_color_for_class(self, class_id, saturation, value):
@@ -136,15 +122,9 @@ class MainWindow(QMainWindow):
             self.previous_mode = self.mode
 
         self.mode = mode_name
-        self.control_panel.mode_label.setText(
-            f"Mode: {mode_name.replace('_', ' ').title()}"
-        )
+        self.control_panel.mode_label.setText(f"Mode: {mode_name.replace('_', ' ').title()}")
         self.clear_all_points()
-        self.viewer.setDragMode(
-            self.viewer.DragMode.ScrollHandDrag
-            if self.mode == "pan"
-            else self.viewer.DragMode.NoDrag
-        )
+        self.viewer.setDragMode(self.viewer.DragMode.ScrollHandDrag if self.mode == "pan" else self.viewer.DragMode.NoDrag)
 
     def set_sam_mode(self):
         self.set_mode("sam_points")
@@ -168,9 +148,7 @@ class MainWindow(QMainWindow):
 
     def toggle_edit_mode(self):
         selected_indices = self.get_selected_segment_indices()
-        can_edit = any(
-            self.segments[i].get("type") == "Polygon" for i in selected_indices
-        )
+        can_edit = any(self.segments[i].get("type") == "Polygon" for i in selected_indices)
         if self.mode == "edit":
             self.set_mode("selection", is_toggle=True)
         elif self.mode == "selection" and can_edit:
@@ -180,9 +158,7 @@ class MainWindow(QMainWindow):
     def open_folder_dialog(self):
         folder_path = QFileDialog.getExistingDirectory(self, "Select Image Folder")
         if folder_path:
-            self.right_panel.file_tree.setRootIndex(
-                self.file_model.setRootPath(folder_path)
-            )
+            self.right_panel.file_tree.setRootIndex(self.file_model.setRootPath(folder_path))
         self.viewer.setFocus()
 
     def load_selected_image(self, index):
@@ -192,9 +168,7 @@ class MainWindow(QMainWindow):
         self.current_file_index = index
         path = self.file_model.filePath(index)
 
-        if os.path.isfile(path) and path.lower().endswith(
-            (".png", ".jpg", ".jpeg", ".tiff", ".tif")
-        ):
+        if os.path.isfile(path) and path.lower().endswith((".png", ".jpg", ".jpeg", ".tiff", ".tif")):
             self.current_image_path = path
             pixmap = QPixmap(self.current_image_path)
             if not pixmap.isNull():
@@ -209,11 +183,7 @@ class MainWindow(QMainWindow):
         self.segments.clear()
         self.next_class_id = 0
         self.update_all_lists()
-        items_to_remove = [
-            item
-            for item in self.viewer.scene().items()
-            if item is not self.viewer._pixmap_item
-        ]
+        items_to_remove = [item for item in self.viewer.scene().items() if item is not self.viewer._pixmap_item]
         for item in items_to_remove:
             self.viewer.scene().removeItem(item)
         self.segment_items.clear()
@@ -224,25 +194,13 @@ class MainWindow(QMainWindow):
         if event.isAutoRepeat():
             return
         if key == Qt.Key.Key_W:
-            self.viewer.verticalScrollBar().setValue(
-                self.viewer.verticalScrollBar().value()
-                - int(self.viewer.height() * 0.1)
-            )
+            self.viewer.verticalScrollBar().setValue(self.viewer.verticalScrollBar().value() - int(self.viewer.height() * 0.1))
         elif key == Qt.Key.Key_S and not mods:
-            self.viewer.verticalScrollBar().setValue(
-                self.viewer.verticalScrollBar().value()
-                + int(self.viewer.height() * 0.1)
-            )
+            self.viewer.verticalScrollBar().setValue(self.viewer.verticalScrollBar().value() + int(self.viewer.height() * 0.1))
         elif key == Qt.Key.Key_A and not (mods & Qt.KeyboardModifier.ControlModifier):
-            self.viewer.horizontalScrollBar().setValue(
-                self.viewer.horizontalScrollBar().value()
-                - int(self.viewer.width() * 0.1)
-            )
+            self.viewer.horizontalScrollBar().setValue(self.viewer.horizontalScrollBar().value() - int(self.viewer.width() * 0.1))
         elif key == Qt.Key.Key_D:
-            self.viewer.horizontalScrollBar().setValue(
-                self.viewer.horizontalScrollBar().value()
-                + int(self.viewer.width() * 0.1)
-            )
+            self.viewer.horizontalScrollBar().setValue(self.viewer.horizontalScrollBar().value() + int(self.viewer.width() * 0.1))
         elif key == Qt.Key.Key_1:
             self.set_sam_mode()
         elif key == Qt.Key.Key_2:
@@ -274,10 +232,7 @@ class MainWindow(QMainWindow):
         if event.isAccepted():
             return
         pos = event.scenePos()
-        if (
-            self.viewer._pixmap_item.pixmap().isNull()
-            or not self.viewer._pixmap_item.pixmap().rect().contains(pos.toPoint())
-        ):
+        if self.viewer._pixmap_item.pixmap().isNull() or not self.viewer._pixmap_item.pixmap().rect().contains(pos.toPoint()):
             return
         if self.mode == "sam_points":
             if event.button() == Qt.MouseButton.LeftButton:
@@ -297,9 +252,7 @@ class MainWindow(QMainWindow):
             self.is_dragging_polygon = True
             selected_indices = self.get_selected_segment_indices()
             self.drag_initial_vertices = {
-                i: list(self.segments[i]["vertices"])
-                for i in selected_indices
-                if self.segments[i].get("type") == "Polygon"
+                i: list(self.segments[i]["vertices"]) for i in selected_indices if self.segments[i].get("type") == "Polygon"
             }
 
     def scene_mouse_move(self, event):
@@ -307,16 +260,12 @@ class MainWindow(QMainWindow):
         if self.mode == "edit" and self.is_dragging_polygon:
             delta = pos - self.drag_start_pos
             for i, initial_verts in self.drag_initial_vertices.items():
-                self.segments[i]["vertices"] = [
-                    QPointF(v.x() + delta.x(), v.y() + delta.y()) for v in initial_verts
-                ]
+                self.segments[i]["vertices"] = [QPointF(v.x() + delta.x(), v.y() + delta.y()) for v in initial_verts]
                 self.update_polygon_visuals(i)
         elif self.mode == "polygon" and self.polygon_points:
             if self.rubber_band_line is None:
                 self.rubber_band_line = QGraphicsLineItem()
-                self.rubber_band_line.setPen(
-                    QPen(Qt.GlobalColor.white, 2, Qt.PenStyle.DotLine)
-                )
+                self.rubber_band_line.setPen(QPen(Qt.GlobalColor.white, 2, Qt.PenStyle.DotLine))
                 self.viewer.scene().addItem(self.rubber_band_line)
             self.rubber_band_line.setLine(
                 self.polygon_points[-1].x(),
@@ -376,25 +325,14 @@ class MainWindow(QMainWindow):
         x, y = int(pos.x()), int(pos.y())
         for i in range(len(self.segments) - 1, -1, -1):
             seg = self.segments[i]
-            mask = (
-                self.rasterize_polygon(seg["vertices"])
-                if seg["type"] == "Polygon"
-                else seg.get("mask")
-            )
-            if (
-                mask is not None
-                and y < mask.shape[0]
-                and x < mask.shape[1]
-                and mask[y, x]
-            ):
+            mask = self.rasterize_polygon(seg["vertices"]) if seg["type"] == "Polygon" else seg.get("mask")
+            if mask is not None and y < mask.shape[0] and x < mask.shape[1] and mask[y, x]:
                 for j in range(self.right_panel.segment_table.rowCount()):
                     item = self.right_panel.segment_table.item(j, 0)
                     if item and item.data(Qt.ItemDataRole.UserRole) == i:
                         table = self.right_panel.segment_table
                         is_selected = table.item(j, 0).isSelected()
-                        range_to_select = QTableWidgetSelectionRange(
-                            j, 0, j, table.columnCount() - 1
-                        )
+                        range_to_select = QTableWidgetSelectionRange(j, 0, j, table.columnCount() - 1)
                         table.setRangeSelected(range_to_select, not is_selected)
                         return
         self.viewer.setFocus()
@@ -404,11 +342,7 @@ class MainWindow(QMainWindow):
         if not selected_indices:
             return
 
-        existing_class_ids = [
-            self.segments[i]["class_id"]
-            for i in selected_indices
-            if self.segments[i].get("class_id") is not None
-        ]
+        existing_class_ids = [self.segments[i]["class_id"] for i in selected_indices if self.segments[i].get("class_id") is not None]
 
         if existing_class_ids:
             target_class_id = min(existing_class_ids)
@@ -448,12 +382,8 @@ class MainWindow(QMainWindow):
 
             if seg_dict["type"] == "Polygon":
                 poly_item = HoverablePolygonItem(QPolygonF(seg_dict["vertices"]))
-                default_brush = QBrush(
-                    QColor(base_color.red(), base_color.green(), base_color.blue(), 70)
-                )
-                hover_brush = QBrush(
-                    QColor(base_color.red(), base_color.green(), base_color.blue(), 170)
-                )
+                default_brush = QBrush(QColor(base_color.red(), base_color.green(), base_color.blue(), 70))
+                hover_brush = QBrush(QColor(base_color.red(), base_color.green(), base_color.blue(), 170))
                 poly_item.set_brushes(default_brush, hover_brush)
                 poly_item.setPen(QPen(Qt.GlobalColor.transparent))
                 self.viewer.scene().addItem(poly_item)
@@ -496,11 +426,7 @@ class MainWindow(QMainWindow):
         selected_indices = self.get_selected_segment_indices()
         for i in selected_indices:
             seg = self.segments[i]
-            mask = (
-                self.rasterize_polygon(seg["vertices"])
-                if seg["type"] == "Polygon"
-                else seg.get("mask")
-            )
+            mask = self.rasterize_polygon(seg["vertices"]) if seg["type"] == "Polygon" else seg.get("mask")
             if mask is not None:
                 pixmap = mask_to_pixmap(mask, (255, 255, 255))
                 highlight_item = self.viewer.scene().addPixmap(pixmap)
@@ -571,15 +497,7 @@ class MainWindow(QMainWindow):
         class_table.blockSignals(True)
         class_table.clearContents()
 
-        unique_class_ids = sorted(
-            list(
-                {
-                    seg.get("class_id")
-                    for seg in self.segments
-                    if seg.get("class_id") is not None
-                }
-            )
-        )
+        unique_class_ids = sorted(list({seg.get("class_id") for seg in self.segments if seg.get("class_id") is not None}))
         class_table.setRowCount(len(unique_class_ids))
 
         for row, cid in enumerate(unique_class_ids):
@@ -595,15 +513,7 @@ class MainWindow(QMainWindow):
 
     def update_class_filter_combo(self):
         combo = self.right_panel.class_filter_combo
-        unique_class_ids = sorted(
-            list(
-                {
-                    seg.get("class_id")
-                    for seg in self.segments
-                    if seg.get("class_id") is not None
-                }
-            )
-        )
+        unique_class_ids = sorted(list({seg.get("class_id") for seg in self.segments if seg.get("class_id") is not None}))
         current_selection = combo.currentText()
         combo.blockSignals(True)
         combo.clear()
@@ -618,9 +528,7 @@ class MainWindow(QMainWindow):
     def reassign_class_ids(self):
         class_table = self.right_panel.class_table
         ordered_ids = [
-            int(class_table.item(row, 0).text())
-            for row in range(class_table.rowCount())
-            if class_table.item(row, 0) is not None
+            int(class_table.item(row, 0).text()) for row in range(class_table.rowCount()) if class_table.item(row, 0) is not None
         ]
         id_map = {old_id: new_id for new_id, old_id in enumerate(ordered_ids)}
         for seg in self.segments:
@@ -658,9 +566,7 @@ class MainWindow(QMainWindow):
             original_index = index_item.data(Qt.ItemDataRole.UserRole)
             if original_index is not None and original_index < len(self.segments):
                 original_class_id = self.segments[original_index].get("class_id")
-                item.setText(
-                    str(original_class_id) if original_class_id is not None else "N/A"
-                )
+                item.setText(str(original_class_id) if original_class_id is not None else "N/A")
         finally:
             table.blockSignals(False)
             self.viewer.setFocus()
@@ -669,11 +575,7 @@ class MainWindow(QMainWindow):
         table = self.right_panel.segment_table
         selected_items = table.selectedItems()
         selected_rows = sorted(list({item.row() for item in selected_items}))
-        return [
-            table.item(row, 0).data(Qt.ItemDataRole.UserRole)
-            for row in selected_rows
-            if table.item(row, 0)
-        ]
+        return [table.item(row, 0).data(Qt.ItemDataRole.UserRole) for row in selected_rows if table.item(row, 0)]
 
     def save_output_to_npz(self):
         if not self.segments or not self.current_image_path:
@@ -686,15 +588,7 @@ class MainWindow(QMainWindow):
             self.viewer._pixmap_item.pixmap().height(),
             self.viewer._pixmap_item.pixmap().width(),
         )
-        unique_class_ids = sorted(
-            list(
-                {
-                    seg["class_id"]
-                    for seg in self.segments
-                    if seg.get("class_id") is not None
-                }
-            )
-        )
+        unique_class_ids = sorted(list({seg["class_id"] for seg in self.segments if seg.get("class_id") is not None}))
         if not unique_class_ids:
             self.right_panel.status_label.setText("Save failed: No classes.")
             QTimer.singleShot(3000, lambda: self.right_panel.status_label.clear())
@@ -709,28 +603,55 @@ class MainWindow(QMainWindow):
             if class_id not in id_map:
                 continue
             new_channel_idx = id_map[class_id]
-            mask = (
-                self.rasterize_polygon(seg["vertices"])
-                if seg["type"] == "Polygon"
-                else seg.get("mask")
-            )
+            mask = self.rasterize_polygon(seg["vertices"]) if seg["type"] == "Polygon" else seg.get("mask")
             if mask is not None:
-                final_mask_tensor[:, :, new_channel_idx] = np.logical_or(
-                    final_mask_tensor[:, :, new_channel_idx], mask
-                )
+                final_mask_tensor[:, :, new_channel_idx] = np.logical_or(final_mask_tensor[:, :, new_channel_idx], mask)
 
         np.savez_compressed(output_path, mask=final_mask_tensor.astype(np.uint8))
         self.file_model.setRootPath(self.file_model.rootPath())
 
         self.right_panel.status_label.setText("Saved!")
+        self.generate_yolo_annotations(npz_file_path=output_path)
         QTimer.singleShot(3000, lambda: self.right_panel.status_label.clear())
 
+    def generate_yolo_annotations(self, npz_file_path):
+        output_path = os.path.splitext(self.current_image_path)[0] + ".txt"
+        npz_data = np.load(npz_file_path)  # Load the saved npz file
+
+        img = npz_data["mask"][:, :, :]
+        num_channels = img.shape[2]  # C
+        h, w = img.shape[:2]  # H, W
+
+        directory_path = os.path.dirname(output_path)
+        os.makedirs(directory_path, exist_ok=True)
+
+        yolo_annotations = []
+
+        for channel in range(num_channels):
+            single_channel_image = img[:, :, channel]
+            contours, _ = cv2.findContours(single_channel_image, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+            class_id = channel  # Use the channel index as the class ID
+
+            for contour in contours:
+                x, y, width, height = cv2.boundingRect(contour)
+                center_x = x + width / 2
+                center_y = y + height / 2
+
+                normalized_center_x = center_x / w
+                normalized_center_y = center_y / h
+                normalized_width = width / w
+                normalized_height = height / h
+
+                yolo_entry = f"{class_id} {normalized_center_x} {normalized_center_y} {normalized_width} {normalized_height}"
+                yolo_annotations.append(yolo_entry)
+
+        with open(output_path, "w") as file:
+            for annotation in yolo_annotations:
+                file.write(annotation + "\n")
+
     def save_current_segment(self):
-        if (
-            self.mode != "sam_points"
-            or not hasattr(self, "preview_mask_item")
-            or not self.preview_mask_item
-        ):
+        if self.mode != "sam_points" or not hasattr(self, "preview_mask_item") or not self.preview_mask_item:
             return
         mask = self.sam_model.predict(self.positive_points, self.negative_points)
         if mask is not None:
@@ -819,13 +740,7 @@ class MainWindow(QMainWindow):
             self.preview_mask_item = None
 
     def handle_polygon_click(self, pos):
-        if self.polygon_points and (
-            (
-                (pos.x() - self.polygon_points[0].x()) ** 2
-                + (pos.y() - self.polygon_points[0].y()) ** 2
-            )
-            < 25
-        ):
+        if self.polygon_points and (((pos.x() - self.polygon_points[0].x()) ** 2 + (pos.y() - self.polygon_points[0].y()) ** 2) < 25):
             if len(self.polygon_points) > 2:
                 self.finalize_polygon()
             return
@@ -844,11 +759,7 @@ class MainWindow(QMainWindow):
         for item in self.polygon_preview_items:
             if not isinstance(item, QGraphicsEllipseItem):
                 self.viewer.scene().removeItem(item)
-        self.polygon_preview_items = [
-            item
-            for item in self.polygon_preview_items
-            if isinstance(item, QGraphicsEllipseItem)
-        ]
+        self.polygon_preview_items = [item for item in self.polygon_preview_items if isinstance(item, QGraphicsEllipseItem)]
 
         if len(self.polygon_points) > 2:
             preview_poly = QGraphicsPolygonItem(QPolygonF(self.polygon_points))
