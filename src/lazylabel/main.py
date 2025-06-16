@@ -193,7 +193,7 @@ class MainWindow(QMainWindow):
         path = self.file_model.filePath(index)
 
         if os.path.isfile(path) and path.lower().endswith(
-            (".png", ".jpg", ".jpeg", ".tiff")
+            (".png", ".jpg", ".jpeg", ".tiff", ".tif")
         ):
             self.current_image_path = path
             pixmap = QPixmap(self.current_image_path)
