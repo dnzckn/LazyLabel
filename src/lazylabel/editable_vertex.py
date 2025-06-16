@@ -12,7 +12,7 @@ class EditableVertexItem(QGraphicsEllipseItem):
 
         self.setZValue(200)
         self.setBrush(QBrush(Qt.GlobalColor.cyan))
-        self.setPen(QPen(Qt.GlobalColor.white, 1))
+        self.setPen(QPen(Qt.GlobalColor.transparent))
         self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsMovable)
         self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemSendsGeometryChanges)
 
