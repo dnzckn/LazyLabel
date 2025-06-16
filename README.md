@@ -1,5 +1,5 @@
 # <img src="https://raw.githubusercontent.com/dnzckn/LazyLabel/main/src/lazylabel/demo_pictures/logo2.png" alt="LazyLabel Logo" style="height:60px; vertical-align:middle;" /> <img src="https://raw.githubusercontent.com/dnzckn/LazyLabel/main/src/lazylabel/demo_pictures/logo_black.png" alt="LazyLabel Cursive" style="height:60px; vertical-align:middle;" />
-LazyLabel is an intuitive, AI-assisted image segmentation tool. It uses Meta's Segment Anything Model (SAM) for quick, precise mask generation, alongside advanced polygon editing for fine-tuned control. Outputs are saved in a clean, one-hot encoded format for easy machine learning integration.
+LazyLabel is an intuitive, AI-assisted image segmentation tool. It uses Meta's Segment Anything Model (SAM) for quick, precise mask generation, alongside advanced polygon editing for fine-tuned control. Outputs are saved in a clean, one-hot encoded `.npz` format for easy machine learning integration and in YOLO `.txt` format.
 
 Inspired by [LabelMe](https://github.com/wkentaro/labelme?tab=readme-ov-file#installation) and [Segment-Anything-UI](https://github.com/branislavhesko/segment-anything-ui/tree/main).
 
