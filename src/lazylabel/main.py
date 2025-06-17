@@ -26,7 +26,7 @@ from .controls import ControlPanel, RightPanel
 from .custom_file_system_model import CustomFileSystemModel
 from .editable_vertex import EditableVertexItem
 from .hoverable_polygon_item import HoverablePolygonItem
-from .hoverable_pixmap_item import HoverablePixmapItem
+from .hoverable_pixelmap_item import HoverablePixmapItem
 from .numeric_table_widget_item import NumericTableWidgetItem
 
 
