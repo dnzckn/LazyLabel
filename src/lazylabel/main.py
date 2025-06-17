@@ -16,7 +16,17 @@ from PyQt6.QtWidgets import (
     QGraphicsPolygonItem,
     QTableWidgetSelectionRange,
 )
-from PyQt6.QtGui import QPixmap, QColor, QPen, QBrush, QPolygonF, QIcon, QCursor
+from PyQt6.QtGui import (
+    QPixmap,
+    QColor,
+    QPen,
+    QBrush,
+    QPolygonF,
+    QIcon,
+    QCursor,
+    QKeySequence,
+    QShortcut,
+)
 from PyQt6.QtCore import Qt, QPointF, QTimer, QModelIndex
 
 from .photo_viewer import PhotoViewer
@@ -126,6 +136,12 @@ class MainWindow(QMainWindow):
         )
         self.control_panel.btn_clear_points.clicked.connect(self.clear_all_points)
         self.control_panel.btn_fit_view.clicked.connect(self.viewer.fitInView)
+
+        # **FIX:** Use QShortcut for reliable global hotkeys
+        next_shortcut = QShortcut(QKeySequence(Qt.Key.Key_Right), self)
+        next_shortcut.activated.connect(self.load_next_image)
+        prev_shortcut = QShortcut(QKeySequence(Qt.Key.Key_Left), self)
+        prev_shortcut.activated.connect(self.load_previous_image)
 
     def show_notification(self, message, duration=3000):
         self.control_panel.notification_label.setText(message)
@@ -291,14 +307,6 @@ class MainWindow(QMainWindow):
         key, mods = event.key(), event.modifiers()
         if event.isAutoRepeat():
             return
-
-        if mods == Qt.KeyboardModifier.NoModifier:
-            if key == Qt.Key.Key_Right:
-                self.load_next_image()
-                return
-            if key == Qt.Key.Key_Left:
-                self.load_previous_image()
-                return
 
         pan_multiplier = 5.0 if (mods & Qt.KeyboardModifier.ShiftModifier) else 2
 
@@ -826,12 +834,10 @@ class MainWindow(QMainWindow):
         ordered_ids = []
         for row in range(class_table.rowCount()):
             id_item = class_table.item(row, 1)
-            # **FIX:** Add check to prevent crash on empty/invalid item
             if id_item and id_item.text():
                 try:
                     ordered_ids.append(int(id_item.text()))
                 except ValueError:
-                    # Handle cases where text might not be a valid int, though it should be
                     continue
 
         id_map = {old_id: new_id for new_id, old_id in enumerate(ordered_ids)}
