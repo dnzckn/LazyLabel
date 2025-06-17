@@ -17,7 +17,7 @@ from PyQt6.QtWidgets import (
     QTableWidgetSelectionRange,
 )
 from PyQt6.QtGui import QPixmap, QColor, QPen, QBrush, QPolygonF, QIcon, QCursor
-from PyQt6.QtCore import Qt, QPointF, QTimer
+from PyQt6.QtCore import Qt, QPointF, QTimer, QModelIndex
 
 from .photo_viewer import PhotoViewer
 from .sam_model import SamModel
@@ -47,7 +47,8 @@ class MainWindow(QMainWindow):
         self.mode = "sam_points"
         self.previous_mode = "sam_points"
         self.current_image_path = None
-        self.current_file_index = None
+        self.current_file_index = QModelIndex()
+
         self.next_class_id = 0
 
         self.class_aliases = {}  # {class_id: "alias_string"}
@@ -224,7 +225,7 @@ class MainWindow(QMainWindow):
         self.viewer.setFocus()
 
     def load_selected_image(self, index):
-        if not index.isValid():
+        if not index.isValid() or not self.file_model.isDir(index.parent()):
             return
 
         self.current_file_index = index
@@ -240,12 +241,40 @@ class MainWindow(QMainWindow):
                 self.viewer.set_photo(pixmap)
                 self.sam_model.set_image(self.current_image_path)
                 self.load_existing_mask()
+                self.right_panel.file_tree.setCurrentIndex(index)
                 self.viewer.setFocus()
+
+    def load_next_image(self):
+        if not self.current_file_index.isValid():
+            return
+
+        if self.control_panel.chk_auto_save.isChecked():
+            self.save_output_to_npz()
+
+        row = self.current_file_index.row()
+        parent = self.current_file_index.parent()
+        if row + 1 < self.file_model.rowCount(parent):
+            next_index = self.file_model.index(row + 1, 0, parent)
+            self.load_selected_image(next_index)
+
+    def load_previous_image(self):
+        if not self.current_file_index.isValid():
+            return
+
+        if self.control_panel.chk_auto_save.isChecked():
+            self.save_output_to_npz()
+
+        row = self.current_file_index.row()
+        parent = self.current_file_index.parent()
+        if row > 0:
+            prev_index = self.file_model.index(row - 1, 0, parent)
+            self.load_selected_image(prev_index)
 
     def reset_state(self):
         self.clear_all_points()
+        # Preserve aliases between images in the same session
+        # self.class_aliases.clear()
         self.segments.clear()
-        self.class_aliases.clear()
         self.next_class_id = 0
         self.update_all_lists()
         items_to_remove = [
@@ -262,6 +291,14 @@ class MainWindow(QMainWindow):
         key, mods = event.key(), event.modifiers()
         if event.isAutoRepeat():
             return
+
+        if mods == Qt.KeyboardModifier.NoModifier:
+            if key == Qt.Key.Key_Right:
+                self.load_next_image()
+                return
+            if key == Qt.Key.Key_Left:
+                self.load_previous_image()
+                return
 
         pan_multiplier = 5.0 if (mods & Qt.KeyboardModifier.ShiftModifier) else 2
 
@@ -287,7 +324,6 @@ class MainWindow(QMainWindow):
             )
         elif key == Qt.Key.Key_Period:
             self.viewer.fitInView()
-        # Other keybindings
         elif key == Qt.Key.Key_1:
             self.set_sam_mode()
         elif key == Qt.Key.Key_2:
@@ -713,6 +749,18 @@ class MainWindow(QMainWindow):
     def update_class_list(self):
         class_table = self.right_panel.class_table
         class_table.blockSignals(True)
+
+        # Preserve existing aliases during update
+        current_aliases = {}
+        for row in range(class_table.rowCount()):
+            try:
+                alias = class_table.item(row, 0).text()
+                cid = int(class_table.item(row, 1).text())
+                current_aliases[cid] = alias
+            except (AttributeError, ValueError):
+                continue
+        self.class_aliases.update(current_aliases)
+
         class_table.clearContents()
 
         unique_class_ids = sorted(
@@ -805,11 +853,14 @@ class MainWindow(QMainWindow):
 
         id_item = class_table.item(item.row(), 1)
         if id_item:
-            class_id = int(id_item.text())
-            self.class_aliases[class_id] = item.text()
+            try:
+                class_id = int(id_item.text())
+                self.class_aliases[class_id] = item.text()
+            except (ValueError, AttributeError):
+                pass  # Ignore if ID item is not valid
 
         class_table.blockSignals(False)
-        self.update_class_filter_combo()  # Refresh filter to show new alias
+        self.update_class_filter_combo()
 
     def handle_class_id_change(self, item):
         if item.column() != 1:  # Class ID column in segment table

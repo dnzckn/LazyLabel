@@ -10,6 +10,7 @@ from PyQt6.QtWidgets import (
     QHBoxLayout,
     QComboBox,
     QHeaderView,
+    QCheckBox,
 )
 from PyQt6.QtCore import Qt
 from .reorderable_class_table import ReorderableClassTable
@@ -51,6 +52,16 @@ class ControlPanel(QWidget):
         self.btn_clear_points.setToolTip("Clear current temporary points/vertices (C)")
         layout.addWidget(self.btn_fit_view)
         layout.addWidget(self.btn_clear_points)
+
+        layout.addSpacing(10)
+
+        # Settings
+        self.chk_auto_save = QCheckBox("Auto-Save on Navigate")
+        self.chk_auto_save.setToolTip(
+            "Automatically save work when using arrow keys to change images."
+        )
+        self.chk_auto_save.setChecked(True)
+        layout.addWidget(self.chk_auto_save)
 
         layout.addStretch()
 
