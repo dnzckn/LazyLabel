@@ -1,4 +1,3 @@
-# src/lazylabel/controls.py
 from PyQt6.QtWidgets import (
     QWidget,
     QVBoxLayout,
@@ -199,7 +198,9 @@ class RightPanel(QWidget):
 
         self.segment_table = QTableWidget()
         self.segment_table.setColumnCount(3)
-        self.segment_table.setHorizontalHeaderLabels(["Segment ID", "Class ID", "Type"])
+        self.segment_table.setHorizontalHeaderLabels(
+            ["Segment ID", "Class ID", "Alias"]
+        )
         self.segment_table.horizontalHeader().setSectionResizeMode(
             QHeaderView.ResizeMode.Stretch
         )

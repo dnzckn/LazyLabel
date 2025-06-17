@@ -1,4 +1,3 @@
-# src/lazylabel/main.py
 import sys
 import os
 import numpy as np
@@ -18,6 +17,7 @@ from PyQt6.QtWidgets import (
     QGraphicsPolygonItem,
     QTableWidgetSelectionRange,
     QSpacerItem,
+    QHeaderView,
 )
 from PyQt6.QtGui import (
     QPixmap,
@@ -91,6 +91,10 @@ class MainWindow(QMainWindow):
         self.file_model = CustomFileSystemModel()
         self.right_panel.file_tree.setModel(self.file_model)
         self.right_panel.file_tree.setColumnWidth(0, 200)
+        file_tree = self.right_panel.file_tree
+        header = file_tree.header()
+        header.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
+        header.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
 
         main_layout = QHBoxLayout()
         main_layout.addWidget(self.control_panel)
@@ -658,7 +662,7 @@ class MainWindow(QMainWindow):
         if existing_class_ids:
             target_class_id = min(existing_class_ids)
         else:
-            target_class_id = self.segments[selected_indices[0]].get("class_id")
+            target_class_id = self.next_class_id
 
         for i in selected_indices:
             self.segments[i]["class_id"] = target_class_id
@@ -808,18 +812,23 @@ class MainWindow(QMainWindow):
             class_id = seg.get("class_id")
             color = self._get_color_for_class(class_id)
             class_id_str = str(class_id) if class_id is not None else "N/A"
+
+            alias_str = "N/A"
+            if class_id is not None:
+                alias_str = self.class_aliases.get(class_id, str(class_id))
+            alias_item = QTableWidgetItem(alias_str)
+
             index_item = NumericTableWidgetItem(str(original_index + 1))
             class_item = NumericTableWidgetItem(class_id_str)
-            type_item = QTableWidgetItem(seg.get("type", "N/A"))
 
             index_item.setFlags(index_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
             class_item.setFlags(class_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
-            type_item.setFlags(type_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+            alias_item.setFlags(alias_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
             index_item.setData(Qt.ItemDataRole.UserRole, original_index)
 
             table.setItem(row, 0, index_item)
             table.setItem(row, 1, class_item)
-            table.setItem(row, 2, type_item)
+            table.setItem(row, 2, alias_item)
 
             for col in range(table.columnCount()):
                 if table.item(row, col):
@@ -838,16 +847,8 @@ class MainWindow(QMainWindow):
     def update_class_list(self):
         class_table = self.right_panel.class_table
         class_table.blockSignals(True)
-        current_aliases = {}
-        for row in range(class_table.rowCount()):
-            try:
-                alias = class_table.item(row, 0).text()
-                cid = int(class_table.item(row, 1).text())
-                current_aliases[cid] = alias
-            except (AttributeError, ValueError):
-                continue
-        self.class_aliases.update(current_aliases)
-        class_table.clearContents()
+
+        preserved_aliases = self.class_aliases.copy()
         unique_class_ids = sorted(
             list(
                 {
@@ -857,10 +858,17 @@ class MainWindow(QMainWindow):
                 }
             )
         )
+
+        new_aliases = {}
+        for cid in unique_class_ids:
+            new_aliases[cid] = preserved_aliases.get(cid, str(cid))
+
+        self.class_aliases = new_aliases
+
+        class_table.clearContents()
         class_table.setRowCount(len(unique_class_ids))
         for row, cid in enumerate(unique_class_ids):
-            alias = self.class_aliases.get(cid, str(cid))
-            alias_item = QTableWidgetItem(alias)
+            alias_item = QTableWidgetItem(self.class_aliases.get(cid))
             id_item = QTableWidgetItem(str(cid))
             id_item.setFlags(id_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
             color = self._get_color_for_class(cid)
@@ -868,6 +876,7 @@ class MainWindow(QMainWindow):
             id_item.setBackground(QBrush(color))
             class_table.setItem(row, 0, alias_item)
             class_table.setItem(row, 1, id_item)
+
         class_table.blockSignals(False)
 
     def update_class_filter_combo(self):
@@ -935,7 +944,9 @@ class MainWindow(QMainWindow):
             except (ValueError, AttributeError):
                 pass
         class_table.blockSignals(False)
+
         self.update_class_filter_combo()
+        self.update_segment_table()
 
     def get_selected_segment_indices(self):
         table = self.right_panel.segment_table
