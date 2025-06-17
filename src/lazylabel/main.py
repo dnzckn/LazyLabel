@@ -344,10 +344,15 @@ class MainWindow(QMainWindow):
         elif self.mode == "polygon" and self.polygon_points:
             if self.rubber_band_line is None:
                 self.rubber_band_line = QGraphicsLineItem()
+
+                line_color = QColor(Qt.GlobalColor.white)
+                line_color.setAlpha(150)
+
                 self.rubber_band_line.setPen(
-                    QPen(Qt.GlobalColor.white, self.line_thickness, Qt.PenStyle.DotLine)
+                    QPen(line_color, self.line_thickness, Qt.PenStyle.DotLine)
                 )
                 self.viewer.scene().addItem(self.rubber_band_line)
+
             self.rubber_band_line.setLine(
                 self.polygon_points[-1].x(),
                 self.polygon_points[-1].y(),
