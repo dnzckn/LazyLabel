@@ -50,8 +50,8 @@ class MainWindow(QMainWindow):
         self.next_class_id = 0
 
         # Annotation visual settings
-        self.point_radius = 0.3
-        self.line_thickness = 0.5
+        self.point_radius = 2
+        self.line_thickness = 1
 
         self.point_items, self.positive_points, self.negative_points = [], [], []
         self.polygon_points, self.polygon_preview_items = [], []
@@ -353,19 +353,41 @@ class MainWindow(QMainWindow):
     def undo_last_action(self):
         if self.mode == "polygon" and self.polygon_points:
             self.polygon_points.pop()
-            if self.polygon_preview_items:
-                self.viewer.scene().removeItem(self.polygon_preview_items.pop())
+
+            for item in self.polygon_preview_items:
+                if item.scene():
+                    self.viewer.scene().removeItem(item)
+            self.polygon_preview_items.clear()
+
+            for point in self.polygon_points:
+                point_diameter = self.point_radius * 2
+                point_color = QColor(Qt.GlobalColor.blue)
+                point_color.setAlpha(150)
+                dot = QGraphicsEllipseItem(
+                    point.x() - self.point_radius,
+                    point.y() - self.point_radius,
+                    point_diameter,
+                    point_diameter,
+                )
+                dot.setBrush(QBrush(point_color))
+                dot.setPen(QPen(Qt.GlobalColor.transparent))
+                self.viewer.scene().addItem(dot)
+                self.polygon_preview_items.append(dot)
+
             self.draw_polygon_preview()
+
         elif self.mode == "sam_points" and self.point_items:
             item_to_remove = self.point_items.pop()
             point_pos = item_to_remove.rect().topLeft() + QPointF(
                 self.point_radius, self.point_radius
             )
             point_coords = [int(point_pos.x()), int(point_pos.y())]
+
             if point_coords in self.positive_points:
                 self.positive_points.remove(point_coords)
             elif point_coords in self.negative_points:
                 self.negative_points.remove(point_coords)
+
             self.viewer.scene().removeItem(item_to_remove)
             self.update_segmentation()
 
@@ -476,6 +498,8 @@ class MainWindow(QMainWindow):
                 poly_item.setPen(QPen(Qt.GlobalColor.transparent))
                 self.viewer.scene().addItem(poly_item)
                 self.segment_items[i].append(poly_item)
+
+                base_color.setAlpha(150)
                 vertex_color = QBrush(base_color)
                 point_diameter = self.point_radius * 2
                 for v in seg_dict["vertices"]:
@@ -856,7 +880,12 @@ class MainWindow(QMainWindow):
     def add_point(self, pos, positive):
         point_list = self.positive_points if positive else self.negative_points
         point_list.append([int(pos.x()), int(pos.y())])
-        color = Qt.GlobalColor.green if positive else Qt.GlobalColor.red
+
+        point_color = (
+            QColor(Qt.GlobalColor.green) if positive else QColor(Qt.GlobalColor.red)
+        )
+        point_color.setAlpha(150)
+
         point_diameter = self.point_radius * 2
         point_item = QGraphicsEllipseItem(
             pos.x() - self.point_radius,
@@ -864,7 +893,7 @@ class MainWindow(QMainWindow):
             point_diameter,
             point_diameter,
         )
-        point_item.setBrush(QBrush(color))
+        point_item.setBrush(QBrush(point_color))
         point_item.setPen(QPen(Qt.GlobalColor.transparent))
         self.viewer.scene().addItem(point_item)
         self.point_items.append(point_item)
@@ -910,13 +939,17 @@ class MainWindow(QMainWindow):
             return
         self.polygon_points.append(pos)
         point_diameter = self.point_radius * 2
+
+        point_color = QColor(Qt.GlobalColor.blue)
+        point_color.setAlpha(150)
+
         dot = QGraphicsEllipseItem(
             pos.x() - self.point_radius,
             pos.y() - self.point_radius,
             point_diameter,
             point_diameter,
         )
-        dot.setBrush(QBrush(Qt.GlobalColor.blue))
+        dot.setBrush(QBrush(point_color))
         dot.setPen(QPen(Qt.GlobalColor.transparent))
         self.viewer.scene().addItem(dot)
         self.polygon_preview_items.append(dot)
@@ -943,6 +976,8 @@ class MainWindow(QMainWindow):
             self.polygon_preview_items.append(preview_poly)
 
         if len(self.polygon_points) > 1:
+            line_color = QColor(Qt.GlobalColor.cyan)
+            line_color.setAlpha(150)
             for i in range(len(self.polygon_points) - 1):
                 line = QGraphicsLineItem(
                     self.polygon_points[i].x(),
@@ -950,7 +985,7 @@ class MainWindow(QMainWindow):
                     self.polygon_points[i + 1].x(),
                     self.polygon_points[i + 1].y(),
                 )
-                line.setPen(QPen(Qt.GlobalColor.cyan, self.line_thickness))
+                line.setPen(QPen(line_color, self.line_thickness))
                 self.viewer.scene().addItem(line)
                 self.polygon_preview_items.append(line)
 
