@@ -12,7 +12,9 @@ class CustomFileSystemModel(QFileSystemModel):
         self.highlighted_path = None
 
     def set_highlighted_path(self, path):
-        self.highlighted_path = path
+        self.highlighted_path = os.path.normpath(path) if path else None
+        # Trigger repaint of the entire view
+        self.layoutChanged.emit()
 
     def columnCount(self, parent: QModelIndex = QModelIndex()) -> int:
         return 2
@@ -39,9 +41,13 @@ class CustomFileSystemModel(QFileSystemModel):
 
         # Handle the temporary highlight for saving
         if role == Qt.ItemDataRole.BackgroundRole:
-            filePath = self.filePath(index)
-            if filePath == self.highlighted_path:
-                return QBrush(QColor("yellow"))
+            filePath = os.path.normpath(self.filePath(index))
+            if (
+                self.highlighted_path
+                and os.path.splitext(filePath)[0]
+                == os.path.splitext(self.highlighted_path)[0]
+            ):
+                return QBrush(QColor(40, 80, 40))  # Dark green highlight
 
         if index.column() == 1:
             if role == Qt.ItemDataRole.CheckStateRole:

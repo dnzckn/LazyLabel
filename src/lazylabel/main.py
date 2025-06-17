@@ -16,7 +16,7 @@ from PyQt6.QtWidgets import (
     QGraphicsPolygonItem,
     QTableWidgetSelectionRange,
 )
-from PyQt6.QtGui import QPixmap, QColor, QPen, QBrush, QPolygonF, QIcon
+from PyQt6.QtGui import QPixmap, QColor, QPen, QBrush, QPolygonF, QIcon, QCursor
 from PyQt6.QtCore import Qt, QPointF, QTimer
 
 from .photo_viewer import PhotoViewer
@@ -49,6 +49,8 @@ class MainWindow(QMainWindow):
         self.current_image_path = None
         self.current_file_index = None
         self.next_class_id = 0
+
+        self.class_properties = {}  # Stores {'name': str, 'color': QColor}
 
         self.point_radius = 0.3
         self.line_thickness = 0.5
@@ -110,6 +112,7 @@ class MainWindow(QMainWindow):
             self.highlight_selected_segments
         )
         self.right_panel.segment_table.itemChanged.connect(self.handle_class_id_change)
+        self.right_panel.class_table.itemChanged.connect(self.handle_class_name_change)
         self.right_panel.btn_reassign_classes.clicked.connect(self.reassign_class_ids)
         self.right_panel.class_filter_combo.currentIndexChanged.connect(
             self.update_segment_table
@@ -121,17 +124,23 @@ class MainWindow(QMainWindow):
             self.toggle_selection_mode
         )
         self.control_panel.btn_clear_points.clicked.connect(self.clear_all_points)
+        self.control_panel.btn_fit_view.clicked.connect(self.viewer.fitInView)
 
-    def _get_color_for_class(self, class_id, saturation, value):
-        if class_id is None:
-            return QColor.fromHsv(0, 0, 128)
+    def show_notification(self, message, duration=3000):
+        self.control_panel.notification_label.setText(message)
+        QTimer.singleShot(
+            duration, lambda: self.control_panel.notification_label.clear()
+        )
 
-        hue = int((class_id * 222.4922359) % 360)
-        color = QColor.fromHsv(hue, saturation, value)
-
-        if not color.isValid():
-            return QColor(Qt.GlobalColor.white)
-        return color
+    def _get_class_properties(self, class_id):
+        if class_id not in self.class_properties:
+            hue = int((class_id * 222.4922359) % 360)
+            color = QColor.fromHsv(hue, 220, 220)
+            self.class_properties[class_id] = {
+                "name": f"Class {class_id}",
+                "color": color,
+            }
+        return self.class_properties[class_id]
 
     def set_mode(self, mode_name, is_toggle=False):
         if self.mode == "selection" and mode_name not in ["selection", "edit"]:
@@ -147,6 +156,16 @@ class MainWindow(QMainWindow):
             f"Mode: {mode_name.replace('_', ' ').title()}"
         )
         self.clear_all_points()
+
+        cursor_map = {
+            "sam_points": Qt.CursorShape.CrossCursor,
+            "polygon": Qt.CursorShape.CrossCursor,
+            "selection": Qt.CursorShape.ArrowCursor,
+            "edit": Qt.CursorShape.SizeAllCursor,
+            "pan": Qt.CursorShape.OpenHandCursor,
+        }
+        self.viewer.set_cursor(cursor_map.get(self.mode, Qt.CursorShape.ArrowCursor))
+
         self.viewer.setDragMode(
             self.viewer.DragMode.ScrollHandDrag
             if self.mode == "pan"
@@ -175,14 +194,25 @@ class MainWindow(QMainWindow):
 
     def toggle_edit_mode(self):
         selected_indices = self.get_selected_segment_indices()
+
+        if self.mode == "edit":
+            self.set_mode("selection", is_toggle=True)
+            return
+
+        if not selected_indices:
+            self.show_notification("Select a polygon to edit.")
+            return
+
         can_edit = any(
             self.segments[i].get("type") == "Polygon" for i in selected_indices
         )
-        if self.mode == "edit":
-            self.set_mode("selection", is_toggle=True)
-        elif self.mode == "selection" and can_edit:
-            self.set_mode("edit", is_toggle=True)
-            self.display_all_segments()
+
+        if not can_edit:
+            self.show_notification("Only polygon segments can be edited.")
+            return
+
+        self.set_mode("edit", is_toggle=True)
+        self.display_all_segments()
 
     def open_folder_dialog(self):
         folder_path = QFileDialog.getExistingDirectory(self, "Select Image Folder")
@@ -214,6 +244,7 @@ class MainWindow(QMainWindow):
     def reset_state(self):
         self.clear_all_points()
         self.segments.clear()
+        self.class_properties.clear()
         self.next_class_id = 0
         self.update_all_lists()
         items_to_remove = [
@@ -253,7 +284,8 @@ class MainWindow(QMainWindow):
             self.viewer.horizontalScrollBar().setValue(
                 self.viewer.horizontalScrollBar().value() + amount
             )
-
+        elif key == Qt.Key.Key_Period:
+            self.viewer.fitInView()
         # Other keybindings
         elif key == Qt.Key.Key_1:
             self.set_sam_mode()
@@ -277,9 +309,15 @@ class MainWindow(QMainWindow):
         elif key == Qt.Key.Key_A and mods == Qt.KeyboardModifier.ControlModifier:
             self.right_panel.segment_table.selectAll()
         elif key == Qt.Key.Key_Space:
-            self.save_current_segment()
+            if self.mode == "polygon" and self.polygon_points:
+                self.finalize_polygon()
+            else:
+                self.save_current_segment()
         elif key == Qt.Key.Key_Return or key == Qt.Key.Key_Enter:
-            self.save_output_to_npz()
+            if self.mode == "polygon" and self.polygon_points:
+                self.finalize_polygon()
+            else:
+                self.save_output_to_npz()
         elif (
             key == Qt.Key.Key_Equal or key == Qt.Key.Key_Plus
         ) and mods == Qt.KeyboardModifier.ControlModifier:
@@ -303,6 +341,10 @@ class MainWindow(QMainWindow):
         self._original_mouse_press(event)
         if event.isAccepted():
             return
+
+        if self.mode == "pan":
+            self.viewer.set_cursor(Qt.CursorShape.ClosedHandCursor)
+
         pos = event.scenePos()
         if (
             self.viewer._pixmap_item.pixmap().isNull()
@@ -364,6 +406,9 @@ class MainWindow(QMainWindow):
             self._original_mouse_move(event)
 
     def scene_mouse_release(self, event):
+        if self.mode == "pan":
+            self.viewer.set_cursor(Qt.CursorShape.OpenHandCursor)
+
         if self.mode == "edit" and self.is_dragging_polygon:
             self.is_dragging_polygon = False
             self.drag_initial_vertices.clear()
@@ -410,6 +455,17 @@ class MainWindow(QMainWindow):
             self.viewer.scene().removeItem(item_to_remove)
             self.update_segmentation()
 
+    def _update_next_class_id(self):
+        all_ids = {
+            seg.get("class_id")
+            for seg in self.segments
+            if seg.get("class_id") is not None
+        }
+        if not all_ids:
+            self.next_class_id = 0
+        else:
+            self.next_class_id = max(all_ids) + 1
+
     def finalize_polygon(self):
         if len(self.polygon_points) < 3:
             return
@@ -424,7 +480,7 @@ class MainWindow(QMainWindow):
                 "class_id": self.next_class_id,
             }
         )
-        self.next_class_id += 1
+        self._update_next_class_id()
         self.polygon_points.clear()
         for item in self.polygon_preview_items:
             self.viewer.scene().removeItem(item)
@@ -477,6 +533,7 @@ class MainWindow(QMainWindow):
         for i in selected_indices:
             self.segments[i]["class_id"] = target_class_id
 
+        self._update_next_class_id()
         self.update_all_lists()
         self.right_panel.segment_table.clearSelection()
         self.viewer.setFocus()
@@ -503,7 +560,9 @@ class MainWindow(QMainWindow):
         for i, seg_dict in enumerate(self.segments):
             self.segment_items[i] = []
             class_id = seg_dict.get("class_id")
-            base_color = self._get_color_for_class(class_id, saturation=220, value=220)
+
+            props = self._get_class_properties(class_id)
+            base_color = props["color"]
 
             if seg_dict["type"] == "Polygon":
                 poly_item = HoverablePolygonItem(QPolygonF(seg_dict["vertices"]))
@@ -609,7 +668,8 @@ class MainWindow(QMainWindow):
         filter_class_id = -1
         if not show_all:
             try:
-                filter_class_id = int(filter_text.split(" ")[1])
+                # Assumes format "Name (ID: X)"
+                filter_class_id = int(filter_text.split("ID: ")[1][:-1])
             except (ValueError, IndexError):
                 pass
 
@@ -622,11 +682,12 @@ class MainWindow(QMainWindow):
 
         for row, (original_index, seg) in enumerate(display_segments):
             class_id = seg.get("class_id")
-            color = self._get_color_for_class(class_id, saturation=180, value=200)
+            props = self._get_class_properties(class_id)
+            color = props["color"]
+            class_name = props["name"]
 
-            class_id_str = str(class_id) if class_id is not None else "N/A"
             index_item = NumericTableWidgetItem(str(original_index + 1))
-            class_item = NumericTableWidgetItem(class_id_str)
+            class_item = NumericTableWidgetItem(class_name)
             type_item = QTableWidgetItem(seg.get("type", "N/A"))
 
             index_item.setFlags(index_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
@@ -668,13 +729,19 @@ class MainWindow(QMainWindow):
         class_table.setRowCount(len(unique_class_ids))
 
         for row, cid in enumerate(unique_class_ids):
-            item = QTableWidgetItem(str(cid))
-            item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+            props = self._get_class_properties(cid)
+            name_item = QTableWidgetItem(props["name"])
+            id_item = QTableWidgetItem(str(cid))
 
-            color = self._get_color_for_class(cid, saturation=180, value=200)
+            id_item.setFlags(id_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+            id_item.setData(Qt.ItemDataRole.UserRole, cid)  # Store original ID
 
-            item.setBackground(QBrush(color))
-            class_table.setItem(row, 0, item)
+            color = props["color"]
+            name_item.setBackground(QBrush(color))
+            id_item.setBackground(QBrush(color))
+
+            class_table.setItem(row, 0, name_item)
+            class_table.setItem(row, 1, id_item)
 
         class_table.blockSignals(False)
 
@@ -689,11 +756,18 @@ class MainWindow(QMainWindow):
                 }
             )
         )
+
         current_selection = combo.currentText()
         combo.blockSignals(True)
         combo.clear()
         combo.addItem("All Classes")
-        combo.addItems([f"Class {cid}" for cid in unique_class_ids])
+        combo.addItems(
+            [
+                f"{self._get_class_properties(cid)['name']} (ID: {cid})"
+                for cid in unique_class_ids
+            ]
+        )
+
         if combo.findText(current_selection) > -1:
             combo.setCurrentText(current_selection)
         else:
@@ -703,21 +777,39 @@ class MainWindow(QMainWindow):
     def reassign_class_ids(self):
         class_table = self.right_panel.class_table
         ordered_ids = [
-            int(class_table.item(row, 0).text())
+            int(class_table.item(row, 1).text())
             for row in range(class_table.rowCount())
-            if class_table.item(row, 0) is not None
+            if class_table.item(row, 1) is not None
         ]
         id_map = {old_id: new_id for new_id, old_id in enumerate(ordered_ids)}
+
         for seg in self.segments:
             old_id = seg.get("class_id")
             if old_id in id_map:
                 seg["class_id"] = id_map[old_id]
-        self.next_class_id = len(ordered_ids)
+
+        # Rebuild class_properties with new IDs
+        new_class_properties = {}
+        for old_id, new_id in id_map.items():
+            if old_id in self.class_properties:
+                new_class_properties[new_id] = self.class_properties[old_id]
+        self.class_properties = new_class_properties
+
+        self._update_next_class_id()
         self.update_all_lists()
         self.viewer.setFocus()
 
+    def handle_class_name_change(self, item):
+        if item.column() == 0:  # Class Name column
+            class_table = self.right_panel.class_table
+            id_item = class_table.item(item.row(), 1)
+            if id_item:
+                class_id = int(id_item.text())
+                self.class_properties[class_id]["name"] = item.text()
+                self.update_all_lists()  # Refresh everything to show new name
+
     def handle_class_id_change(self, item):
-        if item.column() != 1:
+        if item.column() != 1:  # Class Name/ID column in segment table
             return
         table = self.right_panel.segment_table
         index_item = table.item(item.row(), 0)
@@ -726,26 +818,33 @@ class MainWindow(QMainWindow):
 
         table.blockSignals(True)
         try:
-            new_class_id_text = item.text()
-            if not new_class_id_text.strip():
-                raise ValueError("Class ID cannot be empty.")
-            new_class_id = int(new_class_id_text)
+            new_class_name = item.text()
+            # Find class id by name
+            new_class_id = None
+            for cid, props in self.class_properties.items():
+                if props["name"] == new_class_name:
+                    new_class_id = cid
+                    break
+
+            if new_class_id is None:  # If not found, try to parse as integer
+                new_class_id = int(new_class_name)
+
             original_index = index_item.data(Qt.ItemDataRole.UserRole)
 
             if original_index is None or original_index >= len(self.segments):
                 raise IndexError("Invalid segment index found in table.")
 
             self.segments[original_index]["class_id"] = new_class_id
-            if new_class_id >= self.next_class_id:
-                self.next_class_id = new_class_id + 1
+            self._update_next_class_id()
             self.update_all_lists()
+
         except (ValueError, TypeError, AttributeError, IndexError) as e:
+            # On failure, revert text to original
             original_index = index_item.data(Qt.ItemDataRole.UserRole)
             if original_index is not None and original_index < len(self.segments):
                 original_class_id = self.segments[original_index].get("class_id")
-                item.setText(
-                    str(original_class_id) if original_class_id is not None else "N/A"
-                )
+                original_props = self._get_class_properties(original_class_id)
+                item.setText(original_props["name"])
         finally:
             table.blockSignals(False)
             self.viewer.setFocus()
@@ -771,22 +870,21 @@ class MainWindow(QMainWindow):
             self.viewer._pixmap_item.pixmap().height(),
             self.viewer._pixmap_item.pixmap().width(),
         )
-        unique_class_ids = sorted(
-            list(
-                {
-                    seg["class_id"]
-                    for seg in self.segments
-                    if seg.get("class_id") is not None
-                }
-            )
-        )
-        if not unique_class_ids:
-            self.right_panel.status_label.setText("Save failed: No classes.")
+
+        class_table = self.right_panel.class_table
+        ordered_ids = [
+            int(class_table.item(row, 1).text())
+            for row in range(class_table.rowCount())
+            if class_table.item(row, 1) is not None
+        ]
+
+        if not ordered_ids:
+            self.right_panel.status_label.setText("Save failed: No classes defined.")
             QTimer.singleShot(3000, lambda: self.right_panel.status_label.clear())
             return
 
-        id_map = {old_id: new_id for new_id, old_id in enumerate(unique_class_ids)}
-        num_final_classes = len(unique_class_ids)
+        id_map = {old_id: new_id for new_id, old_id in enumerate(ordered_ids)}
+        num_final_classes = len(ordered_ids)
         final_mask_tensor = np.zeros((h, w, num_final_classes), dtype=np.uint8)
 
         for seg in self.segments:
@@ -805,7 +903,9 @@ class MainWindow(QMainWindow):
                 )
 
         np.savez_compressed(output_path, mask=final_mask_tensor.astype(np.uint8))
-        self.file_model.setRootPath(self.file_model.rootPath())
+
+        self.file_model.set_highlighted_path(output_path)
+        QTimer.singleShot(1500, lambda: self.file_model.set_highlighted_path(None))
 
         self.right_panel.status_label.setText("Saved!")
         self.generate_yolo_annotations(npz_file_path=output_path)
@@ -866,7 +966,7 @@ class MainWindow(QMainWindow):
                     "class_id": self.next_class_id,
                 }
             )
-            self.next_class_id += 1
+            self._update_next_class_id()
             self.clear_all_points()
             self.update_all_lists()
 
@@ -876,6 +976,7 @@ class MainWindow(QMainWindow):
             return
         for i in sorted(selected_indices, reverse=True):
             del self.segments[i]
+        self._update_next_class_id()
         self.update_all_lists()
         self.viewer.setFocus()
 
@@ -901,7 +1002,7 @@ class MainWindow(QMainWindow):
                                     "class_id": i,
                                 }
                             )
-                    self.next_class_id = num_classes
+                    self._update_next_class_id()
             self.update_all_lists()
 
     def add_point(self, pos, positive):
@@ -959,7 +1060,7 @@ class MainWindow(QMainWindow):
                 (pos.x() - self.polygon_points[0].x()) ** 2
                 + (pos.y() - self.polygon_points[0].y()) ** 2
             )
-            < 2**2  # pixel distance threshold
+            < 25  # pixel distance threshold squared
         ):
             if len(self.polygon_points) > 2:
                 self.finalize_polygon()
@@ -983,12 +1084,11 @@ class MainWindow(QMainWindow):
         self.draw_polygon_preview()
 
     def draw_polygon_preview(self):
-        if self.rubber_band_line:
-            self.viewer.scene().removeItem(self.rubber_band_line)
-            self.rubber_band_line = None
+        # Clean up old preview lines/polygons
         for item in self.polygon_preview_items:
             if not isinstance(item, QGraphicsEllipseItem):
-                self.viewer.scene().removeItem(item)
+                if item.scene():
+                    self.viewer.scene().removeItem(item)
         self.polygon_preview_items = [
             item
             for item in self.polygon_preview_items

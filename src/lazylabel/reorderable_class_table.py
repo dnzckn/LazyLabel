@@ -9,7 +9,7 @@ class ReorderableClassTable(QTableWidget):
         self.setAcceptDrops(True)
         self.setDropIndicatorShown(True)
         self.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
-        self.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
+        self.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self.setDragDropMode(QAbstractItemView.DragDropMode.InternalMove)
         self.scroll_margin = 40
 
@@ -30,29 +30,30 @@ class ReorderableClassTable(QTableWidget):
             if drop_row < 0:
                 drop_row = self.rowCount()
 
-            selected_rows = sorted(
-                list({index.row() for index in self.selectedIndexes()}), reverse=True
-            )
+            rows = sorted(list({index.row() for index in self.selectedIndexes()}))
 
-            dragged_items = []
-            for row in selected_rows:
-                # Take the item from the row and keep its data
-                item = self.takeItem(row, 0)
-                dragged_items.insert(0, item)
-                # Then remove the row itself
+            if drop_row >= rows[0] and drop_row <= rows[-1] + 1:
+                event.ignore()
+                return
+
+            dragged_data = []
+            for row in reversed(rows):
+                row_data = []
+                for col in range(self.columnCount()):
+                    row_data.append(self.takeItem(row, col))
+                dragged_data.insert(0, row_data)
                 self.removeRow(row)
 
-            # Adjust drop row if it was shifted by the removal
-            for row in selected_rows:
-                if row < drop_row:
-                    drop_row -= 1
+            if drop_row > rows[-1]:
+                drop_row -= len(rows)
 
-            # Insert items at the new location
-            for item in dragged_items:
+            for row_data in dragged_data:
                 self.insertRow(drop_row)
-                self.setItem(drop_row, 0, item)
+                for col, item in enumerate(row_data):
+                    self.setItem(drop_row, col, item)
                 self.selectRow(drop_row)
                 drop_row += 1
 
             event.accept()
-        super().dropEvent(event)
+        else:
+            super().dropEvent(event)
