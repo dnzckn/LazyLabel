@@ -26,6 +26,7 @@ from .controls import ControlPanel, RightPanel
 from .custom_file_system_model import CustomFileSystemModel
 from .editable_vertex import EditableVertexItem
 from .hoverable_polygon_item import HoverablePolygonItem
+from .hoverable_pixmap_item import HoverablePixmapItem
 from .numeric_table_widget_item import NumericTableWidgetItem
 
 
@@ -49,7 +50,6 @@ class MainWindow(QMainWindow):
         self.current_file_index = None
         self.next_class_id = 0
 
-        # Annotation visual settings
         self.point_radius = 0.3
         self.line_thickness = 0.5
 
@@ -548,8 +548,16 @@ class MainWindow(QMainWindow):
                         self.viewer.scene().addItem(vertex_item)
                         self.segment_items[i].append(vertex_item)
             elif seg_dict.get("mask") is not None:
-                pixmap = mask_to_pixmap(seg_dict["mask"], base_color.getRgb()[:3])
-                pixmap_item = self.viewer.scene().addPixmap(pixmap)
+                default_pixmap = mask_to_pixmap(
+                    seg_dict["mask"], base_color.getRgb()[:3], alpha=70
+                )
+                hover_pixmap = mask_to_pixmap(
+                    seg_dict["mask"], base_color.getRgb()[:3], alpha=170
+                )
+
+                pixmap_item = HoverablePixmapItem()
+                pixmap_item.set_pixmaps(default_pixmap, hover_pixmap)
+                self.viewer.scene().addItem(pixmap_item)
                 pixmap_item.setZValue(i + 1)
                 self.segment_items[i].append(pixmap_item)
         self.highlight_selected_segments()
