@@ -9,7 +9,7 @@ class ReorderableClassTable(QTableWidget):
         self.setAcceptDrops(True)
         self.setDropIndicatorShown(True)
         self.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
-        self.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
+        self.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
         self.setDragDropMode(QAbstractItemView.DragDropMode.InternalMove)
         self.scroll_margin = 40
 
@@ -30,24 +30,27 @@ class ReorderableClassTable(QTableWidget):
             if drop_row < 0:
                 drop_row = self.rowCount()
 
-            rows = sorted(list({index.row() for index in self.selectedIndexes()}))
+            selected_rows = sorted(
+                list({index.row() for index in self.selectedIndexes()}), reverse=True
+            )
 
-            if drop_row >= rows[0] and drop_row <= rows[-1] + 1:
-                event.ignore()
-                return
-
-            dragged_data = []
-            for row in reversed(rows):
-                row_data = []
-                for col in range(self.columnCount()):
-                    row_data.append(self.takeItem(row, col))
-                dragged_data.insert(0, row_data)
+            dragged_rows_data = []
+            for row in selected_rows:
+                # Take all items from the row
+                row_data = [
+                    self.takeItem(row, col) for col in range(self.columnCount())
+                ]
+                dragged_rows_data.insert(0, row_data)
+                # Then remove the row itself
                 self.removeRow(row)
 
-            if drop_row > rows[-1]:
-                drop_row -= len(rows)
+            # Adjust drop row if it was shifted by the removal
+            for row in selected_rows:
+                if row < drop_row:
+                    drop_row -= 1
 
-            for row_data in dragged_data:
+            # Insert rows and their items at the new location
+            for row_data in dragged_rows_data:
                 self.insertRow(drop_row)
                 for col, item in enumerate(row_data):
                     self.setItem(drop_row, col, item)
@@ -55,5 +58,4 @@ class ReorderableClassTable(QTableWidget):
                 drop_row += 1
 
             event.accept()
-        else:
-            super().dropEvent(event)
+        super().dropEvent(event)

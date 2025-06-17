@@ -324,6 +324,7 @@ class MainWindow(QMainWindow):
             )
         elif key == Qt.Key.Key_Period:
             self.viewer.fitInView()
+        # Other keybindings
         elif key == Qt.Key.Key_1:
             self.set_sam_mode()
         elif key == Qt.Key.Key_2:
@@ -821,11 +822,18 @@ class MainWindow(QMainWindow):
 
     def reassign_class_ids(self):
         class_table = self.right_panel.class_table
-        ordered_ids = [
-            int(class_table.item(row, 1).text())
-            for row in range(class_table.rowCount())
-            if class_table.item(row, 1) is not None
-        ]
+
+        ordered_ids = []
+        for row in range(class_table.rowCount()):
+            id_item = class_table.item(row, 1)
+            # **FIX:** Add check to prevent crash on empty/invalid item
+            if id_item and id_item.text():
+                try:
+                    ordered_ids.append(int(id_item.text()))
+                except ValueError:
+                    # Handle cases where text might not be a valid int, though it should be
+                    continue
+
         id_map = {old_id: new_id for new_id, old_id in enumerate(ordered_ids)}
 
         for seg in self.segments:
@@ -860,7 +868,7 @@ class MainWindow(QMainWindow):
                 pass  # Ignore if ID item is not valid
 
         class_table.blockSignals(False)
-        self.update_class_filter_combo()
+        self.update_class_filter_combo()  # Refresh filter to show new alias
 
     def handle_class_id_change(self, item):
         if item.column() != 1:  # Class ID column in segment table
