@@ -60,9 +60,7 @@ class MainWindow(QMainWindow):
         self.current_file_index = QModelIndex()
 
         self.next_class_id = 0
-
-        self.class_aliases = {}  # {class_id: "alias_string"}
-
+        self.class_aliases = {}
         self.point_radius = 0.3
         self.line_thickness = 0.5
 
@@ -122,7 +120,6 @@ class MainWindow(QMainWindow):
         self.right_panel.segment_table.itemSelectionChanged.connect(
             self.highlight_selected_segments
         )
-        self.right_panel.segment_table.itemChanged.connect(self.handle_class_id_change)
         self.right_panel.class_table.itemChanged.connect(self.handle_alias_change)
         self.right_panel.btn_reassign_classes.clicked.connect(self.reassign_class_ids)
         self.right_panel.class_filter_combo.currentIndexChanged.connect(
@@ -137,11 +134,50 @@ class MainWindow(QMainWindow):
         self.control_panel.btn_clear_points.clicked.connect(self.clear_all_points)
         self.control_panel.btn_fit_view.clicked.connect(self.viewer.fitInView)
 
-        # **FIX:** Use QShortcut for reliable global hotkeys
-        next_shortcut = QShortcut(QKeySequence(Qt.Key.Key_Right), self)
-        next_shortcut.activated.connect(self.load_next_image)
-        prev_shortcut = QShortcut(QKeySequence(Qt.Key.Key_Left), self)
-        prev_shortcut.activated.connect(self.load_previous_image)
+        QShortcut(QKeySequence(Qt.Key.Key_Right), self, self.load_next_image)
+        QShortcut(QKeySequence(Qt.Key.Key_Left), self, self.load_previous_image)
+        QShortcut(QKeySequence(Qt.Key.Key_1), self, self.set_sam_mode)
+        QShortcut(QKeySequence(Qt.Key.Key_2), self, self.set_polygon_mode)
+        QShortcut(QKeySequence(Qt.Key.Key_E), self, self.toggle_selection_mode)
+        QShortcut(QKeySequence(Qt.Key.Key_Q), self, self.toggle_pan_mode)
+        QShortcut(QKeySequence(Qt.Key.Key_R), self, self.toggle_edit_mode)
+        QShortcut(QKeySequence(Qt.Key.Key_C), self, self.clear_all_points)
+        QShortcut(QKeySequence(Qt.Key.Key_Escape), self, self.handle_escape_press)
+        QShortcut(QKeySequence(Qt.Key.Key_V), self, self.delete_selected_segments)
+        QShortcut(
+            QKeySequence(Qt.Key.Key_Backspace), self, self.delete_selected_segments
+        )
+        QShortcut(QKeySequence(Qt.Key.Key_M), self, self.handle_merge_press)
+        QShortcut(QKeySequence("Ctrl+Z"), self, self.undo_last_action)
+        QShortcut(
+            QKeySequence("Ctrl+A"), self, self.right_panel.segment_table.selectAll
+        )
+        QShortcut(QKeySequence(Qt.Key.Key_Space), self, self.handle_space_press)
+        QShortcut(QKeySequence(Qt.Key.Key_Return), self, self.handle_enter_press)
+        QShortcut(QKeySequence(Qt.Key.Key_Enter), self, self.handle_enter_press)
+        QShortcut(QKeySequence(Qt.Key.Key_Period), self, self.viewer.fitInView)
+
+    def handle_escape_press(self):
+        self.right_panel.segment_table.clearSelection()
+        self.right_panel.class_table.clearSelection()
+        self.clear_all_points()
+        self.viewer.setFocus()
+
+    def handle_space_press(self):
+        if self.mode == "polygon" and self.polygon_points:
+            self.finalize_polygon()
+        else:
+            self.save_current_segment()
+
+    def handle_enter_press(self):
+        if self.mode == "polygon" and self.polygon_points:
+            self.finalize_polygon()
+        else:
+            self.save_output_to_npz()
+
+    def handle_merge_press(self):
+        self.assign_selected_to_class()
+        self.right_panel.segment_table.clearSelection()
 
     def show_notification(self, message, duration=3000):
         self.control_panel.notification_label.setText(message)
@@ -152,10 +188,8 @@ class MainWindow(QMainWindow):
     def _get_color_for_class(self, class_id):
         if class_id is None:
             return QColor.fromHsv(0, 0, 128)
-
         hue = int((class_id * 222.4922359) % 360)
         color = QColor.fromHsv(hue, 220, 220)
-
         if not color.isValid():
             return QColor(Qt.GlobalColor.white)
         return color
@@ -288,8 +322,6 @@ class MainWindow(QMainWindow):
 
     def reset_state(self):
         self.clear_all_points()
-        # Preserve aliases between images in the same session
-        # self.class_aliases.clear()
         self.segments.clear()
         self.next_class_id = 0
         self.update_all_lists()
@@ -305,10 +337,16 @@ class MainWindow(QMainWindow):
 
     def keyPressEvent(self, event):
         key, mods = event.key(), event.modifiers()
-        if event.isAutoRepeat():
+
+        if event.isAutoRepeat() and key not in {
+            Qt.Key.Key_W,
+            Qt.Key.Key_A,
+            Qt.Key.Key_S,
+            Qt.Key.Key_D,
+        }:
             return
 
-        pan_multiplier = 5.0 if (mods & Qt.KeyboardModifier.ShiftModifier) else 2
+        pan_multiplier = 5.0 if (mods & Qt.KeyboardModifier.ShiftModifier) else 2.0
 
         if key == Qt.Key.Key_W:
             amount = int(self.viewer.height() * 0.1 * pan_multiplier)
@@ -320,7 +358,7 @@ class MainWindow(QMainWindow):
             self.viewer.verticalScrollBar().setValue(
                 self.viewer.verticalScrollBar().value() + amount
             )
-        elif key == Qt.Key.Key_A and not (mods & Qt.KeyboardModifier.ControlModifier):
+        elif key == Qt.Key.Key_A:
             amount = int(self.viewer.width() * 0.1 * pan_multiplier)
             self.viewer.horizontalScrollBar().setValue(
                 self.viewer.horizontalScrollBar().value() - amount
@@ -330,40 +368,6 @@ class MainWindow(QMainWindow):
             self.viewer.horizontalScrollBar().setValue(
                 self.viewer.horizontalScrollBar().value() + amount
             )
-        elif key == Qt.Key.Key_Period:
-            self.viewer.fitInView()
-        # Other keybindings
-        elif key == Qt.Key.Key_1:
-            self.set_sam_mode()
-        elif key == Qt.Key.Key_2:
-            self.set_polygon_mode()
-        elif key == Qt.Key.Key_E:
-            self.toggle_selection_mode()
-        elif key == Qt.Key.Key_Q:
-            self.toggle_pan_mode()
-        elif key == Qt.Key.Key_R:
-            self.toggle_edit_mode()
-        elif key == Qt.Key.Key_C or key == Qt.Key.Key_Escape:
-            self.clear_all_points()
-        elif key == Qt.Key.Key_V or key == Qt.Key.Key_Backspace:
-            self.delete_selected_segments()
-        elif key == Qt.Key.Key_M:
-            self.assign_selected_to_class()
-            self.right_panel.segment_table.clearSelection()
-        elif key == Qt.Key.Key_Z and mods == Qt.KeyboardModifier.ControlModifier:
-            self.undo_last_action()
-        elif key == Qt.Key.Key_A and mods == Qt.KeyboardModifier.ControlModifier:
-            self.right_panel.segment_table.selectAll()
-        elif key == Qt.Key.Key_Space:
-            if self.mode == "polygon" and self.polygon_points:
-                self.finalize_polygon()
-            else:
-                self.save_current_segment()
-        elif key == Qt.Key.Key_Return or key == Qt.Key.Key_Enter:
-            if self.mode == "polygon" and self.polygon_points:
-                self.finalize_polygon()
-            else:
-                self.save_output_to_npz()
         elif (
             key == Qt.Key.Key_Equal or key == Qt.Key.Key_Plus
         ) and mods == Qt.KeyboardModifier.ControlModifier:
@@ -382,6 +386,8 @@ class MainWindow(QMainWindow):
             )
             self.display_all_segments()
             self.clear_all_points()
+        else:
+            super().keyPressEvent(event)
 
     def scene_mouse_press(self, event):
         self._original_mouse_press(event)
@@ -432,15 +438,12 @@ class MainWindow(QMainWindow):
         elif self.mode == "polygon" and self.polygon_points:
             if self.rubber_band_line is None:
                 self.rubber_band_line = QGraphicsLineItem()
-
                 line_color = QColor(Qt.GlobalColor.white)
                 line_color.setAlpha(150)
-
                 self.rubber_band_line.setPen(
                     QPen(line_color, self.line_thickness, Qt.PenStyle.DotLine)
                 )
                 self.viewer.scene().addItem(self.rubber_band_line)
-
             self.rubber_band_line.setLine(
                 self.polygon_points[-1].x(),
                 self.polygon_points[-1].y(),
@@ -454,7 +457,6 @@ class MainWindow(QMainWindow):
     def scene_mouse_release(self, event):
         if self.mode == "pan":
             self.viewer.set_cursor(Qt.CursorShape.OpenHandCursor)
-
         if self.mode == "edit" and self.is_dragging_polygon:
             self.is_dragging_polygon = False
             self.drag_initial_vertices.clear()
@@ -463,12 +465,10 @@ class MainWindow(QMainWindow):
     def undo_last_action(self):
         if self.mode == "polygon" and self.polygon_points:
             self.polygon_points.pop()
-
             for item in self.polygon_preview_items:
                 if item.scene():
                     self.viewer.scene().removeItem(item)
             self.polygon_preview_items.clear()
-
             for point in self.polygon_points:
                 point_diameter = self.point_radius * 2
                 point_color = QColor(Qt.GlobalColor.blue)
@@ -483,21 +483,17 @@ class MainWindow(QMainWindow):
                 dot.setPen(QPen(Qt.GlobalColor.transparent))
                 self.viewer.scene().addItem(dot)
                 self.polygon_preview_items.append(dot)
-
             self.draw_polygon_preview()
-
         elif self.mode == "sam_points" and self.point_items:
             item_to_remove = self.point_items.pop()
             point_pos = item_to_remove.rect().topLeft() + QPointF(
                 self.point_radius, self.point_radius
             )
             point_coords = [int(point_pos.x()), int(point_pos.y())]
-
             if point_coords in self.positive_points:
                 self.positive_points.remove(point_coords)
             elif point_coords in self.negative_points:
                 self.negative_points.remove(point_coords)
-
             self.viewer.scene().removeItem(item_to_remove)
             self.update_segmentation()
 
@@ -581,7 +577,6 @@ class MainWindow(QMainWindow):
 
         self._update_next_class_id()
         self.update_all_lists()
-        self.right_panel.segment_table.clearSelection()
         self.viewer.setFocus()
 
     def rasterize_polygon(self, vertices):
@@ -606,7 +601,6 @@ class MainWindow(QMainWindow):
         for i, seg_dict in enumerate(self.segments):
             self.segment_items[i] = []
             class_id = seg_dict.get("class_id")
-
             base_color = self._get_color_for_class(class_id)
 
             if seg_dict["type"] == "Polygon":
@@ -621,7 +615,6 @@ class MainWindow(QMainWindow):
                 poly_item.setPen(QPen(Qt.GlobalColor.transparent))
                 self.viewer.scene().addItem(poly_item)
                 self.segment_items[i].append(poly_item)
-
                 base_color.setAlpha(150)
                 vertex_color = QBrush(base_color)
                 point_diameter = self.point_radius * 2
@@ -658,7 +651,6 @@ class MainWindow(QMainWindow):
                 hover_pixmap = mask_to_pixmap(
                     seg_dict["mask"], base_color.getRgb()[:3], alpha=170
                 )
-
                 pixmap_item = HoverablePixmapItem()
                 pixmap_item.set_pixmaps(default_pixmap, hover_pixmap)
                 self.viewer.scene().addItem(pixmap_item)
@@ -697,7 +689,7 @@ class MainWindow(QMainWindow):
                 self.highlight_items.append(highlight_item)
 
     def update_all_lists(self):
-        self.update_class_list()  # Must be before filter combo
+        self.update_class_list()
         self.update_class_filter_combo()
         self.update_segment_table()
         self.display_all_segments()
@@ -727,13 +719,13 @@ class MainWindow(QMainWindow):
         for row, (original_index, seg) in enumerate(display_segments):
             class_id = seg.get("class_id")
             color = self._get_color_for_class(class_id)
-
             class_id_str = str(class_id) if class_id is not None else "N/A"
             index_item = NumericTableWidgetItem(str(original_index + 1))
             class_item = NumericTableWidgetItem(class_id_str)
             type_item = QTableWidgetItem(seg.get("type", "N/A"))
 
             index_item.setFlags(index_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+            class_item.setFlags(class_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
             type_item.setFlags(type_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
             index_item.setData(Qt.ItemDataRole.UserRole, original_index)
 
@@ -758,8 +750,6 @@ class MainWindow(QMainWindow):
     def update_class_list(self):
         class_table = self.right_panel.class_table
         class_table.blockSignals(True)
-
-        # Preserve existing aliases during update
         current_aliases = {}
         for row in range(class_table.rowCount()):
             try:
@@ -769,9 +759,7 @@ class MainWindow(QMainWindow):
             except (AttributeError, ValueError):
                 continue
         self.class_aliases.update(current_aliases)
-
         class_table.clearContents()
-
         unique_class_ids = sorted(
             list(
                 {
@@ -782,21 +770,16 @@ class MainWindow(QMainWindow):
             )
         )
         class_table.setRowCount(len(unique_class_ids))
-
         for row, cid in enumerate(unique_class_ids):
             alias = self.class_aliases.get(cid, str(cid))
             alias_item = QTableWidgetItem(alias)
             id_item = QTableWidgetItem(str(cid))
-
             id_item.setFlags(id_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
-
             color = self._get_color_for_class(cid)
             alias_item.setBackground(QBrush(color))
             id_item.setBackground(QBrush(color))
-
             class_table.setItem(row, 0, alias_item)
             class_table.setItem(row, 1, id_item)
-
         class_table.blockSignals(False)
 
     def update_class_filter_combo(self):
@@ -810,7 +793,6 @@ class MainWindow(QMainWindow):
                 }
             )
         )
-
         current_selection = combo.currentText()
         combo.blockSignals(True)
         combo.clear()
@@ -821,7 +803,6 @@ class MainWindow(QMainWindow):
                 for cid in unique_class_ids
             ]
         )
-
         if combo.findText(current_selection) > -1:
             combo.setCurrentText(current_selection)
         else:
@@ -830,7 +811,6 @@ class MainWindow(QMainWindow):
 
     def reassign_class_ids(self):
         class_table = self.right_panel.class_table
-
         ordered_ids = []
         for row in range(class_table.rowCount()):
             id_item = class_table.item(row, 1)
@@ -839,75 +819,35 @@ class MainWindow(QMainWindow):
                     ordered_ids.append(int(id_item.text()))
                 except ValueError:
                     continue
-
         id_map = {old_id: new_id for new_id, old_id in enumerate(ordered_ids)}
-
         for seg in self.segments:
             old_id = seg.get("class_id")
             if old_id in id_map:
                 seg["class_id"] = id_map[old_id]
-
         new_aliases = {
             id_map[old_id]: self.class_aliases.get(old_id, str(old_id))
             for old_id in ordered_ids
             if old_id in self.class_aliases
         }
         self.class_aliases = new_aliases
-
         self._update_next_class_id()
         self.update_all_lists()
         self.viewer.setFocus()
 
     def handle_alias_change(self, item):
-        if item.column() != 0:  # Alias column
+        if item.column() != 0:
             return
-
         class_table = self.right_panel.class_table
         class_table.blockSignals(True)
-
         id_item = class_table.item(item.row(), 1)
         if id_item:
             try:
                 class_id = int(id_item.text())
                 self.class_aliases[class_id] = item.text()
             except (ValueError, AttributeError):
-                pass  # Ignore if ID item is not valid
-
+                pass
         class_table.blockSignals(False)
-        self.update_class_filter_combo()  # Refresh filter to show new alias
-
-    def handle_class_id_change(self, item):
-        if item.column() != 1:  # Class ID column in segment table
-            return
-        table = self.right_panel.segment_table
-        index_item = table.item(item.row(), 0)
-        if not index_item:
-            return
-
-        table.blockSignals(True)
-        try:
-            new_class_id_text = item.text()
-            if not new_class_id_text.strip():
-                raise ValueError("Class ID cannot be empty.")
-            new_class_id = int(new_class_id_text)
-            original_index = index_item.data(Qt.ItemDataRole.UserRole)
-
-            if original_index is None or original_index >= len(self.segments):
-                raise IndexError("Invalid segment index found in table.")
-
-            self.segments[original_index]["class_id"] = new_class_id
-            self._update_next_class_id()
-            self.update_all_lists()
-        except (ValueError, TypeError, AttributeError, IndexError) as e:
-            original_index = index_item.data(Qt.ItemDataRole.UserRole)
-            if original_index is not None and original_index < len(self.segments):
-                original_class_id = self.segments[original_index].get("class_id")
-                item.setText(
-                    str(original_class_id) if original_class_id is not None else "N/A"
-                )
-        finally:
-            table.blockSignals(False)
-            self.viewer.setFocus()
+        self.update_class_filter_combo()
 
     def get_selected_segment_indices(self):
         table = self.right_panel.segment_table
@@ -973,35 +913,29 @@ class MainWindow(QMainWindow):
 
     def generate_yolo_annotations(self, npz_file_path):
         output_path = os.path.splitext(self.current_image_path)[0] + ".txt"
-        npz_data = np.load(npz_file_path)  # Load the saved npz file
-
+        npz_data = np.load(npz_file_path)
         img = npz_data["mask"][:, :, :]
-        num_channels = img.shape[2]  # C
-        h, w = img.shape[:2]  # H, W
+        num_channels = img.shape[2]
+        h, w = img.shape[:2]
 
         directory_path = os.path.dirname(output_path)
         os.makedirs(directory_path, exist_ok=True)
 
         yolo_annotations = []
-
         for channel in range(num_channels):
             single_channel_image = img[:, :, channel]
             contours, _ = cv2.findContours(
                 single_channel_image, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
             )
-
-            class_id = channel  # Use the channel index as the class ID
-
+            class_id = channel
             for contour in contours:
                 x, y, width, height = cv2.boundingRect(contour)
                 center_x = x + width / 2
                 center_y = y + height / 2
-
                 normalized_center_x = center_x / w
                 normalized_center_y = center_y / h
                 normalized_width = width / w
                 normalized_height = height / h
-
                 yolo_entry = f"{class_id} {normalized_center_x} {normalized_center_y} {normalized_width} {normalized_height}"
                 yolo_annotations.append(yolo_entry)
 
@@ -1068,12 +1002,10 @@ class MainWindow(QMainWindow):
     def add_point(self, pos, positive):
         point_list = self.positive_points if positive else self.negative_points
         point_list.append([int(pos.x()), int(pos.y())])
-
         point_color = (
             QColor(Qt.GlobalColor.green) if positive else QColor(Qt.GlobalColor.red)
         )
         point_color.setAlpha(150)
-
         point_diameter = self.point_radius * 2
         point_item = QGraphicsEllipseItem(
             pos.x() - self.point_radius,
@@ -1120,17 +1052,15 @@ class MainWindow(QMainWindow):
                 (pos.x() - self.polygon_points[0].x()) ** 2
                 + (pos.y() - self.polygon_points[0].y()) ** 2
             )
-            < 4  # pixel distance threshold squared
+            < 4
         ):
             if len(self.polygon_points) > 2:
                 self.finalize_polygon()
             return
         self.polygon_points.append(pos)
         point_diameter = self.point_radius * 2
-
         point_color = QColor(Qt.GlobalColor.blue)
         point_color.setAlpha(150)
-
         dot = QGraphicsEllipseItem(
             pos.x() - self.point_radius,
             pos.y() - self.point_radius,
@@ -1144,7 +1074,6 @@ class MainWindow(QMainWindow):
         self.draw_polygon_preview()
 
     def draw_polygon_preview(self):
-        # Clean up old preview lines/polygons
         for item in self.polygon_preview_items:
             if not isinstance(item, QGraphicsEllipseItem):
                 if item.scene():
@@ -1154,7 +1083,6 @@ class MainWindow(QMainWindow):
             for item in self.polygon_preview_items
             if isinstance(item, QGraphicsEllipseItem)
         ]
-
         if len(self.polygon_points) > 2:
             preview_poly = QGraphicsPolygonItem(QPolygonF(self.polygon_points))
             preview_poly.setBrush(QBrush(QColor(0, 255, 255, 100)))

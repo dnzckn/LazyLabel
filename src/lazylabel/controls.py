@@ -28,7 +28,6 @@ class ControlPanel(QWidget):
         self.mode_label.setFont(font)
         layout.addWidget(self.mode_label)
 
-        # Mode Buttons
         self.btn_sam_mode = QPushButton("Point Mode (1)")
         self.btn_sam_mode.setToolTip("Switch to Point Mode for AI segmentation (1)")
         self.btn_polygon_mode = QPushButton("Polygon Mode (2)")
@@ -45,7 +44,6 @@ class ControlPanel(QWidget):
         layout.addWidget(line1)
         layout.addSpacing(10)
 
-        # Action Buttons
         self.btn_fit_view = QPushButton("Fit View (.)")
         self.btn_fit_view.setToolTip("Reset image zoom and pan to fit the view (.)")
         self.btn_clear_points = QPushButton("Clear Clicks (C)")
@@ -55,7 +53,6 @@ class ControlPanel(QWidget):
 
         layout.addSpacing(10)
 
-        # Settings
         self.chk_auto_save = QCheckBox("Auto-Save on Navigate")
         self.chk_auto_save.setToolTip(
             "Automatically save work when using arrow keys to change images."
@@ -65,18 +62,14 @@ class ControlPanel(QWidget):
 
         layout.addStretch()
 
-        # Notification Label
         self.notification_label = QLabel("")
         font = self.notification_label.font()
         font.setItalic(True)
         self.notification_label.setFont(font)
-        self.notification_label.setStyleSheet(
-            "color: #ffa500;"
-        )  # Orange color for visibility
+        self.notification_label.setStyleSheet("color: #ffa500;")
         self.notification_label.setWordWrap(True)
         layout.addWidget(self.notification_label)
 
-        # Device Label
         self.device_label = QLabel("Device: Unknown")
         layout.addWidget(self.device_label)
         self.setFixedWidth(250)
@@ -87,7 +80,6 @@ class RightPanel(QWidget):
         super().__init__(parent)
         layout = QVBoxLayout(self)
 
-        # File Explorer
         file_explorer_layout = QVBoxLayout()
         self.btn_open_folder = QPushButton("Open Image Folder")
         self.btn_open_folder.setToolTip("Open a directory of images")
@@ -96,12 +88,10 @@ class RightPanel(QWidget):
         file_explorer_layout.addWidget(self.file_tree)
         layout.addLayout(file_explorer_layout)
 
-        # Status Label
         self.status_label = QLabel("")
         self.status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(self.status_label)
 
-        # Segment Table
         segment_layout = QVBoxLayout()
         class_filter_layout = QHBoxLayout()
         class_filter_layout.addWidget(QLabel("Filter Class:"))
@@ -112,7 +102,7 @@ class RightPanel(QWidget):
 
         self.segment_table = QTableWidget()
         self.segment_table.setColumnCount(3)
-        self.segment_table.setHorizontalHeaderLabels(["Index", "Class ID", "Type"])
+        self.segment_table.setHorizontalHeaderLabels(["Segment ID", "Class ID", "Type"])
         self.segment_table.horizontalHeader().setSectionResizeMode(
             QHeaderView.ResizeMode.Stretch
         )
@@ -120,6 +110,7 @@ class RightPanel(QWidget):
             QAbstractItemView.SelectionBehavior.SelectRows
         )
         self.segment_table.setSortingEnabled(True)
+        self.segment_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         segment_layout.addWidget(self.segment_table)
 
         segment_action_layout = QHBoxLayout()
@@ -136,21 +127,21 @@ class RightPanel(QWidget):
         segment_layout.addLayout(segment_action_layout)
         layout.addLayout(segment_layout, 2)
 
-        # Class Table
         class_layout = QVBoxLayout()
         class_layout.addWidget(QLabel("Class Order:"))
         self.class_table = ReorderableClassTable()
         self.class_table.setToolTip(
-            "Set class aliases and drag to reorder channels for saving."
+            "Double-click to set class aliases and drag to reorder channels for saving."
         )
         self.class_table.setColumnCount(2)
-        self.class_table.setHorizontalHeaderLabels(["Alias", "Channel Index"])
+        self.class_table.setHorizontalHeaderLabels(["Alias", "Class ID"])
         self.class_table.horizontalHeader().setSectionResizeMode(
             0, QHeaderView.ResizeMode.Stretch
         )
         self.class_table.horizontalHeader().setSectionResizeMode(
             1, QHeaderView.ResizeMode.ResizeToContents
         )
+        self.class_table.setEditTriggers(QAbstractItemView.EditTrigger.DoubleClicked)
 
         class_layout.addWidget(self.class_table)
         self.btn_reassign_classes = QPushButton("Reassign Class IDs")
