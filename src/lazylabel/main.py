@@ -50,7 +50,7 @@ class MainWindow(QMainWindow):
         self.current_file_index = None
         self.next_class_id = 0
 
-        self.class_properties = {}  # Stores {'name': str, 'color': QColor}
+        self.class_aliases = {}  # {class_id: "alias_string"}
 
         self.point_radius = 0.3
         self.line_thickness = 0.5
@@ -112,7 +112,7 @@ class MainWindow(QMainWindow):
             self.highlight_selected_segments
         )
         self.right_panel.segment_table.itemChanged.connect(self.handle_class_id_change)
-        self.right_panel.class_table.itemChanged.connect(self.handle_class_name_change)
+        self.right_panel.class_table.itemChanged.connect(self.handle_alias_change)
         self.right_panel.btn_reassign_classes.clicked.connect(self.reassign_class_ids)
         self.right_panel.class_filter_combo.currentIndexChanged.connect(
             self.update_segment_table
@@ -132,15 +132,16 @@ class MainWindow(QMainWindow):
             duration, lambda: self.control_panel.notification_label.clear()
         )
 
-    def _get_class_properties(self, class_id):
-        if class_id not in self.class_properties:
-            hue = int((class_id * 222.4922359) % 360)
-            color = QColor.fromHsv(hue, 220, 220)
-            self.class_properties[class_id] = {
-                "name": f"Class {class_id}",
-                "color": color,
-            }
-        return self.class_properties[class_id]
+    def _get_color_for_class(self, class_id):
+        if class_id is None:
+            return QColor.fromHsv(0, 0, 128)
+
+        hue = int((class_id * 222.4922359) % 360)
+        color = QColor.fromHsv(hue, 220, 220)
+
+        if not color.isValid():
+            return QColor(Qt.GlobalColor.white)
+        return color
 
     def set_mode(self, mode_name, is_toggle=False):
         if self.mode == "selection" and mode_name not in ["selection", "edit"]:
@@ -244,7 +245,7 @@ class MainWindow(QMainWindow):
     def reset_state(self):
         self.clear_all_points()
         self.segments.clear()
-        self.class_properties.clear()
+        self.class_aliases.clear()
         self.next_class_id = 0
         self.update_all_lists()
         items_to_remove = [
@@ -561,8 +562,7 @@ class MainWindow(QMainWindow):
             self.segment_items[i] = []
             class_id = seg_dict.get("class_id")
 
-            props = self._get_class_properties(class_id)
-            base_color = props["color"]
+            base_color = self._get_color_for_class(class_id)
 
             if seg_dict["type"] == "Polygon":
                 poly_item = HoverablePolygonItem(QPolygonF(seg_dict["vertices"]))
@@ -652,9 +652,9 @@ class MainWindow(QMainWindow):
                 self.highlight_items.append(highlight_item)
 
     def update_all_lists(self):
+        self.update_class_list()  # Must be before filter combo
         self.update_class_filter_combo()
         self.update_segment_table()
-        self.update_class_list()
         self.display_all_segments()
 
     def update_segment_table(self):
@@ -668,8 +668,7 @@ class MainWindow(QMainWindow):
         filter_class_id = -1
         if not show_all:
             try:
-                # Assumes format "Name (ID: X)"
-                filter_class_id = int(filter_text.split("ID: ")[1][:-1])
+                filter_class_id = int(filter_text.split("(ID: ")[1][:-1])
             except (ValueError, IndexError):
                 pass
 
@@ -682,12 +681,11 @@ class MainWindow(QMainWindow):
 
         for row, (original_index, seg) in enumerate(display_segments):
             class_id = seg.get("class_id")
-            props = self._get_class_properties(class_id)
-            color = props["color"]
-            class_name = props["name"]
+            color = self._get_color_for_class(class_id)
 
+            class_id_str = str(class_id) if class_id is not None else "N/A"
             index_item = NumericTableWidgetItem(str(original_index + 1))
-            class_item = NumericTableWidgetItem(class_name)
+            class_item = NumericTableWidgetItem(class_id_str)
             type_item = QTableWidgetItem(seg.get("type", "N/A"))
 
             index_item.setFlags(index_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
@@ -698,7 +696,7 @@ class MainWindow(QMainWindow):
             table.setItem(row, 1, class_item)
             table.setItem(row, 2, type_item)
 
-            for col in range(3):
+            for col in range(table.columnCount()):
                 if table.item(row, col):
                     table.item(row, col).setBackground(QBrush(color))
 
@@ -729,18 +727,17 @@ class MainWindow(QMainWindow):
         class_table.setRowCount(len(unique_class_ids))
 
         for row, cid in enumerate(unique_class_ids):
-            props = self._get_class_properties(cid)
-            name_item = QTableWidgetItem(props["name"])
+            alias = self.class_aliases.get(cid, str(cid))
+            alias_item = QTableWidgetItem(alias)
             id_item = QTableWidgetItem(str(cid))
 
             id_item.setFlags(id_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
-            id_item.setData(Qt.ItemDataRole.UserRole, cid)  # Store original ID
 
-            color = props["color"]
-            name_item.setBackground(QBrush(color))
+            color = self._get_color_for_class(cid)
+            alias_item.setBackground(QBrush(color))
             id_item.setBackground(QBrush(color))
 
-            class_table.setItem(row, 0, name_item)
+            class_table.setItem(row, 0, alias_item)
             class_table.setItem(row, 1, id_item)
 
         class_table.blockSignals(False)
@@ -763,7 +760,7 @@ class MainWindow(QMainWindow):
         combo.addItem("All Classes")
         combo.addItems(
             [
-                f"{self._get_class_properties(cid)['name']} (ID: {cid})"
+                f"{self.class_aliases.get(cid, cid)} (ID: {cid})"
                 for cid in unique_class_ids
             ]
         )
@@ -788,28 +785,34 @@ class MainWindow(QMainWindow):
             if old_id in id_map:
                 seg["class_id"] = id_map[old_id]
 
-        # Rebuild class_properties with new IDs
-        new_class_properties = {}
-        for old_id, new_id in id_map.items():
-            if old_id in self.class_properties:
-                new_class_properties[new_id] = self.class_properties[old_id]
-        self.class_properties = new_class_properties
+        new_aliases = {
+            id_map[old_id]: self.class_aliases.get(old_id, str(old_id))
+            for old_id in ordered_ids
+            if old_id in self.class_aliases
+        }
+        self.class_aliases = new_aliases
 
         self._update_next_class_id()
         self.update_all_lists()
         self.viewer.setFocus()
 
-    def handle_class_name_change(self, item):
-        if item.column() == 0:  # Class Name column
-            class_table = self.right_panel.class_table
-            id_item = class_table.item(item.row(), 1)
-            if id_item:
-                class_id = int(id_item.text())
-                self.class_properties[class_id]["name"] = item.text()
-                self.update_all_lists()  # Refresh everything to show new name
+    def handle_alias_change(self, item):
+        if item.column() != 0:  # Alias column
+            return
+
+        class_table = self.right_panel.class_table
+        class_table.blockSignals(True)
+
+        id_item = class_table.item(item.row(), 1)
+        if id_item:
+            class_id = int(id_item.text())
+            self.class_aliases[class_id] = item.text()
+
+        class_table.blockSignals(False)
+        self.update_class_filter_combo()  # Refresh filter to show new alias
 
     def handle_class_id_change(self, item):
-        if item.column() != 1:  # Class Name/ID column in segment table
+        if item.column() != 1:  # Class ID column in segment table
             return
         table = self.right_panel.segment_table
         index_item = table.item(item.row(), 0)
@@ -818,17 +821,10 @@ class MainWindow(QMainWindow):
 
         table.blockSignals(True)
         try:
-            new_class_name = item.text()
-            # Find class id by name
-            new_class_id = None
-            for cid, props in self.class_properties.items():
-                if props["name"] == new_class_name:
-                    new_class_id = cid
-                    break
-
-            if new_class_id is None:  # If not found, try to parse as integer
-                new_class_id = int(new_class_name)
-
+            new_class_id_text = item.text()
+            if not new_class_id_text.strip():
+                raise ValueError("Class ID cannot be empty.")
+            new_class_id = int(new_class_id_text)
             original_index = index_item.data(Qt.ItemDataRole.UserRole)
 
             if original_index is None or original_index >= len(self.segments):
@@ -837,14 +833,13 @@ class MainWindow(QMainWindow):
             self.segments[original_index]["class_id"] = new_class_id
             self._update_next_class_id()
             self.update_all_lists()
-
         except (ValueError, TypeError, AttributeError, IndexError) as e:
-            # On failure, revert text to original
             original_index = index_item.data(Qt.ItemDataRole.UserRole)
             if original_index is not None and original_index < len(self.segments):
                 original_class_id = self.segments[original_index].get("class_id")
-                original_props = self._get_class_properties(original_class_id)
-                item.setText(original_props["name"])
+                item.setText(
+                    str(original_class_id) if original_class_id is not None else "N/A"
+                )
         finally:
             table.blockSignals(False)
             self.viewer.setFocus()

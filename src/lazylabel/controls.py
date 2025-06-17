@@ -101,7 +101,7 @@ class RightPanel(QWidget):
 
         self.segment_table = QTableWidget()
         self.segment_table.setColumnCount(3)
-        self.segment_table.setHorizontalHeaderLabels(["Index", "Class", "Type"])
+        self.segment_table.setHorizontalHeaderLabels(["Index", "Class ID", "Type"])
         self.segment_table.horizontalHeader().setSectionResizeMode(
             QHeaderView.ResizeMode.Stretch
         )
@@ -130,10 +130,10 @@ class RightPanel(QWidget):
         class_layout.addWidget(QLabel("Class Order:"))
         self.class_table = ReorderableClassTable()
         self.class_table.setToolTip(
-            "Define class names and drag to reorder channels for saving."
+            "Set class aliases and drag to reorder channels for saving."
         )
         self.class_table.setColumnCount(2)
-        self.class_table.setHorizontalHeaderLabels(["Class Name", "ID"])
+        self.class_table.setHorizontalHeaderLabels(["Alias", "Channel Index"])
         self.class_table.horizontalHeader().setSectionResizeMode(
             0, QHeaderView.ResizeMode.Stretch
         )
@@ -144,7 +144,7 @@ class RightPanel(QWidget):
         class_layout.addWidget(self.class_table)
         self.btn_reassign_classes = QPushButton("Reassign Class IDs")
         self.btn_reassign_classes.setToolTip(
-            "Re-index class IDs based on the current order in this table"
+            "Re-index class channels based on the current order in this table"
         )
         class_layout.addWidget(self.btn_reassign_classes)
         layout.addLayout(class_layout, 1)
