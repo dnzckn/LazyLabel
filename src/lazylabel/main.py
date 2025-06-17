@@ -50,8 +50,8 @@ class MainWindow(QMainWindow):
         self.next_class_id = 0
 
         # Annotation visual settings
-        self.point_radius = 2
-        self.line_thickness = 1
+        self.point_radius = 0.3
+        self.line_thickness = 0.5
 
         self.point_items, self.positive_points, self.negative_points = [], [], []
         self.polygon_points, self.polygon_preview_items = [], []
@@ -275,13 +275,13 @@ class MainWindow(QMainWindow):
         elif (
             key == Qt.Key.Key_Equal or key == Qt.Key.Key_Plus
         ) and mods == Qt.KeyboardModifier.ControlModifier:
-            self.point_radius = min(20, self.point_radius + 1)
-            self.line_thickness = min(20, self.line_thickness + 1)
+            self.point_radius = min(20, self.point_radius + 0.3)
+            self.line_thickness = min(20, self.line_thickness + 0.5)
             self.display_all_segments()
             self.clear_all_points()
         elif key == Qt.Key.Key_Minus and mods == Qt.KeyboardModifier.ControlModifier:
-            self.point_radius = max(1, self.point_radius - 1)
-            self.line_thickness = max(1, self.line_thickness - 1)
+            self.point_radius = max(0.3, self.point_radius - 0.3)
+            self.line_thickness = max(0.5, self.line_thickness - 0.5)
             self.display_all_segments()
             self.clear_all_points()
 
@@ -932,7 +932,7 @@ class MainWindow(QMainWindow):
                 (pos.x() - self.polygon_points[0].x()) ** 2
                 + (pos.y() - self.polygon_points[0].y()) ** 2
             )
-            < 25
+            < 2**2  # pixel distance threshold
         ):
             if len(self.polygon_points) > 2:
                 self.finalize_polygon()
