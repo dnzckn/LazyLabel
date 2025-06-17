@@ -53,6 +53,9 @@ class MainWindow(QMainWindow):
         self.point_radius = 0.3
         self.line_thickness = 0.5
 
+        self._original_point_radius = self.point_radius
+        self._original_line_thickness = self.line_thickness
+
         self.point_items, self.positive_points, self.negative_points = [], [], []
         self.polygon_points, self.polygon_preview_items = [], []
         self.rubber_band_line = None
@@ -228,7 +231,7 @@ class MainWindow(QMainWindow):
         if event.isAutoRepeat():
             return
 
-        pan_multiplier = 4.0 if (mods & Qt.KeyboardModifier.ShiftModifier) else 1.0
+        pan_multiplier = 5.0 if (mods & Qt.KeyboardModifier.ShiftModifier) else 2
 
         if key == Qt.Key.Key_W:
             amount = int(self.viewer.height() * 0.1 * pan_multiplier)
@@ -280,13 +283,19 @@ class MainWindow(QMainWindow):
         elif (
             key == Qt.Key.Key_Equal or key == Qt.Key.Key_Plus
         ) and mods == Qt.KeyboardModifier.ControlModifier:
-            self.point_radius = min(20, self.point_radius + 1)
-            self.line_thickness = min(20, self.line_thickness + 1)
+            self.point_radius = min(20, self.point_radius + self._original_point_radius)
+            self.line_thickness = min(
+                20, self.line_thickness + self._original_line_thickness
+            )
             self.display_all_segments()
             self.clear_all_points()
         elif key == Qt.Key.Key_Minus and mods == Qt.KeyboardModifier.ControlModifier:
-            self.point_radius = max(1, self.point_radius - 1)
-            self.line_thickness = max(1, self.line_thickness - 1)
+            self.point_radius = max(
+                0.3, self.point_radius - self._original_point_radius
+            )
+            self.line_thickness = max(
+                0.5, self.line_thickness - self._original_line_thickness
+            )
             self.display_all_segments()
             self.clear_all_points()
 
