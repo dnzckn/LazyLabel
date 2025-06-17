@@ -61,11 +61,14 @@ class MainWindow(QMainWindow):
 
         self.next_class_id = 0
         self.class_aliases = {}
-        self.point_radius = 0.3
-        self.line_thickness = 0.5
 
-        self._original_point_radius = self.point_radius
-        self._original_line_thickness = self.line_thickness
+        self._original_point_radius = 0.3
+        self._original_line_thickness = 0.5
+        self.point_radius = self._original_point_radius
+        self.line_thickness = self._original_line_thickness
+
+        self.pan_multiplier = 1.0
+        self.polygon_join_threshold = 2
 
         self.point_items, self.positive_points, self.negative_points = [], [], []
         self.polygon_points, self.polygon_preview_items = [], []
@@ -99,6 +102,7 @@ class MainWindow(QMainWindow):
         )
         self.setup_connections()
         self.set_sam_mode()
+        self.set_annotation_size(10)
 
     def setup_connections(self):
         self._original_mouse_press = self.viewer.scene().mousePressEvent
@@ -134,6 +138,22 @@ class MainWindow(QMainWindow):
         self.control_panel.btn_clear_points.clicked.connect(self.clear_all_points)
         self.control_panel.btn_fit_view.clicked.connect(self.viewer.fitInView)
 
+        self.control_panel.size_slider.valueChanged.connect(self.set_annotation_size)
+        self.control_panel.pan_slider.valueChanged.connect(self.set_pan_multiplier)
+        self.control_panel.join_slider.valueChanged.connect(
+            self.set_polygon_join_threshold
+        )
+
+        self.control_panel.chk_save_npz.stateChanged.connect(
+            self.handle_save_checkbox_change
+        )
+        self.control_panel.chk_save_txt.stateChanged.connect(
+            self.handle_save_checkbox_change
+        )
+
+        self.control_panel.btn_toggle_visibility.clicked.connect(self.toggle_left_panel)
+        self.right_panel.btn_toggle_visibility.clicked.connect(self.toggle_right_panel)
+
         QShortcut(QKeySequence(Qt.Key.Key_Right), self, self.load_next_image)
         QShortcut(QKeySequence(Qt.Key.Key_Left), self, self.load_previous_image)
         QShortcut(QKeySequence(Qt.Key.Key_1), self, self.set_sam_mode)
@@ -156,6 +176,62 @@ class MainWindow(QMainWindow):
         QShortcut(QKeySequence(Qt.Key.Key_Return), self, self.handle_enter_press)
         QShortcut(QKeySequence(Qt.Key.Key_Enter), self, self.handle_enter_press)
         QShortcut(QKeySequence(Qt.Key.Key_Period), self, self.viewer.fitInView)
+
+    def toggle_left_panel(self):
+        is_visible = self.control_panel.main_controls_widget.isVisible()
+        self.control_panel.main_controls_widget.setVisible(not is_visible)
+        if is_visible:
+            self.control_panel.btn_toggle_visibility.setText("> Show")
+            self.control_panel.setFixedWidth(
+                self.control_panel.btn_toggle_visibility.sizeHint().width() + 10
+            )
+        else:
+            self.control_panel.btn_toggle_visibility.setText("< Hide")
+            self.control_panel.setFixedWidth(250)
+
+    def toggle_right_panel(self):
+        is_visible = self.right_panel.main_controls_widget.isVisible()
+        self.right_panel.main_controls_widget.setVisible(not is_visible)
+        if is_visible:
+            self.right_panel.btn_toggle_visibility.setText("< Show")
+            self.right_panel.setFixedWidth(
+                self.right_panel.btn_toggle_visibility.sizeHint().width() + 10
+            )
+        else:
+            self.right_panel.btn_toggle_visibility.setText("Hide >")
+            self.right_panel.setFixedWidth(350)
+
+    def handle_save_checkbox_change(self):
+        is_npz_checked = self.control_panel.chk_save_npz.isChecked()
+        is_txt_checked = self.control_panel.chk_save_txt.isChecked()
+
+        if not is_npz_checked and not is_txt_checked:
+            sender = self.sender()
+            if sender == self.control_panel.chk_save_npz:
+                self.control_panel.chk_save_txt.setChecked(True)
+            else:
+                self.control_panel.chk_save_npz.setChecked(True)
+
+    def set_annotation_size(self, value):
+        multiplier = value / 10.0
+        self.point_radius = self._original_point_radius * multiplier
+        self.line_thickness = self._original_line_thickness * multiplier
+
+        self.control_panel.size_label.setText(f"Annotation Size: {multiplier:.1f}x")
+
+        if self.control_panel.size_slider.value() != value:
+            self.control_panel.size_slider.setValue(value)
+
+        self.display_all_segments()
+        self.clear_all_points()
+
+    def set_pan_multiplier(self, value):
+        self.pan_multiplier = value / 10.0
+        self.control_panel.pan_label.setText(f"Pan Speed: {self.pan_multiplier:.1f}x")
+
+    def set_polygon_join_threshold(self, value):
+        self.polygon_join_threshold = value
+        self.control_panel.join_label.setText(f"Polygon Join Distance: {value}px")
 
     def handle_escape_press(self):
         self.right_panel.segment_table.clearSelection()
@@ -346,46 +422,44 @@ class MainWindow(QMainWindow):
         }:
             return
 
-        pan_multiplier = 5.0 if (mods & Qt.KeyboardModifier.ShiftModifier) else 2.0
+        shift_multiplier = 5.0 if mods & Qt.KeyboardModifier.ShiftModifier else 1.0
 
         if key == Qt.Key.Key_W:
-            amount = int(self.viewer.height() * 0.1 * pan_multiplier)
+            amount = int(
+                self.viewer.height() * 0.1 * self.pan_multiplier * shift_multiplier
+            )
             self.viewer.verticalScrollBar().setValue(
                 self.viewer.verticalScrollBar().value() - amount
             )
         elif key == Qt.Key.Key_S:
-            amount = int(self.viewer.height() * 0.1 * pan_multiplier)
+            amount = int(
+                self.viewer.height() * 0.1 * self.pan_multiplier * shift_multiplier
+            )
             self.viewer.verticalScrollBar().setValue(
                 self.viewer.verticalScrollBar().value() + amount
             )
         elif key == Qt.Key.Key_A:
-            amount = int(self.viewer.width() * 0.1 * pan_multiplier)
+            amount = int(
+                self.viewer.width() * 0.1 * self.pan_multiplier * shift_multiplier
+            )
             self.viewer.horizontalScrollBar().setValue(
                 self.viewer.horizontalScrollBar().value() - amount
             )
         elif key == Qt.Key.Key_D:
-            amount = int(self.viewer.width() * 0.1 * pan_multiplier)
+            amount = int(
+                self.viewer.width() * 0.1 * self.pan_multiplier * shift_multiplier
+            )
             self.viewer.horizontalScrollBar().setValue(
                 self.viewer.horizontalScrollBar().value() + amount
             )
         elif (
             key == Qt.Key.Key_Equal or key == Qt.Key.Key_Plus
         ) and mods == Qt.KeyboardModifier.ControlModifier:
-            self.point_radius = min(20, self.point_radius + self._original_point_radius)
-            self.line_thickness = min(
-                20, self.line_thickness + self._original_line_thickness
-            )
-            self.display_all_segments()
-            self.clear_all_points()
+            current_val = self.control_panel.size_slider.value()
+            self.control_panel.size_slider.setValue(current_val + 1)
         elif key == Qt.Key.Key_Minus and mods == Qt.KeyboardModifier.ControlModifier:
-            self.point_radius = max(
-                0.3, self.point_radius - self._original_point_radius
-            )
-            self.line_thickness = max(
-                0.5, self.line_thickness - self._original_line_thickness
-            )
-            self.display_all_segments()
-            self.clear_all_points()
+            current_val = self.control_panel.size_slider.value()
+            self.control_panel.size_slider.setValue(current_val - 1)
         else:
             super().keyPressEvent(event)
 
@@ -860,12 +934,19 @@ class MainWindow(QMainWindow):
         ]
 
     def save_output_to_npz(self):
-        if not self.segments or not self.current_image_path:
+        save_npz = self.control_panel.chk_save_npz.isChecked()
+        save_txt = self.control_panel.chk_save_txt.isChecked()
+
+        if (
+            (not save_npz and not save_txt)
+            or not self.segments
+            or not self.current_image_path
+        ):
             return
+
         self.right_panel.status_label.setText("Saving...")
         QApplication.processEvents()
 
-        output_path = os.path.splitext(self.current_image_path)[0] + ".npz"
         h, w = (
             self.viewer._pixmap_item.pixmap().height(),
             self.viewer._pixmap_item.pixmap().width(),
@@ -902,41 +983,42 @@ class MainWindow(QMainWindow):
                     final_mask_tensor[:, :, new_channel_idx], mask
                 )
 
-        np.savez_compressed(output_path, mask=final_mask_tensor.astype(np.uint8))
+        if save_npz:
+            npz_path = os.path.splitext(self.current_image_path)[0] + ".npz"
+            np.savez_compressed(npz_path, mask=final_mask_tensor.astype(np.uint8))
+            self.file_model.set_highlighted_path(npz_path)
+            QTimer.singleShot(1500, lambda: self.file_model.set_highlighted_path(None))
 
-        self.file_model.set_highlighted_path(output_path)
-        QTimer.singleShot(1500, lambda: self.file_model.set_highlighted_path(None))
+        if save_txt:
+            self.generate_yolo_annotations(final_mask_tensor)
 
         self.right_panel.status_label.setText("Saved!")
-        self.generate_yolo_annotations(npz_file_path=output_path)
         QTimer.singleShot(3000, lambda: self.right_panel.status_label.clear())
 
-    def generate_yolo_annotations(self, npz_file_path):
+    def generate_yolo_annotations(self, mask_tensor):
         output_path = os.path.splitext(self.current_image_path)[0] + ".txt"
-        npz_data = np.load(npz_file_path)
-        img = npz_data["mask"][:, :, :]
-        num_channels = img.shape[2]
-        h, w = img.shape[:2]
+        h, w, num_channels = mask_tensor.shape
 
         directory_path = os.path.dirname(output_path)
         os.makedirs(directory_path, exist_ok=True)
 
         yolo_annotations = []
         for channel in range(num_channels):
-            single_channel_image = img[:, :, channel]
+            single_channel_image = mask_tensor[:, :, channel]
+            if not np.any(single_channel_image):
+                continue
+
             contours, _ = cv2.findContours(
                 single_channel_image, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
             )
             class_id = channel
             for contour in contours:
                 x, y, width, height = cv2.boundingRect(contour)
-                center_x = x + width / 2
-                center_y = y + height / 2
-                normalized_center_x = center_x / w
-                normalized_center_y = center_y / h
+                center_x = (x + width / 2) / w
+                center_y = (y + height / 2) / h
                 normalized_width = width / w
                 normalized_height = height / h
-                yolo_entry = f"{class_id} {normalized_center_x} {normalized_center_y} {normalized_width} {normalized_height}"
+                yolo_entry = f"{class_id} {center_x} {center_y} {normalized_width} {normalized_height}"
                 yolo_annotations.append(yolo_entry)
 
         with open(output_path, "w") as file:
@@ -1052,7 +1134,7 @@ class MainWindow(QMainWindow):
                 (pos.x() - self.polygon_points[0].x()) ** 2
                 + (pos.y() - self.polygon_points[0].y()) ** 2
             )
-            < 4
+            < self.polygon_join_threshold**2
         ):
             if len(self.polygon_points) > 2:
                 self.finalize_polygon()

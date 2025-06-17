@@ -11,6 +11,8 @@ from PyQt6.QtWidgets import (
     QComboBox,
     QHeaderView,
     QCheckBox,
+    QSlider,
+    QGroupBox,
 )
 from PyQt6.QtCore import Qt
 from .reorderable_class_table import ReorderableClassTable
@@ -21,12 +23,24 @@ class ControlPanel(QWidget):
         super().__init__(parent)
         layout = QVBoxLayout(self)
         layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+
+        toggle_layout = QHBoxLayout()
+        self.btn_toggle_visibility = QPushButton("< Hide")
+        self.btn_toggle_visibility.setToolTip("Hide this panel")
+        toggle_layout.addWidget(self.btn_toggle_visibility)
+        toggle_layout.addStretch()
+        layout.addLayout(toggle_layout)
+
+        self.main_controls_widget = QWidget()
+        main_layout = QVBoxLayout(self.main_controls_widget)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+
         self.mode_label = QLabel("Mode: Points")
         font = self.mode_label.font()
         font.setPointSize(14)
         font.setBold(True)
         self.mode_label.setFont(font)
-        layout.addWidget(self.mode_label)
+        main_layout.addWidget(self.mode_label)
 
         self.btn_sam_mode = QPushButton("Point Mode (1)")
         self.btn_sam_mode.setToolTip("Switch to Point Mode for AI segmentation (1)")
@@ -34,33 +48,89 @@ class ControlPanel(QWidget):
         self.btn_polygon_mode.setToolTip("Switch to Polygon Drawing Mode (2)")
         self.btn_selection_mode = QPushButton("Selection Mode (E)")
         self.btn_selection_mode.setToolTip("Toggle segment selection (E)")
-        layout.addWidget(self.btn_sam_mode)
-        layout.addWidget(self.btn_polygon_mode)
-        layout.addWidget(self.btn_selection_mode)
+        main_layout.addWidget(self.btn_sam_mode)
+        main_layout.addWidget(self.btn_polygon_mode)
+        main_layout.addWidget(self.btn_selection_mode)
 
-        layout.addSpacing(20)
+        main_layout.addSpacing(20)
         line1 = QFrame()
         line1.setFrameShape(QFrame.Shape.HLine)
-        layout.addWidget(line1)
-        layout.addSpacing(10)
+        main_layout.addWidget(line1)
+        main_layout.addSpacing(10)
 
         self.btn_fit_view = QPushButton("Fit View (.)")
         self.btn_fit_view.setToolTip("Reset image zoom and pan to fit the view (.)")
         self.btn_clear_points = QPushButton("Clear Clicks (C)")
         self.btn_clear_points.setToolTip("Clear current temporary points/vertices (C)")
-        layout.addWidget(self.btn_fit_view)
-        layout.addWidget(self.btn_clear_points)
+        main_layout.addWidget(self.btn_fit_view)
+        main_layout.addWidget(self.btn_clear_points)
 
-        layout.addSpacing(10)
+        main_layout.addSpacing(10)
+
+        settings_group = QGroupBox("Settings")
+        settings_layout = QVBoxLayout()
 
         self.chk_auto_save = QCheckBox("Auto-Save on Navigate")
         self.chk_auto_save.setToolTip(
             "Automatically save work when using arrow keys to change images."
         )
         self.chk_auto_save.setChecked(True)
-        layout.addWidget(self.chk_auto_save)
+        settings_layout.addWidget(self.chk_auto_save)
 
-        layout.addStretch()
+        self.chk_save_npz = QCheckBox("Save .npz")
+        self.chk_save_npz.setChecked(True)
+        self.chk_save_npz.setToolTip(
+            "Save the final mask as a compressed NumPy NPZ file."
+        )
+        settings_layout.addWidget(self.chk_save_npz)
+
+        self.chk_save_txt = QCheckBox("Save .txt")
+        self.chk_save_txt.setChecked(True)
+        self.chk_save_txt.setToolTip(
+            "Save bounding box annotations in YOLO TXT format."
+        )
+        settings_layout.addWidget(self.chk_save_txt)
+
+        settings_group.setLayout(settings_layout)
+        main_layout.addWidget(settings_group)
+
+        sliders_group = QGroupBox("Adjustments")
+        sliders_layout = QVBoxLayout()
+
+        self.size_label = QLabel("Annotation Size: 1.0x")
+        self.size_slider = QSlider(Qt.Orientation.Horizontal)
+        self.size_slider.setRange(1, 50)
+        self.size_slider.setValue(10)
+        self.size_slider.setToolTip("Adjusts the size of points and lines (Ctrl +/-)")
+        sliders_layout.addWidget(self.size_label)
+        sliders_layout.addWidget(self.size_slider)
+
+        sliders_layout.addSpacing(10)
+
+        self.pan_label = QLabel("Pan Speed: 1.0x")
+        self.pan_slider = QSlider(Qt.Orientation.Horizontal)
+        self.pan_slider.setRange(1, 100)
+        self.pan_slider.setValue(10)
+        self.pan_slider.setToolTip(
+            "Adjusts the speed of WASD panning. Hold Shift for 5x boost."
+        )
+        sliders_layout.addWidget(self.pan_label)
+        sliders_layout.addWidget(self.pan_slider)
+
+        sliders_layout.addSpacing(10)
+
+        self.join_label = QLabel("Polygon Join Distance: 2px")
+        self.join_slider = QSlider(Qt.Orientation.Horizontal)
+        self.join_slider.setRange(1, 10)
+        self.join_slider.setValue(2)
+        self.join_slider.setToolTip("The pixel distance to 'snap' a polygon closed.")
+        sliders_layout.addWidget(self.join_label)
+        sliders_layout.addWidget(self.join_slider)
+
+        sliders_group.setLayout(sliders_layout)
+        main_layout.addWidget(sliders_group)
+
+        main_layout.addStretch()
 
         self.notification_label = QLabel("")
         font = self.notification_label.font()
@@ -68,10 +138,12 @@ class ControlPanel(QWidget):
         self.notification_label.setFont(font)
         self.notification_label.setStyleSheet("color: #ffa500;")
         self.notification_label.setWordWrap(True)
-        layout.addWidget(self.notification_label)
+        main_layout.addWidget(self.notification_label)
 
         self.device_label = QLabel("Device: Unknown")
-        layout.addWidget(self.device_label)
+        main_layout.addWidget(self.device_label)
+
+        layout.addWidget(self.main_controls_widget)
         self.setFixedWidth(250)
 
 
@@ -80,17 +152,28 @@ class RightPanel(QWidget):
         super().__init__(parent)
         layout = QVBoxLayout(self)
 
+        toggle_layout = QHBoxLayout()
+        toggle_layout.addStretch()
+        self.btn_toggle_visibility = QPushButton("Hide >")
+        self.btn_toggle_visibility.setToolTip("Hide this panel")
+        toggle_layout.addWidget(self.btn_toggle_visibility)
+        layout.addLayout(toggle_layout)
+
+        self.main_controls_widget = QWidget()
+        main_layout = QVBoxLayout(self.main_controls_widget)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+
         file_explorer_layout = QVBoxLayout()
         self.btn_open_folder = QPushButton("Open Image Folder")
         self.btn_open_folder.setToolTip("Open a directory of images")
         self.file_tree = QTreeView()
         file_explorer_layout.addWidget(self.btn_open_folder)
         file_explorer_layout.addWidget(self.file_tree)
-        layout.addLayout(file_explorer_layout)
+        main_layout.addLayout(file_explorer_layout)
 
         self.status_label = QLabel("")
         self.status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(self.status_label)
+        main_layout.addWidget(self.status_label)
 
         segment_layout = QVBoxLayout()
         class_filter_layout = QHBoxLayout()
@@ -125,7 +208,7 @@ class RightPanel(QWidget):
         segment_action_layout.addWidget(self.btn_merge_selection)
         segment_action_layout.addWidget(self.btn_delete_selection)
         segment_layout.addLayout(segment_action_layout)
-        layout.addLayout(segment_layout, 2)
+        main_layout.addLayout(segment_layout, 2)
 
         class_layout = QVBoxLayout()
         class_layout.addWidget(QLabel("Class Order:"))
@@ -149,6 +232,7 @@ class RightPanel(QWidget):
             "Re-index class channels based on the current order in this table"
         )
         class_layout.addWidget(self.btn_reassign_classes)
-        layout.addLayout(class_layout, 1)
+        main_layout.addLayout(class_layout, 1)
 
+        layout.addWidget(self.main_controls_widget)
         self.setFixedWidth(350)

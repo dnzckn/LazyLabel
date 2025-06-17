@@ -13,11 +13,10 @@ class CustomFileSystemModel(QFileSystemModel):
 
     def set_highlighted_path(self, path):
         self.highlighted_path = os.path.normpath(path) if path else None
-        # Trigger repaint of the entire view
         self.layoutChanged.emit()
 
     def columnCount(self, parent: QModelIndex = QModelIndex()) -> int:
-        return 2
+        return 3
 
     def headerData(
         self,
@@ -32,14 +31,15 @@ class CustomFileSystemModel(QFileSystemModel):
             if section == 0:
                 return "File Name"
             if section == 1:
-                return "Mask"
+                return ".npz"
+            if section == 2:
+                return ".txt"
         return super().headerData(section, orientation, role)
 
     def data(self, index: QModelIndex, role: int = Qt.ItemDataRole.DisplayRole):
         if not index.isValid():
             return None
 
-        # Handle the temporary highlight for saving
         if role == Qt.ItemDataRole.BackgroundRole:
             filePath = os.path.normpath(self.filePath(index))
             if (
@@ -47,17 +47,26 @@ class CustomFileSystemModel(QFileSystemModel):
                 and os.path.splitext(filePath)[0]
                 == os.path.splitext(self.highlighted_path)[0]
             ):
-                return QBrush(QColor(40, 80, 40))  # Dark green highlight
+                return QBrush(QColor(40, 80, 40))
 
-        if index.column() == 1:
-            if role == Qt.ItemDataRole.CheckStateRole:
-                filePath = self.filePath(index.siblingAtColumn(0))
-                mask_path = os.path.splitext(filePath)[0] + ".npz"
-                return (
-                    Qt.CheckState.Checked
-                    if os.path.exists(mask_path)
-                    else Qt.CheckState.Unchecked
-                )
-            return None
+        if index.column() > 0 and role == Qt.ItemDataRole.CheckStateRole:
+            filePath = self.filePath(index.siblingAtColumn(0))
+            base_path = os.path.splitext(filePath)[0]
+
+            if index.column() == 1:
+                check_path = base_path + ".npz"
+            elif index.column() == 2:
+                check_path = base_path + ".txt"
+            else:
+                return None
+
+            return (
+                Qt.CheckState.Checked
+                if os.path.exists(check_path)
+                else Qt.CheckState.Unchecked
+            )
+
+        if index.column() > 0 and role == Qt.ItemDataRole.DisplayRole:
+            return ""
 
         return super().data(index, role)
