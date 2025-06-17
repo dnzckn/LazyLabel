@@ -7,3 +7,4 @@ src/lazylabel/.DS_Store
 /dist
 *.npz
 *.txt
+*.json

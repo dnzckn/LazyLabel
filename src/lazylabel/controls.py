@@ -1,3 +1,4 @@
+# src/lazylabel/controls.py
 from PyQt6.QtWidgets import (
     QWidget,
     QVBoxLayout,
@@ -13,6 +14,7 @@ from PyQt6.QtWidgets import (
     QCheckBox,
     QSlider,
     QGroupBox,
+    QSplitter,
 )
 from PyQt6.QtCore import Qt
 from .reorderable_class_table import ReorderableClassTable
@@ -91,6 +93,13 @@ class ControlPanel(QWidget):
         )
         settings_layout.addWidget(self.chk_save_txt)
 
+        self.chk_save_class_aliases = QCheckBox("Save Class Aliases (.json)")
+        self.chk_save_class_aliases.setToolTip(
+            "Save class aliases to a companion JSON file."
+        )
+        self.chk_save_class_aliases.setChecked(False)
+        settings_layout.addWidget(self.chk_save_class_aliases)
+
         settings_group.setLayout(settings_layout)
         main_layout.addWidget(settings_group)
 
@@ -150,32 +159,37 @@ class ControlPanel(QWidget):
 class RightPanel(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
-        layout = QVBoxLayout(self)
+        self.v_layout = QVBoxLayout(self)
 
         toggle_layout = QHBoxLayout()
         toggle_layout.addStretch()
         self.btn_toggle_visibility = QPushButton("Hide >")
         self.btn_toggle_visibility.setToolTip("Hide this panel")
         toggle_layout.addWidget(self.btn_toggle_visibility)
-        layout.addLayout(toggle_layout)
+        self.v_layout.addLayout(toggle_layout)
 
         self.main_controls_widget = QWidget()
         main_layout = QVBoxLayout(self.main_controls_widget)
         main_layout.setContentsMargins(0, 0, 0, 0)
 
-        file_explorer_layout = QVBoxLayout()
+        v_splitter = QSplitter(Qt.Orientation.Vertical)
+
+        # --- File Explorer Widget ---
+        file_explorer_widget = QWidget()
+        file_explorer_layout = QVBoxLayout(file_explorer_widget)
+        file_explorer_layout.setContentsMargins(0, 0, 0, 0)
         self.btn_open_folder = QPushButton("Open Image Folder")
         self.btn_open_folder.setToolTip("Open a directory of images")
         self.file_tree = QTreeView()
         file_explorer_layout.addWidget(self.btn_open_folder)
         file_explorer_layout.addWidget(self.file_tree)
-        main_layout.addLayout(file_explorer_layout)
+        v_splitter.addWidget(file_explorer_widget)
 
-        self.status_label = QLabel("")
-        self.status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        main_layout.addWidget(self.status_label)
+        # --- Segment List Widget ---
+        segment_widget = QWidget()
+        segment_layout = QVBoxLayout(segment_widget)
+        segment_layout.setContentsMargins(0, 0, 0, 0)
 
-        segment_layout = QVBoxLayout()
         class_filter_layout = QHBoxLayout()
         class_filter_layout.addWidget(QLabel("Filter Class:"))
         self.class_filter_combo = QComboBox()
@@ -208,9 +222,12 @@ class RightPanel(QWidget):
         segment_action_layout.addWidget(self.btn_merge_selection)
         segment_action_layout.addWidget(self.btn_delete_selection)
         segment_layout.addLayout(segment_action_layout)
-        main_layout.addLayout(segment_layout, 2)
+        v_splitter.addWidget(segment_widget)
 
-        class_layout = QVBoxLayout()
+        # --- Class Table Widget ---
+        class_widget = QWidget()
+        class_layout = QVBoxLayout(class_widget)
+        class_layout.setContentsMargins(0, 0, 0, 0)
         class_layout.addWidget(QLabel("Class Order:"))
         self.class_table = ReorderableClassTable()
         self.class_table.setToolTip(
@@ -225,14 +242,19 @@ class RightPanel(QWidget):
             1, QHeaderView.ResizeMode.ResizeToContents
         )
         self.class_table.setEditTriggers(QAbstractItemView.EditTrigger.DoubleClicked)
-
         class_layout.addWidget(self.class_table)
         self.btn_reassign_classes = QPushButton("Reassign Class IDs")
         self.btn_reassign_classes.setToolTip(
             "Re-index class channels based on the current order in this table"
         )
         class_layout.addWidget(self.btn_reassign_classes)
-        main_layout.addLayout(class_layout, 1)
+        v_splitter.addWidget(class_widget)
 
-        layout.addWidget(self.main_controls_widget)
+        main_layout.addWidget(v_splitter)
+
+        self.status_label = QLabel("")
+        self.status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        main_layout.addWidget(self.status_label)
+
+        self.v_layout.addWidget(self.main_controls_widget)
         self.setFixedWidth(350)

@@ -1,8 +1,10 @@
+# src/lazylabel/main.py
 import sys
 import os
 import numpy as np
 import qdarktheme
 import cv2
+import json
 from PyQt6.QtWidgets import (
     QApplication,
     QMainWindow,
@@ -15,6 +17,7 @@ from PyQt6.QtWidgets import (
     QTableWidgetItem,
     QGraphicsPolygonItem,
     QTableWidgetSelectionRange,
+    QSpacerItem,
 )
 from PyQt6.QtGui import (
     QPixmap,
@@ -183,7 +186,7 @@ class MainWindow(QMainWindow):
         if is_visible:
             self.control_panel.btn_toggle_visibility.setText("> Show")
             self.control_panel.setFixedWidth(
-                self.control_panel.btn_toggle_visibility.sizeHint().width() + 10
+                self.control_panel.btn_toggle_visibility.sizeHint().width() + 20
             )
         else:
             self.control_panel.btn_toggle_visibility.setText("< Hide")
@@ -192,12 +195,21 @@ class MainWindow(QMainWindow):
     def toggle_right_panel(self):
         is_visible = self.right_panel.main_controls_widget.isVisible()
         self.right_panel.main_controls_widget.setVisible(not is_visible)
-        if is_visible:
+        layout = self.right_panel.v_layout
+
+        if is_visible:  # Content is now hidden
+            layout.addStretch(1)
             self.right_panel.btn_toggle_visibility.setText("< Show")
             self.right_panel.setFixedWidth(
-                self.right_panel.btn_toggle_visibility.sizeHint().width() + 10
+                self.right_panel.btn_toggle_visibility.sizeHint().width() + 20
             )
-        else:
+        else:  # Content is now visible
+            # Remove the stretch so the content can expand
+            for i in range(layout.count()):
+                item = layout.itemAt(i)
+                if isinstance(item, QSpacerItem):
+                    layout.removeItem(item)
+                    break
             self.right_panel.btn_toggle_visibility.setText("Hide >")
             self.right_panel.setFixedWidth(350)
 
@@ -366,6 +378,7 @@ class MainWindow(QMainWindow):
                 self.reset_state()
                 self.viewer.set_photo(pixmap)
                 self.sam_model.set_image(self.current_image_path)
+                self.load_class_aliases()
                 self.load_existing_mask()
                 self.right_panel.file_tree.setCurrentIndex(index)
                 self.viewer.setFocus()
@@ -399,6 +412,7 @@ class MainWindow(QMainWindow):
     def reset_state(self):
         self.clear_all_points()
         self.segments.clear()
+        self.class_aliases.clear()
         self.next_class_id = 0
         self.update_all_lists()
         items_to_remove = [
@@ -936,63 +950,82 @@ class MainWindow(QMainWindow):
     def save_output_to_npz(self):
         save_npz = self.control_panel.chk_save_npz.isChecked()
         save_txt = self.control_panel.chk_save_txt.isChecked()
+        save_aliases = self.control_panel.chk_save_class_aliases.isChecked()
 
-        if (
-            (not save_npz and not save_txt)
-            or not self.segments
-            or not self.current_image_path
-        ):
+        if not self.current_image_path or not any([save_npz, save_txt, save_aliases]):
             return
 
         self.right_panel.status_label.setText("Saving...")
         QApplication.processEvents()
 
-        h, w = (
-            self.viewer._pixmap_item.pixmap().height(),
-            self.viewer._pixmap_item.pixmap().width(),
-        )
+        saved_something = False
 
-        class_table = self.right_panel.class_table
-        ordered_ids = [
-            int(class_table.item(row, 1).text())
-            for row in range(class_table.rowCount())
-            if class_table.item(row, 1) is not None
-        ]
-
-        if not ordered_ids:
-            self.right_panel.status_label.setText("Save failed: No classes defined.")
-            QTimer.singleShot(3000, lambda: self.right_panel.status_label.clear())
-            return
-
-        id_map = {old_id: new_id for new_id, old_id in enumerate(ordered_ids)}
-        num_final_classes = len(ordered_ids)
-        final_mask_tensor = np.zeros((h, w, num_final_classes), dtype=np.uint8)
-
-        for seg in self.segments:
-            class_id = seg.get("class_id")
-            if class_id not in id_map:
-                continue
-            new_channel_idx = id_map[class_id]
-            mask = (
-                self.rasterize_polygon(seg["vertices"])
-                if seg["type"] == "Polygon"
-                else seg.get("mask")
-            )
-            if mask is not None:
-                final_mask_tensor[:, :, new_channel_idx] = np.logical_or(
-                    final_mask_tensor[:, :, new_channel_idx], mask
+        if save_npz or save_txt:
+            if not self.segments:
+                self.show_notification("No segments to save.")
+            else:
+                h, w = (
+                    self.viewer._pixmap_item.pixmap().height(),
+                    self.viewer._pixmap_item.pixmap().width(),
                 )
+                class_table = self.right_panel.class_table
+                ordered_ids = [
+                    int(class_table.item(row, 1).text())
+                    for row in range(class_table.rowCount())
+                    if class_table.item(row, 1) is not None
+                ]
 
-        if save_npz:
-            npz_path = os.path.splitext(self.current_image_path)[0] + ".npz"
-            np.savez_compressed(npz_path, mask=final_mask_tensor.astype(np.uint8))
-            self.file_model.set_highlighted_path(npz_path)
-            QTimer.singleShot(1500, lambda: self.file_model.set_highlighted_path(None))
+                if not ordered_ids:
+                    self.show_notification("No classes defined for mask saving.")
+                else:
+                    id_map = {
+                        old_id: new_id for new_id, old_id in enumerate(ordered_ids)
+                    }
+                    num_final_classes = len(ordered_ids)
+                    final_mask_tensor = np.zeros(
+                        (h, w, num_final_classes), dtype=np.uint8
+                    )
 
-        if save_txt:
-            self.generate_yolo_annotations(final_mask_tensor)
+                    for seg in self.segments:
+                        class_id = seg.get("class_id")
+                        if class_id not in id_map:
+                            continue
+                        new_channel_idx = id_map[class_id]
+                        mask = (
+                            self.rasterize_polygon(seg["vertices"])
+                            if seg["type"] == "Polygon"
+                            else seg.get("mask")
+                        )
+                        if mask is not None:
+                            final_mask_tensor[:, :, new_channel_idx] = np.logical_or(
+                                final_mask_tensor[:, :, new_channel_idx], mask
+                            )
+                    if save_npz:
+                        npz_path = os.path.splitext(self.current_image_path)[0] + ".npz"
+                        np.savez_compressed(
+                            npz_path, mask=final_mask_tensor.astype(np.uint8)
+                        )
+                        self.file_model.set_highlighted_path(npz_path)
+                        QTimer.singleShot(
+                            1500, lambda: self.file_model.set_highlighted_path(None)
+                        )
+                        saved_something = True
+                    if save_txt:
+                        self.generate_yolo_annotations(final_mask_tensor)
+                        saved_something = True
 
-        self.right_panel.status_label.setText("Saved!")
+        if save_aliases:
+            aliases_path = os.path.splitext(self.current_image_path)[0] + ".json"
+            aliases_to_save = {str(k): v for k, v in self.class_aliases.items()}
+            with open(aliases_path, "w") as f:
+                json.dump(aliases_to_save, f, indent=4)
+            saved_something = True
+
+        if saved_something:
+            self.right_panel.status_label.setText("Saved!")
+        else:
+            self.right_panel.status_label.clear()
+
         QTimer.singleShot(3000, lambda: self.right_panel.status_label.clear())
 
     def generate_yolo_annotations(self, mask_tensor):
@@ -1055,6 +1088,20 @@ class MainWindow(QMainWindow):
         self._update_next_class_id()
         self.update_all_lists()
         self.viewer.setFocus()
+
+    def load_class_aliases(self):
+        if not self.current_image_path:
+            return
+        json_path = os.path.splitext(self.current_image_path)[0] + ".json"
+        if os.path.exists(json_path):
+            try:
+                with open(json_path, "r") as f:
+                    loaded_aliases = json.load(f)
+                    # JSON loads keys as strings, convert them to int
+                    self.class_aliases = {int(k): v for k, v in loaded_aliases.items()}
+            except (json.JSONDecodeError, ValueError) as e:
+                print(f"Error loading class aliases from {json_path}: {e}")
+                self.class_aliases.clear()
 
     def load_existing_mask(self):
         if not self.current_image_path:
