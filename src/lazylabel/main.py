@@ -628,7 +628,7 @@ class MainWindow(QMainWindow):
                     self.viewer.scene().addItem(dot)
                     self.segment_items[i].append(dot)
                 if self.mode == "edit" and i in selected_indices:
-                    handle_diameter = self.point_radius * 2 + 4
+                    handle_diameter = self.point_radius * 2
                     for idx, v in enumerate(seg_dict["vertices"]):
                         vertex_item = EditableVertexItem(
                             self,
@@ -1106,7 +1106,7 @@ class MainWindow(QMainWindow):
                 (pos.x() - self.polygon_points[0].x()) ** 2
                 + (pos.y() - self.polygon_points[0].y()) ** 2
             )
-            < 25  # pixel distance threshold squared
+            < 4  # pixel distance threshold squared
         ):
             if len(self.polygon_points) > 2:
                 self.finalize_polygon()

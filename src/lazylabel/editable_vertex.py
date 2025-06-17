@@ -1,6 +1,6 @@
 from PyQt6.QtWidgets import QGraphicsEllipseItem, QGraphicsItem
 from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QBrush, QPen
+from PyQt6.QtGui import QBrush, QPen, QColor
 
 
 class EditableVertexItem(QGraphicsEllipseItem):
@@ -11,7 +11,11 @@ class EditableVertexItem(QGraphicsEllipseItem):
         self.vertex_index = vertex_index
 
         self.setZValue(200)
-        self.setBrush(QBrush(Qt.GlobalColor.cyan))
+
+        color = QColor(Qt.GlobalColor.cyan)
+        color.setAlpha(180)
+        self.setBrush(QBrush(color))
+
         self.setPen(QPen(Qt.GlobalColor.transparent))
         self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsMovable)
         self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemSendsGeometryChanges)
