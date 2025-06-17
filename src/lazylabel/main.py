@@ -227,26 +227,31 @@ class MainWindow(QMainWindow):
         key, mods = event.key(), event.modifiers()
         if event.isAutoRepeat():
             return
+
+        pan_multiplier = 4.0 if (mods & Qt.KeyboardModifier.ShiftModifier) else 1.0
+
         if key == Qt.Key.Key_W:
+            amount = int(self.viewer.height() * 0.1 * pan_multiplier)
             self.viewer.verticalScrollBar().setValue(
-                self.viewer.verticalScrollBar().value()
-                - int(self.viewer.height() * 0.1)
+                self.viewer.verticalScrollBar().value() - amount
             )
-        elif key == Qt.Key.Key_S and not mods:
+        elif key == Qt.Key.Key_S:
+            amount = int(self.viewer.height() * 0.1 * pan_multiplier)
             self.viewer.verticalScrollBar().setValue(
-                self.viewer.verticalScrollBar().value()
-                + int(self.viewer.height() * 0.1)
+                self.viewer.verticalScrollBar().value() + amount
             )
         elif key == Qt.Key.Key_A and not (mods & Qt.KeyboardModifier.ControlModifier):
+            amount = int(self.viewer.width() * 0.1 * pan_multiplier)
             self.viewer.horizontalScrollBar().setValue(
-                self.viewer.horizontalScrollBar().value()
-                - int(self.viewer.width() * 0.1)
+                self.viewer.horizontalScrollBar().value() - amount
             )
         elif key == Qt.Key.Key_D:
+            amount = int(self.viewer.width() * 0.1 * pan_multiplier)
             self.viewer.horizontalScrollBar().setValue(
-                self.viewer.horizontalScrollBar().value()
-                + int(self.viewer.width() * 0.1)
+                self.viewer.horizontalScrollBar().value() + amount
             )
+
+        # Other keybindings
         elif key == Qt.Key.Key_1:
             self.set_sam_mode()
         elif key == Qt.Key.Key_2:
@@ -275,13 +280,13 @@ class MainWindow(QMainWindow):
         elif (
             key == Qt.Key.Key_Equal or key == Qt.Key.Key_Plus
         ) and mods == Qt.KeyboardModifier.ControlModifier:
-            self.point_radius = min(20, self.point_radius + 0.3)
-            self.line_thickness = min(20, self.line_thickness + 0.5)
+            self.point_radius = min(20, self.point_radius + 1)
+            self.line_thickness = min(20, self.line_thickness + 1)
             self.display_all_segments()
             self.clear_all_points()
         elif key == Qt.Key.Key_Minus and mods == Qt.KeyboardModifier.ControlModifier:
-            self.point_radius = max(0.3, self.point_radius - 0.3)
-            self.line_thickness = max(0.5, self.line_thickness - 0.5)
+            self.point_radius = max(1, self.point_radius - 1)
+            self.line_thickness = max(1, self.line_thickness - 1)
             self.display_all_segments()
             self.clear_all_points()
 
