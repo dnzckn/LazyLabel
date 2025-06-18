@@ -1016,13 +1016,27 @@ class MainWindow(QMainWindow):
                         np.savez_compressed(
                             npz_path, mask=final_mask_tensor.astype(np.uint8)
                         )
+                        self.file_model.update_cache_for_path(npz_path)
+
                         self.file_model.set_highlighted_path(npz_path)
                         QTimer.singleShot(
                             1500, lambda: self.file_model.set_highlighted_path(None)
                         )
                         saved_something = True
                     if save_txt:
-                        self.generate_yolo_annotations(final_mask_tensor)
+                        if self.control_panel.chk_yolo_use_alias.isChecked():
+                            class_labels = [
+                                class_table.item(row, 0).text()
+                                for row in range(class_table.rowCount())
+                            ]
+                        else:
+                            class_labels = list(range(num_final_classes))
+
+                        txt_path = self.generate_yolo_annotations(
+                            final_mask_tensor, class_labels
+                        )
+                        if txt_path:
+                            self.file_model.update_cache_for_path(txt_path)
                         saved_something = True
 
         if save_aliases:
@@ -1039,7 +1053,7 @@ class MainWindow(QMainWindow):
 
         QTimer.singleShot(3000, lambda: self.right_panel.status_label.clear())
 
-    def generate_yolo_annotations(self, mask_tensor):
+    def generate_yolo_annotations(self, mask_tensor, class_labels):
         output_path = os.path.splitext(self.current_image_path)[0] + ".txt"
         h, w, num_channels = mask_tensor.shape
 
@@ -1055,19 +1069,25 @@ class MainWindow(QMainWindow):
             contours, _ = cv2.findContours(
                 single_channel_image, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
             )
-            class_id = channel
+
+            class_label = class_labels[channel]
             for contour in contours:
                 x, y, width, height = cv2.boundingRect(contour)
                 center_x = (x + width / 2) / w
                 center_y = (y + height / 2) / h
                 normalized_width = width / w
                 normalized_height = height / h
-                yolo_entry = f"{class_id} {center_x} {center_y} {normalized_width} {normalized_height}"
+                yolo_entry = f"{class_label} {center_x} {center_y} {normalized_width} {normalized_height}"
                 yolo_annotations.append(yolo_entry)
+
+        if not yolo_annotations:
+            return None
 
         with open(output_path, "w") as file:
             for annotation in yolo_annotations:
                 file.write(annotation + "\n")
+
+        return output_path
 
     def save_current_segment(self):
         if (

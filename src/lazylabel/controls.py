@@ -92,6 +92,13 @@ class ControlPanel(QWidget):
         )
         settings_layout.addWidget(self.chk_save_txt)
 
+        self.chk_yolo_use_alias = QCheckBox("Save YOLO with Class Aliases")
+        self.chk_yolo_use_alias.setToolTip(
+            "If checked, saves YOLO .txt files using class alias names instead of numeric IDs.\nThis is useful when a separate .yaml or .names file defines the classes."
+        )
+        self.chk_yolo_use_alias.setChecked(True)
+        settings_layout.addWidget(self.chk_yolo_use_alias)
+
         self.chk_save_class_aliases = QCheckBox("Save Class Aliases (.json)")
         self.chk_save_class_aliases.setToolTip(
             "Save class aliases to a companion JSON file."
@@ -173,7 +180,6 @@ class RightPanel(QWidget):
 
         v_splitter = QSplitter(Qt.Orientation.Vertical)
 
-        # --- File Explorer Widget ---
         file_explorer_widget = QWidget()
         file_explorer_layout = QVBoxLayout(file_explorer_widget)
         file_explorer_layout.setContentsMargins(0, 0, 0, 0)
@@ -184,7 +190,6 @@ class RightPanel(QWidget):
         file_explorer_layout.addWidget(self.file_tree)
         v_splitter.addWidget(file_explorer_widget)
 
-        # --- Segment List Widget ---
         segment_widget = QWidget()
         segment_layout = QVBoxLayout(segment_widget)
         segment_layout.setContentsMargins(0, 0, 0, 0)
@@ -225,7 +230,6 @@ class RightPanel(QWidget):
         segment_layout.addLayout(segment_action_layout)
         v_splitter.addWidget(segment_widget)
 
-        # --- Class Table Widget ---
         class_widget = QWidget()
         class_layout = QVBoxLayout(class_widget)
         class_layout.setContentsMargins(0, 0, 0, 0)
