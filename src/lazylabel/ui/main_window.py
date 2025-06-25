@@ -434,19 +434,136 @@ class MainWindow(QMainWindow):
     
     def _update_segment_table(self):
         """Update segment table."""
-        # Implementation would go here
-        pass
+        table = self.right_panel.segment_table
+        table.blockSignals(True)
+        selected_indices = self.right_panel.get_selected_segment_indices()
+        table.clearContents()
+        table.setRowCount(0)
+        
+        # Get current filter
+        filter_text = self.right_panel.class_filter_combo.currentText()
+        show_all = filter_text == "All Classes"
+        filter_class_id = -1
+        if not show_all:
+            try:
+                # Parse format like "Alias: ID" or "Class ID"
+                if ":" in filter_text:
+                    filter_class_id = int(filter_text.split(":")[-1].strip())
+                else:
+                    filter_class_id = int(filter_text.split()[-1])
+            except (ValueError, IndexError):
+                show_all = True  # If parsing fails, show all
+
+        # Filter segments based on class filter
+        display_segments = []
+        for i, seg in enumerate(self.segment_manager.segments):
+            seg_class_id = seg.get("class_id")
+            should_include = show_all or seg_class_id == filter_class_id
+            if should_include:
+                display_segments.append((i, seg))
+
+        table.setRowCount(len(display_segments))
+
+        # Populate table rows
+        for row, (original_index, seg) in enumerate(display_segments):
+            class_id = seg.get("class_id")
+            color = self._get_color_for_class(class_id)
+            class_id_str = str(class_id) if class_id is not None else "N/A"
+
+            alias_str = "N/A"
+            if class_id is not None:
+                alias_str = self.segment_manager.get_class_alias(class_id)
+            
+            # Create table items (1-based segment ID for display)
+            index_item = NumericTableWidgetItem(str(original_index + 1))
+            class_item = NumericTableWidgetItem(class_id_str)
+            alias_item = QTableWidgetItem(alias_str)
+
+            # Set items as non-editable
+            index_item.setFlags(index_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+            class_item.setFlags(class_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+            alias_item.setFlags(alias_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+            
+            # Store original index for selection tracking
+            index_item.setData(Qt.ItemDataRole.UserRole, original_index)
+
+            # Set items in table
+            table.setItem(row, 0, index_item)
+            table.setItem(row, 1, class_item)
+            table.setItem(row, 2, alias_item)
+
+            # Set background color based on class
+            for col in range(table.columnCount()):
+                if table.item(row, col):
+                    table.item(row, col).setBackground(QBrush(color))
+
+        # Restore selection
+        table.setSortingEnabled(False)
+        for row in range(table.rowCount()):
+            item = table.item(row, 0)
+            if item and item.data(Qt.ItemDataRole.UserRole) in selected_indices:
+                table.selectRow(row)
+        table.setSortingEnabled(True)
+
+        table.blockSignals(False)
+        self.viewer.setFocus()
     
     def _update_all_lists(self):
         """Update all UI lists."""
         self._update_class_list()
         self._update_segment_table()
+        self._update_class_filter()
         self._display_all_segments()
     
     def _update_class_list(self):
         """Update the class list in the right panel."""
-        # Basic implementation - can be expanded
-        pass
+        class_table = self.right_panel.class_table
+        class_table.blockSignals(True)
+
+        # Get unique class IDs
+        unique_class_ids = self.segment_manager.get_unique_class_ids()
+
+        class_table.clearContents()
+        class_table.setRowCount(len(unique_class_ids))
+        
+        for row, cid in enumerate(unique_class_ids):
+            alias_item = QTableWidgetItem(self.segment_manager.get_class_alias(cid))
+            id_item = QTableWidgetItem(str(cid))
+            id_item.setFlags(id_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+            
+            color = self._get_color_for_class(cid)
+            alias_item.setBackground(QBrush(color))
+            id_item.setBackground(QBrush(color))
+            
+            class_table.setItem(row, 0, alias_item)
+            class_table.setItem(row, 1, id_item)
+
+        class_table.blockSignals(False)
+    
+    def _update_class_filter(self):
+        """Update the class filter combo box."""
+        combo = self.right_panel.class_filter_combo
+        current_text = combo.currentText()
+        
+        combo.blockSignals(True)
+        combo.clear()
+        combo.addItem("All Classes")
+        
+        # Add class options
+        unique_class_ids = self.segment_manager.get_unique_class_ids()
+        for class_id in unique_class_ids:
+            alias = self.segment_manager.get_class_alias(class_id)
+            display_text = f"{alias}: {class_id}" if alias else f"Class {class_id}"
+            combo.addItem(display_text)
+        
+        # Restore selection if possible
+        index = combo.findText(current_text)
+        if index >= 0:
+            combo.setCurrentIndex(index)
+        else:
+            combo.setCurrentIndex(0)
+        
+        combo.blockSignals(False)
     
     def _display_all_segments(self):
         """Display all segments on the viewer."""
@@ -725,8 +842,67 @@ class MainWindow(QMainWindow):
     
     def _handle_polygon_click(self, pos):
         """Handle polygon drawing clicks."""
-        # Basic polygon implementation - can be expanded
-        pass
+        # Check if clicking near the first point to close polygon
+        if self.polygon_points and len(self.polygon_points) > 2:
+            first_point = self.polygon_points[0]
+            distance_squared = ((pos.x() - first_point.x()) ** 2 + 
+                              (pos.y() - first_point.y()) ** 2)
+            if distance_squared < self.polygon_join_threshold ** 2:
+                self._finalize_polygon()
+                return
+        
+        # Add new point to polygon
+        self.polygon_points.append(pos)
+        
+        # Create visual point
+        point_diameter = self.point_radius * 2
+        point_color = QColor(Qt.GlobalColor.blue)
+        point_color.setAlpha(150)
+        dot = QGraphicsEllipseItem(
+            pos.x() - self.point_radius,
+            pos.y() - self.point_radius,
+            point_diameter,
+            point_diameter,
+        )
+        dot.setBrush(QBrush(point_color))
+        dot.setPen(QPen(Qt.GlobalColor.transparent))
+        self.viewer.scene().addItem(dot)
+        self.polygon_preview_items.append(dot)
+        
+        # Update polygon preview
+        self._draw_polygon_preview()
+    
+    def _draw_polygon_preview(self):
+        """Draw polygon preview lines and fill."""
+        # Remove old preview lines and polygons (keep dots)
+        for item in self.polygon_preview_items[:]:
+            if not isinstance(item, QGraphicsEllipseItem):
+                if item.scene():
+                    self.viewer.scene().removeItem(item)
+                self.polygon_preview_items.remove(item)
+        
+        if len(self.polygon_points) > 2:
+            # Create preview polygon fill
+            preview_poly = QGraphicsPolygonItem(QPolygonF(self.polygon_points))
+            preview_poly.setBrush(QBrush(QColor(0, 255, 255, 100)))
+            preview_poly.setPen(QPen(Qt.GlobalColor.transparent))
+            self.viewer.scene().addItem(preview_poly)
+            self.polygon_preview_items.append(preview_poly)
+
+        if len(self.polygon_points) > 1:
+            # Create preview lines between points
+            line_color = QColor(Qt.GlobalColor.cyan)
+            line_color.setAlpha(150)
+            for i in range(len(self.polygon_points) - 1):
+                line = QGraphicsLineItem(
+                    self.polygon_points[i].x(),
+                    self.polygon_points[i].y(),
+                    self.polygon_points[i + 1].x(),
+                    self.polygon_points[i + 1].y(),
+                )
+                line.setPen(QPen(line_color, self.line_thickness))
+                self.viewer.scene().addItem(line)
+                self.polygon_preview_items.append(line)
     
     def _handle_segment_selection_click(self, pos):
         """Handle segment selection clicks."""

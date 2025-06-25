@@ -2,7 +2,7 @@
 
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QPushButton, QLabel, QHBoxLayout,
-    QTableWidget, QTreeView, QComboBox, QSplitter, QSpacerItem
+    QTableWidget, QTreeView, QComboBox, QSplitter, QSpacerItem, QHeaderView
 )
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QBrush, QColor
@@ -101,6 +101,10 @@ class RightPanel(QWidget):
         self.segment_table = QTableWidget()
         self.segment_table.setColumnCount(3)
         self.segment_table.setHorizontalHeaderLabels(["Segment ID", "Class ID", "Alias"])
+        self.segment_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        self.segment_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self.segment_table.setSortingEnabled(True)
+        self.segment_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         layout.addWidget(self.segment_table)
         
         # Action buttons
@@ -129,6 +133,9 @@ class RightPanel(QWidget):
         )
         self.class_table.setColumnCount(2)
         self.class_table.setHorizontalHeaderLabels(["Alias", "Class ID"])
+        self.class_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        self.class_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
+        self.class_table.setEditTriggers(QTableWidget.EditTrigger.DoubleClicked)
         layout.addWidget(self.class_table)
         
         self.btn_reassign_classes = QPushButton("Reassign Class IDs")
