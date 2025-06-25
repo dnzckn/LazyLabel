@@ -1,5 +1,6 @@
 from PyQt6.QtWidgets import QGraphicsPolygonItem
-from PyQt6.QtGui import QBrush
+from PyQt6.QtGui import QBrush, QPolygonF
+from PyQt6.QtCore import Qt
 
 
 class HoverablePolygonItem(QGraphicsPolygonItem):
@@ -21,3 +22,18 @@ class HoverablePolygonItem(QGraphicsPolygonItem):
     def hoverLeaveEvent(self, event):
         self.setBrush(self.default_brush)
         super().hoverLeaveEvent(event)
+
+    def mousePressEvent(self, event):
+        # Remove mouse events as per the new instructions
+        pass
+
+    def mouseMoveEvent(self, event):
+        # Remove mouse events as per the new instructions
+        pass
+
+    def mouseReleaseEvent(self, event):
+        # Remove mouse events as per the new instructions
+        pass
+
+    def setPolygonVertices(self, vertices):
+        self.setPolygon(QPolygonF(vertices))

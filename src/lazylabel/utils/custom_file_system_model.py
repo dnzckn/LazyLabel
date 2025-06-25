@@ -39,7 +39,7 @@ class CustomFileSystemModel(QFileSystemModel):
             pass
 
     def update_cache_for_path(self, saved_file_path: str):
-        """Incrementally updates the cache and the view for a newly saved file."""
+        """Incrementally updates the cache and the view for a newly saved or deleted file."""
         if not saved_file_path:
             return
 
@@ -47,9 +47,15 @@ class CustomFileSystemModel(QFileSystemModel):
         base_name = p.stem
 
         if p.suffix == ".npz":
-            self.npz_files.add(base_name)
+            if p.exists():
+                self.npz_files.add(base_name)
+            else:
+                self.npz_files.discard(base_name)
         elif p.suffix == ".txt":
-            self.txt_files.add(base_name)
+            if p.exists():
+                self.txt_files.add(base_name)
+            else:
+                self.txt_files.discard(base_name)
         else:
             return
 

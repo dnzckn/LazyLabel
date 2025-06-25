@@ -17,13 +17,35 @@ class EditableVertexItem(QGraphicsEllipseItem):
         self.setBrush(QBrush(color))
 
         self.setPen(QPen(Qt.GlobalColor.transparent))
+
+        # Set flags for dragging - use the original working approach
         self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsMovable)
         self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemSendsGeometryChanges)
+        self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsSelectable)
+
+        # Accept mouse events
+        self.setAcceptHoverEvents(True)
 
     def itemChange(self, change, value):
         if change == QGraphicsItem.GraphicsItemChange.ItemPositionHasChanged:
             new_pos = value
-            self.main_window.update_vertex_pos(
-                self.segment_index, self.vertex_index, new_pos
-            )
+            if hasattr(self.main_window, "update_vertex_pos"):
+                self.main_window.update_vertex_pos(
+                    self.segment_index, self.vertex_index, new_pos
+                )
         return super().itemChange(change, value)
+
+    def mousePressEvent(self, event):
+        """Handle mouse press events."""
+        super().mousePressEvent(event)
+        event.accept()
+
+    def mouseMoveEvent(self, event):
+        """Handle mouse move events."""
+        super().mouseMoveEvent(event)
+        event.accept()
+
+    def mouseReleaseEvent(self, event):
+        """Handle mouse release events."""
+        super().mouseReleaseEvent(event)
+        event.accept()
