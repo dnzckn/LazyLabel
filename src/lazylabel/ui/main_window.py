@@ -7,6 +7,7 @@ from PyQt6.QtWidgets import (
     QMainWindow,
     QWidget,
     QHBoxLayout,
+    QVBoxLayout,
     QFileDialog,
     QApplication,
     QGraphicsEllipseItem,
@@ -40,6 +41,7 @@ from ..core import SegmentManager, ModelManager, FileManager
 from ..config import Settings, Paths, HotkeyManager
 from ..utils import CustomFileSystemModel, mask_to_pixmap
 from .hotkey_dialog import HotkeyDialog
+from .widgets import StatusBar
 
 
 class MainWindow(QMainWindow):
@@ -83,6 +85,9 @@ class MainWindow(QMainWindow):
             {},
         )
 
+        # Update state flags to prevent recursion
+        self._updating_lists = False
+
         self._setup_ui()
         self._setup_model()
         self._setup_connections()
@@ -110,11 +115,21 @@ class MainWindow(QMainWindow):
         self.file_model = CustomFileSystemModel()
         self.right_panel.setup_file_model(self.file_model)
 
-        # Layout
-        main_layout = QHBoxLayout()
-        main_layout.addWidget(self.control_panel)
-        main_layout.addWidget(self.viewer, 1)
-        main_layout.addWidget(self.right_panel)
+        # Create status bar
+        self.status_bar = StatusBar()
+        self.setStatusBar(self.status_bar)
+
+        # Layout - horizontal layout for main panels
+        main_panels_layout = QHBoxLayout()
+        main_panels_layout.addWidget(self.control_panel)
+        main_panels_layout.addWidget(self.viewer, 1)
+        main_panels_layout.addWidget(self.right_panel)
+
+        # Main vertical layout to accommodate status bar
+        main_layout = QVBoxLayout()
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(0)
+        main_layout.addLayout(main_panels_layout, 1)
 
         central_widget = QWidget()
         central_widget.setLayout(main_layout)
@@ -127,10 +142,11 @@ class MainWindow(QMainWindow):
         )
 
         if sam_model and sam_model.is_loaded:
-            self.control_panel.set_device_text(str(sam_model.device))
+            device_text = str(sam_model.device).upper()
+            self.status_bar.set_permanent_message(f"Device: {device_text}")
             self._enable_sam_functionality(True)
         else:
-            self.control_panel.set_device_text("No model loaded")
+            self.status_bar.set_permanent_message("No model loaded")
             self._enable_sam_functionality(False)
             print("SAM model failed to load. Point mode will be disabled.")
 
@@ -183,6 +199,7 @@ class MainWindow(QMainWindow):
         self.right_panel.class_alias_changed.connect(self._handle_alias_change)
         self.right_panel.reassign_classes_requested.connect(self._reassign_class_ids)
         self.right_panel.class_filter_changed.connect(self._update_segment_table)
+        self.right_panel.class_toggled.connect(self._handle_class_toggle)
 
         # Panel visibility
         self.control_panel.btn_toggle_visibility.clicked.connect(
@@ -355,9 +372,9 @@ class MainWindow(QMainWindow):
         if folder and os.path.exists(folder):
             models = self.model_manager.get_available_models(folder)
             self.control_panel.populate_models(models)
-            self._show_notification("Models list refreshed.")
+            self._show_success_notification("Models list refreshed.")
         else:
-            self._show_notification("No models folder selected.")
+            self._show_warning_notification("No models folder selected.")
 
     def _load_selected_model(self, model_text):
         """Load the selected model."""
@@ -367,7 +384,7 @@ class MainWindow(QMainWindow):
 
         model_path = self.control_panel.model_widget.get_selected_model_path()
         if not model_path or not os.path.exists(model_path):
-            self._show_notification("Selected model file not found.")
+            self._show_error_notification("Selected model file not found.")
             return
 
         self.control_panel.set_current_model("Loading model...")
@@ -379,17 +396,18 @@ class MainWindow(QMainWindow):
                 # Re-enable SAM functionality if model loaded successfully
                 self._enable_sam_functionality(True)
                 if self.model_manager.sam_model:
-                    self.control_panel.set_device_text(
-                        str(self.model_manager.sam_model.device)
-                    )
+                    device_text = str(self.model_manager.sam_model.device).upper()
+                    self.status_bar.set_permanent_message(f"Device: {device_text}")
             else:
                 self.control_panel.set_current_model("Current: Default SAM Model")
-                self._show_notification("Failed to load selected model. Using default.")
+                self._show_error_notification(
+                    "Failed to load selected model. Using default."
+                )
                 self.control_panel.model_widget.reset_to_default()
                 self._enable_sam_functionality(False)
         except Exception as e:
             self.control_panel.set_current_model("Current: Default SAM Model")
-            self._show_notification(f"Error loading model: {str(e)}")
+            self._show_error_notification(f"Error loading model: {str(e)}")
             self.control_panel.model_widget.reset_to_default()
             self._enable_sam_functionality(False)
 
@@ -539,6 +557,8 @@ class MainWindow(QMainWindow):
 
     def _handle_alias_change(self, class_id, alias):
         """Handle class alias change."""
+        if self._updating_lists:
+            return  # Prevent recursion
         self.segment_manager.set_class_alias(class_id, alias)
         self._update_all_lists()
 
@@ -624,16 +644,27 @@ class MainWindow(QMainWindow):
         table.blockSignals(False)
         self.viewer.setFocus()
 
+        # Update active class display
+        active_class = self.segment_manager.get_active_class()
+        self.right_panel.update_active_class_display(active_class)
+
     def _update_all_lists(self):
         """Update all UI lists."""
-        self._update_class_list()
-        self._update_segment_table()
-        self._update_class_filter()
-        self._display_all_segments()
-        if self.mode == "edit":
-            self._display_edit_handles()
-        else:
-            self._clear_edit_handles()
+        if self._updating_lists:
+            return  # Prevent recursion
+
+        self._updating_lists = True
+        try:
+            self._update_class_list()
+            self._update_segment_table()
+            self._update_class_filter()
+            self._display_all_segments()
+            if self.mode == "edit":
+                self._display_edit_handles()
+            else:
+                self._clear_edit_handles()
+        finally:
+            self._updating_lists = False
 
     def _update_class_list(self):
         """Update the class list in the right panel."""
@@ -657,6 +688,10 @@ class MainWindow(QMainWindow):
 
             class_table.setItem(row, 0, alias_item)
             class_table.setItem(row, 1, id_item)
+
+        # Update active class display BEFORE re-enabling signals
+        active_class = self.segment_manager.get_active_class()
+        self.right_panel.update_active_class_display(active_class)
 
         class_table.blockSignals(False)
 
@@ -790,7 +825,7 @@ class MainWindow(QMainWindow):
     def _save_output_to_npz(self):
         """Save output to NPZ and TXT files as enabled, and update file list tickboxes/highlight. If no segments, delete associated files."""
         if not self.current_image_path:
-            self._show_notification("No image loaded.")
+            self._show_warning_notification("No image loaded.")
             return
 
         # If no segments, delete associated files
@@ -805,13 +840,15 @@ class MainWindow(QMainWindow):
                         deleted_files.append(file_path)
                         self.file_model.update_cache_for_path(file_path)
                     except Exception as e:
-                        self._show_notification(f"Error deleting {file_path}: {e}")
+                        self._show_error_notification(
+                            f"Error deleting {file_path}: {e}"
+                        )
             if deleted_files:
                 self._show_notification(
                     f"Deleted: {', '.join(os.path.basename(f) for f in deleted_files)}"
                 )
             else:
-                self._show_notification("No segments to save.")
+                self._show_warning_notification("No segments to save.")
             return
 
         try:
@@ -828,9 +865,11 @@ class MainWindow(QMainWindow):
                     npz_path = self.file_manager.save_npz(
                         self.current_image_path, (h, w), class_order
                     )
-                    self._show_notification(f"Saved: {os.path.basename(npz_path)}")
+                    self._show_success_notification(
+                        f"Saved: {os.path.basename(npz_path)}"
+                    )
                 else:
-                    self._show_notification("No classes defined for saving.")
+                    self._show_warning_notification("No classes defined for saving.")
             if settings.get("save_txt", True):
                 h, w = (
                     self.viewer._pixmap_item.pixmap().height(),
@@ -861,7 +900,7 @@ class MainWindow(QMainWindow):
                         ),
                     )
         except Exception as e:
-            self._show_notification(f"Error saving: {str(e)}")
+            self._show_error_notification(f"Error saving: {str(e)}")
 
     def _handle_merge_press(self):
         """Handle merge key press."""
@@ -897,8 +936,19 @@ class MainWindow(QMainWindow):
 
     def _show_notification(self, message, duration=3000):
         """Show notification message."""
-        self.control_panel.show_notification(message)
-        QTimer.singleShot(duration, self.control_panel.clear_notification)
+        self.status_bar.show_message(message, duration)
+
+    def _show_error_notification(self, message, duration=8000):
+        """Show error notification message."""
+        self.status_bar.show_error_message(message, duration)
+
+    def _show_success_notification(self, message, duration=3000):
+        """Show success notification message."""
+        self.status_bar.show_success_message(message, duration)
+
+    def _show_warning_notification(self, message, duration=5000):
+        """Show warning notification message."""
+        self.status_bar.show_warning_message(message, duration)
 
     def _show_hotkey_dialog(self):
         """Show the hotkey configuration dialog."""
@@ -1262,3 +1312,18 @@ class MainWindow(QMainWindow):
                     QPolygonF(self.segment_manager.segments[segment_index]["vertices"])
                 )
                 return
+
+    def _handle_class_toggle(self, class_id):
+        """Handle class toggle."""
+        is_active = self.segment_manager.toggle_active_class(class_id)
+
+        if is_active:
+            self._show_notification(f"Class {class_id} activated for new segments")
+            # Update visual display
+            self.right_panel.update_active_class_display(class_id)
+        else:
+            self._show_notification(
+                "No active class - new segments will create new classes"
+            )
+            # Update visual display to clear active class
+            self.right_panel.update_active_class_display(None)
