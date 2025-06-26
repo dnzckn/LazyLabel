@@ -81,15 +81,22 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
 
+        print("[3/20] Starting LazyLabel...")
+        print("[4/20] Loading configuration and settings...")
+
         # Initialize configuration
         self.paths = Paths()
         self.settings = Settings.load_from_file(str(self.paths.settings_file))
         self.hotkey_manager = HotkeyManager(str(self.paths.config_dir))
 
+        print("[5/20] Initializing core managers...")
+
         # Initialize managers
         self.segment_manager = SegmentManager()
         self.model_manager = ModelManager(self.paths)
         self.file_manager = FileManager(self.segment_manager)
+
+        print("[6/20] Setting up user interface...")
 
         # Initialize UI state
         self.mode = "sam_points"
@@ -125,9 +132,13 @@ class MainWindow(QMainWindow):
 
         self._setup_ui()
         self._setup_model()
+
+        print("[17/20] Connecting UI signals and shortcuts...")
         self._setup_connections()
         self._setup_shortcuts()
         self._load_settings()
+
+        print("[18/20] LazyLabel initialization complete!")
 
     def _setup_ui(self):
         """Setup the user interface."""
@@ -188,18 +199,29 @@ class MainWindow(QMainWindow):
 
     def _setup_model(self):
         """Setup the SAM model."""
+        print("[7/20] Initializing SAM model (this may take a moment)...")
+
         sam_model = self.model_manager.initialize_default_model(
             self.settings.default_model_type
         )
 
         if sam_model and sam_model.is_loaded:
             device_text = str(sam_model.device).upper()
+            print(f"[14/20] SAM model loaded successfully on {device_text}")
             self.status_bar.set_permanent_message(f"Device: {device_text}")
             self._enable_sam_functionality(True)
-        else:
-            self.status_bar.set_permanent_message("No model loaded")
+        elif sam_model is None:
+            print(
+                "[14/20] SAM model initialization failed. Point mode will be disabled."
+            )
+            self.status_bar.set_permanent_message("Model initialization failed")
             self._enable_sam_functionality(False)
-            print("SAM model failed to load. Point mode will be disabled.")
+        else:
+            print("[14/20] SAM model failed to load. Point mode will be disabled.")
+            self.status_bar.set_permanent_message("Model loading failed")
+            self._enable_sam_functionality(False)
+
+        print("[15/20] Scanning available models...")
 
         # Setup model change callback
         self.model_manager.on_model_changed = self.control_panel.set_current_model
@@ -207,6 +229,9 @@ class MainWindow(QMainWindow):
         # Initialize models list
         models = self.model_manager.get_available_models(str(self.paths.models_dir))
         self.control_panel.populate_models(models)
+
+        if models:
+            print(f"[16/20] Found {len(models)} model(s) in models directory")
 
     def _enable_sam_functionality(self, enabled: bool):
         """Enable or disable SAM point functionality."""
