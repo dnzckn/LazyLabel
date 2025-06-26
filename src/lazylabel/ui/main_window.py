@@ -16,6 +16,8 @@ from PyQt6.QtWidgets import (
     QTableWidgetItem,
     QTableWidgetSelectionRange,
     QHeaderView,
+    QSplitter,
+    QDialog,
 )
 from PyQt6.QtGui import (
     QIcon,
@@ -28,7 +30,7 @@ from PyQt6.QtGui import (
     QPolygonF,
     QImage,
 )
-from PyQt6.QtCore import Qt, QTimer, QModelIndex, QPointF
+from PyQt6.QtCore import Qt, QTimer, QModelIndex, QPointF, pyqtSignal
 
 from .control_panel import ControlPanel
 from .right_panel import RightPanel
@@ -42,6 +44,35 @@ from ..config import Settings, Paths, HotkeyManager
 from ..utils import CustomFileSystemModel, mask_to_pixmap
 from .hotkey_dialog import HotkeyDialog
 from .widgets import StatusBar
+
+
+class PanelPopoutWindow(QDialog):
+    """Pop-out window for draggable panels."""
+
+    panel_closed = pyqtSignal(QWidget)  # Signal emitted when panel window is closed
+
+    def __init__(self, panel_widget, title="Panel", parent=None):
+        super().__init__(parent)
+        self.panel_widget = panel_widget
+        self.setWindowTitle(title)
+        self.setWindowFlags(Qt.WindowType.Window)  # Allow moving to other monitors
+
+        # Make window resizable
+        self.setMinimumSize(200, 300)
+        self.resize(400, 600)
+
+        # Set up layout
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(5, 5, 5, 5)
+        layout.addWidget(panel_widget)
+
+        # Store original parent for restoration
+        self.original_parent = parent
+
+    def closeEvent(self, event):
+        """Handle window close - emit signal to return panel to main window."""
+        self.panel_closed.emit(self.panel_widget)
+        super().closeEvent(event)
 
 
 class MainWindow(QMainWindow):
@@ -65,6 +96,10 @@ class MainWindow(QMainWindow):
         self.previous_mode = "sam_points"
         self.current_image_path = None
         self.current_file_index = QModelIndex()
+
+        # Panel pop-out state
+        self.left_panel_popout = None
+        self.right_panel_popout = None
 
         # Annotation state
         self.point_radius = self.settings.point_radius
@@ -119,17 +154,33 @@ class MainWindow(QMainWindow):
         self.status_bar = StatusBar()
         self.setStatusBar(self.status_bar)
 
-        # Layout - horizontal layout for main panels
-        main_panels_layout = QHBoxLayout()
-        main_panels_layout.addWidget(self.control_panel)
-        main_panels_layout.addWidget(self.viewer, 1)
-        main_panels_layout.addWidget(self.right_panel)
+        # Create horizontal splitter for main panels
+        self.main_splitter = QSplitter(Qt.Orientation.Horizontal)
+        self.main_splitter.addWidget(self.control_panel)
+        self.main_splitter.addWidget(self.viewer)
+        self.main_splitter.addWidget(self.right_panel)
+
+        # Set minimum sizes for panels to prevent shrinking below preferred width
+        self.control_panel.setMinimumWidth(self.control_panel.preferred_width)
+        self.right_panel.setMinimumWidth(self.right_panel.preferred_width)
+
+        # Set splitter sizes - give most space to viewer
+        self.main_splitter.setSizes([250, 800, 350])
+        self.main_splitter.setStretchFactor(0, 0)  # Control panel doesn't stretch
+        self.main_splitter.setStretchFactor(1, 1)  # Viewer stretches
+        self.main_splitter.setStretchFactor(2, 0)  # Right panel doesn't stretch
+
+        # Set splitter child sizes policy
+        self.main_splitter.setChildrenCollapsible(True)
+
+        # Connect splitter signals for intelligent expand/collapse
+        self.main_splitter.splitterMoved.connect(self._handle_splitter_moved)
 
         # Main vertical layout to accommodate status bar
         main_layout = QVBoxLayout()
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(0)
-        main_layout.addLayout(main_panels_layout, 1)
+        main_layout.addWidget(self.main_splitter, 1)
 
         central_widget = QWidget()
         central_widget.setLayout(main_layout)
@@ -201,13 +252,9 @@ class MainWindow(QMainWindow):
         self.right_panel.class_filter_changed.connect(self._update_segment_table)
         self.right_panel.class_toggled.connect(self._handle_class_toggle)
 
-        # Panel visibility
-        self.control_panel.btn_toggle_visibility.clicked.connect(
-            self.control_panel.toggle_visibility
-        )
-        self.right_panel.btn_toggle_visibility.clicked.connect(
-            self.right_panel.toggle_visibility
-        )
+        # Panel pop-out functionality
+        self.control_panel.pop_out_requested.connect(self._pop_out_left_panel)
+        self.right_panel.pop_out_requested.connect(self._pop_out_right_panel)
 
         # Mouse events (will be implemented in a separate handler)
         self._setup_mouse_events()
@@ -995,6 +1042,12 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event):
         """Handle application close."""
+        # Close any popped-out panels first
+        if self.left_panel_popout is not None:
+            self.left_panel_popout.close()
+        if self.right_panel_popout is not None:
+            self.right_panel_popout.close()
+
         # Save settings
         self.settings.save_to_file(str(self.paths.settings_file))
         super().closeEvent(event)
@@ -1327,3 +1380,142 @@ class MainWindow(QMainWindow):
             )
             # Update visual display to clear active class
             self.right_panel.update_active_class_display(None)
+
+    def _pop_out_left_panel(self):
+        """Pop out the left control panel into a separate window."""
+        if self.left_panel_popout is not None:
+            # Panel is already popped out, return it to main window
+            self._return_left_panel(self.control_panel)
+            return
+
+        # Remove panel from main splitter
+        self.control_panel.setParent(None)
+
+        # Create pop-out window
+        self.left_panel_popout = PanelPopoutWindow(
+            self.control_panel, "Control Panel", self
+        )
+        self.left_panel_popout.panel_closed.connect(self._return_left_panel)
+        self.left_panel_popout.show()
+
+        # Update panel's pop-out button
+        self.control_panel.set_popout_mode(True)
+
+        # Make pop-out window resizable
+        self.left_panel_popout.setMinimumSize(200, 400)
+        self.left_panel_popout.resize(self.control_panel.preferred_width + 20, 600)
+
+    def _pop_out_right_panel(self):
+        """Pop out the right panel into a separate window."""
+        if self.right_panel_popout is not None:
+            # Panel is already popped out, return it to main window
+            self._return_right_panel(self.right_panel)
+            return
+
+        # Remove panel from main splitter
+        self.right_panel.setParent(None)
+
+        # Create pop-out window
+        self.right_panel_popout = PanelPopoutWindow(
+            self.right_panel, "File Explorer & Segments", self
+        )
+        self.right_panel_popout.panel_closed.connect(self._return_right_panel)
+        self.right_panel_popout.show()
+
+        # Update panel's pop-out button
+        self.right_panel.set_popout_mode(True)
+
+        # Make pop-out window resizable
+        self.right_panel_popout.setMinimumSize(250, 400)
+        self.right_panel_popout.resize(self.right_panel.preferred_width + 20, 600)
+
+    def _return_left_panel(self, panel_widget):
+        """Return the left panel to the main window."""
+        if self.left_panel_popout is not None:
+            # Close the pop-out window
+            self.left_panel_popout.close()
+
+            # Return panel to main splitter
+            self.main_splitter.insertWidget(0, self.control_panel)
+            self.left_panel_popout = None
+
+            # Update panel's pop-out button
+            self.control_panel.set_popout_mode(False)
+
+            # Restore splitter sizes
+            self.main_splitter.setSizes([250, 800, 350])
+
+    def _handle_splitter_moved(self, pos, index):
+        """Handle splitter movement for intelligent expand/collapse behavior."""
+        sizes = self.main_splitter.sizes()
+
+        # Left panel (index 0) - expand/collapse logic
+        if index == 1:  # Splitter between left panel and viewer
+            left_size = sizes[0]
+            # Only snap to collapsed if user drags very close to collapse
+            if left_size < 50:  # Collapsed threshold
+                # Panel is being collapsed, snap to collapsed state
+                new_sizes = [0] + sizes[1:]
+                new_sizes[1] = new_sizes[1] + left_size  # Give space back to viewer
+                self.main_splitter.setSizes(new_sizes)
+                # Temporarily override minimum width to allow collapsing
+                self.control_panel.setMinimumWidth(0)
+
+        # Right panel (index 2) - expand/collapse logic
+        elif index == 2:  # Splitter between viewer and right panel
+            right_size = sizes[2]
+            # Only snap to collapsed if user drags very close to collapse
+            if right_size < 50:  # Collapsed threshold
+                # Panel is being collapsed, snap to collapsed state
+                new_sizes = sizes[:-1] + [0]
+                new_sizes[1] = new_sizes[1] + right_size  # Give space back to viewer
+                self.main_splitter.setSizes(new_sizes)
+                # Temporarily override minimum width to allow collapsing
+                self.right_panel.setMinimumWidth(0)
+
+    def _expand_left_panel(self):
+        """Expand the left panel to its preferred width."""
+        sizes = self.main_splitter.sizes()
+        if sizes[0] < 50:  # Only expand if currently collapsed
+            # Restore minimum width first
+            self.control_panel.setMinimumWidth(self.control_panel.preferred_width)
+
+            space_needed = self.control_panel.preferred_width
+            viewer_width = sizes[1] - space_needed
+            if viewer_width > 400:  # Ensure viewer has minimum space
+                new_sizes = [self.control_panel.preferred_width, viewer_width] + sizes[
+                    2:
+                ]
+                self.main_splitter.setSizes(new_sizes)
+
+    def _expand_right_panel(self):
+        """Expand the right panel to its preferred width."""
+        sizes = self.main_splitter.sizes()
+        if sizes[2] < 50:  # Only expand if currently collapsed
+            # Restore minimum width first
+            self.right_panel.setMinimumWidth(self.right_panel.preferred_width)
+
+            space_needed = self.right_panel.preferred_width
+            viewer_width = sizes[1] - space_needed
+            if viewer_width > 400:  # Ensure viewer has minimum space
+                new_sizes = sizes[:-1] + [
+                    viewer_width,
+                    self.right_panel.preferred_width,
+                ]
+                self.main_splitter.setSizes(new_sizes)
+
+    def _return_right_panel(self, panel_widget):
+        """Return the right panel to the main window."""
+        if self.right_panel_popout is not None:
+            # Close the pop-out window
+            self.right_panel_popout.close()
+
+            # Return panel to main splitter
+            self.main_splitter.addWidget(self.right_panel)
+            self.right_panel_popout = None
+
+            # Update panel's pop-out button
+            self.right_panel.set_popout_mode(False)
+
+            # Restore splitter sizes
+            self.main_splitter.setSizes([250, 800, 350])

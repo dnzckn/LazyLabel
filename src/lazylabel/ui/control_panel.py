@@ -33,10 +33,12 @@ class ControlPanel(QWidget):
     pan_speed_changed = pyqtSignal(int)
     join_threshold_changed = pyqtSignal(int)
     hotkeys_requested = pyqtSignal()
+    pop_out_requested = pyqtSignal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setFixedWidth(250)
+        self.setMinimumWidth(50)  # Allow collapsing but maintain minimum
+        self.preferred_width = 250  # Store preferred width for expansion
         self._setup_ui()
         self._connect_signals()
 
@@ -45,12 +47,15 @@ class ControlPanel(QWidget):
         layout = QVBoxLayout(self)
         layout.setAlignment(Qt.AlignmentFlag.AlignTop)
 
-        # Toggle button
+        # Top button row
         toggle_layout = QHBoxLayout()
-        self.btn_toggle_visibility = QPushButton("< Hide")
-        self.btn_toggle_visibility.setToolTip("Hide this panel")
-        toggle_layout.addWidget(self.btn_toggle_visibility)
         toggle_layout.addStretch()
+
+        self.btn_popout = QPushButton("⋯")
+        self.btn_popout.setToolTip("Pop out panel to separate window")
+        self.btn_popout.setMaximumWidth(30)
+        toggle_layout.addWidget(self.btn_popout)
+
         layout.addLayout(toggle_layout)
 
         # Main controls widget
@@ -152,6 +157,15 @@ class ControlPanel(QWidget):
         self.btn_clear_points.clicked.connect(self.clear_points_requested)
         self.btn_fit_view.clicked.connect(self.fit_view_requested)
         self.btn_hotkeys.clicked.connect(self.hotkeys_requested)
+        self.btn_popout.clicked.connect(self.pop_out_requested)
+
+    def mouseDoubleClickEvent(self, event):
+        """Handle double-click to expand collapsed panel."""
+        if self.width() < 50:  # If panel is collapsed
+            # Request expansion by calling parent method
+            if self.parent() and hasattr(self.parent(), "_expand_left_panel"):
+                self.parent()._expand_left_panel()
+        super().mouseDoubleClickEvent(event)
 
         # Model widget signals
         self.model_widget.browse_requested.connect(self.browse_models_requested)
@@ -166,17 +180,6 @@ class ControlPanel(QWidget):
         self.adjustments_widget.join_threshold_changed.connect(
             self.join_threshold_changed
         )
-
-    def toggle_visibility(self):
-        """Toggle panel visibility."""
-        is_visible = self.main_controls_widget.isVisible()
-        self.main_controls_widget.setVisible(not is_visible)
-        if is_visible:
-            self.btn_toggle_visibility.setText("> Show")
-            self.setFixedWidth(self.btn_toggle_visibility.sizeHint().width() + 20)
-        else:
-            self.btn_toggle_visibility.setText("< Hide")
-            self.setFixedWidth(250)
 
     def show_notification(self, message: str, duration: int = 3000):
         """Show a notification message."""
@@ -223,3 +226,12 @@ class ControlPanel(QWidget):
             self.btn_sam_mode.setToolTip("Point Mode (SAM model not available)")
         else:
             self.btn_sam_mode.setToolTip("Switch to Point Mode for AI segmentation (1)")
+
+    def set_popout_mode(self, is_popped_out: bool):
+        """Update the pop-out button based on panel state."""
+        if is_popped_out:
+            self.btn_popout.setText("⇤")
+            self.btn_popout.setToolTip("Return panel to main window")
+        else:
+            self.btn_popout.setText("⋯")
+            self.btn_popout.setToolTip("Pop out panel to separate window")

@@ -33,10 +33,12 @@ class RightPanel(QWidget):
     reassign_classes_requested = pyqtSignal()
     class_filter_changed = pyqtSignal()
     class_toggled = pyqtSignal(int)  # class_id
+    pop_out_requested = pyqtSignal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setFixedWidth(350)
+        self.setMinimumWidth(50)  # Allow collapsing but maintain minimum
+        self.preferred_width = 350  # Store preferred width for expansion
         self._setup_ui()
         self._connect_signals()
 
@@ -44,12 +46,16 @@ class RightPanel(QWidget):
         """Setup the UI layout."""
         self.v_layout = QVBoxLayout(self)
 
-        # Toggle button
+        # Top button row
         toggle_layout = QHBoxLayout()
+
+        self.btn_popout = QPushButton("⋯")
+        self.btn_popout.setToolTip("Pop out panel to separate window")
+        self.btn_popout.setMaximumWidth(30)
+        toggle_layout.addWidget(self.btn_popout)
+
         toggle_layout.addStretch()
-        self.btn_toggle_visibility = QPushButton("Hide >")
-        self.btn_toggle_visibility.setToolTip("Hide this panel")
-        toggle_layout.addWidget(self.btn_toggle_visibility)
+
         self.v_layout.addLayout(toggle_layout)
 
         # Main controls widget
@@ -181,6 +187,15 @@ class RightPanel(QWidget):
         self.class_table.cellClicked.connect(self._handle_class_toggle)
         self.btn_reassign_classes.clicked.connect(self.reassign_classes_requested)
         self.class_filter_combo.currentIndexChanged.connect(self.class_filter_changed)
+        self.btn_popout.clicked.connect(self.pop_out_requested)
+
+    def mouseDoubleClickEvent(self, event):
+        """Handle double-click to expand collapsed panel."""
+        if self.width() < 50:  # If panel is collapsed
+            # Request expansion by calling parent method
+            if self.parent() and hasattr(self.parent(), "_expand_right_panel"):
+                self.parent()._expand_right_panel()
+        super().mouseDoubleClickEvent(event)
 
     def _handle_class_alias_change(self, item):
         """Handle class alias change in table."""
@@ -251,25 +266,6 @@ class RightPanel(QWidget):
         """Set the folder for file browsing."""
         self.file_tree.setRootIndex(file_model.setRootPath(folder_path))
 
-    def toggle_visibility(self):
-        """Toggle panel visibility."""
-        is_visible = self.main_controls_widget.isVisible()
-        self.main_controls_widget.setVisible(not is_visible)
-
-        if is_visible:  # Content is now hidden
-            self.v_layout.addStretch(1)
-            self.btn_toggle_visibility.setText("< Show")
-            self.setFixedWidth(self.btn_toggle_visibility.sizeHint().width() + 20)
-        else:  # Content is now visible
-            # Remove the stretch
-            for i in range(self.v_layout.count()):
-                item = self.v_layout.itemAt(i)
-                if isinstance(item, QSpacerItem):
-                    self.v_layout.removeItem(item)
-                    break
-            self.btn_toggle_visibility.setText("Hide >")
-            self.setFixedWidth(350)
-
     def get_selected_segment_indices(self):
         """Get indices of selected segments."""
         selected_items = self.segment_table.selectedItems()
@@ -308,3 +304,12 @@ class RightPanel(QWidget):
     def clear_status(self):
         """Clear status message."""
         self.status_label.clear()
+
+    def set_popout_mode(self, is_popped_out: bool):
+        """Update the pop-out button based on panel state."""
+        if is_popped_out:
+            self.btn_popout.setText("⇤")
+            self.btn_popout.setToolTip("Return panel to main window")
+        else:
+            self.btn_popout.setText("⋯")
+            self.btn_popout.setToolTip("Pop out panel to separate window")
