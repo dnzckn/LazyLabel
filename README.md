@@ -143,11 +143,6 @@ LazyLabel includes a comprehensive hotkey management system:
 
 For complete hotkey documentation, see [HOTKEY_FEATURE.md](src/lazylabel/HOTKEY_FEATURE.md).
 
----
-
-## ☕ Support LazyLabel
-[If you found LazyLabel helpful, consider supporting the project!](https://buymeacoffee.com/dnzckn)
-
 ## Testing
 
 Run tests using pytest:
@@ -167,3 +162,8 @@ python -m pytest tests/unit/ui/test_undo_redo.py -v
 ```
 
 The HTML coverage report will be generated in `htmlcov/` directory.
+
+---
+
+## ☕ Support LazyLabel
+[If you found LazyLabel helpful, consider supporting the project!](https://buymeacoffee.com/dnzckn)
