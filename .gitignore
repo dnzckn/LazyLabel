@@ -8,3 +8,24 @@ src/lazylabel/.DS_Store
 *.npz
 *.txt
 *.json
+
+# Coverage and testing
+.coverage
+htmlcov/
+.pytest_cache/
+*.cover
+*.coverage
+
+# Virtual environments
+venv/
+env/
+.env
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+Thumbs.db
