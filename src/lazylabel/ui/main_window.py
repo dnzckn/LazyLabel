@@ -127,6 +127,7 @@ class MainWindow(QMainWindow):
             {},
         )
         self.action_history = []
+        self.redo_history = []
 
         # Update state flags to prevent recursion
         self._updating_lists = False
@@ -312,6 +313,7 @@ class MainWindow(QMainWindow):
             "delete_segments_alt": self._delete_selected_segments,
             "merge_segments": self._handle_merge_press,
             "undo": self._undo_last_action,
+            "redo": self._redo_last_action,
             "select_all": lambda: self.right_panel.select_all_segments(),
             "save_segment": self._handle_space_press,
             "save_output": self._handle_enter_press,
@@ -883,6 +885,8 @@ class MainWindow(QMainWindow):
                     "segment_index": len(self.segment_manager.segments) - 1,
                 }
             )
+            # Clear redo history when a new action is performed
+            self.redo_history.clear()
             self.clear_all_points()
             self._update_all_lists()
 
@@ -904,6 +908,8 @@ class MainWindow(QMainWindow):
                 "segment_index": len(self.segment_manager.segments) - 1,
             }
         )
+        # Clear redo history when a new action is performed
+        self.redo_history.clear()
 
         self.polygon_points.clear()
         self.clear_all_points()
@@ -1002,12 +1008,18 @@ class MainWindow(QMainWindow):
 
         last_action = self.action_history.pop()
         action_type = last_action.get("type")
+        
+        # Save to redo history before undoing
+        self.redo_history.append(last_action)
 
         if action_type == "add_segment":
             segment_index = last_action.get("segment_index")
             if segment_index is not None and 0 <= segment_index < len(
                 self.segment_manager.segments
             ):
+                # Store the segment data for redo
+                last_action["segment_data"] = self.segment_manager.segments[segment_index].copy()
+                
                 # Remove the segment that was added
                 self.segment_manager.delete_segments([segment_index])
                 self.right_panel.clear_selections() # Clear selection to prevent phantom highlights
@@ -1054,6 +1066,85 @@ class MainWindow(QMainWindow):
         # Add more undo logic for other action types here in the future
         else:
             self._show_warning_notification(f"Undo for action '{action_type}' not implemented.")
+            # Remove from redo history if we couldn't undo it
+            self.redo_history.pop()
+            
+    def _redo_last_action(self):
+        """Redo the last undone action."""
+        if not self.redo_history:
+            self._show_notification("Nothing to redo.")
+            return
+
+        last_action = self.redo_history.pop()
+        action_type = last_action.get("type")
+        
+        # Add back to action history for potential future undo
+        self.action_history.append(last_action)
+
+        if action_type == "add_segment":
+            # Restore the segment that was removed
+            if "segment_data" in last_action:
+                segment_data = last_action["segment_data"]
+                self.segment_manager.add_segment(segment_data)
+                self._update_all_lists()
+                self._show_notification("Redid: Add Segment")
+            else:
+                # If we don't have the segment data (shouldn't happen), we can't redo
+                self._show_warning_notification("Cannot redo: Missing segment data")
+                self.action_history.pop()  # Remove from action history
+        elif action_type == "add_point":
+            point_type = last_action.get("point_type")
+            point_coords = last_action.get("point_coords")
+            if point_coords:
+                pos = QPointF(point_coords[0], point_coords[1])
+                self._add_point(pos, positive=(point_type == "positive"))
+                self._update_segmentation()
+                self._show_notification("Redid: Add Point")
+            else:
+                self._show_warning_notification("Cannot redo: Missing point coordinates")
+                self.action_history.pop()
+        elif action_type == "add_polygon_point":
+            point_coords = last_action.get("point_coords")
+            if point_coords:
+                self._handle_polygon_click(point_coords)
+                self._show_notification("Redid: Add Polygon Point")
+            else:
+                self._show_warning_notification("Cannot redo: Missing polygon point coordinates")
+                self.action_history.pop()
+        elif action_type == "move_polygon":
+            final_vertices = last_action.get("final_vertices")
+            if final_vertices:
+                for i, vertices in final_vertices.items():
+                    if i < len(self.segment_manager.segments):
+                        self.segment_manager.segments[i]["vertices"] = [QPointF(v.x(), v.y()) for v in vertices]
+                        self._update_polygon_item(i)
+                self._display_edit_handles()
+                self._highlight_selected_segments()
+                self._show_notification("Redid: Move Polygon")
+            else:
+                self._show_warning_notification("Cannot redo: Missing final vertices")
+                self.action_history.pop()
+        elif action_type == "move_vertex":
+            segment_index = last_action.get("segment_index")
+            vertex_index = last_action.get("vertex_index")
+            new_pos = last_action.get("new_pos")
+            if segment_index is not None and vertex_index is not None and new_pos is not None:
+                if segment_index < len(self.segment_manager.segments):
+                    self.segment_manager.segments[segment_index]["vertices"][vertex_index] = new_pos
+                    self._update_polygon_item(segment_index)
+                    self._display_edit_handles()
+                    self._highlight_selected_segments()
+                    self._show_notification("Redid: Move Vertex")
+                else:
+                    self._show_warning_notification("Cannot redo: Segment no longer exists")
+                    self.action_history.pop()
+            else:
+                self._show_warning_notification("Cannot redo: Missing vertex data")
+                self.action_history.pop()
+        else:
+            self._show_warning_notification(f"Redo for action '{action_type}' not implemented.")
+            # Remove from action history if we couldn't redo it
+            self.action_history.pop()
 
     def clear_all_points(self):
         """Clear all temporary points."""
@@ -1162,6 +1253,8 @@ class MainWindow(QMainWindow):
             self.viewer.scene().removeItem(item)
         self.segment_items.clear()
         self.highlight_items.clear()
+        self.action_history.clear()
+        self.redo_history.clear()
 
     def _scene_mouse_press(self, event):
         """Handle mouse press events in the scene."""
@@ -1254,6 +1347,8 @@ class MainWindow(QMainWindow):
                     "final_vertices": final_vertices,
                 }
             )
+            # Clear redo history when a new action is performed
+            self.redo_history.clear()
             self.is_dragging_polygon = False
             self.drag_initial_vertices.clear()
             event.accept()
@@ -1294,6 +1389,8 @@ class MainWindow(QMainWindow):
                 "point_item": point_item,
             }
         )
+        # Clear redo history when a new action is performed
+        self.redo_history.clear()
 
     def _update_segmentation(self):
         """Update SAM segmentation preview."""
@@ -1351,6 +1448,8 @@ class MainWindow(QMainWindow):
                 "dot_item": dot,
             }
         )
+        # Clear redo history when a new action is performed
+        self.redo_history.clear()
 
     def _draw_polygon_preview(self):
         """Draw polygon preview lines and fill."""
@@ -1488,6 +1587,8 @@ class MainWindow(QMainWindow):
                         "new_pos": new_pos,
                     }
                 )
+                # Clear redo history when a new action is performed
+                self.redo_history.clear()
             seg["vertices"][
                 vertex_index
             ] = new_pos  # new_pos is already the correct scene coordinate

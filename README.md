@@ -93,7 +93,8 @@ Inspired by [LabelMe](https://github.com/wkentaro/labelme?tab=readme-ov-file#ins
 |---|---|
 | `L-Click` | Add positive point (Point Mode) or polygon vertex. |
 | `R-Click` | Add negative point (Point Mode). |
-| `Ctrl + Z` | Undo last point. |
+| `Ctrl + Z` | Undo last action. |
+| `Ctrl + Y` / `Ctrl + Shift + Z` | Redo last action. |
 | `Spacebar` | Finalize and save current AI segment. |
 | `Enter` | **Save final mask for the current image to a `.npz` file.** |
 | `M` | **Merge** selected segments into a single class. |
@@ -146,3 +147,23 @@ For complete hotkey documentation, see [HOTKEY_FEATURE.md](src/lazylabel/HOTKEY_
 
 ## ☕ Support LazyLabel
 [If you found LazyLabel helpful, consider supporting the project!](https://buymeacoffee.com/dnzckn)
+
+## Testing
+
+Run tests using pytest:
+
+```bash
+# Activate virtual environment first
+& e:\venv\lazylabel\Scripts\Activate.ps1
+
+# Run all tests
+python -m pytest
+
+# Run tests with coverage
+python -m pytest --cov=lazylabel --cov-report=html --cov-report=term-missing
+
+# Run specific test file
+python -m pytest tests/unit/ui/test_undo_redo.py -v
+```
+
+The HTML coverage report will be generated in `htmlcov/` directory.

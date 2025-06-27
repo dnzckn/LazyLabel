@@ -50,6 +50,7 @@ class HotkeyManager:
             HotkeyAction("save_output", "Save Output", "Return", category="Actions"),
             HotkeyAction("save_output_alt", "Save Output (Alt)", "Enter", category="Actions"),
             HotkeyAction("undo", "Undo Last Action", "Ctrl+Z", category="Actions"),
+            HotkeyAction("redo", "Redo Last Action", "Ctrl+Y", "Ctrl+Shift+Z", category="Actions"),
             HotkeyAction("escape", "Cancel/Clear Selection", "Escape", category="Actions"),
             
             # Segments

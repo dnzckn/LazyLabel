@@ -27,11 +27,12 @@ The system manages 27 different hotkey actions across 7 categories:
 - Pan Mode: `Q`
 - Edit Mode: `R`
 
-#### **Actions (6 actions)**
+#### **Actions (7 actions)**
 - Clear Points/Vertices: `C`
 - Save Current Segment: `Space`
 - Save Output: `Return/Enter`
 - Undo Last Action: `Ctrl+Z`
+- Redo Last Action: `Ctrl+Y` or `Ctrl+Shift+Z`
 - Cancel/Clear Selection: `Escape`
 
 #### **Segments (4 actions)**
