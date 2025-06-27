@@ -9,6 +9,7 @@ class EditableVertexItem(QGraphicsEllipseItem):
         self.main_window = main_window
         self.segment_index = segment_index
         self.vertex_index = vertex_index
+        self.initial_pos = None
 
         self.setZValue(200)
 
@@ -31,12 +32,13 @@ class EditableVertexItem(QGraphicsEllipseItem):
             new_pos = value
             if hasattr(self.main_window, "update_vertex_pos"):
                 self.main_window.update_vertex_pos(
-                    self.segment_index, self.vertex_index, new_pos
+                    self.segment_index, self.vertex_index, new_pos, record_undo=False
                 )
         return super().itemChange(change, value)
 
     def mousePressEvent(self, event):
         """Handle mouse press events."""
+        self.initial_pos = self.pos()
         super().mousePressEvent(event)
         event.accept()
 
@@ -47,5 +49,16 @@ class EditableVertexItem(QGraphicsEllipseItem):
 
     def mouseReleaseEvent(self, event):
         """Handle mouse release events."""
+        if self.initial_pos and self.initial_pos != self.pos():
+            self.main_window.action_history.append(
+                {
+                    "type": "move_vertex",
+                    "segment_index": self.segment_index,
+                    "vertex_index": self.vertex_index,
+                    "old_pos": self.initial_pos,
+                    "new_pos": self.pos(),
+                }
+            )
+        self.initial_pos = None
         super().mouseReleaseEvent(event)
         event.accept()

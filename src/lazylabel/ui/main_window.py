@@ -1011,6 +1011,43 @@ class MainWindow(QMainWindow):
                 self.segment_manager.delete_segments([segment_index])
                 self._update_all_lists()
                 self._show_notification("Undid: Add Segment")
+        elif action_type == "add_point":
+            point_type = last_action.get("point_type")
+            point_item = last_action.get("point_item")
+            point_list = self.positive_points if point_type == "positive" else self.negative_points
+            if point_list:
+                point_list.pop()
+                if point_item in self.point_items:
+                    self.point_items.remove(point_item)
+                    self.viewer.scene().removeItem(point_item)
+                self._update_segmentation()
+                self._show_notification("Undid: Add Point")
+        elif action_type == "add_polygon_point":
+            dot_item = last_action.get("dot_item")
+            if self.polygon_points:
+                self.polygon_points.pop()
+                if dot_item in self.polygon_preview_items:
+                    self.polygon_preview_items.remove(dot_item)
+                    self.viewer.scene().removeItem(dot_item)
+                self._draw_polygon_preview()
+            self._show_notification("Undid: Add Polygon Point")
+        elif action_type == "move_polygon":
+            initial_vertices = last_action.get("initial_vertices")
+            for i, vertices in initial_vertices.items():
+                self.segment_manager.segments[i]["vertices"] = vertices
+                self._update_polygon_item(i)
+            self._display_edit_handles()
+            self._highlight_selected_segments()
+            self._show_notification("Undid: Move Polygon")
+        elif action_type == "move_vertex":
+            segment_index = last_action.get("segment_index")
+            vertex_index = last_action.get("vertex_index")
+            old_pos = last_action.get("old_pos")
+            self.segment_manager.segments[segment_index]["vertices"][vertex_index] = old_pos
+            self._update_polygon_item(segment_index)
+            self._display_edit_handles()
+            self._highlight_selected_segments()
+            self._show_notification("Undid: Move Vertex")
 
         # Add more undo logic for other action types here in the future
         else:
@@ -1203,6 +1240,18 @@ class MainWindow(QMainWindow):
     def _scene_mouse_release(self, event):
         """Handle mouse release events in the scene."""
         if self.mode == "edit" and self.is_dragging_polygon:
+            # Record the action for undo
+            final_vertices = {
+                i: list(self.segment_manager.segments[i]["vertices"])
+                for i in self.drag_initial_vertices.keys()
+            }
+            self.action_history.append(
+                {
+                    "type": "move_polygon",
+                    "initial_vertices": self.drag_initial_vertices,
+                    "final_vertices": final_vertices,
+                }
+            )
             self.is_dragging_polygon = False
             self.drag_initial_vertices.clear()
             event.accept()
@@ -1233,6 +1282,16 @@ class MainWindow(QMainWindow):
         point_item.setPen(QPen(Qt.GlobalColor.transparent))
         self.viewer.scene().addItem(point_item)
         self.point_items.append(point_item)
+
+        # Record the action for undo
+        self.action_history.append(
+            {
+                "type": "add_point",
+                "point_type": "positive" if positive else "negative",
+                "point_coords": [int(pos.x()), int(pos.y())],
+                "point_item": point_item,
+            }
+        )
 
     def _update_segmentation(self):
         """Update SAM segmentation preview."""
@@ -1281,6 +1340,15 @@ class MainWindow(QMainWindow):
 
         # Update polygon preview
         self._draw_polygon_preview()
+
+        # Record the action for undo
+        self.action_history.append(
+            {
+                "type": "add_polygon_point",
+                "point_coords": pos,
+                "dot_item": dot,
+            }
+        )
 
     def _draw_polygon_preview(self):
         """Draw polygon preview lines and fill."""
@@ -1403,10 +1471,21 @@ class MainWindow(QMainWindow):
                     self.viewer.scene().removeItem(h)
             self.edit_handles = []
 
-    def update_vertex_pos(self, segment_index, vertex_index, new_pos):
+    def update_vertex_pos(self, segment_index, vertex_index, new_pos, record_undo=True):
         """Update the position of a vertex in a polygon segment."""
         seg = self.segment_manager.segments[segment_index]
         if seg.get("type") == "Polygon":
+            old_pos = seg["vertices"][vertex_index]
+            if record_undo:
+                self.action_history.append(
+                    {
+                        "type": "move_vertex",
+                        "segment_index": segment_index,
+                        "vertex_index": vertex_index,
+                        "old_pos": old_pos,
+                        "new_pos": new_pos,
+                    }
+                )
             seg["vertices"][
                 vertex_index
             ] = new_pos  # new_pos is already the correct scene coordinate

@@ -35,7 +35,7 @@ class HotkeyManager:
             # Navigation
             HotkeyAction("load_next_image", "Load Next Image", "Right", category="Navigation"),
             HotkeyAction("load_previous_image", "Load Previous Image", "Left", category="Navigation"),
-            HotkeyAction("fit_view", "Fit View", "Period", category="Navigation"),
+            HotkeyAction("fit_view", "Fit View", ".", category="Navigation"),
             
             # Modes
             HotkeyAction("sam_mode", "Point Mode (SAM)", "1", category="Modes"),
