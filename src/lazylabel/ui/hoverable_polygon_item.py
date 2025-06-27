@@ -1,6 +1,5 @@
-from PyQt6.QtWidgets import QGraphicsPolygonItem
 from PyQt6.QtGui import QBrush, QPolygonF
-from PyQt6.QtCore import Qt
+from PyQt6.QtWidgets import QGraphicsPolygonItem
 
 
 class HoverablePolygonItem(QGraphicsPolygonItem):

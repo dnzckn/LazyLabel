@@ -1,25 +1,26 @@
 import os
+
 import cv2
 import numpy as np
-import torch
 import requests
+import torch
+from segment_anything import SamPredictor, sam_model_registry
 from tqdm import tqdm
-from segment_anything import sam_model_registry, SamPredictor
 
 
 def download_model(url, download_path):
     """Downloads file with a progress bar."""
-    print(f"[10/20] SAM model not found. Downloading from Meta's repository...")
+    print("[10/20] SAM model not found. Downloading from Meta's repository...")
     print(f"        Downloading to: {download_path}")
     try:
-        print(f"[10/20] Connecting to download server...")
+        print("[10/20] Connecting to download server...")
         response = requests.get(url, stream=True, timeout=30)
         response.raise_for_status()
         total_size_in_bytes = int(response.headers.get("content-length", 0))
         block_size = 1024  # 1 Kibibyte
 
         print(
-            f"[10/20] Starting download ({total_size_in_bytes / (1024*1024*1024):.1f} GB)..."
+            f"[10/20] Starting download ({total_size_in_bytes / (1024 * 1024 * 1024):.1f} GB)..."
         )
         progress_bar = tqdm(total=total_size_in_bytes, unit="iB", unit_scale=True)
         with open(download_path, "wb") as file:
@@ -35,30 +36,34 @@ def download_model(url, download_path):
 
     except requests.exceptions.ConnectionError as e:
         raise RuntimeError(
-            f"[10/20] Network connection failed: Check your internet connection"
-        )
+            "[10/20] Network connection failed: Check your internet connection"
+        ) from e
     except requests.exceptions.Timeout as e:
-        raise RuntimeError(f"[10/20] Download timeout: Server took too long to respond")
+        raise RuntimeError(
+            "[10/20] Download timeout: Server took too long to respond"
+        ) from e
     except requests.exceptions.HTTPError as e:
         raise RuntimeError(
             f"[10/20] HTTP error {e.response.status_code}: Server rejected request"
-        )
+        ) from e
     except requests.exceptions.RequestException as e:
-        raise RuntimeError(f"[10/20] Network error during download: {e}")
+        raise RuntimeError(f"[10/20] Network error during download: {e}") from e
     except PermissionError as e:
         raise RuntimeError(
             f"[10/20] Permission denied: Cannot write to {download_path}"
-        )
+        ) from e
     except OSError as e:
-        raise RuntimeError(f"[10/20] Disk error: {e} (check available disk space)")
+        raise RuntimeError(
+            f"[10/20] Disk error: {e} (check available disk space)"
+        ) from e
     except Exception as e:
         # Clean up partial download
         if os.path.exists(download_path):
-            try:
+            import contextlib
+
+            with contextlib.suppress(OSError):
                 os.remove(download_path)
-            except:
-                pass
-        raise RuntimeError(f"[10/20] Download failed: {e}")
+        raise RuntimeError(f"[10/20] Download failed: {e}") from e
 
 
 class SamModel:
@@ -102,7 +107,7 @@ class SamModel:
 
                 if os.path.exists(old_model_path) and not os.path.exists(model_path):
                     print(
-                        f"[10/20] Moving existing model from cache to models folder..."
+                        "[10/20] Moving existing model from cache to models folder..."
                     )
                     import shutil
 
@@ -118,14 +123,14 @@ class SamModel:
                 self.device
             )
 
-            print(f"[12/20] Setting up predictor...")
+            print("[12/20] Setting up predictor...")
             self.predictor = SamPredictor(self.model)
             self.is_loaded = True
             print("[13/20] SAM model loaded successfully.")
 
         except Exception as e:
             print(f"[8/20] Failed to load SAM model: {e}")
-            print(f"[8/20] SAM point functionality will be disabled.")
+            print("[8/20] SAM point functionality will be disabled.")
             self.is_loaded = False
 
     def load_custom_model(self, model_path, model_type="vit_h"):

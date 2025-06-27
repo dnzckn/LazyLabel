@@ -1,8 +1,9 @@
 """Segment management functionality."""
 
-import numpy as np
+from typing import Any
+
 import cv2
-from typing import List, Dict, Any, Optional, Tuple
+import numpy as np
 from PyQt6.QtCore import QPointF
 
 
@@ -10,10 +11,10 @@ class SegmentManager:
     """Manages image segments and classes."""
 
     def __init__(self):
-        self.segments: List[Dict[str, Any]] = []
-        self.class_aliases: Dict[int, str] = {}
+        self.segments: list[dict[str, Any]] = []
+        self.class_aliases: dict[int, str] = {}
         self.next_class_id: int = 0
-        self.active_class_id: Optional[int] = None  # Currently active/toggled class
+        self.active_class_id: int | None = None  # Currently active/toggled class
 
     def clear(self) -> None:
         """Clear all segments and reset state."""
@@ -22,7 +23,7 @@ class SegmentManager:
         self.next_class_id = 0
         self.active_class_id = None
 
-    def add_segment(self, segment_data: Dict[str, Any]) -> None:
+    def add_segment(self, segment_data: dict[str, Any]) -> None:
         """Add a new segment."""
         if "class_id" not in segment_data:
             # Use active class if available, otherwise use next class ID
@@ -33,14 +34,14 @@ class SegmentManager:
         self.segments.append(segment_data)
         self._update_next_class_id()
 
-    def delete_segments(self, indices: List[int]) -> None:
+    def delete_segments(self, indices: list[int]) -> None:
         """Delete segments by indices."""
         for i in sorted(indices, reverse=True):
             if 0 <= i < len(self.segments):
                 del self.segments[i]
         self._update_next_class_id()
 
-    def assign_segments_to_class(self, indices: List[int]) -> None:
+    def assign_segments_to_class(self, indices: list[int]) -> None:
         """Assign selected segments to a class."""
         if not indices:
             return
@@ -62,21 +63,19 @@ class SegmentManager:
 
         self._update_next_class_id()
 
-    def get_unique_class_ids(self) -> List[int]:
+    def get_unique_class_ids(self) -> list[int]:
         """Get sorted list of unique class IDs."""
         return sorted(
-            list(
-                {
-                    seg.get("class_id")
-                    for seg in self.segments
-                    if seg.get("class_id") is not None
-                }
-            )
+            {
+                seg.get("class_id")
+                for seg in self.segments
+                if seg.get("class_id") is not None
+            }
         )
 
     def rasterize_polygon(
-        self, vertices: List[QPointF], image_size: Tuple[int, int]
-    ) -> Optional[np.ndarray]:
+        self, vertices: list[QPointF], image_size: tuple[int, int]
+    ) -> np.ndarray | None:
         """Convert polygon vertices to binary mask."""
         if not vertices:
             return None
@@ -88,7 +87,7 @@ class SegmentManager:
         return mask.astype(bool)
 
     def create_final_mask_tensor(
-        self, image_size: Tuple[int, int], class_order: List[int]
+        self, image_size: tuple[int, int], class_order: list[int]
     ) -> np.ndarray:
         """Create final mask tensor for saving."""
         h, w = image_size
@@ -115,7 +114,7 @@ class SegmentManager:
 
         return final_mask_tensor
 
-    def reassign_class_ids(self, new_order: List[int]) -> None:
+    def reassign_class_ids(self, new_order: list[int]) -> None:
         """Reassign class IDs based on new order."""
         id_map = {old_id: new_id for new_id, old_id in enumerate(new_order)}
 
@@ -141,11 +140,11 @@ class SegmentManager:
         """Get alias for a class."""
         return self.class_aliases.get(class_id, str(class_id))
 
-    def set_active_class(self, class_id: Optional[int]) -> None:
+    def set_active_class(self, class_id: int | None) -> None:
         """Set the active class ID."""
         self.active_class_id = class_id
 
-    def get_active_class(self) -> Optional[int]:
+    def get_active_class(self) -> int | None:
         """Get the active class ID."""
         return self.active_class_id
 

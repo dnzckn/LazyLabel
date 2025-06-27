@@ -1,8 +1,10 @@
 """Unit tests for the undo and redo functionality."""
 
-import pytest
 from unittest.mock import MagicMock, patch
+
+import pytest
 from PyQt6.QtCore import QPointF
+
 from lazylabel.ui.main_window import MainWindow
 
 
@@ -19,7 +21,6 @@ class TestUndoRedo:
             patch("lazylabel.ui.main_window.MainWindow._setup_shortcuts"),
             patch("lazylabel.ui.main_window.MainWindow._load_settings"),
         ):
-
             window = MainWindow()
             qtbot.addWidget(window)
 

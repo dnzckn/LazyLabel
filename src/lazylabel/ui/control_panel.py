@@ -1,20 +1,16 @@
 """Left control panel with mode controls and settings."""
 
+from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtWidgets import (
-    QWidget,
-    QVBoxLayout,
-    QPushButton,
-    QLabel,
     QFrame,
     QHBoxLayout,
-    QCheckBox,
-    QSlider,
-    QGroupBox,
-    QComboBox,
+    QLabel,
+    QPushButton,
+    QVBoxLayout,
+    QWidget,
 )
-from PyQt6.QtCore import Qt, pyqtSignal
 
-from .widgets import ModelSelectionWidget, SettingsWidget, AdjustmentsWidget
+from .widgets import AdjustmentsWidget, ModelSelectionWidget, SettingsWidget
 
 
 class ControlPanel(QWidget):
@@ -175,10 +171,12 @@ class ControlPanel(QWidget):
 
     def mouseDoubleClickEvent(self, event):
         """Handle double-click to expand collapsed panel."""
-        if self.width() < 50:  # If panel is collapsed
-            # Request expansion by calling parent method
-            if self.parent() and hasattr(self.parent(), "_expand_left_panel"):
-                self.parent()._expand_left_panel()
+        if (
+            self.width() < 50
+            and self.parent()
+            and hasattr(self.parent(), "_expand_left_panel")
+        ):
+            self.parent()._expand_left_panel()
         super().mouseDoubleClickEvent(event)
 
     def show_notification(self, message: str, duration: int = 3000):

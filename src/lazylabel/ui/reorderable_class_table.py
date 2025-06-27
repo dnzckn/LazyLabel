@@ -1,5 +1,4 @@
-from PyQt6.QtWidgets import QTableWidget, QAbstractItemView
-from PyQt6.QtCore import Qt
+from PyQt6.QtWidgets import QAbstractItemView, QTableWidget
 
 
 class ReorderableClassTable(QTableWidget):
@@ -31,7 +30,7 @@ class ReorderableClassTable(QTableWidget):
                 drop_row = self.rowCount()
 
             selected_rows = sorted(
-                list({index.row() for index in self.selectedIndexes()}), reverse=True
+                {index.row() for index in self.selectedIndexes()}, reverse=True
             )
 
             dragged_rows_data = []

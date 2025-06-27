@@ -38,6 +38,12 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install -e ".[dev]"
+    - name: Run ruff linter
+      run: |
+        ruff check --output-format=github .
+    - name: Run ruff formatter check
+      run: |
+        ruff format --check .
     - name: Run tests
       env:
         QT_QPA_PLATFORM: offscreen

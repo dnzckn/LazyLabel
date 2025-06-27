@@ -1,6 +1,7 @@
 from pathlib import Path
-from PyQt6.QtCore import Qt, QModelIndex, QDir
-from PyQt6.QtGui import QFileSystemModel, QBrush, QColor
+
+from PyQt6.QtCore import QDir, QModelIndex, Qt
+from PyQt6.QtGui import QBrush, QColor, QFileSystemModel
 
 
 class CustomFileSystemModel(QFileSystemModel):

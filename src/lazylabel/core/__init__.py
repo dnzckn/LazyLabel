@@ -1,7 +1,7 @@
 """Core business logic for LazyLabel."""
 
-from .segment_manager import SegmentManager
-from .model_manager import ModelManager
 from .file_manager import FileManager
+from .model_manager import ModelManager
+from .segment_manager import SegmentManager
 
-__all__ = ['SegmentManager', 'ModelManager', 'FileManager']
+__all__ = ["SegmentManager", "ModelManager", "FileManager"]

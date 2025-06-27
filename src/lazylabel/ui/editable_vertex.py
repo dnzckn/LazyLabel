@@ -1,6 +1,6 @@
-from PyQt6.QtWidgets import QGraphicsEllipseItem, QGraphicsItem
 from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QBrush, QPen, QColor
+from PyQt6.QtGui import QBrush, QColor, QPen
+from PyQt6.QtWidgets import QGraphicsEllipseItem, QGraphicsItem
 
 
 class EditableVertexItem(QGraphicsEllipseItem):

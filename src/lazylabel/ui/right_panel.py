@@ -1,23 +1,20 @@
 """Right panel with file explorer and segment management."""
 
+from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtWidgets import (
-    QWidget,
-    QVBoxLayout,
-    QPushButton,
-    QLabel,
+    QComboBox,
     QHBoxLayout,
+    QHeaderView,
+    QLabel,
+    QPushButton,
+    QSplitter,
     QTableWidget,
     QTreeView,
-    QComboBox,
-    QSplitter,
-    QSpacerItem,
-    QHeaderView,
+    QVBoxLayout,
+    QWidget,
 )
-from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtGui import QBrush, QColor
 
 from .reorderable_class_table import ReorderableClassTable
-from .numeric_table_widget_item import NumericTableWidgetItem
 
 
 class RightPanel(QWidget):
@@ -191,10 +188,12 @@ class RightPanel(QWidget):
 
     def mouseDoubleClickEvent(self, event):
         """Handle double-click to expand collapsed panel."""
-        if self.width() < 50:  # If panel is collapsed
-            # Request expansion by calling parent method
-            if self.parent() and hasattr(self.parent(), "_expand_right_panel"):
-                self.parent()._expand_right_panel()
+        if (
+            self.width() < 50
+            and self.parent()
+            and hasattr(self.parent(), "_expand_right_panel")
+        ):
+            self.parent()._expand_right_panel()
         super().mouseDoubleClickEvent(event)
 
     def _handle_class_alias_change(self, item):
@@ -269,7 +268,7 @@ class RightPanel(QWidget):
     def get_selected_segment_indices(self):
         """Get indices of selected segments."""
         selected_items = self.segment_table.selectedItems()
-        selected_rows = sorted(list({item.row() for item in selected_items}))
+        selected_rows = sorted({item.row() for item in selected_items})
         return [
             self.segment_table.item(row, 0).data(Qt.ItemDataRole.UserRole)
             for row in selected_rows

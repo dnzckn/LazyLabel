@@ -1,48 +1,46 @@
 """Main application window."""
 
 import os
-import numpy as np
+
 import cv2
+import numpy as np
+from PyQt6.QtCore import QModelIndex, QPointF, Qt, QTimer, pyqtSignal
+from PyQt6.QtGui import (
+    QBrush,
+    QColor,
+    QIcon,
+    QKeySequence,
+    QPen,
+    QPixmap,
+    QPolygonF,
+    QShortcut,
+)
 from PyQt6.QtWidgets import (
-    QMainWindow,
-    QWidget,
-    QHBoxLayout,
-    QVBoxLayout,
-    QFileDialog,
     QApplication,
+    QDialog,
+    QFileDialog,
     QGraphicsEllipseItem,
     QGraphicsLineItem,
     QGraphicsPolygonItem,
+    QMainWindow,
+    QSplitter,
     QTableWidgetItem,
     QTableWidgetSelectionRange,
-    QHeaderView,
-    QSplitter,
-    QDialog,
+    QVBoxLayout,
+    QWidget,
 )
-from PyQt6.QtGui import (
-    QIcon,
-    QKeySequence,
-    QShortcut,
-    QPixmap,
-    QColor,
-    QPen,
-    QBrush,
-    QPolygonF,
-    QImage,
-)
-from PyQt6.QtCore import Qt, QTimer, QModelIndex, QPointF, pyqtSignal
 
-from .control_panel import ControlPanel
-from .right_panel import RightPanel
-from .photo_viewer import PhotoViewer
-from .hoverable_polygon_item import HoverablePolygonItem
-from .hoverable_pixelmap_item import HoverablePixmapItem
-from .editable_vertex import EditableVertexItem
-from .numeric_table_widget_item import NumericTableWidgetItem
-from ..core import SegmentManager, ModelManager, FileManager
-from ..config import Settings, Paths, HotkeyManager
+from ..config import HotkeyManager, Paths, Settings
+from ..core import FileManager, ModelManager, SegmentManager
 from ..utils import CustomFileSystemModel, mask_to_pixmap
+from .control_panel import ControlPanel
+from .editable_vertex import EditableVertexItem
 from .hotkey_dialog import HotkeyDialog
+from .hoverable_pixelmap_item import HoverablePixmapItem
+from .hoverable_polygon_item import HoverablePolygonItem
+from .numeric_table_widget_item import NumericTableWidgetItem
+from .photo_viewer import PhotoViewer
+from .right_panel import RightPanel
 from .widgets import StatusBar
 
 
@@ -799,7 +797,7 @@ class MainWindow(QMainWindow):
     def _display_all_segments(self):
         """Display all segments on the viewer."""
         # Clear existing segment items
-        for i, items in self.segment_items.items():
+        for _i, items in self.segment_items.items():
             for item in items:
                 if item.scene():
                     self.viewer.scene().removeItem(item)
@@ -1008,7 +1006,7 @@ class MainWindow(QMainWindow):
 
         last_action = self.action_history.pop()
         action_type = last_action.get("type")
-        
+
         # Save to redo history before undoing
         self.redo_history.append(last_action)
 
@@ -1018,17 +1016,23 @@ class MainWindow(QMainWindow):
                 self.segment_manager.segments
             ):
                 # Store the segment data for redo
-                last_action["segment_data"] = self.segment_manager.segments[segment_index].copy()
-                
+                last_action["segment_data"] = self.segment_manager.segments[
+                    segment_index
+                ].copy()
+
                 # Remove the segment that was added
                 self.segment_manager.delete_segments([segment_index])
-                self.right_panel.clear_selections() # Clear selection to prevent phantom highlights
+                self.right_panel.clear_selections()  # Clear selection to prevent phantom highlights
                 self._update_all_lists()
                 self._show_notification("Undid: Add Segment")
         elif action_type == "add_point":
             point_type = last_action.get("point_type")
             point_item = last_action.get("point_item")
-            point_list = self.positive_points if point_type == "positive" else self.negative_points
+            point_list = (
+                self.positive_points
+                if point_type == "positive"
+                else self.negative_points
+            )
             if point_list:
                 point_list.pop()
                 if point_item in self.point_items:
@@ -1057,7 +1061,9 @@ class MainWindow(QMainWindow):
             segment_index = last_action.get("segment_index")
             vertex_index = last_action.get("vertex_index")
             old_pos = last_action.get("old_pos")
-            self.segment_manager.segments[segment_index]["vertices"][vertex_index] = old_pos
+            self.segment_manager.segments[segment_index]["vertices"][vertex_index] = (
+                old_pos
+            )
             self._update_polygon_item(segment_index)
             self._display_edit_handles()
             self._highlight_selected_segments()
@@ -1065,10 +1071,12 @@ class MainWindow(QMainWindow):
 
         # Add more undo logic for other action types here in the future
         else:
-            self._show_warning_notification(f"Undo for action '{action_type}' not implemented.")
+            self._show_warning_notification(
+                f"Undo for action '{action_type}' not implemented."
+            )
             # Remove from redo history if we couldn't undo it
             self.redo_history.pop()
-            
+
     def _redo_last_action(self):
         """Redo the last undone action."""
         if not self.redo_history:
@@ -1077,7 +1085,7 @@ class MainWindow(QMainWindow):
 
         last_action = self.redo_history.pop()
         action_type = last_action.get("type")
-        
+
         # Add back to action history for potential future undo
         self.action_history.append(last_action)
 
@@ -1101,7 +1109,9 @@ class MainWindow(QMainWindow):
                 self._update_segmentation()
                 self._show_notification("Redid: Add Point")
             else:
-                self._show_warning_notification("Cannot redo: Missing point coordinates")
+                self._show_warning_notification(
+                    "Cannot redo: Missing point coordinates"
+                )
                 self.action_history.pop()
         elif action_type == "add_polygon_point":
             point_coords = last_action.get("point_coords")
@@ -1109,14 +1119,18 @@ class MainWindow(QMainWindow):
                 self._handle_polygon_click(point_coords)
                 self._show_notification("Redid: Add Polygon Point")
             else:
-                self._show_warning_notification("Cannot redo: Missing polygon point coordinates")
+                self._show_warning_notification(
+                    "Cannot redo: Missing polygon point coordinates"
+                )
                 self.action_history.pop()
         elif action_type == "move_polygon":
             final_vertices = last_action.get("final_vertices")
             if final_vertices:
                 for i, vertices in final_vertices.items():
                     if i < len(self.segment_manager.segments):
-                        self.segment_manager.segments[i]["vertices"] = [QPointF(v.x(), v.y()) for v in vertices]
+                        self.segment_manager.segments[i]["vertices"] = [
+                            QPointF(v.x(), v.y()) for v in vertices
+                        ]
                         self._update_polygon_item(i)
                 self._display_edit_handles()
                 self._highlight_selected_segments()
@@ -1128,21 +1142,31 @@ class MainWindow(QMainWindow):
             segment_index = last_action.get("segment_index")
             vertex_index = last_action.get("vertex_index")
             new_pos = last_action.get("new_pos")
-            if segment_index is not None and vertex_index is not None and new_pos is not None:
+            if (
+                segment_index is not None
+                and vertex_index is not None
+                and new_pos is not None
+            ):
                 if segment_index < len(self.segment_manager.segments):
-                    self.segment_manager.segments[segment_index]["vertices"][vertex_index] = new_pos
+                    self.segment_manager.segments[segment_index]["vertices"][
+                        vertex_index
+                    ] = new_pos
                     self._update_polygon_item(segment_index)
                     self._display_edit_handles()
                     self._highlight_selected_segments()
                     self._show_notification("Redid: Move Vertex")
                 else:
-                    self._show_warning_notification("Cannot redo: Segment no longer exists")
+                    self._show_warning_notification(
+                        "Cannot redo: Segment no longer exists"
+                    )
                     self.action_history.pop()
             else:
                 self._show_warning_notification("Cannot redo: Missing vertex data")
                 self.action_history.pop()
         else:
-            self._show_warning_notification(f"Redo for action '{action_type}' not implemented.")
+            self._show_warning_notification(
+                f"Redo for action '{action_type}' not implemented."
+            )
             # Remove from action history if we couldn't redo it
             self.action_history.pop()
 
@@ -1277,7 +1301,9 @@ class MainWindow(QMainWindow):
                 self.drag_start_pos = pos
                 selected_indices = self.right_panel.get_selected_segment_indices()
                 self.drag_initial_vertices = {
-                    i: [QPointF(p) for p in self.segment_manager.segments[i]["vertices"]]
+                    i: [
+                        QPointF(p) for p in self.segment_manager.segments[i]["vertices"]
+                    ]
                     for i in selected_indices
                     if self.segment_manager.segments[i].get("type") == "Polygon"
                 }
@@ -1312,9 +1338,8 @@ class MainWindow(QMainWindow):
         elif self.mode == "polygon":
             if event.button() == Qt.MouseButton.LeftButton:
                 self._handle_polygon_click(pos)
-        elif self.mode == "selection":
-            if event.button() == Qt.MouseButton.LeftButton:
-                self._handle_segment_selection_click(pos)
+        elif self.mode == "selection" and event.button() == Qt.MouseButton.LeftButton:
+            self._handle_segment_selection_click(pos)
 
     def _scene_mouse_move(self, event):
         """Handle mouse move events in the scene."""
@@ -1338,12 +1363,14 @@ class MainWindow(QMainWindow):
             # Record the action for undo
             final_vertices = {
                 i: list(self.segment_manager.segments[i]["vertices"])
-                for i in self.drag_initial_vertices.keys()
+                for i in self.drag_initial_vertices
             }
             self.action_history.append(
                 {
                     "type": "move_polygon",
-                    "initial_vertices": {k: list(v) for k, v in self.drag_initial_vertices.items()},
+                    "initial_vertices": {
+                        k: list(v) for k, v in self.drag_initial_vertices.items()
+                    },
                     "final_vertices": final_vertices,
                 }
             )
@@ -1589,9 +1616,9 @@ class MainWindow(QMainWindow):
                 )
                 # Clear redo history when a new action is performed
                 self.redo_history.clear()
-            seg["vertices"][
-                vertex_index
-            ] = new_pos  # new_pos is already the correct scene coordinate
+            seg["vertices"][vertex_index] = (
+                new_pos  # new_pos is already the correct scene coordinate
+            )
             self._update_polygon_item(segment_index)
             self._highlight_selected_segments()  # Keep the highlight in sync with the new shape
 

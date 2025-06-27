@@ -2,4 +2,4 @@
 
 from .sam_model import SamModel
 
-__all__ = ['SamModel']
+__all__ = ["SamModel"]

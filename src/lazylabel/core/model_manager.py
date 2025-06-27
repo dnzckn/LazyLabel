@@ -1,12 +1,10 @@
 """Model management functionality."""
 
 import os
-import glob
-from typing import List, Tuple, Optional, Callable
-from pathlib import Path
+from collections.abc import Callable
 
-from ..models.sam_model import SamModel
 from ..config import Paths
+from ..models.sam_model import SamModel
 
 
 class ModelManager:
@@ -14,11 +12,11 @@ class ModelManager:
 
     def __init__(self, paths: Paths):
         self.paths = paths
-        self.sam_model: Optional[SamModel] = None
-        self.current_models_folder: Optional[str] = None
-        self.on_model_changed: Optional[Callable[[str], None]] = None
+        self.sam_model: SamModel | None = None
+        self.current_models_folder: str | None = None
+        self.on_model_changed: Callable[[str], None] | None = None
 
-    def initialize_default_model(self, model_type: str = "vit_h") -> Optional[SamModel]:
+    def initialize_default_model(self, model_type: str = "vit_h") -> SamModel | None:
         """Initialize the default SAM model.
 
         Returns:
@@ -34,14 +32,14 @@ class ModelManager:
             self.sam_model = None
             return None
 
-    def get_available_models(self, folder_path: str) -> List[Tuple[str, str]]:
+    def get_available_models(self, folder_path: str) -> list[tuple[str, str]]:
         """Get list of available .pth models in folder.
 
         Returns:
             List of (display_name, full_path) tuples
         """
         pth_files = []
-        for root, dirs, files in os.walk(folder_path):
+        for root, _dirs, files in os.walk(folder_path):
             for file in files:
                 if file.lower().endswith(".pth"):
                     full_path = os.path.join(root, file)
@@ -86,7 +84,7 @@ class ModelManager:
         """Set the current models folder."""
         self.current_models_folder = folder_path
 
-    def get_models_folder(self) -> Optional[str]:
+    def get_models_folder(self) -> str | None:
         """Get the current models folder."""
         return self.current_models_folder
 

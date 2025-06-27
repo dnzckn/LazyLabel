@@ -143,14 +143,33 @@ LazyLabel includes a comprehensive hotkey management system:
 
 For complete hotkey documentation, see [HOTKEY_FEATURE.md](src/lazylabel/HOTKEY_FEATURE.md).
 
-## Testing
+## Development
 
-Run tests using pytest:
+### Code Quality
+This project uses Ruff for linting and formatting:
 
 ```bash
 # Activate virtual environment first
 & e:\venv\lazylabel\Scripts\Activate.ps1
 
+# Run linter
+ruff check .
+
+# Fix auto-fixable issues
+ruff check --fix .
+
+# Format code
+ruff format .
+
+# Check if code is properly formatted
+ruff format --check .
+```
+
+### Testing
+
+Run tests using pytest:
+
+```bash
 # Run all tests
 python -m pytest
 

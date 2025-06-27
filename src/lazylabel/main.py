@@ -1,6 +1,7 @@
 """Main entry point for LazyLabel application."""
 
 import sys
+
 import qdarktheme
 from PyQt6.QtWidgets import QApplication
 

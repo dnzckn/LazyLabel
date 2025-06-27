@@ -1,8 +1,8 @@
 """Status bar widget for displaying active messages."""
 
-from PyQt6.QtWidgets import QStatusBar, QLabel
-from PyQt6.QtCore import QTimer, pyqtSignal, Qt
+from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtGui import QFont
+from PyQt6.QtWidgets import QLabel, QStatusBar
 
 
 class StatusBar(QStatusBar):

@@ -6,4 +6,4 @@ __email__ = "deniz.n.cakan@gmail.com"
 
 from .main import main
 
-__all__ = ['main']
+__all__ = ["main"]

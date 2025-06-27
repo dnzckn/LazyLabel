@@ -1,6 +1,6 @@
-from PyQt6.QtCore import Qt, QRectF
-from PyQt6.QtGui import QPixmap, QCursor
-from PyQt6.QtWidgets import QGraphicsView, QGraphicsScene, QGraphicsPixmapItem
+from PyQt6.QtCore import QRectF, Qt
+from PyQt6.QtGui import QCursor, QPixmap
+from PyQt6.QtWidgets import QGraphicsPixmapItem, QGraphicsScene, QGraphicsView
 
 
 class PhotoViewer(QGraphicsView):
@@ -47,8 +47,5 @@ class PhotoViewer(QGraphicsView):
 
     def wheelEvent(self, event):
         if not self._pixmap_item.pixmap().isNull():
-            if event.angleDelta().y() > 0:
-                factor = 1.25
-            else:
-                factor = 0.8
+            factor = 1.25 if event.angleDelta().y() > 0 else 0.8
             self.scale(factor, factor)
