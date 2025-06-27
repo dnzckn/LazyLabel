@@ -23,22 +23,15 @@ jobs:
       run: |
         sudo apt-get update
         sudo apt-get install -y \
-          libgl1-mesa-glx \
           libglib2.0-0 \
+          libfontconfig1 \
+          libx11-6 \
+          libxext6 \
           libxrender1 \
-          libxrandr2 \
-          libxss1 \
-          libxcursor1 \
-          libxcomposite1 \
-          libasound2 \
           libxi6 \
           libxtst6 \
-          libxkbcommon-x11-0 \
-          libxkbcommon0 \
-          libxdamage1 \
-          libxfixes3 \
-          libxinerama1 \
-          libqt6widgets6 \
+          libgl1-mesa-dev \
+          qt6-base-dev \
           qt6-qpa-plugins \
           xvfb
     - name: Install dependencies
