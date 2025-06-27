@@ -126,6 +126,7 @@ class MainWindow(QMainWindow):
             None,
             {},
         )
+        self.action_history = []
 
         # Update state flags to prevent recursion
         self._updating_lists = False
@@ -868,11 +869,17 @@ class MainWindow(QMainWindow):
             self.positive_points, self.negative_points
         )
         if mask is not None:
-            self.segment_manager.add_segment(
+            new_segment = {
+                "mask": mask,
+                "type": "SAM",
+                "vertices": None,
+            }
+            self.segment_manager.add_segment(new_segment)
+            # Record the action for undo
+            self.action_history.append(
                 {
-                    "mask": mask,
-                    "type": "SAM",
-                    "vertices": None,
+                    "type": "add_segment",
+                    "segment_index": len(self.segment_manager.segments) - 1,
                 }
             )
             self.clear_all_points()
@@ -883,13 +890,20 @@ class MainWindow(QMainWindow):
         if len(self.polygon_points) < 3:
             return
 
-        self.segment_manager.add_segment(
+        new_segment = {
+            "vertices": list(self.polygon_points),
+            "type": "Polygon",
+            "mask": None,
+        }
+        self.segment_manager.add_segment(new_segment)
+        # Record the action for undo
+        self.action_history.append(
             {
-                "vertices": list(self.polygon_points),
-                "type": "Polygon",
-                "mask": None,
+                "type": "add_segment",
+                "segment_index": len(self.segment_manager.segments) - 1,
             }
         )
+
         self.polygon_points.clear()
         self.clear_all_points()
         self._update_all_lists()
@@ -980,9 +994,27 @@ class MainWindow(QMainWindow):
         self.right_panel.clear_selections()
 
     def _undo_last_action(self):
-        """Undo last action."""
-        # Implementation would go here
-        pass
+        """Undo the last action recorded in the history."""
+        if not self.action_history:
+            self._show_notification("Nothing to undo.")
+            return
+
+        last_action = self.action_history.pop()
+        action_type = last_action.get("type")
+
+        if action_type == "add_segment":
+            segment_index = last_action.get("segment_index")
+            if segment_index is not None and 0 <= segment_index < len(
+                self.segment_manager.segments
+            ):
+                # Remove the segment that was added
+                self.segment_manager.delete_segments([segment_index])
+                self._update_all_lists()
+                self._show_notification("Undid: Add Segment")
+
+        # Add more undo logic for other action types here in the future
+        else:
+            self._show_warning_notification(f"Undo for action '{action_type}' not implemented.")
 
     def clear_all_points(self):
         """Clear all temporary points."""
