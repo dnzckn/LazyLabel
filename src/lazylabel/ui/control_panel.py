@@ -159,20 +159,12 @@ class ControlPanel(QWidget):
         self.btn_hotkeys.clicked.connect(self.hotkeys_requested)
         self.btn_popout.clicked.connect(self.pop_out_requested)
 
-    def mouseDoubleClickEvent(self, event):
-        """Handle double-click to expand collapsed panel."""
-        if self.width() < 50:  # If panel is collapsed
-            # Request expansion by calling parent method
-            if self.parent() and hasattr(self.parent(), "_expand_left_panel"):
-                self.parent()._expand_left_panel()
-        super().mouseDoubleClickEvent(event)
-
         # Model widget signals
         self.model_widget.browse_requested.connect(self.browse_models_requested)
         self.model_widget.refresh_requested.connect(self.refresh_models_requested)
         self.model_widget.model_selected.connect(self.model_selected)
 
-        # Settings widget signals
+        # Adjustments widget signals
         self.adjustments_widget.annotation_size_changed.connect(
             self.annotation_size_changed
         )
@@ -180,6 +172,14 @@ class ControlPanel(QWidget):
         self.adjustments_widget.join_threshold_changed.connect(
             self.join_threshold_changed
         )
+
+    def mouseDoubleClickEvent(self, event):
+        """Handle double-click to expand collapsed panel."""
+        if self.width() < 50:  # If panel is collapsed
+            # Request expansion by calling parent method
+            if self.parent() and hasattr(self.parent(), "_expand_left_panel"):
+                self.parent()._expand_left_panel()
+        super().mouseDoubleClickEvent(event)
 
     def show_notification(self, message: str, duration: int = 3000):
         """Show a notification message."""
@@ -218,6 +218,10 @@ class ControlPanel(QWidget):
     def set_annotation_size(self, value):
         """Set annotation size."""
         self.adjustments_widget.set_annotation_size(value)
+
+    def set_join_threshold(self, value):
+        """Set join threshold."""
+        self.adjustments_widget.set_join_threshold(value)
 
     def set_sam_mode_enabled(self, enabled: bool):
         """Enable or disable the SAM mode button."""

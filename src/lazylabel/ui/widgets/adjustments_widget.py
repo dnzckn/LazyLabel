@@ -105,3 +105,4 @@ class AdjustmentsWidget(QWidget):
     def set_join_threshold(self, value):
         """Set join threshold value."""
         self.join_slider.setValue(value)
+        self.join_label.setText(f"Polygon Join Distance: {value}px")

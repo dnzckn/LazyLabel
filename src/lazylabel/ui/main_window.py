@@ -347,6 +347,7 @@ class MainWindow(QMainWindow):
         self.control_panel.set_annotation_size(
             int(self.settings.annotation_size_multiplier * 10)
         )
+        self.control_panel.set_join_threshold(self.settings.polygon_join_threshold)
         # Set initial mode based on model availability
         if self.model_manager.is_model_available():
             self.set_sam_mode()
@@ -1009,6 +1010,7 @@ class MainWindow(QMainWindow):
             ):
                 # Remove the segment that was added
                 self.segment_manager.delete_segments([segment_index])
+                self.right_panel.clear_selections() # Clear selection to prevent phantom highlights
                 self._update_all_lists()
                 self._show_notification("Undid: Add Segment")
         elif action_type == "add_point":
@@ -1182,7 +1184,7 @@ class MainWindow(QMainWindow):
                 self.drag_start_pos = pos
                 selected_indices = self.right_panel.get_selected_segment_indices()
                 self.drag_initial_vertices = {
-                    i: list(self.segment_manager.segments[i]["vertices"])
+                    i: [QPointF(p) for p in self.segment_manager.segments[i]["vertices"]]
                     for i in selected_indices
                     if self.segment_manager.segments[i].get("type") == "Polygon"
                 }
@@ -1248,7 +1250,7 @@ class MainWindow(QMainWindow):
             self.action_history.append(
                 {
                     "type": "move_polygon",
-                    "initial_vertices": self.drag_initial_vertices,
+                    "initial_vertices": {k: list(v) for k, v in self.drag_initial_vertices.items()},
                     "final_vertices": final_vertices,
                 }
             )
