@@ -3,7 +3,6 @@
 from unittest.mock import MagicMock, patch
 
 import pytest
-from PyQt6.QtCore import QPointF
 
 from lazylabel.ui.main_window import MainWindow
 
@@ -92,8 +91,8 @@ class TestUndoRedo:
     def test_undo_redo_move_vertex(self, mock_main_window):
         """Test undoing and redoing move vertex action."""
         # Setup
-        old_pos = QPointF(10, 10)
-        new_pos = QPointF(20, 20)
+        old_pos = [10, 10]
+        new_pos = [20, 20]
         mock_main_window.action_history = [
             {
                 "type": "move_vertex",
@@ -135,6 +134,82 @@ class TestUndoRedo:
         assert len(mock_main_window.redo_history) == 0
         assert len(mock_main_window.action_history) == 1
         assert mock_main_window.segment_manager.segments[0]["vertices"][0] == new_pos
+        mock_main_window._update_polygon_item.assert_called_once_with(0)
+        mock_main_window._display_edit_handles.assert_called_once()
+        mock_main_window._highlight_selected_segments.assert_called_once()
+        mock_main_window._show_notification.assert_called_once_with(
+            "Redid: Move Vertex"
+        )
+
+    def test_undo_redo_move_bbox_vertex(self, mock_main_window):
+        """Test undoing and redoing move vertex action for a bounding box."""
+        # Setup: A bounding box is a polygon with 4 vertices
+        old_bbox_vertices = [[10, 10], [100, 10], [100, 100], [10, 100]]
+
+        # Simulate initial state where a bbox exists
+        mock_main_window.segment_manager.segments = [
+            {"type": "Polygon", "vertices": old_bbox_vertices}
+        ]
+
+        # Simulate a move_vertex action for one of the bbox vertices
+        # Let's say vertex_index 2 (bottom-right) is moved
+        moved_vertex_old_pos = old_bbox_vertices[2]
+        moved_vertex_new_pos = [
+            105,
+            105,
+        ]  # Slightly different from new_bbox_vertices for a single vertex move
+
+        mock_main_window.action_history = [
+            {
+                "type": "move_vertex",
+                "segment_index": 0,
+                "vertex_index": 2,
+                "old_pos": moved_vertex_old_pos,
+                "new_pos": moved_vertex_new_pos,
+            }
+        ]
+        mock_main_window.redo_history = []
+
+        # Before undo, the segment should reflect the new_pos for the moved vertex
+        mock_main_window.segment_manager.segments[0]["vertices"][2] = (
+            moved_vertex_new_pos
+        )
+
+        # Test undo
+        mock_main_window._undo_last_action()
+
+        # Verify undo
+        assert len(mock_main_window.action_history) == 0
+        assert len(mock_main_window.redo_history) == 1
+        # Check if the specific vertex reverted to its old position
+        assert (
+            mock_main_window.segment_manager.segments[0]["vertices"][2]
+            == moved_vertex_old_pos
+        )
+        mock_main_window._update_polygon_item.assert_called_once_with(0)
+        mock_main_window._display_edit_handles.assert_called_once()
+        mock_main_window._highlight_selected_segments.assert_called_once()
+        mock_main_window._show_notification.assert_called_once_with(
+            "Undid: Move Vertex"
+        )
+
+        # Reset mocks for redo
+        mock_main_window._show_notification.reset_mock()
+        mock_main_window._update_polygon_item.reset_mock()
+        mock_main_window._display_edit_handles.reset_mock()
+        mock_main_window._highlight_selected_segments.reset_mock()
+
+        # Test redo
+        mock_main_window._redo_last_action()
+
+        # Verify redo
+        assert len(mock_main_window.redo_history) == 0
+        assert len(mock_main_window.action_history) == 1
+        # Check if the specific vertex moved back to its new position
+        assert (
+            mock_main_window.segment_manager.segments[0]["vertices"][2]
+            == moved_vertex_new_pos
+        )
         mock_main_window._update_polygon_item.assert_called_once_with(0)
         mock_main_window._display_edit_handles.assert_called_once()
         mock_main_window._highlight_selected_segments.assert_called_once()

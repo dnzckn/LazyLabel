@@ -36,8 +36,13 @@ class SegmentManager:
             else:
                 segment_data["class_id"] = self.next_class_id
 
-        # Convert QPointF to list for storage if it's a polygon
-        if segment_data.get("type") == "Polygon" and segment_data.get("vertices"):
+        # Convert QPointF to list for storage if it's a polygon and contains QPointF objects
+        if (
+            segment_data.get("type") == "Polygon"
+            and segment_data.get("vertices")
+            and segment_data["vertices"]
+            and isinstance(segment_data["vertices"][0], QPointF)
+        ):
             segment_data["vertices"] = [
                 [p.x(), p.y()] for p in segment_data["vertices"]
             ]

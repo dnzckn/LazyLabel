@@ -55,8 +55,8 @@ class EditableVertexItem(QGraphicsEllipseItem):
                     "type": "move_vertex",
                     "segment_index": self.segment_index,
                     "vertex_index": self.vertex_index,
-                    "old_pos": self.initial_pos,
-                    "new_pos": self.pos(),
+                    "old_pos": [self.initial_pos.x(), self.initial_pos.y()],
+                    "new_pos": [self.pos().x(), self.pos().y()],
                 }
             )
         self.initial_pos = None

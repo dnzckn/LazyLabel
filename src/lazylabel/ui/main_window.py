@@ -912,7 +912,7 @@ class MainWindow(QMainWindow):
             return
 
         new_segment = {
-            "vertices": list(self.polygon_points),
+            "vertices": [[p.x(), p.y()] for p in self.polygon_points],
             "type": "Polygon",
             "mask": None,
         }
@@ -1070,7 +1070,9 @@ class MainWindow(QMainWindow):
         elif action_type == "move_polygon":
             initial_vertices = last_action.get("initial_vertices")
             for i, vertices in initial_vertices.items():
-                self.segment_manager.segments[i]["vertices"] = vertices
+                self.segment_manager.segments[i]["vertices"] = [
+                    [p[0], p[1]] for p in vertices
+                ]
                 self._update_polygon_item(i)
             self._display_edit_handles()
             self._highlight_selected_segments()
@@ -1079,13 +1081,27 @@ class MainWindow(QMainWindow):
             segment_index = last_action.get("segment_index")
             vertex_index = last_action.get("vertex_index")
             old_pos = last_action.get("old_pos")
-            self.segment_manager.segments[segment_index]["vertices"][vertex_index] = (
-                old_pos
-            )
-            self._update_polygon_item(segment_index)
-            self._display_edit_handles()
-            self._highlight_selected_segments()
-            self._show_notification("Undid: Move Vertex")
+            if (
+                segment_index is not None
+                and vertex_index is not None
+                and old_pos is not None
+            ):
+                if segment_index < len(self.segment_manager.segments):
+                    self.segment_manager.segments[segment_index]["vertices"][
+                        vertex_index
+                    ] = old_pos
+                    self._update_polygon_item(segment_index)
+                    self._display_edit_handles()
+                    self._highlight_selected_segments()
+                    self._show_notification("Undid: Move Vertex")
+                else:
+                    self._show_warning_notification(
+                        "Cannot undo: Segment no longer exists"
+                    )
+                    self.redo_history.pop()  # Remove from redo history if segment is gone
+            else:
+                self._show_warning_notification("Cannot undo: Missing vertex data")
+                self.redo_history.pop()  # Remove from redo history if data is incomplete
 
         # Add more undo logic for other action types here in the future
         else:
@@ -1147,8 +1163,7 @@ class MainWindow(QMainWindow):
                 for i, vertices in final_vertices.items():
                     if i < len(self.segment_manager.segments):
                         self.segment_manager.segments[i]["vertices"] = [
-                            [v.x(), v.y()]
-                            for v in [QPointF(p[0], p[1]) for p in vertices]
+                            [p[0], p[1]] for p in vertices
                         ]
                         self._update_polygon_item(i)
                 self._display_edit_handles()
@@ -1178,10 +1193,10 @@ class MainWindow(QMainWindow):
                     self._show_warning_notification(
                         "Cannot redo: Segment no longer exists"
                     )
-                    self.action_history.pop()
+                    self.action_history.pop()  # Remove from action history if segment is gone
             else:
                 self._show_warning_notification("Cannot redo: Missing vertex data")
-                self.action_history.pop()
+                self.action_history.pop()  # Remove from action history if data is incomplete
         else:
             self._show_warning_notification(
                 f"Redo for action '{action_type}' not implemented."
@@ -1321,7 +1336,7 @@ class MainWindow(QMainWindow):
                 selected_indices = self.right_panel.get_selected_segment_indices()
                 self.drag_initial_vertices = {
                     i: [
-                        QPointF(p[0], p[1])
+                        [p.x(), p.y()] if isinstance(p, QPointF) else p
                         for p in self.segment_manager.segments[i]["vertices"]
                     ]
                     for i in selected_indices
@@ -1360,7 +1375,7 @@ class MainWindow(QMainWindow):
                 self.drag_start_pos = pos
                 self.rubber_band_rect = QGraphicsRectItem()
                 self.rubber_band_rect.setPen(
-                    QPen(Qt.GlobalColor.red, 2, Qt.PenStyle.DashLine)
+                    QPen(Qt.GlobalColor.red, self.line_thickness, Qt.PenStyle.DashLine)
                 )
                 self.viewer.scene().addItem(self.rubber_band_rect)
         elif self.mode == "selection" and event.button() == Qt.MouseButton.LeftButton:
@@ -1371,9 +1386,13 @@ class MainWindow(QMainWindow):
         if self.mode == "edit" and self.is_dragging_polygon:
             delta = event.scenePos() - self.drag_start_pos
             for i, initial_verts in self.drag_initial_vertices.items():
-                # initial_verts are already QPointF objects
+                # initial_verts are lists, convert to QPointF for addition with delta
                 self.segment_manager.segments[i]["vertices"] = [
-                    [(p + delta).x(), (p + delta).y()] for p in initial_verts
+                    [
+                        (QPointF(p[0], p[1]) + delta).x(),
+                        (QPointF(p[0], p[1]) + delta).y(),
+                    ]
+                    for p in initial_verts
                 ]
                 self._update_polygon_item(i)
             self._display_edit_handles()  # Redraw handles at new positions
@@ -1395,7 +1414,10 @@ class MainWindow(QMainWindow):
         if self.mode == "edit" and self.is_dragging_polygon:
             # Record the action for undo
             final_vertices = {
-                i: list(self.segment_manager.segments[i]["vertices"])
+                i: [
+                    [p.x(), p.y()] if isinstance(p, QPointF) else p
+                    for p in self.segment_manager.segments[i]["vertices"]
+                ]
                 for i in self.drag_initial_vertices
             }
             self.action_history.append(
@@ -1431,7 +1453,7 @@ class MainWindow(QMainWindow):
                 polygon.append(rect.bottomLeft())
 
                 new_segment = {
-                    "vertices": list(polygon),
+                    "vertices": [[p.x(), p.y()] for p in list(polygon)],
                     "type": "Polygon",  # Bounding boxes are stored as polygons
                     "mask": None,
                 }
