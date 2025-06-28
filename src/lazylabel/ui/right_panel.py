@@ -72,6 +72,12 @@ class RightPanel(QWidget):
         # Class management section
         self._setup_class_management(v_splitter)
 
+        # Action history section (new)
+        self.action_pane_widget = QWidget()  # Placeholder for ActionPane
+        action_pane_layout = QVBoxLayout(self.action_pane_widget)
+        action_pane_layout.setContentsMargins(0, 0, 0, 0)
+        v_splitter.addWidget(self.action_pane_widget)
+
         main_layout.addWidget(v_splitter)
 
         # Status label
@@ -80,6 +86,18 @@ class RightPanel(QWidget):
         main_layout.addWidget(self.status_label)
 
         self.v_layout.addWidget(self.main_controls_widget)
+
+    def set_action_pane(self, action_pane_widget):
+        """Sets the ActionPane widget into the right panel."""
+        # Clear existing layout in the placeholder widget
+        while self.action_pane_widget.layout().count():
+            item = self.action_pane_widget.layout().takeAt(0)
+            if item.widget():
+                item.widget().setParent(None)
+        self.action_pane_widget.layout().addWidget(action_pane_widget)
+        action_pane_widget.setParent(
+            self.action_pane_widget
+        )  # Ensure correct parentage
 
     def _setup_file_explorer(self, splitter):
         """Setup file explorer section."""

@@ -24,13 +24,24 @@ class SegmentManager:
         self.active_class_id = None
 
     def add_segment(self, segment_data: dict[str, Any]) -> None:
-        """Add a new segment."""
+        """Add a new segment.
+
+        If the segment is a polygon, convert QPointF objects to simple lists
+        for serialization compatibility.
+        """
         if "class_id" not in segment_data:
             # Use active class if available, otherwise use next class ID
             if self.active_class_id is not None:
                 segment_data["class_id"] = self.active_class_id
             else:
                 segment_data["class_id"] = self.next_class_id
+
+        # Convert QPointF to list for storage if it's a polygon
+        if segment_data.get("type") == "Polygon" and segment_data.get("vertices"):
+            segment_data["vertices"] = [
+                [p.x(), p.y()] for p in segment_data["vertices"]
+            ]
+
         self.segments.append(segment_data)
         self._update_next_class_id()
 
@@ -103,7 +114,9 @@ class SegmentManager:
             new_channel_idx = id_map[class_id]
 
             if seg["type"] == "Polygon":
-                mask = self.rasterize_polygon(seg["vertices"], image_size)
+                # Convert stored list of lists back to QPointF objects for rasterization
+                qpoints = [QPointF(p[0], p[1]) for p in seg["vertices"]]
+                mask = self.rasterize_polygon(qpoints, image_size)
             else:
                 mask = seg.get("mask")
 

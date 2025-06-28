@@ -19,6 +19,7 @@ class ControlPanel(QWidget):
     # Signals
     sam_mode_requested = pyqtSignal()
     polygon_mode_requested = pyqtSignal()
+    bbox_mode_requested = pyqtSignal()  # New signal for bounding box mode
     selection_mode_requested = pyqtSignal()
     clear_points_requested = pyqtSignal()
     fit_view_requested = pyqtSignal()
@@ -117,11 +118,15 @@ class ControlPanel(QWidget):
         self.btn_polygon_mode = QPushButton("Polygon Mode (2)")
         self.btn_polygon_mode.setToolTip("Switch to Polygon Drawing Mode (2)")
 
+        self.btn_bbox_mode = QPushButton("BBox Mode (3)")
+        self.btn_bbox_mode.setToolTip("Switch to Bounding Box Drawing Mode (3)")
+
         self.btn_selection_mode = QPushButton("Selection Mode (E)")
         self.btn_selection_mode.setToolTip("Toggle segment selection (E)")
 
         layout.addWidget(self.btn_sam_mode)
         layout.addWidget(self.btn_polygon_mode)
+        layout.addWidget(self.btn_bbox_mode)
         layout.addWidget(self.btn_selection_mode)
 
     def _add_action_buttons(self, layout):
@@ -149,6 +154,7 @@ class ControlPanel(QWidget):
         """Connect internal signals."""
         self.btn_sam_mode.clicked.connect(self.sam_mode_requested)
         self.btn_polygon_mode.clicked.connect(self.polygon_mode_requested)
+        self.btn_bbox_mode.clicked.connect(self.bbox_mode_requested)
         self.btn_selection_mode.clicked.connect(self.selection_mode_requested)
         self.btn_clear_points.clicked.connect(self.clear_points_requested)
         self.btn_fit_view.clicked.connect(self.fit_view_requested)

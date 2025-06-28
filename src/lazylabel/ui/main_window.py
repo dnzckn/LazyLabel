@@ -4,7 +4,7 @@ import os
 
 import cv2
 import numpy as np
-from PyQt6.QtCore import QModelIndex, QPointF, Qt, QTimer, pyqtSignal
+from PyQt6.QtCore import QModelIndex, QPointF, QRectF, Qt, QTimer, pyqtSignal
 from PyQt6.QtGui import (
     QBrush,
     QColor,
@@ -22,6 +22,7 @@ from PyQt6.QtWidgets import (
     QGraphicsEllipseItem,
     QGraphicsLineItem,
     QGraphicsPolygonItem,
+    QGraphicsRectItem,
     QMainWindow,
     QSplitter,
     QTableWidgetItem,
@@ -116,6 +117,7 @@ class MainWindow(QMainWindow):
         self.point_items, self.positive_points, self.negative_points = [], [], []
         self.polygon_points, self.polygon_preview_items = [], []
         self.rubber_band_line = None
+        self.rubber_band_rect = None  # New attribute for bounding box
         self.preview_mask_item = None
         self.segments, self.segment_items, self.highlight_items = [], {}, []
         self.edit_handles = []
@@ -245,6 +247,7 @@ class MainWindow(QMainWindow):
         # Control panel connections
         self.control_panel.sam_mode_requested.connect(self.set_sam_mode)
         self.control_panel.polygon_mode_requested.connect(self.set_polygon_mode)
+        self.control_panel.bbox_mode_requested.connect(self.set_bbox_mode)
         self.control_panel.selection_mode_requested.connect(self.toggle_selection_mode)
         self.control_panel.clear_points_requested.connect(self.clear_all_points)
         self.control_panel.fit_view_requested.connect(self.viewer.fitInView)
@@ -302,6 +305,7 @@ class MainWindow(QMainWindow):
             "load_previous_image": self._load_previous_image,
             "sam_mode": self.set_sam_mode,
             "polygon_mode": self.set_polygon_mode,
+            "bbox_mode": self.set_bbox_mode,
             "selection_mode": self.toggle_selection_mode,
             "pan_mode": self.toggle_pan_mode,
             "edit_mode": self.toggle_edit_mode,
@@ -376,6 +380,10 @@ class MainWindow(QMainWindow):
         """Set polygon drawing mode."""
         self._set_mode("polygon")
 
+    def set_bbox_mode(self):
+        """Set bounding box drawing mode."""
+        self._set_mode("bbox")
+
     def toggle_selection_mode(self):
         """Toggle selection mode."""
         self._toggle_mode("selection")
@@ -401,6 +409,7 @@ class MainWindow(QMainWindow):
         cursor_map = {
             "sam_points": Qt.CursorShape.CrossCursor,
             "polygon": Qt.CursorShape.CrossCursor,
+            "bbox": Qt.CursorShape.CrossCursor,
             "selection": Qt.CursorShape.ArrowCursor,
             "edit": Qt.CursorShape.SizeAllCursor,
             "pan": Qt.CursorShape.OpenHandCursor,
@@ -521,6 +530,9 @@ class MainWindow(QMainWindow):
         path = self.file_model.filePath(index)
 
         if os.path.isfile(path) and self.file_manager.is_image_file(path):
+            if path == self.current_image_path:  # Only reset if loading a new image
+                return
+
             self.current_image_path = path
             pixmap = QPixmap(self.current_image_path)
             if not pixmap.isNull():
@@ -613,7 +625,9 @@ class MainWindow(QMainWindow):
                 highlight_brush = QBrush(QColor(255, 255, 0, 180))
 
             if seg["type"] == "Polygon" and seg.get("vertices"):
-                poly_item = QGraphicsPolygonItem(QPolygonF(seg["vertices"]))
+                # Convert stored list of lists back to QPointF objects
+                qpoints = [QPointF(p[0], p[1]) for p in seg["vertices"]]
+                poly_item = QGraphicsPolygonItem(QPolygonF(qpoints))
                 poly_item.setBrush(highlight_brush)
                 poly_item.setPen(QPen(Qt.GlobalColor.transparent))
                 poly_item.setZValue(99)
@@ -805,13 +819,17 @@ class MainWindow(QMainWindow):
         self._clear_edit_handles()
 
         # Display segments from segment manager
+
         for i, segment in enumerate(self.segment_manager.segments):
             self.segment_items[i] = []
             class_id = segment.get("class_id")
             base_color = self._get_color_for_class(class_id)
 
             if segment["type"] == "Polygon" and segment.get("vertices"):
-                poly_item = HoverablePolygonItem(QPolygonF(segment["vertices"]))
+                # Convert stored list of lists back to QPointF objects
+                qpoints = [QPointF(p[0], p[1]) for p in segment["vertices"]]
+
+                poly_item = HoverablePolygonItem(QPolygonF(qpoints))
                 default_brush = QBrush(
                     QColor(base_color.red(), base_color.green(), base_color.blue(), 70)
                 )
@@ -1129,7 +1147,8 @@ class MainWindow(QMainWindow):
                 for i, vertices in final_vertices.items():
                     if i < len(self.segment_manager.segments):
                         self.segment_manager.segments[i]["vertices"] = [
-                            QPointF(v.x(), v.y()) for v in vertices
+                            [v.x(), v.y()]
+                            for v in [QPointF(p[0], p[1]) for p in vertices]
                         ]
                         self._update_polygon_item(i)
                 self._display_edit_handles()
@@ -1302,7 +1321,8 @@ class MainWindow(QMainWindow):
                 selected_indices = self.right_panel.get_selected_segment_indices()
                 self.drag_initial_vertices = {
                     i: [
-                        QPointF(p) for p in self.segment_manager.segments[i]["vertices"]
+                        QPointF(p[0], p[1])
+                        for p in self.segment_manager.segments[i]["vertices"]
                     ]
                     for i in selected_indices
                     if self.segment_manager.segments[i].get("type") == "Polygon"
@@ -1312,9 +1332,6 @@ class MainWindow(QMainWindow):
 
         # Call the original scene handler.
         self._original_mouse_press(event)
-        # Skip further processing unless we're in selection mode.
-        if event.isAccepted() and self.mode != "selection":
-            return
 
         if self.is_dragging_polygon:
             return
@@ -1338,6 +1355,14 @@ class MainWindow(QMainWindow):
         elif self.mode == "polygon":
             if event.button() == Qt.MouseButton.LeftButton:
                 self._handle_polygon_click(pos)
+        elif self.mode == "bbox":
+            if event.button() == Qt.MouseButton.LeftButton:
+                self.drag_start_pos = pos
+                self.rubber_band_rect = QGraphicsRectItem()
+                self.rubber_band_rect.setPen(
+                    QPen(Qt.GlobalColor.red, 2, Qt.PenStyle.DashLine)
+                )
+                self.viewer.scene().addItem(self.rubber_band_rect)
         elif self.mode == "selection" and event.button() == Qt.MouseButton.LeftButton:
             self._handle_segment_selection_click(pos)
 
@@ -1346,8 +1371,9 @@ class MainWindow(QMainWindow):
         if self.mode == "edit" and self.is_dragging_polygon:
             delta = event.scenePos() - self.drag_start_pos
             for i, initial_verts in self.drag_initial_vertices.items():
+                # initial_verts are already QPointF objects
                 self.segment_manager.segments[i]["vertices"] = [
-                    QPointF(v) + delta for v in initial_verts
+                    [(p + delta).x(), (p + delta).y()] for p in initial_verts
                 ]
                 self._update_polygon_item(i)
             self._display_edit_handles()  # Redraw handles at new positions
@@ -1356,6 +1382,13 @@ class MainWindow(QMainWindow):
             return
 
         self._original_mouse_move(event)
+
+        if self.mode == "bbox" and self.rubber_band_rect and self.drag_start_pos:
+            current_pos = event.scenePos()
+            rect = QRectF(self.drag_start_pos, current_pos).normalized()
+            self.rubber_band_rect.setRect(rect)
+            event.accept()
+            return
 
     def _scene_mouse_release(self, event):
         """Handle mouse release events in the scene."""
@@ -1383,6 +1416,41 @@ class MainWindow(QMainWindow):
 
         if self.mode == "pan":
             self.viewer.set_cursor(Qt.CursorShape.OpenHandCursor)
+        elif self.mode == "bbox" and self.rubber_band_rect:
+            self.viewer.scene().removeItem(self.rubber_band_rect)
+            rect = self.rubber_band_rect.rect()
+            self.rubber_band_rect = None
+            self.drag_start_pos = None
+
+            if rect.width() > 0 and rect.height() > 0:
+                # Convert QRectF to QPolygonF
+                polygon = QPolygonF()
+                polygon.append(rect.topLeft())
+                polygon.append(rect.topRight())
+                polygon.append(rect.bottomRight())
+                polygon.append(rect.bottomLeft())
+
+                new_segment = {
+                    "vertices": list(polygon),
+                    "type": "Polygon",  # Bounding boxes are stored as polygons
+                    "mask": None,
+                }
+
+                self.segment_manager.add_segment(new_segment)
+
+                # Record the action for undo
+                self.action_history.append(
+                    {
+                        "type": "add_segment",
+                        "segment_index": len(self.segment_manager.segments) - 1,
+                    }
+                )
+                # Clear redo history when a new action is performed
+                self.redo_history.clear()
+                self._update_all_lists()
+            event.accept()
+            return
+
         self._original_mouse_release(event)
 
     def _add_point(self, pos, positive):
@@ -1522,9 +1590,9 @@ class MainWindow(QMainWindow):
                     continue
                 h = self.viewer._pixmap_item.pixmap().height()
                 w = self.viewer._pixmap_item.pixmap().width()
-                points_np = np.array(
-                    [[p.x(), p.y()] for p in seg["vertices"]], dtype=np.int32
-                )
+                # Convert stored list of lists back to QPointF objects for rasterization
+                qpoints = [QPointF(p[0], p[1]) for p in seg["vertices"]]
+                points_np = np.array([[p.x(), p.y()] for p in qpoints], dtype=np.int32)
                 # Ensure points are within bounds
                 points_np = np.clip(points_np, 0, [w - 1, h - 1])
                 mask = np.zeros((h, w), dtype=np.uint8)
@@ -1574,7 +1642,8 @@ class MainWindow(QMainWindow):
         for seg_idx in selected_indices:
             seg = self.segment_manager.segments[seg_idx]
             if seg["type"] == "Polygon" and seg.get("vertices"):
-                for v_idx, pt in enumerate(seg["vertices"]):
+                for v_idx, pt_list in enumerate(seg["vertices"]):
+                    pt = QPointF(pt_list[0], pt_list[1])  # Convert list to QPointF
                     handle = EditableVertexItem(
                         self,
                         seg_idx,
@@ -1610,15 +1679,16 @@ class MainWindow(QMainWindow):
                         "type": "move_vertex",
                         "segment_index": segment_index,
                         "vertex_index": vertex_index,
-                        "old_pos": old_pos,
-                        "new_pos": new_pos,
+                        "old_pos": [old_pos[0], old_pos[1]],  # Store as list
+                        "new_pos": [new_pos.x(), new_pos.y()],  # Store as list
                     }
                 )
                 # Clear redo history when a new action is performed
                 self.redo_history.clear()
-            seg["vertices"][vertex_index] = (
-                new_pos  # new_pos is already the correct scene coordinate
-            )
+            seg["vertices"][vertex_index] = [
+                new_pos.x(),
+                new_pos.y(),  # Store as list
+            ]
             self._update_polygon_item(segment_index)
             self._highlight_selected_segments()  # Keep the highlight in sync with the new shape
 
@@ -1627,9 +1697,12 @@ class MainWindow(QMainWindow):
         items = self.segment_items.get(segment_index, [])
         for item in items:
             if isinstance(item, HoverablePolygonItem):
-                item.setPolygon(
-                    QPolygonF(self.segment_manager.segments[segment_index]["vertices"])
-                )
+                # Convert stored list of lists back to QPointF objects
+                qpoints = [
+                    QPointF(p[0], p[1])
+                    for p in self.segment_manager.segments[segment_index]["vertices"]
+                ]
+                item.setPolygon(QPolygonF(qpoints))
                 return
 
     def _handle_class_toggle(self, class_id):
