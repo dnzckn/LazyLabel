@@ -1,8 +1,66 @@
 """Unit tests for the SegmentManager class."""
 
+import numpy as np
+import pytest
 from PyQt6.QtCore import QPointF
 
 from lazylabel.core.segment_manager import SegmentManager
+
+
+@pytest.fixture
+def manager() -> SegmentManager:
+    """Fixture for SegmentManager."""
+    return SegmentManager()
+
+
+def test_add_and_clear_segments(manager: SegmentManager):
+    """Test adding and clearing segments."""
+    manager.add_segment({"mask": np.array([[1]]), "type": "Mask"})
+    assert len(manager.segments) == 1
+    manager.clear()
+    assert len(manager.segments) == 0
+    assert manager.next_class_id == 0
+
+
+def test_delete_segments(manager: SegmentManager):
+    """Test deleting segments."""
+    manager.add_segment({"mask": np.array([[1]]), "type": "Mask"})
+    manager.add_segment({"mask": np.array([[1]]), "type": "Mask"})
+    manager.delete_segments([0])
+    assert len(manager.segments) == 1
+
+
+def test_assign_segments_to_class(manager: SegmentManager):
+    """Test assigning segments to a class."""
+    manager.add_segment({"mask": np.array([[1]]), "type": "Mask"})
+    manager.add_segment({"mask": np.array([[1]]), "type": "Mask"})
+    manager.assign_segments_to_class([0, 1])
+    assert manager.segments[0]["class_id"] == 0
+    assert manager.segments[1]["class_id"] == 0
+
+
+def test_rasterize_polygon(manager: SegmentManager):
+    """Test rasterizing a polygon."""
+    vertices = [QPointF(1, 1), QPointF(1, 3), QPointF(3, 3), QPointF(3, 1)]
+    mask = manager.rasterize_polygon(vertices, (5, 5))
+    assert mask is not None
+    assert mask.shape == (5, 5)
+    assert mask[2, 2] == 1
+    assert mask[0, 0] == 0
+
+
+def test_create_final_mask_tensor(manager: SegmentManager):
+    """Test creating the final mask tensor."""
+    manager.add_segment(
+        {"mask": np.array([[1, 0], [0, 0]]), "type": "Mask", "class_id": 0}
+    )
+    manager.add_segment(
+        {"mask": np.array([[0, 0], [0, 1]]), "type": "Mask", "class_id": 1}
+    )
+    tensor = manager.create_final_mask_tensor((2, 2), [0, 1])
+    assert tensor.shape == (2, 2, 2)
+    assert tensor[0, 0, 0] == 1
+    assert tensor[1, 1, 1] == 1
 
 
 class TestSegmentManager:
