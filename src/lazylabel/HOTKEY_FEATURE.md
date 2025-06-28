@@ -23,6 +23,7 @@ The system manages 27 different hotkey actions across 7 categories:
 #### **Modes (5 actions)**
 - Point Mode (SAM): `1`
 - Polygon Mode: `2`
+- Bounding Box Mode: `3`
 - Selection Mode: `E`
 - Pan Mode: `Q`
 - Edit Mode: `R`

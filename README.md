@@ -84,6 +84,7 @@ Inspired by [LabelMe](https://github.com/wkentaro/labelme?tab=readme-ov-file#ins
 |---|---|
 | `1` | Enter **Point Mode** (for AI segmentation). |
 | `2` | Enter **Polygon Drawing Mode**. |
+| `3` | Enter **Bounding Box Mode**. |
 | `E` | Toggle **Selection Mode** to select existing segments. |
 | `R` | Enter **Edit Mode** for selected polygons (drag shape or vertices). |
 | `Q` | Toggle **Pan Mode** (click and drag the image). |
