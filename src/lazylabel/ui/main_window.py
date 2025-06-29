@@ -106,6 +106,7 @@ class MainWindow(QMainWindow):
         self.line_thickness = self.settings.line_thickness
         self.pan_multiplier = self.settings.pan_multiplier
         self.polygon_join_threshold = self.settings.polygon_join_threshold
+        self.fragment_threshold = self.settings.fragment_threshold
 
         # Image adjustment state
         self.brightness = self.settings.brightness
@@ -257,6 +258,9 @@ class MainWindow(QMainWindow):
         self.control_panel.annotation_size_changed.connect(self._set_annotation_size)
         self.control_panel.pan_speed_changed.connect(self._set_pan_speed)
         self.control_panel.join_threshold_changed.connect(self._set_join_threshold)
+        self.control_panel.fragment_threshold_changed.connect(
+            self._set_fragment_threshold
+        )
         self.control_panel.brightness_changed.connect(self._set_brightness)
         self.control_panel.contrast_changed.connect(self._set_contrast)
         self.control_panel.gamma_changed.connect(self._set_gamma)
@@ -357,6 +361,7 @@ class MainWindow(QMainWindow):
         )
         self.control_panel.set_pan_speed(int(self.settings.pan_multiplier * 10))
         self.control_panel.set_join_threshold(self.settings.polygon_join_threshold)
+        self.control_panel.set_fragment_threshold(self.settings.fragment_threshold)
         self.control_panel.set_brightness(int(self.settings.brightness))
         self.control_panel.set_contrast(int(self.settings.contrast))
         self.control_panel.set_gamma(int(self.settings.gamma * 100))
@@ -520,6 +525,11 @@ class MainWindow(QMainWindow):
         """Set polygon join threshold."""
         self.polygon_join_threshold = value
         self.settings.polygon_join_threshold = value
+
+    def _set_fragment_threshold(self, value):
+        """Set fragment threshold for AI segment filtering."""
+        self.fragment_threshold = value
+        self.settings.fragment_threshold = value
 
     def _set_brightness(self, value):
         """Set image brightness."""
@@ -952,7 +962,7 @@ class MainWindow(QMainWindow):
             self._save_output_to_npz()
 
     def _save_current_segment(self):
-        """Save current SAM segment."""
+        """Save current SAM segment with fragment threshold filtering."""
         if (
             self.mode != "sam_points"
             or not hasattr(self, "preview_mask_item")
@@ -965,23 +975,74 @@ class MainWindow(QMainWindow):
             self.positive_points, self.negative_points
         )
         if mask is not None:
-            new_segment = {
-                "mask": mask,
-                "type": "SAM",
-                "vertices": None,
-            }
-            self.segment_manager.add_segment(new_segment)
-            # Record the action for undo
-            self.action_history.append(
-                {
-                    "type": "add_segment",
-                    "segment_index": len(self.segment_manager.segments) - 1,
+            # Apply fragment threshold filtering if enabled
+            filtered_mask = self._apply_fragment_threshold(mask)
+            if filtered_mask is not None:
+                new_segment = {
+                    "mask": filtered_mask,
+                    "type": "SAM",
+                    "vertices": None,
                 }
-            )
-            # Clear redo history when a new action is performed
-            self.redo_history.clear()
-            self.clear_all_points()
-            self._update_all_lists()
+                self.segment_manager.add_segment(new_segment)
+                # Record the action for undo
+                self.action_history.append(
+                    {
+                        "type": "add_segment",
+                        "segment_index": len(self.segment_manager.segments) - 1,
+                    }
+                )
+                # Clear redo history when a new action is performed
+                self.redo_history.clear()
+                self.clear_all_points()
+                self._update_all_lists()
+            else:
+                self._show_warning_notification(
+                    "All segments filtered out by fragment threshold"
+                )
+
+    def _apply_fragment_threshold(self, mask):
+        """Apply fragment threshold filtering to remove small segments."""
+        if self.fragment_threshold == 0:
+            # No filtering when threshold is 0
+            return mask
+
+        # Convert mask to uint8 for OpenCV operations
+        mask_uint8 = (mask * 255).astype(np.uint8)
+
+        # Find all contours in the mask
+        contours, _ = cv2.findContours(
+            mask_uint8, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
+        )
+
+        if not contours:
+            return None
+
+        # Calculate areas for all contours
+        contour_areas = [cv2.contourArea(contour) for contour in contours]
+        max_area = max(contour_areas)
+
+        if max_area == 0:
+            return None
+
+        # Calculate minimum area threshold
+        min_area_threshold = (self.fragment_threshold / 100.0) * max_area
+
+        # Filter contours based on area threshold
+        filtered_contours = [
+            contour
+            for contour, area in zip(contours, contour_areas, strict=False)
+            if area >= min_area_threshold
+        ]
+
+        if not filtered_contours:
+            return None
+
+        # Create new mask with only filtered contours
+        filtered_mask = np.zeros_like(mask_uint8)
+        cv2.drawContours(filtered_mask, filtered_contours, -1, 255, -1)
+
+        # Convert back to boolean mask
+        return (filtered_mask > 0).astype(bool)
 
     def _finalize_polygon(self):
         """Finalize polygon drawing."""

@@ -20,6 +20,7 @@ class Settings:
     line_thickness: float = 0.5
     pan_multiplier: float = 1.0
     polygon_join_threshold: int = 2
+    fragment_threshold: int = 0
 
     # Image Adjustment Settings
     brightness: float = 0.0

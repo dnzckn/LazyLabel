@@ -29,6 +29,7 @@ class ControlPanel(QWidget):
     annotation_size_changed = pyqtSignal(int)
     pan_speed_changed = pyqtSignal(int)
     join_threshold_changed = pyqtSignal(int)
+    fragment_threshold_changed = pyqtSignal(int)
     brightness_changed = pyqtSignal(int)
     contrast_changed = pyqtSignal(int)
     gamma_changed = pyqtSignal(int)
@@ -179,6 +180,9 @@ class ControlPanel(QWidget):
         self.adjustments_widget.join_threshold_changed.connect(
             self.join_threshold_changed
         )
+        self.adjustments_widget.fragment_threshold_changed.connect(
+            self.fragment_threshold_changed
+        )
         self.adjustments_widget.brightness_changed.connect(self.brightness_changed)
         self.adjustments_widget.contrast_changed.connect(self.contrast_changed)
         self.adjustments_widget.gamma_changed.connect(self.gamma_changed)
@@ -244,6 +248,10 @@ class ControlPanel(QWidget):
     def set_join_threshold(self, value):
         """Set join threshold."""
         self.adjustments_widget.set_join_threshold(value)
+
+    def set_fragment_threshold(self, value):
+        """Set fragment threshold."""
+        self.adjustments_widget.set_fragment_threshold(value)
 
     def set_brightness(self, value):
         """Set brightness."""

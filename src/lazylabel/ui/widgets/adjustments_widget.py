@@ -19,6 +19,7 @@ class AdjustmentsWidget(QWidget):
     annotation_size_changed = pyqtSignal(int)
     pan_speed_changed = pyqtSignal(int)
     join_threshold_changed = pyqtSignal(int)
+    fragment_threshold_changed = pyqtSignal(int)
     brightness_changed = pyqtSignal(int)
     contrast_changed = pyqtSignal(int)
     gamma_changed = pyqtSignal(int)
@@ -34,108 +35,108 @@ class AdjustmentsWidget(QWidget):
         """Setup the UI layout."""
         group = QGroupBox("Adjustments")
         layout = QVBoxLayout(group)
+        layout.setSpacing(3)  # Reduced spacing between controls
+
+        # Helper function to create compact slider rows
+        def create_slider_row(
+            label_text, default_value, slider_range, tooltip, is_float=False
+        ):
+            row_layout = QHBoxLayout()
+            row_layout.setSpacing(8)
+
+            # Label with fixed width for alignment
+            label = QLabel(label_text)
+            label.setFixedWidth(80)
+            label.setAlignment(
+                Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
+            )
+
+            # Text edit with smaller width
+            text_edit = QLineEdit(str(default_value))
+            text_edit.setFixedWidth(35)
+
+            # Slider takes remaining space
+            slider = QSlider(Qt.Orientation.Horizontal)
+            slider.setRange(slider_range[0], slider_range[1])
+
+            # Convert default_value to appropriate type before setting slider value
+            if is_float:
+                float_value = float(default_value)
+                slider.setValue(int(float_value * 10))
+            else:
+                int_value = int(default_value)
+                slider.setValue(int_value)
+
+            slider.setToolTip(tooltip)
+
+            row_layout.addWidget(label)
+            row_layout.addWidget(text_edit)
+            row_layout.addWidget(slider, 1)  # Stretch factor of 1
+
+            return row_layout, label, text_edit, slider
 
         # Annotation size
-        size_layout = QHBoxLayout()
-        self.size_label = QLabel("Annotation Size:")
-        self.size_edit = QLineEdit("1.0")
-        self.size_edit.setFixedWidth(50)
-        self.size_slider = QSlider(Qt.Orientation.Horizontal)
-        self.size_slider.setRange(1, 50)
-        self.size_slider.setValue(10)
-        self.size_slider.setToolTip("Adjusts the size of points and lines (Ctrl +/-)")
-        size_layout.addWidget(self.size_label)
-        size_layout.addWidget(self.size_edit)
-        size_layout.addStretch()
-        layout.addLayout(size_layout)
-        layout.addWidget(self.size_slider)
-
-        layout.addSpacing(10)
+        size_row, self.size_label, self.size_edit, self.size_slider = create_slider_row(
+            "Size:",
+            "1.0",
+            (1, 50),
+            "Adjusts the size of points and lines (Ctrl +/-)",
+            True,
+        )
+        layout.addLayout(size_row)
 
         # Pan speed
-        pan_layout = QHBoxLayout()
-        self.pan_label = QLabel("Pan Speed:")
-        self.pan_edit = QLineEdit("1.0")
-        self.pan_edit.setFixedWidth(50)
-        self.pan_slider = QSlider(Qt.Orientation.Horizontal)
-        self.pan_slider.setRange(1, 100)
-        self.pan_slider.setValue(10)
-        self.pan_slider.setToolTip(
-            "Adjusts the speed of WASD panning. Hold Shift for 5x boost."
+        pan_row, self.pan_label, self.pan_edit, self.pan_slider = create_slider_row(
+            "Pan:",
+            "1.0",
+            (1, 100),
+            "Adjusts the speed of WASD panning. Hold Shift for 5x boost.",
+            True,
         )
-        pan_layout.addWidget(self.pan_label)
-        pan_layout.addWidget(self.pan_edit)
-        pan_layout.addStretch()
-        layout.addLayout(pan_layout)
-        layout.addWidget(self.pan_slider)
-
-        layout.addSpacing(10)
+        layout.addLayout(pan_row)
 
         # Polygon join threshold
-        join_layout = QHBoxLayout()
-        self.join_label = QLabel("Polygon Join Distance:")
-        self.join_edit = QLineEdit("2")
-        self.join_edit.setFixedWidth(50)
-        self.join_slider = QSlider(Qt.Orientation.Horizontal)
-        self.join_slider.setRange(1, 10)
-        self.join_slider.setValue(2)
-        self.join_slider.setToolTip("The pixel distance to 'snap' a polygon closed.")
-        join_layout.addWidget(self.join_label)
-        join_layout.addWidget(self.join_edit)
-        join_layout.addStretch()
-        layout.addLayout(join_layout)
-        layout.addWidget(self.join_slider)
+        join_row, self.join_label, self.join_edit, self.join_slider = create_slider_row(
+            "Join:", "2", (1, 10), "The pixel distance to 'snap' a polygon closed."
+        )
+        layout.addLayout(join_row)
 
-        layout.addSpacing(10)
+        # Fragment threshold
+        fragment_row, self.fragment_label, self.fragment_edit, self.fragment_slider = (
+            create_slider_row(
+                "Fragment:",
+                "0",
+                (0, 100),
+                "Filter out small AI segments. 0=no filtering, 50=drop <50% of largest, 100=only keep largest",
+            )
+        )
+        layout.addLayout(fragment_row)
+
+        # Add separator for image adjustments
+        layout.addSpacing(8)
 
         # Brightness
-        brightness_layout = QHBoxLayout()
-        self.brightness_label = QLabel("Brightness:")
-        self.brightness_edit = QLineEdit("0")
-        self.brightness_edit.setFixedWidth(50)
-        self.brightness_slider = QSlider(Qt.Orientation.Horizontal)
-        self.brightness_slider.setRange(-100, 100)
-        self.brightness_slider.setValue(0)
-        self.brightness_slider.setToolTip("Adjust image brightness")
-        brightness_layout.addWidget(self.brightness_label)
-        brightness_layout.addWidget(self.brightness_edit)
-        brightness_layout.addStretch()
-        layout.addLayout(brightness_layout)
-        layout.addWidget(self.brightness_slider)
-
-        layout.addSpacing(10)
+        (
+            brightness_row,
+            self.brightness_label,
+            self.brightness_edit,
+            self.brightness_slider,
+        ) = create_slider_row("Bright:", "0", (-100, 100), "Adjust image brightness")
+        layout.addLayout(brightness_row)
 
         # Contrast
-        contrast_layout = QHBoxLayout()
-        self.contrast_label = QLabel("Contrast:")
-        self.contrast_edit = QLineEdit("0")
-        self.contrast_edit.setFixedWidth(50)
-        self.contrast_slider = QSlider(Qt.Orientation.Horizontal)
-        self.contrast_slider.setRange(-100, 100)
-        self.contrast_slider.setValue(0)
-        self.contrast_slider.setToolTip("Adjust image contrast")
-        contrast_layout.addWidget(self.contrast_label)
-        contrast_layout.addWidget(self.contrast_edit)
-        contrast_layout.addStretch()
-        layout.addLayout(contrast_layout)
-        layout.addWidget(self.contrast_slider)
+        contrast_row, self.contrast_label, self.contrast_edit, self.contrast_slider = (
+            create_slider_row("Contrast:", "0", (-100, 100), "Adjust image contrast")
+        )
+        layout.addLayout(contrast_row)
 
-        layout.addSpacing(10)
-
-        # Gamma
-        gamma_layout = QHBoxLayout()
-        self.gamma_label = QLabel("Gamma:")
-        self.gamma_edit = QLineEdit("1.0")
-        self.gamma_edit.setFixedWidth(50)
-        self.gamma_slider = QSlider(Qt.Orientation.Horizontal)
-        self.gamma_slider.setRange(1, 200)  # Represents 0.01 to 2.00
-        self.gamma_slider.setValue(100)  # Default 1.00
-        self.gamma_slider.setToolTip("Adjust image gamma")
-        gamma_layout.addWidget(self.gamma_label)
-        gamma_layout.addWidget(self.gamma_edit)
-        gamma_layout.addStretch()
-        layout.addLayout(gamma_layout)
-        layout.addWidget(self.gamma_slider)
+        # Gamma (uses different scaling: slider_value / 100.0)
+        gamma_row, self.gamma_label, self.gamma_edit, self.gamma_slider = (
+            create_slider_row("Gamma:", "100", (1, 200), "Adjust image gamma")
+        )
+        # Set display text to show actual gamma value
+        self.gamma_edit.setText("1.0")
+        layout.addLayout(gamma_row)
 
         # Main layout
         main_layout = QVBoxLayout(self)
@@ -156,6 +157,8 @@ class AdjustmentsWidget(QWidget):
         self.pan_edit.editingFinished.connect(self._on_pan_edit_finished)
         self.join_slider.valueChanged.connect(self._on_join_slider_changed)
         self.join_edit.editingFinished.connect(self._on_join_edit_finished)
+        self.fragment_slider.valueChanged.connect(self._on_fragment_slider_changed)
+        self.fragment_edit.editingFinished.connect(self._on_fragment_edit_finished)
         self.brightness_slider.valueChanged.connect(self._on_brightness_slider_changed)
         self.brightness_slider.sliderReleased.connect(
             self._on_image_adjustment_slider_released
@@ -218,6 +221,20 @@ class AdjustmentsWidget(QWidget):
             self.join_threshold_changed.emit(slider_value)
         except ValueError:
             self.join_edit.setText(f"{self.join_slider.value()}")
+
+    def _on_fragment_slider_changed(self, value):
+        """Handle fragment threshold slider change."""
+        self.fragment_edit.setText(f"{value}")
+        self.fragment_threshold_changed.emit(value)
+
+    def _on_fragment_edit_finished(self):
+        try:
+            value = int(self.fragment_edit.text())
+            slider_value = max(0, min(100, value))
+            self.fragment_slider.setValue(slider_value)
+            self.fragment_threshold_changed.emit(slider_value)
+        except ValueError:
+            self.fragment_edit.setText(f"{self.fragment_slider.value()}")
 
     def _on_brightness_slider_changed(self, value):
         """Handle brightness slider change."""
@@ -299,6 +316,17 @@ class AdjustmentsWidget(QWidget):
         self.join_slider.setValue(value)
         self.join_edit.setText(f"{value}")
 
+    def get_fragment_threshold(self):
+        """Get current fragment threshold value."""
+
+        return self.fragment_slider.value()
+
+    def set_fragment_threshold(self, value):
+        """Set fragment threshold value."""
+
+        self.fragment_slider.setValue(value)
+        self.fragment_edit.setText(f"{value}")
+
     def get_brightness(self):
         """Get current brightness value."""
 
@@ -338,6 +366,7 @@ class AdjustmentsWidget(QWidget):
         self.set_annotation_size(10)  # Default value
         self.set_pan_speed(10)  # Default value
         self.set_join_threshold(2)  # Default value
+        self.set_fragment_threshold(0)  # Default value
         self.set_brightness(0)  # Default value
         self.set_contrast(0)  # Default value
         self.set_gamma(100)  # Default value (1.0)
