@@ -1,180 +1,213 @@
-# Hotkey Management System
+# ⌨️ Hotkey Management System
 
-## Overview
-LazyLabel now includes a comprehensive hotkey management system that allows users to customize keyboard shortcuts for all major functions. This system provides both session-based and persistent hotkey configuration.
+**Professional hotkey customization for efficient workflows**
 
-## Features
+LazyLabel features a comprehensive hotkey system with 27+ configurable shortcuts organized by function. Customize every keyboard shortcut to match your workflow.
 
-### ✅ **Hotkey Configuration Dialog**
-- **Access**: Click the "Hotkeys" button in the left control panel
-- **Interface**: Tabbed dialog organized by function categories
-- **Real-time editing**: Click any hotkey field and press desired key combination
-- **Conflict detection**: Prevents duplicate key assignments
-- **Visual feedback**: Highlights mouse-related actions that cannot be modified
+![Hotkey System](https://img.shields.io/badge/Hotkeys-27%2B%20Configurable-blue?style=flat-square)
 
-### ✅ **Comprehensive Hotkey Coverage**
-The system manages 27 different hotkey actions across 7 categories:
+---
 
-#### **Navigation (3 actions)**
-- Load Next Image: `Right Arrow`
-- Load Previous Image: `Left Arrow`  
-- Fit View: `Period (.)`
+## 🚀 Quick Start
 
-#### **Modes (5 actions)**
-- Point Mode (SAM): `1`
-- Polygon Mode: `2`
-- Bounding Box Mode: `3`
-- Selection Mode: `E`
-- Pan Mode: `Q`
-- Edit Mode: `R`
+1. **Open Hotkeys** → Click "Hotkeys" button in control panel
+2. **Customize** → Click any key field and press desired shortcut
+3. **Save** → Click "Save Hotkeys" for persistence
+4. **Enjoy** → Use your personalized shortcuts!
 
-#### **Actions (7 actions)**
-- Clear Points/Vertices: `C`
-- Save Current Segment: `Space`
-- Save Output: `Return/Enter`
-- Undo Last Action: `Ctrl+Z`
-- Redo Last Action: `Ctrl+Y` or `Ctrl+Shift+Z`
-- Cancel/Clear Selection: `Escape`
+---
 
-#### **Segments (4 actions)**
-- Merge Selected Segments: `M`
-- Delete Selected Segments: `V` or `Backspace`
-- Select All Segments: `Ctrl+A`
+## ✨ Key Features
 
-#### **View (2 actions)**
-- Zoom In: `Ctrl+Plus`
-- Zoom Out: `Ctrl+Minus`
+### **🎯 Smart Configuration**
+- **Real-time editing** - Click field → Press key → Instant assignment
+- **Conflict prevention** - No duplicate shortcuts allowed
+- **Primary + Secondary** keys for each action
+- **Category organization** across 7 function groups
 
-#### **Movement (4 actions)**
-- Pan Up: `W`
-- Pan Down: `S`
-- Pan Left: `A`
-- Pan Right: `D`
+### **💾 Persistent Settings**
+- **Auto-save** to `~/.config/lazylabel/hotkeys.json`
+- **Session persistence** across app restarts  
+- **Reset to defaults** anytime
+- **Immediate application** of changes
 
-#### **Mouse (3 actions - Read-only)**
-- Add Positive Point / Select: `Left Click`
-- Add Negative Point: `Right Click`
-- Drag/Pan: `Mouse Drag`
+### **🛡️ Safety Features**
+- **Mouse protection** - Click actions can't be reassigned
+- **Graceful fallback** for invalid configurations
+- **Visual feedback** during key capture
+- **Escape handling** to cancel changes
 
-### ✅ **Primary and Secondary Keys**
-- **Primary Key**: Main hotkey for each action
-- **Secondary Key**: Optional alternative hotkey (initially set to None)
-- **Dual Assignment**: Both keys trigger the same action
-- **Independent Configuration**: Set primary and secondary keys separately
+---
 
-### ✅ **Session vs Persistent Settings**
-- **Session Only**: Changes apply immediately but are lost when application closes
-- **Persistent**: Click "Save Hotkeys" to save configuration to file
-- **Auto-load**: Saved hotkeys automatically load on application startup
+## ⌨️ Default Hotkeys
 
-### ✅ **Safety Features**
-- **Mouse Protection**: Mouse-related actions cannot be reassigned
-- **Conflict Prevention**: System prevents duplicate key assignments
-- **Default Reset**: "Reset to Defaults" button restores original hotkeys
-- **Validation**: Invalid key combinations are rejected
+| Category | Action | Primary Key | Secondary |
+|----------|--------|-------------|-----------|
+| **🎯 Modes** | Point Mode (SAM) | `1` | - |
+| | Polygon Mode | `2` | - |
+| | Bounding Box | `3` | - |
+| | Selection Mode | `E` | - |
+| | Edit Mode | `R` | - |
+| | Pan Mode | `Q` | - |
+| **⚡ Actions** | Save Segment | `Space` | - |
+| | Save Output | `Enter` | - |
+| | Clear Points | `C` | - |
+| | Undo | `Ctrl+Z` | - |
+| | Redo | `Ctrl+Y` | `Ctrl+Shift+Z` |
+| | Cancel/Escape | `Escape` | - |
+| **🔧 Segments** | Merge Selected | `M` | - |
+| | Delete Selected | `V` | `Backspace` |
+| | Select All | `Ctrl+A` | - |
+| **🖼️ Navigation** | Next Image | `Right Arrow` | - |
+| | Previous Image | `Left Arrow` | - |
+| | Fit View | `.` (Period) | - |
+| **🔍 View** | Zoom In | `Ctrl+Plus` | - |
+| | Zoom Out | `Ctrl+Minus` | - |
+| **📐 Movement** | Pan Up | `W` | - |
+| | Pan Down | `S` | - |
+| | Pan Left | `A` | - |
+| | Pan Right | `D` | - |
 
-## Usage Instructions
+---
 
-### **Opening the Hotkey Dialog**
-1. Launch LazyLabel
-2. Click the "Hotkeys" button in the left control panel
-3. The Hotkey Configuration dialog opens
+## 🎨 Customization Guide
 
-### **Customizing Hotkeys**
-1. Navigate to the appropriate category tab
-2. Click on a Primary Key or Secondary Key field
-3. The field highlights yellow and shows "Press a key..."
-4. Press your desired key combination
-5. The new hotkey is immediately assigned
+### **Basic Customization**
+```
+1. Click "Hotkeys" button
+2. Select category tab
+3. Click key field → Press new key
+4. Click "Save Hotkeys"
+```
 
-### **Saving Hotkeys**
-1. Make your desired changes in the dialog
-2. Click "Save Hotkeys" button
-3. Hotkeys are saved to `~/.config/lazylabel/hotkeys.json`
-4. Settings persist between application sessions
+### **Advanced Features**
+- **Modifier keys**: `Ctrl`, `Shift`, `Alt` combinations supported
+- **Function keys**: `F1-F12` available
+- **Special keys**: `Space`, `Enter`, `Escape`, Arrow keys
+- **Dual assignment**: Set both primary and secondary shortcuts
 
-### **Resetting to Defaults**
-1. Click "Reset to Defaults" button
-2. Confirm the action
-3. All hotkeys return to original values
-4. Click "Save Hotkeys" to make the reset persistent
+### **Best Practices**
+- **Keep related actions close** on keyboard (e.g., WASD for movement)
+- **Use modifier combos** for destructive actions (e.g., `Ctrl+Del`)
+- **Leverage muscle memory** from other software
+- **Test shortcuts** before saving for comfort
 
-## Technical Implementation
+---
+
+## 🔧 Technical Details
 
 ### **Architecture**
-- **HotkeyManager**: Core hotkey management class
-- **HotkeyAction**: Data structure for individual hotkey actions
-- **HotkeyDialog**: PyQt6 dialog for hotkey configuration
-- **HotkeyLineEdit**: Custom widget for capturing key presses
-
-### **File Storage**
-- **Location**: `~/.config/lazylabel/hotkeys.json`
-- **Format**: JSON with action names and key mappings
-- **Backup**: Original defaults preserved in code
-
-### **Integration**
-- **Dynamic Shortcuts**: QShortcut objects created based on current configuration
-- **Real-time Updates**: Shortcuts update immediately when dialog closes
-- **Memory Management**: Old shortcuts properly cleaned up
-
-### **Key Capture**
-- **Smart Detection**: Captures key combinations including modifiers
-- **User Feedback**: Visual indication during key capture
-- **Escape Handling**: Click away or focus loss cancels capture
-
-## Benefits
-
-### **🎯 User Experience**
-- **Customization**: Adapt interface to personal workflow
-- **Efficiency**: Use familiar key combinations
-- **Accessibility**: Accommodate different user needs
-- **Flexibility**: Change hotkeys without code modification
-
-### **🔧 Developer Benefits**
-- **Maintainable**: Centralized hotkey management
-- **Extensible**: Easy to add new hotkey actions
-- **Robust**: Conflict detection and validation
-- **Persistent**: User preferences preserved
-
-### **🛡️ Safety**
-- **Protected Actions**: Mouse interactions cannot be broken
-- **Conflict Prevention**: No duplicate assignments
-- **Graceful Fallback**: Invalid configurations handled safely
-- **Reset Option**: Always possible to return to defaults
-
-## Example Workflow
-
-1. **Initial Setup**: User opens LazyLabel with default hotkeys
-2. **Customization**: User prefers `F1` for Point Mode instead of `1`
-3. **Configuration**: 
-   - Click "Hotkeys" button
-   - Navigate to "Modes" tab
-   - Click "Primary Key" field for "Point Mode (SAM)"
-   - Press `F1`
-   - Key is assigned and conflict-checked
-4. **Persistence**: Click "Save Hotkeys" to preserve setting
-5. **Usage**: `F1` now activates Point Mode in current and future sessions
-
-## File Structure
-
-```
-src/lazylabel/
-├── config/
-│   ├── hotkeys.py              # HotkeyManager and HotkeyAction classes
-│   └── __init__.py             # Export hotkey classes
-├── ui/
-│   ├── hotkey_dialog.py        # Hotkey configuration dialog
-│   ├── control_panel.py        # Added "Hotkeys" button
-│   └── main_window.py          # Integrated hotkey system
-└── HOTKEY_FEATURE.md           # This documentation
+```python
+# Core components
+HotkeyManager       # Central hotkey coordination
+HotkeyAction        # Individual shortcut definitions  
+HotkeyDialog        # Configuration interface
+HotkeyLineEdit      # Key capture widget
 ```
 
-## Future Enhancements
+### **File Format**
+```json
+{
+  "point_mode": {
+    "primary": "1",
+    "secondary": null
+  },
+  "save_segment": {
+    "primary": "Space", 
+    "secondary": null
+  }
+}
+```
 
-- **Import/Export**: Share hotkey configurations
-- **Profiles**: Multiple hotkey sets for different workflows
-- **Macro Support**: Complex key sequences
-- **Context Sensitivity**: Different hotkeys for different modes
-- **Visual Indicators**: Show current hotkeys in tooltips
+### **Integration Points**
+- **Main Window** - QShortcut creation and management
+- **Control Panel** - "Hotkeys" button access
+- **Settings System** - Persistent configuration
+- **Signal System** - Action triggering
 
-The hotkey management system provides a professional, user-friendly way to customize LazyLabel's interface while maintaining the application's robust functionality.
+---
+
+## 🛠️ Development
+
+### **Adding New Hotkeys**
+```python
+# 1. Define action in HotkeyManager
+self.actions["new_action"] = HotkeyAction(
+    name="New Action",
+    default_primary="F5", 
+    category="Custom"
+)
+
+# 2. Connect to signal in MainWindow
+self.hotkey_manager.get_shortcut("new_action").activated.connect(
+    self.handle_new_action
+)
+
+# 3. Add to dialog tabs
+```
+
+### **Categories**
+- **Navigation** - Image browsing
+- **Modes** - Tool switching  
+- **Actions** - Core operations
+- **Segments** - Shape management
+- **View** - Zoom/pan controls
+- **Movement** - WASD navigation
+- **Mouse** - Click actions (read-only)
+
+---
+
+## 🎯 Use Cases
+
+### **Power Users**
+- **Vim-style** navigation (`hjkl` for movement)
+- **Photoshop-style** tools (`v` for selection)
+- **Custom workflows** for repetitive tasks
+
+### **Accessibility**
+- **One-handed** operation support
+- **Alternative key** positions
+- **Reduced hand movement** patterns
+
+### **Multi-Language**
+- **QWERTY alternatives** (Dvorak, Colemak)
+- **International keyboards** support
+- **Symbol key** accessibility
+
+---
+
+## 🚀 Pro Tips
+
+### **Efficiency Shortcuts**
+```
+🔥 Quick Save:     Space + Enter combo
+⚡ Fast Navigation: Arrow keys for images  
+🎯 Precise Control: Number keys for modes
+🛠️ Edit Flow:      E → R → M workflow
+```
+
+### **Common Customizations**
+- **Gamers**: WASD → Arrow keys for movement
+- **CAD Users**: Function keys for tools
+- **Designers**: Shift+Key for secondary actions
+- **Researchers**: Ctrl+Key for batch operations
+
+---
+
+## ☕ Troubleshooting
+
+### **Key Not Working?**
+1. Check for conflicts in dialog
+2. Ensure key is supported
+3. Try primary vs secondary assignment
+4. Reset to defaults if needed
+
+### **Shortcuts Not Saving?**
+1. Verify write permissions to config directory
+2. Check disk space
+3. Try manual save button
+4. Restart application
+
+---
+
+**🎮 Game-changing productivity for power users** ⚡
