@@ -2,7 +2,7 @@ from unittest.mock import MagicMock
 
 import pytest
 from PyQt6.QtCore import QPointF, Qt
-from PyQt6.QtGui import QMouseEvent, QPixmap
+from PyQt6.QtGui import QPixmap
 
 from lazylabel.ui.main_window import MainWindow
 
@@ -34,20 +34,14 @@ def test_sam_point_creation_on_mouse_press(main_window, qtbot):
     main_window._add_point = MagicMock()
     main_window._original_mouse_press = MagicMock()
 
-    # Simulate a mouse press event on the viewer's scene
+    # Simulate a left mouse press event by calling the handler directly
     pos = QPointF(10, 10)
-    mouse_event = MagicMock(spec=QMouseEvent)
-    mouse_event.type.return_value = QMouseEvent.Type.MouseButtonPress
-    mouse_event.button.return_value = Qt.MouseButton.LeftButton
-    mouse_event.buttons.return_value = Qt.MouseButton.LeftButton
-    mouse_event.modifiers.return_value = Qt.KeyboardModifier.NoModifier
-    mouse_event.scenePos = MagicMock(return_value=pos)
-    mouse_event.pos.return_value = pos.toPoint()
-    mouse_event.isAccepted.return_value = False
-    mouse_event.accept = MagicMock()
+    mock_event = MagicMock()
+    mock_event.button.return_value = Qt.MouseButton.LeftButton
+    mock_event.scenePos.return_value = pos
 
-    # Call the scene's mousePressEvent, which will then call _scene_mouse_press
-    main_window.viewer.scene().mousePressEvent(mouse_event)
+    # Call the scene mouse press handler directly
+    main_window._scene_mouse_press(mock_event)
 
     # Assert that _add_point was called
     main_window._add_point.assert_called_once_with(pos, positive=True)

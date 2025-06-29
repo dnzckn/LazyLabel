@@ -35,12 +35,19 @@ def test_sam_model_initialization(sam_model):
 
 @patch("cv2.imread")
 @patch("cv2.cvtColor")
-def test_set_image(mock_cvt_color, mock_read, sam_model):
-    """Test setting an image."""
+def test_set_image_from_path(mock_cvt_color, mock_read, sam_model):
+    """Test setting an image from path."""
     mock_read.return_value = np.zeros((100, 100, 3), dtype=np.uint8)
     mock_cvt_color.return_value = np.zeros((100, 100, 3), dtype=np.uint8)
-    sam_model.set_image("dummy_path.png")
+    sam_model.set_image_from_path("dummy_path.png")
     sam_model.predictor.set_image.assert_called_once()
+
+
+def test_set_image_from_array(sam_model):
+    """Test setting an image from a numpy array."""
+    dummy_array = np.zeros((200, 200, 3), dtype=np.uint8)
+    sam_model.set_image_from_array(dummy_array)
+    sam_model.predictor.set_image.assert_called_once_with(dummy_array)
 
 
 def test_predict(sam_model):

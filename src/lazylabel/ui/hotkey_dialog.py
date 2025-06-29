@@ -18,6 +18,7 @@ from PyQt6.QtWidgets import (
 )
 
 from ..config import HotkeyAction, HotkeyManager
+from ..utils.logger import logger
 
 
 class HotkeyLineEdit(QLineEdit):
@@ -116,7 +117,7 @@ class HotkeyLineEdit(QLineEdit):
                 return
 
         except Exception as e:
-            print(f"Error capturing key sequence: {e}")
+            logger.error(f"Error capturing key sequence: {e}")
             # Cancel capture on any error
             self.setText("")
             self.stop_capture()

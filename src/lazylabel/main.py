@@ -6,29 +6,31 @@ import qdarktheme
 from PyQt6.QtWidgets import QApplication
 
 from .ui.main_window import MainWindow
+from .utils.logger import logger
 
 
 def main():
     """Main application entry point."""
-    print("=" * 50)
-    print("LazyLabel - AI-Assisted Image Labeling")
-    print("=" * 50)
-    print()
 
-    print("[1/20] Initializing application...")
+    logger.info("=" * 50)
+    logger.info("Step 1/8: LazyLabel - AI-Assisted Image Labeling")
+    logger.info("=" * 50)
+    logger.info("")
+
+    logger.info("Step 2/8: Initializing application...")
     app = QApplication(sys.argv)
 
-    print("[2/20] Applying dark theme...")
+    logger.info("Step 3/8: Applying dark theme...")
     qdarktheme.setup_theme()
 
     main_window = MainWindow()
 
-    print("[19/20] Showing main window...")
+    logger.info("Step 7/8: Showing main window...")
     main_window.show()
 
-    print()
-    print("[20/20] LazyLabel is ready! Happy labeling!")
-    print("=" * 50)
+    logger.info("")
+    logger.info("Step 8/8: LazyLabel is ready! Happy labeling!")
+    logger.info("=" * 50)
 
     sys.exit(app.exec())
 

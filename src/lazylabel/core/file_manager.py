@@ -6,6 +6,7 @@ import os
 import cv2
 import numpy as np
 
+from ..utils.logger import logger
 from .segment_manager import SegmentManager
 
 
@@ -91,7 +92,7 @@ class FileManager:
                         int(k): v for k, v in loaded_aliases.items()
                     }
             except (json.JSONDecodeError, ValueError) as e:
-                print(f"Error loading class aliases from {json_path}: {e}")
+                logger.error(f"Error loading class aliases from {json_path}: {e}")
                 self.segment_manager.class_aliases.clear()
 
     def load_existing_mask(self, image_path: str) -> None:

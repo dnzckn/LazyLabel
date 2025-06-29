@@ -60,6 +60,15 @@ class SettingsWidget(QWidget):
         self.chk_save_class_aliases.setChecked(False)
         layout.addWidget(self.chk_save_class_aliases)
 
+        # Operate on View
+        self.chk_operate_on_view = QCheckBox("Operate On View")
+        self.chk_operate_on_view.setToolTip(
+            "If checked, SAM model will operate on the currently displayed (adjusted) image.\n"
+            "Otherwise, it operates on the original image."
+        )
+        self.chk_operate_on_view.setChecked(False)
+        layout.addWidget(self.chk_operate_on_view)
+
         # Main layout
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(0, 0, 0, 0)
@@ -77,6 +86,7 @@ class SettingsWidget(QWidget):
             self.chk_save_txt,
             self.chk_yolo_use_alias,
             self.chk_save_class_aliases,
+            self.chk_operate_on_view,
         ]:
             checkbox.stateChanged.connect(self.settings_changed)
 
@@ -100,6 +110,7 @@ class SettingsWidget(QWidget):
             "save_txt": self.chk_save_txt.isChecked(),
             "yolo_use_alias": self.chk_yolo_use_alias.isChecked(),
             "save_class_aliases": self.chk_save_class_aliases.isChecked(),
+            "operate_on_view": self.chk_operate_on_view.isChecked(),
         }
 
     def set_settings(self, settings):
@@ -111,3 +122,4 @@ class SettingsWidget(QWidget):
         self.chk_save_class_aliases.setChecked(
             settings.get("save_class_aliases", False)
         )
+        self.chk_operate_on_view.setChecked(settings.get("operate_on_view", False))

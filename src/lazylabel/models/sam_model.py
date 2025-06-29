@@ -7,21 +7,19 @@ import torch
 from segment_anything import SamPredictor, sam_model_registry
 from tqdm import tqdm
 
+from ..utils.logger import logger
+
 
 def download_model(url, download_path):
     """Downloads file with a progress bar."""
-    print("[10/20] SAM model not found. Downloading from Meta's repository...")
-    print(f"        Downloading to: {download_path}")
+
     try:
-        print("[10/20] Connecting to download server...")
+        logger.info("Step 5/8: Connecting to download server...")
         response = requests.get(url, stream=True, timeout=30)
         response.raise_for_status()
         total_size_in_bytes = int(response.headers.get("content-length", 0))
         block_size = 1024  # 1 Kibibyte
 
-        print(
-            f"[10/20] Starting download ({total_size_in_bytes / (1024 * 1024 * 1024):.1f} GB)..."
-        )
         progress_bar = tqdm(total=total_size_in_bytes, unit="iB", unit_scale=True)
         with open(download_path, "wb") as file:
             for data in response.iter_content(block_size):
@@ -32,29 +30,29 @@ def download_model(url, download_path):
         if total_size_in_bytes != 0 and progress_bar.n != total_size_in_bytes:
             raise RuntimeError("Download incomplete - file size mismatch")
 
-        print("[10/20] Model download completed successfully.")
+        logger.info("Step 5/8: Model download completed successfully.")
 
     except requests.exceptions.ConnectionError as e:
         raise RuntimeError(
-            "[10/20] Network connection failed: Check your internet connection"
+            "Step 5/8: Network connection failed: Check your internet connection"
         ) from e
     except requests.exceptions.Timeout as e:
         raise RuntimeError(
-            "[10/20] Download timeout: Server took too long to respond"
+            "Step 5/8: Download timeout: Server took too long to respond"
         ) from e
     except requests.exceptions.HTTPError as e:
         raise RuntimeError(
-            f"[10/20] HTTP error {e.response.status_code}: Server rejected request"
+            f"Step 5/8: HTTP error {e.response.status_code}: Server rejected request"
         ) from e
     except requests.exceptions.RequestException as e:
-        raise RuntimeError(f"[10/20] Network error during download: {e}") from e
+        raise RuntimeError(f"Step 5/8: Network error during download: {e}") from e
     except PermissionError as e:
         raise RuntimeError(
-            f"[10/20] Permission denied: Cannot write to {download_path}"
+            f"Step 5/8: Permission denied: Cannot write to {download_path}"
         ) from e
     except OSError as e:
         raise RuntimeError(
-            f"[10/20] Disk error: {e} (check available disk space)"
+            f"Step 5/8: Disk error: {e} (check available disk space)"
         ) from e
     except Exception as e:
         # Clean up partial download
@@ -63,7 +61,7 @@ def download_model(url, download_path):
 
             with contextlib.suppress(OSError):
                 os.remove(download_path)
-        raise RuntimeError(f"[10/20] Download failed: {e}") from e
+        raise RuntimeError(f"Step 5/8: Download failed: {e}") from e
 
 
 class SamModel:
@@ -74,7 +72,7 @@ class SamModel:
         custom_model_path=None,
     ):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        print(f"[9/20] Detected device: {str(self.device).upper()}")
+        logger.info(f"Step 5/8: Detected device: {str(self.device).upper()}")
 
         self.current_model_type = model_type
         self.current_model_path = custom_model_path
@@ -87,7 +85,7 @@ class SamModel:
             if custom_model_path and os.path.exists(custom_model_path):
                 # Use custom model path
                 model_path = custom_model_path
-                print(f"[10/20] Loading custom SAM model from {model_path}...")
+                logger.info(f"Step 5/8: Loading custom SAM model from {model_path}...")
             else:
                 # Use default model with download if needed - store in models folder
                 model_url = (
@@ -106,8 +104,8 @@ class SamModel:
                 old_model_path = os.path.join(old_cache_dir, model_filename)
 
                 if os.path.exists(old_model_path) and not os.path.exists(model_path):
-                    print(
-                        "[10/20] Moving existing model from cache to models folder..."
+                    logger.info(
+                        "Step 5/8: Moving existing model from cache to models folder..."
                     )
                     import shutil
 
@@ -116,30 +114,32 @@ class SamModel:
                     # Download the model if it doesn't exist
                     download_model(model_url, model_path)
 
-                print(f"[10/20] Loading default SAM model from {model_path}...")
+                logger.info(f"Step 5/8: Loading default SAM model from {model_path}...")
 
-            print(f"[11/20] Initializing {model_type.upper()} model architecture...")
+            logger.info(
+                f"Step 5/8: Initializing {model_type.upper()} model architecture..."
+            )
             self.model = sam_model_registry[model_type](checkpoint=model_path).to(
                 self.device
             )
 
-            print("[12/20] Setting up predictor...")
+            logger.info("Step 5/8: Setting up predictor...")
             self.predictor = SamPredictor(self.model)
             self.is_loaded = True
-            print("[13/20] SAM model loaded successfully.")
+            logger.info("Step 5/8: SAM model loaded successfully.")
 
         except Exception as e:
-            print(f"[8/20] Failed to load SAM model: {e}")
-            print("[8/20] SAM point functionality will be disabled.")
+            logger.error(f"Step 4/8: Failed to load SAM model: {e}")
+            logger.warning("Step 4/8: SAM point functionality will be disabled.")
             self.is_loaded = False
 
     def load_custom_model(self, model_path, model_type="vit_h"):
         """Load a custom model from the specified path."""
         if not os.path.exists(model_path):
-            print(f"Model file not found: {model_path}")
+            logger.warning(f"Model file not found: {model_path}")
             return False
 
-        print(f"Loading custom SAM model from {model_path}...")
+        logger.info(f"Loading custom SAM model from {model_path}...")
         try:
             # Clear existing model from memory
             if hasattr(self, "model") and self.model is not None:
@@ -160,16 +160,16 @@ class SamModel:
             if self.image is not None:
                 self.predictor.set_image(self.image)
 
-            print("Custom SAM model loaded successfully.")
+            logger.info("Custom SAM model loaded successfully.")
             return True
         except Exception as e:
-            print(f"Error loading custom model: {e}")
+            logger.error(f"Error loading custom model: {e}")
             self.is_loaded = False
             self.model = None
             self.predictor = None
             return False
 
-    def set_image(self, image_path):
+    def set_image_from_path(self, image_path):
         if not self.is_loaded:
             return False
         try:
@@ -178,7 +178,18 @@ class SamModel:
             self.predictor.set_image(self.image)
             return True
         except Exception as e:
-            print(f"Error setting image: {e}")
+            logger.error(f"Error setting image from path: {e}")
+            return False
+
+    def set_image_from_array(self, image_array: np.ndarray):
+        if not self.is_loaded:
+            return False
+        try:
+            self.image = image_array
+            self.predictor.set_image(self.image)
+            return True
+        except Exception as e:
+            logger.error(f"Error setting image from array: {e}")
             return False
 
     def predict(self, positive_points, negative_points):
@@ -196,5 +207,5 @@ class SamModel:
             )
             return masks[0]
         except Exception as e:
-            print(f"Error during prediction: {e}")
+            logger.error(f"Error during prediction: {e}")
             return None

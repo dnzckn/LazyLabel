@@ -5,6 +5,7 @@ from collections.abc import Callable
 
 from ..config import Paths
 from ..models.sam_model import SamModel
+from ..utils.logger import logger
 
 
 class ModelManager:
@@ -23,12 +24,12 @@ class ModelManager:
             SamModel instance if successful, None if failed
         """
         try:
-            print(f"[8/20] Loading {model_type.upper()} model...")
+            logger.info(f"Step 4/8: Loading {model_type.upper()} model...")
             self.sam_model = SamModel(model_type=model_type)
             self.current_models_folder = str(self.paths.models_dir)
             return self.sam_model
         except Exception as e:
-            print(f"[8/20] Failed to initialize default model: {e}")
+            logger.error(f"Step 4/8: Failed to initialize default model: {e}")
             self.sam_model = None
             return None
 

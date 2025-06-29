@@ -21,9 +21,15 @@ class Settings:
     pan_multiplier: float = 1.0
     polygon_join_threshold: int = 2
 
+    # Image Adjustment Settings
+    brightness: float = 0.0
+    contrast: float = 0.0
+    gamma: float = 1.0
+
     # Model Settings
     default_model_type: str = "vit_h"
     default_model_filename: str = "sam_vit_h_4b8939.pth"
+    operate_on_view: bool = False
 
     # Save Settings
     auto_save: bool = True

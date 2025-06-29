@@ -29,6 +29,11 @@ class ControlPanel(QWidget):
     annotation_size_changed = pyqtSignal(int)
     pan_speed_changed = pyqtSignal(int)
     join_threshold_changed = pyqtSignal(int)
+    brightness_changed = pyqtSignal(int)
+    contrast_changed = pyqtSignal(int)
+    gamma_changed = pyqtSignal(int)
+    reset_adjustments_requested = pyqtSignal()
+    image_adjustment_changed = pyqtSignal()
     hotkeys_requested = pyqtSignal()
     pop_out_requested = pyqtSignal()
 
@@ -174,6 +179,15 @@ class ControlPanel(QWidget):
         self.adjustments_widget.join_threshold_changed.connect(
             self.join_threshold_changed
         )
+        self.adjustments_widget.brightness_changed.connect(self.brightness_changed)
+        self.adjustments_widget.contrast_changed.connect(self.contrast_changed)
+        self.adjustments_widget.gamma_changed.connect(self.gamma_changed)
+        self.adjustments_widget.reset_requested.connect(
+            self.reset_adjustments_requested
+        )
+        self.adjustments_widget.image_adjustment_changed.connect(
+            self.image_adjustment_changed
+        )
 
     def mouseDoubleClickEvent(self, event):
         """Handle double-click to expand collapsed panel."""
@@ -223,9 +237,25 @@ class ControlPanel(QWidget):
         """Set annotation size."""
         self.adjustments_widget.set_annotation_size(value)
 
+    def set_pan_speed(self, value):
+        """Set pan speed."""
+        self.adjustments_widget.set_pan_speed(value)
+
     def set_join_threshold(self, value):
         """Set join threshold."""
         self.adjustments_widget.set_join_threshold(value)
+
+    def set_brightness(self, value):
+        """Set brightness."""
+        self.adjustments_widget.set_brightness(value)
+
+    def set_contrast(self, value):
+        """Set contrast."""
+        self.adjustments_widget.set_contrast(value)
+
+    def set_gamma(self, value):
+        """Set gamma."""
+        self.adjustments_widget.set_gamma(value)
 
     def set_sam_mode_enabled(self, enabled: bool):
         """Enable or disable the SAM mode button."""

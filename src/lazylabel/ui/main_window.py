@@ -34,6 +34,7 @@ from PyQt6.QtWidgets import (
 from ..config import HotkeyManager, Paths, Settings
 from ..core import FileManager, ModelManager, SegmentManager
 from ..utils import CustomFileSystemModel, mask_to_pixmap
+from ..utils.logger import logger
 from .control_panel import ControlPanel
 from .editable_vertex import EditableVertexItem
 from .hotkey_dialog import HotkeyDialog
@@ -80,22 +81,15 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
 
-        print("[3/20] Starting LazyLabel...")
-        print("[4/20] Loading configuration and settings...")
-
         # Initialize configuration
         self.paths = Paths()
         self.settings = Settings.load_from_file(str(self.paths.settings_file))
         self.hotkey_manager = HotkeyManager(str(self.paths.config_dir))
 
-        print("[5/20] Initializing core managers...")
-
         # Initialize managers
         self.segment_manager = SegmentManager()
         self.model_manager = ModelManager(self.paths)
         self.file_manager = FileManager(self.segment_manager)
-
-        print("[6/20] Setting up user interface...")
 
         # Initialize UI state
         self.mode = "sam_points"
@@ -112,6 +106,11 @@ class MainWindow(QMainWindow):
         self.line_thickness = self.settings.line_thickness
         self.pan_multiplier = self.settings.pan_multiplier
         self.polygon_join_threshold = self.settings.polygon_join_threshold
+
+        # Image adjustment state
+        self.brightness = self.settings.brightness
+        self.contrast = self.settings.contrast
+        self.gamma = self.settings.gamma
 
         # Drawing state
         self.point_items, self.positive_points, self.negative_points = [], [], []
@@ -134,13 +133,9 @@ class MainWindow(QMainWindow):
 
         self._setup_ui()
         self._setup_model()
-
-        print("[17/20] Connecting UI signals and shortcuts...")
         self._setup_connections()
         self._setup_shortcuts()
         self._load_settings()
-
-        print("[18/20] LazyLabel initialization complete!")
 
     def _setup_ui(self):
         """Setup the user interface."""
@@ -201,7 +196,6 @@ class MainWindow(QMainWindow):
 
     def _setup_model(self):
         """Setup the SAM model."""
-        print("[7/20] Initializing SAM model (this may take a moment)...")
 
         sam_model = self.model_manager.initialize_default_model(
             self.settings.default_model_type
@@ -209,21 +203,19 @@ class MainWindow(QMainWindow):
 
         if sam_model and sam_model.is_loaded:
             device_text = str(sam_model.device).upper()
-            print(f"[14/20] SAM model loaded successfully on {device_text}")
+            logger.info(f"Step 6/8: SAM model loaded successfully on {device_text}")
             self.status_bar.set_permanent_message(f"Device: {device_text}")
             self._enable_sam_functionality(True)
         elif sam_model is None:
-            print(
-                "[14/20] SAM model initialization failed. Point mode will be disabled."
+            logger.warning(
+                "Step 6/8: SAM model initialization failed. Point mode will be disabled."
             )
-            self.status_bar.set_permanent_message("Model initialization failed")
             self._enable_sam_functionality(False)
         else:
-            print("[14/20] SAM model failed to load. Point mode will be disabled.")
-            self.status_bar.set_permanent_message("Model loading failed")
+            logger.warning(
+                "Step 6/8: SAM model initialization failed. Point mode will be disabled."
+            )
             self._enable_sam_functionality(False)
-
-        print("[15/20] Scanning available models...")
 
         # Setup model change callback
         self.model_manager.on_model_changed = self.control_panel.set_current_model
@@ -233,7 +225,7 @@ class MainWindow(QMainWindow):
         self.control_panel.populate_models(models)
 
         if models:
-            print(f"[16/20] Found {len(models)} model(s) in models directory")
+            logger.info(f"Step 6/8: Found {len(models)} model(s) in models directory")
 
     def _enable_sam_functionality(self, enabled: bool):
         """Enable or disable SAM point functionality."""
@@ -252,6 +244,9 @@ class MainWindow(QMainWindow):
         self.control_panel.clear_points_requested.connect(self.clear_all_points)
         self.control_panel.fit_view_requested.connect(self.viewer.fitInView)
         self.control_panel.hotkeys_requested.connect(self._show_hotkey_dialog)
+        self.control_panel.settings_widget.settings_changed.connect(
+            self._handle_settings_changed
+        )
 
         # Model management
         self.control_panel.browse_models_requested.connect(self._browse_models_folder)
@@ -262,6 +257,15 @@ class MainWindow(QMainWindow):
         self.control_panel.annotation_size_changed.connect(self._set_annotation_size)
         self.control_panel.pan_speed_changed.connect(self._set_pan_speed)
         self.control_panel.join_threshold_changed.connect(self._set_join_threshold)
+        self.control_panel.brightness_changed.connect(self._set_brightness)
+        self.control_panel.contrast_changed.connect(self._set_contrast)
+        self.control_panel.gamma_changed.connect(self._set_gamma)
+        self.control_panel.reset_adjustments_requested.connect(
+            self._reset_image_adjustments
+        )
+        self.control_panel.image_adjustment_changed.connect(
+            self._handle_image_adjustment_changed
+        )
 
         # Right panel connections
         self.right_panel.open_folder_requested.connect(self._open_folder_dialog)
@@ -351,7 +355,11 @@ class MainWindow(QMainWindow):
         self.control_panel.set_annotation_size(
             int(self.settings.annotation_size_multiplier * 10)
         )
+        self.control_panel.set_pan_speed(int(self.settings.pan_multiplier * 10))
         self.control_panel.set_join_threshold(self.settings.polygon_join_threshold)
+        self.control_panel.set_brightness(int(self.settings.brightness))
+        self.control_panel.set_contrast(int(self.settings.contrast))
+        self.control_panel.set_gamma(int(self.settings.gamma * 100))
         # Set initial mode based on model availability
         if self.model_manager.is_model_available():
             self.set_sam_mode()
@@ -372,7 +380,7 @@ class MainWindow(QMainWindow):
     def set_sam_mode(self):
         """Set SAM points mode."""
         if not self.model_manager.is_model_available():
-            print("Cannot enter SAM mode: No model available")
+            logger.warning("Cannot enter SAM mode: No model available")
             return
         self._set_mode("sam_points")
 
@@ -513,6 +521,53 @@ class MainWindow(QMainWindow):
         self.polygon_join_threshold = value
         self.settings.polygon_join_threshold = value
 
+    def _set_brightness(self, value):
+        """Set image brightness."""
+        self.brightness = value
+        self.settings.brightness = value
+        self.viewer.set_image_adjustments(self.brightness, self.contrast, self.gamma)
+
+    def _set_contrast(self, value):
+        """Set image contrast."""
+        self.contrast = value
+        self.settings.contrast = value
+        self.viewer.set_image_adjustments(self.brightness, self.contrast, self.gamma)
+
+    def _set_gamma(self, value):
+        """Set image gamma."""
+        self.gamma = value / 100.0  # Convert slider value to 0.01-2.0 range
+        self.settings.gamma = self.gamma
+        self.viewer.set_image_adjustments(self.brightness, self.contrast, self.gamma)
+
+    def _reset_image_adjustments(self):
+        """Reset all image adjustment settings to their default values."""
+
+        self.brightness = 0.0
+        self.contrast = 0.0
+        self.gamma = 1.0
+        self.settings.brightness = self.brightness
+        self.settings.contrast = self.contrast
+        self.settings.gamma = self.gamma
+        self.control_panel.adjustments_widget.reset_to_defaults()
+        if self.current_image_path:
+            self.viewer.set_image_adjustments(
+                self.brightness, self.contrast, self.gamma
+            )
+
+    def _handle_settings_changed(self):
+        """Handle changes in settings, e.g., 'Operate On View'."""
+        # Update the main window's settings object with the latest from the widget
+        self.settings.update(**self.control_panel.settings_widget.get_settings())
+
+        # Re-load the current image to apply the new 'Operate On View' setting
+        if self.current_image_path:
+            self._update_sam_model_image()
+
+    def _handle_image_adjustment_changed(self):
+        """Handle changes in image adjustments (brightness, contrast, gamma)."""
+        if self.settings.operate_on_view and self.current_image_path:
+            self._update_sam_model_image()
+
     # File management methods
     def _open_folder_dialog(self):
         """Open folder dialog for images."""
@@ -523,6 +578,7 @@ class MainWindow(QMainWindow):
 
     def _load_selected_image(self, index):
         """Load the selected image."""
+
         if not index.isValid() or not self.file_model.isDir(index.parent()):
             return
 
@@ -538,13 +594,34 @@ class MainWindow(QMainWindow):
             if not pixmap.isNull():
                 self._reset_state()
                 self.viewer.set_photo(pixmap)
-                if self.model_manager.is_model_available():
-                    self.model_manager.sam_model.set_image(self.current_image_path)
+                self.viewer.set_image_adjustments(
+                    self.brightness, self.contrast, self.gamma
+                )
+                self._update_sam_model_image()
                 self.file_manager.load_class_aliases(self.current_image_path)
                 self.file_manager.load_existing_mask(self.current_image_path)
                 self.right_panel.file_tree.setCurrentIndex(index)
                 self._update_all_lists()
                 self.viewer.setFocus()
+
+    def _update_sam_model_image(self):
+        """Updates the SAM model's image based on the 'Operate On View' setting."""
+        if not self.model_manager.is_model_available() or not self.current_image_path:
+            return
+
+        if self.settings.operate_on_view:
+            # Pass the adjusted image (QImage) to SAM model
+            # Convert QImage to numpy array
+            qimage = self.viewer._adjusted_pixmap.toImage()
+            ptr = qimage.constBits()
+            ptr.setsize(qimage.bytesPerLine() * qimage.height())
+            image_np = np.array(ptr).reshape(qimage.height(), qimage.width(), 4)
+            # Convert from BGRA to RGB for SAM
+            image_rgb = cv2.cvtColor(image_np, cv2.COLOR_BGRA2RGB)
+            self.model_manager.sam_model.set_image_from_array(image_rgb)
+        else:
+            # Pass the original image path to SAM model
+            self.model_manager.sam_model.set_image_from_path(self.current_image_path)
 
     def _load_next_image(self):
         """Load next image in the file list, with auto-save if enabled."""

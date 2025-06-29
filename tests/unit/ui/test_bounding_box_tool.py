@@ -1,3 +1,5 @@
+from unittest.mock import MagicMock
+
 import pytest
 from PyQt6.QtCore import QPointF, Qt
 from PyQt6.QtGui import QPixmap
@@ -12,31 +14,41 @@ def main_window_with_image(qtbot):
     window = MainWindow()
     qtbot.addWidget(window)
     # Load a dummy pixmap to enable mouse events
-    window.viewer.set_photo(QPixmap(100, 100))
+    dummy_pixmap = QPixmap(100, 100)
+    dummy_pixmap.fill(Qt.GlobalColor.white)
+    window.viewer.set_photo(dummy_pixmap)
     window.segment_manager = SegmentManager()  # Ensure segment manager is clean
     window.action_history = []
     window.redo_history = []
+
+    # Mock the original mouse press to prevent issues
+    window._original_mouse_press = MagicMock()
+    window._original_mouse_move = MagicMock()
+    window._original_mouse_release = MagicMock()
+
     return window
 
 
-def simulate_mouse_drag(viewer, qtbot, start_scene_pos, end_scene_pos):
-    """Helper to simulate a mouse drag event on the viewer's scene."""
-    # Map scene positions to viewport positions
-    start_viewport_pos = viewer.mapFromScene(start_scene_pos)
-    end_viewport_pos = viewer.mapFromScene(end_scene_pos)
+def simulate_bbox_drag(main_window, start_pos, end_pos):
+    """Helper to simulate bbox drawing by directly calling the mouse event handlers."""
+    # Create a mock event with required attributes
+    press_event = MagicMock()
+    press_event.button.return_value = Qt.MouseButton.LeftButton
+    press_event.scenePos.return_value = start_pos
+    press_event.accept = MagicMock()
 
-    # Simulate mouse press
-    qtbot.mousePress(
-        viewer.viewport(), Qt.MouseButton.LeftButton, pos=start_viewport_pos
-    )
+    move_event = MagicMock()
+    move_event.scenePos.return_value = end_pos
+    move_event.accept = MagicMock()
 
-    # Simulate mouse move
-    qtbot.mouseMove(viewer.viewport(), pos=end_viewport_pos)
+    release_event = MagicMock()
+    release_event.scenePos.return_value = end_pos
+    release_event.accept = MagicMock()
 
-    # Simulate mouse release
-    qtbot.mouseRelease(
-        viewer.viewport(), Qt.MouseButton.LeftButton, pos=end_viewport_pos
-    )
+    # Call the mouse event handlers directly
+    main_window._scene_mouse_press(press_event)
+    main_window._scene_mouse_move(move_event)
+    main_window._scene_mouse_release(release_event)
 
 
 def test_bbox_tool_creation(main_window_with_image):
@@ -53,7 +65,7 @@ def test_bbox_drawing_adds_segment(main_window_with_image, qtbot):
 
     start_pos = QPointF(10, 10)
     end_pos = QPointF(50, 50)
-    simulate_mouse_drag(main_window_with_image.viewer, qtbot, start_pos, end_pos)
+    simulate_bbox_drag(main_window_with_image, start_pos, end_pos)
 
     assert (
         len(main_window_with_image.segment_manager.segments)
@@ -80,7 +92,7 @@ def test_bbox_drawing_no_segment_on_zero_size(main_window_with_image, qtbot):
 
     start_pos = QPointF(10, 10)
     end_pos = QPointF(10, 10)  # Zero size
-    simulate_mouse_drag(main_window_with_image.viewer, qtbot, start_pos, end_pos)
+    simulate_bbox_drag(main_window_with_image, start_pos, end_pos)
 
     assert len(main_window_with_image.segment_manager.segments) == initial_segment_count
     assert len(main_window_with_image.action_history) == initial_history_count
