@@ -22,7 +22,7 @@ class SettingsWidget(QWidget):
         # Auto-save
         self.chk_auto_save = QCheckBox("Auto-Save on Navigate")
         self.chk_auto_save.setToolTip(
-            "Automatically save work when using arrow keys to change images."
+            "Automatically save work when switching to any new image (navigation keys, double-click, etc.)"
         )
         self.chk_auto_save.setChecked(True)
         layout.addWidget(self.chk_auto_save)

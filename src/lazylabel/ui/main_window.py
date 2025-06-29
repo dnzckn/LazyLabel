@@ -587,7 +587,7 @@ class MainWindow(QMainWindow):
         self.viewer.setFocus()
 
     def _load_selected_image(self, index):
-        """Load the selected image."""
+        """Load the selected image. Auto-saves previous work if enabled."""
 
         if not index.isValid() or not self.file_model.isDir(index.parent()):
             return
@@ -598,6 +598,12 @@ class MainWindow(QMainWindow):
         if os.path.isfile(path) and self.file_manager.is_image_file(path):
             if path == self.current_image_path:  # Only reset if loading a new image
                 return
+
+            # Auto-save if enabled and we have a current image (not the first load)
+            if self.current_image_path and self.control_panel.get_settings().get(
+                "auto_save", True
+            ):
+                self._save_output_to_npz()
 
             self.current_image_path = path
             pixmap = QPixmap(self.current_image_path)
@@ -634,12 +640,9 @@ class MainWindow(QMainWindow):
             self.model_manager.sam_model.set_image_from_path(self.current_image_path)
 
     def _load_next_image(self):
-        """Load next image in the file list, with auto-save if enabled."""
+        """Load next image in the file list."""
         if not self.current_file_index.isValid():
             return
-        # Auto-save if enabled
-        if self.control_panel.get_settings().get("auto_save", True):
-            self._save_output_to_npz()
         parent = self.current_file_index.parent()
         row = self.current_file_index.row()
         # Find next valid image file
@@ -651,12 +654,9 @@ class MainWindow(QMainWindow):
                 return
 
     def _load_previous_image(self):
-        """Load previous image in the file list, with auto-save if enabled."""
+        """Load previous image in the file list."""
         if not self.current_file_index.isValid():
             return
-        # Auto-save if enabled
-        if self.control_panel.get_settings().get("auto_save", True):
-            self._save_output_to_npz()
         parent = self.current_file_index.parent()
         row = self.current_file_index.row()
         # Find previous valid image file
