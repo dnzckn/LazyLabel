@@ -1,4 +1,4 @@
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 from PyQt6.QtCore import QPointF, Qt
@@ -9,24 +9,54 @@ from lazylabel.ui.main_window import MainWindow
 
 
 @pytest.fixture
-def main_window_with_image(qtbot):
-    """Fixture for MainWindow with a dummy image loaded."""
-    window = MainWindow()
-    qtbot.addWidget(window)
-    # Load a dummy pixmap to enable mouse events
-    dummy_pixmap = QPixmap(100, 100)
-    dummy_pixmap.fill(Qt.GlobalColor.white)
-    window.viewer.set_photo(dummy_pixmap)
-    window.segment_manager = SegmentManager()  # Ensure segment manager is clean
-    window.action_history = []
-    window.redo_history = []
+def mock_sam_model():
+    """Create a mock SAM model."""
+    mock_model = MagicMock()
+    mock_model.is_loaded = True
+    mock_model.device = "CPU"
+    return mock_model
 
-    # Mock the original mouse press to prevent issues
-    window._original_mouse_press = MagicMock()
-    window._original_mouse_move = MagicMock()
-    window._original_mouse_release = MagicMock()
 
-    return window
+@pytest.fixture
+def main_window_with_image(qtbot, mock_sam_model):
+    """Fixture for MainWindow with a dummy image loaded and mocked model loading."""
+    with (
+        patch(
+            "lazylabel.core.model_manager.ModelManager.initialize_default_model"
+        ) as mock_init,
+        patch(
+            "lazylabel.core.model_manager.ModelManager.get_available_models"
+        ) as mock_get_models,
+        patch(
+            "lazylabel.core.model_manager.ModelManager.is_model_available"
+        ) as mock_is_available,
+    ):
+        # Setup mocks to avoid expensive model loading
+        mock_init.return_value = mock_sam_model
+        mock_get_models.return_value = [
+            ("Mock Model 1", "/path/to/model1"),
+            ("Mock Model 2", "/path/to/model2"),
+        ]
+        mock_is_available.return_value = True
+
+        # Create MainWindow with mocked model loading
+        window = MainWindow()
+        qtbot.addWidget(window)
+
+        # Load a dummy pixmap to enable mouse events
+        dummy_pixmap = QPixmap(100, 100)
+        dummy_pixmap.fill(Qt.GlobalColor.white)
+        window.viewer.set_photo(dummy_pixmap)
+        window.segment_manager = SegmentManager()  # Ensure segment manager is clean
+        window.action_history = []
+        window.redo_history = []
+
+        # Mock the original mouse press to prevent issues
+        window._original_mouse_press = MagicMock()
+        window._original_mouse_move = MagicMock()
+        window._original_mouse_release = MagicMock()
+
+        return window
 
 
 def simulate_bbox_drag(main_window, start_pos, end_pos):

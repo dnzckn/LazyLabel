@@ -6,11 +6,40 @@ from lazylabel.ui.main_window import MainWindow
 
 
 @pytest.fixture
-def main_window(qtbot):
-    """Fixture for MainWindow."""
-    window = MainWindow()
-    qtbot.addWidget(window)
-    return window
+def mock_sam_model():
+    """Create a mock SAM model."""
+    mock_model = MagicMock()
+    mock_model.is_loaded = True
+    mock_model.device = "CPU"
+    return mock_model
+
+
+@pytest.fixture
+def main_window(qtbot, mock_sam_model):
+    """Fixture for MainWindow with mocked model loading."""
+    with (
+        patch(
+            "lazylabel.core.model_manager.ModelManager.initialize_default_model"
+        ) as mock_init,
+        patch(
+            "lazylabel.core.model_manager.ModelManager.get_available_models"
+        ) as mock_get_models,
+        patch(
+            "lazylabel.core.model_manager.ModelManager.is_model_available"
+        ) as mock_is_available,
+    ):
+        # Setup mocks to avoid expensive model loading
+        mock_init.return_value = mock_sam_model
+        mock_get_models.return_value = [
+            ("Mock Model 1", "/path/to/model1"),
+            ("Mock Model 2", "/path/to/model2"),
+        ]
+        mock_is_available.return_value = True
+
+        # Create MainWindow with mocked model loading
+        window = MainWindow()
+        qtbot.addWidget(window)
+        return window
 
 
 def test_open_folder_button_exists(main_window):
@@ -44,7 +73,7 @@ def test_open_folder_signal_emission(main_window, qtbot):
     try:
         # Use qtbot to capture signal emission
         with qtbot.waitSignal(
-            main_window.right_panel.open_folder_requested, timeout=1000
+            main_window.right_panel.open_folder_requested, timeout=100
         ):
             main_window.right_panel.btn_open_folder.click()
     finally:
@@ -158,7 +187,7 @@ def test_open_folder_end_to_end(main_window, qtbot):
 
         # Use qtbot to wait for the signal and trigger the workflow
         with qtbot.waitSignal(
-            main_window.right_panel.open_folder_requested, timeout=1000
+            main_window.right_panel.open_folder_requested, timeout=100
         ):
             main_window.right_panel.btn_open_folder.click()
 
@@ -168,7 +197,7 @@ def test_open_folder_end_to_end(main_window, qtbot):
         QApplication.processEvents()
 
         # Give the system a moment to process the signal-slot connection
-        qtbot.wait(100)
+        qtbot.wait(10)
 
         # Verify the dialog was called
         mock_dialog.assert_called_once_with(main_window, "Select Image Folder")

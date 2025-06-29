@@ -1,4 +1,4 @@
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 from PyQt6.QtCore import QPointF, Qt
@@ -8,11 +8,40 @@ from lazylabel.ui.main_window import MainWindow
 
 
 @pytest.fixture
-def main_window(qtbot):
-    """Fixture for MainWindow."""
-    window = MainWindow()
-    qtbot.addWidget(window)
-    return window
+def mock_sam_model():
+    """Create a mock SAM model."""
+    mock_model = MagicMock()
+    mock_model.is_loaded = True
+    mock_model.device = "CPU"
+    return mock_model
+
+
+@pytest.fixture
+def main_window(qtbot, mock_sam_model):
+    """Fixture for MainWindow with mocked model loading."""
+    with (
+        patch(
+            "lazylabel.core.model_manager.ModelManager.initialize_default_model"
+        ) as mock_init,
+        patch(
+            "lazylabel.core.model_manager.ModelManager.get_available_models"
+        ) as mock_get_models,
+        patch(
+            "lazylabel.core.model_manager.ModelManager.is_model_available"
+        ) as mock_is_available,
+    ):
+        # Setup mocks to avoid expensive model loading
+        mock_init.return_value = mock_sam_model
+        mock_get_models.return_value = [
+            ("Mock Model 1", "/path/to/model1"),
+            ("Mock Model 2", "/path/to/model2"),
+        ]
+        mock_is_available.return_value = True
+
+        # Create MainWindow with mocked model loading
+        window = MainWindow()
+        qtbot.addWidget(window)
+        return window
 
 
 def test_main_window_creation(main_window):
