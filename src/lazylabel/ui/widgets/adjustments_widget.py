@@ -19,7 +19,6 @@ class AdjustmentsWidget(QWidget):
     annotation_size_changed = pyqtSignal(int)
     pan_speed_changed = pyqtSignal(int)
     join_threshold_changed = pyqtSignal(int)
-    fragment_threshold_changed = pyqtSignal(int)
     brightness_changed = pyqtSignal(int)
     contrast_changed = pyqtSignal(int)
     gamma_changed = pyqtSignal(int)
@@ -101,17 +100,6 @@ class AdjustmentsWidget(QWidget):
         )
         layout.addLayout(join_row)
 
-        # Fragment threshold
-        fragment_row, self.fragment_label, self.fragment_edit, self.fragment_slider = (
-            create_slider_row(
-                "Fragment:",
-                "0",
-                (0, 100),
-                "Filter out small AI segments. 0=no filtering, 50=drop <50% of largest, 100=only keep largest",
-            )
-        )
-        layout.addLayout(fragment_row)
-
         # Add separator for image adjustments
         layout.addSpacing(8)
 
@@ -147,6 +135,8 @@ class AdjustmentsWidget(QWidget):
         self.btn_reset.setToolTip(
             "Reset all image adjustment and annotation size settings to their default values."
         )
+        self.btn_reset.setMinimumHeight(28)
+        self.btn_reset.setStyleSheet(self._get_button_style())
         main_layout.addWidget(self.btn_reset)
 
     def _connect_signals(self):
@@ -157,8 +147,6 @@ class AdjustmentsWidget(QWidget):
         self.pan_edit.editingFinished.connect(self._on_pan_edit_finished)
         self.join_slider.valueChanged.connect(self._on_join_slider_changed)
         self.join_edit.editingFinished.connect(self._on_join_edit_finished)
-        self.fragment_slider.valueChanged.connect(self._on_fragment_slider_changed)
-        self.fragment_edit.editingFinished.connect(self._on_fragment_edit_finished)
         self.brightness_slider.valueChanged.connect(self._on_brightness_slider_changed)
         self.brightness_slider.sliderReleased.connect(
             self._on_image_adjustment_slider_released
@@ -221,20 +209,6 @@ class AdjustmentsWidget(QWidget):
             self.join_threshold_changed.emit(slider_value)
         except ValueError:
             self.join_edit.setText(f"{self.join_slider.value()}")
-
-    def _on_fragment_slider_changed(self, value):
-        """Handle fragment threshold slider change."""
-        self.fragment_edit.setText(f"{value}")
-        self.fragment_threshold_changed.emit(value)
-
-    def _on_fragment_edit_finished(self):
-        try:
-            value = int(self.fragment_edit.text())
-            slider_value = max(0, min(100, value))
-            self.fragment_slider.setValue(slider_value)
-            self.fragment_threshold_changed.emit(slider_value)
-        except ValueError:
-            self.fragment_edit.setText(f"{self.fragment_slider.value()}")
 
     def _on_brightness_slider_changed(self, value):
         """Handle brightness slider change."""
@@ -316,17 +290,6 @@ class AdjustmentsWidget(QWidget):
         self.join_slider.setValue(value)
         self.join_edit.setText(f"{value}")
 
-    def get_fragment_threshold(self):
-        """Get current fragment threshold value."""
-
-        return self.fragment_slider.value()
-
-    def set_fragment_threshold(self, value):
-        """Set fragment threshold value."""
-
-        self.fragment_slider.setValue(value)
-        self.fragment_edit.setText(f"{value}")
-
     def get_brightness(self):
         """Get current brightness value."""
 
@@ -366,7 +329,27 @@ class AdjustmentsWidget(QWidget):
         self.set_annotation_size(10)  # Default value
         self.set_pan_speed(10)  # Default value
         self.set_join_threshold(2)  # Default value
-        self.set_fragment_threshold(0)  # Default value
         self.set_brightness(0)  # Default value
         self.set_contrast(0)  # Default value
         self.set_gamma(100)  # Default value (1.0)
+
+    def _get_button_style(self):
+        """Get consistent button styling."""
+        return """
+            QPushButton {
+                background-color: rgba(70, 100, 130, 0.8);
+                border: 1px solid rgba(90, 120, 150, 0.8);
+                border-radius: 6px;
+                color: #E0E0E0;
+                font-weight: bold;
+                font-size: 10px;
+                padding: 4px 8px;
+            }
+            QPushButton:hover {
+                background-color: rgba(90, 120, 150, 0.9);
+                border-color: rgba(110, 140, 170, 0.9);
+            }
+            QPushButton:pressed {
+                background-color: rgba(50, 80, 110, 0.9);
+            }
+        """

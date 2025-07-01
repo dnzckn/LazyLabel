@@ -17,12 +17,21 @@ class FileManager:
         self.segment_manager = segment_manager
 
     def save_npz(
-        self, image_path: str, image_size: tuple[int, int], class_order: list[int]
+        self,
+        image_path: str,
+        image_size: tuple[int, int],
+        class_order: list[int],
+        crop_coords: tuple[int, int, int, int] | None = None,
     ) -> str:
         """Save segments as NPZ file."""
         final_mask_tensor = self.segment_manager.create_final_mask_tensor(
             image_size, class_order
         )
+
+        # Apply crop if coordinates are provided
+        if crop_coords:
+            final_mask_tensor = self._apply_crop_to_mask(final_mask_tensor, crop_coords)
+
         npz_path = os.path.splitext(image_path)[0] + ".npz"
         np.savez_compressed(npz_path, mask=final_mask_tensor.astype(np.uint8))
         return npz_path
@@ -33,11 +42,16 @@ class FileManager:
         image_size: tuple[int, int],
         class_order: list[int],
         class_labels: list[str],
+        crop_coords: tuple[int, int, int, int] | None = None,
     ) -> str | None:
         """Save segments as YOLO format TXT file."""
         final_mask_tensor = self.segment_manager.create_final_mask_tensor(
             image_size, class_order
         )
+
+        # Apply crop if coordinates are provided
+        if crop_coords:
+            final_mask_tensor = self._apply_crop_to_mask(final_mask_tensor, crop_coords)
         output_path = os.path.splitext(image_path)[0] + ".txt"
         h, w = image_size
 
@@ -117,6 +131,35 @@ class FileManager:
                                     "class_id": i,
                                 }
                             )
+
+    def _apply_crop_to_mask(
+        self, mask_tensor: np.ndarray, crop_coords: tuple[int, int, int, int]
+    ) -> np.ndarray:
+        """Apply crop to mask tensor by setting areas outside crop to 0."""
+        x1, y1, x2, y2 = crop_coords
+        h, w = mask_tensor.shape[:2]
+
+        # Create a copy of the mask tensor
+        cropped_mask = mask_tensor.copy()
+
+        # Set areas outside crop to 0
+        # Top area (0, 0, w, y1)
+        if y1 > 0:
+            cropped_mask[:y1, :, :] = 0
+
+        # Bottom area (0, y2, w, h)
+        if y2 < h:
+            cropped_mask[y2:, :, :] = 0
+
+        # Left area (0, y1, x1, y2)
+        if x1 > 0:
+            cropped_mask[y1:y2, :x1, :] = 0
+
+        # Right area (x2, y1, w, y2)
+        if x2 < w:
+            cropped_mask[y1:y2, x2:, :] = 0
+
+        return cropped_mask
 
     def is_image_file(self, filepath: str) -> bool:
         """Check if file is a supported image format."""

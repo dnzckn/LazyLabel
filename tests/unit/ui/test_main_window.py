@@ -1,5 +1,6 @@
 from unittest.mock import MagicMock, patch
 
+import numpy as np
 import pytest
 from PyQt6.QtCore import QModelIndex, QPointF, Qt
 from PyQt6.QtGui import QPixmap
@@ -103,9 +104,32 @@ def test_auto_save_on_image_navigation_when_enabled(main_window, qtbot):
     with patch("lazylabel.ui.main_window.QPixmap") as mock_pixmap_class:
         mock_pixmap = MagicMock()
         mock_pixmap.isNull.return_value = False
+        mock_pixmap.width.return_value = 100
+        mock_pixmap.height.return_value = 100
+
+        # Mock QImage for the pixmap conversion
+        mock_qimage = MagicMock()
+        mock_qimage.height.return_value = 100
+        mock_qimage.width.return_value = 100
+        mock_qimage.bytesPerLine.return_value = 400  # 100 * 4 bytes per pixel (RGBA)
+
+        # Create mock pointer data (400 bytes for 100x100 RGBA image)
+        mock_ptr = MagicMock()
+        mock_ptr.__len__ = lambda: 40000  # 100 * 100 * 4
+        mock_qimage.constBits.return_value = mock_ptr
+        mock_pixmap.toImage.return_value = mock_qimage
+
         mock_pixmap_class.return_value = mock_pixmap
 
-        with patch("lazylabel.ui.main_window.os.path.isfile", return_value=True):
+        with (
+            patch("lazylabel.ui.main_window.os.path.isfile", return_value=True),
+            patch("numpy.array") as mock_np_array,
+        ):
+            # Mock numpy array creation to return proper shaped data
+            mock_np_array.return_value = np.random.randint(
+                0, 256, (100, 100, 4), dtype=np.uint8
+            )
+
             # Create a valid QModelIndex with proper parent
             test_index = MagicMock()
             test_index.isValid.return_value = True
@@ -145,6 +169,21 @@ def test_auto_save_disabled_when_setting_is_false(main_window, qtbot):
     with patch("lazylabel.ui.main_window.QPixmap") as mock_pixmap_class:
         mock_pixmap = MagicMock()
         mock_pixmap.isNull.return_value = False
+        mock_pixmap.width.return_value = 100
+        mock_pixmap.height.return_value = 100
+
+        # Mock QImage for the pixmap conversion
+        mock_qimage = MagicMock()
+        mock_qimage.height.return_value = 100
+        mock_qimage.width.return_value = 100
+        mock_qimage.bytesPerLine.return_value = 400  # 100 * 4 bytes per pixel (RGBA)
+
+        # Create mock pointer data (400 bytes for 100x100 RGBA image)
+        mock_ptr = MagicMock()
+        mock_ptr.__len__ = lambda: 40000  # 100 * 100 * 4
+        mock_qimage.constBits.return_value = mock_ptr
+        mock_pixmap.toImage.return_value = mock_qimage
+
         mock_pixmap_class.return_value = mock_pixmap
 
         # Create a valid QModelIndex
@@ -183,6 +222,21 @@ def test_auto_save_skipped_on_first_image_load(main_window, qtbot):
     with patch("lazylabel.ui.main_window.QPixmap") as mock_pixmap_class:
         mock_pixmap = MagicMock()
         mock_pixmap.isNull.return_value = False
+        mock_pixmap.width.return_value = 100
+        mock_pixmap.height.return_value = 100
+
+        # Mock QImage for the pixmap conversion
+        mock_qimage = MagicMock()
+        mock_qimage.height.return_value = 100
+        mock_qimage.width.return_value = 100
+        mock_qimage.bytesPerLine.return_value = 400  # 100 * 4 bytes per pixel (RGBA)
+
+        # Create mock pointer data (400 bytes for 100x100 RGBA image)
+        mock_ptr = MagicMock()
+        mock_ptr.__len__ = lambda: 40000  # 100 * 100 * 4
+        mock_qimage.constBits.return_value = mock_ptr
+        mock_pixmap.toImage.return_value = mock_qimage
+
         mock_pixmap_class.return_value = mock_pixmap
 
         # Create a valid QModelIndex
@@ -231,3 +285,204 @@ def test_auto_save_skipped_when_loading_same_image(main_window, qtbot):
 
     # Verify auto-save was NOT called (same image, early return)
     main_window._save_output_to_npz.assert_not_called()
+
+
+# Border crop functionality tests
+def test_crop_state_initialization(main_window):
+    """Test that crop state is properly initialized."""
+    assert hasattr(main_window, "crop_mode")
+    assert hasattr(main_window, "crop_rect_item")
+    assert hasattr(main_window, "crop_start_pos")
+    assert hasattr(main_window, "crop_coords_by_size")
+    assert hasattr(main_window, "current_crop_coords")
+    assert hasattr(main_window, "crop_hover_overlays")
+    assert main_window.crop_mode is False
+    assert main_window.crop_rect_item is None
+    assert main_window.crop_start_pos is None
+    assert main_window.crop_coords_by_size == {}
+    assert main_window.current_crop_coords is None
+    assert main_window.crop_hover_overlays == []
+
+
+def test_crop_drawing_mode_activation(main_window):
+    """Test activating crop drawing mode."""
+    main_window._start_crop_drawing()
+
+    assert main_window.crop_mode is True
+    assert main_window.mode == "crop"
+
+
+def test_crop_coordinate_application(main_window):
+    """Test applying crop coordinates."""
+    # Mock current image path
+    main_window.current_image_path = "/test/image.jpg"
+
+    # Mock QPixmap to avoid file I/O
+    with patch("lazylabel.ui.main_window.QPixmap") as mock_pixmap_class:
+        mock_pixmap = MagicMock()
+        mock_pixmap.isNull.return_value = False
+        mock_pixmap.width.return_value = 500
+        mock_pixmap.height.return_value = 400
+        mock_pixmap_class.return_value = mock_pixmap
+
+        # Mock the apply crop to image method to avoid complex image processing
+        main_window._apply_crop_to_image = MagicMock()
+
+        # Apply coordinates
+        main_window._apply_crop_coordinates(10, 20, 100, 200)
+
+        # Check that coordinates are stored
+        assert main_window.current_crop_coords == (10, 20, 100, 200)
+        assert (500, 400) in main_window.crop_coords_by_size
+        assert main_window.crop_coords_by_size[(500, 400)] == (10, 20, 100, 200)
+
+
+def test_crop_coordinate_validation(main_window):
+    """Test crop coordinate validation and bounds checking."""
+    main_window.current_image_path = "/test/image.jpg"
+
+    with patch("lazylabel.ui.main_window.QPixmap") as mock_pixmap_class:
+        mock_pixmap = MagicMock()
+        mock_pixmap.isNull.return_value = False
+        mock_pixmap.width.return_value = 100  # Small image
+        mock_pixmap.height.return_value = 100
+        mock_pixmap_class.return_value = mock_pixmap
+
+        main_window._apply_crop_to_image = MagicMock()
+
+        # Try to apply coordinates outside image bounds
+        main_window._apply_crop_coordinates(-10, -20, 150, 200)
+
+        # Coordinates should be clamped to image bounds
+        assert main_window.current_crop_coords == (0, 0, 99, 99)
+
+
+def test_crop_coordinate_auto_ordering(main_window):
+    """Test that crop coordinates are automatically ordered correctly."""
+    main_window.current_image_path = "/test/image.jpg"
+
+    with patch("lazylabel.ui.main_window.QPixmap") as mock_pixmap_class:
+        mock_pixmap = MagicMock()
+        mock_pixmap.isNull.return_value = False
+        mock_pixmap.width.return_value = 500
+        mock_pixmap.height.return_value = 400
+        mock_pixmap_class.return_value = mock_pixmap
+
+        main_window._apply_crop_to_image = MagicMock()
+
+        # Apply reversed coordinates
+        main_window._apply_crop_coordinates(100, 200, 10, 20)
+
+        # Should be automatically reordered
+        assert main_window.current_crop_coords == (10, 20, 100, 200)
+
+
+def test_crop_clearing(main_window):
+    """Test clearing crop functionality."""
+    # Set up initial crop state
+    main_window.current_crop_coords = (10, 20, 100, 200)
+    main_window.crop_coords_by_size = {(500, 400): (10, 20, 100, 200)}
+    main_window.current_image_path = "/test/image.jpg"
+
+    # Mock dependencies
+    main_window._remove_crop_visual = MagicMock()
+    main_window._reload_current_image = MagicMock()
+
+    with patch("lazylabel.ui.main_window.QPixmap") as mock_pixmap_class:
+        mock_pixmap = MagicMock()
+        mock_pixmap.isNull.return_value = False
+        mock_pixmap.width.return_value = 500
+        mock_pixmap.height.return_value = 400
+        mock_pixmap_class.return_value = mock_pixmap
+
+        main_window._clear_crop()
+
+        # Check that crop state is cleared
+        assert main_window.current_crop_coords is None
+        assert (500, 400) not in main_window.crop_coords_by_size
+
+
+def test_crop_hover_state_management(main_window):
+    """Test crop hover state management."""
+    # Set up crop coordinates
+    main_window.current_crop_coords = (10, 20, 100, 200)
+
+    # Test hover enter
+    main_window._on_crop_hover_enter()
+    assert main_window.is_hovering_crop is True
+
+    # Test hover leave
+    main_window._on_crop_hover_leave()
+    assert main_window.is_hovering_crop is False
+
+
+def test_crop_visual_cleanup_on_reset(main_window):
+    """Test that crop visuals are cleaned up during state reset."""
+    # Mock cleanup methods
+    main_window._remove_crop_visual = MagicMock()
+    main_window._remove_crop_hover_overlay = MagicMock()
+    main_window._remove_crop_hover_effect = MagicMock()
+
+    # Set up crop state before reset
+    main_window.crop_mode = True
+    main_window.crop_start_pos = QPointF(10, 20)
+
+    # Mock other reset operations to avoid side effects
+    main_window.clear_all_points = MagicMock()
+    main_window.segment_manager.clear = MagicMock()
+    main_window._update_all_lists = MagicMock()
+    main_window.viewer.scene().items = MagicMock(return_value=[])
+
+    # Call reset state
+    main_window._reset_state()
+
+    # Verify cleanup methods were called
+    main_window._remove_crop_visual.assert_called_once()
+    main_window._remove_crop_hover_overlay.assert_called_once()
+    main_window._remove_crop_hover_effect.assert_called_once()
+    # Verify crop state was reset
+    assert main_window.crop_mode is False
+    assert main_window.crop_start_pos is None
+
+
+def test_control_panel_crop_integration(main_window):
+    """Test that control panel crop widget is properly integrated."""
+    # Check that control panel has crop widget
+    assert hasattr(main_window.control_panel, "crop_widget")
+
+    # Check that delegate methods exist
+    assert hasattr(main_window.control_panel, "set_crop_coordinates")
+    assert hasattr(main_window.control_panel, "clear_crop_coordinates")
+    assert hasattr(main_window.control_panel, "get_crop_coordinates")
+    assert hasattr(main_window.control_panel, "has_crop")
+    assert hasattr(main_window.control_panel, "set_crop_status")
+
+
+def test_crop_drawing_mouse_events(main_window):
+    """Test crop drawing with mouse events."""
+    # Set up for crop mode - need to set crop_mode flag as well
+    main_window.mode = "crop"
+    main_window.crop_mode = True
+    main_window.crop_rect_item = None
+    main_window.crop_start_pos = None
+
+    # Load a dummy pixmap so viewer has a valid image
+    dummy_pixmap = QPixmap(100, 100)
+    dummy_pixmap.fill(Qt.GlobalColor.white)
+    main_window.viewer.set_photo(dummy_pixmap)
+
+    # Mock the original mouse press to prevent side effects
+    main_window._original_mouse_press = MagicMock()
+
+    # Mock mouse event
+    mock_event = MagicMock()
+    mock_event.button.return_value = Qt.MouseButton.LeftButton
+    pos = QPointF(50, 60)
+    mock_event.scenePos.return_value = pos
+
+    # Test mouse press in crop mode
+    main_window._scene_mouse_press(mock_event)
+
+    # Check that crop drawing was initiated
+    assert main_window.crop_start_pos == pos
+    assert main_window.crop_rect_item is not None

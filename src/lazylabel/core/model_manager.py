@@ -94,3 +94,15 @@ class ModelManager:
         return self.sam_model is not None and getattr(
             self.sam_model, "is_loaded", False
         )
+
+    def set_image_from_path(self, image_path: str) -> bool:
+        """Set image for SAM model from file path."""
+        if not self.is_model_available():
+            return False
+        return self.sam_model.set_image_from_path(image_path)
+
+    def set_image_from_array(self, image_array) -> bool:
+        """Set image for SAM model from numpy array."""
+        if not self.is_model_available():
+            return False
+        return self.sam_model.set_image_from_array(image_array)

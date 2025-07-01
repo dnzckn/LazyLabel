@@ -1,14 +1,17 @@
 """Main application window."""
 
+import hashlib
 import os
+from pathlib import Path
 
 import cv2
 import numpy as np
-from PyQt6.QtCore import QModelIndex, QPointF, QRectF, Qt, QTimer, pyqtSignal
+from PyQt6.QtCore import QModelIndex, QPointF, QRectF, Qt, QThread, QTimer, pyqtSignal
 from PyQt6.QtGui import (
     QBrush,
     QColor,
     QIcon,
+    QImage,
     QKeySequence,
     QPen,
     QPixmap,
@@ -44,6 +47,129 @@ from .numeric_table_widget_item import NumericTableWidgetItem
 from .photo_viewer import PhotoViewer
 from .right_panel import RightPanel
 from .widgets import StatusBar
+
+
+class SAMUpdateWorker(QThread):
+    """Worker thread for updating SAM model in background."""
+
+    finished = pyqtSignal()
+    error = pyqtSignal(str)
+
+    def __init__(
+        self,
+        model_manager,
+        image_path,
+        operate_on_view,
+        current_image=None,
+        parent=None,
+    ):
+        super().__init__(parent)
+        self.model_manager = model_manager
+        self.image_path = image_path
+        self.operate_on_view = operate_on_view
+        self.current_image = current_image  # Numpy array of current modified image
+        self._should_stop = False
+        self.scale_factor = 1.0  # Track scaling factor for coordinate transformation
+
+    def stop(self):
+        """Request the worker to stop."""
+        self._should_stop = True
+
+    def get_scale_factor(self):
+        """Get the scale factor used for image resizing."""
+        return self.scale_factor
+
+    def run(self):
+        """Run SAM update in background thread."""
+        try:
+            if self._should_stop:
+                return
+
+            if self.operate_on_view and self.current_image is not None:
+                # Use the provided modified image
+                if self._should_stop:
+                    return
+
+                # Optimize image size for faster SAM processing
+                image = self.current_image
+                original_height, original_width = image.shape[:2]
+                max_size = 1024
+
+                if original_height > max_size or original_width > max_size:
+                    # Calculate scaling factor
+                    self.scale_factor = min(
+                        max_size / original_width, max_size / original_height
+                    )
+                    new_width = int(original_width * self.scale_factor)
+                    new_height = int(original_height * self.scale_factor)
+
+                    # Resize using OpenCV for speed
+                    image = cv2.resize(
+                        image, (new_width, new_height), interpolation=cv2.INTER_AREA
+                    )
+                else:
+                    self.scale_factor = 1.0
+
+                if self._should_stop:
+                    return
+
+                # Set image from numpy array (FIXED: use resized image, not original)
+                self.model_manager.set_image_from_array(image)
+            else:
+                # Load original image
+                pixmap = QPixmap(self.image_path)
+                if pixmap.isNull():
+                    self.error.emit("Failed to load image")
+                    return
+
+                if self._should_stop:
+                    return
+
+                original_width = pixmap.width()
+                original_height = pixmap.height()
+
+                # Optimize image size for faster SAM processing
+                max_size = 1024
+                if original_width > max_size or original_height > max_size:
+                    # Calculate scaling factor
+                    self.scale_factor = min(
+                        max_size / original_width, max_size / original_height
+                    )
+
+                    # Scale down while maintaining aspect ratio
+                    scaled_pixmap = pixmap.scaled(
+                        max_size,
+                        max_size,
+                        Qt.AspectRatioMode.KeepAspectRatio,
+                        Qt.TransformationMode.SmoothTransformation,
+                    )
+
+                    # Convert to numpy array for SAM
+                    qimage = scaled_pixmap.toImage()
+                    width = qimage.width()
+                    height = qimage.height()
+                    ptr = qimage.bits()
+                    ptr.setsize(height * width * 4)
+                    arr = np.array(ptr).reshape(height, width, 4)
+                    # Convert RGBA to RGB
+                    image_array = arr[:, :, :3]
+
+                    if self._should_stop:
+                        return
+
+                    # FIXED: Use the resized image array, not original path
+                    self.model_manager.set_image_from_array(image_array)
+                else:
+                    self.scale_factor = 1.0
+                    # For images that don't need resizing, use original path
+                    self.model_manager.set_image_from_path(self.image_path)
+
+            if not self._should_stop:
+                self.finished.emit()
+
+        except Exception as e:
+            if not self._should_stop:
+                self.error.emit(str(e))
 
 
 class PanelPopoutWindow(QDialog):
@@ -131,6 +257,40 @@ class MainWindow(QMainWindow):
 
         # Update state flags to prevent recursion
         self._updating_lists = False
+
+        # Crop feature state
+        self.crop_mode = False
+        self.crop_rect_item = None
+        self.crop_start_pos = None
+        self.crop_coords_by_size = {}  # Dictionary to store crop coordinates by image size
+        self.current_crop_coords = None  # Current crop coordinates (x1, y1, x2, y2)
+        self.crop_visual_overlays = []  # Visual overlays showing crop areas
+        self.crop_hover_overlays = []  # Hover overlays for cropped areas
+        self.crop_hover_effect_items = []  # Hover effect items
+        self.is_hovering_crop = False  # Track if mouse is hovering over crop area
+
+        # Channel threshold widget cache
+        self._cached_original_image = None  # Cache for performance optimization
+
+        # SAM model update debouncing for "operate on view" mode
+        self.sam_update_timer = QTimer()
+        self.sam_update_timer.setSingleShot(True)  # Only fire once
+        self.sam_update_timer.timeout.connect(self._update_sam_model_image_debounced)
+        self.sam_update_delay = 500  # 500ms delay for regular value changes
+        self.drag_finish_delay = 150  # 150ms delay when drag finishes (more responsive)
+        self.any_slider_dragging = False  # Track if any slider is being dragged
+        self.sam_is_dirty = False  # Track if SAM needs updating
+        self.sam_is_updating = False  # Track if SAM is currently updating
+
+        # SAM update threading for better responsiveness
+        self.sam_worker_thread = None
+        self.sam_scale_factor = (
+            1.0  # Track current SAM scale factor for coordinate transformation
+        )
+
+        # Smart caching for SAM embeddings to avoid redundant processing
+        self.sam_embedding_cache = {}  # Cache SAM embeddings by content hash
+        self.current_sam_hash = None  # Hash of currently loaded SAM image
 
         self._setup_ui()
         self._setup_model()
@@ -242,6 +402,7 @@ class MainWindow(QMainWindow):
         self.control_panel.polygon_mode_requested.connect(self.set_polygon_mode)
         self.control_panel.bbox_mode_requested.connect(self.set_bbox_mode)
         self.control_panel.selection_mode_requested.connect(self.toggle_selection_mode)
+        self.control_panel.edit_mode_requested.connect(self._handle_edit_mode_request)
         self.control_panel.clear_points_requested.connect(self.clear_all_points)
         self.control_panel.fit_view_requested.connect(self.viewer.fitInView)
         self.control_panel.hotkeys_requested.connect(self._show_hotkey_dialog)
@@ -269,6 +430,16 @@ class MainWindow(QMainWindow):
         )
         self.control_panel.image_adjustment_changed.connect(
             self._handle_image_adjustment_changed
+        )
+
+        # Border crop connections
+        self.control_panel.crop_draw_requested.connect(self._start_crop_drawing)
+        self.control_panel.crop_clear_requested.connect(self._clear_crop)
+        self.control_panel.crop_applied.connect(self._apply_crop_coordinates)
+
+        # Channel threshold connections
+        self.control_panel.channel_threshold_changed.connect(
+            self._handle_channel_threshold_changed
         )
 
         # Right panel connections
@@ -316,7 +487,7 @@ class MainWindow(QMainWindow):
             "bbox_mode": self.set_bbox_mode,
             "selection_mode": self.toggle_selection_mode,
             "pan_mode": self.toggle_pan_mode,
-            "edit_mode": self.toggle_edit_mode,
+            "edit_mode": self._handle_edit_mode_request,
             "clear_points": self.clear_all_points,
             "escape": self._handle_escape_press,
             "delete_segments": self._delete_selected_segments,
@@ -383,11 +554,13 @@ class MainWindow(QMainWindow):
 
     # Mode management methods
     def set_sam_mode(self):
-        """Set SAM points mode."""
+        """Set mode to SAM points."""
         if not self.model_manager.is_model_available():
             logger.warning("Cannot enter SAM mode: No model available")
             return
         self._set_mode("sam_points")
+        # Ensure SAM model is updated when entering SAM mode (lazy update)
+        self._ensure_sam_updated()
 
     def set_polygon_mode(self):
         """Set polygon drawing mode."""
@@ -408,6 +581,32 @@ class MainWindow(QMainWindow):
     def toggle_edit_mode(self):
         """Toggle edit mode."""
         self._toggle_mode("edit")
+
+    def _handle_edit_mode_request(self):
+        """Handle edit mode request with validation."""
+        # Check if there are any polygon segments to edit
+        polygon_segments = [
+            seg for seg in self.segment_manager.segments if seg.get("type") == "Polygon"
+        ]
+
+        if not polygon_segments:
+            self._show_error_notification("No polygons selected!")
+            return
+
+        # Check if any polygons are actually selected
+        selected_indices = self.right_panel.get_selected_segment_indices()
+        selected_polygons = [
+            i
+            for i in selected_indices
+            if self.segment_manager.segments[i].get("type") == "Polygon"
+        ]
+
+        if not selected_polygons:
+            self._show_error_notification("No polygons selected!")
+            return
+
+        # Enter edit mode if validation passes
+        self.toggle_edit_mode()
 
     def _set_mode(self, mode_name, is_toggle=False):
         """Set the current mode."""
@@ -619,6 +818,28 @@ class MainWindow(QMainWindow):
                 self.right_panel.file_tree.setCurrentIndex(index)
                 self._update_all_lists()
                 self.viewer.setFocus()
+
+        if self.model_manager.is_model_available():
+            self._update_sam_model_image()
+
+        # Update channel threshold widget for new image
+        self._update_channel_threshold_for_image(pixmap)
+
+        # Restore crop coordinates for this image size if they exist
+        image_size = (pixmap.width(), pixmap.height())
+        if image_size in self.crop_coords_by_size:
+            self.current_crop_coords = self.crop_coords_by_size[image_size]
+            x1, y1, x2, y2 = self.current_crop_coords
+            self.control_panel.set_crop_coordinates(x1, y1, x2, y2)
+            self._apply_crop_to_image()
+        else:
+            self.current_crop_coords = None
+            self.control_panel.clear_crop_coordinates()
+
+        # Cache original image for channel threshold processing
+        self._cache_original_image()
+
+        self._show_success_notification(f"Loaded: {Path(self.current_image_path).name}")
 
     def _update_sam_model_image(self):
         """Updates the SAM model's image based on the 'Operate On View' setting."""
@@ -975,6 +1196,24 @@ class MainWindow(QMainWindow):
             self.positive_points, self.negative_points
         )
         if mask is not None:
+            # COORDINATE TRANSFORMATION FIX: Scale mask back up to display size if needed
+            if (
+                self.sam_scale_factor != 1.0
+                and self.viewer._pixmap_item
+                and not self.viewer._pixmap_item.pixmap().isNull()
+            ):
+                # Get original image dimensions
+                original_height = self.viewer._pixmap_item.pixmap().height()
+                original_width = self.viewer._pixmap_item.pixmap().width()
+
+                # Resize mask back to original dimensions for saving
+                mask_resized = cv2.resize(
+                    mask.astype(np.uint8),
+                    (original_width, original_height),
+                    interpolation=cv2.INTER_NEAREST,
+                ).astype(bool)
+                mask = mask_resized
+
             # Apply fragment threshold filtering if enabled
             filtered_mask = self._apply_fragment_threshold(mask)
             if filtered_mask is not None:
@@ -1110,7 +1349,10 @@ class MainWindow(QMainWindow):
                 class_order = self.segment_manager.get_unique_class_ids()
                 if class_order:
                     npz_path = self.file_manager.save_npz(
-                        self.current_image_path, (h, w), class_order
+                        self.current_image_path,
+                        (h, w),
+                        class_order,
+                        self.current_crop_coords,
                     )
                     self._show_success_notification(
                         f"Saved: {os.path.basename(npz_path)}"
@@ -1131,7 +1373,11 @@ class MainWindow(QMainWindow):
                     class_labels = [str(cid) for cid in class_order]
                 if class_order:
                     txt_path = self.file_manager.save_yolo_txt(
-                        self.current_image_path, (h, w), class_order, class_labels
+                        self.current_image_path,
+                        (h, w),
+                        class_order,
+                        class_labels,
+                        self.current_crop_coords,
                     )
             # Efficiently update file list tickboxes and highlight
             for path in [npz_path, txt_path]:
@@ -1440,6 +1686,17 @@ class MainWindow(QMainWindow):
         self.clear_all_points()
         self.segment_manager.clear()
         self._update_all_lists()
+
+        # Clean up crop visuals
+        self._remove_crop_visual()
+        self._remove_crop_hover_overlay()
+        self._remove_crop_hover_effect()
+
+        # Reset crop state
+        self.crop_mode = False
+        self.crop_start_pos = None
+        self.current_crop_coords = None
+
         items_to_remove = [
             item
             for item in self.viewer.scene().items()
@@ -1518,6 +1775,13 @@ class MainWindow(QMainWindow):
                 self.viewer.scene().addItem(self.rubber_band_rect)
         elif self.mode == "selection" and event.button() == Qt.MouseButton.LeftButton:
             self._handle_segment_selection_click(pos)
+        elif self.mode == "crop" and event.button() == Qt.MouseButton.LeftButton:
+            self.crop_start_pos = pos
+            self.crop_rect_item = QGraphicsRectItem()
+            self.crop_rect_item.setPen(
+                QPen(Qt.GlobalColor.blue, 2, Qt.PenStyle.DashLine)
+            )
+            self.viewer.scene().addItem(self.crop_rect_item)
 
     def _scene_mouse_move(self, event):
         """Handle mouse move events in the scene."""
@@ -1544,6 +1808,13 @@ class MainWindow(QMainWindow):
             current_pos = event.scenePos()
             rect = QRectF(self.drag_start_pos, current_pos).normalized()
             self.rubber_band_rect.setRect(rect)
+            event.accept()
+            return
+
+        if self.mode == "crop" and self.crop_rect_item and self.crop_start_pos:
+            current_pos = event.scenePos()
+            rect = QRectF(self.crop_start_pos, current_pos).normalized()
+            self.crop_rect_item.setRect(rect)
             event.accept()
             return
 
@@ -1611,12 +1882,53 @@ class MainWindow(QMainWindow):
             event.accept()
             return
 
+        if self.mode == "crop" and self.crop_rect_item:
+            rect = self.crop_rect_item.rect()
+            # Clean up the drawing rectangle
+            self.viewer.scene().removeItem(self.crop_rect_item)
+            self.crop_rect_item = None
+            self.crop_start_pos = None
+
+            if rect.width() > 5 and rect.height() > 5:  # Minimum crop size
+                # Get actual crop coordinates
+                x1, y1 = int(rect.left()), int(rect.top())
+                x2, y2 = int(rect.right()), int(rect.bottom())
+
+                # Apply the crop coordinates
+                self._apply_crop_coordinates(x1, y1, x2, y2)
+                self.crop_mode = False
+                self._set_mode("sam_points")  # Return to default mode
+
+            event.accept()
+            return
+
         self._original_mouse_release(event)
 
     def _add_point(self, pos, positive):
         """Add a point for SAM segmentation."""
+        # RACE CONDITION FIX: Block clicks during SAM updates
+        if self.sam_is_updating:
+            self._show_warning_notification(
+                "AI model is updating, please wait...", 2000
+            )
+            return
+
+        # Ensure SAM is updated before using it
+        self._ensure_sam_updated()
+
+        # Wait for SAM to finish updating if it started
+        if self.sam_is_updating:
+            self._show_warning_notification(
+                "AI model is updating, please wait...", 2000
+            )
+            return
+
+        # COORDINATE TRANSFORMATION FIX: Scale coordinates for SAM model
+        sam_x = int(pos.x() * self.sam_scale_factor)
+        sam_y = int(pos.y() * self.sam_scale_factor)
+
         point_list = self.positive_points if positive else self.negative_points
-        point_list.append([int(pos.x()), int(pos.y())])
+        point_list.append([sam_x, sam_y])
 
         point_color = (
             QColor(Qt.GlobalColor.green) if positive else QColor(Qt.GlobalColor.red)
@@ -1635,12 +1947,13 @@ class MainWindow(QMainWindow):
         self.viewer.scene().addItem(point_item)
         self.point_items.append(point_item)
 
-        # Record the action for undo
+        # Record the action for undo (store display coordinates)
         self.action_history.append(
             {
                 "type": "add_point",
                 "point_type": "positive" if positive else "negative",
-                "point_coords": [int(pos.x()), int(pos.y())],
+                "point_coords": [int(pos.x()), int(pos.y())],  # Display coordinates
+                "sam_coords": [sam_x, sam_y],  # SAM coordinates
                 "point_item": point_item,
             }
         )
@@ -1658,6 +1971,24 @@ class MainWindow(QMainWindow):
             self.positive_points, self.negative_points
         )
         if mask is not None:
+            # COORDINATE TRANSFORMATION FIX: Scale mask back up to display size if needed
+            if (
+                self.sam_scale_factor != 1.0
+                and self.viewer._pixmap_item
+                and not self.viewer._pixmap_item.pixmap().isNull()
+            ):
+                # Get original image dimensions
+                original_height = self.viewer._pixmap_item.pixmap().height()
+                original_width = self.viewer._pixmap_item.pixmap().width()
+
+                # Resize mask back to original dimensions for saving
+                mask_resized = cv2.resize(
+                    mask.astype(np.uint8),
+                    (original_width, original_height),
+                    interpolation=cv2.INTER_NEAREST,
+                ).astype(bool)
+                mask = mask_resized
+
             pixmap = mask_to_pixmap(mask, (255, 255, 0))
             self.preview_mask_item = self.viewer.scene().addPixmap(pixmap)
             self.preview_mask_item.setZValue(50)
@@ -2018,3 +2349,659 @@ class MainWindow(QMainWindow):
 
             # Restore splitter sizes
             self.main_splitter.setSizes([250, 800, 350])
+
+    # Additional methods for new features
+    def _handle_settings_changed(self):
+        """Handle changes in settings, e.g., 'Operate On View'."""
+        # Update the main window's settings object with the latest from the widget
+        self.settings.update(**self.control_panel.settings_widget.get_settings())
+
+        # Re-load the current image to apply the new 'Operate On View' setting
+        if self.current_image_path:
+            self._update_sam_model_image()
+
+    def _handle_channel_threshold_changed(self):
+        """Handle changes in channel thresholding - optimized to avoid unnecessary work."""
+        if not self.current_image_path:
+            return
+
+        # Get channel threshold widget
+        threshold_widget = self.control_panel.get_channel_threshold_widget()
+
+        # Check if there's actually any active thresholding
+        if not threshold_widget.has_active_thresholding():
+            # No active thresholding - just reload original image without SAM update
+            self._reload_original_image_without_sam()
+            return
+
+        # Always update visuals immediately for responsive UI
+        self._apply_channel_thresholding_fast()
+
+        # Mark SAM as dirty instead of updating immediately
+        # Only update SAM when user actually needs it (enters SAM mode)
+        if self.settings.operate_on_view:
+            self._mark_sam_dirty()
+
+    def _mark_sam_dirty(self):
+        """Mark SAM model as needing update, but don't update immediately."""
+        self.sam_is_dirty = True
+        # Cancel any pending SAM updates since we're going lazy
+        self.sam_update_timer.stop()
+
+    def _ensure_sam_updated(self):
+        """Ensure SAM model is up-to-date when user needs it (lazy update with threading)."""
+        if not self.sam_is_dirty or self.sam_is_updating:
+            return
+
+        if not self.current_image_path or not self.model_manager.is_model_available():
+            return
+
+        # Get current image (with modifications if operate_on_view is enabled)
+        current_image = None
+        image_hash = None
+
+        if (
+            self.settings.operate_on_view
+            and hasattr(self, "_cached_original_image")
+            and self._cached_original_image is not None
+        ):
+            # Apply current modifications to get the view image
+            current_image = self._get_current_modified_image()
+            image_hash = self._get_image_hash(current_image)
+        else:
+            # Use original image path as hash for non-modified images
+            image_hash = hashlib.md5(self.current_image_path.encode()).hexdigest()
+
+        # Check if this exact image state is already loaded in SAM
+        if image_hash and image_hash == self.current_sam_hash:
+            # SAM already has this exact image state - no update needed
+            self.sam_is_dirty = False
+            return
+
+        # Stop any existing worker
+        if self.sam_worker_thread and self.sam_worker_thread.isRunning():
+            self.sam_worker_thread.stop()
+            self.sam_worker_thread.wait(1000)  # Wait up to 1 second
+
+        # Show status message
+        if hasattr(self, "status_bar"):
+            self.status_bar.show_message("Loading image view into AI model...", 0)
+
+        # Mark as updating
+        self.sam_is_updating = True
+        self.sam_is_dirty = False
+
+        # Create and start worker thread
+        self.sam_worker_thread = SAMUpdateWorker(
+            self.model_manager,
+            self.current_image_path,
+            self.settings.operate_on_view,
+            current_image,  # Pass current image directly
+            self,
+        )
+        self.sam_worker_thread.finished.connect(
+            lambda: self._on_sam_update_finished(image_hash)
+        )
+        self.sam_worker_thread.error.connect(self._on_sam_update_error)
+
+        self.sam_worker_thread.start()
+
+    def _on_sam_update_finished(self, image_hash):
+        """Handle completion of SAM update in background thread."""
+        self.sam_is_updating = False
+
+        # Clear status message
+        if hasattr(self, "status_bar"):
+            self.status_bar.clear_message()
+
+        # Update scale factor from worker thread
+        if self.sam_worker_thread:
+            self.sam_scale_factor = self.sam_worker_thread.get_scale_factor()
+
+        # Clean up worker thread
+        if self.sam_worker_thread:
+            self.sam_worker_thread.deleteLater()
+            self.sam_worker_thread = None
+
+        # Update current_sam_hash after successful update
+        self.current_sam_hash = image_hash
+
+    def _on_sam_update_error(self, error_message):
+        """Handle error during SAM update."""
+        self.sam_is_updating = False
+
+        # Show error in status bar
+        if hasattr(self, "status_bar"):
+            self.status_bar.show_message(
+                f"Error loading AI model: {error_message}", 5000
+            )
+
+        # Clean up worker thread
+        if self.sam_worker_thread:
+            self.sam_worker_thread.deleteLater()
+            self.sam_worker_thread = None
+
+    def _get_current_modified_image(self):
+        """Get the current image with all modifications applied (excluding crop for SAM)."""
+        if self._cached_original_image is None:
+            return None
+
+        # Start with cached original
+        result_image = self._cached_original_image.copy()
+
+        # Apply channel thresholding if active
+        threshold_widget = self.control_panel.get_channel_threshold_widget()
+        if threshold_widget and threshold_widget.has_active_thresholding():
+            result_image = threshold_widget.apply_thresholding(result_image)
+
+        # NOTE: Crop is NOT applied here - it's only a visual overlay and should only affect saved masks
+        # The crop visual overlay is handled by _apply_crop_to_image() which adds QGraphicsRectItem overlays
+
+        return result_image
+
+    def _get_image_hash(self, image_array=None):
+        """Compute hash of current image state for caching (excluding crop)."""
+        if image_array is None:
+            image_array = self._get_current_modified_image()
+
+        if image_array is None:
+            return None
+
+        # Create hash based on image content and modifications
+        hasher = hashlib.md5()
+        hasher.update(image_array.tobytes())
+
+        # Include modification parameters in hash
+        threshold_widget = self.control_panel.get_channel_threshold_widget()
+        if threshold_widget and threshold_widget.has_active_thresholding():
+            # Add threshold parameters to hash
+            params = str(threshold_widget.get_threshold_params()).encode()
+            hasher.update(params)
+
+        # NOTE: Crop coordinates are NOT included in hash since crop doesn't affect SAM processing
+        # Crop is only a visual overlay and affects final saved masks, not the AI model input
+
+        return hasher.hexdigest()
+
+    def _reload_original_image_without_sam(self):
+        """Reload original image without triggering expensive SAM update."""
+        if not self.current_image_path:
+            return
+
+        pixmap = QPixmap(self.current_image_path)
+        if not pixmap.isNull():
+            self.viewer.set_photo(pixmap)
+            self.viewer.set_image_adjustments(
+                self.brightness, self.contrast, self.gamma
+            )
+            # Reapply crop overlays if they exist
+            if self.current_crop_coords:
+                self._apply_crop_to_image()
+            # Clear cached image
+            self._cached_original_image = None
+            # Don't call _update_sam_model_image() - that's the expensive part!
+
+    def _apply_channel_thresholding_fast(self):
+        """Apply channel thresholding using cached image data for better performance."""
+        if not self.current_image_path:
+            return
+
+        # Get channel threshold widget
+        threshold_widget = self.control_panel.get_channel_threshold_widget()
+
+        # If no active thresholding, reload original image
+        if not threshold_widget.has_active_thresholding():
+            self._reload_original_image_without_sam()
+            return
+
+        # Use cached image array if available, otherwise load and cache
+        if (
+            not hasattr(self, "_cached_original_image")
+            or self._cached_original_image is None
+        ):
+            self._cache_original_image()
+
+        if self._cached_original_image is None:
+            return
+
+        # Apply thresholding to cached image
+        thresholded_image = threshold_widget.apply_thresholding(
+            self._cached_original_image
+        )
+
+        # Convert back to QPixmap efficiently
+        qimage = self._numpy_to_qimage(thresholded_image)
+        thresholded_pixmap = QPixmap.fromImage(qimage)
+
+        # Apply to viewer
+        self.viewer.set_photo(thresholded_pixmap)
+        self.viewer.set_image_adjustments(self.brightness, self.contrast, self.gamma)
+
+        # Reapply crop overlays if they exist
+        if self.current_crop_coords:
+            self._apply_crop_to_image()
+
+    def _cache_original_image(self):
+        """Cache the original image as numpy array for fast processing."""
+        if not self.current_image_path:
+            self._cached_original_image = None
+            return
+
+        # Load original image
+        pixmap = QPixmap(self.current_image_path)
+        if pixmap.isNull():
+            self._cached_original_image = None
+            return
+
+        # Convert pixmap to numpy array
+        qimage = pixmap.toImage()
+        ptr = qimage.constBits()
+        ptr.setsize(qimage.bytesPerLine() * qimage.height())
+        image_np = np.array(ptr).reshape(qimage.height(), qimage.width(), 4)
+        # Convert from BGRA to RGB
+        self._cached_original_image = image_np[
+            :, :, [2, 1, 0]
+        ]  # BGR to RGB, ignore alpha
+
+    def _numpy_to_qimage(self, image_array):
+        """Convert numpy array to QImage efficiently."""
+        # Ensure array is contiguous
+        image_array = np.ascontiguousarray(image_array)
+
+        if len(image_array.shape) == 2:
+            # Grayscale
+            height, width = image_array.shape
+            bytes_per_line = width
+            return QImage(
+                bytes(image_array.data),  # Convert memoryview to bytes
+                width,
+                height,
+                bytes_per_line,
+                QImage.Format.Format_Grayscale8,
+            )
+        else:
+            # RGB
+            height, width, channels = image_array.shape
+            bytes_per_line = width * channels
+            return QImage(
+                bytes(image_array.data),  # Convert memoryview to bytes
+                width,
+                height,
+                bytes_per_line,
+                QImage.Format.Format_RGB888,
+            )
+
+    def _apply_channel_thresholding(self):
+        """Apply channel thresholding to the current image - legacy method."""
+        # Use the optimized version
+        self._apply_channel_thresholding_fast()
+
+    def _update_channel_threshold_for_image(self, pixmap):
+        """Update channel threshold widget for the given image pixmap."""
+        if pixmap.isNull():
+            self.control_panel.update_channel_threshold_for_image(None)
+            return
+
+        # Convert pixmap to numpy array
+        qimage = pixmap.toImage()
+        ptr = qimage.constBits()
+        ptr.setsize(qimage.bytesPerLine() * qimage.height())
+        image_np = np.array(ptr).reshape(qimage.height(), qimage.width(), 4)
+        # Convert from BGRA to RGB, ignore alpha
+        image_rgb = image_np[:, :, [2, 1, 0]]
+
+        # Check if image is grayscale (all channels are the same)
+        if np.array_equal(image_rgb[:, :, 0], image_rgb[:, :, 1]) and np.array_equal(
+            image_rgb[:, :, 1], image_rgb[:, :, 2]
+        ):
+            # Convert to single channel grayscale
+            image_array = image_rgb[:, :, 0]
+        else:
+            # Keep as RGB
+            image_array = image_rgb
+
+        # Update the channel threshold widget
+        self.control_panel.update_channel_threshold_for_image(image_array)
+
+    # Border crop methods
+    def _start_crop_drawing(self):
+        """Start crop drawing mode."""
+        self.crop_mode = True
+        self._set_mode("crop")
+        self.control_panel.set_crop_status("Click and drag to draw crop rectangle")
+        self._show_notification("Click and drag to draw crop rectangle")
+
+    def _clear_crop(self):
+        """Clear current crop."""
+        self.current_crop_coords = None
+        self.control_panel.clear_crop_coordinates()
+        self._remove_crop_visual()
+        if self.current_image_path:
+            # Clear crop for current image size
+            pixmap = QPixmap(self.current_image_path)
+            if not pixmap.isNull():
+                image_size = (pixmap.width(), pixmap.height())
+                if image_size in self.crop_coords_by_size:
+                    del self.crop_coords_by_size[image_size]
+        self._show_notification("Crop cleared")
+
+    def _apply_crop_coordinates(self, x1, y1, x2, y2):
+        """Apply crop coordinates from text input."""
+        if not self.current_image_path:
+            self.control_panel.set_crop_status("No image loaded")
+            return
+
+        pixmap = QPixmap(self.current_image_path)
+        if pixmap.isNull():
+            self.control_panel.set_crop_status("Invalid image")
+            return
+
+        # Round to nearest pixel
+        x1, y1, x2, y2 = round(x1), round(y1), round(x2), round(y2)
+
+        # Validate coordinates are within image bounds
+        img_width, img_height = pixmap.width(), pixmap.height()
+        x1 = max(0, min(x1, img_width - 1))
+        x2 = max(0, min(x2, img_width - 1))
+        y1 = max(0, min(y1, img_height - 1))
+        y2 = max(0, min(y2, img_height - 1))
+
+        # Ensure proper ordering
+        if x1 > x2:
+            x1, x2 = x2, x1
+        if y1 > y2:
+            y1, y2 = y2, y1
+
+        # Store crop coordinates
+        self.current_crop_coords = (x1, y1, x2, y2)
+        image_size = (img_width, img_height)
+        self.crop_coords_by_size[image_size] = self.current_crop_coords
+
+        # Update display coordinates in case they were adjusted
+        self.control_panel.set_crop_coordinates(x1, y1, x2, y2)
+
+        # Apply crop to current image
+        self._apply_crop_to_image()
+        self._show_notification(f"Crop applied: {x1}:{x2}, {y1}:{y2}")
+
+    def _apply_crop_to_image(self):
+        """Add visual overlays to show crop areas."""
+        if not self.current_crop_coords or not self.current_image_path:
+            return
+
+        # Add visual crop overlays
+        self._add_crop_visual_overlays()
+
+        # Add crop hover overlay
+        self._add_crop_hover_overlay()
+
+    def _add_crop_visual_overlays(self):
+        """Add simple black overlays to show cropped areas."""
+        if not self.current_crop_coords:
+            return
+
+        # Remove existing visual overlays
+        self._remove_crop_visual_overlays()
+
+        x1, y1, x2, y2 = self.current_crop_coords
+
+        # Get image dimensions
+        pixmap = QPixmap(self.current_image_path)
+        if pixmap.isNull():
+            return
+
+        img_width, img_height = pixmap.width(), pixmap.height()
+
+        # Import needed classes
+        from PyQt6.QtCore import QRectF
+        from PyQt6.QtGui import QBrush, QColor
+        from PyQt6.QtWidgets import QGraphicsRectItem
+
+        # Create black overlays for the 4 cropped regions
+        self.crop_visual_overlays = []
+
+        # Semi-transparent black color
+        overlay_color = QColor(0, 0, 0, 120)  # Black with transparency
+
+        # Top rectangle
+        if y1 > 0:
+            top_overlay = QGraphicsRectItem(QRectF(0, 0, img_width, y1))
+            top_overlay.setBrush(QBrush(overlay_color))
+            top_overlay.setPen(QPen(Qt.GlobalColor.transparent))
+            top_overlay.setZValue(25)  # Above image but below other UI elements
+            self.crop_visual_overlays.append(top_overlay)
+
+        # Bottom rectangle
+        if y2 < img_height:
+            bottom_overlay = QGraphicsRectItem(
+                QRectF(0, y2, img_width, img_height - y2)
+            )
+            bottom_overlay.setBrush(QBrush(overlay_color))
+            bottom_overlay.setPen(QPen(Qt.GlobalColor.transparent))
+            bottom_overlay.setZValue(25)
+            self.crop_visual_overlays.append(bottom_overlay)
+
+        # Left rectangle
+        if x1 > 0:
+            left_overlay = QGraphicsRectItem(QRectF(0, y1, x1, y2 - y1))
+            left_overlay.setBrush(QBrush(overlay_color))
+            left_overlay.setPen(QPen(Qt.GlobalColor.transparent))
+            left_overlay.setZValue(25)
+            self.crop_visual_overlays.append(left_overlay)
+
+        # Right rectangle
+        if x2 < img_width:
+            right_overlay = QGraphicsRectItem(QRectF(x2, y1, img_width - x2, y2 - y1))
+            right_overlay.setBrush(QBrush(overlay_color))
+            right_overlay.setPen(QPen(Qt.GlobalColor.transparent))
+            right_overlay.setZValue(25)
+            self.crop_visual_overlays.append(right_overlay)
+
+        # Add all visual overlays to scene
+        for overlay in self.crop_visual_overlays:
+            self.viewer.scene().addItem(overlay)
+
+    def _remove_crop_visual_overlays(self):
+        """Remove crop visual overlays."""
+        if hasattr(self, "crop_visual_overlays"):
+            for overlay in self.crop_visual_overlays:
+                if overlay and overlay.scene():
+                    self.viewer.scene().removeItem(overlay)
+            self.crop_visual_overlays = []
+
+    def _remove_crop_visual(self):
+        """Remove visual crop rectangle and overlays."""
+        if self.crop_rect_item and self.crop_rect_item.scene():
+            self.viewer.scene().removeItem(self.crop_rect_item)
+        self.crop_rect_item = None
+
+        # Remove all crop-related visuals
+        self._remove_crop_visual_overlays()
+        self._remove_crop_hover_overlay()
+        self._remove_crop_hover_effect()
+
+    def _add_crop_hover_overlay(self):
+        """Add invisible hover overlays for cropped areas (outside the crop rectangle)."""
+        if not self.current_crop_coords:
+            return
+
+        # Remove existing overlays
+        self._remove_crop_hover_overlay()
+
+        x1, y1, x2, y2 = self.current_crop_coords
+
+        # Get image dimensions
+        if not self.current_image_path:
+            return
+        pixmap = QPixmap(self.current_image_path)
+        if pixmap.isNull():
+            return
+
+        img_width, img_height = pixmap.width(), pixmap.height()
+
+        # Import needed classes
+        from PyQt6.QtCore import QRectF
+        from PyQt6.QtGui import QBrush, QPen
+        from PyQt6.QtWidgets import QGraphicsRectItem
+
+        # Create hover overlays for the 4 cropped regions (outside the crop rectangle)
+        self.crop_hover_overlays = []
+
+        # Top rectangle (0, 0, img_width, y1)
+        if y1 > 0:
+            top_overlay = QGraphicsRectItem(QRectF(0, 0, img_width, y1))
+            self.crop_hover_overlays.append(top_overlay)
+
+        # Bottom rectangle (0, y2, img_width, img_height - y2)
+        if y2 < img_height:
+            bottom_overlay = QGraphicsRectItem(
+                QRectF(0, y2, img_width, img_height - y2)
+            )
+            self.crop_hover_overlays.append(bottom_overlay)
+
+        # Left rectangle (0, y1, x1, y2 - y1)
+        if x1 > 0:
+            left_overlay = QGraphicsRectItem(QRectF(0, y1, x1, y2 - y1))
+            self.crop_hover_overlays.append(left_overlay)
+
+        # Right rectangle (x2, y1, img_width - x2, y2 - y1)
+        if x2 < img_width:
+            right_overlay = QGraphicsRectItem(QRectF(x2, y1, img_width - x2, y2 - y1))
+            self.crop_hover_overlays.append(right_overlay)
+
+        # Configure each overlay
+        for overlay in self.crop_hover_overlays:
+            overlay.setBrush(QBrush(QColor(0, 0, 0, 0)))  # Transparent
+            overlay.setPen(QPen(Qt.GlobalColor.transparent))
+            overlay.setAcceptHoverEvents(True)
+            overlay.setZValue(50)  # Above image but below other items
+
+            # Custom hover events
+            original_hover_enter = overlay.hoverEnterEvent
+            original_hover_leave = overlay.hoverLeaveEvent
+
+            def hover_enter_event(event, orig_func=original_hover_enter):
+                self._on_crop_hover_enter()
+                orig_func(event)
+
+            def hover_leave_event(event, orig_func=original_hover_leave):
+                self._on_crop_hover_leave()
+                orig_func(event)
+
+            overlay.hoverEnterEvent = hover_enter_event
+            overlay.hoverLeaveEvent = hover_leave_event
+
+            self.viewer.scene().addItem(overlay)
+
+    def _remove_crop_hover_overlay(self):
+        """Remove crop hover overlays."""
+        if hasattr(self, "crop_hover_overlays"):
+            for overlay in self.crop_hover_overlays:
+                if overlay and overlay.scene():
+                    self.viewer.scene().removeItem(overlay)
+            self.crop_hover_overlays = []
+        self.is_hovering_crop = False
+
+    def _on_crop_hover_enter(self):
+        """Handle mouse entering crop area."""
+        if not self.current_crop_coords:
+            return
+
+        self.is_hovering_crop = True
+        self._apply_crop_hover_effect()
+
+    def _on_crop_hover_leave(self):
+        """Handle mouse leaving crop area."""
+        self.is_hovering_crop = False
+        self._remove_crop_hover_effect()
+
+    def _apply_crop_hover_effect(self):
+        """Apply simple highlight to cropped areas on hover."""
+        if not self.current_crop_coords or not self.current_image_path:
+            return
+
+        # Remove existing hover effect
+        self._remove_crop_hover_effect()
+
+        x1, y1, x2, y2 = self.current_crop_coords
+
+        # Get image dimensions
+        pixmap = QPixmap(self.current_image_path)
+        if pixmap.isNull():
+            return
+
+        img_width, img_height = pixmap.width(), pixmap.height()
+
+        # Import needed classes
+        from PyQt6.QtCore import QRectF
+        from PyQt6.QtGui import QBrush, QColor
+        from PyQt6.QtWidgets import QGraphicsRectItem
+
+        # Create simple colored overlays for the 4 cropped regions
+        self.crop_hover_effect_items = []
+
+        # Use a simple semi-transparent yellow overlay
+        hover_color = QColor(255, 255, 0, 60)  # Light yellow with transparency
+
+        # Top rectangle
+        if y1 > 0:
+            top_effect = QGraphicsRectItem(QRectF(0, 0, img_width, y1))
+            top_effect.setBrush(QBrush(hover_color))
+            top_effect.setPen(QPen(Qt.GlobalColor.transparent))
+            top_effect.setZValue(75)  # Above crop overlay
+            self.crop_hover_effect_items.append(top_effect)
+
+        # Bottom rectangle
+        if y2 < img_height:
+            bottom_effect = QGraphicsRectItem(QRectF(0, y2, img_width, img_height - y2))
+            bottom_effect.setBrush(QBrush(hover_color))
+            bottom_effect.setPen(QPen(Qt.GlobalColor.transparent))
+            bottom_effect.setZValue(75)
+            self.crop_hover_effect_items.append(bottom_effect)
+
+        # Left rectangle
+        if x1 > 0:
+            left_effect = QGraphicsRectItem(QRectF(0, y1, x1, y2 - y1))
+            left_effect.setBrush(QBrush(hover_color))
+            left_effect.setPen(QPen(Qt.GlobalColor.transparent))
+            left_effect.setZValue(75)
+            self.crop_hover_effect_items.append(left_effect)
+
+        # Right rectangle
+        if x2 < img_width:
+            right_effect = QGraphicsRectItem(QRectF(x2, y1, img_width - x2, y2 - y1))
+            right_effect.setBrush(QBrush(hover_color))
+            right_effect.setPen(QPen(Qt.GlobalColor.transparent))
+            right_effect.setZValue(75)
+            self.crop_hover_effect_items.append(right_effect)
+
+        # Add all hover effect items to scene
+        for effect_item in self.crop_hover_effect_items:
+            self.viewer.scene().addItem(effect_item)
+
+    def _remove_crop_hover_effect(self):
+        """Remove crop hover effect."""
+        if hasattr(self, "crop_hover_effect_items"):
+            for effect_item in self.crop_hover_effect_items:
+                if effect_item and effect_item.scene():
+                    self.viewer.scene().removeItem(effect_item)
+            self.crop_hover_effect_items = []
+
+    def _reload_current_image(self):
+        """Reload current image without crop."""
+        if not self.current_image_path:
+            return
+
+        pixmap = QPixmap(self.current_image_path)
+        if not pixmap.isNull():
+            self.viewer.set_photo(pixmap)
+            self.viewer.set_image_adjustments(
+                self.brightness, self.contrast, self.gamma
+            )
+            if self.model_manager.is_model_available():
+                self._update_sam_model_image()
+
+    def _update_sam_model_image_debounced(self):
+        """Update SAM model image after debounce delay."""
+        # This is called after the user stops interacting with sliders
+        self._update_sam_model_image()

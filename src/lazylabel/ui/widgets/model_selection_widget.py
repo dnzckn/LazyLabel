@@ -33,8 +33,13 @@ class ModelSelectionWidget(QWidget):
         button_layout = QHBoxLayout()
         self.btn_browse = QPushButton("Browse Models")
         self.btn_browse.setToolTip("Browse for a folder containing .pth model files")
+        self.btn_browse.setMinimumHeight(28)
+        self.btn_browse.setStyleSheet(self._get_button_style())
+
         self.btn_refresh = QPushButton("Refresh")
         self.btn_refresh.setToolTip("Refresh the list of available models")
+        self.btn_refresh.setMinimumHeight(28)
+        self.btn_refresh.setStyleSheet(self._get_button_style())
 
         button_layout.addWidget(self.btn_browse)
         button_layout.addWidget(self.btn_refresh)
@@ -99,3 +104,24 @@ class ModelSelectionWidget(QWidget):
         self.model_combo.setCurrentIndex(0)
         self.model_combo.blockSignals(False)
         self.set_current_model("Current: Default SAM Model")
+
+    def _get_button_style(self):
+        """Get consistent button styling."""
+        return """
+            QPushButton {
+                background-color: rgba(70, 100, 130, 0.8);
+                border: 1px solid rgba(90, 120, 150, 0.8);
+                border-radius: 6px;
+                color: #E0E0E0;
+                font-weight: bold;
+                font-size: 10px;
+                padding: 4px 8px;
+            }
+            QPushButton:hover {
+                background-color: rgba(90, 120, 150, 0.9);
+                border-color: rgba(110, 140, 170, 0.9);
+            }
+            QPushButton:pressed {
+                background-color: rgba(50, 80, 110, 0.9);
+            }
+        """
