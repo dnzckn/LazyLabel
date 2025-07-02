@@ -16,6 +16,7 @@ from .widgets import (
     AdjustmentsWidget,
     BorderCropWidget,
     ChannelThresholdWidget,
+    FFTThresholdWidget,
     FragmentThresholdWidget,
     ModelSelectionWidget,
     SettingsWidget,
@@ -189,6 +190,8 @@ class ControlPanel(QWidget):
     crop_applied = pyqtSignal(int, int, int, int)  # x1, y1, x2, y2
     # Channel threshold signals
     channel_threshold_changed = pyqtSignal()
+    # FFT threshold signals
+    fft_threshold_changed = pyqtSignal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -207,6 +210,7 @@ class ControlPanel(QWidget):
         self.model_widget = ModelSelectionWidget()
         self.crop_widget = BorderCropWidget()
         self.channel_threshold_widget = ChannelThresholdWidget()
+        self.fft_threshold_widget = FFTThresholdWidget()
         self.settings_widget = SettingsWidget()
         self.adjustments_widget = AdjustmentsWidget()
         self.fragment_widget = FragmentThresholdWidget()
@@ -606,6 +610,12 @@ class ControlPanel(QWidget):
         )
         layout.addWidget(threshold_collapsible)
 
+        # FFT Threshold - collapsible
+        fft_threshold_collapsible = SimpleCollapsible(
+            "FFT Threshold", self.fft_threshold_widget
+        )
+        layout.addWidget(fft_threshold_collapsible)
+
         # Image Adjustments - collapsible
         adjustments_collapsible = SimpleCollapsible(
             "Image Adjustments", self.adjustments_widget
@@ -671,6 +681,11 @@ class ControlPanel(QWidget):
         # Channel threshold signals
         self.channel_threshold_widget.thresholdChanged.connect(
             self.channel_threshold_changed
+        )
+
+        # FFT threshold signals
+        self.fft_threshold_widget.fft_threshold_changed.connect(
+            self.fft_threshold_changed
         )
 
     def _on_sam_mode_clicked(self):
@@ -859,3 +874,12 @@ class ControlPanel(QWidget):
     def get_channel_threshold_widget(self):
         """Get the channel threshold widget."""
         return self.channel_threshold_widget
+
+    # FFT threshold delegate methods
+    def update_fft_threshold_for_image(self, image_array):
+        """Update FFT threshold widget for new image."""
+        self.fft_threshold_widget.update_fft_threshold_for_image(image_array)
+
+    def get_fft_threshold_widget(self):
+        """Get the FFT threshold widget."""
+        return self.fft_threshold_widget

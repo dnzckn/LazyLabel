@@ -442,6 +442,11 @@ class MainWindow(QMainWindow):
             self._handle_channel_threshold_changed
         )
 
+        # FFT threshold connections
+        self.control_panel.fft_threshold_changed.connect(
+            self._handle_fft_threshold_changed
+        )
+
         # Right panel connections
         self.right_panel.open_folder_requested.connect(self._open_folder_dialog)
         self.right_panel.image_selected.connect(self._load_selected_image)
@@ -2365,17 +2370,22 @@ class MainWindow(QMainWindow):
         if not self.current_image_path:
             return
 
-        # Get channel threshold widget
-        threshold_widget = self.control_panel.get_channel_threshold_widget()
+        # Always update visuals immediately for responsive UI
+        # Use combined method to handle both channel and FFT thresholding
+        self._apply_image_processing_fast()
 
-        # Check if there's actually any active thresholding
-        if not threshold_widget.has_active_thresholding():
-            # No active thresholding - just reload original image without SAM update
-            self._reload_original_image_without_sam()
+        # Mark SAM as dirty instead of updating immediately
+        # Only update SAM when user actually needs it (enters SAM mode)
+        if self.settings.operate_on_view:
+            self._mark_sam_dirty()
+
+    def _handle_fft_threshold_changed(self):
+        """Handle changes in FFT thresholding."""
+        if not self.current_image_path:
             return
 
         # Always update visuals immediately for responsive UI
-        self._apply_channel_thresholding_fast()
+        self._apply_image_processing_fast()
 
         # Mark SAM as dirty instead of updating immediately
         # Only update SAM when user actually needs it (enters SAM mode)
@@ -2494,6 +2504,11 @@ class MainWindow(QMainWindow):
         if threshold_widget and threshold_widget.has_active_thresholding():
             result_image = threshold_widget.apply_thresholding(result_image)
 
+        # Apply FFT thresholding if active (after channel thresholding)
+        fft_widget = self.control_panel.get_fft_threshold_widget()
+        if fft_widget and fft_widget.is_active():
+            result_image = fft_widget.apply_fft_thresholding(result_image)
+
         # NOTE: Crop is NOT applied here - it's only a visual overlay and should only affect saved masks
         # The crop visual overlay is handled by _apply_crop_to_image() which adds QGraphicsRectItem overlays
 
@@ -2516,6 +2531,13 @@ class MainWindow(QMainWindow):
         if threshold_widget and threshold_widget.has_active_thresholding():
             # Add threshold parameters to hash
             params = str(threshold_widget.get_threshold_params()).encode()
+            hasher.update(params)
+
+        # Include FFT threshold parameters in hash
+        fft_widget = self.control_panel.get_fft_threshold_widget()
+        if fft_widget and fft_widget.is_active():
+            # Add FFT threshold parameters to hash
+            params = str(fft_widget.get_settings()).encode()
             hasher.update(params)
 
         # NOTE: Crop coordinates are NOT included in hash since crop doesn't affect SAM processing
@@ -2575,6 +2597,59 @@ class MainWindow(QMainWindow):
 
         # Apply to viewer
         self.viewer.set_photo(thresholded_pixmap)
+        self.viewer.set_image_adjustments(self.brightness, self.contrast, self.gamma)
+
+        # Reapply crop overlays if they exist
+        if self.current_crop_coords:
+            self._apply_crop_to_image()
+
+    def _apply_image_processing_fast(self):
+        """Apply all image processing (channel thresholding + FFT) using cached image data."""
+        if not self.current_image_path:
+            return
+
+        # Get both widgets
+        threshold_widget = self.control_panel.get_channel_threshold_widget()
+        fft_widget = self.control_panel.get_fft_threshold_widget()
+
+        # Check if any processing is active
+        has_channel_threshold = (
+            threshold_widget and threshold_widget.has_active_thresholding()
+        )
+        has_fft_threshold = fft_widget and fft_widget.is_active()
+
+        # If no active processing, reload original image
+        if not has_channel_threshold and not has_fft_threshold:
+            self._reload_original_image_without_sam()
+            return
+
+        # Use cached image array if available, otherwise load and cache
+        if (
+            not hasattr(self, "_cached_original_image")
+            or self._cached_original_image is None
+        ):
+            self._cache_original_image()
+
+        if self._cached_original_image is None:
+            return
+
+        # Start with cached original image
+        processed_image = self._cached_original_image.copy()
+
+        # Apply channel thresholding first if active
+        if has_channel_threshold:
+            processed_image = threshold_widget.apply_thresholding(processed_image)
+
+        # Apply FFT thresholding second if active
+        if has_fft_threshold:
+            processed_image = fft_widget.apply_fft_thresholding(processed_image)
+
+        # Convert back to QPixmap efficiently
+        qimage = self._numpy_to_qimage(processed_image)
+        processed_pixmap = QPixmap.fromImage(qimage)
+
+        # Apply to viewer
+        self.viewer.set_photo(processed_pixmap)
         self.viewer.set_image_adjustments(self.brightness, self.contrast, self.gamma)
 
         # Reapply crop overlays if they exist
@@ -2662,6 +2737,9 @@ class MainWindow(QMainWindow):
 
         # Update the channel threshold widget
         self.control_panel.update_channel_threshold_for_image(image_array)
+
+        # Update the FFT threshold widget
+        self.control_panel.update_fft_threshold_for_image(image_array)
 
     # Border crop methods
     def _start_crop_drawing(self):
