@@ -245,6 +245,11 @@ class MainWindow(QMainWindow):
         self.rubber_band_line = None
         self.rubber_band_rect = None  # New attribute for bounding box
         self.preview_mask_item = None
+
+        # AI mode state
+        self.ai_click_start_pos = None
+        self.ai_click_time = 0
+        self.ai_rubber_band_rect = None
         self.segments, self.segment_items, self.highlight_items = [], {}, []
         self.edit_handles = []
         self.is_dragging_polygon, self.drag_start_pos, self.drag_initial_vertices = (
@@ -291,6 +296,10 @@ class MainWindow(QMainWindow):
         # Smart caching for SAM embeddings to avoid redundant processing
         self.sam_embedding_cache = {}  # Cache SAM embeddings by content hash
         self.current_sam_hash = None  # Hash of currently loaded SAM image
+
+        # Add bounding box preview state
+        self.ai_bbox_preview_mask = None
+        self.ai_bbox_preview_rect = None
 
         self._setup_ui()
         self._setup_model()
@@ -391,8 +400,8 @@ class MainWindow(QMainWindow):
     def _enable_sam_functionality(self, enabled: bool):
         """Enable or disable SAM point functionality."""
         self.control_panel.set_sam_mode_enabled(enabled)
-        if not enabled and self.mode == "sam_points":
-            # Switch to polygon mode if SAM is disabled and we're in SAM mode
+        if not enabled and self.mode in ["sam_points", "ai"]:
+            # Switch to polygon mode if SAM is disabled and we're in SAM/AI mode
             self.set_polygon_mode()
 
     def _setup_connections(self):
@@ -559,12 +568,12 @@ class MainWindow(QMainWindow):
 
     # Mode management methods
     def set_sam_mode(self):
-        """Set mode to SAM points."""
+        """Set mode to AI (combines SAM points and bounding box)."""
         if not self.model_manager.is_model_available():
-            logger.warning("Cannot enter SAM mode: No model available")
+            logger.warning("Cannot enter AI mode: No model available")
             return
-        self._set_mode("sam_points")
-        # Ensure SAM model is updated when entering SAM mode (lazy update)
+        self._set_mode("ai")
+        # Ensure SAM model is updated when entering AI mode (lazy update)
         self._ensure_sam_updated()
 
     def set_polygon_mode(self):
@@ -625,6 +634,7 @@ class MainWindow(QMainWindow):
         # Set cursor and drag mode based on mode
         cursor_map = {
             "sam_points": Qt.CursorShape.CrossCursor,
+            "ai": Qt.CursorShape.CrossCursor,
             "polygon": Qt.CursorShape.CrossCursor,
             "bbox": Qt.CursorShape.CrossCursor,
             "selection": Qt.CursorShape.ArrowCursor,
@@ -690,6 +700,9 @@ class MainWindow(QMainWindow):
         self.control_panel.set_current_model("Loading model...")
         QApplication.processEvents()
 
+        # CRITICAL FIX: Reset SAM state before switching models
+        self._reset_sam_state_for_model_switch()
+
         try:
             success = self.model_manager.load_custom_model(model_path)
             if success:
@@ -698,6 +711,9 @@ class MainWindow(QMainWindow):
                 if self.model_manager.sam_model:
                     device_text = str(self.model_manager.sam_model.device).upper()
                     self.status_bar.set_permanent_message(f"Device: {device_text}")
+
+                # Mark SAM as dirty to force update with new model
+                self._mark_sam_dirty()
             else:
                 self.control_panel.set_current_model("Current: Default SAM Model")
                 self._show_error_notification(
@@ -1171,6 +1187,20 @@ class MainWindow(QMainWindow):
         """Handle escape key press."""
         self.right_panel.clear_selections()
         self.clear_all_points()
+
+        # Clear bounding box preview state if active
+        if (
+            hasattr(self, "ai_bbox_preview_mask")
+            and self.ai_bbox_preview_mask is not None
+        ):
+            self.ai_bbox_preview_mask = None
+            self.ai_bbox_preview_rect = None
+
+            # Clear preview
+            if hasattr(self, "preview_mask_item") and self.preview_mask_item:
+                self.viewer.scene().removeItem(self.preview_mask_item)
+                self.preview_mask_item = None
+
         self.viewer.setFocus()
 
     def _handle_space_press(self):
@@ -1190,17 +1220,68 @@ class MainWindow(QMainWindow):
     def _save_current_segment(self):
         """Save current SAM segment with fragment threshold filtering."""
         if (
-            self.mode != "sam_points"
-            or not hasattr(self, "preview_mask_item")
-            or not self.preview_mask_item
+            self.mode not in ["sam_points", "ai"]
             or not self.model_manager.is_model_available()
         ):
             return
 
-        mask = self.model_manager.sam_model.predict(
+        # Check if we have a bounding box preview to save
+        if (
+            hasattr(self, "ai_bbox_preview_mask")
+            and self.ai_bbox_preview_mask is not None
+        ):
+            # Save bounding box preview
+            mask = self.ai_bbox_preview_mask
+
+            # Apply fragment threshold filtering if enabled
+            filtered_mask = self._apply_fragment_threshold(mask)
+            if filtered_mask is not None:
+                new_segment = {
+                    "mask": filtered_mask,
+                    "type": "SAM",
+                    "vertices": None,
+                }
+                self.segment_manager.add_segment(new_segment)
+                # Record the action for undo
+                self.action_history.append(
+                    {
+                        "type": "add_segment",
+                        "segment_index": len(self.segment_manager.segments) - 1,
+                    }
+                )
+                # Clear redo history when a new action is performed
+                self.redo_history.clear()
+                self._update_all_lists()
+                self._show_success_notification("AI bounding box segmentation saved!")
+            else:
+                self._show_warning_notification(
+                    "All segments filtered out by fragment threshold"
+                )
+
+            # Clear bounding box preview state
+            self.ai_bbox_preview_mask = None
+            self.ai_bbox_preview_rect = None
+
+            # Clear preview
+            if hasattr(self, "preview_mask_item") and self.preview_mask_item:
+                self.viewer.scene().removeItem(self.preview_mask_item)
+                self.preview_mask_item = None
+            return
+
+        # Handle point-based predictions (existing behavior)
+        if not hasattr(self, "preview_mask_item") or not self.preview_mask_item:
+            return
+
+        result = self.model_manager.sam_model.predict(
             self.positive_points, self.negative_points
         )
-        if mask is not None:
+        if result is not None:
+            mask, scores, logits = result
+
+            # Ensure mask is boolean (SAM models can return float masks)
+            if mask.dtype != bool:
+                mask = mask > 0.5  # Convert float mask to boolean
+
             # COORDINATE TRANSFORMATION FIX: Scale mask back up to display size if needed
             if (
                 self.sam_scale_factor != 1.0
@@ -1702,6 +1783,14 @@ class MainWindow(QMainWindow):
         self.crop_start_pos = None
         self.current_crop_coords = None
 
+        # Reset AI mode state
+        self.ai_click_start_pos = None
+        self.ai_click_time = 0
+        if hasattr(self, "ai_rubber_band_rect") and self.ai_rubber_band_rect:
+            if self.ai_rubber_band_rect.scene():
+                self.viewer.scene().removeItem(self.ai_rubber_band_rect)
+            self.ai_rubber_band_rect = None
+
         items_to_remove = [
             item
             for item in self.viewer.scene().items()
@@ -1713,6 +1802,10 @@ class MainWindow(QMainWindow):
         self.highlight_items.clear()
         self.action_history.clear()
         self.redo_history.clear()
+
+        # Add bounding box preview state
+        self.ai_bbox_preview_mask = None
+        self.ai_bbox_preview_rect = None
 
     def _scene_mouse_press(self, event):
         """Handle mouse press events in the scene."""
@@ -1763,10 +1856,19 @@ class MainWindow(QMainWindow):
         elif self.mode == "sam_points":
             if event.button() == Qt.MouseButton.LeftButton:
                 self._add_point(pos, positive=True)
-                self._update_segmentation()
             elif event.button() == Qt.MouseButton.RightButton:
                 self._add_point(pos, positive=False)
-                self._update_segmentation()
+        elif self.mode == "ai":
+            if event.button() == Qt.MouseButton.LeftButton:
+                # AI mode: single click adds point, drag creates bounding box
+                self.ai_click_start_pos = pos
+                self.ai_click_time = (
+                    event.timestamp() if hasattr(event, "timestamp") else 0
+                )
+                # We'll determine if it's a click or drag in mouse_release
+            elif event.button() == Qt.MouseButton.RightButton:
+                # Right-click adds negative point in AI mode
+                self._add_point(pos, positive=False, update_segmentation=True)
         elif self.mode == "polygon":
             if event.button() == Qt.MouseButton.LeftButton:
                 self._handle_polygon_click(pos)
@@ -1816,6 +1918,40 @@ class MainWindow(QMainWindow):
             event.accept()
             return
 
+        if (
+            self.mode == "ai"
+            and hasattr(self, "ai_click_start_pos")
+            and self.ai_click_start_pos
+        ):
+            current_pos = event.scenePos()
+            # Check if we've moved enough to consider this a drag
+            drag_distance = (
+                (current_pos.x() - self.ai_click_start_pos.x()) ** 2
+                + (current_pos.y() - self.ai_click_start_pos.y()) ** 2
+            ) ** 0.5
+
+            if drag_distance > 5:  # Minimum drag distance
+                # Create rubber band if not exists
+                if (
+                    not hasattr(self, "ai_rubber_band_rect")
+                    or not self.ai_rubber_band_rect
+                ):
+                    self.ai_rubber_band_rect = QGraphicsRectItem()
+                    self.ai_rubber_band_rect.setPen(
+                        QPen(
+                            Qt.GlobalColor.cyan,
+                            self.line_thickness,
+                            Qt.PenStyle.DashLine,
+                        )
+                    )
+                    self.viewer.scene().addItem(self.ai_rubber_band_rect)
+
+                # Update rubber band
+                rect = QRectF(self.ai_click_start_pos, current_pos).normalized()
+                self.ai_rubber_band_rect.setRect(rect)
+                event.accept()
+                return
+
         if self.mode == "crop" and self.crop_rect_item and self.crop_start_pos:
             current_pos = event.scenePos()
             rect = QRectF(self.crop_start_pos, current_pos).normalized()
@@ -1852,6 +1988,42 @@ class MainWindow(QMainWindow):
 
         if self.mode == "pan":
             self.viewer.set_cursor(Qt.CursorShape.OpenHandCursor)
+        elif (
+            self.mode == "ai"
+            and hasattr(self, "ai_click_start_pos")
+            and self.ai_click_start_pos
+        ):
+            current_pos = event.scenePos()
+            # Calculate drag distance
+            drag_distance = (
+                (current_pos.x() - self.ai_click_start_pos.x()) ** 2
+                + (current_pos.y() - self.ai_click_start_pos.y()) ** 2
+            ) ** 0.5
+
+            if (
+                hasattr(self, "ai_rubber_band_rect")
+                and self.ai_rubber_band_rect
+                and drag_distance > 5
+            ):
+                # This was a drag - use SAM bounding box prediction
+                rect = self.ai_rubber_band_rect.rect()
+                self.viewer.scene().removeItem(self.ai_rubber_band_rect)
+                self.ai_rubber_band_rect = None
+                self.ai_click_start_pos = None
+
+                if rect.width() > 10 and rect.height() > 10:  # Minimum box size
+                    self._handle_ai_bounding_box(rect)
+            else:
+                # This was a click - add positive point
+                self.ai_click_start_pos = None
+                if hasattr(self, "ai_rubber_band_rect") and self.ai_rubber_band_rect:
+                    self.viewer.scene().removeItem(self.ai_rubber_band_rect)
+                    self.ai_rubber_band_rect = None
+
+                self._add_point(current_pos, positive=True, update_segmentation=True)
+
+            event.accept()
+            return
         elif self.mode == "bbox" and self.rubber_band_rect:
             self.viewer.scene().removeItem(self.rubber_band_rect)
             rect = self.rubber_band_rect.rect()
@@ -1909,14 +2081,88 @@ class MainWindow(QMainWindow):
 
         self._original_mouse_release(event)
 
-    def _add_point(self, pos, positive):
+    def _handle_ai_bounding_box(self, rect):
+        """Handle AI mode bounding box by using SAM's predict_from_box to create a preview."""
+        if not self.model_manager.is_model_available():
+            self._show_warning_notification("AI model not available", 2000)
+            return
+
+        # Quick check - if currently updating, skip but don't block future attempts
+        if self.sam_is_updating:
+            self._show_warning_notification(
+                "AI model is updating, please wait...", 2000
+            )
+            return
+
+        # Convert QRectF to SAM box format [x1, y1, x2, y2]
+        # COORDINATE TRANSFORMATION FIX: Use proper coordinate mapping based on operate_on_view setting
+        from PyQt6.QtCore import QPointF
+
+        top_left = QPointF(rect.left(), rect.top())
+        bottom_right = QPointF(rect.right(), rect.bottom())
+
+        sam_x1, sam_y1 = self._transform_display_coords_to_sam_coords(top_left)
+        sam_x2, sam_y2 = self._transform_display_coords_to_sam_coords(bottom_right)
+
+        box = [sam_x1, sam_y1, sam_x2, sam_y2]
+
+        try:
+            result = self.model_manager.sam_model.predict_from_box(box)
+            if result is not None:
+                mask, scores, logits = result
+
+                # Ensure mask is boolean (SAM models can return float masks)
+                if mask.dtype != bool:
+                    mask = mask > 0.5  # Convert float mask to boolean
+
+                # COORDINATE TRANSFORMATION FIX: Scale mask back up to display size if needed
+                if (
+                    self.sam_scale_factor != 1.0
+                    and self.viewer._pixmap_item
+                    and not self.viewer._pixmap_item.pixmap().isNull()
+                ):
+                    # Get original image dimensions
+                    original_height = self.viewer._pixmap_item.pixmap().height()
+                    original_width = self.viewer._pixmap_item.pixmap().width()
+
+                    # Resize mask back to original dimensions for saving
+                    mask_resized = cv2.resize(
+                        mask.astype(np.uint8),
+                        (original_width, original_height),
+                        interpolation=cv2.INTER_NEAREST,
+                    ).astype(bool)
+                    mask = mask_resized
+
+                # Store the preview mask and rect for later confirmation
+                self.ai_bbox_preview_mask = mask
+                self.ai_bbox_preview_rect = rect
+
+                # Clear any existing preview
+                if hasattr(self, "preview_mask_item") and self.preview_mask_item:
+                    self.viewer.scene().removeItem(self.preview_mask_item)
+
+                # Show preview with yellow color
+                pixmap = mask_to_pixmap(mask, (255, 255, 0))
+                self.preview_mask_item = self.viewer.scene().addPixmap(pixmap)
+                self.preview_mask_item.setZValue(50)
+
+                self._show_success_notification(
+                    "AI bounding box preview ready - press Space to confirm!"
+                )
+            else:
+                self._show_warning_notification("No prediction result from AI model")
+        except Exception as e:
+            logger.error(f"Error during AI bounding box prediction: {e}")
+            self._show_error_notification("AI prediction failed")
+
+    def _add_point(self, pos, positive, update_segmentation=True):
         """Add a point for SAM segmentation."""
         # RACE CONDITION FIX: Block clicks during SAM updates
         if self.sam_is_updating:
             self._show_warning_notification(
                 "AI model is updating, please wait...", 2000
             )
-            return
+            return False
 
         # Ensure SAM is updated before using it
         self._ensure_sam_updated()
@@ -1926,11 +2172,10 @@ class MainWindow(QMainWindow):
             self._show_warning_notification(
                 "AI model is updating, please wait...", 2000
             )
-            return
+            return False
 
-        # COORDINATE TRANSFORMATION FIX: Scale coordinates for SAM model
-        sam_x = int(pos.x() * self.sam_scale_factor)
-        sam_y = int(pos.y() * self.sam_scale_factor)
+        # COORDINATE TRANSFORMATION FIX: Use proper coordinate mapping based on operate_on_view setting
+        sam_x, sam_y = self._transform_display_coords_to_sam_coords(pos)
 
         point_list = self.positive_points if positive else self.negative_points
         point_list.append([sam_x, sam_y])
@@ -1965,6 +2210,12 @@ class MainWindow(QMainWindow):
         # Clear redo history when a new action is performed
         self.redo_history.clear()
 
+        # Update segmentation if requested and not currently updating
+        if update_segmentation and not self.sam_is_updating:
+            self._update_segmentation()
+
+        return True
+
     def _update_segmentation(self):
         """Update SAM segmentation preview."""
         if hasattr(self, "preview_mask_item") and self.preview_mask_item:
@@ -1972,10 +2223,16 @@ class MainWindow(QMainWindow):
         if not self.positive_points or not self.model_manager.is_model_available():
             return
 
-        mask = self.model_manager.sam_model.predict(
+        result = self.model_manager.sam_model.predict(
             self.positive_points, self.negative_points
         )
-        if mask is not None:
+        if result is not None:
+            mask, scores, logits = result
+
+            # Ensure mask is boolean (SAM models can return float masks)
+            if mask.dtype != bool:
+                mask = mask > 0.5  # Convert float mask to boolean
+
             # COORDINATE TRANSFORMATION FIX: Scale mask back up to display size if needed
             if (
                 self.sam_scale_factor != 1.0
@@ -2428,10 +2685,21 @@ class MainWindow(QMainWindow):
             self.sam_is_dirty = False
             return
 
-        # Stop any existing worker
+        # IMPROVED: More robust worker thread cleanup
         if self.sam_worker_thread and self.sam_worker_thread.isRunning():
             self.sam_worker_thread.stop()
-            self.sam_worker_thread.wait(1000)  # Wait up to 1 second
+            self.sam_worker_thread.terminate()
+            # Wait longer for proper cleanup
+            self.sam_worker_thread.wait(5000)  # Wait up to 5 seconds
+            if self.sam_worker_thread.isRunning():
+                # Force kill if still running
+                self.sam_worker_thread.quit()
+                self.sam_worker_thread.wait(2000)
+
+        # Clean up old worker thread
+        if self.sam_worker_thread:
+            self.sam_worker_thread.deleteLater()
+            self.sam_worker_thread = None
 
         # Show status message
         if hasattr(self, "status_bar"):
@@ -2740,6 +3008,9 @@ class MainWindow(QMainWindow):
 
         # Update the FFT threshold widget
         self.control_panel.update_fft_threshold_for_image(image_array)
+
+        # Auto-collapse FFT threshold panel if image is not black and white
+        self.control_panel.auto_collapse_fft_threshold_for_image(image_array)
 
     # Border crop methods
     def _start_crop_drawing(self):
@@ -3083,3 +3354,136 @@ class MainWindow(QMainWindow):
         """Update SAM model image after debounce delay."""
         # This is called after the user stops interacting with sliders
         self._update_sam_model_image()
+
+    def _reset_sam_state_for_model_switch(self):
+        """Reset SAM state completely when switching models to prevent worker thread conflicts."""
+
+        # CRITICAL: Force terminate any running SAM worker thread
+        if self.sam_worker_thread and self.sam_worker_thread.isRunning():
+            self.sam_worker_thread.stop()
+            self.sam_worker_thread.terminate()
+            self.sam_worker_thread.wait(3000)  # Wait up to 3 seconds
+            if self.sam_worker_thread.isRunning():
+                # Force kill if still running
+                self.sam_worker_thread.quit()
+                self.sam_worker_thread.wait(1000)
+
+        # Clean up worker thread reference
+        if self.sam_worker_thread:
+            self.sam_worker_thread.deleteLater()
+            self.sam_worker_thread = None
+
+        # Reset SAM update flags
+        self.sam_is_updating = False
+        self.sam_is_dirty = True  # Force update with new model
+        self.current_sam_hash = None  # Invalidate cache
+        self.sam_scale_factor = 1.0
+
+        # Clear all points and segments
+        self.clear_all_points()
+        self.segment_manager.clear()
+        self._update_all_lists()
+
+        # Clear preview items
+        if hasattr(self, "preview_mask_item") and self.preview_mask_item:
+            if self.preview_mask_item.scene():
+                self.viewer.scene().removeItem(self.preview_mask_item)
+            self.preview_mask_item = None
+
+        # Clean up crop visuals
+        self._remove_crop_visual()
+        self._remove_crop_hover_overlay()
+        self._remove_crop_hover_effect()
+
+        # Reset crop state
+        self.crop_mode = False
+        self.crop_start_pos = None
+        self.current_crop_coords = None
+
+        # Reset AI mode state
+        self.ai_click_start_pos = None
+        self.ai_click_time = 0
+        if hasattr(self, "ai_rubber_band_rect") and self.ai_rubber_band_rect:
+            if self.ai_rubber_band_rect.scene():
+                self.viewer.scene().removeItem(self.ai_rubber_band_rect)
+            self.ai_rubber_band_rect = None
+
+        # Clear all graphics items except the main image
+        items_to_remove = [
+            item
+            for item in self.viewer.scene().items()
+            if item is not self.viewer._pixmap_item
+        ]
+        for item in items_to_remove:
+            self.viewer.scene().removeItem(item)
+
+        # Reset all collections
+        self.segment_items.clear()
+        self.highlight_items.clear()
+        self.action_history.clear()
+        self.redo_history.clear()
+
+        # Reset bounding box preview state
+        self.ai_bbox_preview_mask = None
+        self.ai_bbox_preview_rect = None
+
+        # Clear status bar messages
+        if hasattr(self, "status_bar"):
+            self.status_bar.clear_message()
+
+    def _transform_display_coords_to_sam_coords(self, pos):
+        """Transform display coordinates to SAM model coordinates.
+
+        When 'operate on view' is ON: SAM processes the displayed image
+        When 'operate on view' is OFF: SAM processes the original image
+        """
+        if self.settings.operate_on_view:
+            # Simple case: SAM processes the same image the user sees
+            sam_x = int(pos.x() * self.sam_scale_factor)
+            sam_y = int(pos.y() * self.sam_scale_factor)
+        else:
+            # Complex case: Map display coordinates to original image coordinates
+            # then scale for SAM processing
+
+            # Get displayed image dimensions (may include adjustments)
+            if (
+                not self.viewer._pixmap_item
+                or self.viewer._pixmap_item.pixmap().isNull()
+            ):
+                # Fallback: use simple scaling
+                sam_x = int(pos.x() * self.sam_scale_factor)
+                sam_y = int(pos.y() * self.sam_scale_factor)
+            else:
+                display_width = self.viewer._pixmap_item.pixmap().width()
+                display_height = self.viewer._pixmap_item.pixmap().height()
+
+                # Get original image dimensions
+                if not self.current_image_path:
+                    # Fallback: use simple scaling
+                    sam_x = int(pos.x() * self.sam_scale_factor)
+                    sam_y = int(pos.y() * self.sam_scale_factor)
+                else:
+                    # Load original image to get true dimensions
+                    original_pixmap = QPixmap(self.current_image_path)
+                    if original_pixmap.isNull():
+                        # Fallback: use simple scaling
+                        sam_x = int(pos.x() * self.sam_scale_factor)
+                        sam_y = int(pos.y() * self.sam_scale_factor)
+                    else:
+                        original_width = original_pixmap.width()
+                        original_height = original_pixmap.height()
+
+                        # Map display coordinates to original image coordinates
+                        if display_width > 0 and display_height > 0:
+                            original_x = pos.x() * (original_width / display_width)
+                            original_y = pos.y() * (original_height / display_height)
+
+                            # Apply SAM scale factor to original coordinates
+                            sam_x = int(original_x * self.sam_scale_factor)
+                            sam_y = int(original_y * self.sam_scale_factor)
+                        else:
+                            # Fallback: use simple scaling
+                            sam_x = int(pos.x() * self.sam_scale_factor)
+                            sam_y = int(pos.y() * self.sam_scale_factor)
+
+        return sam_x, sam_y

@@ -44,7 +44,7 @@ class HotkeyManager:
             ),
             HotkeyAction("fit_view", "Fit View", ".", category="Navigation"),
             # Modes
-            HotkeyAction("sam_mode", "Point Mode (SAM)", "1", category="Modes"),
+            HotkeyAction("sam_mode", "AI Mode (Points + Box)", "1", category="Modes"),
             HotkeyAction("polygon_mode", "Polygon Mode", "2", category="Modes"),
             HotkeyAction("bbox_mode", "Bounding Box Mode", "3", category="Modes"),
             HotkeyAction("selection_mode", "Selection Mode", "E", category="Modes"),
@@ -95,7 +95,7 @@ class HotkeyManager:
             # Mouse-related (cannot be reassigned)
             HotkeyAction(
                 "left_click",
-                "Add Positive Point / Select",
+                "AI: Point (click) / Box (drag) / Select",
                 "Left Click",
                 category="Mouse",
                 mouse_related=True,

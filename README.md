@@ -2,7 +2,7 @@
 
 **AI-Assisted Image Segmentation Made Simple**
 
-LazyLabel combines Meta's Segment Anything Model (SAM) with intuitive editing tools for fast, precise image labeling. Perfect for machine learning datasets, computer vision research, and annotation workflows.
+LazyLabel combines Meta's Segment Anything Model (SAM) with intuitive editing tools for fast, precise image labeling. Perfect for machine learning datasets and computer vision research.
 
 ![LazyLabel Screenshot](https://raw.githubusercontent.com/dnzckn/LazyLabel/main/src/lazylabel/demo_pictures/gui.PNG)
 
@@ -19,64 +19,47 @@ lazylabel-gui
 ### Usage
 1. **Open Folder** → Select your image directory
 2. **Click on image** → AI generates instant masks  
-3. **Fine-tune** → Edit polygons, merge segments, adjust classes
+3. **Fine-tune** → Edit polygons, merge segments
 4. **Export** → Clean `.npz` files ready for ML training
 
 ---
 
 ## ✨ Key Features
 
-### **🧠 AI-Powered Segmentation**
-- **One-click masking** with Meta's SAM model
-- **Smart prompting** via positive/negative points
-- **Fragment filtering** to remove small artifacts
-- **Multiple model support** (VIT-H, VIT-L, VIT-B)
-
-### **🎨 Advanced Editing**
-- **Polygon drawing** with full vertex control
-- **Bounding box** annotation mode
-- **Shape merging** and class assignment
-- **Edit mode** for precision adjustments
-
-### **⚡ Productivity Tools**
-- **Image adjustments** (brightness, contrast, gamma) 
-- **Customizable hotkeys** for all functions
-- **Undo/redo** with full history
-- **Auto-save** and session persistence
-
-### **📊 ML-Ready Outputs**
-- **One-hot encoded** `.npz` format
-- **Clean class separation** with shape `(H, W, Classes)`
-- **Batch processing** support
-- **Existing mask loading** for iterative work
+- **🧠 One-click AI segmentation** with Meta's SAM and SAM2 models
+- **🎨 Manual polygon drawing** with full vertex control
+- **⚡ Smart editing tools** - merge segments, adjust class names, and class order
+- **📊 ML-ready exports** - One-hot encoded `.npz` format and `.json` for YOLO format
+- **🔧 Image enhancement** - brightness, contrast, gamma adjustment
+- **🔍 Image viewer** - zoom, pan, brightness, contrast, and gamma adjustment
+- **✂️ Edge cropping** - define custom crop areas to focus on specific regions
+- **🔄 Undo/Redo** - full history of all actions
+- **💾 Auto-saving** - Automatic saving of your labels when navigating between images
+- **🎛️ Advanced filtering** - FFT thresholding and color channel thresholding
+- **⌨️ Customizable hotkeys** for all functions
 
 ---
 
-## ⌨️ Essential Controls
+## ⌨️ Essential Hotkeys
 
-| Mode | Key | Action |
-|------|-----|--------|
-| **AI Segmentation** | `1` | Point mode for SAM |
-| | `Left Click` | Add positive point |
-| | `Right Click` | Add negative point |
-| | `Space` | Save segment |
-| **Manual Drawing** | `2` | Polygon mode |
-| | `Left Click` | Add vertex |
-| | `Enter` | Close polygon |
-| **Editing** | `E` | Selection mode |
-| | `R` | Edit selected shapes |
-| | `M` | Merge selected segments |
-| **Navigation** | `Q` | Pan mode |
-| | `W/A/S/D` | Pan image |
-| | `Scroll` | Zoom in/out |
+| Action | Key | Description |
+|--------|-----|-------------|
+| **AI Mode** | `1` | Point-click segmentation |
+| **Draw Mode** | `2` | Manual polygon drawing |
+| **Edit Mode** | `E` | Select and modify shapes |
+| **Save Segment** | `Space` | Confirm current mask |
+| **Merge** | `M` | Combine selected segments |
+| **Pan** | `Q` + drag | Navigate large images |
+| **Positive Point** | `Left Click` | Add to segment |
+| **Negative Point** | `Right Click` | Remove from segment |
 
-**💡 All hotkeys are customizable** - Click "Hotkeys" button to personalize shortcuts
+💡 **All hotkeys customizable** - Click "Hotkeys" button to personalize
 
 ---
 
 ## 📦 Output Format
 
-LazyLabel exports clean, ML-ready data:
+Perfect for ML training - clean, structured data:
 
 ```python
 import numpy as np
@@ -86,41 +69,24 @@ data = np.load('your_image.npz')
 mask = data['mask']  # Shape: (height, width, num_classes)
 
 # Each channel is a binary mask for one class
-class_0_mask = mask[:, :, 0]  # Binary mask for class 0
-class_1_mask = mask[:, :, 1]  # Binary mask for class 1
-# ... and so on
+class_0_mask = mask[:, :, 0]  # Background
+class_1_mask = mask[:, :, 1]  # Object type 1
+class_2_mask = mask[:, :, 2]  # Object type 2
 ```
 
-**Perfect for:**
-- Semantic segmentation training
-- Instance segmentation datasets  
+
+**Ideal for:**
+- Semantic segmentation datasets
+- Instance segmentation training
 - Computer vision research
 - Automated annotation pipelines
 
 ---
 
-## 🛠️ Advanced Features
+## 🛠️ Development
 
-### **Image Enhancement**
-- **Brightness/Contrast** adjustment sliders
-- **Gamma correction** for better visibility
-- **Live preview** of adjustments
-- **SAM integration** with adjusted images
-
-### **Smart Filtering**
-- **Fragment threshold** removes small segments
-- **Size-based filtering** (0-100% of largest segment)
-- **Quality control** for clean annotations
-
-### **Professional Workflow**
-- **Class management** with custom aliases
-- **Segment organization** with sortable tables
-- **Batch export** for large datasets
-- **Model switching** without restart
-
----
-
-## 🏗️ Development
+**Requirements:** Python 3.10+
+**2.5GB** disk space for SAM model (auto-downloaded)
 
 ### Installation from Source
 ```bash
@@ -130,38 +96,26 @@ pip install -e .
 lazylabel-gui
 ```
 
-### Code Quality & Testing
+### Testing & Quality
 ```bash
-# Linting & formatting
-ruff check . && ruff format .
-
-# Run tests with coverage
+# Run full test suite
 python -m pytest --cov=lazylabel --cov-report=html
 
-# All tests pass with 60%+ coverage
+# Code formatting & linting
+ruff check . && ruff format .
 ```
 
 ### Architecture
-- **Modular design** with clean separation of concerns
-- **Signal-based communication** between components  
+- **Modular design** with clean component separation
+- **Signal-based communication** between UI elements
 - **Extensible model system** for new SAM variants
-- **Comprehensive test suite** with 95% speed optimization
-
----
-
-## 📋 Requirements
-
-- **Python 3.10+**
-- **OpenCV** for image processing
-- **PyQt6** for GUI
-- **NumPy** for data handling
-- **2.5GB** disk space for SAM model (auto-downloaded)
+- **Comprehensive test suite** (150+ tests, 60%+ coverage)
 
 ---
 
 ## 🤝 Contributing
 
-LazyLabel welcomes contributions! Check out our:
+LazyLabel welcomes contributions! Check out:
 - [Architecture Guide](src/lazylabel/ARCHITECTURE.md) for technical details
 - [Hotkey System](src/lazylabel/HOTKEY_FEATURE.md) for customization
 - Issues page for feature requests and bug reports
@@ -170,9 +124,8 @@ LazyLabel welcomes contributions! Check out our:
 
 ## 🙏 Acknowledgments
 
-LazyLabel was inspired by and builds upon the excellent work of:
-- [LabelMe](https://github.com/wkentaro/labelme) - The pioneering open-source image annotation tool
-- [Segment-Anything-UI](https://github.com/branislavhesko/segment-anything-ui) - Early SAM integration concepts
+- [LabelMe](https://github.com/wkentaro/labelme)
+- [Segment-Anything-UI](https://github.com/branislavhesko/segment-anything-ui)
 
 ---
 

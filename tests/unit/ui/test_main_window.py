@@ -51,30 +51,43 @@ def test_main_window_creation(main_window):
 
 
 def test_sam_point_creation_on_mouse_press(main_window, qtbot):
-    """Test that _add_point is called when in sam_points mode and mouse is pressed."""
-    # Set the mode to sam_points
+    """Test that _add_point is called when in AI mode with click (not drag)."""
+    # Enable the model manager
+    main_window.model_manager.is_model_available = MagicMock(return_value=True)
+
+    # Set the mode to AI (sam_mode now goes to AI mode)
     main_window.set_sam_mode()
+    assert main_window.mode == "ai"
 
     # Load a dummy pixmap to ensure mouse events are processed
     dummy_pixmap = QPixmap(100, 100)  # Create a 100x100 dummy pixmap
     dummy_pixmap.fill(Qt.GlobalColor.white)
     main_window.viewer.set_photo(dummy_pixmap)
 
-    # Mock _add_point and _original_mouse_press to prevent side effects and TypeErrors
+    # Mock methods to prevent side effects
     main_window._add_point = MagicMock()
+    main_window._update_segmentation = MagicMock()
     main_window._original_mouse_press = MagicMock()
+    main_window._original_mouse_release = MagicMock()
 
-    # Simulate a left mouse press event by calling the handler directly
+    # Simulate a left mouse press event (AI mode click)
     pos = QPointF(10, 10)
-    mock_event = MagicMock()
-    mock_event.button.return_value = Qt.MouseButton.LeftButton
-    mock_event.scenePos.return_value = pos
+    press_event = MagicMock()
+    press_event.button.return_value = Qt.MouseButton.LeftButton
+    press_event.scenePos.return_value = pos
 
-    # Call the scene mouse press handler directly
-    main_window._scene_mouse_press(mock_event)
+    # Simulate a left mouse release event at the same position (click, not drag)
+    release_event = MagicMock()
+    release_event.scenePos.return_value = pos  # Same position = click
 
-    # Assert that _add_point was called
-    main_window._add_point.assert_called_once_with(pos, positive=True)
+    # Call the mouse press and release handlers
+    main_window._scene_mouse_press(press_event)
+    main_window._scene_mouse_release(release_event)
+
+    # Assert that _add_point was called on release (AI mode behavior)
+    main_window._add_point.assert_called_once_with(
+        pos, positive=True, update_segmentation=True
+    )
 
 
 def test_auto_save_on_image_navigation_when_enabled(main_window, qtbot):

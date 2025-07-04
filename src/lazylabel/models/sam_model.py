@@ -200,12 +200,34 @@ class SamModel:
             points = np.array(positive_points + negative_points)
             labels = np.array([1] * len(positive_points) + [0] * len(negative_points))
 
-            masks, _, _ = self.predictor.predict(
+            masks, scores, logits = self.predictor.predict(
                 point_coords=points,
                 point_labels=labels,
-                multimask_output=False,
+                multimask_output=True,
             )
-            return masks[0]
+
+            # Return the mask with the highest score (consistent with SAM2)
+            best_mask_idx = np.argmax(scores)
+            return masks[best_mask_idx], scores[best_mask_idx], logits[best_mask_idx]
         except Exception as e:
             logger.error(f"Error during prediction: {e}")
+            return None
+
+    def predict_from_box(self, box):
+        """Generate predictions from bounding box using SAM."""
+        if not self.is_loaded:
+            return None
+
+        try:
+            masks, scores, logits = self.predictor.predict(
+                box=np.array(box),
+                multimask_output=True,
+            )
+
+            # Return the mask with the highest score
+            best_mask_idx = np.argmax(scores)
+            return masks[best_mask_idx], scores[best_mask_idx], logits[best_mask_idx]
+
+        except Exception as e:
+            logger.error(f"Error during box prediction: {e}")
             return None

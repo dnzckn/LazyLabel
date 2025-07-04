@@ -59,6 +59,7 @@ def test_predict(sam_model):
         np.zeros(1),
         np.zeros(1),
     )
-    mask = sam_model.predict(positive_points, negative_points)
-    assert mask is not None
+    result = sam_model.predict(positive_points, negative_points)
+    assert result is not None
+    mask, scores, logits = result
     assert mask.shape == (100, 100)

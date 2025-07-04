@@ -108,6 +108,13 @@ class SimpleCollapsible(QWidget):
         self.content_widget.setVisible(not self.is_collapsed)
         self.toggle_button.setText("▶" if self.is_collapsed else "▼")
 
+    def set_collapsed(self, collapsed: bool):
+        """Set the collapsed state programmatically."""
+        if self.is_collapsed != collapsed:
+            self.is_collapsed = collapsed
+            self.content_widget.setVisible(not self.is_collapsed)
+            self.toggle_button.setText("▶" if self.is_collapsed else "▼")
+
 
 class ProfessionalCard(QFrame):
     """A professional-looking card widget for containing controls."""
@@ -611,10 +618,10 @@ class ControlPanel(QWidget):
         layout.addWidget(threshold_collapsible)
 
         # FFT Threshold - collapsible
-        fft_threshold_collapsible = SimpleCollapsible(
+        self.fft_threshold_collapsible = SimpleCollapsible(
             "FFT Threshold", self.fft_threshold_widget
         )
-        layout.addWidget(fft_threshold_collapsible)
+        layout.addWidget(self.fft_threshold_collapsible)
 
         # Image Adjustments - collapsible
         adjustments_collapsible = SimpleCollapsible(
@@ -883,3 +890,31 @@ class ControlPanel(QWidget):
     def get_fft_threshold_widget(self):
         """Get the FFT threshold widget."""
         return self.fft_threshold_widget
+
+    def auto_collapse_fft_threshold_for_image(self, image_array):
+        """Auto-collapse FFT threshold panel if image is not black and white."""
+        if not hasattr(self, "fft_threshold_collapsible"):
+            return
+
+        should_collapse = True  # Default to collapsed
+
+        if image_array is not None:
+            # Check if image is grayscale (black and white)
+            if len(image_array.shape) == 2:
+                # True grayscale - keep expanded
+                should_collapse = False
+            elif len(image_array.shape) == 3 and image_array.shape[2] == 3:
+                # Check if all three channels are identical (grayscale stored as RGB)
+                import numpy as np
+
+                r_channel = image_array[:, :, 0]
+                g_channel = image_array[:, :, 1]
+                b_channel = image_array[:, :, 2]
+                if np.array_equal(r_channel, g_channel) and np.array_equal(
+                    g_channel, b_channel
+                ):
+                    # Grayscale stored as RGB - keep expanded
+                    should_collapse = False
+
+        # Set collapsed state (collapse for non-BW images, expand for BW images)
+        self.fft_threshold_collapsible.set_collapsed(should_collapse)
