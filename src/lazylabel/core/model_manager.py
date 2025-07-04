@@ -4,9 +4,20 @@ import os
 from collections.abc import Callable
 
 from ..config import Paths
-from ..models.sam2_model import Sam2Model
 from ..models.sam_model import SamModel
 from ..utils.logger import logger
+
+# Optional SAM-2 support
+try:
+    from ..models.sam2_model import Sam2Model
+
+    SAM2_AVAILABLE = True
+except ImportError:
+    logger.info(
+        "SAM-2 not available. Install with: pip install git+https://github.com/facebookresearch/sam2.git"
+    )
+    Sam2Model = None
+    SAM2_AVAILABLE = False
 
 
 class ModelManager:
@@ -103,6 +114,15 @@ class ModelManager:
 
             # Create appropriate model instance
             if self._is_sam2_model(model_path):
+                if not SAM2_AVAILABLE:
+                    logger.warning(
+                        f"SAM-2 model detected but SAM-2 not installed: {model_path}"
+                    )
+                    logger.info(
+                        "Install SAM-2 with: pip install git+https://github.com/facebookresearch/sam2.git"
+                    )
+                    return False
+
                 logger.info(f"Loading SAM2 model: {model_type}")
                 self.sam_model = Sam2Model(model_path)
             else:

@@ -3,10 +3,19 @@ import os
 import cv2
 import numpy as np
 import torch
-from sam2.build_sam import build_sam2
-from sam2.sam2_image_predictor import SAM2ImagePredictor
 
 from ..utils.logger import logger
+
+# SAM-2 specific imports - will fail gracefully if not available
+try:
+    from sam2.build_sam import build_sam2
+    from sam2.sam2_image_predictor import SAM2ImagePredictor
+except ImportError as e:
+    logger.error(f"SAM-2 dependencies not found: {e}")
+    logger.info(
+        "Install SAM-2 with: pip install git+https://github.com/facebookresearch/sam2.git"
+    )
+    raise ImportError("SAM-2 dependencies required for Sam2Model") from e
 
 
 class Sam2Model:

@@ -16,6 +16,13 @@ pip install lazylabel-gui
 lazylabel-gui
 ```
 
+### Optional: SAM-2 Support
+For advanced SAM-2 models, install manually:
+```bash
+pip install git+https://github.com/facebookresearch/sam2.git
+```
+*Note: SAM-2 is optional - LazyLabel works with SAM 1.0 models by default*
+
 ### Usage
 1. **Open Folder** → Select your image directory
 2. **Click on image** → AI generates instant masks  
