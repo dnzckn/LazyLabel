@@ -26,18 +26,16 @@ from PyQt6.QtWidgets import (
     QGraphicsLineItem,
     QGraphicsPolygonItem,
     QGraphicsRectItem,
+    QHBoxLayout,
+    QLabel,
     QMainWindow,
-    QMessageBox,
+    QPushButton,
     QSplitter,
     QTableWidgetItem,
     QTableWidgetSelectionRange,
+    QTabWidget,
     QVBoxLayout,
     QWidget,
-    QHBoxLayout,
-    QTabWidget,
-    QGridLayout,
-    QLabel,
-    QPushButton,
 )
 
 from ..config import HotkeyManager, Paths, Settings
@@ -207,6 +205,7 @@ class MultiViewSAMInitWorker(QThread):
 
             try:
                 from ..models.sam2_model import Sam2Model
+
                 SAM2_AVAILABLE = True
             except ImportError:
                 Sam2Model = None
@@ -256,12 +255,16 @@ class MultiViewSAMInitWorker(QThread):
                         self.models_created.append(model_instance)
                         self.model_initialized.emit(i, model_instance)
                     else:
-                        raise Exception(f"Model instance {i+1} failed to load")
+                        raise Exception(f"Model instance {i + 1} failed to load")
 
                 except Exception as model_error:
-                    logger.error(f"Error creating model instance {i+1}: {model_error}")
+                    logger.error(
+                        f"Error creating model instance {i + 1}: {model_error}"
+                    )
                     if not self._should_stop:
-                        self.error.emit(f"Failed to create model instance {i+1}: {model_error}")
+                        self.error.emit(
+                            f"Failed to create model instance {i + 1}: {model_error}"
+                        )
                     return
 
             if not self._should_stop:
@@ -278,7 +281,15 @@ class MultiViewSAMUpdateWorker(QThread):
     finished = pyqtSignal(int)  # viewer_index
     error = pyqtSignal(int, str)  # viewer_index, error_message
 
-    def __init__(self, viewer_index, model, image_path, operate_on_view=False, current_image=None, parent=None):
+    def __init__(
+        self,
+        viewer_index,
+        model,
+        image_path,
+        operate_on_view=False,
+        current_image=None,
+        parent=None,
+    ):
         super().__init__(parent)
         self.viewer_index = viewer_index
         self.model = model
@@ -441,17 +452,29 @@ class MainWindow(QMainWindow):
         self.multi_view_viewers = []  # 2 PhotoViewer instances
         self.multi_view_segments = [[], []]  # Segments for each image
         self.current_multi_batch_start = 0  # Starting index for current 2-image batch
-        
+
         # Multi-view worker threads
         self.multi_view_init_worker = None  # Worker for initializing models
-        self.multi_view_update_workers = [None, None]  # Workers for updating model images
-        self.multi_view_models_dirty = [False, False]  # Track if models need image updates
+        self.multi_view_update_workers = [
+            None,
+            None,
+        ]  # Workers for updating model images
+        self.multi_view_models_dirty = [
+            False,
+            False,
+        ]  # Track if models need image updates
         self.multi_view_models_updating = [False, False]  # Track if models are updating
-        self._last_multi_view_images = [None, None]  # Track last loaded images to avoid unnecessary updates
-        
+        self._last_multi_view_images = [
+            None,
+            None,
+        ]  # Track last loaded images to avoid unnecessary updates
+
         # Multi-view polygon state (using same pattern as single view)
         self.multi_view_polygon_points = [[], []]  # QPointF objects for each viewer
-        self.multi_view_polygon_preview_items = [[], []]  # Visual preview items for each viewer
+        self.multi_view_polygon_preview_items = [
+            [],
+            [],
+        ]  # Visual preview items for each viewer
 
         # Initialize UI state
         self.mode = "sam_points"
@@ -503,9 +526,7 @@ class MainWindow(QMainWindow):
         self.crop_mode = False
         self.crop_rect_item = None
         self.crop_start_pos = None
-        self.crop_coords_by_size = (
-            {}
-        )  # Dictionary to store crop coordinates by image size
+        self.crop_coords_by_size = {}  # Dictionary to store crop coordinates by image size
         self.current_crop_coords = None  # Current crop coordinates (x1, y1, x2, y2)
         self.crop_visual_overlays = []  # Visual overlays showing crop areas
         self.crop_hover_overlays = []  # Hover overlays for cropped areas
@@ -651,7 +672,7 @@ class MainWindow(QMainWindow):
             header_layout = QHBoxLayout(header_widget)
             header_layout.setContentsMargins(0, 0, 0, 0)
 
-            info_label = QLabel(f"Image {i+1}: No image loaded")
+            info_label = QLabel(f"Image {i + 1}: No image loaded")
             info_label.setStyleSheet("font-weight: bold; padding: 2px;")
             header_layout.addWidget(info_label)
 
@@ -675,10 +696,12 @@ class MainWindow(QMainWindow):
             self.multi_view_viewers.append(viewer)
             self.multi_view_info_labels.append(info_label)
             self.multi_view_unlink_buttons.append(unlink_button)
-            
+
         # Connect zoom synchronization signals
         for i, viewer in enumerate(self.multi_view_viewers):
-            viewer.zoom_changed.connect(lambda factor, src_idx=i: self._sync_multi_view_zoom(factor, src_idx))
+            viewer.zoom_changed.connect(
+                lambda factor, src_idx=i: self._sync_multi_view_zoom(factor, src_idx)
+            )
 
         layout.addWidget(grid_widget)
 
@@ -752,7 +775,7 @@ class MainWindow(QMainWindow):
         self.control_panel.selection_mode_requested.connect(self.toggle_selection_mode)
         self.control_panel.edit_mode_requested.connect(self._handle_edit_mode_request)
         self.control_panel.clear_points_requested.connect(self.clear_all_points)
-        self.control_panel.fit_view_requested.connect(self.viewer.fitInView)
+        self.control_panel.fit_view_requested.connect(self._handle_fit_view)
         self.control_panel.hotkeys_requested.connect(self._show_hotkey_dialog)
         self.control_panel.settings_widget.settings_changed.connect(
             self._handle_settings_changed
@@ -852,7 +875,7 @@ class MainWindow(QMainWindow):
             "save_segment": self._handle_space_press,
             "save_output": self._handle_enter_press,
             "save_output_alt": self._handle_enter_press,
-            "fit_view": self.viewer.fitInView,
+            "fit_view": self._handle_fit_view,
             "zoom_in": self._handle_zoom_in,
             "zoom_out": self._handle_zoom_out,
             "pan_up": lambda: self._handle_pan_key("up"),
@@ -1592,7 +1615,9 @@ class MainWindow(QMainWindow):
         if self.mode == "polygon":
             if self.view_mode == "single" and self.polygon_points:
                 self._finalize_polygon()
-            elif self.view_mode == "multi" and hasattr(self, "multi_view_polygon_points"):
+            elif self.view_mode == "multi" and hasattr(
+                self, "multi_view_polygon_points"
+            ):
                 # Complete polygons for all viewers that have points
                 for i, points in enumerate(self.multi_view_polygon_points):
                     if points and len(points) >= 3:
@@ -1605,7 +1630,9 @@ class MainWindow(QMainWindow):
         if self.mode == "polygon":
             if self.view_mode == "single" and self.polygon_points:
                 self._finalize_polygon()
-            elif self.view_mode == "multi" and hasattr(self, "multi_view_polygon_points"):
+            elif self.view_mode == "multi" and hasattr(
+                self, "multi_view_polygon_points"
+            ):
                 # Complete polygons for all viewers that have points
                 for i, points in enumerate(self.multi_view_polygon_points):
                     if points and len(points) >= 3:
@@ -1800,16 +1827,16 @@ class MainWindow(QMainWindow):
         for i in range(2):
             image_path = self.multi_view_images[i]
             segments = self.multi_view_segments[i]
-            
+
             if not image_path:
                 continue
-                
+
             # Save segments for this viewer
             try:
                 # Temporarily set segment manager segments for saving
                 original_segments = self.segment_manager.segments
                 self.segment_manager.segments = segments
-                
+
                 # Get image dimensions from the specific viewer
                 if i < len(self.multi_view_viewers):
                     pixmap = self.multi_view_viewers[i]._pixmap_item.pixmap()
@@ -1821,9 +1848,9 @@ class MainWindow(QMainWindow):
                         h, w = temp_pixmap.height(), temp_pixmap.width()
                 else:
                     continue
-                
+
                 settings = self.control_panel.get_settings()
-                
+
                 # Save NPZ if enabled and we have segments
                 if settings.get("save_npz", True) and segments:
                     class_order = self.segment_manager.get_unique_class_ids()
@@ -1838,13 +1865,14 @@ class MainWindow(QMainWindow):
                         # Update file list
                         self.file_model.update_cache_for_path(npz_path)
                         self.file_model.set_highlighted_path(npz_path)
-                
+
                 # Save TXT if enabled and we have segments
                 if settings.get("save_txt", True) and segments:
                     class_order = self.segment_manager.get_unique_class_ids()
                     if settings.get("yolo_use_alias", True):
                         class_labels = [
-                            self.segment_manager.get_class_alias(cid) for cid in class_order
+                            self.segment_manager.get_class_alias(cid)
+                            for cid in class_order
                         ]
                     else:
                         class_labels = [str(cid) for cid in class_order]
@@ -1857,7 +1885,7 @@ class MainWindow(QMainWindow):
                             None,  # No crop coords in multi-view for now
                         )
                         self.file_model.update_cache_for_path(txt_path)
-                
+
                 # If no segments, delete associated files
                 if not segments:
                     base, _ = os.path.splitext(image_path)
@@ -1870,20 +1898,26 @@ class MainWindow(QMainWindow):
                                 deleted_files.append(os.path.basename(file_path))
                                 self.file_model.update_cache_for_path(file_path)
                             except Exception as e:
-                                self._show_error_notification(f"Error deleting {file_path}: {e}")
+                                self._show_error_notification(
+                                    f"Error deleting {file_path}: {e}"
+                                )
                     if deleted_files:
                         saved_files.extend([f"Deleted: {f}" for f in deleted_files])
-                
+
                 # Restore original segments
                 self.segment_manager.segments = original_segments
-                
+
             except Exception as e:
-                self._show_error_notification(f"Error saving {os.path.basename(image_path)}: {str(e)}")
+                self._show_error_notification(
+                    f"Error saving {os.path.basename(image_path)}: {str(e)}"
+                )
                 # Restore original segments in case of error
                 self.segment_manager.segments = original_segments
 
         if saved_files:
-            self._show_success_notification(f"Multi-view saved: {', '.join(saved_files)}")
+            self._show_success_notification(
+                f"Multi-view saved: {', '.join(saved_files)}"
+            )
         else:
             self._show_warning_notification("No segments to save in multi-view mode.")
 
@@ -1893,7 +1927,7 @@ class MainWindow(QMainWindow):
         if self.view_mode == "multi":
             self._save_multi_view_output()
             return
-            
+
         if not self.current_image_path:
             self._show_warning_notification("No image loaded.")
             return
@@ -2173,26 +2207,34 @@ class MainWindow(QMainWindow):
             self.action_history.pop()
 
     def clear_all_points(self):
-        """Clear all temporary points."""
-        if hasattr(self, "rubber_band_line") and self.rubber_band_line:
-            self.viewer.scene().removeItem(self.rubber_band_line)
-            self.rubber_band_line = None
+        """Clear all temporary points - works in both single and multi-view mode."""
+        if self.view_mode == "single":
+            # Clear single view points
+            if hasattr(self, "rubber_band_line") and self.rubber_band_line:
+                self.viewer.scene().removeItem(self.rubber_band_line)
+                self.rubber_band_line = None
 
-        self.positive_points.clear()
-        self.negative_points.clear()
+            self.positive_points.clear()
+            self.negative_points.clear()
 
-        for item in self.point_items:
-            self.viewer.scene().removeItem(item)
-        self.point_items.clear()
+            for item in self.point_items:
+                self.viewer.scene().removeItem(item)
+            self.point_items.clear()
 
-        self.polygon_points.clear()
-        for item in self.polygon_preview_items:
-            self.viewer.scene().removeItem(item)
-        self.polygon_preview_items.clear()
+            self.polygon_points.clear()
+            for item in self.polygon_preview_items:
+                self.viewer.scene().removeItem(item)
+            self.polygon_preview_items.clear()
 
-        if hasattr(self, "preview_mask_item") and self.preview_mask_item:
-            self.viewer.scene().removeItem(self.preview_mask_item)
-            self.preview_mask_item = None
+            if hasattr(self, "preview_mask_item") and self.preview_mask_item:
+                self.viewer.scene().removeItem(self.preview_mask_item)
+                self.preview_mask_item = None
+
+        elif self.view_mode == "multi":
+            # Clear multi-view polygon points
+            if hasattr(self, "multi_view_polygon_points"):
+                for i in range(len(self.multi_view_polygon_points)):
+                    self._clear_multi_view_polygon(i)
 
     def _show_notification(self, message, duration=3000):
         """Show notification message."""
@@ -2228,30 +2270,50 @@ class MainWindow(QMainWindow):
         self.control_panel.set_annotation_size(max(current_val - 1, 1))
 
     def _handle_pan_key(self, direction):
-        """Handle WASD pan keys."""
-        if not hasattr(self, "viewer"):
-            return
+        """Handle WASD pan keys - works in both single and multi-view mode."""
+        if self.view_mode == "single":
+            if not hasattr(self, "viewer"):
+                return
+            self._pan_viewer(self.viewer, direction)
+        elif self.view_mode == "multi":
+            # Pan all multi-view viewers
+            if hasattr(self, "multi_view_viewers"):
+                for viewer in self.multi_view_viewers:
+                    if viewer:
+                        self._pan_viewer(viewer, direction)
 
-        amount = int(self.viewer.height() * 0.1 * self.pan_multiplier)
+    def _pan_viewer(self, viewer, direction):
+        """Pan a specific viewer in the given direction."""
+        amount = int(viewer.height() * 0.1 * self.pan_multiplier)
 
         if direction == "up":
-            self.viewer.verticalScrollBar().setValue(
-                self.viewer.verticalScrollBar().value() - amount
+            viewer.verticalScrollBar().setValue(
+                viewer.verticalScrollBar().value() - amount
             )
         elif direction == "down":
-            self.viewer.verticalScrollBar().setValue(
-                self.viewer.verticalScrollBar().value() + amount
+            viewer.verticalScrollBar().setValue(
+                viewer.verticalScrollBar().value() + amount
             )
         elif direction == "left":
-            amount = int(self.viewer.width() * 0.1 * self.pan_multiplier)
-            self.viewer.horizontalScrollBar().setValue(
-                self.viewer.horizontalScrollBar().value() - amount
+            amount = int(viewer.width() * 0.1 * self.pan_multiplier)
+            viewer.horizontalScrollBar().setValue(
+                viewer.horizontalScrollBar().value() - amount
             )
         elif direction == "right":
-            amount = int(self.viewer.width() * 0.1 * self.pan_multiplier)
-            self.viewer.horizontalScrollBar().setValue(
-                self.viewer.horizontalScrollBar().value() + amount
+            amount = int(viewer.width() * 0.1 * self.pan_multiplier)
+            viewer.horizontalScrollBar().setValue(
+                viewer.horizontalScrollBar().value() + amount
             )
+
+    def _handle_fit_view(self):
+        """Handle fit view hotkey - works in both single and multi-view mode."""
+        if self.view_mode == "single":
+            if hasattr(self, "viewer"):
+                self.viewer.fitInView()
+        elif self.view_mode == "multi" and hasattr(self, "multi_view_viewers"):
+            for viewer in self.multi_view_viewers:
+                if viewer:
+                    viewer.fitInView()
 
     def closeEvent(self, event):
         """Handle application close."""
@@ -3985,9 +4047,9 @@ class MainWindow(QMainWindow):
         """Transform display coordinates to SAM model coordinates for multi-view mode."""
         if viewer_index >= len(self.multi_view_viewers):
             return pos.x(), pos.y()
-            
+
         viewer = self.multi_view_viewers[viewer_index]
-        
+
         if self.settings.operate_on_view:
             # Simple case: SAM processes the displayed image
             sam_x = int(pos.x() * self.sam_scale_factor)
@@ -3995,10 +4057,7 @@ class MainWindow(QMainWindow):
         else:
             # Complex case: Map display coordinates to original image coordinates
             # Get displayed image dimensions for this specific viewer
-            if (
-                not viewer._pixmap_item
-                or viewer._pixmap_item.pixmap().isNull()
-            ):
+            if not viewer._pixmap_item or viewer._pixmap_item.pixmap().isNull():
                 # Fallback: use simple scaling
                 sam_x = int(pos.x() * self.sam_scale_factor)
                 sam_y = int(pos.y() * self.sam_scale_factor)
@@ -4006,19 +4065,27 @@ class MainWindow(QMainWindow):
                 # Calculate scaling factors for this viewer
                 pixmap = viewer._pixmap_item.pixmap()
                 scene_rect = viewer.sceneRect()
-                
+
                 # Scale factors (how much the image is scaled in the view)
-                scale_x = pixmap.width() / scene_rect.width() if scene_rect.width() > 0 else 1.0
-                scale_y = pixmap.height() / scene_rect.height() if scene_rect.height() > 0 else 1.0
-                
+                scale_x = (
+                    pixmap.width() / scene_rect.width()
+                    if scene_rect.width() > 0
+                    else 1.0
+                )
+                scale_y = (
+                    pixmap.height() / scene_rect.height()
+                    if scene_rect.height() > 0
+                    else 1.0
+                )
+
                 # Transform to original image coordinates
                 orig_x = pos.x() * scale_x
                 orig_y = pos.y() * scale_y
-                
+
                 # Scale for SAM processing
                 sam_x = int(orig_x * self.sam_scale_factor)
                 sam_y = int(orig_y * self.sam_scale_factor)
-                
+
         return sam_x, sam_y
 
     def _on_view_mode_changed(self, index):
@@ -4029,13 +4096,13 @@ class MainWindow(QMainWindow):
             # Restore single view state
             self._restore_single_view_state()
         elif index == 1:  # Multi view
-            self.view_mode = "multi"
             # Check if we have a folder loaded
             if not hasattr(self, "file_model") or not self.file_model:
                 self._show_warning_notification(
                     "Please open a folder with images first before using multi-view mode."
                 )
                 # Switch back to single view
+                self.view_mode = "single"
                 self.view_mode_tabs.setCurrentIndex(0)
                 return
 
@@ -4046,8 +4113,11 @@ class MainWindow(QMainWindow):
                     "No images without NPZ files found. Please open a folder with images first."
                 )
                 # Switch back to single view
+                self.view_mode = "single"
                 self.view_mode_tabs.setCurrentIndex(0)
                 return
+
+            self.view_mode = "multi"
 
             self._initialize_multi_view_models()
             self._setup_multi_view_mouse_events()
@@ -4065,49 +4135,59 @@ class MainWindow(QMainWindow):
 
         # Create and start the initialization worker
         self.multi_view_init_worker = MultiViewSAMInitWorker(self.model_manager, self)
-        
+
         # Connect signals
-        self.multi_view_init_worker.model_initialized.connect(self._on_multi_view_model_initialized)
-        self.multi_view_init_worker.all_models_initialized.connect(self._on_all_multi_view_models_initialized)
+        self.multi_view_init_worker.model_initialized.connect(
+            self._on_multi_view_model_initialized
+        )
+        self.multi_view_init_worker.all_models_initialized.connect(
+            self._on_all_multi_view_models_initialized
+        )
         self.multi_view_init_worker.error.connect(self._on_multi_view_init_error)
         self.multi_view_init_worker.progress.connect(self._on_multi_view_init_progress)
-        
+
         # Show loading notification
         self._show_notification("Initializing 2 SAM models for multi-view...")
-        
+
         # Start the worker
         self.multi_view_init_worker.start()
 
     def _on_multi_view_model_initialized(self, viewer_index, model_instance):
         """Handle individual model initialization completion."""
         self.multi_view_models.append(model_instance)
-        
+
     def _on_all_multi_view_models_initialized(self, total_models):
         """Handle completion of all multi-view model initialization."""
-        self._show_success_notification(f"Successfully initialized {total_models} SAM models")
-        
+        self._show_success_notification(
+            f"Successfully initialized {total_models} SAM models"
+        )
+
         # Clean up the worker
         if self.multi_view_init_worker:
             self.multi_view_init_worker.quit()
             self.multi_view_init_worker.wait()
             self.multi_view_init_worker.deleteLater()
             self.multi_view_init_worker = None
-            
+
     def _on_multi_view_init_error(self, error_message):
         """Handle multi-view model initialization error."""
-        self._show_error_notification(f"Failed to initialize multi-view models: {error_message}")
+        self._show_error_notification(
+            f"Failed to initialize multi-view models: {error_message}"
+        )
         self._cleanup_multi_view_models()
-        
+
         # Clean up the worker
         if self.multi_view_init_worker:
             self.multi_view_init_worker.quit()
             self.multi_view_init_worker.wait()
             self.multi_view_init_worker.deleteLater()
             self.multi_view_init_worker = None
-            
+
     def _on_multi_view_init_progress(self, current, total):
         """Handle multi-view model initialization progress."""
-        self._show_notification(f"Initializing SAM models for multi-view: {current}/{total}...")
+        self._show_notification(
+            f"Initializing SAM models for multi-view: {current}/{total}..."
+        )
 
     def _cleanup_multi_view_workers(self):
         """Clean up multi-view worker threads."""
@@ -4121,7 +4201,7 @@ class MainWindow(QMainWindow):
                 self.multi_view_init_worker.wait()
             self.multi_view_init_worker.deleteLater()
             self.multi_view_init_worker = None
-            
+
         # Clean up update workers
         for i in range(2):
             if self.multi_view_update_workers[i]:
@@ -4133,7 +4213,7 @@ class MainWindow(QMainWindow):
                     self.multi_view_update_workers[i].wait()
                 self.multi_view_update_workers[i].deleteLater()
                 self.multi_view_update_workers[i] = None
-                
+
         # Reset state
         self.multi_view_models_updating = [False, False]
 
@@ -4146,26 +4226,28 @@ class MainWindow(QMainWindow):
         """Ensure multi-view SAM model is updated for the given viewer."""
         if not (0 <= viewer_index < 2):
             return
-            
+
         if not self.multi_view_models_dirty[viewer_index]:
             return  # Already up to date
-            
+
         if self.multi_view_models_updating[viewer_index]:
             return  # Already updating
-            
+
         if viewer_index >= len(self.multi_view_models):
             return  # No model available for this viewer
-            
+
         image_path = self.multi_view_images[viewer_index]
         if not image_path:
             return  # No image loaded for this viewer
-            
+
         # Mark as updating
         self.multi_view_models_updating[viewer_index] = True
-        
+
         # Show loading notification
-        self._show_notification(f"Loading image into AI model for viewer {viewer_index + 1}...")
-        
+        self._show_notification(
+            f"Loading image into AI model for viewer {viewer_index + 1}..."
+        )
+
         # Create and start update worker
         self.multi_view_update_workers[viewer_index] = MultiViewSAMUpdateWorker(
             viewer_index,
@@ -4173,9 +4255,9 @@ class MainWindow(QMainWindow):
             image_path,
             self.settings.operate_on_view,
             None,  # TODO: Add support for current_image if needed
-            self
+            self,
         )
-        
+
         # Connect signals
         self.multi_view_update_workers[viewer_index].finished.connect(
             self._on_multi_view_sam_update_finished
@@ -4183,32 +4265,34 @@ class MainWindow(QMainWindow):
         self.multi_view_update_workers[viewer_index].error.connect(
             self._on_multi_view_sam_update_error
         )
-        
+
         # Start the worker
         self.multi_view_update_workers[viewer_index].start()
-        
+
     def _on_multi_view_sam_update_finished(self, viewer_index):
         """Handle completion of multi-view SAM model update."""
         self.multi_view_models_dirty[viewer_index] = False
         self.multi_view_models_updating[viewer_index] = False
-        
+
         # Clear loading notification
         self._clear_notification()
-        
+
         # Clean up worker
         if self.multi_view_update_workers[viewer_index]:
             self.multi_view_update_workers[viewer_index].quit()
             self.multi_view_update_workers[viewer_index].wait()
             self.multi_view_update_workers[viewer_index].deleteLater()
             self.multi_view_update_workers[viewer_index] = None
-            
+
     def _on_multi_view_sam_update_error(self, viewer_index, error_message):
         """Handle multi-view SAM model update error."""
         self.multi_view_models_updating[viewer_index] = False
-        
+
         # Show error notification
-        self._show_error_notification(f"Error loading AI model for viewer {viewer_index + 1}: {error_message}")
-        
+        self._show_error_notification(
+            f"Error loading AI model for viewer {viewer_index + 1}: {error_message}"
+        )
+
         # Clean up worker
         if self.multi_view_update_workers[viewer_index]:
             self.multi_view_update_workers[viewer_index].quit()
@@ -4220,7 +4304,7 @@ class MainWindow(QMainWindow):
         """Clean up multi-view model instances."""
         # Clean up worker threads first
         self._cleanup_multi_view_workers()
-        
+
         # Clean up model instances
         for model in self.multi_view_models:
             if hasattr(model, "model") and model.model:
@@ -4244,7 +4328,7 @@ class MainWindow(QMainWindow):
         self.multi_view_segments = [[], []]
         self.multi_view_linked = [True, True]
         self._last_multi_view_images = [None, None]
-        
+
         # Clear multi-view polygon state
         for i in range(2):
             self._clear_multi_view_polygon(i)
@@ -4268,7 +4352,7 @@ class MainWindow(QMainWindow):
             viewer.scene().clear()
 
         # Clear info labels
-        if hasattr(self, 'multi_view_info_labels'):
+        if hasattr(self, "multi_view_info_labels"):
             for label in self.multi_view_info_labels:
                 label.setText("Image: No image loaded")
 
@@ -4333,7 +4417,7 @@ class MainWindow(QMainWindow):
                 self.multi_view_images[i] = None
                 self.multi_view_viewers[i].set_photo(QPixmap())
                 self.multi_view_info_labels[i].setText(
-                    f"Image {i+1}: No images available"
+                    f"Image {i + 1}: No images available"
                 )
                 self.multi_view_viewers[i].hide()
 
@@ -4360,28 +4444,28 @@ class MainWindow(QMainWindow):
                 if not pixmap.isNull():
                     self.multi_view_viewers[i].set_photo(pixmap)
                     self.multi_view_info_labels[i].setText(
-                        f"Image {i+1}: {os.path.basename(image_path)}"
+                        f"Image {i + 1}: {os.path.basename(image_path)}"
                     )
                     self.multi_view_viewers[i].show()
 
                     # Update SAM model if needed - but only mark dirty if image actually changed
                     if i < len(self.multi_view_models):
                         # Check if this is a different image than what's currently loaded
-                        if not hasattr(self, '_last_multi_view_images'):
+                        if not hasattr(self, "_last_multi_view_images"):
                             self._last_multi_view_images = [None, None]
-                        
+
                         if self._last_multi_view_images[i] != image_path:
                             self._last_multi_view_images[i] = image_path
                             self._mark_multi_view_sam_dirty(i)
                 else:
                     self.multi_view_info_labels[i].setText(
-                        f"Image {i+1}: Failed to load"
+                        f"Image {i + 1}: Failed to load"
                     )
                     self.multi_view_viewers[i].hide()
             else:
                 # Clear viewer
                 self.multi_view_viewers[i].set_photo(QPixmap())
-                self.multi_view_info_labels[i].setText(f"Image {i+1}: No image")
+                self.multi_view_info_labels[i].setText(f"Image {i + 1}: No image")
                 self.multi_view_viewers[i].hide()
 
         # Reset segments for new batch
@@ -4417,7 +4501,6 @@ class MainWindow(QMainWindow):
             self.current_multi_batch_start -= 2
             self._load_current_multi_batch()
 
-
     def _get_active_viewer(self):
         """Get the currently active viewer based on view mode."""
         if self.view_mode == "single":
@@ -4434,18 +4517,14 @@ class MainWindow(QMainWindow):
         if self.view_mode != "multi":
             return
 
-        # Get the source viewer
-        source_viewer = self.multi_view_viewers[viewer_index]
-
         # Convert event position to scene coordinates
-        scene_pos = event.scenePos()
 
         # Handle the event for the source viewer first
         if self.multi_view_linked[viewer_index]:
             self._handle_multi_view_action(event, viewer_index, "press")
 
         # Mirror to other linked viewers
-        for i, viewer in enumerate(self.multi_view_viewers):
+        for i, _viewer in enumerate(self.multi_view_viewers):
             if (
                 i != viewer_index
                 and self.multi_view_linked[i]
@@ -4463,7 +4542,7 @@ class MainWindow(QMainWindow):
             self._handle_multi_view_action(event, viewer_index, "move")
 
         # Mirror to other linked viewers
-        for i, viewer in enumerate(self.multi_view_viewers):
+        for i, _viewer in enumerate(self.multi_view_viewers):
             if (
                 i != viewer_index
                 and self.multi_view_linked[i]
@@ -4481,7 +4560,7 @@ class MainWindow(QMainWindow):
             self._handle_multi_view_action(event, viewer_index, "release")
 
         # Mirror to other linked viewers
-        for i, viewer in enumerate(self.multi_view_viewers):
+        for i, _viewer in enumerate(self.multi_view_viewers):
             if (
                 i != viewer_index
                 and self.multi_view_linked[i]
@@ -4519,10 +4598,13 @@ class MainWindow(QMainWindow):
                 # Handle bbox dragging
                 self._handle_multi_view_bbox_drag(image_pos, viewer_index)
 
-        elif action_type == "release":
-            if self.mode == "bbox" and hasattr(self, "multi_view_bbox_starts"):
-                # Handle bbox completion
-                self._handle_multi_view_bbox_complete(image_pos, viewer_index)
+        elif (
+            action_type == "release"
+            and self.mode == "bbox"
+            and hasattr(self, "multi_view_bbox_starts")
+        ):
+            # Handle bbox completion
+            self._handle_multi_view_bbox_complete(image_pos, viewer_index)
 
     def _mirror_mouse_action(self, event, target_viewer_index, action_type):
         """Mirror a mouse action to another viewer."""
@@ -4553,15 +4635,19 @@ class MainWindow(QMainWindow):
 
         # Check if model is updating
         if self.multi_view_models_updating[viewer_index]:
-            self._show_warning_notification(f"AI model is updating for viewer {viewer_index + 1}, please wait...")
+            self._show_warning_notification(
+                f"AI model is updating for viewer {viewer_index + 1}, please wait..."
+            )
             return
 
         # Ensure SAM model is updated for this viewer
         self._ensure_multi_view_sam_updated(viewer_index)
-        
+
         # Check again if model is now updating (started by ensure call)
         if self.multi_view_models_updating[viewer_index]:
-            self._show_warning_notification(f"AI model is loading for viewer {viewer_index + 1}, please wait...")
+            self._show_warning_notification(
+                f"AI model is loading for viewer {viewer_index + 1}, please wait..."
+            )
             return
 
         # Determine if positive or negative click
@@ -4581,7 +4667,9 @@ class MainWindow(QMainWindow):
         # Process with SAM model
         try:
             # Convert position to model coordinates
-            model_pos = self._transform_multi_view_coords_to_sam_coords(pos, viewer_index)
+            model_pos = self._transform_multi_view_coords_to_sam_coords(
+                pos, viewer_index
+            )
 
             # Prepare points for prediction (like single view mode)
             if positive:
@@ -4597,7 +4685,7 @@ class MainWindow(QMainWindow):
             if result is not None:
                 # Unpack the tuple like single view mode
                 mask, scores, logits = result
-                
+
                 # Ensure mask is boolean (SAM models can return float masks)
                 if mask.dtype != bool:
                     mask = mask > 0.5
@@ -4622,11 +4710,13 @@ class MainWindow(QMainWindow):
     def _handle_multi_view_polygon_click(self, pos, viewer_index):
         """Handle polygon mode click for a specific viewer - matches single view pattern."""
         points = self.multi_view_polygon_points[viewer_index]
-        
+
         # Check if clicking near first point to close polygon
         if points and len(points) > 2:
             first_point = points[0]
-            distance_squared = (pos.x() - first_point.x()) ** 2 + (pos.y() - first_point.y()) ** 2
+            distance_squared = (pos.x() - first_point.x()) ** 2 + (
+                pos.y() - first_point.y()
+            ) ** 2
             if distance_squared < self.polygon_join_threshold**2:
                 self._finalize_multi_view_polygon(viewer_index)
                 return
@@ -4640,19 +4730,21 @@ class MainWindow(QMainWindow):
         point_item.setBrush(QBrush(QColor(0, 255, 255)))  # Cyan like single view
         point_item.setPen(QPen(Qt.PenStyle.NoPen))
         viewer.scene().addItem(point_item)
-        
+
         # Store visual item for cleanup
         self.multi_view_polygon_preview_items[viewer_index].append(point_item)
 
         # Draw polygon preview with fill
         self._draw_multi_view_polygon_preview(viewer_index)
-        
+
         # Record action for undo
-        self.action_history.append({
-            "type": "multi_view_polygon_point",
-            "viewer_index": viewer_index,
-            "point": pos,
-        })
+        self.action_history.append(
+            {
+                "type": "multi_view_polygon_point",
+                "viewer_index": viewer_index,
+                "point": pos,
+            }
+        )
 
     def _draw_multi_view_polygon_preview(self, viewer_index):
         """Draw polygon preview with fill - matches single view pattern."""
@@ -4673,7 +4765,9 @@ class MainWindow(QMainWindow):
         # Draw polygon fill preview when 3+ points (like single view)
         if len(points) > 2:
             preview_poly = QGraphicsPolygonItem(QPolygonF(points))
-            preview_poly.setBrush(QBrush(QColor(0, 255, 255, 100)))  # Cyan with transparency
+            preview_poly.setBrush(
+                QBrush(QColor(0, 255, 255, 100))
+            )  # Cyan with transparency
             preview_poly.setPen(QPen(Qt.GlobalColor.transparent))
             viewer.scene().addItem(preview_poly)
             preview_items.append(preview_poly)
@@ -4682,8 +4776,7 @@ class MainWindow(QMainWindow):
         if len(points) > 1:
             for i in range(len(points) - 1):
                 line_item = QGraphicsLineItem(
-                    points[i].x(), points[i].y(), 
-                    points[i + 1].x(), points[i + 1].y()
+                    points[i].x(), points[i].y(), points[i + 1].x(), points[i + 1].y()
                 )
                 line_item.setPen(QPen(QColor(0, 255, 255), 2))  # Cyan lines
                 viewer.scene().addItem(line_item)
@@ -4692,8 +4785,7 @@ class MainWindow(QMainWindow):
         # Draw closing line when 3+ points (dashed)
         if len(points) > 2:
             line_item = QGraphicsLineItem(
-                points[-1].x(), points[-1].y(), 
-                points[0].x(), points[0].y()
+                points[-1].x(), points[-1].y(), points[0].x(), points[0].y()
             )
             line_item.setPen(QPen(QColor(0, 255, 255), 2, Qt.PenStyle.DashLine))
             viewer.scene().addItem(line_item)
@@ -4721,15 +4813,18 @@ class MainWindow(QMainWindow):
     def _clear_multi_view_polygon(self, viewer_index):
         """Clear polygon state for a specific viewer."""
         # Clear points
-        if hasattr(self, 'multi_view_polygon_points') and viewer_index < len(self.multi_view_polygon_points):
+        if hasattr(self, "multi_view_polygon_points") and viewer_index < len(
+            self.multi_view_polygon_points
+        ):
             self.multi_view_polygon_points[viewer_index].clear()
-        
+
         # Remove all visual items (only if viewers exist)
-        if (hasattr(self, 'multi_view_viewers') and 
-            viewer_index < len(self.multi_view_viewers) and 
-            hasattr(self, 'multi_view_polygon_preview_items') and 
-            viewer_index < len(self.multi_view_polygon_preview_items)):
-            
+        if (
+            hasattr(self, "multi_view_viewers")
+            and viewer_index < len(self.multi_view_viewers)
+            and hasattr(self, "multi_view_polygon_preview_items")
+            and viewer_index < len(self.multi_view_polygon_preview_items)
+        ):
             viewer = self.multi_view_viewers[viewer_index]
             for item in self.multi_view_polygon_preview_items[viewer_index]:
                 if item.scene():
@@ -4805,7 +4900,6 @@ class MainWindow(QMainWindow):
             return  # Need at least 3 points for a polygon
 
         # Create polygon segment
-        polygon_points = [QPointF(x, y) for x, y in points]
 
         segment = {
             "type": "Polygon",
@@ -4914,21 +5008,23 @@ class MainWindow(QMainWindow):
         # Clean up
         self.multi_view_bbox_starts[viewer_index] = None
         self.multi_view_bbox_rects[viewer_index] = None
-        
+
     def _sync_multi_view_zoom(self, factor, source_viewer_index):
         """Synchronize zoom across linked multi-view viewers."""
         if self.view_mode != "multi":
             return
-            
+
         # Only sync if source viewer is linked
         if not self.multi_view_linked[source_viewer_index]:
             return
-            
+
         # Sync to all other linked viewers
         for i, viewer in enumerate(self.multi_view_viewers):
-            if (i != source_viewer_index and 
-                self.multi_view_linked[i] and 
-                self.multi_view_images[i]):
+            if (
+                i != source_viewer_index
+                and self.multi_view_linked[i]
+                and self.multi_view_images[i]
+            ):
                 viewer.sync_zoom(factor)
 
     def _display_multi_view_bbox(self, segment, viewer_index):

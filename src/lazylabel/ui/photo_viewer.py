@@ -9,6 +9,7 @@ class PhotoViewer(QGraphicsView):
     # Signals for multi-view synchronization
     zoom_changed = pyqtSignal(float)  # Emits zoom factor
     view_changed = pyqtSignal()  # Emits when view (pan/zoom) changes
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self._scene = QGraphicsScene(self)
@@ -112,7 +113,7 @@ class PhotoViewer(QGraphicsView):
             self.scale(factor, factor)
             # Emit zoom signal for multi-view synchronization
             self.zoom_changed.emit(factor)
-            
+
     def sync_zoom(self, factor):
         """Synchronize zoom from another viewer."""
         if not self._pixmap_item.pixmap().isNull():
