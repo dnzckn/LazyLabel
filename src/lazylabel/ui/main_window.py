@@ -4692,7 +4692,7 @@ class MainWindow(QMainWindow):
                 # Create segment with proper structure (matches single view)
                 new_segment = {
                     "type": "AI",
-                    "mask": mask,
+                    "mask": mask.astype(bool),  # Ensure boolean type
                     "class_id": 1,  # Default class
                     "points": [(pos.x(), pos.y())],
                     "labels": [1 if positive else 0],
@@ -4806,6 +4806,9 @@ class MainWindow(QMainWindow):
 
         # Add to segments for this viewer (separate multi-view storage)
         self.multi_view_segments[viewer_index].append(new_segment)
+
+        # Display the polygon segment (fix: was missing!)
+        self._display_multi_view_polygon(new_segment, viewer_index)
 
         # Clear polygon state for this viewer
         self._clear_multi_view_polygon(viewer_index)
@@ -4927,7 +4930,7 @@ class MainWindow(QMainWindow):
             return
 
         viewer = self.multi_view_viewers[viewer_index]
-        points = segment.get("points", [])
+        points = segment.get("vertices", segment.get("points", []))
 
         if len(points) < 3:
             return
