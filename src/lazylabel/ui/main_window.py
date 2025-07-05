@@ -789,9 +789,15 @@ class MainWindow(QMainWindow):
         # Update the main window's settings object with the latest from the widget
         self.settings.update(**self.control_panel.settings_widget.get_settings())
 
-        # Re-load the current image to apply the new 'Operate On View' setting
+        # When operate on view setting changes, we need to force SAM model to update
+        # with proper scale factor recalculation via the worker thread
         if self.current_image_path:
-            self._update_sam_model_image()
+            # Mark SAM as dirty and reset scale factor to force proper recalculation
+            self.sam_is_dirty = True
+            self.sam_scale_factor = 1.0  # Reset to default
+            self.current_sam_hash = None  # Invalidate cache
+            # Use the worker thread to properly calculate scale factor
+            self._ensure_sam_updated()
 
     def _handle_image_adjustment_changed(self):
         """Handle changes in image adjustments (brightness, contrast, gamma)."""
@@ -2613,14 +2619,6 @@ class MainWindow(QMainWindow):
             self.main_splitter.setSizes([250, 800, 350])
 
     # Additional methods for new features
-    def _handle_settings_changed(self):
-        """Handle changes in settings, e.g., 'Operate On View'."""
-        # Update the main window's settings object with the latest from the widget
-        self.settings.update(**self.control_panel.settings_widget.get_settings())
-
-        # Re-load the current image to apply the new 'Operate On View' setting
-        if self.current_image_path:
-            self._update_sam_model_image()
 
     def _handle_channel_threshold_changed(self):
         """Handle changes in channel thresholding - optimized to avoid unnecessary work."""
@@ -3379,9 +3377,9 @@ class MainWindow(QMainWindow):
         self.current_sam_hash = None  # Invalidate cache
         self.sam_scale_factor = 1.0
 
-        # Clear all points and segments
+        # Clear all points but preserve segments
         self.clear_all_points()
-        self.segment_manager.clear()
+        # Note: Segments are preserved when switching models
         self._update_all_lists()
 
         # Clear preview items
@@ -3430,6 +3428,9 @@ class MainWindow(QMainWindow):
         # Clear status bar messages
         if hasattr(self, "status_bar"):
             self.status_bar.clear_message()
+
+        # Redisplay segments after model switch to restore visual representation
+        self._display_all_segments()
 
     def _transform_display_coords_to_sam_coords(self, pos):
         """Transform display coordinates to SAM model coordinates.
