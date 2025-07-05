@@ -1,11 +1,14 @@
 import cv2
 import numpy as np
-from PyQt6.QtCore import QRectF, Qt
+from PyQt6.QtCore import QRectF, Qt, pyqtSignal
 from PyQt6.QtGui import QCursor, QImage, QPixmap
 from PyQt6.QtWidgets import QGraphicsPixmapItem, QGraphicsScene, QGraphicsView
 
 
 class PhotoViewer(QGraphicsView):
+    # Signals for multi-view synchronization
+    zoom_changed = pyqtSignal(float)  # Emits zoom factor
+    view_changed = pyqtSignal()  # Emits when view (pan/zoom) changes
     def __init__(self, parent=None):
         super().__init__(parent)
         self._scene = QGraphicsScene(self)
@@ -41,6 +44,10 @@ class PhotoViewer(QGraphicsView):
         if pixmap and not pixmap.isNull():
             self._original_image = pixmap.toImage()
             self._adjusted_pixmap = pixmap
+            # Check if _pixmap_item still exists, recreate if deleted
+            if self._pixmap_item not in self._scene.items():
+                self._pixmap_item = QGraphicsPixmapItem()
+                self._scene.addItem(self._pixmap_item)
             self._pixmap_item.setPixmap(pixmap)
 
             # Convert QImage to ARGB32 for consistent processing
@@ -102,4 +109,11 @@ class PhotoViewer(QGraphicsView):
     def wheelEvent(self, event):
         if not self._pixmap_item.pixmap().isNull():
             factor = 1.25 if event.angleDelta().y() > 0 else 0.8
+            self.scale(factor, factor)
+            # Emit zoom signal for multi-view synchronization
+            self.zoom_changed.emit(factor)
+            
+    def sync_zoom(self, factor):
+        """Synchronize zoom from another viewer."""
+        if not self._pixmap_item.pixmap().isNull():
             self.scale(factor, factor)
