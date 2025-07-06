@@ -20,7 +20,9 @@ class SingleViewModeHandler(BaseModeHandler):
 
         # Check if SAM model is updating
         if self.main_window.sam_is_updating:
-            self.main_window._show_warning_notification("AI model is updating, please wait...")
+            self.main_window._show_warning_notification(
+                "AI model is updating, please wait..."
+            )
             return
 
         # Ensure SAM model is updated
@@ -28,17 +30,25 @@ class SingleViewModeHandler(BaseModeHandler):
 
         # Check again if model is now updating
         if self.main_window.sam_is_updating:
-            self.main_window._show_warning_notification("AI model is loading, please wait...")
+            self.main_window._show_warning_notification(
+                "AI model is loading, please wait..."
+            )
             return
 
         # Transform coordinates and add point
         sam_x, sam_y = self.main_window._transform_display_coords_to_sam_coords(pos)
 
-        point_list = self.main_window.positive_points if positive else self.main_window.negative_points
+        point_list = (
+            self.main_window.positive_points
+            if positive
+            else self.main_window.negative_points
+        )
         point_list.append([sam_x, sam_y])
 
         # Add visual point
-        point_color = QColor(Qt.GlobalColor.green) if positive else QColor(Qt.GlobalColor.red)
+        point_color = (
+            QColor(Qt.GlobalColor.green) if positive else QColor(Qt.GlobalColor.red)
+        )
         point_color.setAlpha(150)
         point_diameter = self.main_window.point_radius * 2
 
@@ -46,7 +56,7 @@ class SingleViewModeHandler(BaseModeHandler):
             pos.x() - self.main_window.point_radius,
             pos.y() - self.main_window.point_radius,
             point_diameter,
-            point_diameter
+            point_diameter,
         )
         point_item.setBrush(QBrush(point_color))
         point_item.setPen(QPen(Qt.PenStyle.NoPen))
@@ -54,14 +64,16 @@ class SingleViewModeHandler(BaseModeHandler):
         self.main_window.point_items.append(point_item)
 
         # Record the action for undo
-        self.main_window.action_history.append({
-            "type": "add_point",
-            "point_type": "positive" if positive else "negative",
-            "point_coords": [int(pos.x()), int(pos.y())],
-            "sam_coords": [sam_x, sam_y],
-            "point_item": point_item,
-            "viewer_mode": "single"
-        })
+        self.main_window.action_history.append(
+            {
+                "type": "add_point",
+                "point_type": "positive" if positive else "negative",
+                "point_coords": [int(pos.x()), int(pos.y())],
+                "sam_coords": [sam_x, sam_y],
+                "point_item": point_item,
+                "viewer_mode": "single",
+            }
+        )
         # Clear redo history when a new action is performed
         self.main_window.redo_history.clear()
 
@@ -73,8 +85,10 @@ class SingleViewModeHandler(BaseModeHandler):
         # Check if clicking near first point to close polygon
         if self.main_window.polygon_points and len(self.main_window.polygon_points) > 2:
             first_point = self.main_window.polygon_points[0]
-            distance_squared = (pos.x() - first_point.x()) ** 2 + (pos.y() - first_point.y()) ** 2
-            if distance_squared < self.main_window.polygon_join_threshold ** 2:
+            distance_squared = (pos.x() - first_point.x()) ** 2 + (
+                pos.y() - first_point.y()
+            ) ** 2
+            if distance_squared < self.main_window.polygon_join_threshold**2:
                 self._finalize_polygon()
                 return
 
@@ -96,13 +110,19 @@ class SingleViewModeHandler(BaseModeHandler):
 
         # Create rubber band rectangle
         self.main_window.rubber_band_rect = QGraphicsRectItem()
-        self.main_window.rubber_band_rect.setPen(QPen(QColor(255, 0, 0), 2, Qt.PenStyle.DashLine))
+        self.main_window.rubber_band_rect.setPen(
+            QPen(QColor(255, 0, 0), 2, Qt.PenStyle.DashLine)
+        )
         self.main_window.viewer.scene().addItem(self.main_window.rubber_band_rect)
 
     def handle_bbox_drag(self, pos):
         """Handle bbox mode drag in single view."""
-        if (hasattr(self.main_window, 'drag_start_pos') and self.main_window.drag_start_pos and
-            hasattr(self.main_window, 'rubber_band_rect') and self.main_window.rubber_band_rect):
+        if (
+            hasattr(self.main_window, "drag_start_pos")
+            and self.main_window.drag_start_pos
+            and hasattr(self.main_window, "rubber_band_rect")
+            and self.main_window.rubber_band_rect
+        ):
             from PyQt6.QtCore import QRectF
 
             # Update rubber band rectangle
@@ -112,9 +132,14 @@ class SingleViewModeHandler(BaseModeHandler):
     def handle_bbox_complete(self, pos):
         """Handle bbox mode completion in single view."""
         # Implementation from main_window._scene_mouse_release bbox handling
-        if hasattr(self.main_window, 'rubber_band_rect') and self.main_window.rubber_band_rect:
+        if (
+            hasattr(self.main_window, "rubber_band_rect")
+            and self.main_window.rubber_band_rect
+        ):
             # Remove rubber band
-            self.main_window.viewer.scene().removeItem(self.main_window.rubber_band_rect)
+            self.main_window.viewer.scene().removeItem(
+                self.main_window.rubber_band_rect
+            )
             self.main_window.rubber_band_rect = None
 
             # Create polygon from bbox
@@ -128,7 +153,7 @@ class SingleViewModeHandler(BaseModeHandler):
                     [rect.left(), rect.top()],
                     [rect.right(), rect.top()],
                     [rect.right(), rect.bottom()],
-                    [rect.left(), rect.bottom()]
+                    [rect.left(), rect.bottom()],
                 ]
 
                 new_segment = {
@@ -140,10 +165,12 @@ class SingleViewModeHandler(BaseModeHandler):
                 self.segment_manager.add_segment(new_segment)
 
                 # Record action for undo
-                self.main_window.action_history.append({
-                    "type": "add_segment",
-                    "segment_index": len(self.segment_manager.segments) - 1,
-                })
+                self.main_window.action_history.append(
+                    {
+                        "type": "add_segment",
+                        "segment_index": len(self.segment_manager.segments) - 1,
+                    }
+                )
                 self.main_window.redo_history.clear()
 
                 self.main_window._update_all_lists()
@@ -195,8 +222,13 @@ class SingleViewModeHandler(BaseModeHandler):
 
     def clear_all_points(self):
         """Clear all temporary points in single view."""
-        if hasattr(self.main_window, "rubber_band_line") and self.main_window.rubber_band_line:
-            self.main_window.viewer.scene().removeItem(self.main_window.rubber_band_line)
+        if (
+            hasattr(self.main_window, "rubber_band_line")
+            and self.main_window.rubber_band_line
+        ):
+            self.main_window.viewer.scene().removeItem(
+                self.main_window.rubber_band_line
+            )
             self.main_window.rubber_band_line = None
 
         self.main_window.positive_points.clear()
@@ -212,14 +244,22 @@ class SingleViewModeHandler(BaseModeHandler):
         self.main_window.polygon_preview_items.clear()
 
         # Clear polygon lasso lines
-        if hasattr(self.main_window, 'polygon_lasso_lines') and self.main_window.polygon_lasso_lines:
+        if (
+            hasattr(self.main_window, "polygon_lasso_lines")
+            and self.main_window.polygon_lasso_lines
+        ):
             for line in self.main_window.polygon_lasso_lines:
                 if line.scene():
                     self.main_window.viewer.scene().removeItem(line)
             self.main_window.polygon_lasso_lines.clear()
 
-        if hasattr(self.main_window, "preview_mask_item") and self.main_window.preview_mask_item:
-            self.main_window.viewer.scene().removeItem(self.main_window.preview_mask_item)
+        if (
+            hasattr(self.main_window, "preview_mask_item")
+            and self.main_window.preview_mask_item
+        ):
+            self.main_window.viewer.scene().removeItem(
+                self.main_window.preview_mask_item
+            )
             self.main_window.preview_mask_item = None
 
     def _finalize_polygon(self):
@@ -228,7 +268,10 @@ class SingleViewModeHandler(BaseModeHandler):
             return
 
         # Clear lasso lines when finalizing
-        if hasattr(self.main_window, 'polygon_lasso_lines') and self.main_window.polygon_lasso_lines:
+        if (
+            hasattr(self.main_window, "polygon_lasso_lines")
+            and self.main_window.polygon_lasso_lines
+        ):
             for line in self.main_window.polygon_lasso_lines:
                 if line.scene():
                     self.main_window.viewer.scene().removeItem(line)
@@ -243,10 +286,12 @@ class SingleViewModeHandler(BaseModeHandler):
         self.segment_manager.add_segment(new_segment)
 
         # Record action for undo
-        self.main_window.action_history.append({
-            "type": "add_segment",
-            "segment_index": len(self.segment_manager.segments) - 1,
-        })
+        self.main_window.action_history.append(
+            {
+                "type": "add_segment",
+                "segment_index": len(self.segment_manager.segments) - 1,
+            }
+        )
         self.main_window.redo_history.clear()
 
         self.main_window.polygon_points.clear()

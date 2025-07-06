@@ -335,7 +335,7 @@ def test_multi_view_ai_click_handling(main_window_with_multi_view):
     mock_result = (
         np.ones((256, 256), dtype=bool),  # mask
         np.array([0.9]),  # scores
-        np.random.rand(1, 256, 256)  # logits
+        np.random.rand(1, 256, 256),  # logits
     )
     window.multi_view_models[0].predict.return_value = mock_result
 
@@ -493,7 +493,9 @@ def test_multi_view_mouse_event_delegation(main_window_with_multi_view):
 
     # Verify delegation occurred with mapped position - called for both viewers
     assert window.multi_view_mode_handler.handle_ai_click.call_count == 2
-    window.multi_view_mode_handler.handle_ai_click.assert_any_call(mapped_pos, mock_event, 0)
+    window.multi_view_mode_handler.handle_ai_click.assert_any_call(
+        mapped_pos, mock_event, 0
+    )
 
 
 def test_multi_view_empty_batch_handling(main_window_with_multi_view):

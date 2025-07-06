@@ -13,34 +13,57 @@ class HoverablePolygonItem(QGraphicsPolygonItem):
 
     def set_brushes(self, default_brush, hover_brush):
         from lazylabel.utils.logger import logger
+
         self.default_brush = default_brush
         self.hover_brush = hover_brush
         self.setBrush(self.default_brush)
-        logger.debug(f"HoverablePolygonItem.set_brushes: default={default_brush}, hover={hover_brush}")
+        logger.debug(
+            f"HoverablePolygonItem.set_brushes: default={default_brush}, hover={hover_brush}"
+        )
 
     def set_segment_info(self, segment_id, main_window):
         from lazylabel.utils.logger import logger
+
         self.segment_id = segment_id
         self.main_window = main_window
-        logger.debug(f"HoverablePolygonItem.set_segment_info: segment_id={segment_id}, main_window={main_window is not None}")
+        logger.debug(
+            f"HoverablePolygonItem.set_segment_info: segment_id={segment_id}, main_window={main_window is not None}"
+        )
 
     def hoverEnterEvent(self, event):
         from lazylabel.utils.logger import logger
-        logger.debug(f"HoverablePolygonItem.hoverEnterEvent: segment_id={self.segment_id}, main_window={self.main_window is not None}")
+
+        logger.debug(
+            f"HoverablePolygonItem.hoverEnterEvent: segment_id={self.segment_id}, main_window={self.main_window is not None}"
+        )
         self.setBrush(self.hover_brush)
         # Trigger hover on mirror segments in multi-view mode
-        if self.main_window and hasattr(self.main_window, 'view_mode') and self.main_window.view_mode == "multi":
-            logger.debug(f"Triggering segment hover: segment_id={self.segment_id}, view_mode={self.main_window.view_mode}")
-            self.main_window._trigger_segment_hover(self.segment_id, True, self)
+        if self.main_window:
+            if hasattr(self.main_window, "view_mode"):
+                logger.debug(f"View mode check: view_mode={self.main_window.view_mode}")
+                if self.main_window.view_mode == "multi":
+                    logger.debug(
+                        f"Triggering segment hover: segment_id={self.segment_id}"
+                    )
+                    self.main_window._trigger_segment_hover(self.segment_id, True, self)
+            else:
+                logger.debug("main_window has no view_mode attribute!")
         super().hoverEnterEvent(event)
 
     def hoverLeaveEvent(self, event):
         from lazylabel.utils.logger import logger
-        logger.debug(f"HoverablePolygonItem.hoverLeaveEvent: segment_id={self.segment_id}, main_window={self.main_window is not None}")
+
+        logger.debug(
+            f"HoverablePolygonItem.hoverLeaveEvent: segment_id={self.segment_id}, main_window={self.main_window is not None}"
+        )
         self.setBrush(self.default_brush)
         # Trigger unhover on mirror segments in multi-view mode
-        if self.main_window and hasattr(self.main_window, 'view_mode') and self.main_window.view_mode == "multi":
-            logger.debug(f"Triggering segment unhover: segment_id={self.segment_id}, view_mode={self.main_window.view_mode}")
+        if (
+            self.main_window
+            and hasattr(self.main_window, "view_mode")
+            and self.main_window.view_mode == "multi"
+        ):
+            logger.debug(f"Triggering segment unhover: segment_id={self.segment_id}")
             self.main_window._trigger_segment_hover(self.segment_id, False, self)
         super().hoverLeaveEvent(event)
 

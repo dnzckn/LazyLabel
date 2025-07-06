@@ -47,6 +47,7 @@ from .editable_vertex import EditableVertexItem
 from .hotkey_dialog import HotkeyDialog
 from .hoverable_pixelmap_item import HoverablePixmapItem
 from .hoverable_polygon_item import HoverablePolygonItem
+from .modes import MultiViewModeHandler
 from .numeric_table_widget_item import NumericTableWidgetItem
 from .photo_viewer import PhotoViewer
 from .right_panel import RightPanel
@@ -217,17 +218,23 @@ class MultiViewSAMInitWorker(QThread):
             custom_model_path = None
             default_model_type = "vit_h"  # fallback
 
-            if parent and hasattr(parent, 'control_panel'):
+            if parent and hasattr(parent, "control_panel"):
                 # Get the selected model path from the model selection widget
                 model_path = parent.control_panel.model_widget.get_selected_model_path()
                 if model_path:
                     # User has selected a custom model
                     custom_model_path = model_path
                     # Detect model type from filename
-                    default_model_type = self.model_manager.detect_model_type(model_path)
+                    default_model_type = self.model_manager.detect_model_type(
+                        model_path
+                    )
                 else:
                     # Using default model
-                    default_model_type = parent.settings.default_model_type if hasattr(parent, 'settings') else "vit_h"
+                    default_model_type = (
+                        parent.settings.default_model_type
+                        if hasattr(parent, "settings")
+                        else "vit_h"
+                    )
 
             is_sam2 = default_model_type.startswith("sam2")
 
@@ -250,7 +257,7 @@ class MultiViewSAMInitWorker(QThread):
                         if custom_model_path:
                             model_instance = SamModel(
                                 model_type=default_model_type,
-                                custom_model_path=custom_model_path
+                                custom_model_path=custom_model_path,
                             )
                         else:
                             model_instance = SamModel(model_type=default_model_type)
@@ -307,7 +314,10 @@ class ImageDiscoveryWorker(QThread):
 
             self.progress.emit("Scanning for images...")
 
-            if not hasattr(self.file_model, "rootPath") or not self.file_model.rootPath():
+            if (
+                not hasattr(self.file_model, "rootPath")
+                or not self.file_model.rootPath()
+            ):
                 self.images_discovered.emit([])
                 return
 
@@ -488,6 +498,16 @@ class PanelPopoutWindow(QDialog):
 
         # Store original parent for restoration
         self.original_parent = parent
+        self.main_window = parent  # Store reference to main window for key forwarding
+
+    def keyPressEvent(self, event):
+        """Forward key events to main window to preserve hotkey functionality."""
+        if self.main_window and hasattr(self.main_window, "keyPressEvent"):
+            # Forward the key event to the main window
+            self.main_window.keyPressEvent(event)
+        else:
+            # Default handling if main window not available
+            super().keyPressEvent(event)
 
     def closeEvent(self, event):
         """Handle window close - emit signal to return panel to main window."""
@@ -518,7 +538,10 @@ class MainWindow(QMainWindow):
         self.multi_view_linked = [True, True]  # Link status for each image
         self.multi_view_viewers = []  # 2 PhotoViewer instances
         self.multi_view_segments = [[], []]  # Segments for each image
-        self.multi_view_segment_items = {0: {}, 1: {}}  # Visual items for segments per viewer
+        self.multi_view_segment_items = {
+            0: {},
+            1: {},
+        }  # Visual items for segments per viewer
         self.current_multi_batch_start = 0  # Starting index for current 2-image batch
 
         # Multi-view worker threads
@@ -634,7 +657,7 @@ class MainWindow(QMainWindow):
         self.ai_bbox_preview_rect = None
 
         self._setup_ui()
-        self._setup_model()
+        self._setup_model_manager()  # Just setup manager, don't load model
         self._setup_connections()
         self._setup_shortcuts()
         self._load_settings()
@@ -799,29 +822,8 @@ class MainWindow(QMainWindow):
 
         layout.addWidget(controls_widget)
 
-    def _setup_model(self):
-        """Setup the SAM model."""
-
-        sam_model = self.model_manager.initialize_default_model(
-            self.settings.default_model_type
-        )
-
-        if sam_model and sam_model.is_loaded:
-            device_text = str(sam_model.device).upper()
-            logger.info(f"Step 6/8: SAM model loaded successfully on {device_text}")
-            self.status_bar.set_permanent_message(f"Device: {device_text}")
-            self._enable_sam_functionality(True)
-        elif sam_model is None:
-            logger.warning(
-                "Step 6/8: SAM model initialization failed. Point mode will be disabled."
-            )
-            self._enable_sam_functionality(False)
-        else:
-            logger.warning(
-                "Step 6/8: SAM model initialization failed. Point mode will be disabled."
-            )
-            self._enable_sam_functionality(False)
-
+    def _setup_model_manager(self):
+        """Setup the model manager without loading any models."""
         # Setup model change callback
         self.model_manager.on_model_changed = self.control_panel.set_current_model
 
@@ -831,6 +833,8 @@ class MainWindow(QMainWindow):
 
         if models:
             logger.info(f"Step 6/8: Found {len(models)} model(s) in models directory")
+        else:
+            logger.info("Step 6/8: No models found in models directory")
 
     def _enable_sam_functionality(self, enabled: bool):
         """Enable or disable SAM point functionality."""
@@ -966,11 +970,17 @@ class MainWindow(QMainWindow):
             # Create primary shortcut
             if primary_key:
                 shortcut = QShortcut(QKeySequence(primary_key), self, callback)
+                shortcut.setContext(
+                    Qt.ShortcutContext.ApplicationShortcut
+                )  # Work app-wide
                 self.shortcuts.append(shortcut)
 
             # Create secondary shortcut
             if secondary_key:
                 shortcut = QShortcut(QKeySequence(secondary_key), self, callback)
+                shortcut.setContext(
+                    Qt.ShortcutContext.ApplicationShortcut
+                )  # Work app-wide
                 self.shortcuts.append(shortcut)
 
     def _load_settings(self):
@@ -1045,14 +1055,9 @@ class MainWindow(QMainWindow):
     # Mode management methods
     def set_sam_mode(self):
         """Set mode to AI (combines SAM points and bounding box)."""
-        # In multi-view mode with lazy loading, we'll load models on first use
-        if self.view_mode == "single" and not self.model_manager.is_model_available():
-            logger.warning("Cannot enter AI mode: No model available")
-            return
+        # Allow entering AI mode even without a loaded model (lazy loading)
         self._set_mode("ai")
-        # Ensure SAM model is updated when entering AI mode (lazy update)
-        if self.view_mode == "single":
-            self._ensure_sam_updated()
+        # Note: Model will be loaded on first click/use, similar to multi-view mode
 
     def set_polygon_mode(self):
         """Set polygon drawing mode."""
@@ -1250,23 +1255,31 @@ class MainWindow(QMainWindow):
     def _apply_image_adjustments_to_all_viewers(self):
         """Apply current image adjustments to all active viewers."""
         # Apply to single view viewer if it has an image
-        if (self.current_image_path and
-            hasattr(self.viewer, '_original_image') and
-            self.viewer._original_image is not None and
-            hasattr(self.viewer, '_original_image_bgr') and
-            self.viewer._original_image_bgr is not None):
-            self.viewer.set_image_adjustments(self.brightness, self.contrast, self.gamma)
+        if (
+            self.current_image_path
+            and hasattr(self.viewer, "_original_image")
+            and self.viewer._original_image is not None
+            and hasattr(self.viewer, "_original_image_bgr")
+            and self.viewer._original_image_bgr is not None
+        ):
+            self.viewer.set_image_adjustments(
+                self.brightness, self.contrast, self.gamma
+            )
 
         # Apply to multi-view viewers if they have images
         if self.view_mode == "multi" and hasattr(self, "multi_view_viewers"):
             for i, viewer in enumerate(self.multi_view_viewers):
-                if (i < len(self.multi_view_images) and
-                    self.multi_view_images[i] is not None and
-                    hasattr(viewer, '_original_image') and
-                    viewer._original_image is not None and
-                    hasattr(viewer, '_original_image_bgr') and
-                    viewer._original_image_bgr is not None):
-                    viewer.set_image_adjustments(self.brightness, self.contrast, self.gamma)
+                if (
+                    i < len(self.multi_view_images)
+                    and self.multi_view_images[i] is not None
+                    and hasattr(viewer, "_original_image")
+                    and viewer._original_image is not None
+                    and hasattr(viewer, "_original_image_bgr")
+                    and viewer._original_image_bgr is not None
+                ):
+                    viewer.set_image_adjustments(
+                        self.brightness, self.contrast, self.gamma
+                    )
 
     def _reset_image_adjustments(self):
         """Reset all image adjustment settings to their default values."""
@@ -1278,17 +1291,29 @@ class MainWindow(QMainWindow):
         self.settings.contrast = self.contrast
         self.settings.gamma = self.gamma
         self.control_panel.adjustments_widget.reset_to_defaults()
-        if self.current_image_path or (self.view_mode == "multi" and any(self.multi_view_images)):
+        if self.current_image_path or (
+            self.view_mode == "multi" and any(self.multi_view_images)
+        ):
             self._apply_image_adjustments_to_all_viewers()
 
     def _handle_settings_changed(self):
-        """Handle changes in settings, e.g., 'Operate On View'."""
+        """Handle changes in settings."""
+        # Get old operate_on_view setting
+        old_operate_on_view = self.settings.operate_on_view
+
         # Update the main window's settings object with the latest from the widget
         self.settings.update(**self.control_panel.settings_widget.get_settings())
 
-        # When operate on view setting changes, we need to force SAM model to update
-        # with proper scale factor recalculation via the worker thread
-        if self.current_image_path:
+        # Only update SAM if operate_on_view setting actually changed
+        if (
+            old_operate_on_view != self.settings.operate_on_view
+            and self.current_image_path
+        ):
+            # When operate on view setting changes, we need to force SAM model to update
+            # with proper scale factor recalculation via the worker thread
+            logger.debug(
+                f"Operate on view changed from {old_operate_on_view} to {self.settings.operate_on_view}"
+            )
             # Mark SAM as dirty and reset scale factor to force proper recalculation
             self.sam_is_dirty = True
             self.sam_scale_factor = 1.0  # Reset to default
@@ -1426,8 +1451,18 @@ class MainWindow(QMainWindow):
         # Remove highlight overlays before deleting segments
         if hasattr(self, "highlight_items"):
             for item in self.highlight_items:
-                self.viewer.scene().removeItem(item)
+                if item.scene():
+                    item.scene().removeItem(item)
             self.highlight_items = []
+
+        # Also clear multi-view highlight items
+        if hasattr(self, "multi_view_highlight_items"):
+            for _viewer_idx, items in self.multi_view_highlight_items.items():
+                for item in items:
+                    if item.scene():
+                        item.scene().removeItem(item)
+            self.multi_view_highlight_items = {0: [], 1: []}
+
         selected_indices = self.right_panel.get_selected_segment_indices()
         self.segment_manager.delete_segments(selected_indices)
         self._update_all_lists()
@@ -1517,13 +1552,23 @@ class MainWindow(QMainWindow):
                 # New multi-view format - highlight in relevant viewers
                 for viewer_idx in range(len(self.multi_view_viewers)):
                     if viewer_idx in seg["views"]:
-                        self._add_highlight_to_viewer(i, seg, viewer_idx, highlight_brush, seg["views"][viewer_idx])
+                        self._add_highlight_to_viewer(
+                            i,
+                            seg,
+                            viewer_idx,
+                            highlight_brush,
+                            seg["views"][viewer_idx],
+                        )
             else:
                 # Legacy single-view format - highlight in all viewers
                 for viewer_idx in range(len(self.multi_view_viewers)):
-                    self._add_highlight_to_viewer(i, seg, viewer_idx, highlight_brush, seg)
+                    self._add_highlight_to_viewer(
+                        i, seg, viewer_idx, highlight_brush, seg
+                    )
 
-    def _add_highlight_to_viewer(self, segment_index, segment, viewer_idx, highlight_brush, segment_data):
+    def _add_highlight_to_viewer(
+        self, segment_index, segment, viewer_idx, highlight_brush, segment_data
+    ):
         """Add highlight overlay to a specific viewer."""
         viewer = self.multi_view_viewers[viewer_idx]
 
@@ -1548,40 +1593,68 @@ class MainWindow(QMainWindow):
 
     def _trigger_segment_hover(self, segment_id, hover_state, triggering_item=None):
         """Handle segment hover events for multi-view synchronization."""
-        logger.debug(f"_trigger_segment_hover called: segment_id={segment_id}, hover_state={hover_state}, view_mode={self.view_mode}")
+        logger.debug(
+            f"_trigger_segment_hover called: segment_id={segment_id}, hover_state={hover_state}, view_mode={self.view_mode}"
+        )
 
         if self.view_mode != "multi":
             logger.debug("Not in multi-view mode, returning")
             return
 
         # Trigger hover state on corresponding segments in all viewers
-        if hasattr(self, 'multi_view_segment_items'):
-            logger.debug(f"multi_view_segment_items exists: {list(self.multi_view_segment_items.keys())}")
+        if hasattr(self, "multi_view_segment_items"):
+            logger.debug(
+                f"multi_view_segment_items exists: {list(self.multi_view_segment_items.keys())}"
+            )
             for viewer_idx, viewer_segments in self.multi_view_segment_items.items():
-                logger.debug(f"Viewer {viewer_idx} has segments: {list(viewer_segments.keys())}")
+                logger.debug(
+                    f"Viewer {viewer_idx} has segments: {list(viewer_segments.keys())}"
+                )
                 if segment_id in viewer_segments:
-                    logger.debug(f"Found segment {segment_id} in viewer {viewer_idx} with {len(viewer_segments[segment_id])} items")
+                    logger.debug(
+                        f"Found segment {segment_id} in viewer {viewer_idx} with {len(viewer_segments[segment_id])} items"
+                    )
                     for item in viewer_segments[segment_id]:
                         # Skip the item that triggered the hover to avoid recursion
                         if item is triggering_item:
                             logger.debug(f"Skipping triggering item {item}")
                             continue
 
-                        if hasattr(item, 'set_hover_state'):
+                        if hasattr(item, "set_hover_state"):
                             logger.debug(f"Using set_hover_state for item {item}")
                             item.set_hover_state(hover_state)
-                        elif hasattr(item, 'setBrush') and hasattr(item, 'hover_brush') and hasattr(item, 'default_brush'):
+                        elif (
+                            hasattr(item, "setBrush")
+                            and hasattr(item, "hover_brush")
+                            and hasattr(item, "default_brush")
+                        ):
                             # For HoverablePolygonItem
-                            logger.debug(f"Using setBrush for HoverablePolygonItem {item}")
-                            item.setBrush(item.hover_brush if hover_state else item.default_brush)
-                        elif hasattr(item, 'setPixmap') and hasattr(item, 'hover_pixmap') and hasattr(item, 'default_pixmap'):
+                            logger.debug(
+                                f"Using setBrush for HoverablePolygonItem {item}"
+                            )
+                            item.setBrush(
+                                item.hover_brush if hover_state else item.default_brush
+                            )
+                        elif (
+                            hasattr(item, "setPixmap")
+                            and hasattr(item, "hover_pixmap")
+                            and hasattr(item, "default_pixmap")
+                        ):
                             # For HoverablePixmapItem
-                            logger.debug(f"Using setPixmap for HoverablePixmapItem {item}")
-                            item.setPixmap(item.hover_pixmap if hover_state else item.default_pixmap)
+                            logger.debug(
+                                f"Using setPixmap for HoverablePixmapItem {item}"
+                            )
+                            item.setPixmap(
+                                item.hover_pixmap
+                                if hover_state
+                                else item.default_pixmap
+                            )
                         else:
                             logger.debug(f"No hover method found for item {item}")
                 else:
-                    logger.debug(f"Segment {segment_id} not found in viewer {viewer_idx}")
+                    logger.debug(
+                        f"Segment {segment_id} not found in viewer {viewer_idx}"
+                    )
         else:
             logger.debug("multi_view_segment_items attribute not found")
 
@@ -1805,13 +1878,17 @@ class MainWindow(QMainWindow):
     def _display_all_multi_view_segments(self):
         """Display all segments in multi-view mode."""
         # Clear existing segment items from all viewers
-        if hasattr(self, 'multi_view_segment_items'):
+        if hasattr(self, "multi_view_segment_items"):
             for viewer_idx, viewer_segments in self.multi_view_segment_items.items():
                 for _segment_idx, items in viewer_segments.items():
-                    for item in items[:]:  # Create a copy to avoid modification during iteration
+                    for item in items[
+                        :
+                    ]:  # Create a copy to avoid modification during iteration
                         try:
                             if item.scene():
-                                self.multi_view_viewers[viewer_idx].scene().removeItem(item)
+                                self.multi_view_viewers[viewer_idx].scene().removeItem(
+                                    item
+                                )
                         except RuntimeError:
                             # Object has been deleted, skip it
                             pass
@@ -1823,10 +1900,14 @@ class MainWindow(QMainWindow):
             for item in viewer.scene().items():
                 # Only remove items that are confirmed segment display items
                 # Skip pixmap items (could be the image itself) and temporary graphics items
-                if (hasattr(item, 'segment_id') or
-                    isinstance(item, HoverablePixmapItem | HoverablePolygonItem)) or (hasattr(item, '__class__') and
-                      item.__class__.__name__ == 'QGraphicsPolygonItem' and
-                      hasattr(item, 'segment_id')):
+                if (
+                    hasattr(item, "segment_id")
+                    or isinstance(item, HoverablePixmapItem | HoverablePolygonItem)
+                ) or (
+                    hasattr(item, "__class__")
+                    and item.__class__.__name__ == "QGraphicsPolygonItem"
+                    and hasattr(item, "segment_id")
+                ):
                     items_to_remove.append(item)
 
             for item in items_to_remove:
@@ -1850,13 +1931,19 @@ class MainWindow(QMainWindow):
                 # New multi-view format with paired data
                 for viewer_idx in range(len(self.multi_view_viewers)):
                     if viewer_idx in segment["views"]:
-                        self._display_segment_in_multi_view_viewer(i, segment, viewer_idx, base_color)
+                        self._display_segment_in_multi_view_viewer(
+                            i, segment, viewer_idx, base_color
+                        )
             else:
                 # Legacy single-view format - display in all viewers
                 for viewer_idx in range(len(self.multi_view_viewers)):
-                    self._display_segment_in_multi_view_viewer(i, segment, viewer_idx, base_color)
+                    self._display_segment_in_multi_view_viewer(
+                        i, segment, viewer_idx, base_color
+                    )
 
-    def _display_segment_in_multi_view_viewer(self, segment_index, segment, viewer_index, base_color):
+    def _display_segment_in_multi_view_viewer(
+        self, segment_index, segment, viewer_index, base_color
+    ):
         """Display a specific segment in a specific viewer."""
         if viewer_index >= len(self.multi_view_viewers):
             return
@@ -1890,6 +1977,9 @@ class MainWindow(QMainWindow):
             poly_item.set_brushes(default_brush, hover_brush)
             poly_item.set_segment_info(segment_index, self)
             poly_item.setPen(QPen(Qt.GlobalColor.transparent))
+            logger.debug(
+                f"Created polygon segment {segment_index} in viewer {viewer_index}"
+            )
 
             viewer.scene().addItem(poly_item)
             self.multi_view_segment_items[viewer_index][segment_index].append(poly_item)
@@ -1905,10 +1995,13 @@ class MainWindow(QMainWindow):
             pixmap_item = HoverablePixmapItem()
             pixmap_item.set_pixmaps(default_pixmap, hover_pixmap)
             pixmap_item.set_segment_info(segment_index, self)
+            logger.debug(f"Created AI segment {segment_index} in viewer {viewer_index}")
 
             viewer.scene().addItem(pixmap_item)
             pixmap_item.setZValue(segment_index + 1)
-            self.multi_view_segment_items[viewer_index][segment_index].append(pixmap_item)
+            self.multi_view_segment_items[viewer_index][segment_index].append(
+                pixmap_item
+            )
 
     # Event handlers
     def _handle_escape_press(self):
@@ -1945,13 +2038,16 @@ class MainWindow(QMainWindow):
                 for i, points in enumerate(self.multi_view_polygon_points):
                     if points and len(points) >= 3:
                         # Use the multi-view mode handler for proper pairing logic
-                        if hasattr(self, 'multi_view_mode_handler'):
+                        if hasattr(self, "multi_view_mode_handler"):
                             self.multi_view_mode_handler._finalize_multi_view_polygon(i)
                         else:
                             self._finalize_multi_view_polygon(i)
         else:
-            # For AI mode and other modes, save current segment
-            self._save_current_segment()
+            # For AI mode, use accept method, otherwise save current segment
+            if self.mode == "ai" and self.view_mode == "single":
+                self._accept_ai_segment()
+            else:
+                self._save_current_segment()
 
     def _handle_enter_press(self):
         """Handle enter key press."""
@@ -1965,7 +2061,7 @@ class MainWindow(QMainWindow):
                 for i, points in enumerate(self.multi_view_polygon_points):
                     if points and len(points) >= 3:
                         # Use the multi-view mode handler for proper pairing logic
-                        if hasattr(self, 'multi_view_mode_handler'):
+                        if hasattr(self, "multi_view_mode_handler"):
                             self.multi_view_mode_handler._finalize_multi_view_polygon(i)
                         else:
                             self._finalize_multi_view_polygon(i)
@@ -1976,10 +2072,23 @@ class MainWindow(QMainWindow):
 
     def _save_current_segment(self):
         """Save current SAM segment with fragment threshold filtering."""
-        if (
-            self.mode not in ["sam_points", "ai"]
-            or not self.model_manager.is_model_available()
-        ):
+        logger.debug(
+            f"_save_current_segment called - mode: {self.mode}, view_mode: {self.view_mode}"
+        )
+
+        if self.mode not in ["sam_points", "ai"]:
+            logger.debug(f"Mode {self.mode} not in ['sam_points', 'ai'], returning")
+            return
+
+        # Handle multi-view mode separately
+        if self.view_mode == "multi":
+            if hasattr(self, "multi_view_mode_handler"):
+                self.multi_view_mode_handler.save_ai_predictions()
+            return
+
+        # Single view mode - check model availability
+        if not self.model_manager.is_model_available():
+            logger.debug("Model not available, returning")
             return
 
         # Check if we have a bounding box preview to save
@@ -1995,7 +2104,7 @@ class MainWindow(QMainWindow):
             if filtered_mask is not None:
                 new_segment = {
                     "mask": filtered_mask,
-                    "type": "SAM",
+                    "type": "AI",  # Changed from "SAM" to match other AI segments
                     "vertices": None,
                 }
                 self.segment_manager.add_segment(new_segment)
@@ -2027,11 +2136,23 @@ class MainWindow(QMainWindow):
 
         # Handle point-based predictions
         # First check if we have a preview mask already generated
-        if hasattr(self, "current_preview_mask") and self.current_preview_mask is not None:
+        has_preview_mask = (
+            hasattr(self, "current_preview_mask")
+            and self.current_preview_mask is not None
+        )
+        has_preview_item = hasattr(self, "preview_mask_item") and self.preview_mask_item
+
+        logger.debug(
+            f"Point-based save - has_preview_mask: {has_preview_mask}, has_preview_item: {has_preview_item}"
+        )
+
+        if has_preview_mask:
             mask = self.current_preview_mask
+            logger.debug("Using existing current_preview_mask")
         else:
             # No preview mask - need to generate one
-            if not hasattr(self, "preview_mask_item") or not self.preview_mask_item:
+            if not has_preview_item:
+                logger.debug("No preview item, cannot save")
                 return
 
             result = self.model_manager.sam_model.predict(
@@ -2068,10 +2189,13 @@ class MainWindow(QMainWindow):
             if filtered_mask is not None:
                 new_segment = {
                     "mask": filtered_mask,
-                    "type": "SAM",
+                    "type": "AI",  # Changed from "SAM" to match other AI segments
                     "vertices": None,
                 }
                 self.segment_manager.add_segment(new_segment)
+                logger.info(
+                    f"Added AI segment. Total segments: {len(self.segment_manager.segments)}"
+                )
                 # Record the action for undo
                 self.action_history.append(
                     {
@@ -2083,6 +2207,7 @@ class MainWindow(QMainWindow):
                 self.redo_history.clear()
                 self.clear_all_points()
                 self._update_all_lists()
+                self._show_success_notification("AI segment saved!")
             else:
                 self._show_warning_notification(
                     "All segments filtered out by fragment threshold"
@@ -2169,7 +2294,7 @@ class MainWindow(QMainWindow):
                     # Create a segment for this viewer with the view-specific data
                     viewer_segment = {
                         "type": segment["type"],
-                        "class_id": segment.get("class_id")
+                        "class_id": segment.get("class_id"),
                     }
                     # Copy view-specific data to the top level
                     viewer_segment.update(segment["views"][viewer_index])
@@ -2426,22 +2551,30 @@ class MainWindow(QMainWindow):
                 if viewer_index is not None and hasattr(self, "multi_view_point_items"):
                     # Remove from multi-view point collections
                     if point_type == "positive":
-                        if (hasattr(self, "multi_view_positive_points") and
-                            viewer_index < len(self.multi_view_positive_points) and
-                            self.multi_view_positive_points[viewer_index]):
+                        if (
+                            hasattr(self, "multi_view_positive_points")
+                            and viewer_index < len(self.multi_view_positive_points)
+                            and self.multi_view_positive_points[viewer_index]
+                        ):
                             self.multi_view_positive_points[viewer_index].pop()
                     else:
-                        if (hasattr(self, "multi_view_negative_points") and
-                            viewer_index < len(self.multi_view_negative_points) and
-                            self.multi_view_negative_points[viewer_index]):
+                        if (
+                            hasattr(self, "multi_view_negative_points")
+                            and viewer_index < len(self.multi_view_negative_points)
+                            and self.multi_view_negative_points[viewer_index]
+                        ):
                             self.multi_view_negative_points[viewer_index].pop()
 
                     # Remove from visual items
-                    if (viewer_index < len(self.multi_view_point_items) and
-                        point_item in self.multi_view_point_items[viewer_index]):
+                    if (
+                        viewer_index < len(self.multi_view_point_items)
+                        and point_item in self.multi_view_point_items[viewer_index]
+                    ):
                         self.multi_view_point_items[viewer_index].remove(point_item)
                         if point_item.scene():
-                            self.multi_view_viewers[viewer_index].scene().removeItem(point_item)
+                            self.multi_view_viewers[viewer_index].scene().removeItem(
+                                point_item
+                            )
 
                 self._show_notification(f"Undid: Add Point (Viewer {viewer_index + 1})")
             else:
@@ -2506,18 +2639,25 @@ class MainWindow(QMainWindow):
             viewer_index = last_action.get("viewer_index")
             if viewer_index is not None and hasattr(self, "multi_view_polygon_points"):
                 # Remove the last point from the specific viewer
-                if (viewer_index < len(self.multi_view_polygon_points) and
-                    self.multi_view_polygon_points[viewer_index]):
+                if (
+                    viewer_index < len(self.multi_view_polygon_points)
+                    and self.multi_view_polygon_points[viewer_index]
+                ):
                     self.multi_view_polygon_points[viewer_index].pop()
 
                     # Remove the visual dot from the scene
-                    if (hasattr(self, "multi_view_polygon_preview_items") and
-                        viewer_index < len(self.multi_view_polygon_preview_items)):
-                        preview_items = self.multi_view_polygon_preview_items[viewer_index]
+                    if hasattr(
+                        self, "multi_view_polygon_preview_items"
+                    ) and viewer_index < len(self.multi_view_polygon_preview_items):
+                        preview_items = self.multi_view_polygon_preview_items[
+                            viewer_index
+                        ]
                         # Find and remove the last dot item
                         for item in reversed(preview_items):
-                            if hasattr(item, 'rect'):  # It's a dot/ellipse item
-                                self.multi_view_viewers[viewer_index].scene().removeItem(item)
+                            if hasattr(item, "rect"):  # It's a dot/ellipse item
+                                self.multi_view_viewers[
+                                    viewer_index
+                                ].scene().removeItem(item)
                                 preview_items.remove(item)
                                 break
 
@@ -2525,7 +2665,9 @@ class MainWindow(QMainWindow):
                     self._draw_multi_view_polygon_preview(viewer_index)
                     self._show_notification("Undid: Add Multi-View Polygon Point")
             else:
-                self._show_warning_notification("Cannot undo: Multi-view polygon data missing")
+                self._show_warning_notification(
+                    "Cannot undo: Multi-view polygon data missing"
+                )
                 self.redo_history.pop()
 
         # Add more undo logic for other action types here in the future
@@ -2570,19 +2712,31 @@ class MainWindow(QMainWindow):
                 if viewer_mode == "multi":
                     # Handle multi-view point redo
                     viewer_index = last_action.get("viewer_index")
-                    if viewer_index is not None and hasattr(self, "multi_view_mode_handler"):
+                    if viewer_index is not None and hasattr(
+                        self, "multi_view_mode_handler"
+                    ):
                         # Use the multi-view handler to re-add the point
-                        positive = (point_type == "positive")
+                        positive = point_type == "positive"
                         # Create a mock event for the handler
                         from PyQt6.QtCore import Qt
 
                         # Create mock event with the correct button
-                        mock_event = type('MockEvent', (), {
-                            'button': lambda: Qt.MouseButton.LeftButton if positive else Qt.MouseButton.RightButton
-                        })()
+                        mock_event = type(
+                            "MockEvent",
+                            (),
+                            {
+                                "button": lambda: Qt.MouseButton.LeftButton
+                                if positive
+                                else Qt.MouseButton.RightButton
+                            },
+                        )()
 
-                        self.multi_view_mode_handler.handle_ai_click(pos, mock_event, viewer_index)
-                        self._show_notification(f"Redid: Add Point (Viewer {viewer_index + 1})")
+                        self.multi_view_mode_handler.handle_ai_click(
+                            pos, mock_event, viewer_index
+                        )
+                        self._show_notification(
+                            f"Redid: Add Point (Viewer {viewer_index + 1})"
+                        )
                 else:
                     # Handle single-view point redo (existing logic)
                     self._add_point(pos, positive=(point_type == "positive"))
@@ -2651,7 +2805,9 @@ class MainWindow(QMainWindow):
                 self._handle_multi_view_polygon_click(point, viewer_index)
                 self._show_notification("Redid: Add Multi-View Polygon Point")
             else:
-                self._show_warning_notification("Cannot redo: Missing multi-view polygon data")
+                self._show_warning_notification(
+                    "Cannot redo: Missing multi-view polygon data"
+                )
                 self.action_history.pop()
         else:
             self._show_warning_notification(
@@ -2723,16 +2879,28 @@ class MainWindow(QMainWindow):
         logger.debug(f"_accept_ai_segment called - view_mode: {self.view_mode}")
 
         if self.view_mode == "single":
-            # Single view mode - check for preview mask
-            has_preview_item = hasattr(self, 'preview_mask_item') and self.preview_mask_item
-            has_preview_mask = hasattr(self, 'current_preview_mask') and self.current_preview_mask is not None
+            # Single view mode - check for preview mask (both point-based and bbox)
+            has_preview_item = (
+                hasattr(self, "preview_mask_item") and self.preview_mask_item
+            )
+            has_preview_mask = (
+                hasattr(self, "current_preview_mask")
+                and self.current_preview_mask is not None
+            )
+            has_bbox_preview = (
+                hasattr(self, "ai_bbox_preview_mask")
+                and self.ai_bbox_preview_mask is not None
+            )
 
-            logger.debug(f"Single view - has_preview_item: {has_preview_item}, has_preview_mask: {has_preview_mask}")
+            logger.debug(
+                f"Single view - has_preview_item: {has_preview_item}, has_preview_mask: {has_preview_mask}, has_bbox_preview: {has_bbox_preview}"
+            )
 
-            if has_preview_item and has_preview_mask:
-
-                # Apply fragment threshold filtering if enabled
-                filtered_mask = self._apply_fragment_threshold(self.current_preview_mask)
+            # Handle bbox preview first
+            if has_bbox_preview:
+                filtered_mask = self._apply_fragment_threshold(
+                    self.ai_bbox_preview_mask
+                )
                 if filtered_mask is not None:
                     # Create actual segment
                     new_segment = {
@@ -2743,27 +2911,76 @@ class MainWindow(QMainWindow):
                     self.segment_manager.add_segment(new_segment)
 
                     # Record the action for undo
-                    self.action_history.append({
-                        "type": "add_segment",
-                        "segment_index": len(self.segment_manager.segments) - 1,
-                    })
+                    self.action_history.append(
+                        {
+                            "type": "add_segment",
+                            "segment_index": len(self.segment_manager.segments) - 1,
+                        }
+                    )
                     # Clear redo history when a new action is performed
                     self.redo_history.clear()
 
+                    # Clear the bbox preview
+                    self.ai_bbox_preview_mask = None
+                    self.ai_bbox_preview_rect = None
+
+                    # Clear preview
+                    if has_preview_item:
+                        self.viewer.scene().removeItem(self.preview_mask_item)
+                        self.preview_mask_item = None
+
+                    # Clear all points
+                    self.clear_all_points()
+                    self._update_all_lists()
+                    self._show_success_notification("AI bounding box segment saved!")
+                else:
+                    self._show_warning_notification(
+                        "All segments filtered out by fragment threshold"
+                    )
+            elif has_preview_item and has_preview_mask:
+                # Apply fragment threshold filtering if enabled
+                filtered_mask = self._apply_fragment_threshold(
+                    self.current_preview_mask
+                )
+                if filtered_mask is not None:
+                    # Create actual segment
+                    new_segment = {
+                        "type": "AI",
+                        "mask": filtered_mask,
+                        "vertices": None,
+                    }
+                    self.segment_manager.add_segment(new_segment)
+
+                    # Record the action for undo
+                    self.action_history.append(
+                        {
+                            "type": "add_segment",
+                            "segment_index": len(self.segment_manager.segments) - 1,
+                        }
+                    )
+                    # Clear redo history when a new action is performed
+                    self.redo_history.clear()
+
+                    # Clear all points after accepting
+                    self.clear_all_points()
                     self._update_all_lists()
                     self._show_notification("AI segment accepted")
                 else:
-                    self._show_warning_notification("All segments filtered out by fragment threshold")
-
-                # Clear the preview
-                if self.preview_mask_item.scene():
-                    self.viewer.scene().removeItem(self.preview_mask_item)
-                self.preview_mask_item = None
-                self.current_preview_mask = None
+                    self._show_warning_notification(
+                        "All segments filtered out by fragment threshold"
+                    )
+                    # Only clear preview if we didn't accept
+                    if has_preview_item and self.preview_mask_item.scene():
+                        self.viewer.scene().removeItem(self.preview_mask_item)
+                    self.preview_mask_item = None
+                    self.current_preview_mask = None
 
         elif self.view_mode == "multi":
             # Multi-view mode - use the multi-view mode handler to save AI predictions
-            if hasattr(self, 'multi_view_mode_handler') and self.multi_view_mode_handler:
+            if (
+                hasattr(self, "multi_view_mode_handler")
+                and self.multi_view_mode_handler
+            ):
                 self.multi_view_mode_handler.save_ai_predictions()
                 self._show_notification("AI segment(s) accepted")
                 return
@@ -2771,10 +2988,12 @@ class MainWindow(QMainWindow):
             # Fallback to old logic if mode handler not available
             accepted_any = False
 
-            if hasattr(self, 'multi_view_preview_masks'):
+            if hasattr(self, "multi_view_preview_masks"):
                 for i in range(2):
-                    if (i < len(self.multi_view_preview_masks) and
-                        self.multi_view_preview_masks[i] is not None):
+                    if (
+                        i < len(self.multi_view_preview_masks)
+                        and self.multi_view_preview_masks[i] is not None
+                    ):
                         # Accept the preview for this viewer
                         mask = self.multi_view_preview_masks[i]
 
@@ -2791,33 +3010,39 @@ class MainWindow(QMainWindow):
                         self.segment_manager.add_segment(new_segment)
 
                         # Record the action for undo
-                        self.action_history.append({
-                            "type": "add_segment",
-                            "segment_index": len(self.segment_manager.segments) - 1,
-                        })
+                        self.action_history.append(
+                            {
+                                "type": "add_segment",
+                                "segment_index": len(self.segment_manager.segments) - 1,
+                            }
+                        )
                         # Clear redo history when a new action is performed
                         self.redo_history.clear()
 
                         # Clear the preview
-                        if (hasattr(self, 'multi_view_preview_mask_items') and
-                            i < len(self.multi_view_preview_mask_items) and
-                            self.multi_view_preview_mask_items[i]):
+                        if (
+                            hasattr(self, "multi_view_preview_mask_items")
+                            and i < len(self.multi_view_preview_mask_items)
+                            and self.multi_view_preview_mask_items[i]
+                        ):
                             viewer = self.multi_view_viewers[i]
-                            viewer.scene().removeItem(self.multi_view_preview_mask_items[i])
+                            viewer.scene().removeItem(
+                                self.multi_view_preview_mask_items[i]
+                            )
                             self.multi_view_preview_mask_items[i] = None
 
                         # Clear the stored mask
                         self.multi_view_preview_masks[i] = None
 
                         # Clear AI points for this viewer
-                        if hasattr(self, 'multi_view_point_items'):
+                        if hasattr(self, "multi_view_point_items"):
                             for item in self.multi_view_point_items[i]:
                                 viewer.scene().removeItem(item)
                             self.multi_view_point_items[i].clear()
 
-                        if hasattr(self, 'multi_view_positive_points'):
+                        if hasattr(self, "multi_view_positive_points"):
                             self.multi_view_positive_points[i].clear()
-                        if hasattr(self, 'multi_view_negative_points'):
+                        if hasattr(self, "multi_view_negative_points"):
                             self.multi_view_negative_points[i].clear()
 
                         accepted_any = True
@@ -3227,6 +3452,9 @@ class MainWindow(QMainWindow):
 
     def _handle_ai_bounding_box(self, rect):
         """Handle AI mode bounding box by using SAM's predict_from_box to create a preview."""
+        # Ensure model is loaded (lazy loading)
+        self._ensure_sam_updated()
+
         if not self.model_manager.is_model_available():
             self._show_warning_notification("AI model not available", 2000)
             return
@@ -3830,8 +4058,34 @@ class MainWindow(QMainWindow):
         if not self.sam_is_dirty or self.sam_is_updating:
             return
 
-        if not self.current_image_path or not self.model_manager.is_model_available():
+        if not self.current_image_path:
             return
+
+        # If no model is available, try to load the default model
+        if not self.model_manager.is_model_available():
+            logger.info("No model loaded, attempting to load default model...")
+            try:
+                sam_model = self.model_manager.initialize_default_model(
+                    self.settings.default_model_type
+                )
+                if sam_model and sam_model.is_loaded:
+                    device_text = str(sam_model.device).upper()
+                    logger.info(f"AI model loaded successfully on {device_text}")
+                    self.status_bar.set_permanent_message(f"Device: {device_text}")
+                    self._enable_sam_functionality(True)
+                else:
+                    raise Exception("Model failed to load")
+            except Exception as e:
+                error_msg = f"Failed to load AI model: {str(e)}"
+                logger.error(error_msg)
+                logger.error(
+                    "Please check:\n1. Model file exists in models directory\n2. You have sufficient GPU/CPU memory\n3. PyTorch is properly installed"
+                )
+                self._show_error_notification(error_msg)
+                self._enable_sam_functionality(False)
+                # Switch to polygon mode
+                self.set_polygon_mode()
+                return
 
         # Get current image (with modifications if operate_on_view is enabled)
         current_image = None
@@ -4896,6 +5150,9 @@ class MainWindow(QMainWindow):
 
             self.view_mode = "multi"
 
+            # Initialize multi-view mode handler
+            self.multi_view_mode_handler = MultiViewModeHandler(self)
+
             # Clean up single-view model to free memory
             self._cleanup_single_view_model()
 
@@ -4905,27 +5162,6 @@ class MainWindow(QMainWindow):
 
     def _initialize_multi_view_models(self):
         """Initialize 2 SAM model instances for multi-view mode using threading."""
-        # For multi-view, we don't need a pre-loaded model - we'll create new instances
-        # Just check if we have model files available
-        # import os
-
-        # Determine the default model filename based on model type
-        # model_filenames = {
-        #     "vit_h": "sam_vit_h_4b8939.pth",
-        #     "vit_l": "sam_vit_l_0b3195.pth",
-        #     "vit_b": "sam_vit_b_01ec64.pth"
-        # }
-
-        # default_model_type = self.settings.default_model_type
-        # model_filename = model_filenames.get(default_model_type, "sam_vit_h_4b8939.pth")
-
-        # Check if the model file exists in the models directory
-        # models_dir = os.path.join(os.path.dirname(__file__), "..", "models")
-        # model_path = os.path.join(models_dir, model_filename)
-
-        # The model will be downloaded automatically if it doesn't exist
-        # So we can proceed with initialization
-
         # Clear existing models and workers
         self._cleanup_multi_view_models()
         self._cleanup_multi_view_workers()
@@ -4943,9 +5179,6 @@ class MainWindow(QMainWindow):
         self.multi_view_init_worker.error.connect(self._on_multi_view_init_error)
         self.multi_view_init_worker.progress.connect(self._on_multi_view_init_progress)
 
-        # Show loading notification
-        self._show_notification("Initializing 2 SAM models for multi-view...")
-
         # Start the worker
         self.multi_view_init_worker.start()
 
@@ -4960,10 +5193,6 @@ class MainWindow(QMainWindow):
 
     def _on_all_multi_view_models_initialized(self, total_models):
         """Handle completion of all multi-view model initialization."""
-        self._show_success_notification(
-            f"Successfully initialized {total_models} SAM models"
-        )
-
         # Clean up the worker
         if self.multi_view_init_worker:
             self.multi_view_init_worker.quit()
@@ -4971,16 +5200,37 @@ class MainWindow(QMainWindow):
             self.multi_view_init_worker.deleteLater()
             self.multi_view_init_worker = None
 
-        # Mark all models as dirty to load images
+        # Track loading progress
+        self._multi_view_loading_step = 0
+        self._multi_view_total_steps = 0
+
+        # Count steps needed
         for i in range(len(self.multi_view_models)):
-            if self.multi_view_images[i]:
-                self._mark_multi_view_sam_dirty(i)
+            if self.multi_view_images[i] and self.multi_view_models[i]:
+                self._multi_view_total_steps += 1
+
+        if self._multi_view_total_steps > 0:
+            self._show_notification("Loading images into AI models...", duration=0)
+            # Load images into the models
+            for i in range(len(self.multi_view_models)):
+                if self.multi_view_images[i] and self.multi_view_models[i]:
+                    self._mark_multi_view_sam_dirty(i)
+                    # Immediately trigger image loading
+                    self._ensure_multi_view_sam_updated(i)
+        else:
+            self._show_notification("AI models ready for prompting", duration=3000)
 
     def _on_multi_view_init_error(self, error_message):
         """Handle multi-view model initialization error."""
         self._show_error_notification(
-            f"Failed to initialize multi-view models: {error_message}"
+            f"Failed to initialize AI models: {error_message}. Please check console for details.",
+            duration=8000,
         )
+        logger.error(f"Multi-view model initialization failed: {error_message}")
+        logger.error(
+            "Please ensure:\n1. Model files exist in models directory\n2. Sufficient GPU/CPU memory available\n3. PyTorch is properly installed"
+        )
+
         self._cleanup_multi_view_models()
 
         # Clean up the worker
@@ -4993,7 +5243,8 @@ class MainWindow(QMainWindow):
     def _on_multi_view_init_progress(self, current, total):
         """Handle multi-view model initialization progress."""
         self._show_notification(
-            f"Initializing SAM models for multi-view: {current}/{total}..."
+            f"Loading AI model {current} of {total}...",
+            duration=0,  # Persistent message
         )
 
     def _cleanup_multi_view_workers(self):
@@ -5050,10 +5301,7 @@ class MainWindow(QMainWindow):
         # Mark as updating
         self.multi_view_models_updating[viewer_index] = True
 
-        # Show loading notification
-        self._show_notification(
-            f"Loading image into AI model for viewer {viewer_index + 1}..."
-        )
+        # Don't show individual notifications here - handled by progress tracking
 
         # Get current modified image if operate_on_view is enabled
         current_image = None
@@ -5086,9 +5334,6 @@ class MainWindow(QMainWindow):
         self.multi_view_models_dirty[viewer_index] = False
         self.multi_view_models_updating[viewer_index] = False
 
-        # Clear loading notification
-        self._clear_notification()
-
         # Clean up worker
         if self.multi_view_update_workers[viewer_index]:
             self.multi_view_update_workers[viewer_index].quit()
@@ -5096,13 +5341,47 @@ class MainWindow(QMainWindow):
             self.multi_view_update_workers[viewer_index].deleteLater()
             self.multi_view_update_workers[viewer_index] = None
 
+        # Update progress
+        if hasattr(self, "_multi_view_loading_step"):
+            self._multi_view_loading_step += 1
+            if self._multi_view_loading_step < self._multi_view_total_steps:
+                self._show_notification(
+                    f"Loading image {self._multi_view_loading_step + 1} of {self._multi_view_total_steps}...",
+                    duration=0,
+                )
+
+        # Check if all models are ready
+        all_ready = all(
+            not self.multi_view_models_updating[i]
+            and not self.multi_view_models_dirty[i]
+            for i in range(len(self.multi_view_models))
+            if self.multi_view_models[i] is not None
+        )
+
+        if all_ready:
+            # All models and images loaded - show ready message
+            self._show_success_notification(
+                "AI models ready for prompting. Click or drag to create predictions.",
+                duration=5000,
+            )
+            # Clean up progress tracking
+            if hasattr(self, "_multi_view_loading_step"):
+                delattr(self, "_multi_view_loading_step")
+            if hasattr(self, "_multi_view_total_steps"):
+                delattr(self, "_multi_view_total_steps")
+
     def _on_multi_view_sam_update_error(self, viewer_index, error_message):
         """Handle multi-view SAM model update error."""
         self.multi_view_models_updating[viewer_index] = False
+        self.multi_view_models_dirty[viewer_index] = False  # Prevent retry loops
 
         # Show error notification
         self._show_error_notification(
-            f"Error loading AI model for viewer {viewer_index + 1}: {error_message}"
+            f"Failed to load image into AI model {viewer_index + 1}: {error_message}",
+            duration=8000,
+        )
+        logger.error(
+            f"Multi-view SAM update failed for viewer {viewer_index + 1}: {error_message}"
         )
 
         # Clean up worker
@@ -5135,9 +5414,12 @@ class MainWindow(QMainWindow):
 
     def _cleanup_single_view_model(self):
         """Clean up single-view model instance to free memory when switching to multi-view."""
-        if hasattr(self.model_manager, 'sam_model') and self.model_manager.sam_model:
+        if hasattr(self.model_manager, "sam_model") and self.model_manager.sam_model:
             # Clear the model
-            if hasattr(self.model_manager.sam_model, 'model') and self.model_manager.sam_model.model:
+            if (
+                hasattr(self.model_manager.sam_model, "model")
+                and self.model_manager.sam_model.model
+            ):
                 del self.model_manager.sam_model.model
             del self.model_manager.sam_model
             self.model_manager.sam_model = None
@@ -5145,6 +5427,7 @@ class MainWindow(QMainWindow):
             # Clear GPU memory
             try:
                 import torch
+
                 if torch.cuda.is_available():
                     torch.cuda.empty_cache()
             except ImportError:
@@ -5154,13 +5437,18 @@ class MainWindow(QMainWindow):
 
     def _get_multi_view_modified_image(self, viewer_index):
         """Get the current modified image for a specific viewer in multi-view mode."""
-        if not hasattr(self, 'multi_view_viewers') or viewer_index >= len(self.multi_view_viewers):
+        if not hasattr(self, "multi_view_viewers") or viewer_index >= len(
+            self.multi_view_viewers
+        ):
             return None
 
         viewer = self.multi_view_viewers[viewer_index]
 
         # Get the original image from the viewer
-        if not hasattr(viewer, '_original_image_bgr') or viewer._original_image_bgr is None:
+        if (
+            not hasattr(viewer, "_original_image_bgr")
+            or viewer._original_image_bgr is None
+        ):
             return None
 
         # Start with the original BGR image
@@ -5200,6 +5488,13 @@ class MainWindow(QMainWindow):
         if hasattr(self, "multi_view_bbox_rects"):
             self.multi_view_bbox_rects = [None, None]
 
+        # Clean up mode handler
+        if hasattr(self, "multi_view_mode_handler"):
+            self.multi_view_mode_handler = None
+
+        # Mark SAM as dirty to trigger lazy loading when needed
+        self.sam_is_dirty = True
+
         # Reset batch index
         self.current_multi_batch_start = 0
 
@@ -5213,9 +5508,11 @@ class MainWindow(QMainWindow):
             pixmap = QPixmap(self.current_image_path)
             if not pixmap.isNull():
                 self.viewer.set_photo(pixmap)
-                self.viewer.set_image_adjustments(self.brightness, self.contrast, self.gamma)
+                self.viewer.set_image_adjustments(
+                    self.brightness, self.contrast, self.gamma
+                )
                 # Redisplay segments for single view
-                if hasattr(self, 'single_view_mode_handler'):
+                if hasattr(self, "single_view_mode_handler"):
                     self.single_view_mode_handler.display_all_segments()
 
         # Clear info labels
@@ -5264,7 +5561,11 @@ class MainWindow(QMainWindow):
 
     def _start_background_image_discovery(self):
         """Start background discovery of all image files."""
-        if self.images_discovery_in_progress or not hasattr(self, "file_model") or not self.file_model:
+        if (
+            self.images_discovery_in_progress
+            or not hasattr(self, "file_model")
+            or not self.file_model
+        ):
             return
 
         self.images_discovery_in_progress = True
@@ -5277,8 +5578,12 @@ class MainWindow(QMainWindow):
             self.image_discovery_worker.deleteLater()
 
         # Start new discovery worker
-        self.image_discovery_worker = ImageDiscoveryWorker(self.file_model, self.file_manager, self)
-        self.image_discovery_worker.images_discovered.connect(self._on_images_discovered)
+        self.image_discovery_worker = ImageDiscoveryWorker(
+            self.file_model, self.file_manager, self
+        )
+        self.image_discovery_worker.images_discovered.connect(
+            self._on_images_discovered
+        )
         self.image_discovery_worker.progress.connect(self._on_image_discovery_progress)
         self.image_discovery_worker.error.connect(self._on_image_discovery_error)
         self.image_discovery_worker.start()
@@ -5299,7 +5604,7 @@ class MainWindow(QMainWindow):
         if self.view_mode == "multi" and not any(self.multi_view_images):
             self._load_current_multi_batch()
 
-        self._show_success_notification(f"Found {len(images_list)} images without NPZ files")
+        # Don't show notification - image discovery happens in background
 
     def _on_image_discovery_progress(self, message):
         """Handle image discovery progress updates."""
@@ -5355,7 +5660,9 @@ class MainWindow(QMainWindow):
                 if not pixmap.isNull():
                     self.multi_view_viewers[i].set_photo(pixmap)
                     # Apply current image adjustments to the newly loaded image
-                    self.multi_view_viewers[i].set_image_adjustments(self.brightness, self.contrast, self.gamma)
+                    self.multi_view_viewers[i].set_image_adjustments(
+                        self.brightness, self.contrast, self.gamma
+                    )
                     self.multi_view_info_labels[i].setText(
                         f"Image {i + 1}: {os.path.basename(image_path)}"
                     )
@@ -5388,7 +5695,7 @@ class MainWindow(QMainWindow):
         self._update_multi_view_channel_threshold_for_images()
 
         # Clear cached images to force reload when processing is applied
-        if hasattr(self, '_cached_multi_view_original_images'):
+        if hasattr(self, "_cached_multi_view_original_images"):
             self._cached_multi_view_original_images = None
 
         # Apply any active channel thresholding to the newly loaded images
@@ -5470,7 +5777,7 @@ class MainWindow(QMainWindow):
         viewer_rect = viewer.viewport().rect()
 
         # Convert QPointF to QPoint for contains check
-        view_point = view_pos.toPoint() if hasattr(view_pos, 'toPoint') else view_pos
+        view_point = view_pos.toPoint() if hasattr(view_pos, "toPoint") else view_pos
 
         # For all modes (bbox, polygon, AI), cancel if mouse leaves current viewer
         if not viewer_rect.contains(view_point):
@@ -5505,57 +5812,77 @@ class MainWindow(QMainWindow):
     def _cancel_multi_view_bbox(self, viewer_index):
         """Cancel bounding box creation for a specific viewer."""
         # Clear bbox start position
-        if hasattr(self, "multi_view_bbox_starts") and viewer_index < len(self.multi_view_bbox_starts):
+        if hasattr(self, "multi_view_bbox_starts") and viewer_index < len(
+            self.multi_view_bbox_starts
+        ):
             self.multi_view_bbox_starts[viewer_index] = None
 
         # Remove visual rectangle
-        if hasattr(self, "multi_view_bbox_rects") and viewer_index < len(self.multi_view_bbox_rects):
+        if hasattr(self, "multi_view_bbox_rects") and viewer_index < len(
+            self.multi_view_bbox_rects
+        ):
             rect_item = self.multi_view_bbox_rects[viewer_index]
             if rect_item and rect_item.scene():
                 self.multi_view_viewers[viewer_index].scene().removeItem(rect_item)
             self.multi_view_bbox_rects[viewer_index] = None
 
-        self._show_notification(f"Bounding box creation cancelled (mouse left viewer {viewer_index + 1})")
+        self._show_notification(
+            f"Bounding box creation cancelled (mouse left viewer {viewer_index + 1})"
+        )
 
     def _cancel_multi_view_polygon(self, viewer_index):
         """Cancel polygon creation for a specific viewer."""
         # Clear polygon points
-        if hasattr(self, "multi_view_polygon_points") and viewer_index < len(self.multi_view_polygon_points):
+        if hasattr(self, "multi_view_polygon_points") and viewer_index < len(
+            self.multi_view_polygon_points
+        ):
             self.multi_view_polygon_points[viewer_index].clear()
 
         # Remove visual polygon lines and points
-        if hasattr(self, "multi_view_polygon_lines") and viewer_index < len(self.multi_view_polygon_lines):
+        if hasattr(self, "multi_view_polygon_lines") and viewer_index < len(
+            self.multi_view_polygon_lines
+        ):
             for line_item in self.multi_view_polygon_lines[viewer_index]:
                 if line_item and line_item.scene():
                     self.multi_view_viewers[viewer_index].scene().removeItem(line_item)
             self.multi_view_polygon_lines[viewer_index].clear()
 
-        if hasattr(self, "multi_view_polygon_point_items") and viewer_index < len(self.multi_view_polygon_point_items):
+        if hasattr(self, "multi_view_polygon_point_items") and viewer_index < len(
+            self.multi_view_polygon_point_items
+        ):
             for point_item in self.multi_view_polygon_point_items[viewer_index]:
                 if point_item and point_item.scene():
                     self.multi_view_viewers[viewer_index].scene().removeItem(point_item)
             self.multi_view_polygon_point_items[viewer_index].clear()
 
-        self._show_notification(f"Polygon creation cancelled (mouse left viewer {viewer_index + 1})")
+        self._show_notification(
+            f"Polygon creation cancelled (mouse left viewer {viewer_index + 1})"
+        )
 
     def _cancel_multi_view_ai_operation(self, viewer_index):
         """Cancel AI operation for a specific viewer."""
         # Clear AI drag rectangle if active
-        if hasattr(self, "multi_view_ai_drag_rects") and viewer_index < len(self.multi_view_ai_drag_rects):
+        if hasattr(self, "multi_view_ai_drag_rects") and viewer_index < len(
+            self.multi_view_ai_drag_rects
+        ):
             rect_item = self.multi_view_ai_drag_rects[viewer_index]
             if rect_item and rect_item.scene():
                 self.multi_view_viewers[viewer_index].scene().removeItem(rect_item)
             self.multi_view_ai_drag_rects[viewer_index] = None
 
         # Clear AI click start
-        if hasattr(self, "multi_view_ai_click_starts") and viewer_index < len(self.multi_view_ai_click_starts):
+        if hasattr(self, "multi_view_ai_click_starts") and viewer_index < len(
+            self.multi_view_ai_click_starts
+        ):
             self.multi_view_ai_click_starts[viewer_index] = None
 
     def _is_mouse_in_any_viewer(self, scene_pos):
         """Check if mouse position is within any viewer's bounds."""
         for viewer in self.multi_view_viewers:
             view_pos = viewer.mapFromScene(scene_pos)
-            view_point = view_pos.toPoint() if hasattr(view_pos, 'toPoint') else view_pos
+            view_point = (
+                view_pos.toPoint() if hasattr(view_pos, "toPoint") else view_pos
+            )
             viewer_rect = viewer.viewport().rect()
             if viewer_rect.contains(view_point):
                 return True
@@ -5658,11 +5985,23 @@ class MainWindow(QMainWindow):
 
     def _handle_multi_view_ai_click(self, pos, viewer_index, event):
         """Handle AI mode click for a specific viewer."""
+        # Delegate to mode handler if available
+        if hasattr(self, "multi_view_mode_handler") and self.multi_view_mode_handler:
+            self.multi_view_mode_handler.handle_ai_click(pos, event, viewer_index)
+            return
+
+        # Fallback to old logic if handler not available
         # Lazy loading: Initialize models on first AI mode usage
-        if not hasattr(self, 'multi_view_models') or len(self.multi_view_models) == 0:
+        if not hasattr(self, "multi_view_models") or len(self.multi_view_models) == 0:
             # Check if models are already being initialized
-            if hasattr(self, 'multi_view_init_worker') and self.multi_view_init_worker and self.multi_view_init_worker.isRunning():
-                self._show_warning_notification("AI models are still loading, please wait...")
+            if (
+                hasattr(self, "multi_view_init_worker")
+                and self.multi_view_init_worker
+                and self.multi_view_init_worker.isRunning()
+            ):
+                self._show_warning_notification(
+                    "AI models are still loading, please wait..."
+                )
                 return
 
             self._show_notification("Loading AI models for first use...")
@@ -5690,37 +6029,45 @@ class MainWindow(QMainWindow):
             return
 
         # Initialize tracking if not exists
-        if not hasattr(self, 'multi_view_point_items'):
+        if not hasattr(self, "multi_view_point_items"):
             self.multi_view_point_items = [[], []]
-        if not hasattr(self, 'multi_view_positive_points'):
+        if not hasattr(self, "multi_view_positive_points"):
             self.multi_view_positive_points = [[], []]
-        if not hasattr(self, 'multi_view_negative_points'):
+        if not hasattr(self, "multi_view_negative_points"):
             self.multi_view_negative_points = [[], []]
-        if not hasattr(self, 'multi_view_ai_click_starts'):
+        if not hasattr(self, "multi_view_ai_click_starts"):
             self.multi_view_ai_click_starts = [None, None]
-        if not hasattr(self, 'multi_view_ai_drag_rects'):
+        if not hasattr(self, "multi_view_ai_drag_rects"):
             self.multi_view_ai_drag_rects = [None, None]
 
         # Store click start position and time for drag detection
         self.multi_view_ai_click_starts[viewer_index] = pos
-        self.ai_click_time = event.timestamp() if hasattr(event, 'timestamp') else 0
+        self.ai_click_time = event.timestamp() if hasattr(event, "timestamp") else 0
 
         # Determine if positive or negative click
         positive = event.button() == Qt.MouseButton.LeftButton
 
         # Don't add point yet - wait to see if it's a drag
         # Store the pending click info
-        if not hasattr(self, 'multi_view_pending_clicks'):
+        if not hasattr(self, "multi_view_pending_clicks"):
             self.multi_view_pending_clicks = [None, None]
         self.multi_view_pending_clicks[viewer_index] = {
-            'pos': pos,
-            'positive': positive,
-            'event': event
+            "pos": pos,
+            "positive": positive,
+            "event": event,
         }
 
     def _handle_multi_view_ai_drag(self, pos, viewer_index):
         """Handle AI mode dragging for bounding box preview."""
-        if not hasattr(self, 'multi_view_ai_click_starts') or viewer_index >= len(self.multi_view_ai_click_starts):
+        # Delegate to mode handler if available
+        if hasattr(self, "multi_view_mode_handler") and self.multi_view_mode_handler:
+            self.multi_view_mode_handler.handle_ai_drag(pos, viewer_index)
+            return
+
+        # Fallback to old logic
+        if not hasattr(self, "multi_view_ai_click_starts") or viewer_index >= len(
+            self.multi_view_ai_click_starts
+        ):
             return
 
         start_pos = self.multi_view_ai_click_starts[viewer_index]
@@ -5728,12 +6075,14 @@ class MainWindow(QMainWindow):
             return
 
         # Check if we've moved enough to consider this a drag
-        distance = ((pos.x() - start_pos.x())**2 + (pos.y() - start_pos.y())**2)**0.5
+        distance = (
+            (pos.x() - start_pos.x()) ** 2 + (pos.y() - start_pos.y()) ** 2
+        ) ** 0.5
         if distance < 5:  # Minimum drag distance
             return
 
         # Initialize drag rect if needed
-        if not hasattr(self, 'multi_view_ai_drag_rects'):
+        if not hasattr(self, "multi_view_ai_drag_rects"):
             self.multi_view_ai_drag_rects = [None, None]
 
         viewer = self.multi_view_viewers[viewer_index]
@@ -5748,7 +6097,7 @@ class MainWindow(QMainWindow):
             self.multi_view_ai_drag_rects[viewer_index] = rect_item
 
             # Clear pending click since this is now a drag
-            if hasattr(self, 'multi_view_pending_clicks'):
+            if hasattr(self, "multi_view_pending_clicks"):
                 self.multi_view_pending_clicks[viewer_index] = None
 
         # Update rectangle
@@ -5761,7 +6110,15 @@ class MainWindow(QMainWindow):
 
     def _handle_multi_view_ai_release(self, pos, viewer_index):
         """Handle AI mode mouse release - either point or bbox."""
-        if not hasattr(self, 'multi_view_ai_click_starts') or viewer_index >= len(self.multi_view_ai_click_starts):
+        # Delegate to mode handler if available
+        if hasattr(self, "multi_view_mode_handler") and self.multi_view_mode_handler:
+            self.multi_view_mode_handler.handle_ai_complete(pos, viewer_index)
+            return
+
+        # Fallback to old logic
+        if not hasattr(self, "multi_view_ai_click_starts") or viewer_index >= len(
+            self.multi_view_ai_click_starts
+        ):
             return
 
         start_pos = self.multi_view_ai_click_starts[viewer_index]
@@ -5769,27 +6126,35 @@ class MainWindow(QMainWindow):
             return
 
         # Check if this was a drag (bbox) or click (point)
-        if hasattr(self, 'multi_view_ai_drag_rects') and self.multi_view_ai_drag_rects[viewer_index]:
+        if (
+            hasattr(self, "multi_view_ai_drag_rects")
+            and self.multi_view_ai_drag_rects[viewer_index]
+        ):
             # This was a drag - handle as bounding box
             self._finalize_multi_view_ai_bbox(pos, viewer_index)
-        elif hasattr(self, 'multi_view_pending_clicks') and self.multi_view_pending_clicks[viewer_index]:
+        elif (
+            hasattr(self, "multi_view_pending_clicks")
+            and self.multi_view_pending_clicks[viewer_index]
+        ):
             # This was a click - handle as point
             click_info = self.multi_view_pending_clicks[viewer_index]
-            self._finalize_multi_view_ai_point(click_info['pos'], viewer_index, click_info['positive'])
+            self._finalize_multi_view_ai_point(
+                click_info["pos"], viewer_index, click_info["positive"]
+            )
 
         # Clean up
         self.multi_view_ai_click_starts[viewer_index] = None
-        if hasattr(self, 'multi_view_pending_clicks'):
+        if hasattr(self, "multi_view_pending_clicks"):
             self.multi_view_pending_clicks[viewer_index] = None
 
     def _finalize_multi_view_ai_point(self, pos, viewer_index, positive):
         """Finalize AI point click."""
         # Initialize point tracking if not exists
-        if not hasattr(self, 'multi_view_point_items'):
+        if not hasattr(self, "multi_view_point_items"):
             self.multi_view_point_items = [[], []]
-        if not hasattr(self, 'multi_view_positive_points'):
+        if not hasattr(self, "multi_view_positive_points"):
             self.multi_view_positive_points = [[], []]
-        if not hasattr(self, 'multi_view_negative_points'):
+        if not hasattr(self, "multi_view_negative_points"):
             self.multi_view_negative_points = [[], []]
 
         model = self.multi_view_models[viewer_index]
@@ -5801,7 +6166,7 @@ class MainWindow(QMainWindow):
             pos.x() - self.point_radius,
             pos.y() - self.point_radius,
             self.point_radius * 2,
-            self.point_radius * 2
+            self.point_radius * 2,
         )
         point_item.setBrush(QBrush(point_color))
         point_item.setPen(QPen(Qt.PenStyle.NoPen))
@@ -5823,11 +6188,15 @@ class MainWindow(QMainWindow):
             negative_model_points = []
 
             for pt in self.multi_view_positive_points[viewer_index]:
-                model_pt = self._transform_multi_view_coords_to_sam_coords(pt, viewer_index)
+                model_pt = self._transform_multi_view_coords_to_sam_coords(
+                    pt, viewer_index
+                )
                 positive_model_points.append(model_pt)
 
             for pt in self.multi_view_negative_points[viewer_index]:
-                model_pt = self._transform_multi_view_coords_to_sam_coords(pt, viewer_index)
+                model_pt = self._transform_multi_view_coords_to_sam_coords(
+                    pt, viewer_index
+                )
                 negative_model_points.append(model_pt)
 
             # Generate mask using the specific model with all accumulated points
@@ -5850,7 +6219,10 @@ class MainWindow(QMainWindow):
 
     def _finalize_multi_view_ai_bbox(self, pos, viewer_index):
         """Finalize AI bounding box."""
-        if not hasattr(self, 'multi_view_ai_drag_rects') or not self.multi_view_ai_drag_rects[viewer_index]:
+        if (
+            not hasattr(self, "multi_view_ai_drag_rects")
+            or not self.multi_view_ai_drag_rects[viewer_index]
+        ):
             return
 
         viewer = self.multi_view_viewers[viewer_index]
@@ -5868,14 +6240,16 @@ class MainWindow(QMainWindow):
         viewer.scene().removeItem(rect_item)
         self.multi_view_ai_drag_rects[viewer_index] = None
 
-        # Only process if bbox is large enough
-        if abs(x2 - x1) < 10 or abs(y2 - y1) < 10:
-            return
+        # Process bbox regardless of size
 
         try:
             # Convert bbox corners to model coordinates
-            tl = self._transform_multi_view_coords_to_sam_coords(QPointF(x1, y1), viewer_index)
-            br = self._transform_multi_view_coords_to_sam_coords(QPointF(x2, y2), viewer_index)
+            tl = self._transform_multi_view_coords_to_sam_coords(
+                QPointF(x1, y1), viewer_index
+            )
+            br = self._transform_multi_view_coords_to_sam_coords(
+                QPointF(x2, y2), viewer_index
+            )
 
             # Generate mask using bbox
             bbox = [tl[0], tl[1], br[0], br[1]]
@@ -5908,8 +6282,10 @@ class MainWindow(QMainWindow):
             ) ** 2
             if distance_squared < self.polygon_join_threshold**2:
                 # Use the multi-view mode handler for proper pairing logic
-                if hasattr(self, 'multi_view_mode_handler'):
-                    self.multi_view_mode_handler._finalize_multi_view_polygon(viewer_index)
+                if hasattr(self, "multi_view_mode_handler"):
+                    self.multi_view_mode_handler._finalize_multi_view_polygon(
+                        viewer_index
+                    )
                 else:
                     self._finalize_multi_view_polygon(viewer_index)
                 return
@@ -5984,15 +6360,14 @@ class MainWindow(QMainWindow):
             viewer.scene().addItem(line_item)
             preview_items.append(line_item)
 
-    def _add_multi_view_paired_segment(self, segment_type, class_id, view_data_0, view_data_1):
+    def _add_multi_view_paired_segment(
+        self, segment_type, class_id, view_data_0, view_data_1
+    ):
         """Add a paired segment for multi-view mode with same class ID."""
         # Create paired segment with both view data
         paired_segment = {
             "type": segment_type,
-            "views": {
-                0: view_data_0,
-                1: view_data_1
-            }
+            "views": {0: view_data_0, 1: view_data_1},
         }
 
         # Set class ID if provided
@@ -6003,10 +6378,7 @@ class MainWindow(QMainWindow):
         self.segment_manager.add_segment(paired_segment)
 
         # Record for undo
-        self.action_history.append({
-            "type": "add_segment",
-            "data": paired_segment
-        })
+        self.action_history.append({"type": "add_segment", "data": paired_segment})
 
         # Clear redo history when a new action is performed
         self.redo_history.clear()
@@ -6025,17 +6397,22 @@ class MainWindow(QMainWindow):
 
         # Check if there's a pending polygon on the other viewer to pair with
         other_viewer_index = 1 - viewer_index
-        if (hasattr(self, '_pending_polygon_segments') and
-            other_viewer_index in self._pending_polygon_segments):
-
+        if (
+            hasattr(self, "_pending_polygon_segments")
+            and other_viewer_index in self._pending_polygon_segments
+        ):
             # Pair with the pending polygon from the other viewer
             other_view_data = self._pending_polygon_segments[other_viewer_index]
 
             # Create paired segment with both polygons
             if viewer_index == 0:
-                self._add_multi_view_paired_segment("Polygon", None, view_data, other_view_data)
+                self._add_multi_view_paired_segment(
+                    "Polygon", None, view_data, other_view_data
+                )
             else:
-                self._add_multi_view_paired_segment("Polygon", None, other_view_data, view_data)
+                self._add_multi_view_paired_segment(
+                    "Polygon", None, other_view_data, view_data
+                )
 
             # Clean up pending polygon
             del self._pending_polygon_segments[other_viewer_index]
@@ -6046,22 +6423,25 @@ class MainWindow(QMainWindow):
             # No pending polygon to pair with - mirror the polygon to the other viewer automatically
             # Create mirrored view data (same coordinates as they should align between linked images)
             mirrored_view_data = {
-                "vertices": view_data["vertices"].copy(),  # Use same coordinates for mirrored polygon
+                "vertices": view_data[
+                    "vertices"
+                ].copy(),  # Use same coordinates for mirrored polygon
                 "mask": None,
             }
 
             # Create paired segment with both polygons using same coordinates
             if viewer_index == 0:
-                self._add_multi_view_paired_segment("Polygon", None, view_data, mirrored_view_data)
+                self._add_multi_view_paired_segment(
+                    "Polygon", None, view_data, mirrored_view_data
+                )
             else:
-                self._add_multi_view_paired_segment("Polygon", None, mirrored_view_data, view_data)
+                self._add_multi_view_paired_segment(
+                    "Polygon", None, mirrored_view_data, view_data
+                )
 
             # Update UI
             self._update_all_lists()
             self._show_notification("Polygon created and mirrored to both viewers.")
-
-        # Display the polygon segment (fix: was missing!)
-        self._display_multi_view_polygon(new_segment, viewer_index)
 
         # Clear polygon state for this viewer
         self._clear_multi_view_polygon(viewer_index)
@@ -6104,10 +6484,12 @@ class MainWindow(QMainWindow):
         viewer = self.multi_view_viewers[viewer_index]
 
         # Initialize preview tracking if needed
-        if not hasattr(self, 'multi_view_preview_mask_items'):
+        if not hasattr(self, "multi_view_preview_mask_items"):
             self.multi_view_preview_mask_items = [None, None]
-        if not hasattr(self, 'multi_view_preview_masks'):
+        if not hasattr(self, "multi_view_preview_masks"):
             self.multi_view_preview_masks = [None, None]
+        if not hasattr(self, "multi_view_ai_predictions"):
+            self.multi_view_ai_predictions = {}
 
         # Remove existing preview if any
         if self.multi_view_preview_mask_items[viewer_index]:
@@ -6125,6 +6507,29 @@ class MainWindow(QMainWindow):
         # Store preview for spacebar acceptance
         self.multi_view_preview_mask_items[viewer_index] = preview_item
         self.multi_view_preview_masks[viewer_index] = mask
+
+        # Also store in the format expected by save_ai_predictions
+        # Collect current points and labels
+        points = []
+        labels = []
+        if hasattr(self, "multi_view_positive_points") and viewer_index < len(
+            self.multi_view_positive_points
+        ):
+            for pt in self.multi_view_positive_points[viewer_index]:
+                points.append((pt.x(), pt.y()))
+                labels.append(1)
+        if hasattr(self, "multi_view_negative_points") and viewer_index < len(
+            self.multi_view_negative_points
+        ):
+            for pt in self.multi_view_negative_points[viewer_index]:
+                points.append((pt.x(), pt.y()))
+                labels.append(0)
+
+        self.multi_view_ai_predictions[viewer_index] = {
+            "mask": mask,
+            "points": points,
+            "labels": labels,
+        }
 
         # Show hint to user
         self._show_notification("Press spacebar to accept AI segment suggestion")
@@ -6163,8 +6568,12 @@ class MainWindow(QMainWindow):
 
                 # Create hoverable item with proper class-based colors
                 mask_item = HoverablePixmapItem()
-                default_pixmap = mask_to_pixmap(mask, color_rgb, alpha=70)  # Match single view transparency
-                hover_pixmap = mask_to_pixmap(mask, color_rgb, alpha=170)   # Match single view hover
+                default_pixmap = mask_to_pixmap(
+                    mask, color_rgb, alpha=70
+                )  # Match single view transparency
+                hover_pixmap = mask_to_pixmap(
+                    mask, color_rgb, alpha=170
+                )  # Match single view hover
                 mask_item.set_pixmaps(default_pixmap, hover_pixmap)
                 mask_item.setPos(0, 0)
                 mask_item.set_segment_info(len(self.segment_manager.segments) - 1, self)
@@ -6185,13 +6594,19 @@ class MainWindow(QMainWindow):
                 base_color = self._get_color_for_class(class_id)
 
                 # Set fill with transparency (match single view styling)
-                default_brush = QBrush(QColor(base_color.red(), base_color.green(), base_color.blue(), 70))
-                hover_brush = QBrush(QColor(base_color.red(), base_color.green(), base_color.blue(), 170))
+                default_brush = QBrush(
+                    QColor(base_color.red(), base_color.green(), base_color.blue(), 70)
+                )
+                hover_brush = QBrush(
+                    QColor(base_color.red(), base_color.green(), base_color.blue(), 170)
+                )
                 polygon_item.set_brushes(default_brush, hover_brush)
 
                 # Set transparent border (no outline, same as single view)
                 polygon_item.setPen(QPen(Qt.GlobalColor.transparent))
-                polygon_item.set_segment_info(len(self.segment_manager.segments) - 1, self)
+                polygon_item.set_segment_info(
+                    len(self.segment_manager.segments) - 1, self
+                )
 
                 viewer.scene().addItem(polygon_item)
 
@@ -6206,7 +6621,9 @@ class MainWindow(QMainWindow):
         # Create visual rectangle
         viewer = self.multi_view_viewers[viewer_index]
         rect_item = QGraphicsRectItem(pos.x(), pos.y(), 0, 0)
-        rect_item.setPen(QPen(QColor(255, 0, 0), 2, Qt.PenStyle.DashLine))  # Red dashed line for visibility
+        rect_item.setPen(
+            QPen(QColor(255, 0, 0), 2, Qt.PenStyle.DashLine)
+        )  # Red dashed line for visibility
         viewer.scene().addItem(rect_item)
 
         # Store for later updates
@@ -6268,7 +6685,9 @@ class MainWindow(QMainWindow):
 
         # Set styling to match single view (transparent pen, proper alpha)
         polygon_item.setPen(QPen(Qt.GlobalColor.transparent))
-        polygon_item.setBrush(QBrush(QColor(base_color.red(), base_color.green(), base_color.blue(), 70)))
+        polygon_item.setBrush(
+            QBrush(QColor(base_color.red(), base_color.green(), base_color.blue(), 70))
+        )
         viewer.scene().addItem(polygon_item)
 
     def _handle_multi_view_bbox_drag(self, pos, viewer_index):
@@ -6321,14 +6740,27 @@ class MainWindow(QMainWindow):
         # Remove temporary rectangle
         self.multi_view_viewers[viewer_index].scene().removeItem(rect_item)
 
-        # Create segment if bbox is large enough and mirror to both views
-        if width > 30 and height > 30:  # Increased minimum size to avoid tiny segments
+        # Also remove the mirrored rectangle if it exists
+        other_viewer_index = 1 - viewer_index
+        if (
+            other_viewer_index < len(self.multi_view_bbox_rects)
+            and self.multi_view_bbox_rects[other_viewer_index] is not None
+        ):
+            self.multi_view_viewers[other_viewer_index].scene().removeItem(
+                self.multi_view_bbox_rects[other_viewer_index]
+            )
+            self.multi_view_bbox_rects[other_viewer_index] = None
+            self.multi_view_bbox_starts[other_viewer_index] = None
+
+        # Create segment regardless of size
+        # Only create segment from the first viewer to avoid duplication
+        if viewer_index == 0 or self.multi_view_bbox_starts[0] is None:
             # Convert bbox to polygon vertices
             vertices = [
                 [x, y],
                 [x + width, y],
                 [x + width, y + height],
-                [x, y + height]
+                [x, y + height],
             ]
 
             # Create view data for the bbox
@@ -6337,26 +6769,15 @@ class MainWindow(QMainWindow):
                 "mask": None,
             }
 
-            # Mirror the bbox to the other viewer automatically (same coordinates)
-            mirrored_view_data = {
-                "vertices": vertices,  # Use same coordinates for mirrored bbox
-                "mask": None,
-            }
-
-            # Create paired segment with both bboxes using same coordinates
-            if viewer_index == 0:
-                self._add_multi_view_paired_segment("Polygon", None, view_data, mirrored_view_data)
-            else:
-                self._add_multi_view_paired_segment("Polygon", None, mirrored_view_data, view_data)
+            # Use same data for both views (like polygon mode)
+            self._add_multi_view_paired_segment("Polygon", None, view_data, view_data)
 
             # Update lists
             self._update_all_lists()
-            self._show_notification("Bounding box created and mirrored to both viewers.")
 
-        # Clean up
+        # Clean up both viewers
         self.multi_view_bbox_starts[viewer_index] = None
         self.multi_view_bbox_rects[viewer_index] = None
-
 
     def _sync_multi_view_zoom(self, factor, source_viewer_index):
         """Synchronize zoom across linked multi-view viewers."""
@@ -6393,5 +6814,7 @@ class MainWindow(QMainWindow):
 
         # Set styling to match single view (transparent pen, proper alpha)
         rect_item.setPen(QPen(Qt.GlobalColor.transparent))
-        rect_item.setBrush(QBrush(QColor(base_color.red(), base_color.green(), base_color.blue(), 70)))
+        rect_item.setBrush(
+            QBrush(QColor(base_color.red(), base_color.green(), base_color.blue(), 70))
+        )
         viewer.scene().addItem(rect_item)

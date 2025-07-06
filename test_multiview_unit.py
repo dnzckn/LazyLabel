@@ -7,7 +7,7 @@ Tests the core logic and fixes.
 import os
 import sys
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
 
 from unittest.mock import Mock
 
@@ -24,7 +24,9 @@ def test_lazy_loading():
     main_window.multi_view_models = []
 
     # Check initial state
-    assert len(main_window.multi_view_models) == 0, "Models should not be loaded initially"
+    assert len(main_window.multi_view_models) == 0, (
+        "Models should not be loaded initially"
+    )
     print("✅ Models not loaded on multi-view switch")
 
 
@@ -39,7 +41,9 @@ def test_ai_mode_entry():
     main_window = Mock(spec=MainWindow)
     main_window.view_mode = "multi"
     main_window.model_manager = Mock()
-    main_window.model_manager.is_model_available.return_value = False  # No model in single view
+    main_window.model_manager.is_model_available.return_value = (
+        False  # No model in single view
+    )
     main_window._set_mode = Mock()
     main_window._ensure_sam_updated = Mock()
 
@@ -74,7 +78,9 @@ def test_model_initialization_on_click():
     MainWindow._handle_multi_view_ai_click(main_window, pos, 0, mock_event)
 
     # Check that initialization was triggered
-    main_window._show_notification.assert_called_with("Loading AI models for first use...")
+    main_window._show_notification.assert_called_with(
+        "Loading AI models for first use..."
+    )
     main_window._initialize_multi_view_models.assert_called_once()
     print("✅ Model initialization triggered on first AI click")
 
@@ -141,7 +147,9 @@ def test_model_cleanup():
     MainWindow._cleanup_single_view_model(main_window)
 
     # Check that model was cleared
-    assert main_window.model_manager.sam_model is None, "Single-view model should be cleared"
+    assert main_window.model_manager.sam_model is None, (
+        "Single-view model should be cleared"
+    )
     print("✅ Single-view model cleaned up when switching to multi-view")
 
 
@@ -164,6 +172,7 @@ def run_all_tests():
     except Exception as e:
         print(f"\n❌ Test failed: {e}")
         import traceback
+
         traceback.print_exc()
         return False
 

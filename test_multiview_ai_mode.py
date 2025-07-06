@@ -10,7 +10,7 @@ import time
 import traceback
 
 # Add the src directory to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
 
 from PyQt6.QtCore import QPointF, Qt
 from PyQt6.QtWidgets import QApplication
@@ -65,8 +65,13 @@ class TestMultiViewAI:
             time.sleep(0.5)
 
             # Check that models are NOT loaded yet
-            if not hasattr(self.main_window, 'multi_view_models') or len(self.main_window.multi_view_models) == 0:
-                print("  ✅ Models not loaded on multi-view switch (lazy loading working)")
+            if (
+                not hasattr(self.main_window, "multi_view_models")
+                or len(self.main_window.multi_view_models) == 0
+            ):
+                print(
+                    "  ✅ Models not loaded on multi-view switch (lazy loading working)"
+                )
                 self.passed_tests.append("Lazy loading")
             else:
                 print("  ❌ Models loaded immediately (lazy loading failed)")
@@ -91,7 +96,9 @@ class TestMultiViewAI:
                 print("  ✅ AI mode entered successfully")
                 self.passed_tests.append("AI mode entry")
             else:
-                print(f"  ❌ Failed to enter AI mode, current mode: {self.main_window.mode}")
+                print(
+                    f"  ❌ Failed to enter AI mode, current mode: {self.main_window.mode}"
+                )
                 self.failed_tests.append("AI mode entry")
 
         except Exception as e:
@@ -108,10 +115,11 @@ class TestMultiViewAI:
             print("  - Simulating AI click on viewer 0...")
 
             # Create mock mouse event
-            mock_event = type('MockEvent', (), {
-                'button': lambda: Qt.MouseButton.LeftButton,
-                'timestamp': lambda: 0
-            })()
+            mock_event = type(
+                "MockEvent",
+                (),
+                {"button": lambda: Qt.MouseButton.LeftButton, "timestamp": lambda: 0},
+            )()
 
             # Simulate click at position
             pos = QPointF(100, 100)
@@ -119,7 +127,10 @@ class TestMultiViewAI:
             QApplication.processEvents()
 
             # Check if initialization started
-            if hasattr(self.main_window, 'multi_view_init_worker') and self.main_window.multi_view_init_worker:
+            if (
+                hasattr(self.main_window, "multi_view_init_worker")
+                and self.main_window.multi_view_init_worker
+            ):
                 print("  ✅ Model initialization started on first AI use")
 
                 # Wait for models to load (with timeout)
@@ -129,10 +140,17 @@ class TestMultiViewAI:
 
                 while time.time() - start_time < timeout:
                     QApplication.processEvents()
-                    if (hasattr(self.main_window, 'multi_view_models') and
-                        len(self.main_window.multi_view_models) >= 2 and
-                        all(model is not None for model in self.main_window.multi_view_models[:2])):
-                        print(f"  ✅ Models loaded successfully in {time.time() - start_time:.1f} seconds")
+                    if (
+                        hasattr(self.main_window, "multi_view_models")
+                        and len(self.main_window.multi_view_models) >= 2
+                        and all(
+                            model is not None
+                            for model in self.main_window.multi_view_models[:2]
+                        )
+                    ):
+                        print(
+                            f"  ✅ Models loaded successfully in {time.time() - start_time:.1f} seconds"
+                        )
                         self.passed_tests.append("Model loading on first use")
                         break
                     time.sleep(0.1)
@@ -162,10 +180,11 @@ class TestMultiViewAI:
             # Test positive point
             print("  - Testing positive point on viewer 0...")
             pos = QPointF(150, 150)
-            mock_event = type('MockEvent', (), {
-                'button': lambda: Qt.MouseButton.LeftButton,
-                'timestamp': lambda: 0
-            })()
+            mock_event = type(
+                "MockEvent",
+                (),
+                {"button": lambda: Qt.MouseButton.LeftButton, "timestamp": lambda: 0},
+            )()
 
             self.main_window._handle_multi_view_ai_click(pos, 0, mock_event)
             self.main_window._handle_multi_view_ai_release(pos, 0)
@@ -173,8 +192,10 @@ class TestMultiViewAI:
             time.sleep(0.5)
 
             # Check if point was added
-            if (hasattr(self.main_window, 'multi_view_positive_points') and
-                len(self.main_window.multi_view_positive_points[0]) > 0):
+            if (
+                hasattr(self.main_window, "multi_view_positive_points")
+                and len(self.main_window.multi_view_positive_points[0]) > 0
+            ):
                 print("  ✅ Positive point added successfully")
             else:
                 print("  ❌ Positive point not added")
@@ -182,10 +203,11 @@ class TestMultiViewAI:
             # Test negative point
             print("  - Testing negative point on viewer 1...")
             pos2 = QPointF(200, 200)
-            mock_event2 = type('MockEvent', (), {
-                'button': lambda: Qt.MouseButton.RightButton,
-                'timestamp': lambda: 0
-            })()
+            mock_event2 = type(
+                "MockEvent",
+                (),
+                {"button": lambda: Qt.MouseButton.RightButton, "timestamp": lambda: 0},
+            )()
 
             self.main_window._handle_multi_view_ai_click(pos2, 1, mock_event2)
             self.main_window._handle_multi_view_ai_release(pos2, 1)
@@ -193,8 +215,10 @@ class TestMultiViewAI:
             time.sleep(0.5)
 
             # Check if negative point was added
-            if (hasattr(self.main_window, 'multi_view_negative_points') and
-                len(self.main_window.multi_view_negative_points[1]) > 0):
+            if (
+                hasattr(self.main_window, "multi_view_negative_points")
+                and len(self.main_window.multi_view_negative_points[1]) > 0
+            ):
                 print("  ✅ Negative point added successfully")
                 self.passed_tests.append("AI point functionality")
             else:
@@ -225,10 +249,11 @@ class TestMultiViewAI:
             start_pos = QPointF(50, 50)
             end_pos = QPointF(250, 250)
 
-            mock_event = type('MockEvent', (), {
-                'button': lambda: Qt.MouseButton.LeftButton,
-                'timestamp': lambda: 0
-            })()
+            mock_event = type(
+                "MockEvent",
+                (),
+                {"button": lambda: Qt.MouseButton.LeftButton, "timestamp": lambda: 0},
+            )()
 
             # Start drag
             self.main_window._handle_multi_view_ai_click(start_pos, 0, mock_event)
@@ -244,8 +269,10 @@ class TestMultiViewAI:
             time.sleep(1)  # Wait for AI prediction
 
             # Check if AI prediction was generated
-            if (hasattr(self.main_window, 'multi_view_ai_predictions') and
-                0 in self.main_window.multi_view_ai_predictions):
+            if (
+                hasattr(self.main_window, "multi_view_ai_predictions")
+                and 0 in self.main_window.multi_view_ai_predictions
+            ):
                 print("  ✅ AI bbox prediction generated")
                 self.passed_tests.append("AI bbox functionality")
             else:
@@ -264,7 +291,7 @@ class TestMultiViewAI:
         try:
             # Add some points first
             print("  - Adding test points...")
-            if hasattr(self.main_window, 'multi_view_positive_points'):
+            if hasattr(self.main_window, "multi_view_positive_points"):
                 self.main_window.multi_view_positive_points[0].append([100, 100])
                 self.main_window.multi_view_negative_points[1].append([200, 200])
 
@@ -275,7 +302,7 @@ class TestMultiViewAI:
 
             # Check if cleared
             points_cleared = True
-            if hasattr(self.main_window, 'multi_view_positive_points'):
+            if hasattr(self.main_window, "multi_view_positive_points"):
                 for points in self.main_window.multi_view_positive_points:
                     if len(points) > 0:
                         points_cleared = False
@@ -303,7 +330,7 @@ class TestMultiViewAI:
             self.main_window.settings.operate_on_view = True
 
             # Mark models as dirty to force update
-            if hasattr(self.main_window, 'multi_view_models_dirty'):
+            if hasattr(self.main_window, "multi_view_models_dirty"):
                 self.main_window.multi_view_models_dirty = [True, True]
 
             # Trigger model update
@@ -312,7 +339,7 @@ class TestMultiViewAI:
             QApplication.processEvents()
 
             # Check if modified image would be used
-            if hasattr(self.main_window, '_get_multi_view_modified_image'):
+            if hasattr(self.main_window, "_get_multi_view_modified_image"):
                 modified_image = self.main_window._get_multi_view_modified_image(0)
                 if modified_image is not None:
                     print("  ✅ Operate-on-view can get modified image")
@@ -344,8 +371,10 @@ class TestMultiViewAI:
             time.sleep(0.5)
 
             # Check if multi-view models were cleaned up
-            if (not hasattr(self.main_window, 'multi_view_models') or
-                len(self.main_window.multi_view_models) == 0):
+            if (
+                not hasattr(self.main_window, "multi_view_models")
+                or len(self.main_window.multi_view_models) == 0
+            ):
                 print("  ✅ Multi-view models cleaned up")
                 self.passed_tests.append("Memory cleanup")
             else:
@@ -361,9 +390,14 @@ class TestMultiViewAI:
         """Wait for models to be ready."""
         start_time = time.time()
         while time.time() - start_time < timeout:
-            if (hasattr(self.main_window, 'multi_view_models') and
-                len(self.main_window.multi_view_models) >= 2 and
-                all(model is not None for model in self.main_window.multi_view_models[:2])):
+            if (
+                hasattr(self.main_window, "multi_view_models")
+                and len(self.main_window.multi_view_models) >= 2
+                and all(
+                    model is not None
+                    for model in self.main_window.multi_view_models[:2]
+                )
+            ):
                 return True
             QApplication.processEvents()
             time.sleep(0.1)
@@ -412,7 +446,7 @@ class TestMultiViewAI:
 def main():
     """Run the test suite."""
     tester = TestMultiViewAI()
-    success = tester.run_all_tests()
+    tester.run_all_tests()
 
     # Run the app for manual testing
     sys.exit(tester.app.exec())

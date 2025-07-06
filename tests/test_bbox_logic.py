@@ -9,7 +9,7 @@ from unittest.mock import Mock
 import pytest
 
 # Add the src directory to path for testing
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 
 class TestBboxLogic:
@@ -43,8 +43,8 @@ class TestBboxLogic:
         mock_window._handle_multi_view_bbox_start(mock_pos, 0)
 
         # Verify state
-        assert hasattr(mock_window, 'multi_view_bbox_starts')
-        assert hasattr(mock_window, 'multi_view_bbox_rects')
+        assert hasattr(mock_window, "multi_view_bbox_starts")
+        assert hasattr(mock_window, "multi_view_bbox_rects")
         assert mock_window.multi_view_bbox_starts[0] is mock_pos
         assert mock_window.multi_view_bbox_rects[0] is not None
 
@@ -64,11 +64,15 @@ class TestBboxLogic:
 
             def _handle_multi_view_bbox_drag(self, pos, viewer_index):
                 """Implementation of bbox drag logic."""
-                if not hasattr(self, "multi_view_bbox_starts") or not hasattr(self, "multi_view_bbox_rects"):
+                if not hasattr(self, "multi_view_bbox_starts") or not hasattr(
+                    self, "multi_view_bbox_rects"
+                ):
                     return
 
-                if (self.multi_view_bbox_starts[viewer_index] is None or
-                    self.multi_view_bbox_rects[viewer_index] is None):
+                if (
+                    self.multi_view_bbox_starts[viewer_index] is None
+                    or self.multi_view_bbox_rects[viewer_index] is None
+                ):
                     return
 
                 # Update rectangle
@@ -108,24 +112,16 @@ class TestBboxLogic:
 
         def test_action_routing(mode, action_type):
             """Test routing logic for a specific mode and action."""
-            if action_type == "press":
-                if mode == "bbox":
-                    return "bbox_start"
-                elif mode == "polygon":
-                    return "polygon_click"
-                elif mode == "ai":
-                    return "ai_click"
-            elif action_type == "move":
-                if mode == "bbox":
-                    return "bbox_drag"
-                elif mode == "ai":
-                    return "ai_drag"
-            elif action_type == "release":
-                if mode == "bbox":
-                    return "bbox_complete"
-                elif mode == "ai":
-                    return "ai_release"
-            return None
+            action_map = {
+                ("press", "bbox"): "bbox_start",
+                ("press", "polygon"): "polygon_click",
+                ("press", "ai"): "ai_click",
+                ("move", "bbox"): "bbox_drag",
+                ("move", "ai"): "ai_drag",
+                ("release", "bbox"): "bbox_complete",
+                ("release", "ai"): "ai_release",
+            }
+            return action_map.get((action_type, mode))
 
         # Test bbox mode routing
         assert test_action_routing("bbox", "press") == "bbox_start"
@@ -148,7 +144,7 @@ class TestBboxLogic:
                 self.mirror_calls = []
 
             def _handle_multi_view_action(self, event, viewer_index, action_type):
-                self.action_calls = getattr(self, 'action_calls', [])
+                self.action_calls = getattr(self, "action_calls", [])
                 self.action_calls.append((viewer_index, action_type))
 
             def _mirror_mouse_action(self, event, target_viewer_index, action_type):
@@ -160,13 +156,17 @@ class TestBboxLogic:
 
                 # Handle the event for the source viewer first
                 if self.multi_view_linked[source_viewer_index]:
-                    self._handle_multi_view_action(mock_event, source_viewer_index, action_type)
+                    self._handle_multi_view_action(
+                        mock_event, source_viewer_index, action_type
+                    )
 
                 # Mirror to other linked viewers (current logic mirrors all modes)
                 for i in range(len(self.multi_view_linked)):
-                    if (i != source_viewer_index and
-                        self.multi_view_linked[i] and
-                        self.multi_view_images[i]):
+                    if (
+                        i != source_viewer_index
+                        and self.multi_view_linked[i]
+                        and self.multi_view_images[i]
+                    ):
                         self._mirror_mouse_action(mock_event, i, action_type)
 
         mock_window = MockMainWindow()
@@ -175,7 +175,7 @@ class TestBboxLogic:
         mock_window.simulate_mouse_event(0, "press")
 
         # Should handle action for source viewer
-        assert hasattr(mock_window, 'action_calls')
+        assert hasattr(mock_window, "action_calls")
         assert (0, "press") in mock_window.action_calls
 
         # Should mirror to other viewer
@@ -196,18 +196,24 @@ class TestBboxLogic:
             def _cancel_multi_view_bbox(self, viewer_index):
                 """Implementation of bbox cancellation logic."""
                 # Clear bbox start position
-                if hasattr(self, "multi_view_bbox_starts") and viewer_index < len(self.multi_view_bbox_starts):
+                if hasattr(self, "multi_view_bbox_starts") and viewer_index < len(
+                    self.multi_view_bbox_starts
+                ):
                     self.multi_view_bbox_starts[viewer_index] = None
 
                 # Remove visual rectangle (mocked)
-                if hasattr(self, "multi_view_bbox_rects") and viewer_index < len(self.multi_view_bbox_rects):
+                if hasattr(self, "multi_view_bbox_rects") and viewer_index < len(
+                    self.multi_view_bbox_rects
+                ):
                     rect_item = self.multi_view_bbox_rects[viewer_index]
                     if rect_item:
                         # In real code: viewer.scene().removeItem(rect_item)
                         pass
                     self.multi_view_bbox_rects[viewer_index] = None
 
-                self._show_notification(f"Bounding box creation cancelled (mouse left viewer {viewer_index + 1})")
+                self._show_notification(
+                    f"Bounding box creation cancelled (mouse left viewer {viewer_index + 1})"
+                )
 
         mock_window = MockMainWindow()
 
@@ -235,15 +241,17 @@ class TestBboxImplementation:
 
             # Check that required bbox methods exist
             required_methods = [
-                '_handle_multi_view_bbox_start',
-                '_handle_multi_view_bbox_drag',
-                '_handle_multi_view_bbox_complete',
-                '_cancel_multi_view_bbox',
-                'set_bbox_mode'
+                "_handle_multi_view_bbox_start",
+                "_handle_multi_view_bbox_drag",
+                "_handle_multi_view_bbox_complete",
+                "_cancel_multi_view_bbox",
+                "set_bbox_mode",
             ]
 
             for method in required_methods:
-                assert hasattr(MainWindow, method), f"MainWindow missing method: {method}"
+                assert hasattr(MainWindow, method), (
+                    f"MainWindow missing method: {method}"
+                )
 
         except ImportError as e:
             pytest.skip(f"Cannot import MainWindow due to dependencies: {e}")

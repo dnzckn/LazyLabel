@@ -32,4 +32,5 @@ env/
 Thumbs.db
 *:Zone.Identifier
 
+# LLM's 
 .claude

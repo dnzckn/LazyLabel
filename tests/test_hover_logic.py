@@ -9,7 +9,7 @@ from unittest.mock import Mock
 import pytest
 
 # Add the src directory to path for testing
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 
 class TestHoverLogic:
@@ -29,9 +29,11 @@ class TestHoverLogic:
 
             def simulate_hover_enter(self):
                 """Simulate the logic from hoverEnterEvent."""
-                if (self.main_window and
-                    hasattr(self.main_window, 'view_mode') and
-                    self.main_window.view_mode == "multi"):
+                if (
+                    self.main_window
+                    and hasattr(self.main_window, "view_mode")
+                    and self.main_window.view_mode == "multi"
+                ):
                     self.main_window._trigger_segment_hover(self.segment_id, True, self)
                     return True
                 return False
@@ -77,8 +79,8 @@ class TestHoverLogic:
                         5: [Mock(), Mock()],  # segment 5 has 2 items in viewer 0
                     },
                     1: {
-                        5: [Mock()],          # segment 5 has 1 item in viewer 1
-                    }
+                        5: [Mock()],  # segment 5 has 1 item in viewer 1
+                    },
                 }
 
                 # Set up mock items with hover methods
@@ -92,26 +94,43 @@ class TestHoverLogic:
                             item.hover_pixmap = Mock()
                             item.default_pixmap = Mock()
 
-            def _trigger_segment_hover(self, segment_id, hover_state, triggering_item=None):
+            def _trigger_segment_hover(
+                self, segment_id, hover_state, triggering_item=None
+            ):
                 """Implementation of the actual method logic."""
                 if self.view_mode != "multi":
                     return
 
-                if hasattr(self, 'multi_view_segment_items'):
-                    for viewer_idx, viewer_segments in self.multi_view_segment_items.items():
+                if hasattr(self, "multi_view_segment_items"):
+                    for (
+                        _viewer_idx,
+                        viewer_segments,
+                    ) in self.multi_view_segment_items.items():
                         if segment_id in viewer_segments:
                             for item in viewer_segments[segment_id]:
                                 if item is triggering_item:
                                     continue
 
-                                if (hasattr(item, 'setBrush') and
-                                    hasattr(item, 'hover_brush') and
-                                    hasattr(item, 'default_brush')):
-                                    item.setBrush(item.hover_brush if hover_state else item.default_brush)
-                                elif (hasattr(item, 'setPixmap') and
-                                      hasattr(item, 'hover_pixmap') and
-                                      hasattr(item, 'default_pixmap')):
-                                    item.setPixmap(item.hover_pixmap if hover_state else item.default_pixmap)
+                                if (
+                                    hasattr(item, "setBrush")
+                                    and hasattr(item, "hover_brush")
+                                    and hasattr(item, "default_brush")
+                                ):
+                                    item.setBrush(
+                                        item.hover_brush
+                                        if hover_state
+                                        else item.default_brush
+                                    )
+                                elif (
+                                    hasattr(item, "setPixmap")
+                                    and hasattr(item, "hover_pixmap")
+                                    and hasattr(item, "default_pixmap")
+                                ):
+                                    item.setPixmap(
+                                        item.hover_pixmap
+                                        if hover_state
+                                        else item.default_pixmap
+                                    )
 
         mock_window = MockMainWindow()
 
@@ -164,22 +183,33 @@ class TestHoverLogic:
                     0: {7: [self.triggering_item, self.other_item]}
                 }
 
-            def _trigger_segment_hover(self, segment_id, hover_state, triggering_item=None):
+            def _trigger_segment_hover(
+                self, segment_id, hover_state, triggering_item=None
+            ):
                 """Implementation with triggering item exclusion."""
                 if self.view_mode != "multi":
                     return
 
-                if hasattr(self, 'multi_view_segment_items'):
-                    for viewer_idx, viewer_segments in self.multi_view_segment_items.items():
+                if hasattr(self, "multi_view_segment_items"):
+                    for (
+                        _viewer_idx,
+                        viewer_segments,
+                    ) in self.multi_view_segment_items.items():
                         if segment_id in viewer_segments:
                             for item in viewer_segments[segment_id]:
                                 if item is triggering_item:
                                     continue  # Skip the triggering item
 
-                                if (hasattr(item, 'setBrush') and
-                                    hasattr(item, 'hover_brush') and
-                                    hasattr(item, 'default_brush')):
-                                    item.setBrush(item.hover_brush if hover_state else item.default_brush)
+                                if (
+                                    hasattr(item, "setBrush")
+                                    and hasattr(item, "hover_brush")
+                                    and hasattr(item, "default_brush")
+                                ):
+                                    item.setBrush(
+                                        item.hover_brush
+                                        if hover_state
+                                        else item.default_brush
+                                    )
 
         mock_window = MockMainWindow()
 
@@ -265,21 +295,25 @@ class TestBoundaryLogic:
 
             def viewport(self):
                 mock_viewport = Mock()
-                mock_viewport.rect.return_value.contains.return_value = self.contains_point
+                mock_viewport.rect.return_value.contains.return_value = (
+                    self.contains_point
+                )
                 return mock_viewport
 
         class MockMainWindow:
             def __init__(self, viewer_contains):
                 self.multi_view_viewers = [
                     MockViewer(viewer_contains[0]),
-                    MockViewer(viewer_contains[1])
+                    MockViewer(viewer_contains[1]),
                 ]
 
             def _is_mouse_in_any_viewer(self, scene_pos):
                 """Implementation of the actual method."""
                 for viewer in self.multi_view_viewers:
                     view_pos = viewer.mapFromScene(scene_pos)
-                    view_point = view_pos.toPoint() if hasattr(view_pos, 'toPoint') else view_pos
+                    view_point = (
+                        view_pos.toPoint() if hasattr(view_pos, "toPoint") else view_pos
+                    )
                     viewer_rect = viewer.viewport().rect()
                     if viewer_rect.contains(view_point):
                         return True
@@ -310,8 +344,13 @@ class TestHoverImplementationChecks:
     def test_hoverable_files_exist(self):
         """Test that hoverable item files exist and are importable."""
         try:
-            from lazylabel.ui.hoverable_pixelmap_item import HoverablePixmapItem
-            from lazylabel.ui.hoverable_polygon_item import HoverablePolygonItem
+            from lazylabel.ui.hoverable_pixelmap_item import (
+                HoverablePixmapItem,  # noqa: F401
+            )
+            from lazylabel.ui.hoverable_polygon_item import (
+                HoverablePolygonItem,  # noqa: F401
+            )
+
             assert True  # If we get here, imports worked
         except ImportError as e:
             pytest.fail(f"Failed to import hoverable items: {e}")
@@ -322,14 +361,28 @@ class TestHoverImplementationChecks:
         from lazylabel.ui.hoverable_polygon_item import HoverablePolygonItem
 
         # Test HoverablePolygonItem methods
-        poly_methods = ['set_segment_info', 'hoverEnterEvent', 'hoverLeaveEvent', 'set_brushes']
+        poly_methods = [
+            "set_segment_info",
+            "hoverEnterEvent",
+            "hoverLeaveEvent",
+            "set_brushes",
+        ]
         for method in poly_methods:
-            assert hasattr(HoverablePolygonItem, method), f"HoverablePolygonItem missing {method}"
+            assert hasattr(HoverablePolygonItem, method), (
+                f"HoverablePolygonItem missing {method}"
+            )
 
         # Test HoverablePixmapItem methods
-        pixmap_methods = ['set_segment_info', 'hoverEnterEvent', 'hoverLeaveEvent', 'set_pixmaps']
+        pixmap_methods = [
+            "set_segment_info",
+            "hoverEnterEvent",
+            "hoverLeaveEvent",
+            "set_pixmaps",
+        ]
         for method in pixmap_methods:
-            assert hasattr(HoverablePixmapItem, method), f"HoverablePixmapItem missing {method}"
+            assert hasattr(HoverablePixmapItem, method), (
+                f"HoverablePixmapItem missing {method}"
+            )
 
     def test_hover_event_contains_trigger_logic(self):
         """Test that hover events contain _trigger_segment_hover calls."""
@@ -340,13 +393,21 @@ class TestHoverImplementationChecks:
 
         # Check HoverablePolygonItem.hoverEnterEvent
         poly_source = inspect.getsource(HoverablePolygonItem.hoverEnterEvent)
-        assert "_trigger_segment_hover" in poly_source, "HoverablePolygonItem missing _trigger_segment_hover call"
-        assert 'view_mode == "multi"' in poly_source, "HoverablePolygonItem missing multi-view check"
+        assert "_trigger_segment_hover" in poly_source, (
+            "HoverablePolygonItem missing _trigger_segment_hover call"
+        )
+        assert 'view_mode == "multi"' in poly_source, (
+            "HoverablePolygonItem missing multi-view check"
+        )
 
         # Check HoverablePixmapItem.hoverEnterEvent
         pixmap_source = inspect.getsource(HoverablePixmapItem.hoverEnterEvent)
-        assert "_trigger_segment_hover" in pixmap_source, "HoverablePixmapItem missing _trigger_segment_hover call"
-        assert 'view_mode == "multi"' in pixmap_source, "HoverablePixmapItem missing multi-view check"
+        assert "_trigger_segment_hover" in pixmap_source, (
+            "HoverablePixmapItem missing _trigger_segment_hover call"
+        )
+        assert 'view_mode == "multi"' in pixmap_source, (
+            "HoverablePixmapItem missing multi-view check"
+        )
 
 
 if __name__ == "__main__":

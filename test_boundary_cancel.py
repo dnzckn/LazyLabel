@@ -11,7 +11,8 @@ from PyQt6.QtCore import QPointF, QRectF
 from PyQt6.QtWidgets import QApplication
 
 # Add the src directory to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
+
 
 def test_boundary_detection():
     """Test the boundary detection logic."""
@@ -34,10 +35,15 @@ def test_boundary_detection():
 
     # Expected results
     assert viewer_rect.contains(inside_point), "Inside point should be contained"
-    assert not viewer_rect.contains(outside_point_x), "Outside X point should not be contained"
-    assert not viewer_rect.contains(outside_point_y), "Outside Y point should not be contained"
+    assert not viewer_rect.contains(outside_point_x), (
+        "Outside X point should not be contained"
+    )
+    assert not viewer_rect.contains(outside_point_y), (
+        "Outside Y point should not be contained"
+    )
 
     print("✓ Boundary detection logic works correctly")
+
 
 def test_coordinate_mapping():
     """Test coordinate mapping between scene and view."""
@@ -71,6 +77,7 @@ def test_coordinate_mapping():
     except Exception as e:
         print(f"✗ Error in coordinate mapping: {e}")
         raise
+
 
 def test_cancel_operations():
     """Test the cancellation methods."""
@@ -126,6 +133,7 @@ def test_cancel_operations():
 
     print("✓ Cancel operations logic works correctly")
 
+
 if __name__ == "__main__":
     print("Testing boundary cancellation functionality...")
 
@@ -134,13 +142,14 @@ if __name__ == "__main__":
         test_coordinate_mapping()
         test_cancel_operations()
 
-        print("\n" + "="*50)
+        print("\n" + "=" * 50)
         print("✓ ALL TESTS PASSED")
         print("The boundary cancellation should work correctly.")
-        print("="*50)
+        print("=" * 50)
 
     except Exception as e:
         print(f"\n✗ TEST FAILED: {e}")
         import traceback
+
         traceback.print_exc()
         sys.exit(1)

@@ -10,7 +10,7 @@ import pytest
 from PyQt6.QtCore import QPointF
 
 # Add the src directory to path for testing
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 
 class TestMultiViewUndoRedo:
@@ -52,7 +52,7 @@ class TestMultiViewUndoRedo:
             "point_coords": point_coords,
             "point_item": point_item,
             "viewer_mode": "multi",
-            "viewer_index": viewer_index
+            "viewer_index": viewer_index,
         }
 
         self.main_window.action_history.append(action)
@@ -86,7 +86,7 @@ class TestMultiViewUndoRedo:
             "point_coords": [100, 150],
             "point_item": point_item,
             "viewer_mode": "multi",
-            "viewer_index": viewer_index
+            "viewer_index": viewer_index,
         }
         self.main_window.action_history.append(action)
 
@@ -111,35 +111,59 @@ class TestMultiViewUndoRedo:
                     viewer_index = last_action.get("viewer_index")
                     if viewer_index is not None:
                         # Remove from multi-view point collections
-                        if point_type == "positive":
-                            if (hasattr(self.main_window, "multi_view_positive_points") and
-                                viewer_index < len(self.main_window.multi_view_positive_points) and
-                                self.main_window.multi_view_positive_points[viewer_index]):
-                                self.main_window.multi_view_positive_points[viewer_index].pop()
+                        if (
+                            point_type == "positive"
+                            and hasattr(self.main_window, "multi_view_positive_points")
+                            and viewer_index
+                            < len(self.main_window.multi_view_positive_points)
+                            and self.main_window.multi_view_positive_points[
+                                viewer_index
+                            ]
+                        ):
+                            self.main_window.multi_view_positive_points[
+                                viewer_index
+                            ].pop()
 
                         # Remove from visual items
-                        if (viewer_index < len(self.main_window.multi_view_point_items) and
-                            point_item in self.main_window.multi_view_point_items[viewer_index]):
-                            self.main_window.multi_view_point_items[viewer_index].remove(point_item)
+                        if (
+                            viewer_index < len(self.main_window.multi_view_point_items)
+                            and point_item
+                            in self.main_window.multi_view_point_items[viewer_index]
+                        ):
+                            self.main_window.multi_view_point_items[
+                                viewer_index
+                            ].remove(point_item)
                             if point_item.scene():
-                                self.main_window.multi_view_viewers[viewer_index].scene().removeItem(point_item)
+                                self.main_window.multi_view_viewers[
+                                    viewer_index
+                                ].scene().removeItem(point_item)
 
-                    self.main_window._show_notification(f"Undid: Add Point (Viewer {viewer_index + 1})")
+                    self.main_window._show_notification(
+                        f"Undid: Add Point (Viewer {viewer_index + 1})"
+                    )
 
         # Execute undo
         mock_undo_last_action()
 
         # Verify results
         assert len(self.main_window.action_history) == 0  # Action was popped
-        assert len(self.main_window.redo_history) == 1   # Action moved to redo
-        assert len(self.main_window.multi_view_positive_points[viewer_index]) == 0  # Point removed
-        assert len(self.main_window.multi_view_point_items[viewer_index]) == 0      # Visual item removed
+        assert len(self.main_window.redo_history) == 1  # Action moved to redo
+        assert (
+            len(self.main_window.multi_view_positive_points[viewer_index]) == 0
+        )  # Point removed
+        assert (
+            len(self.main_window.multi_view_point_items[viewer_index]) == 0
+        )  # Visual item removed
 
         # Verify scene removeItem was called
-        self.main_window.multi_view_viewers[viewer_index].scene().removeItem.assert_called_once_with(point_item)
+        self.main_window.multi_view_viewers[
+            viewer_index
+        ].scene().removeItem.assert_called_once_with(point_item)
 
         # Verify notification
-        self.main_window._show_notification.assert_called_with("Undid: Add Point (Viewer 1)")
+        self.main_window._show_notification.assert_called_with(
+            "Undid: Add Point (Viewer 1)"
+        )
 
     def test_undo_multiview_add_point_negative(self):
         """Test undoing a negative point addition in multi-view mode."""
@@ -159,7 +183,7 @@ class TestMultiViewUndoRedo:
             "point_coords": [200, 250],
             "point_item": point_item,
             "viewer_mode": "multi",
-            "viewer_index": viewer_index
+            "viewer_index": viewer_index,
         }
         self.main_window.action_history.append(action)
 
@@ -172,17 +196,23 @@ class TestMultiViewUndoRedo:
             viewer_index = last_action.get("viewer_index")
             point_item = last_action.get("point_item")
 
-            if point_type == "negative":
-                if (hasattr(self.main_window, "multi_view_negative_points") and
-                    viewer_index < len(self.main_window.multi_view_negative_points) and
-                    self.main_window.multi_view_negative_points[viewer_index]):
-                    self.main_window.multi_view_negative_points[viewer_index].pop()
+            if (
+                point_type == "negative"
+                and hasattr(self.main_window, "multi_view_negative_points")
+                and viewer_index < len(self.main_window.multi_view_negative_points)
+                and self.main_window.multi_view_negative_points[viewer_index]
+            ):
+                self.main_window.multi_view_negative_points[viewer_index].pop()
 
-            if (viewer_index < len(self.main_window.multi_view_point_items) and
-                point_item in self.main_window.multi_view_point_items[viewer_index]):
+            if (
+                viewer_index < len(self.main_window.multi_view_point_items)
+                and point_item in self.main_window.multi_view_point_items[viewer_index]
+            ):
                 self.main_window.multi_view_point_items[viewer_index].remove(point_item)
                 if point_item.scene():
-                    self.main_window.multi_view_viewers[viewer_index].scene().removeItem(point_item)
+                    self.main_window.multi_view_viewers[
+                        viewer_index
+                    ].scene().removeItem(point_item)
 
         # Execute undo
         mock_undo_negative_point()
@@ -190,7 +220,9 @@ class TestMultiViewUndoRedo:
         # Verify results
         assert len(self.main_window.multi_view_negative_points[viewer_index]) == 0
         assert len(self.main_window.multi_view_point_items[viewer_index]) == 0
-        self.main_window.multi_view_viewers[viewer_index].scene().removeItem.assert_called_once_with(point_item)
+        self.main_window.multi_view_viewers[
+            viewer_index
+        ].scene().removeItem.assert_called_once_with(point_item)
 
     def test_redo_multiview_add_point(self):
         """Test redoing a point addition in multi-view mode."""
@@ -203,7 +235,7 @@ class TestMultiViewUndoRedo:
             "point_type": "positive",
             "point_coords": point_coords,
             "viewer_mode": "multi",
-            "viewer_index": viewer_index
+            "viewer_index": viewer_index,
         }
         self.main_window.redo_history.append(action)
 
@@ -222,22 +254,24 @@ class TestMultiViewUndoRedo:
                 if viewer_mode == "multi":
                     viewer_index = last_action.get("viewer_index")
                     point_coords = last_action.get("point_coords")
-                    point_type = last_action.get("point_type")
 
                     if viewer_index is not None and point_coords:
                         # Simulate re-adding the point via multi-view handler
                         pos = QPointF(point_coords[0], point_coords[1])
-                        positive = (point_type == "positive")
 
                         # Mock the handler call
-                        self.main_window.multi_view_mode_handler.handle_ai_click(pos, Mock(), viewer_index)
-                        self.main_window._show_notification(f"Redid: Add Point (Viewer {viewer_index + 1})")
+                        self.main_window.multi_view_mode_handler.handle_ai_click(
+                            pos, Mock(), viewer_index
+                        )
+                        self.main_window._show_notification(
+                            f"Redid: Add Point (Viewer {viewer_index + 1})"
+                        )
 
         # Execute redo
         mock_redo_last_action()
 
         # Verify results
-        assert len(self.main_window.redo_history) == 0    # Action was popped
+        assert len(self.main_window.redo_history) == 0  # Action was popped
         assert len(self.main_window.action_history) == 1  # Action moved back to history
 
         # Verify handler was called
@@ -245,10 +279,12 @@ class TestMultiViewUndoRedo:
         call_args = self.main_window.multi_view_mode_handler.handle_ai_click.call_args
         assert call_args[0][0].x() == point_coords[0]  # QPointF x coordinate
         assert call_args[0][0].y() == point_coords[1]  # QPointF y coordinate
-        assert call_args[0][2] == viewer_index         # viewer_index parameter
+        assert call_args[0][2] == viewer_index  # viewer_index parameter
 
         # Verify notification
-        self.main_window._show_notification.assert_called_with("Redid: Add Point (Viewer 1)")
+        self.main_window._show_notification.assert_called_with(
+            "Redid: Add Point (Viewer 1)"
+        )
 
     def test_multiview_polygon_point_undo_redo(self):
         """Test undo/redo for multi-view polygon points."""
@@ -271,7 +307,7 @@ class TestMultiViewUndoRedo:
             "type": "multi_view_polygon_point",
             "viewer_index": viewer_index,
             "point_coords": point_coords,
-            "dot_item": dot_item
+            "dot_item": dot_item,
         }
         self.main_window.action_history.append(action)
 
@@ -283,18 +319,27 @@ class TestMultiViewUndoRedo:
             viewer_index = last_action.get("viewer_index")
             if viewer_index is not None:
                 # Remove the last point from the specific viewer
-                if (viewer_index < len(self.main_window.multi_view_polygon_points) and
-                    self.main_window.multi_view_polygon_points[viewer_index]):
+                if (
+                    viewer_index < len(self.main_window.multi_view_polygon_points)
+                    and self.main_window.multi_view_polygon_points[viewer_index]
+                ):
                     self.main_window.multi_view_polygon_points[viewer_index].pop()
 
                 # Remove the visual dot from the scene
-                if (hasattr(self.main_window, "multi_view_polygon_preview_items") and
-                    viewer_index < len(self.main_window.multi_view_polygon_preview_items)):
-                    preview_items = self.main_window.multi_view_polygon_preview_items[viewer_index]
+                if hasattr(
+                    self.main_window, "multi_view_polygon_preview_items"
+                ) and viewer_index < len(
+                    self.main_window.multi_view_polygon_preview_items
+                ):
+                    preview_items = self.main_window.multi_view_polygon_preview_items[
+                        viewer_index
+                    ]
                     if preview_items:
                         dot_item = preview_items.pop()
-                        if hasattr(dot_item, 'scene') and dot_item.scene():
-                            self.main_window.multi_view_viewers[viewer_index].scene().removeItem(dot_item)
+                        if hasattr(dot_item, "scene") and dot_item.scene():
+                            self.main_window.multi_view_viewers[
+                                viewer_index
+                            ].scene().removeItem(dot_item)
 
         # Execute undo
         mock_undo_polygon_point()
@@ -310,7 +355,7 @@ class TestMultiViewUndoRedo:
             "type": "add_point",
             "point_type": "positive",
             "viewer_mode": "single",
-            "point_coords": [50, 60]
+            "point_coords": [50, 60],
         }
 
         # Add multi-view action
@@ -319,7 +364,7 @@ class TestMultiViewUndoRedo:
             "point_type": "negative",
             "viewer_mode": "multi",
             "viewer_index": 1,
-            "point_coords": [150, 160]
+            "point_coords": [150, 160],
         }
 
         self.main_window.action_history.extend([single_action, multi_action])
@@ -367,11 +412,17 @@ class TestMultiViewUndoRedo:
             "point_coords": [100, 200],
             "point_item": Mock(),
             "viewer_mode": "multi",
-            "viewer_index": 0
+            "viewer_index": 0,
         }
 
         # Verify all required fields
-        required_fields = ["type", "point_type", "point_coords", "viewer_mode", "viewer_index"]
+        required_fields = [
+            "type",
+            "point_type",
+            "point_coords",
+            "viewer_mode",
+            "viewer_index",
+        ]
         for field in required_fields:
             assert field in action, f"Missing required field: {field}"
 
@@ -399,7 +450,7 @@ class TestMultiViewUndoRedo:
             "point_coords": [100, 150],
             "point_item": point_item,
             "viewer_mode": "multi",
-            "viewer_index": viewer_index
+            "viewer_index": viewer_index,
         }
         self.main_window.action_history.append(action)
 
@@ -444,13 +495,17 @@ class TestMultiViewUndoRedo:
             viewer_index = last_action.get("viewer_index")
             if viewer_index is None:
                 # Should handle gracefully
-                self.main_window._show_warning_notification("Cannot undo: Missing viewer index")
+                self.main_window._show_warning_notification(
+                    "Cannot undo: Missing viewer index"
+                )
                 return False
             return True
 
         result = mock_undo_missing_viewer()
         assert result is False
-        self.main_window._show_warning_notification.assert_called_with("Cannot undo: Missing viewer index")
+        self.main_window._show_warning_notification.assert_called_with(
+            "Cannot undo: Missing viewer index"
+        )
 
 
 class TestMultiViewUndoRedoIntegration:
@@ -476,7 +531,7 @@ class TestMultiViewUndoRedoIntegration:
         action = {
             "type": "add_segment",
             "segment_index": 0,
-            "segment_data": segment_data
+            "segment_data": segment_data,
         }
 
         main_window.action_history.append(action)

@@ -7,7 +7,7 @@ import os
 import sys
 
 # Add the src directory to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
 
 from PyQt6.QtCore import QPointF, Qt, QTimer
 from PyQt6.QtWidgets import QApplication
@@ -37,7 +37,7 @@ def test_multiview_ai():
         QApplication.processEvents()
 
         # Check if models are loaded (should be empty with lazy loading)
-        if hasattr(main_window, 'multi_view_models'):
+        if hasattr(main_window, "multi_view_models"):
             print(f"   Models loaded: {len(main_window.multi_view_models)}")
         else:
             print("   No models loaded yet (lazy loading ✅)")
@@ -59,10 +59,11 @@ def test_multiview_ai():
         print("\n3️⃣ Simulating AI click...")
 
         # Create mock event
-        mock_event = type('MockEvent', (), {
-            'button': lambda: Qt.MouseButton.LeftButton,
-            'timestamp': lambda: 0
-        })()
+        mock_event = type(
+            "MockEvent",
+            (),
+            {"button": lambda: Qt.MouseButton.LeftButton, "timestamp": lambda: 0},
+        )()
 
         # Try to click
         pos = QPointF(100, 100)
@@ -70,12 +71,18 @@ def test_multiview_ai():
         QApplication.processEvents()
 
         # Check model loading status
-        if hasattr(main_window, 'multi_view_init_worker') and main_window.multi_view_init_worker:
+        if (
+            hasattr(main_window, "multi_view_init_worker")
+            and main_window.multi_view_init_worker
+        ):
             print("   Model loading started ✅")
 
             # Monitor loading progress
             def check_loading():
-                if hasattr(main_window, 'multi_view_models') and len(main_window.multi_view_models) > 0:
+                if (
+                    hasattr(main_window, "multi_view_models")
+                    and len(main_window.multi_view_models) > 0
+                ):
                     print(f"\n4️⃣ Models loaded: {len(main_window.multi_view_models)}")
                     for i, model in enumerate(main_window.multi_view_models):
                         if model:
@@ -97,7 +104,7 @@ def test_multiview_ai():
         print("\n5️⃣ Testing escape key...")
 
         # Add some test points
-        if hasattr(main_window, 'multi_view_positive_points'):
+        if hasattr(main_window, "multi_view_positive_points"):
             main_window.multi_view_positive_points[0].append([50, 50])
             print("   Added test point")
 
@@ -106,7 +113,7 @@ def test_multiview_ai():
         QApplication.processEvents()
 
         # Check
-        if hasattr(main_window, 'multi_view_positive_points'):
+        if hasattr(main_window, "multi_view_positive_points"):
             if len(main_window.multi_view_positive_points[0]) == 0:
                 print("   Points cleared ✅")
             else:

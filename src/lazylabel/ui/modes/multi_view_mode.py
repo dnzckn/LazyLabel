@@ -18,60 +18,67 @@ class MultiViewModeHandler(BaseModeHandler):
     def __init__(self, main_window):
         super().__init__(main_window)
         # Initialize multi-view segment tracking
-        if not hasattr(main_window, 'multi_view_segment_items'):
+        if not hasattr(main_window, "multi_view_segment_items"):
             main_window.multi_view_segment_items = {0: {}, 1: {}}
 
     def handle_ai_click(self, pos, event, viewer_index=0):
         """Handle AI mode click in multi view."""
+        # Check if models need to be initialized (first time use)
+        if (
+            not hasattr(self.main_window, "multi_view_models")
+            or not self.main_window.multi_view_models
+            or all(m is None for m in self.main_window.multi_view_models)
+        ):
+            # Check if already initializing
+            if (
+                hasattr(self.main_window, "multi_view_init_worker")
+                and self.main_window.multi_view_init_worker
+                and self.main_window.multi_view_init_worker.isRunning()
+            ):
+                return  # Don't show duplicate messages
+
+            self.main_window._show_notification(
+                "Initializing AI models for multi-view mode...", duration=0
+            )  # Persistent message
+            self.main_window._initialize_multi_view_models()
+            return  # Exit early, models will load in background
+
         if viewer_index >= len(self.main_window.multi_view_models):
             return
 
-        # Check if model is updating
-        if self.main_window.multi_view_models_updating[viewer_index]:
-            self.main_window._show_warning_notification(
-                f"AI model is updating for viewer {viewer_index + 1}, please wait..."
-            )
+        # Check if any model is still updating or needs update
+        if any(
+            self.main_window.multi_view_models_updating[i]
+            or self.main_window.multi_view_models_dirty[i]
+            for i in range(len(self.main_window.multi_view_models))
+            if i < len(self.main_window.multi_view_models)
+        ):
+            # Models are still loading - user should wait
             return
 
         # Skip AI prediction if model is not ready
-        if (viewer_index >= len(self.main_window.multi_view_models) or
-            self.main_window.multi_view_models[viewer_index] is None):
+        if self.main_window.multi_view_models[viewer_index] is None:
             logger.error(f"AI model not initialized for viewer {viewer_index + 1}")
             self.main_window._show_warning_notification(
                 f"AI model not initialized for viewer {viewer_index + 1}"
             )
             return
 
-        # Check if model is updating
-        if self.main_window.multi_view_models_updating[viewer_index]:
-            logger.info(f"AI model is updating for viewer {viewer_index + 1}")
-            self.main_window._show_warning_notification(
-                f"AI model is updating for viewer {viewer_index + 1}, please wait..."
-            )
-            return
-
-        # Check if model needs image update and try to start it
-        if self.main_window.multi_view_models_dirty[viewer_index]:
-            logger.info(f"AI model is dirty for viewer {viewer_index + 1}, starting image update")
-            self.main_window._ensure_multi_view_sam_updated(viewer_index)
-            self.main_window._show_warning_notification(
-                f"AI model is loading image for viewer {viewer_index + 1}, please wait..."
-            )
-            return
-
-        logger.info(f"AI model is ready for viewer {viewer_index + 1}, proceeding with prediction")
+        logger.info(
+            f"AI model is ready for viewer {viewer_index + 1}, proceeding with prediction"
+        )
 
         # Determine if positive or negative click
         positive = event.button() == Qt.MouseButton.LeftButton
 
         if positive:
             # Left-click: Set up for potential drag (similar to single-view AI mode)
-            if not hasattr(self.main_window, 'multi_view_ai_starts'):
-                self.main_window.multi_view_ai_starts = [None, None]
-            if not hasattr(self.main_window, 'multi_view_ai_rects'):
+            if not hasattr(self.main_window, "multi_view_ai_click_starts"):
+                self.main_window.multi_view_ai_click_starts = [None, None]
+            if not hasattr(self.main_window, "multi_view_ai_rects"):
                 self.main_window.multi_view_ai_rects = [None, None]
 
-            self.main_window.multi_view_ai_starts[viewer_index] = pos
+            self.main_window.multi_view_ai_click_starts[viewer_index] = pos
             # We'll determine if it's a click or drag in the move/release handlers
             return
 
@@ -89,26 +96,28 @@ class MultiViewModeHandler(BaseModeHandler):
             pos.x() - self.main_window.point_radius,
             pos.y() - self.main_window.point_radius,
             point_diameter,
-            point_diameter
+            point_diameter,
         )
         point_item.setBrush(QBrush(point_color))
         point_item.setPen(QPen(Qt.PenStyle.NoPen))
         viewer.scene().addItem(point_item)
 
         # Track point items for clearing
-        if not hasattr(self.main_window, 'multi_view_point_items'):
+        if not hasattr(self.main_window, "multi_view_point_items"):
             self.main_window.multi_view_point_items = {0: [], 1: []}
         self.main_window.multi_view_point_items[viewer_index].append(point_item)
 
         # Record the action for undo
-        self.main_window.action_history.append({
-            "type": "add_point",
-            "point_type": "positive" if positive else "negative",
-            "point_coords": [int(pos.x()), int(pos.y())],
-            "point_item": point_item,
-            "viewer_mode": "multi",
-            "viewer_index": viewer_index
-        })
+        self.main_window.action_history.append(
+            {
+                "type": "add_point",
+                "point_type": "positive" if positive else "negative",
+                "point_coords": [int(pos.x()), int(pos.y())],
+                "point_item": point_item,
+                "viewer_mode": "multi",
+                "viewer_index": viewer_index,
+            }
+        )
         # Clear redo history when a new action is performed
         self.main_window.redo_history.clear()
 
@@ -139,7 +148,7 @@ class MultiViewModeHandler(BaseModeHandler):
                     mask = mask > 0.5
 
                 # Store prediction data for potential saving
-                if not hasattr(self.main_window, 'multi_view_ai_predictions'):
+                if not hasattr(self.main_window, "multi_view_ai_predictions"):
                     self.main_window.multi_view_ai_predictions = {}
 
                 self.main_window.multi_view_ai_predictions[viewer_index] = {
@@ -147,7 +156,7 @@ class MultiViewModeHandler(BaseModeHandler):
                     "points": [(pos.x(), pos.y())],
                     "labels": [1 if positive else 0],
                     "model_pos": model_pos,
-                    "positive": positive
+                    "positive": positive,
                 }
 
                 # Show preview mask
@@ -155,7 +164,9 @@ class MultiViewModeHandler(BaseModeHandler):
 
                 # Try to generate prediction for the other viewer too
                 other_viewer_index = 1 - viewer_index
-                self._generate_paired_ai_preview(viewer_index, other_viewer_index, pos, positive)
+                self._generate_paired_ai_preview(
+                    viewer_index, other_viewer_index, pos, positive
+                )
 
         except Exception as e:
             logger.error(f"Error processing AI click for viewer {viewer_index}: {e}")
@@ -167,8 +178,10 @@ class MultiViewModeHandler(BaseModeHandler):
         # Check if clicking near first point to close polygon
         if points and len(points) > 2:
             first_point = points[0]
-            distance_squared = (pos.x() - first_point.x()) ** 2 + (pos.y() - first_point.y()) ** 2
-            if distance_squared < self.main_window.polygon_join_threshold ** 2:
+            distance_squared = (pos.x() - first_point.x()) ** 2 + (
+                pos.y() - first_point.y()
+            ) ** 2
+            if distance_squared < self.main_window.polygon_join_threshold**2:
                 self._finalize_multi_view_polygon(viewer_index)
                 return
 
@@ -182,14 +195,16 @@ class MultiViewModeHandler(BaseModeHandler):
             pos.x() - self.main_window.point_radius,
             pos.y() - self.main_window.point_radius,
             point_diameter,
-            point_diameter
+            point_diameter,
         )
         point_item.setBrush(QBrush(QColor(0, 255, 255)))  # Cyan like single view
         point_item.setPen(QPen(Qt.PenStyle.NoPen))
         viewer.scene().addItem(point_item)
 
         # Store visual item for cleanup
-        self.main_window.multi_view_polygon_preview_items[viewer_index].append(point_item)
+        self.main_window.multi_view_polygon_preview_items[viewer_index].append(
+            point_item
+        )
 
     def handle_bbox_start(self, pos, viewer_index=0):
         """Handle bbox mode start in multi view."""
@@ -247,16 +262,22 @@ class MultiViewModeHandler(BaseModeHandler):
         # Remove temporary rectangle
         self.main_window.multi_view_viewers[viewer_index].scene().removeItem(rect_item)
 
-        # Create segment if bbox is large enough
-        if width > 10 and height > 10:
-            # Create view-specific bbox data as polygon
-            view_data = {
-                "vertices": [[x, y], [x + width, y], [x + width, y + height], [x, y + height]],
-                "mask": None,
-            }
+        # Create segment regardless of size
+        # Create view-specific bbox data as polygon
+        view_data = {
+            "vertices": [
+                [x, y],
+                [x + width, y],
+                [x + width, y + height],
+                [x, y + height],
+            ],
+            "mask": None,
+        }
 
-            # Use the paired segment method for bounding boxes to create segments for both views
-            self.main_window._add_multi_view_paired_segment("Polygon", None, view_data, view_data)
+        # Use the paired segment method for bounding boxes to create segments for both views
+        self.main_window._add_multi_view_paired_segment(
+            "Polygon", None, view_data, view_data
+        )
 
         # Clean up
         self.main_window.multi_view_bbox_starts[viewer_index] = None
@@ -265,13 +286,20 @@ class MultiViewModeHandler(BaseModeHandler):
     def display_all_segments(self):
         """Display all segments in multi view."""
         # Clear existing segment items from all viewers
-        if hasattr(self.main_window, 'multi_view_segment_items'):
-            for viewer_idx, viewer_segments in self.main_window.multi_view_segment_items.items():
+        if hasattr(self.main_window, "multi_view_segment_items"):
+            for (
+                viewer_idx,
+                viewer_segments,
+            ) in self.main_window.multi_view_segment_items.items():
                 for _segment_idx, items in viewer_segments.items():
-                    for item in items[:]:  # Create a copy to avoid modification during iteration
+                    for item in items[
+                        :
+                    ]:  # Create a copy to avoid modification during iteration
                         try:
                             if item.scene():
-                                self.main_window.multi_view_viewers[viewer_idx].scene().removeItem(item)
+                                self.main_window.multi_view_viewers[
+                                    viewer_idx
+                                ].scene().removeItem(item)
                         except RuntimeError:
                             # Object has been deleted, skip it
                             pass
@@ -289,7 +317,9 @@ class MultiViewModeHandler(BaseModeHandler):
                 # New multi-view format
                 for viewer_idx in range(len(self.main_window.multi_view_viewers)):
                     if viewer_idx in segment["views"]:
-                        self._display_segment_in_viewer(i, segment, viewer_idx, base_color)
+                        self._display_segment_in_viewer(
+                            i, segment, viewer_idx, base_color
+                        )
             else:
                 # Legacy single-view format - display in all viewers
                 for viewer_idx in range(len(self.main_window.multi_view_viewers)):
@@ -308,23 +338,30 @@ class MultiViewModeHandler(BaseModeHandler):
     def _add_multi_view_segment(self, segment_type, class_id, viewer_index, view_data):
         """Add a segment with view-specific data to the multi-view system."""
         # Delegate to main window's method to ensure consistent undo/redo handling
-        self.main_window._add_multi_view_segment(segment_type, class_id, viewer_index, view_data)
+        self.main_window._add_multi_view_segment(
+            segment_type, class_id, viewer_index, view_data
+        )
 
-    def _create_paired_ai_segment(self, viewer_index, view_data, other_viewer_index, pos, positive):
+    def _create_paired_ai_segment(
+        self, viewer_index, view_data, other_viewer_index, pos, positive
+    ):
         """Create paired AI segments for both viewers with the same class ID."""
         try:
             # Check if the other viewer's model is ready
-            if (other_viewer_index < len(self.main_window.multi_view_models) and
-                self.main_window.multi_view_models[other_viewer_index] is not None and
-                not self.main_window.multi_view_models_dirty[other_viewer_index] and
-                not self.main_window.multi_view_models_updating[other_viewer_index]):
-
+            if (
+                other_viewer_index < len(self.main_window.multi_view_models)
+                and self.main_window.multi_view_models[other_viewer_index] is not None
+                and not self.main_window.multi_view_models_dirty[other_viewer_index]
+                and not self.main_window.multi_view_models_updating[other_viewer_index]
+            ):
                 # Run AI prediction on the other viewer
                 other_model = self.main_window.multi_view_models[other_viewer_index]
 
                 # Convert position to model coordinates for the other viewer
-                other_model_pos = self.main_window._transform_multi_view_coords_to_sam_coords(
-                    pos, other_viewer_index
+                other_model_pos = (
+                    self.main_window._transform_multi_view_coords_to_sam_coords(
+                        pos, other_viewer_index
+                    )
                 )
 
                 # Prepare points for prediction
@@ -357,18 +394,17 @@ class MultiViewModeHandler(BaseModeHandler):
                         "type": "AI",
                         "views": {
                             viewer_index: view_data,
-                            other_viewer_index: other_view_data
-                        }
+                            other_viewer_index: other_view_data,
+                        },
                     }
 
                     # Add to main segment manager (this will assign the same class ID)
                     self.main_window.segment_manager.add_segment(paired_segment)
 
                     # Record for undo
-                    self.main_window.action_history.append({
-                        "type": "add_segment",
-                        "data": paired_segment
-                    })
+                    self.main_window.action_history.append(
+                        {"type": "add_segment", "data": paired_segment}
+                    )
 
                     # Update UI lists to show the new segment
                     self.main_window._update_all_lists()
@@ -390,10 +426,15 @@ class MultiViewModeHandler(BaseModeHandler):
         viewer = self.main_window.multi_view_viewers[viewer_index]
 
         # Clear existing preview for this viewer
-        if not hasattr(self.main_window, 'multi_view_preview_items'):
+        if not hasattr(self.main_window, "multi_view_preview_items"):
             self.main_window.multi_view_preview_items = {}
-        if viewer_index in self.main_window.multi_view_preview_items and self.main_window.multi_view_preview_items[viewer_index].scene():
-            viewer.scene().removeItem(self.main_window.multi_view_preview_items[viewer_index])
+        if (
+            viewer_index in self.main_window.multi_view_preview_items
+            and self.main_window.multi_view_preview_items[viewer_index].scene()
+        ):
+            viewer.scene().removeItem(
+                self.main_window.multi_view_preview_items[viewer_index]
+            )
 
         # Create preview mask
         pixmap = mask_to_pixmap(mask, (255, 255, 0))  # Yellow preview
@@ -401,21 +442,26 @@ class MultiViewModeHandler(BaseModeHandler):
         preview_item.setZValue(50)
         self.main_window.multi_view_preview_items[viewer_index] = preview_item
 
-    def _generate_paired_ai_preview(self, source_viewer_index, target_viewer_index, pos, positive):
+    def _generate_paired_ai_preview(
+        self, source_viewer_index, target_viewer_index, pos, positive
+    ):
         """Generate AI prediction preview for the paired viewer."""
         try:
             # Check if the target viewer's model is ready
-            if (target_viewer_index < len(self.main_window.multi_view_models) and
-                self.main_window.multi_view_models[target_viewer_index] is not None and
-                not self.main_window.multi_view_models_dirty[target_viewer_index] and
-                not self.main_window.multi_view_models_updating[target_viewer_index]):
-
+            if (
+                target_viewer_index < len(self.main_window.multi_view_models)
+                and self.main_window.multi_view_models[target_viewer_index] is not None
+                and not self.main_window.multi_view_models_dirty[target_viewer_index]
+                and not self.main_window.multi_view_models_updating[target_viewer_index]
+            ):
                 # Run AI prediction on the target viewer
                 target_model = self.main_window.multi_view_models[target_viewer_index]
 
                 # Convert position to model coordinates for the target viewer
-                target_model_pos = self.main_window._transform_multi_view_coords_to_sam_coords(
-                    pos, target_viewer_index
+                target_model_pos = (
+                    self.main_window._transform_multi_view_coords_to_sam_coords(
+                        pos, target_viewer_index
+                    )
                 )
 
                 # Prepare points for prediction
@@ -437,7 +483,7 @@ class MultiViewModeHandler(BaseModeHandler):
                         mask = mask > 0.5
 
                     # Store prediction data
-                    if not hasattr(self.main_window, 'multi_view_ai_predictions'):
+                    if not hasattr(self.main_window, "multi_view_ai_predictions"):
                         self.main_window.multi_view_ai_predictions = {}
 
                     self.main_window.multi_view_ai_predictions[target_viewer_index] = {
@@ -445,7 +491,7 @@ class MultiViewModeHandler(BaseModeHandler):
                         "points": [(pos.x(), pos.y())],
                         "labels": [1 if positive else 0],
                         "model_pos": target_model_pos,
-                        "positive": positive
+                        "positive": positive,
                     }
 
                     # Show preview
@@ -457,27 +503,37 @@ class MultiViewModeHandler(BaseModeHandler):
     def _clear_ai_previews(self):
         """Clear AI prediction previews and points from all viewers."""
         # Clear preview masks
-        if hasattr(self.main_window, 'multi_view_preview_items'):
-            for viewer_index, preview_item in self.main_window.multi_view_preview_items.items():
+        if hasattr(self.main_window, "multi_view_preview_items"):
+            for (
+                viewer_index,
+                preview_item,
+            ) in self.main_window.multi_view_preview_items.items():
                 if preview_item and preview_item.scene():
-                    self.main_window.multi_view_viewers[viewer_index].scene().removeItem(preview_item)
+                    self.main_window.multi_view_viewers[
+                        viewer_index
+                    ].scene().removeItem(preview_item)
             self.main_window.multi_view_preview_items.clear()
 
         # Clear prediction data
-        if hasattr(self.main_window, 'multi_view_ai_predictions'):
+        if hasattr(self.main_window, "multi_view_ai_predictions"):
             self.main_window.multi_view_ai_predictions.clear()
 
         # Clear tracked point items
-        if hasattr(self.main_window, 'multi_view_point_items'):
-            for viewer_index, point_items in self.main_window.multi_view_point_items.items():
+        if hasattr(self.main_window, "multi_view_point_items"):
+            for (
+                viewer_index,
+                point_items,
+            ) in self.main_window.multi_view_point_items.items():
                 for point_item in point_items:
                     if point_item.scene():
-                        self.main_window.multi_view_viewers[viewer_index].scene().removeItem(point_item)
+                        self.main_window.multi_view_viewers[
+                            viewer_index
+                        ].scene().removeItem(point_item)
                 point_items.clear()
 
     def save_ai_predictions(self):
         """Save AI predictions as actual segments."""
-        if not hasattr(self.main_window, 'multi_view_ai_predictions'):
+        if not hasattr(self.main_window, "multi_view_ai_predictions"):
             return
 
         predictions = self.main_window.multi_view_ai_predictions
@@ -491,58 +547,59 @@ class MultiViewModeHandler(BaseModeHandler):
             active_class = self.main_window.segment_manager.get_active_class()
             if active_class is None:
                 # Determine next class ID
-                existing_classes = self.main_window.segment_manager.get_unique_class_ids()
+                existing_classes = (
+                    self.main_window.segment_manager.get_unique_class_ids()
+                )
                 next_class_id = max(existing_classes) + 1 if existing_classes else 1
             else:
                 next_class_id = active_class
 
             # Create paired segment with both viewer data
-            paired_segment = {
-                "type": "AI",
-                "class_id": next_class_id,
-                "views": {}
-            }
+            paired_segment = {"type": "AI", "class_id": next_class_id, "views": {}}
 
             # Add view data for each viewer
             for viewer_index in [0, 1]:
                 if viewer_index in predictions:
-                    paired_segment["views"][viewer_index] = {
-                        "mask": predictions[viewer_index]["mask"],
-                        "points": predictions[viewer_index]["points"],
-                        "labels": predictions[viewer_index]["labels"]
-                    }
+                    view_data = {"mask": predictions[viewer_index]["mask"]}
+                    # Add points/labels if they exist (point-based prediction)
+                    if "points" in predictions[viewer_index]:
+                        view_data["points"] = predictions[viewer_index]["points"]
+                        view_data["labels"] = predictions[viewer_index]["labels"]
+                    # Add box if it exists (box-based prediction)
+                    if "box" in predictions[viewer_index]:
+                        view_data["box"] = predictions[viewer_index]["box"]
+
+                    paired_segment["views"][viewer_index] = view_data
 
             # Add to main segment manager
             self.main_window.segment_manager.add_segment(paired_segment)
 
             # Record for undo
-            self.main_window.action_history.append({
-                "type": "add_segment",
-                "data": paired_segment
-            })
+            self.main_window.action_history.append(
+                {"type": "add_segment", "data": paired_segment}
+            )
 
             self.main_window._update_all_lists()
 
         else:
             # Only one viewer has prediction - create single segment with views structure
             for viewer_index, prediction in predictions.items():
-                segment_data = {
-                    "type": "AI",
-                    "views": {
-                        viewer_index: {
-                            "mask": prediction["mask"],
-                            "points": prediction["points"],
-                            "labels": prediction["labels"]
-                        }
-                    }
-                }
+                view_data = {"mask": prediction["mask"]}
+                # Add points/labels if they exist (point-based prediction)
+                if "points" in prediction:
+                    view_data["points"] = prediction["points"]
+                    view_data["labels"] = prediction["labels"]
+                # Add box if it exists (box-based prediction)
+                if "box" in prediction:
+                    view_data["box"] = prediction["box"]
+
+                segment_data = {"type": "AI", "views": {viewer_index: view_data}}
                 self.main_window.segment_manager.add_segment(segment_data)
 
                 # Record for undo
-                self.main_window.action_history.append({
-                    "type": "add_segment",
-                    "data": segment_data
-                })
+                self.main_window.action_history.append(
+                    {"type": "add_segment", "data": segment_data}
+                )
 
             self.main_window._update_all_lists()
 
@@ -563,17 +620,24 @@ class MultiViewModeHandler(BaseModeHandler):
 
         # Check if there's a pending polygon on the other viewer to pair with
         other_viewer_index = 1 - viewer_index
-        if (hasattr(self.main_window, '_pending_polygon_segments') and
-            other_viewer_index in self.main_window._pending_polygon_segments):
-
+        if (
+            hasattr(self.main_window, "_pending_polygon_segments")
+            and other_viewer_index in self.main_window._pending_polygon_segments
+        ):
             # Pair with the pending polygon from the other viewer
-            other_view_data = self.main_window._pending_polygon_segments[other_viewer_index]
+            other_view_data = self.main_window._pending_polygon_segments[
+                other_viewer_index
+            ]
 
             # Create paired segment with both polygons
             if viewer_index == 0:
-                self.main_window._add_multi_view_paired_segment("Polygon", None, view_data, other_view_data)
+                self.main_window._add_multi_view_paired_segment(
+                    "Polygon", None, view_data, other_view_data
+                )
             else:
-                self.main_window._add_multi_view_paired_segment("Polygon", None, other_view_data, view_data)
+                self.main_window._add_multi_view_paired_segment(
+                    "Polygon", None, other_view_data, view_data
+                )
 
             # Clean up pending polygon
             del self.main_window._pending_polygon_segments[other_viewer_index]
@@ -584,19 +648,27 @@ class MultiViewModeHandler(BaseModeHandler):
             # No pending polygon to pair with - mirror the polygon to the other viewer automatically
             # Create mirrored view data (same coordinates as they should align between linked images)
             mirrored_view_data = {
-                "vertices": view_data["vertices"].copy(),  # Use same coordinates for mirrored polygon
+                "vertices": view_data[
+                    "vertices"
+                ].copy(),  # Use same coordinates for mirrored polygon
                 "mask": None,
             }
 
             # Create paired segment with both polygons using same coordinates
             if viewer_index == 0:
-                self.main_window._add_multi_view_paired_segment("Polygon", None, view_data, mirrored_view_data)
+                self.main_window._add_multi_view_paired_segment(
+                    "Polygon", None, view_data, mirrored_view_data
+                )
             else:
-                self.main_window._add_multi_view_paired_segment("Polygon", None, mirrored_view_data, view_data)
+                self.main_window._add_multi_view_paired_segment(
+                    "Polygon", None, mirrored_view_data, view_data
+                )
 
             # Update UI
             self.main_window._update_all_lists()
-            self.main_window._show_notification("Polygon created and mirrored to both viewers.")
+            self.main_window._show_notification(
+                "Polygon created and mirrored to both viewers."
+            )
 
         # Clear polygon state for this viewer
         self._clear_multi_view_polygon(viewer_index)
@@ -604,9 +676,9 @@ class MultiViewModeHandler(BaseModeHandler):
     def _clear_multi_view_polygon(self, viewer_index):
         """Clear polygon state for a specific viewer."""
         # Clear points
-        if hasattr(self.main_window, "multi_view_polygon_points") and viewer_index < len(
-            self.main_window.multi_view_polygon_points
-        ):
+        if hasattr(
+            self.main_window, "multi_view_polygon_points"
+        ) and viewer_index < len(self.main_window.multi_view_polygon_points):
             self.main_window.multi_view_polygon_points[viewer_index].clear()
 
         # Remove all visual items
@@ -622,7 +694,9 @@ class MultiViewModeHandler(BaseModeHandler):
                     viewer.scene().removeItem(item)
             self.main_window.multi_view_polygon_preview_items[viewer_index].clear()
 
-    def _display_segment_in_viewer(self, segment_index, segment, viewer_index, base_color):
+    def _display_segment_in_viewer(
+        self, segment_index, segment, viewer_index, base_color
+    ):
         """Display a specific segment in a specific viewer."""
         if viewer_index >= len(self.main_window.multi_view_viewers):
             return
@@ -657,10 +731,14 @@ class MultiViewModeHandler(BaseModeHandler):
             poly_item.set_segment_info(segment_index, self.main_window)
             poly_item.setPen(QPen(Qt.GlobalColor.transparent))
 
-            logger.debug(f"Created HoverablePolygonItem for segment {segment_index} in viewer {viewer_index}")
+            logger.debug(
+                f"Created HoverablePolygonItem for segment {segment_index} in viewer {viewer_index}"
+            )
 
             viewer.scene().addItem(poly_item)
-            self.main_window.multi_view_segment_items[viewer_index][segment_index].append(poly_item)
+            self.main_window.multi_view_segment_items[viewer_index][
+                segment_index
+            ].append(poly_item)
 
         elif segment_type == "AI" and segment_data.get("mask") is not None:
             # Display AI mask
@@ -674,20 +752,26 @@ class MultiViewModeHandler(BaseModeHandler):
             pixmap_item.set_pixmaps(default_pixmap, hover_pixmap)
             pixmap_item.set_segment_info(segment_index, self.main_window)
 
-            logger.debug(f"Created HoverablePixmapItem for segment {segment_index} in viewer {viewer_index}")
+            logger.debug(
+                f"Created HoverablePixmapItem for segment {segment_index} in viewer {viewer_index}"
+            )
 
             viewer.scene().addItem(pixmap_item)
             pixmap_item.setZValue(segment_index + 1)
-            self.main_window.multi_view_segment_items[viewer_index][segment_index].append(pixmap_item)
+            self.main_window.multi_view_segment_items[viewer_index][
+                segment_index
+            ].append(pixmap_item)
 
     def handle_ai_drag(self, pos, viewer_index=0):
         """Handle AI mode drag in multi view."""
-        if (not hasattr(self.main_window, "multi_view_ai_starts") or
-            not hasattr(self.main_window, "multi_view_ai_rects") or
-            self.main_window.multi_view_ai_starts[viewer_index] is None):
+        if (
+            not hasattr(self.main_window, "multi_view_ai_click_starts")
+            or not hasattr(self.main_window, "multi_view_ai_rects")
+            or self.main_window.multi_view_ai_click_starts[viewer_index] is None
+        ):
             return
 
-        start_pos = self.main_window.multi_view_ai_starts[viewer_index]
+        start_pos = self.main_window.multi_view_ai_click_starts[viewer_index]
 
         # Check if we've moved enough to consider this a drag
         drag_distance = (
@@ -710,26 +794,30 @@ class MultiViewModeHandler(BaseModeHandler):
 
             # Update rubber band
             from PyQt6.QtCore import QRectF
+
             rect = QRectF(start_pos, pos).normalized()
             self.main_window.multi_view_ai_rects[viewer_index].setRect(rect)
 
     def handle_ai_complete(self, pos, viewer_index=0):
         """Handle AI mode completion in multi view."""
-        if (not hasattr(self.main_window, "multi_view_ai_starts") or
-            self.main_window.multi_view_ai_starts[viewer_index] is None):
+        if (
+            not hasattr(self.main_window, "multi_view_ai_click_starts")
+            or self.main_window.multi_view_ai_click_starts[viewer_index] is None
+        ):
             return
 
-        start_pos = self.main_window.multi_view_ai_starts[viewer_index]
+        start_pos = self.main_window.multi_view_ai_click_starts[viewer_index]
 
         # Calculate drag distance
         drag_distance = (
             (pos.x() - start_pos.x()) ** 2 + (pos.y() - start_pos.y()) ** 2
         ) ** 0.5
 
-        if (hasattr(self.main_window, "multi_view_ai_rects") and
-            self.main_window.multi_view_ai_rects[viewer_index] is not None and
-            drag_distance > 5):
-
+        if (
+            hasattr(self.main_window, "multi_view_ai_rects")
+            and self.main_window.multi_view_ai_rects[viewer_index] is not None
+            and drag_distance > 5
+        ):
             # This was a drag - use AI bounding box prediction
             rect_item = self.main_window.multi_view_ai_rects[viewer_index]
             rect = rect_item.rect()
@@ -738,17 +826,21 @@ class MultiViewModeHandler(BaseModeHandler):
             viewer = self.main_window.multi_view_viewers[viewer_index]
             viewer.scene().removeItem(rect_item)
             self.main_window.multi_view_ai_rects[viewer_index] = None
-            self.main_window.multi_view_ai_starts[viewer_index] = None
+            self.main_window.multi_view_ai_click_starts[viewer_index] = None
 
             if rect.width() > 10 and rect.height() > 10:  # Minimum box size
                 self._handle_multi_view_ai_bounding_box(rect, viewer_index)
         else:
             # This was a click - add positive point
-            self.main_window.multi_view_ai_starts[viewer_index] = None
-            if (hasattr(self.main_window, "multi_view_ai_rects") and
-                self.main_window.multi_view_ai_rects[viewer_index] is not None):
+            self.main_window.multi_view_ai_click_starts[viewer_index] = None
+            if (
+                hasattr(self.main_window, "multi_view_ai_rects")
+                and self.main_window.multi_view_ai_rects[viewer_index] is not None
+            ):
                 viewer = self.main_window.multi_view_viewers[viewer_index]
-                viewer.scene().removeItem(self.main_window.multi_view_ai_rects[viewer_index])
+                viewer.scene().removeItem(
+                    self.main_window.multi_view_ai_rects[viewer_index]
+                )
                 self.main_window.multi_view_ai_rects[viewer_index] = None
 
             # Add positive point
@@ -786,19 +878,23 @@ class MultiViewModeHandler(BaseModeHandler):
                     mask = mask > 0.5
 
                 # Store prediction data for potential saving
-                if not hasattr(self.main_window, 'multi_view_ai_predictions'):
+                if not hasattr(self.main_window, "multi_view_ai_predictions"):
                     self.main_window.multi_view_ai_predictions = {}
 
                 self.main_window.multi_view_ai_predictions[viewer_index] = {
                     "mask": mask.astype(bool),
                     "box": box,
+                    "points": [],  # Empty for box predictions
+                    "labels": [],  # Empty for box predictions
                 }
 
                 # Show preview mask
                 self._display_ai_preview(mask, viewer_index)
 
         except Exception as e:
-            logger.error(f"Error processing AI bounding box for viewer {viewer_index}: {e}")
+            logger.error(
+                f"Error processing AI bounding box for viewer {viewer_index}: {e}"
+            )
 
     def _handle_multi_view_ai_click_point(self, pos, viewer_index, positive=True):
         """Handle AI point click for a specific viewer (extracted from handle_ai_click)."""
@@ -815,26 +911,28 @@ class MultiViewModeHandler(BaseModeHandler):
             pos.x() - self.main_window.point_radius,
             pos.y() - self.main_window.point_radius,
             point_diameter,
-            point_diameter
+            point_diameter,
         )
         point_item.setBrush(QBrush(point_color))
         point_item.setPen(QPen(Qt.PenStyle.NoPen))
         viewer.scene().addItem(point_item)
 
         # Track point items for clearing
-        if not hasattr(self.main_window, 'multi_view_point_items'):
+        if not hasattr(self.main_window, "multi_view_point_items"):
             self.main_window.multi_view_point_items = {0: [], 1: []}
         self.main_window.multi_view_point_items[viewer_index].append(point_item)
 
         # Record the action for undo
-        self.main_window.action_history.append({
-            "type": "add_point",
-            "point_type": "positive" if positive else "negative",
-            "point_coords": [int(pos.x()), int(pos.y())],
-            "point_item": point_item,
-            "viewer_mode": "multi",
-            "viewer_index": viewer_index
-        })
+        self.main_window.action_history.append(
+            {
+                "type": "add_point",
+                "point_type": "positive" if positive else "negative",
+                "point_coords": [int(pos.x()), int(pos.y())],
+                "point_item": point_item,
+                "viewer_mode": "multi",
+                "viewer_index": viewer_index,
+            }
+        )
         # Clear redo history when a new action is performed
         self.main_window.redo_history.clear()
 
@@ -865,7 +963,7 @@ class MultiViewModeHandler(BaseModeHandler):
                     mask = mask > 0.5
 
                 # Store prediction data for potential saving
-                if not hasattr(self.main_window, 'multi_view_ai_predictions'):
+                if not hasattr(self.main_window, "multi_view_ai_predictions"):
                     self.main_window.multi_view_ai_predictions = {}
 
                 self.main_window.multi_view_ai_predictions[viewer_index] = {
@@ -873,7 +971,7 @@ class MultiViewModeHandler(BaseModeHandler):
                     "points": [(pos.x(), pos.y())],
                     "labels": [1 if positive else 0],
                     "model_pos": model_pos,
-                    "positive": positive
+                    "positive": positive,
                 }
 
                 # Show preview mask
@@ -881,7 +979,9 @@ class MultiViewModeHandler(BaseModeHandler):
 
                 # Try to generate prediction for the other viewer too
                 other_viewer_index = 1 - viewer_index
-                self._generate_paired_ai_preview(viewer_index, other_viewer_index, pos, positive)
+                self._generate_paired_ai_preview(
+                    viewer_index, other_viewer_index, pos, positive
+                )
 
         except Exception as e:
             logger.error(f"Error processing AI click for viewer {viewer_index}: {e}")

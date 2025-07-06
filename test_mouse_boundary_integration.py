@@ -12,7 +12,8 @@ from PyQt6.QtCore import QPointF
 from PyQt6.QtWidgets import QApplication
 
 # Add the src directory to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
+
 
 def test_actual_cancellation_methods():
     """Test the actual cancellation methods from main_window.py"""
@@ -82,8 +83,12 @@ def test_actual_cancellation_methods():
     for item in main_window.multi_view_polygon_point_items[1]:
         item.scene.return_value = mock_scene2
 
-    print(f"Before: polygon_points = {len(main_window.multi_view_polygon_points[1])} points")
-    print(f"Before: polygon_lines = {len(main_window.multi_view_polygon_lines[1])} lines")
+    print(
+        f"Before: polygon_points = {len(main_window.multi_view_polygon_points[1])} points"
+    )
+    print(
+        f"Before: polygon_lines = {len(main_window.multi_view_polygon_lines[1])} lines"
+    )
 
     # Reset notification mock
     main_window._show_notification.reset_mock()
@@ -91,14 +96,24 @@ def test_actual_cancellation_methods():
     # Test polygon cancellation
     main_window._cancel_multi_view_polygon(1)
 
-    print(f"After: polygon_points = {len(main_window.multi_view_polygon_points[1])} points")
-    print(f"After: polygon_lines = {len(main_window.multi_view_polygon_lines[1])} lines")
+    print(
+        f"After: polygon_points = {len(main_window.multi_view_polygon_points[1])} points"
+    )
+    print(
+        f"After: polygon_lines = {len(main_window.multi_view_polygon_lines[1])} lines"
+    )
     print(f"Notification called: {main_window._show_notification.called}")
 
     # Verify polygon cancellation
-    assert len(main_window.multi_view_polygon_points[1]) == 0, "Polygon points should be cleared"
-    assert len(main_window.multi_view_polygon_lines[1]) == 0, "Polygon lines should be cleared"
-    assert len(main_window.multi_view_polygon_point_items[1]) == 0, "Polygon point items should be cleared"
+    assert len(main_window.multi_view_polygon_points[1]) == 0, (
+        "Polygon points should be cleared"
+    )
+    assert len(main_window.multi_view_polygon_lines[1]) == 0, (
+        "Polygon lines should be cleared"
+    )
+    assert len(main_window.multi_view_polygon_point_items[1]) == 0, (
+        "Polygon point items should be cleared"
+    )
     assert main_window._show_notification.called, "Notification should be shown"
 
     print("✓ Polygon cancellation works correctly")
@@ -117,6 +132,7 @@ def test_actual_cancellation_methods():
     assert main_window._show_notification.called, "Should show notification"
 
     print("✓ Operation dispatcher works correctly")
+
 
 def test_mouse_move_boundary_logic():
     """Test the mouse move boundary detection logic"""
@@ -158,8 +174,12 @@ def test_mouse_move_boundary_logic():
     print("Test 1: Mouse inside viewport")
     main_window._multi_view_mouse_move(mock_event, 0)
 
-    assert not main_window._cancel_multi_view_operations.called, "Should not cancel when inside"
-    assert main_window._handle_multi_view_action.called, "Should handle action when inside"
+    assert not main_window._cancel_multi_view_operations.called, (
+        "Should not cancel when inside"
+    )
+    assert main_window._handle_multi_view_action.called, (
+        "Should handle action when inside"
+    )
 
     print("✓ Mouse inside viewport handled correctly")
 
@@ -173,10 +193,15 @@ def test_mouse_move_boundary_logic():
     print("Test 2: Mouse outside viewport")
     main_window._multi_view_mouse_move(mock_event, 0)
 
-    assert main_window._cancel_multi_view_operations.called, "Should cancel when outside"
-    assert not main_window._handle_multi_view_action.called, "Should not handle action when outside"
+    assert main_window._cancel_multi_view_operations.called, (
+        "Should cancel when outside"
+    )
+    assert not main_window._handle_multi_view_action.called, (
+        "Should not handle action when outside"
+    )
 
     print("✓ Mouse outside viewport handled correctly")
+
 
 if __name__ == "__main__":
     print("Testing mouse boundary integration...")
@@ -185,14 +210,15 @@ if __name__ == "__main__":
         test_actual_cancellation_methods()
         test_mouse_move_boundary_logic()
 
-        print("\n" + "="*60)
+        print("\n" + "=" * 60)
         print("✓ ALL INTEGRATION TESTS PASSED")
         print("The boundary cancellation feature is working correctly!")
         print("You can now test bbox/polygon cancellation in the actual app.")
-        print("="*60)
+        print("=" * 60)
 
     except Exception as e:
         print(f"\n✗ INTEGRATION TEST FAILED: {e}")
         import traceback
+
         traceback.print_exc()
         sys.exit(1)

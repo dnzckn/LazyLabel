@@ -10,7 +10,7 @@ import os
 import sys
 
 # Add the src directory to path so we can import LazyLabel modules
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
 
 from lazylabel.utils.logger import logger
 
@@ -21,7 +21,9 @@ logger.setLevel(logging.DEBUG)
 if not logger.handlers:
     console_handler = logging.StreamHandler()
     console_handler.setLevel(logging.DEBUG)
-    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    formatter = logging.Formatter(
+        "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    )
     console_handler.setFormatter(formatter)
     logger.addHandler(console_handler)
 

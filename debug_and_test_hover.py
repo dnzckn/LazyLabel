@@ -8,7 +8,7 @@ import os
 import sys
 
 # Add the src directory to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
 
 # Set up debug logging before importing LazyLabel
 from lazylabel.utils.logger import logger
@@ -18,7 +18,7 @@ logger.setLevel(logging.DEBUG)
 # Add console handler
 console_handler = logging.StreamHandler()
 console_handler.setLevel(logging.DEBUG)
-formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
 console_handler.setFormatter(formatter)
 logger.addHandler(console_handler)
 
@@ -45,4 +45,5 @@ print("=" * 60)
 # Now run LazyLabel
 if __name__ == "__main__":
     from lazylabel.main import main
+
     main()

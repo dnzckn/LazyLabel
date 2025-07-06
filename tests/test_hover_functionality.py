@@ -9,7 +9,7 @@ from unittest.mock import Mock
 import pytest
 
 # Add the src directory to path for testing
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 
 class TestHoverSetup:
@@ -78,9 +78,11 @@ class TestHoverLogic:
 
             def simulate_hover_enter(self):
                 """Simulate hoverEnterEvent logic."""
-                if (self.main_window and
-                    hasattr(self.main_window, 'view_mode') and
-                    self.main_window.view_mode == "multi"):
+                if (
+                    self.main_window
+                    and hasattr(self.main_window, "view_mode")
+                    and self.main_window.view_mode == "multi"
+                ):
                     self.main_window._trigger_segment_hover(self.segment_id, True, self)
                     return True
                 return False
@@ -126,8 +128,8 @@ class TestHoverLogic:
                         5: [Mock(), Mock()],  # segment 5 has 2 items in viewer 0
                     },
                     1: {
-                        5: [Mock()],          # segment 5 has 1 item in viewer 1
-                    }
+                        5: [Mock()],  # segment 5 has 1 item in viewer 1
+                    },
                 }
 
                 # Set up mock items with hover methods
@@ -141,26 +143,43 @@ class TestHoverLogic:
                             item.hover_pixmap = Mock()
                             item.default_pixmap = Mock()
 
-            def _trigger_segment_hover(self, segment_id, hover_state, triggering_item=None):
+            def _trigger_segment_hover(
+                self, segment_id, hover_state, triggering_item=None
+            ):
                 """Copy of the actual method logic."""
                 if self.view_mode != "multi":
                     return
 
-                if hasattr(self, 'multi_view_segment_items'):
-                    for viewer_idx, viewer_segments in self.multi_view_segment_items.items():
+                if hasattr(self, "multi_view_segment_items"):
+                    for (
+                        _viewer_idx,
+                        viewer_segments,
+                    ) in self.multi_view_segment_items.items():
                         if segment_id in viewer_segments:
                             for item in viewer_segments[segment_id]:
                                 if item is triggering_item:
                                     continue
 
-                                if (hasattr(item, 'setBrush') and
-                                    hasattr(item, 'hover_brush') and
-                                    hasattr(item, 'default_brush')):
-                                    item.setBrush(item.hover_brush if hover_state else item.default_brush)
-                                elif (hasattr(item, 'setPixmap') and
-                                      hasattr(item, 'hover_pixmap') and
-                                      hasattr(item, 'default_pixmap')):
-                                    item.setPixmap(item.hover_pixmap if hover_state else item.default_pixmap)
+                                if (
+                                    hasattr(item, "setBrush")
+                                    and hasattr(item, "hover_brush")
+                                    and hasattr(item, "default_brush")
+                                ):
+                                    item.setBrush(
+                                        item.hover_brush
+                                        if hover_state
+                                        else item.default_brush
+                                    )
+                                elif (
+                                    hasattr(item, "setPixmap")
+                                    and hasattr(item, "hover_pixmap")
+                                    and hasattr(item, "default_pixmap")
+                                ):
+                                    item.setPixmap(
+                                        item.hover_pixmap
+                                        if hover_state
+                                        else item.default_pixmap
+                                    )
 
         mock_window = MockMainWindow()
 
@@ -203,10 +222,10 @@ class TestHoverImplementation:
         from lazylabel.ui.hoverable_polygon_item import HoverablePolygonItem
 
         required_methods = [
-            'set_segment_info',
-            'hoverEnterEvent',
-            'hoverLeaveEvent',
-            'set_brushes'
+            "set_segment_info",
+            "hoverEnterEvent",
+            "hoverLeaveEvent",
+            "set_brushes",
         ]
 
         for method in required_methods:
@@ -217,10 +236,10 @@ class TestHoverImplementation:
         from lazylabel.ui.hoverable_pixelmap_item import HoverablePixmapItem
 
         required_methods = [
-            'set_segment_info',
-            'hoverEnterEvent',
-            'hoverLeaveEvent',
-            'set_pixmaps'
+            "set_segment_info",
+            "hoverEnterEvent",
+            "hoverLeaveEvent",
+            "set_pixmaps",
         ]
 
         for method in required_methods:
@@ -268,9 +287,10 @@ class TestBoundaryBehavior:
         # Simulate polygon mode logic from _multi_view_mouse_move
         scene_pos = Mock()
 
-        if mock_window.mode == "polygon":
-            if not mock_window._is_mouse_in_any_viewer(scene_pos):
-                mock_window._cancel_multi_view_operations(0)
+        if mock_window.mode == "polygon" and not mock_window._is_mouse_in_any_viewer(
+            scene_pos
+        ):
+            mock_window._cancel_multi_view_operations(0)
 
         # Should not cancel when mouse is in a viewer
         assert not mock_window.cancelled
@@ -291,9 +311,8 @@ class TestBoundaryBehavior:
         # Simulate bbox mode logic - should cancel when outside current viewer
         viewer_rect_contains = False  # Mouse outside current viewer
 
-        if mock_window.mode != "polygon":
-            if not viewer_rect_contains:
-                mock_window._cancel_multi_view_operations(0)
+        if mock_window.mode != "polygon" and not viewer_rect_contains:
+            mock_window._cancel_multi_view_operations(0)
 
         # Should cancel when mouse leaves current viewer
         assert mock_window.cancelled

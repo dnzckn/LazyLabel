@@ -22,6 +22,7 @@ class PhotoViewer(QGraphicsView):
         self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.setDragMode(QGraphicsView.DragMode.NoDrag)
+        self.setMouseTracking(True)  # Enable mouse tracking for hover events
 
         self._original_image = None
         self._adjusted_pixmap = None

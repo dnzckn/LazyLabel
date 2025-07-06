@@ -12,7 +12,8 @@ from PyQt6.QtGui import QBrush, QColor
 from PyQt6.QtWidgets import QApplication
 
 # Add the src directory to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
+
 
 def test_hoverable_item_setup():
     """Test that hoverable items are properly set up with segment info"""
@@ -57,6 +58,7 @@ def test_hoverable_item_setup():
     print(f"Pixmap segment_id after setup: {pixmap_item.segment_id}")
 
     return True
+
 
 def test_hover_event_triggering():
     """Test that hover events properly trigger _trigger_segment_hover"""
@@ -141,6 +143,7 @@ def test_hover_event_triggering():
 
     return trigger_called and leave_trigger_called
 
+
 def test_multi_view_segment_tracking():
     """Test that multi-view segment tracking works"""
 
@@ -157,12 +160,12 @@ def test_multi_view_segment_tracking():
             self.multi_view_segment_items = {
                 0: {  # viewer 0
                     5: [Mock(), Mock()],  # segment 5 has 2 items
-                    7: [Mock()]           # segment 7 has 1 item
+                    7: [Mock()],  # segment 7 has 1 item
                 },
                 1: {  # viewer 1
-                    5: [Mock()],          # segment 5 has 1 item
-                    7: [Mock(), Mock()]   # segment 7 has 2 items
-                }
+                    5: [Mock()],  # segment 5 has 1 item
+                    7: [Mock(), Mock()],  # segment 7 has 2 items
+                },
             }
 
         def _trigger_segment_hover(self, segment_id, hover_state, triggering_item=None):
@@ -182,9 +185,9 @@ def test_multi_view_segment_tracking():
                             continue
 
                         # Mock the hover state change
-                        if hasattr(item, 'setBrush'):
+                        if hasattr(item, "setBrush"):
                             print("      Would setBrush on item")
-                        elif hasattr(item, 'setPixmap'):
+                        elif hasattr(item, "setPixmap"):
                             print("      Would setPixmap on item")
 
     mock_main_window = MockMainWindow()
@@ -202,6 +205,7 @@ def test_multi_view_segment_tracking():
     mock_main_window._trigger_segment_hover(7, False, None)
 
     return True
+
 
 def test_single_vs_multiview_hover():
     """Test hover behavior difference between single and multi-view"""
@@ -253,10 +257,13 @@ def test_single_vs_multiview_hover():
     expected_result = (not single_trigger_called) and multi_trigger_called
 
     print("\nExpected behavior: single=False, multi=True")
-    print(f"Actual behavior: single={single_trigger_called}, multi={multi_trigger_called}")
+    print(
+        f"Actual behavior: single={single_trigger_called}, multi={multi_trigger_called}"
+    )
     print(f"Test passed: {expected_result}")
 
     return expected_result
+
 
 if __name__ == "__main__":
     print("Testing mouse hover highlighting in multi-view mode...")
@@ -267,7 +274,7 @@ if __name__ == "__main__":
         test3 = test_multi_view_segment_tracking()
         test4 = test_single_vs_multiview_hover()
 
-        print("\n" + "="*60)
+        print("\n" + "=" * 60)
         if all([test1, test2, test3, test4]):
             print("✓ ALL HOVER TESTS PASSED")
             print("Hover highlighting should work in multi-view mode.")
@@ -278,10 +285,11 @@ if __name__ == "__main__":
         else:
             print("✗ SOME HOVER TESTS FAILED")
             print("Check the output above for specific issues.")
-        print("="*60)
+        print("=" * 60)
 
     except Exception as e:
         print(f"\n✗ HOVER TEST FAILED: {e}")
         import traceback
+
         traceback.print_exc()
         sys.exit(1)
