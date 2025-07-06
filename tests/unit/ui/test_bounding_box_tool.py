@@ -48,6 +48,9 @@ def main_window_with_image(qtbot, mock_sam_model):
         dummy_pixmap.fill(Qt.GlobalColor.white)
         window.viewer.set_photo(dummy_pixmap)
         window.segment_manager = SegmentManager()  # Ensure segment manager is clean
+        # Update mode handler references to the new segment manager
+        window.single_view_mode_handler.segment_manager = window.segment_manager
+        window.multi_view_mode_handler.segment_manager = window.segment_manager
         window.action_history = []
         window.redo_history = []
 
@@ -60,25 +63,11 @@ def main_window_with_image(qtbot, mock_sam_model):
 
 
 def simulate_bbox_drag(main_window, start_pos, end_pos):
-    """Helper to simulate bbox drawing by directly calling the mouse event handlers."""
-    # Create a mock event with required attributes
-    press_event = MagicMock()
-    press_event.button.return_value = Qt.MouseButton.LeftButton
-    press_event.scenePos.return_value = start_pos
-    press_event.accept = MagicMock()
-
-    move_event = MagicMock()
-    move_event.scenePos.return_value = end_pos
-    move_event.accept = MagicMock()
-
-    release_event = MagicMock()
-    release_event.scenePos.return_value = end_pos
-    release_event.accept = MagicMock()
-
-    # Call the mouse event handlers directly
-    main_window._scene_mouse_press(press_event)
-    main_window._scene_mouse_move(move_event)
-    main_window._scene_mouse_release(release_event)
+    """Helper to simulate bbox drawing by directly calling the mode handlers."""
+    # Call the mode handlers directly since that's what we're testing
+    main_window.single_view_mode_handler.handle_bbox_start(start_pos)
+    main_window.single_view_mode_handler.handle_bbox_drag(end_pos)
+    main_window.single_view_mode_handler.handle_bbox_complete(end_pos)
 
 
 def test_bbox_tool_creation(main_window_with_image):

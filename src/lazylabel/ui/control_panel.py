@@ -761,6 +761,7 @@ class ControlPanel(QWidget):
         # Map internal mode names to buttons
         mode_buttons = {
             "sam_points": self.btn_sam_mode,
+            "ai": self.btn_sam_mode,  # AI mode uses the same button as SAM mode
             "polygon": self.btn_polygon_mode,
             "bbox": self.btn_bbox_mode,
             "selection": self.btn_selection_mode,

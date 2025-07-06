@@ -326,13 +326,21 @@ def test_multi_view_ai_click_handling(main_window_with_multi_view):
     # Mock coordinate transformation
     window._transform_multi_view_coords_to_sam_coords = MagicMock(return_value=(50, 60))
 
-    # Mock event
+    # Mock event - use right click since left click now does drag detection
     mock_event = MagicMock()
-    mock_event.button.return_value = Qt.MouseButton.LeftButton
+    mock_event.button.return_value = Qt.MouseButton.RightButton
     pos = QPointF(10, 20)
 
-    # Test AI click
-    window._handle_multi_view_ai_click(pos, 0, mock_event)
+    # Mock the SAM model prediction to return a valid result
+    mock_result = (
+        np.ones((256, 256), dtype=bool),  # mask
+        np.array([0.9]),  # scores
+        np.random.rand(1, 256, 256)  # logits
+    )
+    window.multi_view_models[0].predict.return_value = mock_result
+
+    # Test AI click using mode handler
+    window.multi_view_mode_handler.handle_ai_click(pos, mock_event, 0)
 
     # Verify model prediction was called
     window.multi_view_models[0].predict.assert_called_once()
@@ -477,15 +485,15 @@ def test_multi_view_mouse_event_delegation(main_window_with_multi_view):
     pos = QPointF(10, 20)
     mock_event.scenePos.return_value = pos
 
-    # Mock multi-view click handler
-    window._handle_multi_view_ai_click = MagicMock()
+    # Mock the mode handler's AI click method
+    window.multi_view_mode_handler.handle_ai_click = MagicMock()
 
     # Test mouse event delegation
     window._multi_view_mouse_press(mock_event, 0)
 
     # Verify delegation occurred with mapped position - called for both viewers
-    assert window._handle_multi_view_ai_click.call_count == 2
-    window._handle_multi_view_ai_click.assert_any_call(mapped_pos, 0, mock_event)
+    assert window.multi_view_mode_handler.handle_ai_click.call_count == 2
+    window.multi_view_mode_handler.handle_ai_click.assert_any_call(mapped_pos, mock_event, 0)
 
 
 def test_multi_view_empty_batch_handling(main_window_with_multi_view):

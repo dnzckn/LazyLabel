@@ -31,3 +31,5 @@ env/
 # OS
 Thumbs.db
 *:Zone.Identifier
+
+.claude

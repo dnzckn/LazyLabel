@@ -72,8 +72,13 @@ class PhotoViewer(QGraphicsView):
             self._pixmap_item.setPixmap(QPixmap())
 
     def set_image_adjustments(self, brightness: float, contrast: float, gamma: float):
-        if self._original_image_bgr is None:
+        if self._original_image_bgr is None or self._original_image is None:
             return
+
+        # Ensure _pixmap_item exists and is valid
+        if self._pixmap_item not in self._scene.items():
+            self._pixmap_item = QGraphicsPixmapItem()
+            self._scene.addItem(self._pixmap_item)
 
         img_bgr = self._original_image_bgr.copy()
 
@@ -98,7 +103,10 @@ class PhotoViewer(QGraphicsView):
             adjusted_img.data, w, h, bytes_per_line, QImage.Format.Format_BGR888
         )
         self._adjusted_pixmap = QPixmap.fromImage(adjusted_qimage)
-        self._pixmap_item.setPixmap(self._adjusted_pixmap)
+
+        # Ensure the pixmap is valid before setting it
+        if not self._adjusted_pixmap.isNull():
+            self._pixmap_item.setPixmap(self._adjusted_pixmap)
 
     def set_cursor(self, cursor_shape):
         self.viewport().setCursor(QCursor(cursor_shape))
