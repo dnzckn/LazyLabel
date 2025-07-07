@@ -7,15 +7,25 @@ import sys
 from unittest.mock import Mock
 
 import pytest
+from PyQt6.QtWidgets import QApplication
 
 # Add the src directory to path for testing
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
+
+# Create QApplication for Qt tests
+@pytest.fixture(scope="module")
+def qapp():
+    """Create QApplication for tests."""
+    app = QApplication.instance()
+    if app is None:
+        app = QApplication(sys.argv)
+    yield app
 
 
 class TestHoverSetup:
     """Test hover item setup and configuration."""
 
-    def test_hoverable_polygon_item_setup(self):
+    def test_hoverable_polygon_item_setup(self, qapp):
         """Test that HoverablePolygonItem is properly set up with segment info."""
         from PyQt6.QtCore import QPointF
         from PyQt6.QtGui import QPolygonF
@@ -40,7 +50,7 @@ class TestHoverSetup:
         assert poly_item.segment_id == 5
         assert poly_item.main_window is mock_main_window
 
-    def test_hoverable_pixmap_item_setup(self):
+    def test_hoverable_pixmap_item_setup(self, qapp):
         """Test that HoverablePixmapItem is properly set up with segment info."""
         from lazylabel.ui.hoverable_pixelmap_item import HoverablePixmapItem
 
@@ -217,7 +227,7 @@ class TestHoverLogic:
 class TestHoverImplementation:
     """Test the actual hover implementation files."""
 
-    def test_hoverable_polygon_item_methods(self):
+    def test_hoverable_polygon_item_methods(self, qapp):
         """Test that HoverablePolygonItem has required methods."""
         from lazylabel.ui.hoverable_polygon_item import HoverablePolygonItem
 
@@ -231,7 +241,7 @@ class TestHoverImplementation:
         for method in required_methods:
             assert hasattr(HoverablePolygonItem, method), f"Missing method: {method}"
 
-    def test_hoverable_pixmap_item_methods(self):
+    def test_hoverable_pixmap_item_methods(self, qapp):
         """Test that HoverablePixmapItem has required methods."""
         from lazylabel.ui.hoverable_pixelmap_item import HoverablePixmapItem
 
