@@ -18,7 +18,7 @@ from PyQt6.QtWidgets import QApplication
 from lazylabel.ui.main_window import MainWindow
 
 
-class TestMultiViewAI:
+class MultiViewAITester:
     """Test class for multi-view AI mode functionality."""
 
     def __init__(self):
@@ -445,7 +445,7 @@ class TestMultiViewAI:
 
 def main():
     """Run the test suite."""
-    tester = TestMultiViewAI()
+    tester = MultiViewAITester()
     tester.run_all_tests()
 
     # Run the app for manual testing

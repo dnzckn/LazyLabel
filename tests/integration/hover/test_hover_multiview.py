@@ -98,16 +98,12 @@ def test_hover_event_triggering():
     # Test hover enter event
     print("\nTesting hover enter event...")
 
-    # Create a mock event to avoid Qt instantiation issues
-    from unittest.mock import MagicMock
-    mock_event = MagicMock()
-
     # Test the hover logic directly without calling Qt's event handling
     # This tests the actual logic we care about without GUI dependencies
-    
+
     # Manually call the hover logic (what hoverEnterEvent does)
     poly_item.setBrush(poly_item.hover_brush)
-    
+
     # Trigger hover on mirror segments in multi-view mode (what the event handler does)
     if (poly_item.main_window and hasattr(poly_item.main_window, "view_mode") and
         poly_item.main_window.view_mode == "multi" and
@@ -141,7 +137,7 @@ def test_hover_event_triggering():
     # Test hover leave logic directly
     # Manually call the hover leave logic (what hoverLeaveEvent does)
     poly_item.setBrush(poly_item.default_brush)
-    
+
     # Trigger hover leave on mirror segments in multi-view mode
     if (poly_item.main_window and hasattr(poly_item.main_window, "view_mode") and
         poly_item.main_window.view_mode == "multi" and
@@ -267,26 +263,26 @@ def test_single_vs_multiview_hover():
     print("\nTriggering hover on single-view item...")
     # Test single-view hover logic directly
     single_item.setBrush(single_item.hover_brush if hasattr(single_item, 'hover_brush') else QBrush())
-    
+
     # Single-view should NOT trigger cross-segment hover
     if (single_item.main_window and hasattr(single_item.main_window, "view_mode") and
         single_item.main_window.view_mode == "multi" and
         hasattr(single_item.main_window, "_trigger_segment_hover")):
         single_item.main_window._trigger_segment_hover(single_item.segment_id, True, single_item)
-    
+
     single_trigger_called = single_mock._trigger_segment_hover.called
     print(f"Single-view _trigger_segment_hover called: {single_trigger_called}")
 
     print("\nTriggering hover on multi-view item...")
     # Test multi-view hover logic directly
     multi_item.setBrush(multi_item.hover_brush if hasattr(multi_item, 'hover_brush') else QBrush())
-    
+
     # Multi-view SHOULD trigger cross-segment hover
     if (multi_item.main_window and hasattr(multi_item.main_window, "view_mode") and
         multi_item.main_window.view_mode == "multi" and
         hasattr(multi_item.main_window, "_trigger_segment_hover")):
         multi_item.main_window._trigger_segment_hover(multi_item.segment_id, True, multi_item)
-    
+
     multi_trigger_called = multi_mock._trigger_segment_hover.called
     print(f"Multi-view _trigger_segment_hover called: {multi_trigger_called}")
 
