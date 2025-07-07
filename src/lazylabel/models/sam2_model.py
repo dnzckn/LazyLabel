@@ -80,7 +80,9 @@ class Sam2Model:
                     logger.info(
                         f"SAM2: Attempting to load with config filename: {config_filename}"
                     )
-                    self.model = self._build_sam2_with_fallback(config_filename, model_path)
+                    self.model = self._build_sam2_with_fallback(
+                        config_filename, model_path
+                    )
                     logger.info("SAM2: Successfully loaded with config filename")
                 except Exception as e2:
                     logger.debug(f"SAM2: Config filename approach failed: {e2}")
@@ -118,7 +120,9 @@ class Sam2Model:
                         logger.info(
                             f"SAM2: Attempting to load with base config: {base_config}"
                         )
-                        self.model = self._build_sam2_with_fallback(base_config, model_path)
+                        self.model = self._build_sam2_with_fallback(
+                            base_config, model_path
+                        )
                         logger.info("SAM2: Successfully loaded with base config")
                     except Exception as e3:
                         # All approaches failed
@@ -230,18 +234,26 @@ class Sam2Model:
                 checkpoint = torch.load(model_path, map_location=self.device)
 
                 # Check if checkpoint has nested 'model' key (common in SAM2.1)
-                if 'model' in checkpoint and isinstance(checkpoint['model'], dict):
-                    logger.info("SAM2: Detected nested checkpoint structure, extracting model weights")
-                    model_weights = checkpoint['model']
+                if "model" in checkpoint and isinstance(checkpoint["model"], dict):
+                    logger.info(
+                        "SAM2: Detected nested checkpoint structure, extracting model weights"
+                    )
+                    model_weights = checkpoint["model"]
                 else:
                     # Flat structure - filter out the known problematic keys
                     model_weights = {}
-                    problematic_keys = {'no_obj_embed_spatial', 'obj_ptr_tpos_proj.weight', 'obj_ptr_tpos_proj.bias'}
+                    problematic_keys = {
+                        "no_obj_embed_spatial",
+                        "obj_ptr_tpos_proj.weight",
+                        "obj_ptr_tpos_proj.bias",
+                    }
                     for key, value in checkpoint.items():
                         if key not in problematic_keys:
                             model_weights[key] = value
 
-                    logger.info(f"SAM2: Filtered out problematic keys: {list(problematic_keys & set(checkpoint.keys()))}")
+                    logger.info(
+                        f"SAM2: Filtered out problematic keys: {list(problematic_keys & set(checkpoint.keys()))}"
+                    )
 
                 # Load the model weights
                 model.load_state_dict(model_weights, strict=False)
