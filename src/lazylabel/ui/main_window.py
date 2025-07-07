@@ -6907,9 +6907,8 @@ class MainWindow(QMainWindow):
 
         if segment.get("type") == "AI":
             mask = segment.get("mask")
-            if mask is not None:
-                if 0 <= x < mask.shape[1] and 0 <= y < mask.shape[0]:
-                    return mask[y, x] > 0
+            if mask is not None and 0 <= x < mask.shape[1] and 0 <= y < mask.shape[0]:
+                return mask[y, x] > 0
         elif segment.get("type") == "Polygon":
             vertices = segment.get("vertices")
             if vertices:

@@ -7,6 +7,8 @@ import os
 import sys
 from unittest.mock import Mock
 
+import pytest
+
 # Add the src directory to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
 
@@ -79,7 +81,9 @@ def test_hover_setup_logic():
         args = multi_main_window._trigger_segment_hover.call_args[0]
         print(f"Call args: segment_id={args[0]}, hover_state={args[1]}, item={args[2]}")
 
-    return not single_result and multi_result
+    # Assert the expected behavior
+    assert not single_result, "Single-view should not trigger hover"
+    assert multi_result, "Multi-view should trigger hover"
 
 
 def test_trigger_segment_hover_logic():
@@ -187,7 +191,8 @@ def test_trigger_segment_hover_logic():
     print("\nTesting hover trigger for non-existing segment (99)...")
     mock_window._trigger_segment_hover(99, True, None)
 
-    return setBrush_calls > 0
+    # Assert that hover was triggered correctly
+    assert setBrush_calls > 0, "setBrush should have been called on hover items"
 
 
 def test_actual_hover_files():
@@ -243,16 +248,15 @@ def test_actual_hover_files():
         print(f"  Contains _trigger_segment_hover call: {pixmap_has_trigger}")
         print(f"  Contains multi-view check: {pixmap_has_multi}")
 
-        return (
-            has_trigger_call
-            and has_multi_check
-            and pixmap_has_trigger
-            and pixmap_has_multi
-        )
+        # Assert that hover methods have the required logic
+        assert has_trigger_call, "HoverablePolygonItem should have _trigger_segment_hover call"
+        assert has_multi_check, "HoverablePolygonItem should have multi-view check"
+        assert pixmap_has_trigger, "HoverablePixmapItem should have _trigger_segment_hover call"
+        assert pixmap_has_multi, "HoverablePixmapItem should have multi-view check"
 
     except Exception as e:
         print(f"Error testing hover files: {e}")
-        return False
+        pytest.fail(f"Error testing hover files: {e}")
 
 
 if __name__ == "__main__":
