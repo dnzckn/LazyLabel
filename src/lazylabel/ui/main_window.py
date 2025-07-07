@@ -1358,6 +1358,11 @@ class MainWindow(QMainWindow):
         path = self.file_model.filePath(index)
 
         if os.path.isfile(path) and self.file_manager.is_image_file(path):
+            # Check if we're in multi-view mode
+            if hasattr(self, 'view_mode') and self.view_mode == "multi":
+                self._load_selected_image_multi_view(index, path)
+                return
+
             if path == self.current_image_path:  # Only reset if loading a new image
                 return
 
@@ -1404,6 +1409,32 @@ class MainWindow(QMainWindow):
 
         self._show_success_notification(f"Loaded: {Path(self.current_image_path).name}")
 
+    def _load_selected_image_multi_view(self, index, path):
+        """Load selected image in multi-view mode starting from the selected file."""
+        # Get all images in the directory
+        all_images = self._get_all_images()
+
+        if not all_images:
+            self._show_warning_notification("No images found")
+            return
+
+        # Find the index of the selected image in the all_images list
+        try:
+            selected_index = all_images.index(path)
+        except ValueError:
+            self._show_warning_notification("Selected image not found in directory")
+            return
+
+        # Set the multi-view batch start to the selected image
+        self.current_multi_batch_start = selected_index
+
+        # Load the batch starting from the selected image
+        self._load_current_multi_batch()
+
+        # Set the current file index for consistency
+        self.current_file_index = index
+        self.right_panel.file_tree.setCurrentIndex(index)
+
     def _update_sam_model_image(self):
         """Updates the SAM model's image based on the 'Operate On View' setting."""
         if not self.model_manager.is_model_available() or not self.current_image_path:
@@ -1425,6 +1456,11 @@ class MainWindow(QMainWindow):
 
     def _load_next_image(self):
         """Load next image in the file list."""
+        # Handle multi-view mode by loading next batch
+        if hasattr(self, 'view_mode') and self.view_mode == "multi":
+            self._load_next_multi_batch()
+            return
+
         if not self.current_file_index.isValid():
             return
         parent = self.current_file_index.parent()
@@ -1439,6 +1475,11 @@ class MainWindow(QMainWindow):
 
     def _load_previous_image(self):
         """Load previous image in the file list."""
+        # Handle multi-view mode by loading previous batch
+        if hasattr(self, 'view_mode') and self.view_mode == "multi":
+            self._load_previous_multi_batch()
+            return
+
         if not self.current_file_index.isValid():
             return
         parent = self.current_file_index.parent()
@@ -5249,7 +5290,6 @@ class MainWindow(QMainWindow):
                 return
 
             self.view_mode = "multi"
-            logger.info("Successfully set view_mode to 'multi'")
 
             # Initialize multi-view mode handler
             self.multi_view_mode_handler = MultiViewModeHandler(self)
@@ -5828,12 +5868,34 @@ class MainWindow(QMainWindow):
         if self.current_multi_batch_start + 2 < len(all_images):
             self.current_multi_batch_start += 2
             self._load_current_multi_batch()
+            self._update_file_tree_selection_for_multi_view()
 
     def _load_previous_multi_batch(self):
         """Load the previous batch of 2 images."""
         if self.current_multi_batch_start >= 2:
             self.current_multi_batch_start -= 2
             self._load_current_multi_batch()
+            self._update_file_tree_selection_for_multi_view()
+
+    def _update_file_tree_selection_for_multi_view(self):
+        """Update file tree selection to reflect the first image in the current multi-view batch."""
+        if not hasattr(self, 'multi_view_images') or not self.multi_view_images[0]:
+            return
+
+        # Get the path of the first image in the current batch
+        first_image_path = self.multi_view_images[0]
+
+        # Find the corresponding index in the file model
+        all_images = self._get_all_images()
+        if first_image_path in all_images:
+            # Find the file model index for this path
+            parent = self.file_model.index(os.path.dirname(first_image_path))
+            for row in range(self.file_model.rowCount(parent)):
+                index = self.file_model.index(row, 0, parent)
+                if self.file_model.filePath(index) == first_image_path:
+                    self.current_file_index = index
+                    self.right_panel.file_tree.setCurrentIndex(index)
+                    break
 
     def _get_active_viewer(self):
         """Get the currently active viewer based on view mode."""
@@ -6072,7 +6134,6 @@ class MainWindow(QMainWindow):
                 self._handle_multi_view_bbox_start(image_pos, viewer_index)
             elif self.mode == "selection":
                 # Handle selection mode
-                print(f"Calling selection handler for viewer {viewer_index}")
                 self._handle_multi_view_selection_click(image_pos, viewer_index)
             elif self.mode == "edit":
                 # Handle edit mode click
@@ -6645,9 +6706,6 @@ class MainWindow(QMainWindow):
 
     def _handle_multi_view_selection_click(self, pos, viewer_index):
         """Handle selection mode click for a specific viewer."""
-        print(f"Multi-view selection click at {pos} in viewer {viewer_index}")
-        print(f"Total segments: {len(self.segment_manager.segments)}")
-
         # Find segment at position using main segment manager (same as single view)
         for i, segment in enumerate(self.segment_manager.segments):
             # Get the segment data for this specific viewer if it exists
@@ -6658,29 +6716,14 @@ class MainWindow(QMainWindow):
                     "type": segment["type"],
                     **segment_data
                 }
-                print(f"Segment {i}: Multi-view format, type={segment['type']}, viewer_data keys={list(segment_data.keys())}")
             else:
                 # Use the segment as-is (legacy format or single-view data)
                 test_segment = segment
-                print(f"Segment {i}: Legacy format, type={segment.get('type')}")
-
-            if test_segment.get("type") == "Polygon":
-                vertices = test_segment.get("vertices", [])
-                print(f"  Polygon vertices: {len(vertices)} vertices")
-                if len(vertices) > 0:
-                    print(f"  First vertex: {vertices[0]}")
-            elif test_segment.get("type") == "AI":
-                mask = test_segment.get("mask")
-                if mask is not None:
-                    print(f"  AI mask shape: {mask.shape}")
 
             if self._is_point_in_segment(pos, test_segment):
-                print(f"HIT DETECTED on segment {i}!")
                 # Select/deselect segment using main segment manager index
                 self._toggle_multi_view_segment_selection(viewer_index, i)
                 return
-
-        print(f"No segment hit detected at {pos}")
 
     def _handle_multi_view_edit_click(self, pos, viewer_index, event):
         """Handle edit mode click for a specific viewer."""
@@ -6861,31 +6904,20 @@ class MainWindow(QMainWindow):
     def _is_point_in_segment(self, pos, segment):
         """Check if a point is inside a segment."""
         x, y = int(pos.x()), int(pos.y())
-        print(f"    Checking point ({x}, {y}) in segment type {segment.get('type')}")
 
         if segment.get("type") == "AI":
             mask = segment.get("mask")
             if mask is not None:
-                print(f"    AI mask shape: {mask.shape}, checking bounds")
                 if 0 <= x < mask.shape[1] and 0 <= y < mask.shape[0]:
-                    hit = mask[y, x] > 0
-                    print(f"    AI mask hit: {hit}")
-                    return hit
-                else:
-                    print("    Point outside AI mask bounds")
+                    return mask[y, x] > 0
         elif segment.get("type") == "Polygon":
             vertices = segment.get("vertices")
             if vertices:
-                print(f"    Polygon vertices: {vertices}")
                 # Convert vertices to QPointF for polygon testing
                 qpoints = [QPointF(p[0], p[1]) for p in vertices]
                 polygon = QPolygonF(qpoints)
-                hit = polygon.containsPoint(QPointF(x, y), Qt.FillRule.OddEvenFill)
-                print(f"    Polygon hit: {hit}")
-                return hit
-            else:
-                print("    No vertices in polygon")
-        print("    No hit detected")
+                return polygon.containsPoint(QPointF(x, y), Qt.FillRule.OddEvenFill)
+        
         return False
 
     def _toggle_multi_view_segment_selection(self, viewer_index, segment_index):
