@@ -64,7 +64,6 @@ class MultiViewModeHandler(BaseModeHandler):
             )
             return
 
-
         # Determine if positive or negative click
         positive = event.button() == Qt.MouseButton.LeftButton
 
@@ -133,9 +132,13 @@ class MultiViewModeHandler(BaseModeHandler):
 
             # Add current point to accumulated lists
             if positive:
-                self.main_window.multi_view_positive_points[viewer_index].append(model_pos)
+                self.main_window.multi_view_positive_points[viewer_index].append(
+                    model_pos
+                )
             else:
-                self.main_window.multi_view_negative_points[viewer_index].append(model_pos)
+                self.main_window.multi_view_negative_points[viewer_index].append(
+                    model_pos
+                )
 
             # Prepare points for prediction using ALL accumulated points (like single view mode)
             positive_points = self.main_window.multi_view_positive_points[viewer_index]
@@ -1022,9 +1025,13 @@ class MultiViewModeHandler(BaseModeHandler):
 
             # Add current point to accumulated lists
             if positive:
-                self.main_window.multi_view_positive_points[viewer_index].append(model_pos)
+                self.main_window.multi_view_positive_points[viewer_index].append(
+                    model_pos
+                )
             else:
-                self.main_window.multi_view_negative_points[viewer_index].append(model_pos)
+                self.main_window.multi_view_negative_points[viewer_index].append(
+                    model_pos
+                )
 
             # Prepare points for prediction using ALL accumulated points (like single view mode)
             positive_points = self.main_window.multi_view_positive_points[viewer_index]

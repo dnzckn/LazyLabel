@@ -19,11 +19,12 @@ def test_multiview():
         app = QApplication(sys.argv)
 
     # Mock the GUI components to prevent blocking
-    with patch('lazylabel.ui.main_window.MainWindow.show'), \
-         patch('lazylabel.ui.main_window.MainWindow._finalize_multi_view_polygon'), \
-         patch('lazylabel.ui.main_window.MainWindow.set_polygon_mode'), \
-         patch('PyQt6.QtWidgets.QApplication.processEvents'):
-
+    with (
+        patch("lazylabel.ui.main_window.MainWindow.show"),
+        patch("lazylabel.ui.main_window.MainWindow._finalize_multi_view_polygon"),
+        patch("lazylabel.ui.main_window.MainWindow.set_polygon_mode"),
+        patch("PyQt6.QtWidgets.QApplication.processEvents"),
+    ):
         from lazylabel.ui.main_window import MainWindow
 
         # Create main window (mocked show prevents GUI display)
@@ -34,7 +35,7 @@ def test_multiview():
         window.multi_view_segment_items = {0: {}, 1: {}}
 
         # Test multi-view mode switching logic
-        assert hasattr(window, 'view_tab_widget')
+        assert hasattr(window, "view_tab_widget")
 
         # Test polygon mode setting
         window.set_polygon_mode()
@@ -54,7 +55,7 @@ def test_multiview():
         mock_segment = {
             "type": "Polygon",
             "class_id": 1,
-            "views": {0: {"points": test_points}, 1: {"points": test_points}}
+            "views": {0: {"points": test_points}, 1: {"points": test_points}},
         }
         window.segment_manager.segments = [mock_segment]
 
@@ -66,8 +67,8 @@ def test_multiview():
         assert 1 in window.segment_manager.segments[0]["views"]
 
         # Verify multi-view components exist
-        assert hasattr(window, 'multi_view_polygon_points')
-        assert hasattr(window, 'multi_view_segment_items')
+        assert hasattr(window, "multi_view_polygon_points")
+        assert hasattr(window, "multi_view_segment_items")
 
 
 if __name__ == "__main__":

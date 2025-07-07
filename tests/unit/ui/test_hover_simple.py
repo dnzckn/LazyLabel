@@ -249,9 +249,13 @@ def test_actual_hover_files():
         print(f"  Contains multi-view check: {pixmap_has_multi}")
 
         # Assert that hover methods have the required logic
-        assert has_trigger_call, "HoverablePolygonItem should have _trigger_segment_hover call"
+        assert has_trigger_call, (
+            "HoverablePolygonItem should have _trigger_segment_hover call"
+        )
         assert has_multi_check, "HoverablePolygonItem should have multi-view check"
-        assert pixmap_has_trigger, "HoverablePixmapItem should have _trigger_segment_hover call"
+        assert pixmap_has_trigger, (
+            "HoverablePixmapItem should have _trigger_segment_hover call"
+        )
         assert pixmap_has_multi, "HoverablePixmapItem should have multi-view check"
 
     except Exception as e:

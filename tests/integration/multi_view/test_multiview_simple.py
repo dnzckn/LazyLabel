@@ -29,6 +29,7 @@ def test_multiview_ai_initialization():
 
     # Test AI mode functionality
     from lazylabel.ui.modes.multi_view_mode import MultiViewModeHandler
+
     handler = MultiViewModeHandler(mock_main_window)
 
     # Verify handler was created
@@ -68,6 +69,7 @@ def test_multiview_ai_point_accumulation():
 
             # Mock SAM model result
             import numpy as np
+
             mock_result = (
                 np.ones((256, 256), dtype=bool),
                 np.array([0.9]),
@@ -79,6 +81,7 @@ def test_multiview_ai_point_accumulation():
 
     # Create handler and test
     from lazylabel.ui.modes.multi_view_mode import MultiViewModeHandler
+
     handler = MultiViewModeHandler(mock_main_window)
 
     # Create mock right-click event
@@ -88,13 +91,15 @@ def test_multiview_ai_point_accumulation():
     pos = QPointF(100, 200)
 
     # Test negative point handling - patch the _display_ai_preview call
-    with patch.object(handler, '_display_ai_preview'), \
-         patch.object(handler, '_generate_paired_ai_preview'):
+    with (
+        patch.object(handler, "_display_ai_preview"),
+        patch.object(handler, "_generate_paired_ai_preview"),
+    ):
         handler.handle_ai_click(pos, mock_event, viewer_index=0)
 
     # Verify that point accumulation attributes were created
-    assert hasattr(mock_main_window, 'multi_view_positive_points')
-    assert hasattr(mock_main_window, 'multi_view_negative_points')
+    assert hasattr(mock_main_window, "multi_view_positive_points")
+    assert hasattr(mock_main_window, "multi_view_negative_points")
 
     # The attributes should now be real dictionaries with lists, not mocks
     assert isinstance(mock_main_window.multi_view_positive_points, dict)
@@ -131,6 +136,7 @@ def test_multiview_point_clearing():
 
     # Create handler and test clearing
     from lazylabel.ui.modes.multi_view_mode import MultiViewModeHandler
+
     handler = MultiViewModeHandler(mock_main_window)
 
     # Clear points

@@ -558,20 +558,20 @@ def test_multi_view_segment_selection_with_mouse_click(main_window_with_multi_vi
                     [100.0, 100.0],
                     [200.0, 100.0],
                     [200.0, 200.0],
-                    [100.0, 200.0]
+                    [100.0, 200.0],
                 ],
-                "mask": None
+                "mask": None,
             },
             1: {
                 "vertices": [
                     [100.0, 100.0],
                     [200.0, 100.0],
                     [200.0, 200.0],
-                    [100.0, 200.0]
+                    [100.0, 200.0],
                 ],
-                "mask": None
-            }
-        }
+                "mask": None,
+            },
+        },
     }
 
     # Add the segment to the segment manager
@@ -630,20 +630,20 @@ def test_multi_view_selection_not_mirrored_between_viewers(main_window_with_mult
                     [100.0, 100.0],
                     [200.0, 100.0],
                     [200.0, 200.0],
-                    [100.0, 200.0]
+                    [100.0, 200.0],
                 ],
-                "mask": None
+                "mask": None,
             },
             1: {
                 "vertices": [
                     [100.0, 100.0],
                     [200.0, 100.0],
                     [200.0, 200.0],
-                    [100.0, 200.0]
+                    [100.0, 200.0],
                 ],
-                "mask": None
-            }
-        }
+                "mask": None,
+            },
+        },
     }
 
     window.segment_manager.add_segment(test_segment)
@@ -689,20 +689,20 @@ def test_multi_view_selection_toggle_on_repeated_clicks(main_window_with_multi_v
                     [75.0, 75.0],
                     [175.0, 75.0],
                     [175.0, 175.0],
-                    [75.0, 175.0]
+                    [75.0, 175.0],
                 ],
-                "mask": None
+                "mask": None,
             },
             1: {
                 "vertices": [
                     [75.0, 75.0],
                     [175.0, 75.0],
                     [175.0, 175.0],
-                    [75.0, 175.0]
+                    [75.0, 175.0],
                 ],
-                "mask": None
-            }
-        }
+                "mask": None,
+            },
+        },
     }
 
     window.segment_manager.add_segment(test_segment)

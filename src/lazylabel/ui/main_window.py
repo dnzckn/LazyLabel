@@ -1359,7 +1359,7 @@ class MainWindow(QMainWindow):
 
         if os.path.isfile(path) and self.file_manager.is_image_file(path):
             # Check if we're in multi-view mode
-            if hasattr(self, 'view_mode') and self.view_mode == "multi":
+            if hasattr(self, "view_mode") and self.view_mode == "multi":
                 self._load_selected_image_multi_view(index, path)
                 return
 
@@ -1457,7 +1457,7 @@ class MainWindow(QMainWindow):
     def _load_next_image(self):
         """Load next image in the file list."""
         # Handle multi-view mode by loading next batch
-        if hasattr(self, 'view_mode') and self.view_mode == "multi":
+        if hasattr(self, "view_mode") and self.view_mode == "multi":
             self._load_next_multi_batch()
             return
 
@@ -1476,7 +1476,7 @@ class MainWindow(QMainWindow):
     def _load_previous_image(self):
         """Load previous image in the file list."""
         # Handle multi-view mode by loading previous batch
-        if hasattr(self, 'view_mode') and self.view_mode == "multi":
+        if hasattr(self, "view_mode") and self.view_mode == "multi":
             self._load_previous_multi_batch()
             return
 
@@ -1908,7 +1908,9 @@ class MainWindow(QMainWindow):
 
     def _display_all_multi_view_segments(self):
         """Display all segments in multi-view mode."""
-        logger.debug(f"Displaying {len(self.segment_manager.segments)} segments in multi-view mode")
+        logger.debug(
+            f"Displaying {len(self.segment_manager.segments)} segments in multi-view mode"
+        )
 
         # Clear existing segment items from all viewers
         if hasattr(self, "multi_view_segment_items"):
@@ -2661,11 +2663,15 @@ class MainWindow(QMainWindow):
                         # Multi-view vertex undo
                         seg = self.segment_manager.segments[segment_index]
                         if "views" in seg and viewer_index in seg["views"]:
-                            seg["views"][viewer_index]["vertices"][vertex_index] = old_pos
+                            seg["views"][viewer_index]["vertices"][vertex_index] = (
+                                old_pos
+                            )
                         else:
                             seg["vertices"][vertex_index] = old_pos
 
-                        self._update_multi_view_polygon_item(segment_index, viewer_index)
+                        self._update_multi_view_polygon_item(
+                            segment_index, viewer_index
+                        )
                         self._display_multi_view_edit_handles()
                         self._highlight_multi_view_selected_segments()
                     else:
@@ -2840,11 +2846,15 @@ class MainWindow(QMainWindow):
                         # Multi-view vertex redo
                         seg = self.segment_manager.segments[segment_index]
                         if "views" in seg and viewer_index in seg["views"]:
-                            seg["views"][viewer_index]["vertices"][vertex_index] = new_pos
+                            seg["views"][viewer_index]["vertices"][vertex_index] = (
+                                new_pos
+                            )
                         else:
                             seg["vertices"][vertex_index] = new_pos
 
-                        self._update_multi_view_polygon_item(segment_index, viewer_index)
+                        self._update_multi_view_polygon_item(
+                            segment_index, viewer_index
+                        )
                         self._display_multi_view_edit_handles()
                         self._highlight_multi_view_selected_segments()
                     else:
@@ -3891,14 +3901,18 @@ class MainWindow(QMainWindow):
             self._update_polygon_item(segment_index)
             self._highlight_selected_segments()  # Keep the highlight in sync with the new shape
 
-    def update_multi_view_vertex_pos(self, segment_index, vertex_index, viewer_index, new_pos, record_undo=True):
+    def update_multi_view_vertex_pos(
+        self, segment_index, vertex_index, viewer_index, new_pos, record_undo=True
+    ):
         """Update the position of a vertex in a polygon segment for multi-view mode."""
         seg = self.segment_manager.segments[segment_index]
         if seg.get("type") == "Polygon":
             # Get the appropriate vertices array for this viewer
             if "views" in seg and viewer_index in seg["views"]:
                 vertices = seg["views"][viewer_index].get("vertices", [])
-                old_pos = vertices[vertex_index] if vertex_index < len(vertices) else [0, 0]
+                old_pos = (
+                    vertices[vertex_index] if vertex_index < len(vertices) else [0, 0]
+                )
 
                 if record_undo:
                     self.action_history.append(
@@ -3922,7 +3936,9 @@ class MainWindow(QMainWindow):
                 ]
 
                 # Sync to other viewers if this is a linked segment
-                self._sync_multi_view_vertex_edit(segment_index, vertex_index, viewer_index, new_pos)
+                self._sync_multi_view_vertex_edit(
+                    segment_index, vertex_index, viewer_index, new_pos
+                )
 
             else:
                 # Legacy format - update the main vertices array
@@ -3952,17 +3968,21 @@ class MainWindow(QMainWindow):
             self._update_multi_view_polygon_item(segment_index, viewer_index)
             self._highlight_multi_view_selected_segments()
 
-    def _sync_multi_view_vertex_edit(self, segment_index, vertex_index, source_viewer_index, new_pos):
+    def _sync_multi_view_vertex_edit(
+        self, segment_index, vertex_index, source_viewer_index, new_pos
+    ):
         """Sync a vertex edit from one viewer to other linked viewers."""
         seg = self.segment_manager.segments[segment_index]
         if "views" in seg:
             # Sync to other viewers with the same coordinates (for aligned images)
             for other_viewer_index in seg["views"]:
-                if other_viewer_index != source_viewer_index and vertex_index < len(seg["views"][other_viewer_index].get("vertices", [])):
-                        seg["views"][other_viewer_index]["vertices"][vertex_index] = [
-                            new_pos.x(),
-                            new_pos.y(),
-                        ]
+                if other_viewer_index != source_viewer_index and vertex_index < len(
+                    seg["views"][other_viewer_index].get("vertices", [])
+                ):
+                    seg["views"][other_viewer_index]["vertices"][vertex_index] = [
+                        new_pos.x(),
+                        new_pos.y(),
+                    ]
 
     def _update_polygon_item(self, segment_index):
         """Efficiently update the visual polygon item for a given segment."""
@@ -5879,7 +5899,7 @@ class MainWindow(QMainWindow):
 
     def _update_file_tree_selection_for_multi_view(self):
         """Update file tree selection to reflect the first image in the current multi-view batch."""
-        if not hasattr(self, 'multi_view_images') or not self.multi_view_images[0]:
+        if not hasattr(self, "multi_view_images") or not self.multi_view_images[0]:
             return
 
         # Get the path of the first image in the current batch
@@ -5917,7 +5937,11 @@ class MainWindow(QMainWindow):
         viewer = self.multi_view_viewers[viewer_index]
         view_pos = viewer.mapFromScene(event.scenePos())
         items_at_pos = viewer.items(view_pos)
-        handle_items = [item for item in items_at_pos if isinstance(item, EditableVertexItem | MultiViewEditableVertexItem)]
+        handle_items = [
+            item
+            for item in items_at_pos
+            if isinstance(item, EditableVertexItem | MultiViewEditableVertexItem)
+        ]
         is_handle_click = len(handle_items) > 0
 
         # Allow vertex handles to process their own mouse events
@@ -5928,7 +5952,9 @@ class MainWindow(QMainWindow):
             self.multi_view_handle_dragging[viewer_index] = True
 
             # Call the original scene mouse handler to let items process the event
-            original_handler = getattr(viewer.scene(), f"_original_mouse_press_{viewer_index}", None)
+            original_handler = getattr(
+                viewer.scene(), f"_original_mouse_press_{viewer_index}", None
+            )
             if original_handler:
                 original_handler(event)
             return
@@ -5955,9 +5981,14 @@ class MainWindow(QMainWindow):
             return
 
         # If we're currently dragging a handle, pass through to original handler
-        if hasattr(self, "multi_view_handle_dragging") and self.multi_view_handle_dragging[viewer_index]:
+        if (
+            hasattr(self, "multi_view_handle_dragging")
+            and self.multi_view_handle_dragging[viewer_index]
+        ):
             viewer = self.multi_view_viewers[viewer_index]
-            original_handler = getattr(viewer.scene(), f"_original_mouse_move_{viewer_index}", None)
+            original_handler = getattr(
+                viewer.scene(), f"_original_mouse_move_{viewer_index}", None
+            )
             if original_handler:
                 original_handler(event)
             return
@@ -6086,9 +6117,14 @@ class MainWindow(QMainWindow):
             return
 
         # If we're currently dragging a handle, pass through to original handler and end drag
-        if hasattr(self, "multi_view_handle_dragging") and self.multi_view_handle_dragging[viewer_index]:
+        if (
+            hasattr(self, "multi_view_handle_dragging")
+            and self.multi_view_handle_dragging[viewer_index]
+        ):
             viewer = self.multi_view_viewers[viewer_index]
-            original_handler = getattr(viewer.scene(), f"_original_mouse_release_{viewer_index}", None)
+            original_handler = getattr(
+                viewer.scene(), f"_original_mouse_release_{viewer_index}", None
+            )
             if original_handler:
                 original_handler(event)
             # End the handle dragging state
@@ -6571,9 +6607,7 @@ class MainWindow(QMainWindow):
             viewer.scene().addItem(line_item)
             preview_items.append(line_item)
 
-    def _add_multi_view_segment(
-        self, segment_type, class_id, viewer_index, view_data
-    ):
+    def _add_multi_view_segment(self, segment_type, class_id, viewer_index, view_data):
         """Add a segment for a specific viewer in multi-view mode."""
         # Create segment with view-specific data
         segment = {
@@ -6712,10 +6746,7 @@ class MainWindow(QMainWindow):
             if "views" in segment and viewer_index in segment["views"]:
                 segment_data = segment["views"][viewer_index]
                 # Create a temporary segment object with the view-specific data
-                test_segment = {
-                    "type": segment["type"],
-                    **segment_data
-                }
+                test_segment = {"type": segment["type"], **segment_data}
             else:
                 # Use the segment as-is (legacy format or single-view data)
                 test_segment = segment
@@ -6738,14 +6769,16 @@ class MainWindow(QMainWindow):
                     if "views" in segment and viewer_index in segment["views"]:
                         test_segment = {
                             "type": segment["type"],
-                            **segment["views"][viewer_index]
+                            **segment["views"][viewer_index],
                         }
                     else:
                         test_segment = segment
 
                     if self._is_point_in_segment(pos, test_segment):
                         # Start dragging this polygon
-                        self._start_multi_view_polygon_drag(pos, viewer_index, selected_indices)
+                        self._start_multi_view_polygon_drag(
+                            pos, viewer_index, selected_indices
+                        )
                         return
 
             # If not clicking on selected polygon, clear selection like single-view mode
@@ -6788,11 +6821,11 @@ class MainWindow(QMainWindow):
             delta_y = pos.y() - self.multi_view_drag_start_pos[viewer_index].y()
 
             # Update vertices for all dragged polygons
-            for i, initial_verts in self.multi_view_drag_initial_vertices[viewer_index].items():
+            for i, initial_verts in self.multi_view_drag_initial_vertices[
+                viewer_index
+            ].items():
                 segment = self.segment_manager.segments[i]
-                new_vertices = [
-                    [p[0] + delta_x, p[1] + delta_y] for p in initial_verts
-                ]
+                new_vertices = [[p[0] + delta_x, p[1] + delta_y] for p in initial_verts]
 
                 # Update the appropriate view's vertices
                 if "views" in segment and viewer_index in segment["views"]:
@@ -6815,22 +6848,30 @@ class MainWindow(QMainWindow):
         if self.multi_view_is_dragging_polygon[viewer_index]:
             # Record the action for undo
             final_vertices = {}
-            for i, _initial_verts in self.multi_view_drag_initial_vertices[viewer_index].items():
+            for i, _initial_verts in self.multi_view_drag_initial_vertices[
+                viewer_index
+            ].items():
                 segment = self.segment_manager.segments[i]
                 if "views" in segment and viewer_index in segment["views"]:
-                    current_vertices = segment["views"][viewer_index].get("vertices", [])
+                    current_vertices = segment["views"][viewer_index].get(
+                        "vertices", []
+                    )
                 else:
                     current_vertices = segment.get("vertices", [])
 
                 final_vertices[i] = [[p[0], p[1]] for p in current_vertices]
 
-            self.action_history.append({
-                "type": "move_polygon",
-                "viewer_mode": "multi",
-                "viewer_index": viewer_index,
-                "initial_vertices": self.multi_view_drag_initial_vertices[viewer_index],
-                "final_vertices": final_vertices
-            })
+            self.action_history.append(
+                {
+                    "type": "move_polygon",
+                    "viewer_mode": "multi",
+                    "viewer_index": viewer_index,
+                    "initial_vertices": self.multi_view_drag_initial_vertices[
+                        viewer_index
+                    ],
+                    "final_vertices": final_vertices,
+                }
+            )
 
             # Clear redo history
             self.redo_history.clear()
@@ -7298,15 +7339,21 @@ class MainWindow(QMainWindow):
 
         for i in selected_indices:
             segment = self.segment_manager.segments[i]
-            if segment.get("type") == "Polygon" and "views" in segment and source_viewer_index in segment["views"]:
-                    source_vertices = segment["views"][source_viewer_index].get("vertices", [])
+            if (
+                segment.get("type") == "Polygon"
+                and "views" in segment
+                and source_viewer_index in segment["views"]
+            ):
+                source_vertices = segment["views"][source_viewer_index].get(
+                    "vertices", []
+                )
 
-                    # Update other viewers with the same vertices (for aligned images)
-                    for other_viewer_index in segment["views"]:
-                        if other_viewer_index != source_viewer_index:
-                            segment["views"][other_viewer_index]["vertices"] = [
-                                [p[0], p[1]] for p in source_vertices
-                            ]
+                # Update other viewers with the same vertices (for aligned images)
+                for other_viewer_index in segment["views"]:
+                    if other_viewer_index != source_viewer_index:
+                        segment["views"][other_viewer_index]["vertices"] = [
+                            [p[0], p[1]] for p in source_vertices
+                        ]
 
         # Refresh display to show synchronized changes
         if hasattr(self, "multi_view_mode_handler"):

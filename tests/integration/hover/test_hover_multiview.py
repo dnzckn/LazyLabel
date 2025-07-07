@@ -105,10 +105,15 @@ def test_hover_event_triggering():
     poly_item.setBrush(poly_item.hover_brush)
 
     # Trigger hover on mirror segments in multi-view mode (what the event handler does)
-    if (poly_item.main_window and hasattr(poly_item.main_window, "view_mode") and
-        poly_item.main_window.view_mode == "multi" and
-        hasattr(poly_item.main_window, "_trigger_segment_hover")):
-        poly_item.main_window._trigger_segment_hover(poly_item.segment_id, True, poly_item)
+    if (
+        poly_item.main_window
+        and hasattr(poly_item.main_window, "view_mode")
+        and poly_item.main_window.view_mode == "multi"
+        and hasattr(poly_item.main_window, "_trigger_segment_hover")
+    ):
+        poly_item.main_window._trigger_segment_hover(
+            poly_item.segment_id, True, poly_item
+        )
 
     # Check results
     trigger_called = mock_main_window._trigger_segment_hover.called
@@ -139,10 +144,15 @@ def test_hover_event_triggering():
     poly_item.setBrush(poly_item.default_brush)
 
     # Trigger hover leave on mirror segments in multi-view mode
-    if (poly_item.main_window and hasattr(poly_item.main_window, "view_mode") and
-        poly_item.main_window.view_mode == "multi" and
-        hasattr(poly_item.main_window, "_trigger_segment_hover")):
-        poly_item.main_window._trigger_segment_hover(poly_item.segment_id, False, poly_item)
+    if (
+        poly_item.main_window
+        and hasattr(poly_item.main_window, "view_mode")
+        and poly_item.main_window.view_mode == "multi"
+        and hasattr(poly_item.main_window, "_trigger_segment_hover")
+    ):
+        poly_item.main_window._trigger_segment_hover(
+            poly_item.segment_id, False, poly_item
+        )
 
     leave_trigger_called = mock_main_window._trigger_segment_hover.called
     print(f"_trigger_segment_hover called on leave: {leave_trigger_called}")
@@ -159,7 +169,9 @@ def test_hover_event_triggering():
 
     # Assert the expected behavior
     assert trigger_called, "_trigger_segment_hover should be called on hover enter"
-    assert leave_trigger_called, "_trigger_segment_hover should be called on hover leave"
+    assert leave_trigger_called, (
+        "_trigger_segment_hover should be called on hover leave"
+    )
 
 
 def test_multi_view_segment_tracking():
@@ -223,7 +235,7 @@ def test_multi_view_segment_tracking():
     mock_main_window._trigger_segment_hover(7, False, None)
 
     # Assert that the segment tracking was set up correctly
-    assert hasattr(mock_main_window, 'multi_view_segment_items')
+    assert hasattr(mock_main_window, "multi_view_segment_items")
     assert 0 in mock_main_window.multi_view_segment_items
     assert 1 in mock_main_window.multi_view_segment_items
 
@@ -262,26 +274,40 @@ def test_single_vs_multiview_hover():
 
     print("\nTriggering hover on single-view item...")
     # Test single-view hover logic directly
-    single_item.setBrush(single_item.hover_brush if hasattr(single_item, 'hover_brush') else QBrush())
+    single_item.setBrush(
+        single_item.hover_brush if hasattr(single_item, "hover_brush") else QBrush()
+    )
 
     # Single-view should NOT trigger cross-segment hover
-    if (single_item.main_window and hasattr(single_item.main_window, "view_mode") and
-        single_item.main_window.view_mode == "multi" and
-        hasattr(single_item.main_window, "_trigger_segment_hover")):
-        single_item.main_window._trigger_segment_hover(single_item.segment_id, True, single_item)
+    if (
+        single_item.main_window
+        and hasattr(single_item.main_window, "view_mode")
+        and single_item.main_window.view_mode == "multi"
+        and hasattr(single_item.main_window, "_trigger_segment_hover")
+    ):
+        single_item.main_window._trigger_segment_hover(
+            single_item.segment_id, True, single_item
+        )
 
     single_trigger_called = single_mock._trigger_segment_hover.called
     print(f"Single-view _trigger_segment_hover called: {single_trigger_called}")
 
     print("\nTriggering hover on multi-view item...")
     # Test multi-view hover logic directly
-    multi_item.setBrush(multi_item.hover_brush if hasattr(multi_item, 'hover_brush') else QBrush())
+    multi_item.setBrush(
+        multi_item.hover_brush if hasattr(multi_item, "hover_brush") else QBrush()
+    )
 
     # Multi-view SHOULD trigger cross-segment hover
-    if (multi_item.main_window and hasattr(multi_item.main_window, "view_mode") and
-        multi_item.main_window.view_mode == "multi" and
-        hasattr(multi_item.main_window, "_trigger_segment_hover")):
-        multi_item.main_window._trigger_segment_hover(multi_item.segment_id, True, multi_item)
+    if (
+        multi_item.main_window
+        and hasattr(multi_item.main_window, "view_mode")
+        and multi_item.main_window.view_mode == "multi"
+        and hasattr(multi_item.main_window, "_trigger_segment_hover")
+    ):
+        multi_item.main_window._trigger_segment_hover(
+            multi_item.segment_id, True, multi_item
+        )
 
     multi_trigger_called = multi_mock._trigger_segment_hover.called
     print(f"Multi-view _trigger_segment_hover called: {multi_trigger_called}")
@@ -294,7 +320,9 @@ def test_single_vs_multiview_hover():
     )
 
     # Assert expected behavior
-    assert not single_trigger_called, "Single-view should not trigger hover on other segments"
+    assert not single_trigger_called, (
+        "Single-view should not trigger hover on other segments"
+    )
     assert multi_trigger_called, "Multi-view should trigger hover on other segments"
 
 

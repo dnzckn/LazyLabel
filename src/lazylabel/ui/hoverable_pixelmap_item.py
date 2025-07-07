@@ -26,9 +26,12 @@ class HoverablePixmapItem(QGraphicsPixmapItem):
     def hoverEnterEvent(self, event):
         self.setPixmap(self.hover_pixmap)
         # Trigger hover on mirror segments in multi-view mode
-        if (self.main_window and hasattr(self.main_window, "view_mode") and
-            self.main_window.view_mode == "multi" and
-            hasattr(self.main_window, "_trigger_segment_hover")):
+        if (
+            self.main_window
+            and hasattr(self.main_window, "view_mode")
+            and self.main_window.view_mode == "multi"
+            and hasattr(self.main_window, "_trigger_segment_hover")
+        ):
             self.main_window._trigger_segment_hover(self.segment_id, True, self)
         super().hoverEnterEvent(event)
 
