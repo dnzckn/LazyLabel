@@ -538,3 +538,186 @@ def test_multi_view_empty_batch_handling(main_window_with_multi_view):
     # Verify viewers were hidden
     for viewer in window.multi_view_viewers:
         viewer.hide.assert_called_once()
+
+
+def test_multi_view_segment_selection_with_mouse_click(main_window_with_multi_view):
+    """Test that clicking on a segment in multi-view mode selects it."""
+    window = main_window_with_multi_view
+
+    # Set up multi-view mode and selection mode
+    window.view_mode = "multi"
+    window._set_mode("selection")
+
+    # Create a test segment in multi-view format
+    test_segment = {
+        "type": "Polygon",
+        "class_id": 1,
+        "views": {
+            0: {
+                "vertices": [
+                    [100.0, 100.0],
+                    [200.0, 100.0],
+                    [200.0, 200.0],
+                    [100.0, 200.0]
+                ],
+                "mask": None
+            },
+            1: {
+                "vertices": [
+                    [100.0, 100.0],
+                    [200.0, 100.0],
+                    [200.0, 200.0],
+                    [100.0, 200.0]
+                ],
+                "mask": None
+            }
+        }
+    }
+
+    # Add the segment to the segment manager
+    window.segment_manager.add_segment(test_segment)
+
+    # Update the display to show the segment
+    window._update_all_lists()
+
+    # Verify the segment was added
+    assert len(window.segment_manager.segments) == 1
+
+    # Verify no segments are initially selected
+    selected_indices = window.right_panel.get_selected_segment_indices()
+    assert len(selected_indices) == 0
+
+    # Simulate clicking directly on the segment selection handler
+    click_point = QPointF(150.0, 150.0)  # Center of the 100x100 square
+
+    # Directly call the selection handler
+    window._handle_multi_view_selection_click(click_point, 0)
+
+    # Verify that the segment is now selected
+    selected_indices = window.right_panel.get_selected_segment_indices()
+    assert len(selected_indices) == 1
+    assert selected_indices[0] == 0
+
+    # Verify that the segment row is selected in the table
+    table = window.right_panel.segment_table
+    assert table.rowCount() == 1
+
+    # Check if row 0 is selected
+    selected_rows = []
+    for i in range(table.rowCount()):
+        if table.item(i, 0) and table.item(i, 0).isSelected():
+            selected_rows.append(i)
+
+    assert len(selected_rows) == 1
+    assert selected_rows[0] == 0
+
+
+def test_multi_view_selection_not_mirrored_between_viewers(main_window_with_multi_view):
+    """Test that selection clicks are not mirrored between viewers."""
+    window = main_window_with_multi_view
+
+    # Set up multi-view mode and selection mode
+    window.view_mode = "multi"
+    window._set_mode("selection")
+
+    # Create a test segment in multi-view format
+    test_segment = {
+        "type": "Polygon",
+        "class_id": 1,
+        "views": {
+            0: {
+                "vertices": [
+                    [100.0, 100.0],
+                    [200.0, 100.0],
+                    [200.0, 200.0],
+                    [100.0, 200.0]
+                ],
+                "mask": None
+            },
+            1: {
+                "vertices": [
+                    [100.0, 100.0],
+                    [200.0, 100.0],
+                    [200.0, 200.0],
+                    [100.0, 200.0]
+                ],
+                "mask": None
+            }
+        }
+    }
+
+    window.segment_manager.add_segment(test_segment)
+    window._update_all_lists()
+
+    # Verify no segments are initially selected
+    selected_indices = window.right_panel.get_selected_segment_indices()
+    assert len(selected_indices) == 0
+
+    # Click on segment in viewer 0 only
+    click_point = QPointF(150.0, 150.0)
+    window._handle_multi_view_selection_click(click_point, 0)
+
+    # Verify segment is selected
+    selected_indices = window.right_panel.get_selected_segment_indices()
+    assert len(selected_indices) == 1
+    assert selected_indices[0] == 0
+
+    # Verify that clicking in the same location in viewer 1 doesn't immediately deselect
+    # (This tests that selection events are not mirrored between viewers)
+    window._handle_multi_view_selection_click(click_point, 1)
+
+    # Should now be deselected because viewer 1 click was handled independently
+    selected_indices = window.right_panel.get_selected_segment_indices()
+    assert len(selected_indices) == 0
+
+
+def test_multi_view_selection_toggle_on_repeated_clicks(main_window_with_multi_view):
+    """Test that clicking the same segment twice toggles selection."""
+    window = main_window_with_multi_view
+
+    # Set up multi-view mode and selection mode
+    window.view_mode = "multi"
+    window._set_mode("selection")
+
+    # Create and add a test segment
+    test_segment = {
+        "type": "Polygon",
+        "class_id": 1,
+        "views": {
+            0: {
+                "vertices": [
+                    [75.0, 75.0],
+                    [175.0, 75.0],
+                    [175.0, 175.0],
+                    [75.0, 175.0]
+                ],
+                "mask": None
+            },
+            1: {
+                "vertices": [
+                    [75.0, 75.0],
+                    [175.0, 75.0],
+                    [175.0, 175.0],
+                    [75.0, 175.0]
+                ],
+                "mask": None
+            }
+        }
+    }
+
+    window.segment_manager.add_segment(test_segment)
+    window._update_all_lists()
+
+    click_point = QPointF(125.0, 125.0)
+
+    # First click - should select
+    window._handle_multi_view_selection_click(click_point, 0)
+
+    selected_indices = window.right_panel.get_selected_segment_indices()
+    assert len(selected_indices) == 1
+
+    # Second click - should deselect
+    window._handle_multi_view_selection_click(click_point, 0)
+
+    selected_indices = window.right_panel.get_selected_segment_indices()
+    assert len(selected_indices) == 0

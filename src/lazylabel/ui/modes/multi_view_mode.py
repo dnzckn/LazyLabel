@@ -64,9 +64,6 @@ class MultiViewModeHandler(BaseModeHandler):
             )
             return
 
-        logger.info(
-            f"AI model is ready for viewer {viewer_index + 1}, proceeding with prediction"
-        )
 
         # Determine if positive or negative click
         positive = event.button() == Qt.MouseButton.LeftButton
