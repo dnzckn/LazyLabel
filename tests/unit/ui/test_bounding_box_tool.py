@@ -49,7 +49,10 @@ def main_window_with_image(qtbot, mock_sam_model):
         window.viewer.set_photo(dummy_pixmap)
         window.segment_manager = SegmentManager()  # Ensure segment manager is clean
         # Update mode handler references to the new segment manager
-        if hasattr(window, 'multi_view_mode_handler') and window.multi_view_mode_handler:
+        if (
+            hasattr(window, "multi_view_mode_handler")
+            and window.multi_view_mode_handler
+        ):
             window.multi_view_mode_handler.segment_manager = window.segment_manager
         window.action_history = []
         window.redo_history = []
@@ -87,19 +90,20 @@ def simulate_bbox_drag(main_window, start_pos, end_pos):
                 [min_x, min_y],
                 [max_x, min_y],
                 [max_x, max_y],
-                [min_x, max_y]
+                [min_x, max_y],
             ]
 
-            main_window.segment_manager.add_segment({
-                "type": "Polygon",
-                "vertices": bbox_vertices
-            })
+            main_window.segment_manager.add_segment(
+                {"type": "Polygon", "vertices": bbox_vertices}
+            )
 
             # Record in action history
-            main_window.action_history.append({
-                "type": "add_segment",
-                "segment_index": len(main_window.segment_manager.segments) - 1
-            })
+            main_window.action_history.append(
+                {
+                    "type": "add_segment",
+                    "segment_index": len(main_window.segment_manager.segments) - 1,
+                }
+            )
     else:
         # Multi-view mode uses the _handle_multi_view_bbox_* methods
         viewer_index = 0  # Use first viewer for testing

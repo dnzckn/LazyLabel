@@ -12,6 +12,7 @@ from PyQt6.QtWidgets import QApplication
 # Add the src directory to path for testing
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
+
 # Create QApplication for Qt tests
 @pytest.fixture(scope="module")
 def qapp():

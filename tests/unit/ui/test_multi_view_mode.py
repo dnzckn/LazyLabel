@@ -344,6 +344,7 @@ def test_multi_view_ai_click_handling(main_window_with_multi_view):
 
     # Set up the mode handler properly
     from lazylabel.ui.modes import MultiViewModeHandler
+
     window.multi_view_mode_handler = MultiViewModeHandler(window)
 
     # Mock additional dependencies
@@ -429,7 +430,9 @@ def test_multi_view_save_batch(main_window_with_multi_view):
     window.control_panel.get_settings = MagicMock(return_value={"save_npz": True})
 
     # Mock _get_segments_for_viewer to return segments
-    window._get_segments_for_viewer = MagicMock(side_effect=lambda i: [{"class": "test", "mask": np.zeros((100, 100))}])
+    window._get_segments_for_viewer = MagicMock(
+        side_effect=lambda i: [{"class": "test", "mask": np.zeros((100, 100))}]
+    )
 
     # Mock viewers with pixmaps
     mock_viewers = [MagicMock(), MagicMock()]

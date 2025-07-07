@@ -69,7 +69,7 @@ class Sam2Model:
             # First, try using the auto-detected config path directly
             try:
                 logger.info(f"SAM2: Attempting to load with config path: {config_path}")
-                self.model = build_sam2(config_path, model_path, device=self.device)
+                self.model = self._build_sam2_with_fallback(config_path, model_path)
                 logger.info("SAM2: Successfully loaded with config path")
             except Exception as e1:
                 logger.debug(f"SAM2: Config path approach failed: {e1}")
@@ -80,9 +80,7 @@ class Sam2Model:
                     logger.info(
                         f"SAM2: Attempting to load with config filename: {config_filename}"
                     )
-                    self.model = build_sam2(
-                        config_filename, model_path, device=self.device
-                    )
+                    self.model = self._build_sam2_with_fallback(config_filename, model_path)
                     logger.info("SAM2: Successfully loaded with config filename")
                 except Exception as e2:
                     logger.debug(f"SAM2: Config filename approach failed: {e2}")
@@ -120,9 +118,7 @@ class Sam2Model:
                         logger.info(
                             f"SAM2: Attempting to load with base config: {base_config}"
                         )
-                        self.model = build_sam2(
-                            base_config, model_path, device=self.device
-                        )
+                        self.model = self._build_sam2_with_fallback(base_config, model_path)
                         logger.info("SAM2: Successfully loaded with base config")
                     except Exception as e3:
                         # All approaches failed
@@ -217,6 +213,45 @@ class Sam2Model:
                 # Last resort - return just the config name and let hydra handle it
                 return "sam2.1_hiera_l.yaml"
 
+    def _build_sam2_with_fallback(self, config_path, model_path):
+        """Build SAM2 model with fallback for state_dict compatibility issues."""
+        try:
+            # First, try the standard build_sam2 approach
+            return build_sam2(config_path, model_path, device=self.device)
+        except RuntimeError as e:
+            if "Unexpected key(s) in state_dict" in str(e):
+                logger.warning(f"SAM2: Detected state_dict compatibility issue: {e}")
+                logger.info("SAM2: Attempting to load with state_dict filtering...")
+
+                # Build model without loading weights first
+                model = build_sam2(config_path, None, device=self.device)
+
+                # Load checkpoint and handle nested structure
+                checkpoint = torch.load(model_path, map_location=self.device)
+
+                # Check if checkpoint has nested 'model' key (common in SAM2.1)
+                if 'model' in checkpoint and isinstance(checkpoint['model'], dict):
+                    logger.info("SAM2: Detected nested checkpoint structure, extracting model weights")
+                    model_weights = checkpoint['model']
+                else:
+                    # Flat structure - filter out the known problematic keys
+                    model_weights = {}
+                    problematic_keys = {'no_obj_embed_spatial', 'obj_ptr_tpos_proj.weight', 'obj_ptr_tpos_proj.bias'}
+                    for key, value in checkpoint.items():
+                        if key not in problematic_keys:
+                            model_weights[key] = value
+
+                    logger.info(f"SAM2: Filtered out problematic keys: {list(problematic_keys & set(checkpoint.keys()))}")
+
+                # Load the model weights
+                model.load_state_dict(model_weights, strict=False)
+                logger.info("SAM2: Successfully loaded model with state_dict filtering")
+
+                return model
+            else:
+                # Re-raise if it's a different type of error
+                raise
+
     def set_image_from_path(self, image_path: str) -> bool:
         """Set image for SAM2 model from file path."""
         if not self.is_loaded:
@@ -305,7 +340,7 @@ class Sam2Model:
                 config_path = self._auto_detect_config(model_path)
 
             # Load new model
-            self.model = build_sam2(config_path, model_path, device=self.device)
+            self.model = self._build_sam2_with_fallback(config_path, model_path)
             self.predictor = SAM2ImagePredictor(self.model)
             self.current_model_path = model_path
             self.is_loaded = True
