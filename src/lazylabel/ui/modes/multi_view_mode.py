@@ -125,13 +125,21 @@ class MultiViewModeHandler(BaseModeHandler):
                 pos, viewer_index
             )
 
-            # Prepare points for prediction (like single view mode)
+            # Initialize point accumulation for multiview mode (like single view)
+            if not hasattr(self.main_window, "multi_view_positive_points"):
+                self.main_window.multi_view_positive_points = {0: [], 1: []}
+            if not hasattr(self.main_window, "multi_view_negative_points"):
+                self.main_window.multi_view_negative_points = {0: [], 1: []}
+
+            # Add current point to accumulated lists
             if positive:
-                positive_points = [model_pos]
-                negative_points = []
+                self.main_window.multi_view_positive_points[viewer_index].append(model_pos)
             else:
-                positive_points = []
-                negative_points = [model_pos]
+                self.main_window.multi_view_negative_points[viewer_index].append(model_pos)
+
+            # Prepare points for prediction using ALL accumulated points (like single view mode)
+            positive_points = self.main_window.multi_view_positive_points[viewer_index]
+            negative_points = self.main_window.multi_view_negative_points[viewer_index]
 
             # Generate mask using the specific model
             result = model.predict(positive_points, negative_points)
@@ -148,10 +156,24 @@ class MultiViewModeHandler(BaseModeHandler):
                 if not hasattr(self.main_window, "multi_view_ai_predictions"):
                     self.main_window.multi_view_ai_predictions = {}
 
+                # Store all accumulated points, not just current point
+                all_points = []
+                all_labels = []
+
+                # Add all positive points
+                for pt in positive_points:
+                    all_points.append(pt)
+                    all_labels.append(1)
+
+                # Add all negative points
+                for pt in negative_points:
+                    all_points.append(pt)
+                    all_labels.append(0)
+
                 self.main_window.multi_view_ai_predictions[viewer_index] = {
                     "mask": mask.astype(bool),
-                    "points": [(pos.x(), pos.y())],
-                    "labels": [1 if positive else 0],
+                    "points": all_points,
+                    "labels": all_labels,
                     "model_pos": model_pos,
                     "positive": positive,
                 }
@@ -565,6 +587,14 @@ class MultiViewModeHandler(BaseModeHandler):
                             viewer_index
                         ].scene().removeItem(point_item)
                 point_items.clear()
+
+        # Clear accumulated point lists (like single view mode)
+        if hasattr(self.main_window, "multi_view_positive_points"):
+            for viewer_points in self.main_window.multi_view_positive_points.values():
+                viewer_points.clear()
+        if hasattr(self.main_window, "multi_view_negative_points"):
+            for viewer_points in self.main_window.multi_view_negative_points.values():
+                viewer_points.clear()
 
     def save_ai_predictions(self):
         """Save AI predictions as actual segments."""
@@ -984,13 +1014,21 @@ class MultiViewModeHandler(BaseModeHandler):
                 pos, viewer_index
             )
 
-            # Prepare points for prediction (like single view mode)
+            # Initialize point accumulation for multiview mode (like single view)
+            if not hasattr(self.main_window, "multi_view_positive_points"):
+                self.main_window.multi_view_positive_points = {0: [], 1: []}
+            if not hasattr(self.main_window, "multi_view_negative_points"):
+                self.main_window.multi_view_negative_points = {0: [], 1: []}
+
+            # Add current point to accumulated lists
             if positive:
-                positive_points = [model_pos]
-                negative_points = []
+                self.main_window.multi_view_positive_points[viewer_index].append(model_pos)
             else:
-                positive_points = []
-                negative_points = [model_pos]
+                self.main_window.multi_view_negative_points[viewer_index].append(model_pos)
+
+            # Prepare points for prediction using ALL accumulated points (like single view mode)
+            positive_points = self.main_window.multi_view_positive_points[viewer_index]
+            negative_points = self.main_window.multi_view_negative_points[viewer_index]
 
             # Generate mask using the specific model
             result = model.predict(positive_points, negative_points)
@@ -1007,10 +1045,24 @@ class MultiViewModeHandler(BaseModeHandler):
                 if not hasattr(self.main_window, "multi_view_ai_predictions"):
                     self.main_window.multi_view_ai_predictions = {}
 
+                # Store all accumulated points, not just current point
+                all_points = []
+                all_labels = []
+
+                # Add all positive points
+                for pt in positive_points:
+                    all_points.append(pt)
+                    all_labels.append(1)
+
+                # Add all negative points
+                for pt in negative_points:
+                    all_points.append(pt)
+                    all_labels.append(0)
+
                 self.main_window.multi_view_ai_predictions[viewer_index] = {
                     "mask": mask.astype(bool),
-                    "points": [(pos.x(), pos.y())],
-                    "labels": [1 if positive else 0],
+                    "points": all_points,
+                    "labels": all_labels,
                     "model_pos": model_pos,
                     "positive": positive,
                 }

@@ -6917,7 +6917,7 @@ class MainWindow(QMainWindow):
                 qpoints = [QPointF(p[0], p[1]) for p in vertices]
                 polygon = QPolygonF(qpoints)
                 return polygon.containsPoint(QPointF(x, y), Qt.FillRule.OddEvenFill)
-        
+
         return False
 
     def _toggle_multi_view_segment_selection(self, viewer_index, segment_index):
