@@ -162,10 +162,10 @@ class MultiViewModeHandler(BaseModeHandler):
                 # Show preview mask
                 self._display_ai_preview(mask, viewer_index)
 
-                # Try to generate prediction for the other viewer too
+                # Generate prediction for the other viewer with same coordinates
                 other_viewer_index = 1 - viewer_index
                 self._generate_paired_ai_preview(
-                    viewer_index, other_viewer_index, pos, positive
+                    viewer_index, other_viewer_index, pos, model_pos, positive
                 )
 
         except Exception as e:
@@ -443,9 +443,9 @@ class MultiViewModeHandler(BaseModeHandler):
         self.main_window.multi_view_preview_items[viewer_index] = preview_item
 
     def _generate_paired_ai_preview(
-        self, source_viewer_index, target_viewer_index, pos, positive
+        self, source_viewer_index, target_viewer_index, pos, model_pos, positive
     ):
-        """Generate AI prediction preview for the paired viewer."""
+        """Generate AI prediction preview for the paired viewer using same model coordinates."""
         try:
             # Check if the target viewer's model is ready
             if (
@@ -457,12 +457,8 @@ class MultiViewModeHandler(BaseModeHandler):
                 # Run AI prediction on the target viewer
                 target_model = self.main_window.multi_view_models[target_viewer_index]
 
-                # Convert position to model coordinates for the target viewer
-                target_model_pos = (
-                    self.main_window._transform_multi_view_coords_to_sam_coords(
-                        pos, target_viewer_index
-                    )
-                )
+                # Use the same model coordinates (no transformation needed)
+                target_model_pos = model_pos
 
                 # Prepare points for prediction
                 if positive:
@@ -499,6 +495,48 @@ class MultiViewModeHandler(BaseModeHandler):
 
         except Exception as e:
             logger.error(f"Error generating paired AI preview: {e}")
+
+    def _generate_paired_ai_bbox_preview(
+        self, source_viewer_index, target_viewer_index, box
+    ):
+        """Generate AI bounding box prediction preview for the paired viewer using same box coordinates."""
+        try:
+            # Check if the target viewer's model is ready
+            if (
+                target_viewer_index < len(self.main_window.multi_view_models)
+                and self.main_window.multi_view_models[target_viewer_index] is not None
+                and not self.main_window.multi_view_models_dirty[target_viewer_index]
+                and not self.main_window.multi_view_models_updating[target_viewer_index]
+            ):
+                # Run AI prediction on the target viewer
+                target_model = self.main_window.multi_view_models[target_viewer_index]
+
+                # Use the same bounding box coordinates
+                result = target_model.predict_from_box(box)
+
+                if result is not None and len(result) == 3:
+                    mask, scores, logits = result
+
+                    # Ensure mask is boolean
+                    if mask.dtype != bool:
+                        mask = mask > 0.5
+
+                    # Store prediction data
+                    if not hasattr(self.main_window, "multi_view_ai_predictions"):
+                        self.main_window.multi_view_ai_predictions = {}
+
+                    self.main_window.multi_view_ai_predictions[target_viewer_index] = {
+                        "mask": mask.astype(bool),
+                        "box": box,
+                        "points": [],  # Empty for box predictions
+                        "labels": [],  # Empty for box predictions
+                    }
+
+                    # Show preview
+                    self._display_ai_preview(mask, target_viewer_index)
+
+        except Exception as e:
+            logger.error(f"Error generating paired AI bbox preview: {e}")
 
     def _clear_ai_previews(self):
         """Clear AI prediction previews and points from all viewers."""
@@ -891,6 +929,12 @@ class MultiViewModeHandler(BaseModeHandler):
                 # Show preview mask
                 self._display_ai_preview(mask, viewer_index)
 
+                # Generate prediction for the other viewer with same bounding box
+                other_viewer_index = 1 - viewer_index
+                self._generate_paired_ai_bbox_preview(
+                    viewer_index, other_viewer_index, box
+                )
+
         except Exception as e:
             logger.error(
                 f"Error processing AI bounding box for viewer {viewer_index}: {e}"
@@ -977,10 +1021,10 @@ class MultiViewModeHandler(BaseModeHandler):
                 # Show preview mask
                 self._display_ai_preview(mask, viewer_index)
 
-                # Try to generate prediction for the other viewer too
+                # Generate prediction for the other viewer with same coordinates
                 other_viewer_index = 1 - viewer_index
                 self._generate_paired_ai_preview(
-                    viewer_index, other_viewer_index, pos, positive
+                    viewer_index, other_viewer_index, pos, model_pos, positive
                 )
 
         except Exception as e:
