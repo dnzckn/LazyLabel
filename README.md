@@ -136,10 +136,4 @@ LazyLabel welcomes contributions! Check out:
 
 ---
 
-## ☕ Support
-
-If LazyLabel saves you time on annotation tasks, [consider supporting the project!](https://buymeacoffee.com/dnzckn)
-
----
-
 **Made with ❤️ for the computer vision community**
