@@ -70,7 +70,12 @@ class MultiIndicatorSlider(QWidget):
         slider_rect = self.get_slider_rect()
         ratio = (x - slider_rect.left()) / slider_rect.width()
         ratio = max(0, min(1, ratio))  # Clamp to [0, 1]
-        return int(self.minimum + ratio * (self.maximum - self.minimum))
+        value = self.minimum + ratio * (self.maximum - self.minimum)
+        # Use integer values for channel thresholds (0-255) and intensity sliders, float for frequency sliders (0-10000)
+        if self.maximum <= 255 or self.maximum == 256:
+            return int(value)
+        else:
+            return value
 
     def paintEvent(self, event):
         """Paint the slider."""
@@ -138,7 +143,8 @@ class MultiIndicatorSlider(QWidget):
                 painter.setPen(QPen(Qt.GlobalColor.transparent))
                 painter.drawRoundedRect(segment_rect, 5, 5)
 
-        # Draw indicators
+        # Draw indicators and collect label positions to avoid overlaps
+        label_positions = []
         for i, value in enumerate(self.indicators):
             x = self.value_to_x(value)
 
@@ -157,9 +163,47 @@ class MultiIndicatorSlider(QWidget):
 
             painter.drawRoundedRect(handle_rect, 3, 3)
 
-            # Value label
-            painter.setPen(QPen(QColor(255, 255, 255)))
-            painter.drawText(x - 15, slider_rect.bottom() + 15, f"{value}")
+            # Store label info for non-overlapping positioning
+            label_text = f"{int(value)}"
+            label_positions.append((x, label_text))
+
+        # Draw labels with overlap prevention
+        self._draw_non_overlapping_labels(painter, slider_rect, label_positions)
+
+    def _draw_non_overlapping_labels(self, painter, slider_rect, label_positions):
+        """Draw labels with spacing to prevent overlaps."""
+        if not label_positions:
+            return
+
+        painter.setPen(QPen(QColor(255, 255, 255)))
+
+        # Sort by x position
+        sorted_labels = sorted(label_positions, key=lambda item: item[0])
+
+        # Minimum spacing between labels (in pixels)
+        min_spacing = 30
+
+        # Adjust positions to prevent overlaps
+        adjusted_positions = []
+        for i, (x, text) in enumerate(sorted_labels):
+            if i == 0:
+                adjusted_positions.append((x, text))
+            else:
+                prev_x = adjusted_positions[-1][0]
+                if x - prev_x < min_spacing:
+                    # Move this label to maintain minimum spacing
+                    new_x = prev_x + min_spacing
+                    # But don't go beyond the slider bounds
+                    slider_right = slider_rect.right() - 15
+                    if new_x > slider_right:
+                        new_x = slider_right
+                    adjusted_positions.append((new_x, text))
+                else:
+                    adjusted_positions.append((x, text))
+
+        # Draw the adjusted labels
+        for x, text in adjusted_positions:
+            painter.drawText(int(x - 15), slider_rect.bottom() + 15, text)
 
     def mousePressEvent(self, event):
         """Handle mouse press events."""
@@ -352,7 +396,7 @@ class ChannelThresholdWidget(QWidget):
 
         # Instructions
         instructions = QLabel(
-            "✓ Check to enable • Double-click to add threshold • Right-click to remove"
+            "✓ Check to enable\n• Double-click to add threshold\n• Right-click to remove"
         )
         instructions.setStyleSheet("color: #888; font-size: 9px;")
         instructions.setWordWrap(True)

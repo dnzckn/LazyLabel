@@ -316,7 +316,13 @@ class MultiViewModeHandler(BaseModeHandler):
         # Remove temporary rectangle
         self.main_window.multi_view_viewers[viewer_index].scene().removeItem(rect_item)
 
-        # Create segment regardless of size
+        # Only create segment if minimum size is met (2x2 pixels)
+        if width < 2 or height < 2:
+            # Clean up and return without creating segment
+            self.main_window.multi_view_bbox_starts[viewer_index] = None
+            self.main_window.multi_view_bbox_rects[viewer_index] = None
+            return
+
         # Create view-specific bbox data as polygon
         view_data = {
             "vertices": [

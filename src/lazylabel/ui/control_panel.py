@@ -48,7 +48,7 @@ class SimpleCollapsible(QWidget):
                 border: 1px solid rgba(120, 120, 120, 0.5);
                 background: rgba(70, 70, 70, 0.6);
                 color: #E0E0E0;
-                font-size: 10px;
+                font-size: 11px;
                 font-weight: bold;
                 border-radius: 2px;
             }
@@ -71,7 +71,7 @@ class SimpleCollapsible(QWidget):
             QLabel {
                 color: #E0E0E0;
                 font-weight: bold;
-                font-size: 11px;
+                font-size: 12px;
                 background: transparent;
                 border: none;
                 padding: 2px;
@@ -202,8 +202,8 @@ class ControlPanel(QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setMinimumWidth(260)  # Slightly wider for better layout
-        self.preferred_width = 280
+        self.setMinimumWidth(300)  # Wider for better text fitting
+        self.preferred_width = 320
         self._setup_ui()
         self._connect_signals()
 
@@ -274,9 +274,9 @@ class ControlPanel(QWidget):
                 padding: 4px 8px;
                 margin-right: 1px;
                 color: #B0B0B0;
-                font-size: 9px;
-                min-width: 45px;
-                max-width: 80px;
+                font-size: 11px;
+                min-width: 50px;
+                max-width: 100px;
             }
             QTabBar::tab:selected {
                 background-color: rgba(70, 70, 70, 0.9);
@@ -307,7 +307,7 @@ class ControlPanel(QWidget):
             QLabel {
                 color: #FFA500;
                 font-style: italic;
-                font-size: 9px;
+                font-size: 10px;
                 background: transparent;
                 border: none;
                 padding: 4px;
@@ -389,7 +389,7 @@ class ControlPanel(QWidget):
         button = QPushButton(f"{text} ({key})")
         button.setToolTip(f"{tooltip} ({key})")
         button.setFixedHeight(28)
-        button.setFixedWidth(75)  # Fixed width for consistency
+        button.setFixedWidth(90)  # Wider for better text fitting
         button.setStyleSheet(
             """
             QPushButton {
@@ -398,7 +398,7 @@ class ControlPanel(QWidget):
                 border-radius: 6px;
                 color: #E0E0E0;
                 font-weight: bold;
-                font-size: 10px;
+                font-size: 11px;
                 padding: 4px 8px;
             }
             QPushButton:hover {
@@ -434,7 +434,7 @@ class ControlPanel(QWidget):
         button = QPushButton(button_text)
         button.setToolTip(tooltip_text)
         button.setFixedHeight(28)
-        button.setFixedWidth(75)  # Fixed width for consistency
+        button.setFixedWidth(90)  # Wider for better text fitting
         button.setStyleSheet(
             """
             QPushButton {
@@ -443,7 +443,7 @@ class ControlPanel(QWidget):
                 border-radius: 6px;
                 color: #E0E0E0;
                 font-weight: bold;
-                font-size: 10px;
+                font-size: 11px;
                 padding: 4px 8px;
             }
             QPushButton:hover {
@@ -476,7 +476,7 @@ class ControlPanel(QWidget):
                 border-radius: 6px;
                 color: #E0E0E0;
                 font-weight: bold;
-                font-size: 10px;
+                font-size: 11px;
                 padding: 4px 8px;
                 min-height: 22px;
             }
@@ -497,7 +497,7 @@ class ControlPanel(QWidget):
                 border: 1px solid rgba(100, 100, 100, 0.6);
                 border-radius: 5px;
                 color: #E0E0E0;
-                font-size: 10px;
+                font-size: 11px;
                 padding: 4px 8px;
                 min-height: 22px;
             }
@@ -617,10 +617,11 @@ class ControlPanel(QWidget):
         )
         layout.addWidget(threshold_collapsible)
 
-        # FFT Threshold - collapsible
+        # FFT Threshold - collapsible (default collapsed)
         self.fft_threshold_collapsible = SimpleCollapsible(
             "FFT Threshold", self.fft_threshold_widget
         )
+        self.fft_threshold_collapsible.set_collapsed(True)  # Default to collapsed
         layout.addWidget(self.fft_threshold_collapsible)
 
         # Image Adjustments - collapsible

@@ -288,30 +288,51 @@ def test_multi_view_batch_navigation(main_window_with_multi_view):
     """Test navigation between multi-view batches."""
     window = main_window_with_multi_view
 
-    # Mock dependencies
-    window._get_all_images = MagicMock(
-        return_value=[
-            "/path/to/image1.jpg",
-            "/path/to/image2.jpg",
-            "/path/to/image3.jpg",
-            "/path/to/image4.jpg",
-        ]
+    # Mock the new efficient navigation methods
+    window._get_next_multi_images_from_file_model = MagicMock(
+        return_value=["/path/to/image3.jpg", "/path/to/image4.jpg"]
     )
-    window._load_current_multi_batch = MagicMock()
+    window._get_previous_multi_images_from_file_model = MagicMock(
+        return_value=["/path/to/image1.jpg", "/path/to/image2.jpg"]
+    )
+    window._load_multi_view_pair = MagicMock()
+    window._update_multi_view_navigation_state = MagicMock()
+
+    # Mock file model and current index
+    window.current_file_index = MagicMock()
+    window.current_file_index.isValid.return_value = True
+    window.current_file_index.parent.return_value = MagicMock()
+    window.file_model = MagicMock()
+    window.file_model.rowCount.return_value = 4
+    window.file_model.index.return_value = MagicMock()
+    window.file_model.filePath.return_value = "/path/to/image3.jpg"
+    window.right_panel = MagicMock()
+    window.right_panel.file_tree = MagicMock()
 
     # Test next batch navigation
-    window.current_multi_batch_start = 0
     window._load_next_multi_batch()
 
-    assert window.current_multi_batch_start == 2
-    window._load_current_multi_batch.assert_called_once()
+    # Verify the new efficient navigation was called (check call count and args)
+    assert window._get_next_multi_images_from_file_model.call_count == 1
+    call_args = window._get_next_multi_images_from_file_model.call_args
+    assert call_args[0][1] == 2  # Second argument should be 2
+    window._load_multi_view_pair.assert_called_once_with("/path/to/image3.jpg", "/path/to/image4.jpg")
+    window._update_multi_view_navigation_state.assert_called_once()
+
+    # Reset mocks for previous batch test
+    window._get_previous_multi_images_from_file_model.reset_mock()
+    window._load_multi_view_pair.reset_mock()
+    window._update_multi_view_navigation_state.reset_mock()
 
     # Test previous batch navigation
-    window._load_current_multi_batch.reset_mock()
     window._load_previous_multi_batch()
 
-    assert window.current_multi_batch_start == 0
-    window._load_current_multi_batch.assert_called_once()
+    # Verify the new efficient navigation was called (check call count and args)
+    assert window._get_previous_multi_images_from_file_model.call_count == 1
+    call_args = window._get_previous_multi_images_from_file_model.call_args
+    assert call_args[0][1] == 2  # Second argument should be 2
+    window._load_multi_view_pair.assert_called_once_with("/path/to/image1.jpg", "/path/to/image2.jpg")
+    window._update_multi_view_navigation_state.assert_called_once()
 
 
 def test_multi_view_ai_click_handling(main_window_with_multi_view):

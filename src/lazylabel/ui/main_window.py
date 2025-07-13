@@ -1623,7 +1623,6 @@ class MainWindow(QMainWindow):
                             segment["_source_viewer"] = 0
                     all_segments.extend(viewer0_segments)
                     self.segment_manager.segments.clear()
-                    print(f"Loaded {len(viewer0_segments)} segments for viewer 0")
                 except Exception as e:
                     print(f"Error loading segments for viewer 0: {e}")
 
@@ -1639,13 +1638,11 @@ class MainWindow(QMainWindow):
                             segment["_source_viewer"] = 1
                     all_segments.extend(viewer1_segments)
                     self.segment_manager.segments.clear()
-                    print(f"Loaded {len(viewer1_segments)} segments for viewer 1")
                 except Exception as e:
                     print(f"Error loading segments for viewer 1: {e}")
 
             # Set all segments at once
             self.segment_manager.segments = all_segments
-            print(f"Total segments loaded: {len(all_segments)}")
 
             # Update all UI components to reflect the loaded segments
             if all_segments:
@@ -1657,7 +1654,6 @@ class MainWindow(QMainWindow):
                     viewer.scene().update()
                     viewer.update()
 
-                print(f"UI updated with {len(all_segments)} segments")
             else:
                 # Even if no segments, update the lists to clear them
                 self._update_all_lists()
@@ -1819,6 +1815,54 @@ class MainWindow(QMainWindow):
                     return prev_index
 
         return None
+
+    def _get_next_multi_images_from_file_model(self, current_index, count):
+        """Get the next 'count' image file paths from the file model."""
+        if not self.file_model or not current_index.isValid():
+            return []
+
+        parent_index = current_index.parent()
+        current_row = current_index.row()
+        images = []
+
+        # Look for the next image files starting from the next row
+        for row in range(current_row + 1, self.file_model.rowCount(parent_index)):
+            if len(images) >= count:
+                break
+            next_index = self.file_model.index(row, 0, parent_index)
+            if next_index.isValid():
+                next_path = self.file_model.filePath(next_index)
+                if os.path.isfile(next_path) and self.file_manager.is_image_file(
+                    next_path
+                ):
+                    images.append(next_path)
+
+        return images
+
+    def _get_previous_multi_images_from_file_model(self, current_index, count):
+        """Get the previous 'count' image file paths from the file model."""
+        if not self.file_model or not current_index.isValid():
+            return []
+
+        parent_index = current_index.parent()
+        current_row = current_index.row()
+        images = []
+
+        # Look for the previous image files starting from the previous rows
+        # We need to go back 'count' images from current position
+        for row in range(current_row - 1, -1, -1):
+            if len(images) >= count:
+                break
+            prev_index = self.file_model.index(row, 0, parent_index)
+            if prev_index.isValid():
+                prev_path = self.file_model.filePath(prev_index)
+                if os.path.isfile(prev_path) and self.file_manager.is_image_file(
+                    prev_path
+                ):
+                    images.append(prev_path)
+
+        # Reverse the list since we collected them in reverse order
+        return images[::-1]
 
     def _update_sam_model_image(self):
         """Updates the SAM model's image based on the 'Operate On View' setting."""
@@ -2831,11 +2875,14 @@ class MainWindow(QMainWindow):
 
                     class_order = self.segment_manager.get_unique_class_ids()
                     if class_order:
+                        # Get crop coordinates for this image size
+                        crop_coords = self.crop_coords_by_size.get((w, h))
+
                         npz_path = self.file_manager.save_npz(
                             image_path,
                             (h, w),
                             class_order,
-                            None,  # No crop coords in multi-view for now
+                            crop_coords,  # Pass crop coordinates if available
                         )
                         saved_files.append(os.path.basename(npz_path))
                         # Track saved file for highlighting later
@@ -2861,12 +2908,15 @@ class MainWindow(QMainWindow):
                     else:
                         class_labels = [str(cid) for cid in class_order]
                     if class_order:
+                        # Get crop coordinates for this image size
+                        crop_coords = self.crop_coords_by_size.get((w, h))
+
                         txt_path = self.file_manager.save_yolo_txt(
                             image_path,
                             (h, w),
                             class_order,
                             class_labels,
-                            None,  # No crop coords in multi-view for now
+                            crop_coords,  # Pass crop coordinates if available
                         )
                         saved_files.append(os.path.basename(txt_path))
                         # Track saved file for highlighting later
@@ -3949,7 +3999,7 @@ class MainWindow(QMainWindow):
             self.rubber_band_rect = None
             self.drag_start_pos = None
 
-            if rect.width() > 0 and rect.height() > 0:
+            if rect.width() >= 2 and rect.height() >= 2:
                 # Convert QRectF to QPolygonF
                 polygon = QPolygonF()
                 polygon.append(rect.topLeft())
@@ -5289,63 +5339,144 @@ class MainWindow(QMainWindow):
     # Border crop methods
     def _start_crop_drawing(self):
         """Start crop drawing mode."""
+        if self.view_mode == "multi" and not any(self.multi_view_images):
+            self.control_panel.set_crop_status("No images loaded in multi-view mode")
+            self._show_warning_notification("No images loaded in multi-view mode")
+            return
+
         self.crop_mode = True
         self._set_mode("crop")
-        self.control_panel.set_crop_status("Click and drag to draw crop rectangle")
-        self._show_notification("Click and drag to draw crop rectangle")
+
+        if self.view_mode == "multi":
+            self.control_panel.set_crop_status(
+                "Click and drag to draw crop rectangle (applies to both viewers)"
+            )
+            self._show_notification(
+                "Click and drag to draw crop rectangle (applies to both viewers)"
+            )
+        else:
+            self.control_panel.set_crop_status("Click and drag to draw crop rectangle")
+            self._show_notification("Click and drag to draw crop rectangle")
 
     def _clear_crop(self):
         """Clear current crop."""
         self.current_crop_coords = None
         self.control_panel.clear_crop_coordinates()
         self._remove_crop_visual()
-        if self.current_image_path:
-            # Clear crop for current image size
-            pixmap = QPixmap(self.current_image_path)
-            if not pixmap.isNull():
-                image_size = (pixmap.width(), pixmap.height())
-                if image_size in self.crop_coords_by_size:
-                    del self.crop_coords_by_size[image_size]
+
+        if self.view_mode == "multi":
+            # Clear crop for multi-view mode - check both images
+            for _i, image_path in enumerate(self.multi_view_images):
+                if image_path:
+                    pixmap = QPixmap(image_path)
+                    if not pixmap.isNull():
+                        image_size = (pixmap.width(), pixmap.height())
+                        if image_size in self.crop_coords_by_size:
+                            del self.crop_coords_by_size[image_size]
+            # Clear multi-view crop visual overlays
+            self._remove_multi_view_crop_visual()
+        else:
+            # Single view mode
+            if self.current_image_path:
+                # Clear crop for current image size
+                pixmap = QPixmap(self.current_image_path)
+                if not pixmap.isNull():
+                    image_size = (pixmap.width(), pixmap.height())
+                    if image_size in self.crop_coords_by_size:
+                        del self.crop_coords_by_size[image_size]
+
         self._show_notification("Crop cleared")
 
     def _apply_crop_coordinates(self, x1, y1, x2, y2):
         """Apply crop coordinates from text input."""
-        if not self.current_image_path:
-            self.control_panel.set_crop_status("No image loaded")
-            return
+        if self.view_mode == "multi":
+            # Multi-view mode
+            if not any(self.multi_view_images):
+                self.control_panel.set_crop_status(
+                    "No images loaded in multi-view mode"
+                )
+                return
 
-        pixmap = QPixmap(self.current_image_path)
-        if pixmap.isNull():
-            self.control_panel.set_crop_status("Invalid image")
-            return
+            # Round to nearest pixel
+            x1, y1, x2, y2 = round(x1), round(y1), round(x2), round(y2)
 
-        # Round to nearest pixel
-        x1, y1, x2, y2 = round(x1), round(y1), round(x2), round(y2)
+            # Apply crop to all loaded images in multi-view
+            applied_count = 0
+            for _i, image_path in enumerate(self.multi_view_images):
+                if image_path:
+                    pixmap = QPixmap(image_path)
+                    if not pixmap.isNull():
+                        # Validate coordinates are within image bounds
+                        img_width, img_height = pixmap.width(), pixmap.height()
+                        adj_x1 = max(0, min(x1, img_width - 1))
+                        adj_x2 = max(0, min(x2, img_width - 1))
+                        adj_y1 = max(0, min(y1, img_height - 1))
+                        adj_y2 = max(0, min(y2, img_height - 1))
 
-        # Validate coordinates are within image bounds
-        img_width, img_height = pixmap.width(), pixmap.height()
-        x1 = max(0, min(x1, img_width - 1))
-        x2 = max(0, min(x2, img_width - 1))
-        y1 = max(0, min(y1, img_height - 1))
-        y2 = max(0, min(y2, img_height - 1))
+                        # Ensure proper ordering
+                        if adj_x1 > adj_x2:
+                            adj_x1, adj_x2 = adj_x2, adj_x1
+                        if adj_y1 > adj_y2:
+                            adj_y1, adj_y2 = adj_y2, adj_y1
 
-        # Ensure proper ordering
-        if x1 > x2:
-            x1, x2 = x2, x1
-        if y1 > y2:
-            y1, y2 = y2, y1
+                        # Store crop coordinates for this image size
+                        image_size = (img_width, img_height)
+                        crop_coords = (adj_x1, adj_y1, adj_x2, adj_y2)
+                        self.crop_coords_by_size[image_size] = crop_coords
+                        applied_count += 1
 
-        # Store crop coordinates
-        self.current_crop_coords = (x1, y1, x2, y2)
-        image_size = (img_width, img_height)
-        self.crop_coords_by_size[image_size] = self.current_crop_coords
+            if applied_count > 0:
+                # Store the original coordinates for display
+                self.current_crop_coords = (x1, y1, x2, y2)
 
-        # Update display coordinates in case they were adjusted
-        self.control_panel.set_crop_coordinates(x1, y1, x2, y2)
+                # Update display coordinates
+                self.control_panel.set_crop_coordinates(x1, y1, x2, y2)
 
-        # Apply crop to current image
-        self._apply_crop_to_image()
-        self._show_notification(f"Crop applied: {x1}:{x2}, {y1}:{y2}")
+                # Apply crop visual overlays to multi-view
+                self._apply_multi_view_crop_to_images()
+                self._show_notification(
+                    f"Crop applied to {applied_count} images: {x1}:{x2}, {y1}:{y2}"
+                )
+            else:
+                self.control_panel.set_crop_status("No valid images to apply crop")
+        else:
+            # Single view mode
+            if not self.current_image_path:
+                self.control_panel.set_crop_status("No image loaded")
+                return
+
+            pixmap = QPixmap(self.current_image_path)
+            if pixmap.isNull():
+                self.control_panel.set_crop_status("Invalid image")
+                return
+
+            # Round to nearest pixel
+            x1, y1, x2, y2 = round(x1), round(y1), round(x2), round(y2)
+
+            # Validate coordinates are within image bounds
+            img_width, img_height = pixmap.width(), pixmap.height()
+            x1 = max(0, min(x1, img_width - 1))
+            x2 = max(0, min(x2, img_width - 1))
+            y1 = max(0, min(y1, img_height - 1))
+            y2 = max(0, min(y2, img_height - 1))
+
+            # Ensure proper ordering
+            if x1 > x2:
+                x1, x2 = x2, x1
+            if y1 > y2:
+                y1, y2 = y2, y1
+
+            # Store crop coordinates
+            self.current_crop_coords = (x1, y1, x2, y2)
+            image_size = (img_width, img_height)
+            self.crop_coords_by_size[image_size] = self.current_crop_coords
+
+            # Update display coordinates in case they were adjusted
+            self.control_panel.set_crop_coordinates(x1, y1, x2, y2)
+
+            # Apply crop to current image
+            self._apply_crop_to_image()
+            self._show_notification(f"Crop applied: {x1}:{x2}, {y1}:{y2}")
 
     def _apply_crop_to_image(self):
         """Add visual overlays to show crop areas."""
@@ -5609,6 +5740,112 @@ class MainWindow(QMainWindow):
                 if effect_item and effect_item.scene():
                     self.viewer.scene().removeItem(effect_item)
             self.crop_hover_effect_items = []
+
+    def _apply_multi_view_crop_to_images(self):
+        """Apply crop visual overlays to all multi-view images."""
+        if not self.current_crop_coords or self.view_mode != "multi":
+            return
+
+        for i in range(len(self.multi_view_viewers)):
+            if i < len(self.multi_view_images) and self.multi_view_images[i]:
+                self._add_multi_view_crop_visual_overlays(i)
+
+    def _add_multi_view_crop_visual_overlays(self, viewer_index):
+        """Add crop visual overlays to a specific multi-view viewer."""
+        if not self.current_crop_coords or viewer_index >= len(self.multi_view_viewers):
+            return
+
+        image_path = self.multi_view_images[viewer_index]
+        if not image_path:
+            return
+
+        viewer = self.multi_view_viewers[viewer_index]
+        x1, y1, x2, y2 = self.current_crop_coords
+
+        # Get image dimensions
+        pixmap = QPixmap(image_path)
+        if pixmap.isNull():
+            return
+
+        img_width, img_height = pixmap.width(), pixmap.height()
+
+        # Validate coordinates are within image bounds
+        x1 = max(0, min(x1, img_width - 1))
+        x2 = max(0, min(x2, img_width - 1))
+        y1 = max(0, min(y1, img_height - 1))
+        y2 = max(0, min(y2, img_height - 1))
+
+        # Import needed classes
+        from PyQt6.QtCore import QRectF, Qt
+        from PyQt6.QtGui import QBrush, QColor, QPen
+        from PyQt6.QtWidgets import QGraphicsRectItem
+
+        # Initialize multi-view crop overlays storage
+        if not hasattr(self, "multi_view_crop_overlays"):
+            self.multi_view_crop_overlays = {0: [], 1: []}
+
+        # Remove existing overlays for this viewer
+        self._remove_multi_view_crop_visual_overlays(viewer_index)
+
+        # Semi-transparent black color
+        overlay_color = QColor(0, 0, 0, 120)
+
+        # Top rectangle
+        if y1 > 0:
+            top_overlay = QGraphicsRectItem(QRectF(0, 0, img_width, y1))
+            top_overlay.setBrush(QBrush(overlay_color))
+            top_overlay.setPen(QPen(Qt.GlobalColor.transparent))
+            top_overlay.setZValue(60)
+            viewer.scene().addItem(top_overlay)
+            self.multi_view_crop_overlays[viewer_index].append(top_overlay)
+
+        # Bottom rectangle
+        if y2 < img_height:
+            bottom_overlay = QGraphicsRectItem(
+                QRectF(0, y2, img_width, img_height - y2)
+            )
+            bottom_overlay.setBrush(QBrush(overlay_color))
+            bottom_overlay.setPen(QPen(Qt.GlobalColor.transparent))
+            bottom_overlay.setZValue(60)
+            viewer.scene().addItem(bottom_overlay)
+            self.multi_view_crop_overlays[viewer_index].append(bottom_overlay)
+
+        # Left rectangle
+        if x1 > 0:
+            left_overlay = QGraphicsRectItem(QRectF(0, y1, x1, y2 - y1))
+            left_overlay.setBrush(QBrush(overlay_color))
+            left_overlay.setPen(QPen(Qt.GlobalColor.transparent))
+            left_overlay.setZValue(60)
+            viewer.scene().addItem(left_overlay)
+            self.multi_view_crop_overlays[viewer_index].append(left_overlay)
+
+        # Right rectangle
+        if x2 < img_width:
+            right_overlay = QGraphicsRectItem(QRectF(x2, y1, img_width - x2, y2 - y1))
+            right_overlay.setBrush(QBrush(overlay_color))
+            right_overlay.setPen(QPen(Qt.GlobalColor.transparent))
+            right_overlay.setZValue(60)
+            viewer.scene().addItem(right_overlay)
+            self.multi_view_crop_overlays[viewer_index].append(right_overlay)
+
+    def _remove_multi_view_crop_visual_overlays(self, viewer_index):
+        """Remove crop visual overlays from a specific multi-view viewer."""
+        if not hasattr(self, "multi_view_crop_overlays"):
+            return
+
+        if viewer_index in self.multi_view_crop_overlays:
+            for overlay in self.multi_view_crop_overlays[viewer_index]:
+                if overlay and overlay.scene():
+                    overlay.scene().removeItem(overlay)
+            self.multi_view_crop_overlays[viewer_index] = []
+
+    def _remove_multi_view_crop_visual(self):
+        """Remove all multi-view crop visual overlays."""
+        if not hasattr(self, "multi_view_crop_overlays"):
+            return
+
+        for viewer_index in self.multi_view_crop_overlays:
+            self._remove_multi_view_crop_visual_overlays(viewer_index)
 
     def _reload_current_image(self):
         """Reload current image without crop."""
@@ -6306,10 +6543,6 @@ class MainWindow(QMainWindow):
                     for segment in self.segment_manager.segments:
                         segment.pop("_source_viewer", None)
 
-                    print(
-                        f"Loaded {len(self.segment_manager.segments)} segments for single-view"
-                    )
-
                     # Update UI lists
                     self._update_all_lists()
 
@@ -6525,18 +6758,93 @@ class MainWindow(QMainWindow):
 
     def _load_next_multi_batch(self):
         """Load the next batch of 2 images."""
-        all_images = self._get_all_images()
-        if self.current_multi_batch_start + 2 < len(all_images):
-            self.current_multi_batch_start += 2
-            self._load_current_multi_batch()
-            self._update_file_tree_selection_for_multi_view()
+        # Use efficient file model navigation instead of full folder scan
+        if not self.current_file_index.isValid():
+            return
+
+        # Find the next 2 images from current position
+        next_images = self._get_next_multi_images_from_file_model(
+            self.current_file_index, 2
+        )
+        if len(next_images) >= 2:
+            # Load the new pair
+            self._load_multi_view_pair(next_images[0], next_images[1])
+
+            # Update current file index to the first image of the new batch
+            parent_index = self.current_file_index.parent()
+            for row in range(self.file_model.rowCount(parent_index)):
+                index = self.file_model.index(row, 0, parent_index)
+                if self.file_model.filePath(index) == next_images[0]:
+                    self.current_file_index = index
+                    self.right_panel.file_tree.setCurrentIndex(index)
+                    break
+
+            # Update button states and batch info
+            self._update_multi_view_navigation_state()
 
     def _load_previous_multi_batch(self):
         """Load the previous batch of 2 images."""
-        if self.current_multi_batch_start >= 2:
-            self.current_multi_batch_start -= 2
-            self._load_current_multi_batch()
-            self._update_file_tree_selection_for_multi_view()
+        # Use efficient file model navigation instead of full folder scan
+        if not self.current_file_index.isValid():
+            return
+
+        # Find the previous 2 images from current position
+        prev_images = self._get_previous_multi_images_from_file_model(
+            self.current_file_index, 2
+        )
+        if len(prev_images) >= 2:
+            # Load the new pair
+            self._load_multi_view_pair(prev_images[0], prev_images[1])
+
+            # Update current file index to the first image of the new batch
+            parent_index = self.current_file_index.parent()
+            for row in range(self.file_model.rowCount(parent_index)):
+                index = self.file_model.index(row, 0, parent_index)
+                if self.file_model.filePath(index) == prev_images[0]:
+                    self.current_file_index = index
+                    self.right_panel.file_tree.setCurrentIndex(index)
+                    break
+
+            # Update button states and batch info
+            self._update_multi_view_navigation_state()
+
+    def _update_multi_view_navigation_state(self):
+        """Update multi-view navigation button states and batch info without folder scan."""
+        if not self.current_file_index.isValid():
+            return
+
+        # Check if there are previous images available (efficient check)
+        prev_available = (
+            len(
+                self._get_previous_multi_images_from_file_model(
+                    self.current_file_index, 1
+                )
+            )
+            > 0
+        )
+        self.multi_prev_button.setEnabled(prev_available)
+
+        # Check if there are next images available (efficient check)
+        next_available = (
+            len(self._get_next_multi_images_from_file_model(self.current_file_index, 2))
+            >= 2
+        )
+        self.multi_next_button.setEnabled(next_available)
+
+        # Update batch info to show current image names instead of indices
+        if (
+            hasattr(self, "multi_view_images")
+            and self.multi_view_images[0]
+            and self.multi_view_images[1]
+        ):
+            img1_name = os.path.basename(self.multi_view_images[0])
+            img2_name = os.path.basename(self.multi_view_images[1])
+            self.multi_batch_info.setText(f"Batch: {img1_name} + {img2_name}")
+        elif hasattr(self, "multi_view_images") and self.multi_view_images[0]:
+            img1_name = os.path.basename(self.multi_view_images[0])
+            self.multi_batch_info.setText(f"Batch: {img1_name} (single)")
+        else:
+            self.multi_batch_info.setText("Batch: No images loaded")
 
     def _update_file_tree_selection_for_multi_view(self):
         """Update file tree selection to reflect the first image in the current multi-view batch."""
@@ -6546,10 +6854,9 @@ class MainWindow(QMainWindow):
         # Get the path of the first image in the current batch
         first_image_path = self.multi_view_images[0]
 
-        # Find the corresponding index in the file model
-        all_images = self._get_all_images()
-        if first_image_path in all_images:
-            # Find the file model index for this path
+        # Find the corresponding index in the file model directly without full scan
+        if os.path.exists(first_image_path):
+            # Find the file model index for this path directly
             parent = self.file_model.index(os.path.dirname(first_image_path))
             for row in range(self.file_model.rowCount(parent)):
                 index = self.file_model.index(row, 0, parent)
@@ -6600,6 +6907,11 @@ class MainWindow(QMainWindow):
                 original_handler(event)
             return
 
+        # Handle crop mode drawing
+        if self.mode == "crop" and event.button() == Qt.MouseButton.LeftButton:
+            self._handle_multi_view_crop_start(event, viewer_index)
+            return
+
         # Handle the event for the source viewer first
         if self.multi_view_linked[viewer_index]:
             self._handle_multi_view_action(event, viewer_index, "press")
@@ -6642,6 +6954,11 @@ class MainWindow(QMainWindow):
 
         # Convert QPointF to QPoint for contains check
         view_point = view_pos.toPoint() if hasattr(view_pos, "toPoint") else view_pos
+
+        # Handle crop mode drawing
+        if self.mode == "crop":
+            self._handle_multi_view_crop_move(event, viewer_index)
+            return
 
         # For all modes (bbox, polygon, AI), cancel if mouse leaves current viewer
         if not viewer_rect.contains(view_point):
@@ -6770,6 +7087,11 @@ class MainWindow(QMainWindow):
                 original_handler(event)
             # End the handle dragging state
             self.multi_view_handle_dragging[viewer_index] = False
+            return
+
+        # Handle crop mode drawing completion
+        if self.mode == "crop":
+            self._handle_multi_view_crop_complete(event, viewer_index)
             return
 
         # Handle the event for the source viewer first
@@ -7835,9 +8157,12 @@ class MainWindow(QMainWindow):
             self.multi_view_bbox_rects[other_viewer_index] = None
             self.multi_view_bbox_starts[other_viewer_index] = None
 
-        # Create segment regardless of size
-        # Only create segment from the first viewer to avoid duplication
-        if viewer_index == 0 or self.multi_view_bbox_starts[0] is None:
+        # Only create segment if minimum size is met (2x2 pixels) and from first viewer to avoid duplication
+        if (
+            width >= 2
+            and height >= 2
+            and (viewer_index == 0 or self.multi_view_bbox_starts[0] is None)
+        ):
             # Convert bbox to polygon vertices
             vertices = [
                 [x, y],
@@ -7999,3 +8324,78 @@ class MainWindow(QMainWindow):
         # Refresh display to show synchronized changes
         if hasattr(self, "multi_view_mode_handler"):
             self.multi_view_mode_handler.display_all_segments()
+
+    def _handle_multi_view_crop_start(self, event, viewer_index):
+        """Handle crop drawing start in multi-view mode."""
+        if viewer_index >= len(self.multi_view_viewers):
+            return
+
+        viewer = self.multi_view_viewers[viewer_index]
+        pos = event.scenePos()
+
+        # Initialize multi-view crop state if needed
+        if not hasattr(self, "multi_view_crop_start_pos"):
+            self.multi_view_crop_start_pos = [None, None]
+        if not hasattr(self, "multi_view_crop_rect_items"):
+            self.multi_view_crop_rect_items = [None, None]
+
+        # Store start position for this viewer
+        self.multi_view_crop_start_pos[viewer_index] = pos
+
+        # Create crop rectangle for this viewer
+        from PyQt6.QtCore import Qt
+        from PyQt6.QtGui import QPen
+        from PyQt6.QtWidgets import QGraphicsRectItem
+
+        self.multi_view_crop_rect_items[viewer_index] = QGraphicsRectItem()
+        self.multi_view_crop_rect_items[viewer_index].setPen(
+            QPen(Qt.GlobalColor.blue, 2, Qt.PenStyle.DashLine)
+        )
+        viewer.scene().addItem(self.multi_view_crop_rect_items[viewer_index])
+
+    def _handle_multi_view_crop_move(self, event, viewer_index):
+        """Handle crop drawing move in multi-view mode."""
+        if (
+            not hasattr(self, "multi_view_crop_rect_items")
+            or not hasattr(self, "multi_view_crop_start_pos")
+            or viewer_index >= len(self.multi_view_crop_rect_items)
+            or not self.multi_view_crop_rect_items[viewer_index]
+            or not self.multi_view_crop_start_pos[viewer_index]
+        ):
+            return
+
+        from PyQt6.QtCore import QRectF
+
+        current_pos = event.scenePos()
+        start_pos = self.multi_view_crop_start_pos[viewer_index]
+        rect = QRectF(start_pos, current_pos).normalized()
+        self.multi_view_crop_rect_items[viewer_index].setRect(rect)
+
+    def _handle_multi_view_crop_complete(self, event, viewer_index):
+        """Handle crop drawing completion in multi-view mode."""
+        if (
+            not hasattr(self, "multi_view_crop_rect_items")
+            or not hasattr(self, "multi_view_crop_start_pos")
+            or viewer_index >= len(self.multi_view_crop_rect_items)
+            or not self.multi_view_crop_rect_items[viewer_index]
+        ):
+            return
+
+        viewer = self.multi_view_viewers[viewer_index]
+        rect_item = self.multi_view_crop_rect_items[viewer_index]
+        rect = rect_item.rect()
+
+        # Clean up the drawing rectangle
+        viewer.scene().removeItem(rect_item)
+        self.multi_view_crop_rect_items[viewer_index] = None
+        self.multi_view_crop_start_pos[viewer_index] = None
+
+        if rect.width() > 5 and rect.height() > 5:  # Minimum crop size
+            # Get actual crop coordinates
+            x1, y1 = int(rect.left()), int(rect.top())
+            x2, y2 = int(rect.right()), int(rect.bottom())
+
+            # Apply the crop coordinates
+            self._apply_crop_coordinates(x1, y1, x2, y2)
+            self.crop_mode = False
+            self._set_mode("sam_points")  # Return to default mode
