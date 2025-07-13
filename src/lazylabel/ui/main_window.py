@@ -1465,8 +1465,9 @@ class MainWindow(QMainWindow):
     def _load_selected_image_multi_view(self, index, path):
         """Load selected image in multi-view mode starting from the selected file."""
         # Auto-save if enabled and we have current images (not the first load)
-        if (self.multi_view_images[0] and
-            self.control_panel.get_settings().get("auto_save", True)):
+        if self.multi_view_images[0] and self.control_panel.get_settings().get(
+            "auto_save", True
+        ):
             self._save_multi_view_output()
 
         # Load current image and next image directly from file model
@@ -1493,7 +1494,9 @@ class MainWindow(QMainWindow):
             next_index = self.file_model.index(row, 0, parent_index)
             if next_index.isValid():
                 next_path = self.file_model.filePath(next_index)
-                if os.path.isfile(next_path) and self.file_manager.is_image_file(next_path):
+                if os.path.isfile(next_path) and self.file_manager.is_image_file(
+                    next_path
+                ):
                     return next_path
 
         return None
@@ -1521,7 +1524,9 @@ class MainWindow(QMainWindow):
                     self.brightness, self.contrast, self.gamma
                 )
                 self.multi_view_viewers[0].show()
-                self.multi_view_info_labels[0].setText(f"Image 1: {Path(image1_path).name}")
+                self.multi_view_info_labels[0].setText(
+                    f"Image 1: {Path(image1_path).name}"
+                )
             else:
                 self.multi_view_viewers[0].set_photo(QPixmap())
                 self.multi_view_info_labels[0].setText("Image 1: Failed to load")
@@ -1539,7 +1544,9 @@ class MainWindow(QMainWindow):
                     self.brightness, self.contrast, self.gamma
                 )
                 self.multi_view_viewers[1].show()
-                self.multi_view_info_labels[1].setText(f"Image 2: {Path(image2_path).name}")
+                self.multi_view_info_labels[1].setText(
+                    f"Image 2: {Path(image2_path).name}"
+                )
             else:
                 self.multi_view_viewers[1].set_photo(QPixmap())
                 self.multi_view_info_labels[1].setText("Image 2: Failed to load")
@@ -1549,7 +1556,9 @@ class MainWindow(QMainWindow):
 
         # Update batch info without requiring full file scan
         if image1_path and image2_path:
-            self.multi_batch_info.setText(f"Viewing: {Path(image1_path).name} + {Path(image2_path).name}")
+            self.multi_batch_info.setText(
+                f"Viewing: {Path(image1_path).name} + {Path(image2_path).name}"
+            )
         elif image1_path:
             self.multi_batch_info.setText(f"Viewing: {Path(image1_path).name} (single)")
         else:
@@ -1561,7 +1570,10 @@ class MainWindow(QMainWindow):
 
         # Check and update SAM models for both viewers
         for i, image_path in enumerate([image1_path, image2_path]):
-            if i < len(self.multi_view_models) and self._last_multi_view_images[i] != image_path:
+            if (
+                i < len(self.multi_view_models)
+                and self._last_multi_view_images[i] != image_path
+            ):
                 self._last_multi_view_images[i] = image_path
                 self._mark_multi_view_sam_dirty(i)
 
@@ -1580,7 +1592,8 @@ class MainWindow(QMainWindow):
         for _viewer_idx, viewer in enumerate(self.multi_view_viewers):
             # Remove all items except the pixmap from each viewer's scene
             items_to_remove = [
-                item for item in viewer.scene().items()
+                item
+                for item in viewer.scene().items()
                 if item is not viewer._pixmap_item
             ]
             for item in items_to_remove:
@@ -1653,12 +1666,14 @@ class MainWindow(QMainWindow):
             print(f"Error in _load_multi_view_segments: {e}")
             self.segment_manager.segments.clear()
 
-
     def _cancel_multi_view_sam_loading(self):
         """Cancel any ongoing SAM model loading operations to prevent conflicts."""
         # Stop all running SAM update workers safely
         for i in range(len(self.multi_view_update_workers)):
-            if self.multi_view_update_workers[i] and self.multi_view_update_workers[i].isRunning():
+            if (
+                self.multi_view_update_workers[i]
+                and self.multi_view_update_workers[i].isRunning()
+            ):
                 # Request the worker to stop gracefully
                 self.multi_view_update_workers[i].stop()
                 self.multi_view_update_workers[i].quit()
@@ -1674,7 +1689,7 @@ class MainWindow(QMainWindow):
                     pass
 
         # Clean up all timeout timers
-        if hasattr(self, 'multi_view_update_timers'):
+        if hasattr(self, "multi_view_update_timers"):
             for i, timer in list(self.multi_view_update_timers.items()):
                 timer.stop()
                 timer.deleteLater()
@@ -1685,15 +1700,15 @@ class MainWindow(QMainWindow):
             self.multi_view_models_updating[i] = False
 
         # Reset progress tracking to avoid stale state
-        if hasattr(self, '_multi_view_loading_step'):
+        if hasattr(self, "_multi_view_loading_step"):
             self._multi_view_loading_step = 0
-        if hasattr(self, '_multi_view_total_steps'):
+        if hasattr(self, "_multi_view_total_steps"):
             self._multi_view_total_steps = 0
 
     def _safe_cancel_multi_view_sam_loading(self):
         """Safely cancel SAM loading without forcing termination to avoid crashes."""
         # Clean up timeout timers first (these are safe to cancel)
-        if hasattr(self, 'multi_view_update_timers'):
+        if hasattr(self, "multi_view_update_timers"):
             for i, timer in list(self.multi_view_update_timers.items()):
                 timer.stop()
                 timer.deleteLater()
@@ -1702,14 +1717,17 @@ class MainWindow(QMainWindow):
         # For workers, just request stop but don't force cleanup
         # Let them finish gracefully or timeout naturally
         for i in range(len(self.multi_view_update_workers)):
-            if self.multi_view_update_workers[i] and self.multi_view_update_workers[i].isRunning():
+            if (
+                self.multi_view_update_workers[i]
+                and self.multi_view_update_workers[i].isRunning()
+            ):
                 # Request graceful stop but don't wait or force cleanup
                 self.multi_view_update_workers[i].stop()
 
         # Reset progress tracking to clean state
-        if hasattr(self, '_multi_view_loading_step'):
+        if hasattr(self, "_multi_view_loading_step"):
             self._multi_view_loading_step = 0
-        if hasattr(self, '_multi_view_total_steps'):
+        if hasattr(self, "_multi_view_total_steps"):
             self._multi_view_total_steps = 0
 
     def _load_next_multi_view_pair(self):
@@ -1718,8 +1736,9 @@ class MainWindow(QMainWindow):
             return
 
         # Auto-save if enabled and we have current images (not the first load)
-        if (self.multi_view_images[0] and
-            self.control_panel.get_settings().get("auto_save", True)):
+        if self.multi_view_images[0] and self.control_panel.get_settings().get(
+            "auto_save", True
+        ):
             self._save_multi_view_output()
 
         # Get the next image from current position
@@ -1741,12 +1760,15 @@ class MainWindow(QMainWindow):
             return
 
         # Auto-save if enabled and we have current images (not the first load)
-        if (self.multi_view_images[0] and
-            self.control_panel.get_settings().get("auto_save", True)):
+        if self.multi_view_images[0] and self.control_panel.get_settings().get(
+            "auto_save", True
+        ):
             self._save_multi_view_output()
 
         # Get the previous image from current position
-        prev_index = self._get_previous_image_index_from_file_model(self.current_file_index)
+        prev_index = self._get_previous_image_index_from_file_model(
+            self.current_file_index
+        )
         if prev_index:
             prev_path = self.file_model.filePath(prev_index)
             next_path = self._get_next_image_from_file_model(prev_index)
@@ -1771,7 +1793,9 @@ class MainWindow(QMainWindow):
             next_index = self.file_model.index(row, 0, parent_index)
             if next_index.isValid():
                 next_path = self.file_model.filePath(next_index)
-                if os.path.isfile(next_path) and self.file_manager.is_image_file(next_path):
+                if os.path.isfile(next_path) and self.file_manager.is_image_file(
+                    next_path
+                ):
                     return next_index
 
         return None
@@ -1789,7 +1813,9 @@ class MainWindow(QMainWindow):
             prev_index = self.file_model.index(row, 0, parent_index)
             if prev_index.isValid():
                 prev_path = self.file_model.filePath(prev_index)
-                if os.path.isfile(prev_path) and self.file_manager.is_image_file(prev_path):
+                if os.path.isfile(prev_path) and self.file_manager.is_image_file(
+                    prev_path
+                ):
                     return prev_index
 
         return None
@@ -2424,7 +2450,9 @@ class MainWindow(QMainWindow):
                 poly_item.setPen(QPen(Qt.GlobalColor.transparent))
 
                 viewer.scene().addItem(poly_item)
-                self.multi_view_segment_items[viewer_index][segment_index].append(poly_item)
+                self.multi_view_segment_items[viewer_index][segment_index].append(
+                    poly_item
+                )
 
             elif segment_data.get("mask") is not None:
                 # Display as mask
@@ -2440,7 +2468,9 @@ class MainWindow(QMainWindow):
 
                 viewer.scene().addItem(pixmap_item)
                 pixmap_item.setZValue(segment_index + 1)
-                self.multi_view_segment_items[viewer_index][segment_index].append(pixmap_item)
+                self.multi_view_segment_items[viewer_index][segment_index].append(
+                    pixmap_item
+                )
 
     # Event handlers
     def _handle_escape_press(self):
@@ -2747,11 +2777,15 @@ class MainWindow(QMainWindow):
                     # Only save if this segment belongs to this viewer
                     if source_viewer == viewer_index:
                         # Create a clean copy without metadata
-                        clean_segment = {k: v for k, v in segment.items() if not k.startswith("_")}
+                        clean_segment = {
+                            k: v for k, v in segment.items() if not k.startswith("_")
+                        }
                         viewer_segments.append(clean_segment)
                 else:
                     # Fallback for segments without source info - include for all viewers
-                    clean_segment = {k: v for k, v in segment.items() if not k.startswith("_")}
+                    clean_segment = {
+                        k: v for k, v in segment.items() if not k.startswith("_")
+                    }
                     viewer_segments.append(clean_segment)
 
         return viewer_segments
@@ -2805,7 +2839,7 @@ class MainWindow(QMainWindow):
                         )
                         saved_files.append(os.path.basename(npz_path))
                         # Track saved file for highlighting later
-                        if not hasattr(self, '_saved_file_paths'):
+                        if not hasattr(self, "_saved_file_paths"):
                             self._saved_file_paths = []
                         self._saved_file_paths.append(npz_path)
 
@@ -2836,7 +2870,7 @@ class MainWindow(QMainWindow):
                         )
                         saved_files.append(os.path.basename(txt_path))
                         # Track saved file for highlighting later
-                        if not hasattr(self, '_saved_file_paths'):
+                        if not hasattr(self, "_saved_file_paths"):
                             self._saved_file_paths = []
                         self._saved_file_paths.append(txt_path)
 
@@ -2867,7 +2901,7 @@ class MainWindow(QMainWindow):
                 )
 
         # Update file list with green flash and tick marks (like single view mode)
-        if hasattr(self, '_saved_file_paths') and self._saved_file_paths:
+        if hasattr(self, "_saved_file_paths") and self._saved_file_paths:
             for path in self._saved_file_paths:
                 if path:
                     self.file_model.update_cache_for_path(path)
@@ -4797,9 +4831,7 @@ class MainWindow(QMainWindow):
         self.single_view_sam_init_worker.model_initialized.connect(
             self._on_single_view_model_initialized
         )
-        self.single_view_sam_init_worker.error.connect(
-            self._on_single_view_model_error
-        )
+        self.single_view_sam_init_worker.error.connect(self._on_single_view_model_error)
         self.single_view_sam_init_worker.progress.connect(
             self._on_single_view_model_progress
         )
@@ -5873,23 +5905,29 @@ class MainWindow(QMainWindow):
             # Start sequential loading with the first model
             self._start_sequential_multi_view_sam_loading()
         else:
-            self._show_success_notification("AI models ready for prompting", duration=3000)
+            self._show_success_notification(
+                "AI models ready for prompting", duration=3000
+            )
 
     def _start_sequential_multi_view_sam_loading(self):
         """Start loading images into SAM models sequentially to avoid resource conflicts."""
         # Find the next dirty model that needs updating
         for i in range(len(self.multi_view_models)):
-            if (self.multi_view_images[i] and
-                self.multi_view_models[i] and
-                self.multi_view_models_dirty[i] and
-                not self.multi_view_models_updating[i]):
+            if (
+                self.multi_view_images[i]
+                and self.multi_view_models[i]
+                and self.multi_view_models_dirty[i]
+                and not self.multi_view_models_updating[i]
+            ):
                 # Start updating this model
                 self._ensure_multi_view_sam_updated(i)
                 return
 
         # If no more models to update, we're done
         if self._multi_view_loading_step >= self._multi_view_total_steps:
-            self._show_success_notification("AI models ready for prompting", duration=3000)
+            self._show_success_notification(
+                "AI models ready for prompting", duration=3000
+            )
 
     def _on_multi_view_init_error(self, error_message):
         """Handle multi-view model initialization error."""
@@ -6009,7 +6047,7 @@ class MainWindow(QMainWindow):
         timeout_timer.start(30000)  # 30 seconds timeout
 
         # Store timer reference to clean up later
-        if not hasattr(self, 'multi_view_update_timers'):
+        if not hasattr(self, "multi_view_update_timers"):
             self.multi_view_update_timers = {}
         self.multi_view_update_timers[viewer_index] = timeout_timer
 
@@ -6023,20 +6061,27 @@ class MainWindow(QMainWindow):
             self.multi_view_update_workers[viewer_index].quit()
 
             # Give the worker time to finish gracefully
-            if self.multi_view_update_workers[viewer_index].wait(3000):  # Wait up to 3 seconds
+            if self.multi_view_update_workers[viewer_index].wait(
+                3000
+            ):  # Wait up to 3 seconds
                 # Worker finished gracefully
                 self.multi_view_update_workers[viewer_index].deleteLater()
                 self.multi_view_update_workers[viewer_index] = None
             else:
                 # Worker is stuck - don't force terminate to avoid crashes
                 # Just mark it as None and let garbage collection handle it eventually
-                logger.warning(f"Worker for viewer {viewer_index + 1} did not respond to stop request")
+                logger.warning(
+                    f"Worker for viewer {viewer_index + 1} did not respond to stop request"
+                )
                 self.multi_view_update_workers[viewer_index] = None
 
         # Clean up timer
         timer.stop()
         timer.deleteLater()
-        if hasattr(self, 'multi_view_update_timers') and viewer_index in self.multi_view_update_timers:
+        if (
+            hasattr(self, "multi_view_update_timers")
+            and viewer_index in self.multi_view_update_timers
+        ):
             del self.multi_view_update_timers[viewer_index]
 
         # Mark as not updating and not dirty to prevent retry loops
@@ -6062,7 +6107,10 @@ class MainWindow(QMainWindow):
         self.multi_view_models_updating[viewer_index] = False
 
         # Clean up timeout timer
-        if hasattr(self, 'multi_view_update_timers') and viewer_index in self.multi_view_update_timers:
+        if (
+            hasattr(self, "multi_view_update_timers")
+            and viewer_index in self.multi_view_update_timers
+        ):
             self.multi_view_update_timers[viewer_index].stop()
             self.multi_view_update_timers[viewer_index].deleteLater()
             del self.multi_view_update_timers[viewer_index]
@@ -6092,7 +6140,10 @@ class MainWindow(QMainWindow):
         self.multi_view_models_dirty[viewer_index] = False  # Prevent retry loops
 
         # Clean up timeout timer
-        if hasattr(self, 'multi_view_update_timers') and viewer_index in self.multi_view_update_timers:
+        if (
+            hasattr(self, "multi_view_update_timers")
+            and viewer_index in self.multi_view_update_timers
+        ):
             self.multi_view_update_timers[viewer_index].stop()
             self.multi_view_update_timers[viewer_index].deleteLater()
             del self.multi_view_update_timers[viewer_index]
@@ -6255,7 +6306,9 @@ class MainWindow(QMainWindow):
                     for segment in self.segment_manager.segments:
                         segment.pop("_source_viewer", None)
 
-                    print(f"Loaded {len(self.segment_manager.segments)} segments for single-view")
+                    print(
+                        f"Loaded {len(self.segment_manager.segments)} segments for single-view"
+                    )
 
                     # Update UI lists
                     self._update_all_lists()

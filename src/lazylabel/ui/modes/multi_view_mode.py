@@ -50,7 +50,8 @@ class MultiViewModeHandler(BaseModeHandler):
         if self.main_window.multi_view_models_updating[viewer_index]:
             # This specific model is still loading - user should wait
             self.main_window._show_notification(
-                f"AI model for viewer {viewer_index + 1} is still loading...", duration=2000
+                f"AI model for viewer {viewer_index + 1} is still loading...",
+                duration=2000,
             )
             return
 
@@ -59,8 +60,10 @@ class MultiViewModeHandler(BaseModeHandler):
             # This model exists but doesn't have the current image loaded yet
 
             # Check if any loading session is already in progress to avoid conflicts
-            any_loading = any(self.main_window.multi_view_models_updating[i]
-                            for i in range(len(self.main_window.multi_view_models_updating)))
+            any_loading = any(
+                self.main_window.multi_view_models_updating[i]
+                for i in range(len(self.main_window.multi_view_models_updating))
+            )
             if any_loading:
                 self.main_window._show_notification(
                     "AI models are already loading, please wait...", duration=2000
@@ -68,11 +71,16 @@ class MultiViewModeHandler(BaseModeHandler):
                 return
 
             self.main_window._show_notification(
-                f"Loading image into AI model for viewer {viewer_index + 1}...", duration=0
+                f"Loading image into AI model for viewer {viewer_index + 1}...",
+                duration=0,
             )
             # Start sequential loading but only show progress for models that need updating
-            dirty_count = sum(1 for i in range(len(self.main_window.multi_view_models))
-                            if self.main_window.multi_view_models_dirty[i] and self.main_window.multi_view_images[i])
+            dirty_count = sum(
+                1
+                for i in range(len(self.main_window.multi_view_models))
+                if self.main_window.multi_view_models_dirty[i]
+                and self.main_window.multi_view_images[i]
+            )
             if dirty_count > 0:
                 # Initialize progress tracking for lazy loading
                 self.main_window._multi_view_loading_step = 0
