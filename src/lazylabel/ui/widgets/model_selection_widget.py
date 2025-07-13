@@ -1,24 +1,119 @@
 """Model selection widget."""
 
-from PyQt6.QtCore import pyqtSignal
+from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtWidgets import (
-    QComboBox,
     QGroupBox,
     QHBoxLayout,
     QLabel,
+    QMenu,
     QPushButton,
+    QToolButton,
     QVBoxLayout,
     QWidget,
 )
 
 
-class CustomComboBox(QComboBox):
-    """Custom ComboBox that closes immediately on item click."""
+class CustomDropdown(QToolButton):
+    """Custom dropdown using QToolButton + QMenu for reliable closing behavior."""
+
+    activated = pyqtSignal(int)
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        # Connect activated signal directly to hidePopup for immediate closure
-        self.activated.connect(self.hidePopup)
+        self.setText("Default (vit_h)")
+        self.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        self.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextOnly)
+
+        # Create the menu
+        self.menu = QMenu(self)
+        self.setMenu(self.menu)
+
+        # Store items for access
+        self.items = []
+
+        # Style to match app theme (dark theme with consistent colors)
+        self.setStyleSheet("""
+            QToolButton {
+                background-color: rgba(40, 40, 40, 0.8);
+                border: 1px solid rgba(80, 80, 80, 0.6);
+                border-radius: 6px;
+                color: #E0E0E0;
+                font-size: 10px;
+                padding: 5px 8px;
+                text-align: left;
+                min-width: 150px;
+            }
+            QToolButton:hover {
+                background-color: rgba(60, 60, 60, 0.8);
+                border-color: rgba(90, 120, 150, 0.8);
+            }
+            QToolButton:pressed {
+                background-color: rgba(70, 100, 130, 0.8);
+            }
+            QToolButton::menu-indicator {
+                subcontrol-origin: padding;
+                subcontrol-position: top right;
+                width: 16px;
+                border-left: 1px solid rgba(80, 80, 80, 0.6);
+            }
+        """)
+
+    def addItem(self, text, data=None):
+        """Add an item to the dropdown."""
+        action = self.menu.addAction(text)
+        action.setData(data)
+        self.items.append((text, data))
+
+        # Connect to selection handler
+        action.triggered.connect(
+            lambda checked, idx=len(self.items) - 1: self._on_item_selected(idx)
+        )
+
+        # Set first item as current
+        if len(self.items) == 1:
+            self.setText(text)
+
+    def clear(self):
+        """Clear all items."""
+        self.menu.clear()
+        self.items.clear()
+
+    def _on_item_selected(self, index):
+        """Handle item selection."""
+        if 0 <= index < len(self.items):
+            text, data = self.items[index]
+            self.setText(text)
+            self.activated.emit(index)
+
+    def itemText(self, index):
+        """Get text of item at index."""
+        if 0 <= index < len(self.items):
+            return self.items[index][0]
+        return ""
+
+    def itemData(self, index):
+        """Get data of item at index."""
+        if 0 <= index < len(self.items):
+            return self.items[index][1]
+        return None
+
+    def currentIndex(self):
+        """Get current selected index."""
+        current_text = self.text()
+        for i, (text, _) in enumerate(self.items):
+            if text == current_text:
+                return i
+        return 0
+
+    def setCurrentIndex(self, index):
+        """Set current selected index."""
+        if 0 <= index < len(self.items):
+            text, _ = self.items[index]
+            self.setText(text)
+
+    def blockSignals(self, block):
+        """Block/unblock signals."""
+        super().blockSignals(block)
 
 
 class ModelSelectionWidget(QWidget):
@@ -56,7 +151,7 @@ class ModelSelectionWidget(QWidget):
 
         # Model combo
         layout.addWidget(QLabel("Available Models:"))
-        self.model_combo = CustomComboBox()
+        self.model_combo = CustomDropdown()
         self.model_combo.setToolTip("Select a .pth model file to use")
         self.model_combo.addItem("Default (vit_h)")
         layout.addWidget(self.model_combo)
