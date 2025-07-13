@@ -15,19 +15,10 @@ from PyQt6.QtWidgets import (
 class CustomComboBox(QComboBox):
     """Custom ComboBox that closes immediately on item click."""
 
-    def showPopup(self):
-        """Override to track when popup is shown."""
-        super().showPopup()
-        # Get the popup view and connect to its clicked signal
-        view = self.view()
-        if view and not hasattr(view, "_click_connected"):
-            view.clicked.connect(self._on_item_clicked)
-            view._click_connected = True
-
-    def _on_item_clicked(self, index):
-        """Handle item click to close popup immediately."""
-        self.setCurrentIndex(index.row())
-        self.hidePopup()
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        # Connect activated signal directly to hidePopup for immediate closure
+        self.activated.connect(self.hidePopup)
 
 
 class ModelSelectionWidget(QWidget):
@@ -85,27 +76,16 @@ class ModelSelectionWidget(QWidget):
         """Connect internal signals."""
         self.btn_browse.clicked.connect(self.browse_requested)
         self.btn_refresh.clicked.connect(self.refresh_requested)
-        # Use currentIndexChanged signal which fires when selection changes
-        self.model_combo.currentIndexChanged.connect(self._on_model_changed)
-        # Also connect to highlighted to close dropdown on mouse hover selection
-        self.model_combo.highlighted.connect(self._on_model_highlighted)
+        # Use activated signal which fires when user actually selects an item
+        self.model_combo.activated.connect(self._on_model_activated)
 
-    def _on_model_changed(self, index):
-        """Handle model selection when index changes."""
-        if index >= 0:  # Valid index
-            # Get the selected text
-            selected_text = self.model_combo.itemText(index)
+    def _on_model_activated(self, index):
+        """Handle model selection when user clicks on an item."""
+        # Get the selected text
+        selected_text = self.model_combo.itemText(index)
 
-            # Emit the signal immediately
-            self.model_selected.emit(selected_text)
-
-            # Force close dropdown immediately
-            self.model_combo.hidePopup()
-
-    def _on_model_highlighted(self, index):
-        """Handle when a model is highlighted/hovered."""
-        # This helps with closing dropdown when user clicks on highlighted item
-        pass
+        # Emit the signal immediately
+        self.model_selected.emit(selected_text)
 
     def populate_models(self, models: list[tuple[str, str]]):
         """Populate the models combo box.
