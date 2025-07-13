@@ -177,6 +177,51 @@ class SAMUpdateWorker(QThread):
                 self.error.emit(str(e))
 
 
+class SingleViewSAMInitWorker(QThread):
+    """Worker thread for initializing single-view SAM model in background."""
+
+    model_initialized = pyqtSignal(object)  # model_instance
+    finished = pyqtSignal()
+    error = pyqtSignal(str)
+    progress = pyqtSignal(str)  # status message
+
+    def __init__(self, model_manager, default_model_type):
+        super().__init__()
+        self.model_manager = model_manager
+        self.default_model_type = default_model_type
+        self._should_stop = False
+
+    def stop(self):
+        """Stop the worker gracefully."""
+        self._should_stop = True
+
+    def run(self):
+        """Initialize SAM model in background."""
+        try:
+            if self._should_stop:
+                return
+
+            self.progress.emit("Initializing AI model...")
+
+            # Initialize the default model
+            sam_model = self.model_manager.initialize_default_model(
+                self.default_model_type
+            )
+
+            if self._should_stop:
+                return
+
+            if sam_model and sam_model.is_loaded:
+                self.model_initialized.emit(sam_model)
+                self.progress.emit("AI model initialized")
+            else:
+                self.error.emit("Model failed to load")
+
+        except Exception as e:
+            if not self._should_stop:
+                self.error.emit(f"Failed to load AI model: {str(e)}")
+
+
 class MultiViewSAMInitWorker(QThread):
     """Worker thread for initializing multi-view SAM models in background."""
 
@@ -647,6 +692,10 @@ class MainWindow(QMainWindow):
         self.sam_scale_factor = (
             1.0  # Track current SAM scale factor for coordinate transformation
         )
+
+        # Single-view SAM model initialization threading
+        self.single_view_sam_init_worker = None
+        self.single_view_model_initializing = False
 
         # Smart caching for SAM embeddings to avoid redundant processing
         self.sam_embedding_cache = {}  # Cache SAM embeddings by content hash
@@ -1528,7 +1577,7 @@ class MainWindow(QMainWindow):
         self.segment_manager.clear()
 
         # Clear multi-view specific scene items
-        for viewer_idx, viewer in enumerate(self.multi_view_viewers):
+        for _viewer_idx, viewer in enumerate(self.multi_view_viewers):
             # Remove all items except the pixmap from each viewer's scene
             items_to_remove = [
                 item for item in viewer.scene().items()
@@ -1545,117 +1594,65 @@ class MainWindow(QMainWindow):
         self._update_all_lists()
 
     def _load_multi_view_segments(self, image1_path, image2_path):
-        """Load existing segments for both viewers and merge them into multi-view format."""
+        """Load existing segments for both viewers with proper origin tracking."""
         try:
-            viewer0_segments = []
-            viewer1_segments = []
+            all_segments = []
 
-            # Load segments for viewer 0
+            # Load segments for viewer 0 (image1)
             if image1_path:
                 try:
                     self.file_manager.load_class_aliases(image1_path)
                     self.file_manager.load_existing_mask(image1_path)
+                    # Tag segments with their source viewer
                     viewer0_segments = list(self.segment_manager.segments)
+                    for segment in viewer0_segments:
+                        if "views" not in segment:  # Only tag legacy segments
+                            segment["_source_viewer"] = 0
+                    all_segments.extend(viewer0_segments)
                     self.segment_manager.segments.clear()
+                    print(f"Loaded {len(viewer0_segments)} segments for viewer 0")
                 except Exception as e:
                     print(f"Error loading segments for viewer 0: {e}")
 
-            # Load segments for viewer 1
+            # Load segments for viewer 1 (image2)
             if image2_path:
                 try:
                     self.file_manager.load_class_aliases(image2_path)
                     self.file_manager.load_existing_mask(image2_path)
+                    # Tag segments with their source viewer
                     viewer1_segments = list(self.segment_manager.segments)
+                    for segment in viewer1_segments:
+                        if "views" not in segment:  # Only tag legacy segments
+                            segment["_source_viewer"] = 1
+                    all_segments.extend(viewer1_segments)
                     self.segment_manager.segments.clear()
+                    print(f"Loaded {len(viewer1_segments)} segments for viewer 1")
                 except Exception as e:
                     print(f"Error loading segments for viewer 1: {e}")
 
-            # Only proceed if we have segments to merge
-            if viewer0_segments or viewer1_segments:
-                # Merge segments intelligently
-                merged_segments = self._merge_multi_view_segments(
-                    viewer0_segments, viewer1_segments
-                )
+            # Set all segments at once
+            self.segment_manager.segments = all_segments
+            print(f"Total segments loaded: {len(all_segments)}")
 
-                self.segment_manager.segments = merged_segments
+            # Update all UI components to reflect the loaded segments
+            if all_segments:
+                # Update segment list, class list, and display segments
+                self._update_all_lists()
 
-                # Display the loaded segments
-                self._display_all_segments()
+                # Force a repaint of the viewers to ensure visibility
+                for viewer in self.multi_view_viewers:
+                    viewer.scene().update()
+                    viewer.update()
+
+                print(f"UI updated with {len(all_segments)} segments")
+            else:
+                # Even if no segments, update the lists to clear them
+                self._update_all_lists()
 
         except Exception as e:
             print(f"Error in _load_multi_view_segments: {e}")
-            # Ensure segments are cleared on error to prevent inconsistent state
             self.segment_manager.segments.clear()
 
-    def _merge_multi_view_segments(self, viewer0_segs, viewer1_segs):
-        """Merge segments from two viewers into multi-view format."""
-        merged = []
-        used_viewer1_indices = set()
-
-        # Convert viewer 0 segments
-        for seg0 in viewer0_segs:
-            multi_seg = {
-                "type": seg0["type"],
-                "class_id": seg0["class_id"],
-                "views": {
-                    0: {
-                        "mask": seg0["mask"],
-                        "vertices": seg0.get("vertices"),
-                        "type": seg0["type"],
-                        "class_id": seg0["class_id"]
-                    }
-                }
-            }
-
-            # Try to find matching segment in viewer 1
-            # (same class_id and similar mask overlap)
-            match_idx = self._find_matching_segment(
-                seg0, viewer1_segs, used_viewer1_indices
-            )
-
-            if match_idx is not None:
-                seg1 = viewer1_segs[match_idx]
-                multi_seg["views"][1] = {
-                    "mask": seg1["mask"],
-                    "vertices": seg1.get("vertices"),
-                    "type": seg1["type"],
-                    "class_id": seg1["class_id"]
-                }
-                used_viewer1_indices.add(match_idx)
-
-            merged.append(multi_seg)
-
-        # Add remaining viewer 1 segments that weren't matched
-        for i, seg1 in enumerate(viewer1_segs):
-            if i not in used_viewer1_indices:
-                merged.append({
-                    "type": seg1["type"],
-                    "class_id": seg1["class_id"],
-                    "views": {
-                        1: {
-                            "mask": seg1["mask"],
-                            "vertices": seg1.get("vertices"),
-                            "type": seg1["type"],
-                            "class_id": seg1["class_id"]
-                        }
-                    }
-                })
-
-        return merged
-
-    def _find_matching_segment(self, seg0, viewer1_segs, used_indices):
-        """Find matching segment based on class_id and mask overlap."""
-        for i, seg1 in enumerate(viewer1_segs):
-            if i in used_indices:
-                continue
-
-            # First check if class_id matches
-            if seg0["class_id"] == seg1["class_id"]:
-                # For AI/Polygon segments created in multi-view,
-                # they likely have the same class_id
-                return i
-
-        return None
 
     def _cancel_multi_view_sam_loading(self):
         """Cancel any ongoing SAM model loading operations to prevent conflicts."""
@@ -2332,11 +2329,19 @@ class MainWindow(QMainWindow):
                             i, segment, viewer_idx, base_color
                         )
             else:
-                # Legacy single-view format - display in all viewers
-                for viewer_idx in range(len(self.multi_view_viewers)):
+                # Legacy single-view format - display only in source viewer
+                source_viewer = segment.get("_source_viewer")
+                if source_viewer is not None:
+                    # Display only in the viewer it was loaded from
                     self._display_segment_in_multi_view_viewer(
-                        i, segment, viewer_idx, base_color
+                        i, segment, source_viewer, base_color
                     )
+                else:
+                    # Fallback for segments without source info - display in all viewers
+                    for viewer_idx in range(len(self.multi_view_viewers)):
+                        self._display_segment_in_multi_view_viewer(
+                            i, segment, viewer_idx, base_color
+                        )
 
     def _display_segment_in_multi_view_viewer(
         self, segment_index, segment, viewer_index, base_color
@@ -2400,6 +2405,42 @@ class MainWindow(QMainWindow):
             self.multi_view_segment_items[viewer_index][segment_index].append(
                 pixmap_item
             )
+
+        elif segment_type == "Loaded":
+            # Handle legacy loaded segments - they could be either polygon or mask
+            if segment_data.get("vertices"):
+                # Display as polygon
+                qpoints = [QPointF(p[0], p[1]) for p in segment_data["vertices"]]
+                poly_item = HoverablePolygonItem(QPolygonF(qpoints))
+
+                default_brush = QBrush(
+                    QColor(base_color.red(), base_color.green(), base_color.blue(), 70)
+                )
+                hover_brush = QBrush(
+                    QColor(base_color.red(), base_color.green(), base_color.blue(), 170)
+                )
+                poly_item.set_brushes(default_brush, hover_brush)
+                poly_item.set_segment_info(segment_index, self)
+                poly_item.setPen(QPen(Qt.GlobalColor.transparent))
+
+                viewer.scene().addItem(poly_item)
+                self.multi_view_segment_items[viewer_index][segment_index].append(poly_item)
+
+            elif segment_data.get("mask") is not None:
+                # Display as mask
+                default_pixmap = mask_to_pixmap(
+                    segment_data["mask"], base_color.getRgb()[:3], alpha=70
+                )
+                hover_pixmap = mask_to_pixmap(
+                    segment_data["mask"], base_color.getRgb()[:3], alpha=170
+                )
+                pixmap_item = HoverablePixmapItem()
+                pixmap_item.set_pixmaps(default_pixmap, hover_pixmap)
+                pixmap_item.set_segment_info(segment_index, self)
+
+                viewer.scene().addItem(pixmap_item)
+                pixmap_item.setZValue(segment_index + 1)
+                self.multi_view_segment_items[viewer_index][segment_index].append(pixmap_item)
 
     # Event handlers
     def _handle_escape_press(self):
@@ -2696,10 +2737,22 @@ class MainWindow(QMainWindow):
                     }
                     # Copy view-specific data to the top level
                     viewer_segment.update(segment["views"][viewer_index])
+                    # Remove internal metadata before saving
+                    viewer_segment.pop("_source_viewer", None)
                     viewer_segments.append(viewer_segment)
             else:
-                # Legacy single-view segment - applies to all viewers
-                viewer_segments.append(segment)
+                # Legacy single-view segment - check source viewer
+                source_viewer = segment.get("_source_viewer")
+                if source_viewer is not None:
+                    # Only save if this segment belongs to this viewer
+                    if source_viewer == viewer_index:
+                        # Create a clean copy without metadata
+                        clean_segment = {k: v for k, v in segment.items() if not k.startswith("_")}
+                        viewer_segments.append(clean_segment)
+                else:
+                    # Fallback for segments without source info - include for all viewers
+                    clean_segment = {k: v for k, v in segment.items() if not k.startswith("_")}
+                    viewer_segments.append(clean_segment)
 
         return viewer_segments
 
@@ -3992,6 +4045,11 @@ class MainWindow(QMainWindow):
 
     def _add_point(self, pos, positive, update_segmentation=True):
         """Add a point for SAM segmentation."""
+        # Check if model is being initialized
+        if self.single_view_model_initializing:
+            self._show_notification("AI model is initializing, please wait...", 2000)
+            return False
+
         # RACE CONDITION FIX: Block clicks during SAM updates
         if self.sam_is_updating:
             self._show_warning_notification(
@@ -4001,6 +4059,11 @@ class MainWindow(QMainWindow):
 
         # Ensure SAM is updated before using it
         self._ensure_sam_updated()
+
+        # Check again if model initialization started
+        if self.single_view_model_initializing:
+            self._show_notification("AI model is initializing, please wait...", 2000)
+            return False
 
         # Wait for SAM to finish updating if it started
         if self.sam_is_updating:
@@ -4607,31 +4670,11 @@ class MainWindow(QMainWindow):
         if not self.current_image_path:
             return
 
-        # If no model is available, try to load the default model
+        # If no model is available, start async loading
         if not self.model_manager.is_model_available():
-            logger.info("No model loaded, attempting to load default model...")
-            try:
-                sam_model = self.model_manager.initialize_default_model(
-                    self.settings.default_model_type
-                )
-                if sam_model and sam_model.is_loaded:
-                    device_text = str(sam_model.device).upper()
-                    logger.info(f"AI model loaded successfully on {device_text}")
-                    self.status_bar.set_permanent_message(f"Device: {device_text}")
-                    self._enable_sam_functionality(True)
-                else:
-                    raise Exception("Model failed to load")
-            except Exception as e:
-                error_msg = f"Failed to load AI model: {str(e)}"
-                logger.error(error_msg)
-                logger.error(
-                    "Please check:\n1. Model file exists in models directory\n2. You have sufficient GPU/CPU memory\n3. PyTorch is properly installed"
-                )
-                self._show_error_notification(error_msg)
-                self._enable_sam_functionality(False)
-                # Switch to polygon mode
-                self.set_polygon_mode()
-                return
+            logger.info("No model loaded, starting async model initialization...")
+            self._start_single_view_model_initialization()
+            return
 
         # Get current image (with modifications if operate_on_view is enabled)
         current_image = None
@@ -4673,7 +4716,7 @@ class MainWindow(QMainWindow):
 
         # Show status message
         if hasattr(self, "status_bar"):
-            self.status_bar.show_message("Loading image view into AI model...", 0)
+            self.status_bar.show_message("Loading image into AI model...", 0)
 
         # Mark as updating
         self.sam_is_updating = True
@@ -4698,9 +4741,8 @@ class MainWindow(QMainWindow):
         """Handle completion of SAM update in background thread."""
         self.sam_is_updating = False
 
-        # Clear status message
-        if hasattr(self, "status_bar"):
-            self.status_bar.clear_message()
+        # Show completion message consistent with multi-view
+        self._show_success_notification("AI model ready for prompting", duration=3000)
 
         # Update scale factor from worker thread
         if self.sam_worker_thread:
@@ -4728,6 +4770,77 @@ class MainWindow(QMainWindow):
         if self.sam_worker_thread:
             self.sam_worker_thread.deleteLater()
             self.sam_worker_thread = None
+
+    def _start_single_view_model_initialization(self):
+        """Start async model initialization for single-view mode."""
+        if self.single_view_model_initializing:
+            return
+
+        # Clean up any existing worker
+        if self.single_view_sam_init_worker:
+            self.single_view_sam_init_worker.stop()
+            self.single_view_sam_init_worker.deleteLater()
+            self.single_view_sam_init_worker = None
+
+        # Show status message
+        self._show_notification("Initializing AI model...", 0)
+
+        # Mark as initializing
+        self.single_view_model_initializing = True
+
+        # Create and start worker
+        self.single_view_sam_init_worker = SingleViewSAMInitWorker(
+            self.model_manager, self.settings.default_model_type
+        )
+
+        # Connect signals
+        self.single_view_sam_init_worker.model_initialized.connect(
+            self._on_single_view_model_initialized
+        )
+        self.single_view_sam_init_worker.error.connect(
+            self._on_single_view_model_error
+        )
+        self.single_view_sam_init_worker.progress.connect(
+            self._on_single_view_model_progress
+        )
+
+        # Start the worker
+        self.single_view_sam_init_worker.start()
+
+    def _on_single_view_model_initialized(self, sam_model):
+        """Handle successful model initialization."""
+        self.single_view_model_initializing = False
+
+        # Update status
+        device_text = str(sam_model.device).upper()
+        self.status_bar.set_permanent_message(f"Device: {device_text}")
+        self._enable_sam_functionality(True)
+
+        # Clean up worker
+        if self.single_view_sam_init_worker:
+            self.single_view_sam_init_worker.deleteLater()
+            self.single_view_sam_init_worker = None
+
+        # Automatically start image loading now that model is ready
+        self._ensure_sam_updated()
+
+    def _on_single_view_model_error(self, error_message):
+        """Handle model initialization error."""
+        self.single_view_model_initializing = False
+
+        # Show error and switch to polygon mode
+        self._show_error_notification(f"AI model failed to load: {error_message}")
+        self._enable_sam_functionality(False)
+        self.set_polygon_mode()
+
+        # Clean up worker
+        if self.single_view_sam_init_worker:
+            self.single_view_sam_init_worker.deleteLater()
+            self.single_view_sam_init_worker = None
+
+    def _on_single_view_model_progress(self, message):
+        """Handle model initialization progress updates."""
+        self._show_notification(message, 0)
 
     def _get_current_modified_image(self):
         """Get the current image with all modifications applied (excluding crop for SAM)."""
@@ -6127,6 +6240,29 @@ class MainWindow(QMainWindow):
                 self.viewer.set_image_adjustments(
                     self.brightness, self.contrast, self.gamma
                 )
+
+                # Load existing segments for the current image
+                print(f"Loading segments for single-view: {self.current_image_path}")
+                try:
+                    # Clear any leftover multi-view segments first
+                    self.segment_manager.clear()
+
+                    # Load segments and class aliases for the current image
+                    self.file_manager.load_class_aliases(self.current_image_path)
+                    self.file_manager.load_existing_mask(self.current_image_path)
+
+                    # Remove any multi-view tags that shouldn't be in single-view
+                    for segment in self.segment_manager.segments:
+                        segment.pop("_source_viewer", None)
+
+                    print(f"Loaded {len(self.segment_manager.segments)} segments for single-view")
+
+                    # Update UI lists
+                    self._update_all_lists()
+
+                except Exception as e:
+                    print(f"Error loading segments for single-view: {e}")
+
                 # Redisplay segments for single view
                 if hasattr(self, "single_view_mode_handler"):
                     self.single_view_mode_handler.display_all_segments()
