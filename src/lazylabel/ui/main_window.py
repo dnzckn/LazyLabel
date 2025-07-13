@@ -185,10 +185,11 @@ class SingleViewSAMInitWorker(QThread):
     error = pyqtSignal(str)
     progress = pyqtSignal(str)  # status message
 
-    def __init__(self, model_manager, default_model_type):
+    def __init__(self, model_manager, default_model_type, custom_model_path=None):
         super().__init__()
         self.model_manager = model_manager
         self.default_model_type = default_model_type
+        self.custom_model_path = custom_model_path
         self._should_stop = False
 
     def stop(self):
@@ -201,12 +202,22 @@ class SingleViewSAMInitWorker(QThread):
             if self._should_stop:
                 return
 
-            self.progress.emit("Initializing AI model...")
-
-            # Initialize the default model
-            sam_model = self.model_manager.initialize_default_model(
-                self.default_model_type
-            )
+            if self.custom_model_path:
+                # Load custom model
+                model_name = os.path.basename(self.custom_model_path)
+                self.progress.emit(f"Loading {model_name}...")
+                
+                success = self.model_manager.load_custom_model(self.custom_model_path)
+                if not success:
+                    raise Exception(f"Failed to load custom model: {model_name}")
+                    
+                sam_model = self.model_manager.sam_model
+            else:
+                # Initialize the default model
+                self.progress.emit("Initializing AI model...")
+                sam_model = self.model_manager.initialize_default_model(
+                    self.default_model_type
+                )
 
             if self._should_stop:
                 return
@@ -575,6 +586,9 @@ class MainWindow(QMainWindow):
         self.segment_manager = SegmentManager()
         self.model_manager = ModelManager(self.paths)
         self.file_manager = FileManager(self.segment_manager)
+        
+        # Lazy model loading state
+        self.pending_custom_model_path = None  # Path to custom model for lazy loading
 
         # Multi-view mode state
         self.view_mode = "single"  # "single" or "multi"
@@ -1235,9 +1249,13 @@ class MainWindow(QMainWindow):
             self._show_warning_notification("No models folder selected.")
 
     def _load_selected_model(self, model_text):
-        """Load the selected model."""
+        """Set the selected model for lazy loading (don't load immediately)."""
         if not model_text or model_text == "Default (vit_h)":
+            # Clear any pending custom model and use default
+            self.pending_custom_model_path = None
             self.control_panel.set_current_model("Current: Default SAM Model")
+            # Clear existing model to free memory until needed
+            self._reset_sam_state_for_model_switch()
             return
 
         model_path = self.control_panel.model_widget.get_selected_model_path()
@@ -1245,35 +1263,15 @@ class MainWindow(QMainWindow):
             self._show_error_notification("Selected model file not found.")
             return
 
-        self.control_panel.set_current_model("Loading model...")
-        QApplication.processEvents()
-
-        # CRITICAL FIX: Reset SAM state before switching models
+        # Store the model path for lazy loading BEFORE clearing state
+        self.pending_custom_model_path = model_path
+        
+        # Clear existing model to free memory and mark for lazy loading
         self._reset_sam_state_for_model_switch()
-
-        try:
-            success = self.model_manager.load_custom_model(model_path)
-            if success:
-                # Re-enable SAM functionality if model loaded successfully
-                self._enable_sam_functionality(True)
-                if self.model_manager.sam_model:
-                    device_text = str(self.model_manager.sam_model.device).upper()
-                    self.status_bar.set_permanent_message(f"Device: {device_text}")
-
-                # Mark SAM as dirty to force update with new model
-                self._mark_sam_dirty()
-            else:
-                self.control_panel.set_current_model("Current: Default SAM Model")
-                self._show_error_notification(
-                    "Failed to load selected model. Using default."
-                )
-                self.control_panel.model_widget.reset_to_default()
-                self._enable_sam_functionality(False)
-        except Exception as e:
-            self.control_panel.set_current_model("Current: Default SAM Model")
-            self._show_error_notification(f"Error loading model: {str(e)}")
-            self.control_panel.model_widget.reset_to_default()
-            self._enable_sam_functionality(False)
+        
+        # Update UI to show which model is selected (but not loaded yet)
+        model_name = os.path.basename(model_path)
+        self.control_panel.set_current_model(f"Selected: {model_name}")
 
     # Adjustment methods
     def _set_annotation_size(self, value):
@@ -1369,13 +1367,13 @@ class MainWindow(QMainWindow):
         # Update the main window's settings object with the latest from the widget
         self.settings.update(**self.control_panel.settings_widget.get_settings())
 
-        # Only update SAM if operate_on_view setting actually changed
+        # Only mark SAM as dirty if operate_on_view setting actually changed (lazy loading)
         if (
             old_operate_on_view != self.settings.operate_on_view
             and self.current_image_path
         ):
-            # When operate on view setting changes, we need to force SAM model to update
-            # with proper scale factor recalculation via the worker thread
+            # When operate on view setting changes, mark SAM as dirty but don't load immediately
+            # Only load when user actually tries to use AI mode (lazy loading)
             logger.debug(
                 f"Operate on view changed from {old_operate_on_view} to {self.settings.operate_on_view}"
             )
@@ -1383,13 +1381,21 @@ class MainWindow(QMainWindow):
             self.sam_is_dirty = True
             self.sam_scale_factor = 1.0  # Reset to default
             self.current_sam_hash = None  # Invalidate cache
-            # Use the worker thread to properly calculate scale factor
-            self._ensure_sam_updated()
+            # Don't call _ensure_sam_updated() here - let it load lazily when user uses AI mode
 
     def _handle_image_adjustment_changed(self):
         """Handle changes in image adjustments (brightness, contrast, gamma)."""
-        if self.settings.operate_on_view and self.current_image_path:
-            self._update_sam_model_image()
+        if self.settings.operate_on_view:
+            # Handle single view mode - mark as dirty for lazy loading
+            if self.current_image_path:
+                self._mark_sam_dirty()
+            
+            # Handle multi view mode - mark models as dirty so they get updated with adjusted images
+            elif self.view_mode == "multi" and hasattr(self, "multi_view_models"):
+                for i in range(len(self.multi_view_models)):
+                    if (self.multi_view_images[i] and 
+                        self.multi_view_models[i] is not None):
+                        self._mark_multi_view_sam_dirty(i)
 
     # File management methods
     def _open_folder_dialog(self):
@@ -4754,9 +4760,12 @@ class MainWindow(QMainWindow):
         if not self.current_image_path:
             return
 
-        # If no model is available, start async loading
-        if not self.model_manager.is_model_available():
-            logger.info("No model loaded, starting async model initialization...")
+        # Check if we need to load a different model
+        model_available = self.model_manager.is_model_available()
+        pending_model = getattr(self, 'pending_custom_model_path', None)
+        
+        # If no model is available OR we have a pending custom model, start async loading
+        if not model_available or pending_model:
             self._start_single_view_model_initialization()
             return
 
@@ -4872,9 +4881,11 @@ class MainWindow(QMainWindow):
         # Mark as initializing
         self.single_view_model_initializing = True
 
-        # Create and start worker
+        # Create and start worker (use pending custom model if available)
         self.single_view_sam_init_worker = SingleViewSAMInitWorker(
-            self.model_manager, self.settings.default_model_type
+            self.model_manager, 
+            self.settings.default_model_type,
+            self.pending_custom_model_path
         )
 
         # Connect signals
@@ -4897,6 +4908,15 @@ class MainWindow(QMainWindow):
         device_text = str(sam_model.device).upper()
         self.status_bar.set_permanent_message(f"Device: {device_text}")
         self._enable_sam_functionality(True)
+        
+        # Update UI to show which model is loaded
+        if self.pending_custom_model_path:
+            model_name = os.path.basename(self.pending_custom_model_path)
+            self.control_panel.set_current_model(f"Loaded: {model_name}")
+            # Clear the pending path since it's now loaded
+            self.pending_custom_model_path = None
+        else:
+            self.control_panel.set_current_model("Current: Default SAM Model")
 
         # Clean up worker
         if self.single_view_sam_init_worker:
@@ -6461,15 +6481,27 @@ class MainWindow(QMainWindow):
 
         viewer = self.multi_view_viewers[viewer_index]
 
-        # Get the original image from the viewer
+        # Use the adjusted pixmap (includes brightness/contrast/gamma) like single-view mode
         if (
-            not hasattr(viewer, "_original_image_bgr")
-            or viewer._original_image_bgr is None
+            hasattr(viewer, "_adjusted_pixmap") 
+            and viewer._adjusted_pixmap is not None
+            and not viewer._adjusted_pixmap.isNull()
         ):
+            # Convert adjusted pixmap to numpy array (same as single-view operate_on_view)
+            qimage = viewer._adjusted_pixmap.toImage()
+            ptr = qimage.constBits()
+            ptr.setsize(qimage.bytesPerLine() * qimage.height())
+            image_np = np.array(ptr).reshape(qimage.height(), qimage.width(), 4)
+            # Convert from BGRA to BGR for consistency with _original_image_bgr
+            result_image = cv2.cvtColor(image_np, cv2.COLOR_BGRA2BGR)
+        elif (
+            hasattr(viewer, "_original_image_bgr")
+            and viewer._original_image_bgr is not None
+        ):
+            # Fallback to original image if no adjusted pixmap
+            result_image = viewer._original_image_bgr.copy()
+        else:
             return None
-
-        # Start with the original BGR image
-        result_image = viewer._original_image_bgr.copy()
 
         # Apply channel thresholding if active (same logic as single-view)
         threshold_widget = self.control_panel.get_channel_threshold_widget()
@@ -6477,9 +6509,9 @@ class MainWindow(QMainWindow):
             result_image = threshold_widget.apply_thresholding(result_image)
 
         # Apply FFT processing if active (same logic as single-view)
-        fft_widget = self.control_panel.get_fft_widget()
-        if fft_widget and fft_widget.has_active_filter():
-            result_image = fft_widget.apply_filter(result_image)
+        fft_widget = self.control_panel.get_fft_threshold_widget()
+        if fft_widget and fft_widget.is_active():
+            result_image = fft_widget.apply_fft_thresholding(result_image)
 
         return result_image
 
