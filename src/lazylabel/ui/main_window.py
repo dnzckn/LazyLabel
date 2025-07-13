@@ -19,7 +19,6 @@ from PyQt6.QtGui import (
     QShortcut,
 )
 from PyQt6.QtWidgets import (
-    QApplication,
     QDialog,
     QFileDialog,
     QGraphicsEllipseItem,
@@ -206,11 +205,11 @@ class SingleViewSAMInitWorker(QThread):
                 # Load custom model
                 model_name = os.path.basename(self.custom_model_path)
                 self.progress.emit(f"Loading {model_name}...")
-                
+
                 success = self.model_manager.load_custom_model(self.custom_model_path)
                 if not success:
                     raise Exception(f"Failed to load custom model: {model_name}")
-                    
+
                 sam_model = self.model_manager.sam_model
             else:
                 # Initialize the default model
@@ -586,7 +585,7 @@ class MainWindow(QMainWindow):
         self.segment_manager = SegmentManager()
         self.model_manager = ModelManager(self.paths)
         self.file_manager = FileManager(self.segment_manager)
-        
+
         # Lazy model loading state
         self.pending_custom_model_path = None  # Path to custom model for lazy loading
 
@@ -601,7 +600,6 @@ class MainWindow(QMainWindow):
             0: {},
             1: {},
         }  # Visual items for segments per viewer
-        self.current_multi_batch_start = 0  # Starting index for current 2-image batch
 
         # Multi-view worker threads
         self.multi_view_init_worker = None  # Worker for initializing models
@@ -619,7 +617,7 @@ class MainWindow(QMainWindow):
             None,
         ]  # Track last loaded images to avoid unnecessary updates
 
-        # Background image discovery for instant multi-view loading
+        # Background image discovery for global image list
         self.image_discovery_worker = None
         self.cached_image_paths = []  # Cached list of image file paths (not image data)
         self.images_discovery_in_progress = False
@@ -869,20 +867,7 @@ class MainWindow(QMainWindow):
         controls_widget = QWidget()
         controls_layout = QHBoxLayout(controls_widget)
 
-        # Navigation for multi-view
-        self.multi_prev_button = QPushButton("◄ Previous 2")
-        self.multi_prev_button.clicked.connect(self._load_previous_multi_batch)
-        controls_layout.addWidget(self.multi_prev_button)
-
-        self.multi_next_button = QPushButton("Next 2 ►")
-        self.multi_next_button.clicked.connect(self._load_next_multi_batch)
-        controls_layout.addWidget(self.multi_next_button)
-
         controls_layout.addStretch()
-
-        # Batch info
-        self.multi_batch_info = QLabel("Batch: 0-0 of 0")
-        controls_layout.addWidget(self.multi_batch_info)
 
         layout.addWidget(controls_widget)
 
@@ -1265,10 +1250,10 @@ class MainWindow(QMainWindow):
 
         # Store the model path for lazy loading BEFORE clearing state
         self.pending_custom_model_path = model_path
-        
+
         # Clear existing model to free memory and mark for lazy loading
         self._reset_sam_state_for_model_switch()
-        
+
         # Update UI to show which model is selected (but not loaded yet)
         model_name = os.path.basename(model_path)
         self.control_panel.set_current_model(f"Selected: {model_name}")
@@ -1389,12 +1374,14 @@ class MainWindow(QMainWindow):
             # Handle single view mode - mark as dirty for lazy loading
             if self.current_image_path:
                 self._mark_sam_dirty()
-            
+
             # Handle multi view mode - mark models as dirty so they get updated with adjusted images
             elif self.view_mode == "multi" and hasattr(self, "multi_view_models"):
                 for i in range(len(self.multi_view_models)):
-                    if (self.multi_view_images[i] and 
-                        self.multi_view_models[i] is not None):
+                    if (
+                        self.multi_view_images[i]
+                        and self.multi_view_models[i] is not None
+                    ):
                         self._mark_multi_view_sam_dirty(i)
 
     # File management methods
@@ -1403,7 +1390,7 @@ class MainWindow(QMainWindow):
         folder_path = QFileDialog.getExistingDirectory(self, "Select Image Folder")
         if folder_path:
             self.right_panel.set_folder(folder_path, self.file_model)
-            # Start background image discovery for instant multi-view loading
+            # Start background image discovery for global image list
             self._start_background_image_discovery()
         self.viewer.setFocus()
 
@@ -1559,16 +1546,6 @@ class MainWindow(QMainWindow):
         else:
             self.multi_view_viewers[1].set_photo(QPixmap())
             self.multi_view_info_labels[1].setText("Image 2: No image")
-
-        # Update batch info without requiring full file scan
-        if image1_path and image2_path:
-            self.multi_batch_info.setText(
-                f"Viewing: {Path(image1_path).name} + {Path(image2_path).name}"
-            )
-        elif image1_path:
-            self.multi_batch_info.setText(f"Viewing: {Path(image1_path).name} (single)")
-        else:
-            self.multi_batch_info.setText("No images loaded")
 
         # Update SAM models if needed - mark dirty if image actually changed
         if not hasattr(self, "_last_multi_view_images"):
@@ -1891,9 +1868,9 @@ class MainWindow(QMainWindow):
 
     def _load_next_image(self):
         """Load next image in the file list."""
-        # Handle multi-view mode by loading next pair
+        # Handle multi-view mode by loading next batch of 2
         if hasattr(self, "view_mode") and self.view_mode == "multi":
-            self._load_next_multi_view_pair()
+            self._load_next_multi_batch()
             return
 
         if not self.current_file_index.isValid():
@@ -1910,9 +1887,9 @@ class MainWindow(QMainWindow):
 
     def _load_previous_image(self):
         """Load previous image in the file list."""
-        # Handle multi-view mode by loading previous pair
+        # Handle multi-view mode by loading previous batch of 2
         if hasattr(self, "view_mode") and self.view_mode == "multi":
-            self._load_previous_multi_view_pair()
+            self._load_previous_multi_batch()
             return
 
         if not self.current_file_index.isValid():
@@ -2950,6 +2927,8 @@ class MainWindow(QMainWindow):
                                 )
                     if deleted_files:
                         saved_files.extend([f"Deleted: {f}" for f in deleted_files])
+                        # Update UI immediately when files are deleted
+                        self._update_all_lists()
 
             except Exception as e:
                 self._show_error_notification(
@@ -3010,6 +2989,8 @@ class MainWindow(QMainWindow):
                 self._show_notification(
                     f"Deleted: {', '.join(os.path.basename(f) for f in deleted_files)}"
                 )
+                # Update UI immediately when files are deleted
+                self._update_all_lists()
             else:
                 self._show_warning_notification("No segments to save.")
             return
@@ -4762,8 +4743,8 @@ class MainWindow(QMainWindow):
 
         # Check if we need to load a different model
         model_available = self.model_manager.is_model_available()
-        pending_model = getattr(self, 'pending_custom_model_path', None)
-        
+        pending_model = getattr(self, "pending_custom_model_path", None)
+
         # If no model is available OR we have a pending custom model, start async loading
         if not model_available or pending_model:
             self._start_single_view_model_initialization()
@@ -4883,9 +4864,9 @@ class MainWindow(QMainWindow):
 
         # Create and start worker (use pending custom model if available)
         self.single_view_sam_init_worker = SingleViewSAMInitWorker(
-            self.model_manager, 
+            self.model_manager,
             self.settings.default_model_type,
-            self.pending_custom_model_path
+            self.pending_custom_model_path,
         )
 
         # Connect signals
@@ -4908,7 +4889,7 @@ class MainWindow(QMainWindow):
         device_text = str(sam_model.device).upper()
         self.status_bar.set_permanent_message(f"Device: {device_text}")
         self._enable_sam_functionality(True)
-        
+
         # Update UI to show which model is loaded
         if self.pending_custom_model_path:
             model_name = os.path.basename(self.pending_custom_model_path)
@@ -6099,9 +6080,8 @@ class MainWindow(QMainWindow):
             # Don't initialize models immediately - use lazy loading when AI mode is used
             self._setup_multi_view_mouse_events()
 
-            # Only load multi-batch if images are already cached to avoid file scanning
-            if self.cached_image_paths:
-                self._load_current_multi_batch()
+            # Load current image pair from file model position
+            self._load_current_multi_view_pair_from_file_model()
 
     def _initialize_multi_view_models(self):
         """Initialize 2 SAM model instances for multi-view mode using threading."""
@@ -6483,7 +6463,7 @@ class MainWindow(QMainWindow):
 
         # Use the adjusted pixmap (includes brightness/contrast/gamma) like single-view mode
         if (
-            hasattr(viewer, "_adjusted_pixmap") 
+            hasattr(viewer, "_adjusted_pixmap")
             and viewer._adjusted_pixmap is not None
             and not viewer._adjusted_pixmap.isNull()
         ):
@@ -6544,9 +6524,6 @@ class MainWindow(QMainWindow):
         # Mark SAM as dirty to trigger lazy loading when needed
         self.sam_is_dirty = True
 
-        # Reset batch index
-        self.current_multi_batch_start = 0
-
         # Clear multi-view viewers
         for viewer in self.multi_view_viewers:
             viewer.set_photo(QPixmap())
@@ -6594,10 +6571,6 @@ class MainWindow(QMainWindow):
         if hasattr(self.control_panel, "border_crop_widget"):
             self.control_panel.border_crop_widget.enable_thresholding()
 
-        # Update batch info
-        if hasattr(self, "multi_batch_info"):
-            self.multi_batch_info.setText("Batch: No images loaded")
-
     def _toggle_multi_view_link(self, image_index):
         """Toggle the link status for a specific image in multi-view."""
         if 0 <= image_index < 2:
@@ -6615,19 +6588,6 @@ class MainWindow(QMainWindow):
                 button.setText("↪")
                 button.setToolTip("Link this image to mirroring")
                 button.setStyleSheet("background-color: #ffcccc;")
-
-    def _get_all_images(self):
-        """Get list of all image file paths (cached for performance)."""
-        # Return cached list immediately for instant multi-view loading
-        if self.cached_image_paths:
-            return self.cached_image_paths
-
-        # If no cache and no discovery in progress, start background discovery
-        if not self.images_discovery_in_progress:
-            self._start_background_image_discovery()
-
-        # Return empty list to prevent blocking - images will load when discovery completes
-        return []
 
     def _start_background_image_discovery(self):
         """Start background discovery of all image files."""
@@ -6672,7 +6632,7 @@ class MainWindow(QMainWindow):
 
         # If we're in multi-view mode and no images are loaded, try loading now
         if self.view_mode == "multi" and not any(self.multi_view_images):
-            self._load_current_multi_batch()
+            self._load_current_multi_view_pair_from_file_model()
 
         # Don't show notification - image discovery happens in background
 
@@ -6692,191 +6652,215 @@ class MainWindow(QMainWindow):
             self.image_discovery_worker.deleteLater()
             self.image_discovery_worker = None
 
-    def _load_current_multi_batch(self):
-        """Load the current batch of 2 images for multi-view."""
-        all_images = self._get_all_images()
-
-        if not all_images:
-            self._show_warning_notification("No images found")
-            # Clear all viewers and return to single view
-            for i in range(2):
-                self.multi_view_images[i] = None
-                self.multi_view_viewers[i].set_photo(QPixmap())
-                self.multi_view_info_labels[i].setText(
-                    f"Image {i + 1}: No images available"
-                )
-                self.multi_view_viewers[i].hide()
-
-            if hasattr(self, "multi_batch_info"):
-                self.multi_batch_info.setText("Batch: No images available")
+    def _load_current_multi_view_pair_from_file_model(self):
+        """Load current image pair from cached list position without additional scanning."""
+        if not self.current_file_index.isValid() or not self.cached_image_paths:
             return
 
-        # Get 2 images starting from current batch start
-        batch_images = all_images[
-            self.current_multi_batch_start : self.current_multi_batch_start + 2
-        ]
+        # Get current image path
+        current_path = self.file_model.filePath(self.current_file_index)
+        if not (
+            os.path.isfile(current_path)
+            and self.file_manager.is_image_file(current_path)
+        ):
+            return
 
-        # Pad with None if less than 2 images
-        while len(batch_images) < 2:
-            batch_images.append(None)
+        # Find current image position in cached list
+        try:
+            current_index = self.cached_image_paths.index(current_path)
+        except ValueError:
+            # Current image not in cached list, use file model approach as fallback
+            next_path = self._get_next_image_from_file_model(self.current_file_index)
+            self._load_multi_view_pair(current_path, next_path)
+            return
 
-        # Load images into multi-view
-        for i, image_path in enumerate(batch_images):
-            self.multi_view_images[i] = image_path
+        # Get next image from cached list
+        next_path = None
+        if current_index + 1 < len(self.cached_image_paths):
+            next_path = self.cached_image_paths[current_index + 1]
 
-            if image_path:
-                # Load image
-                pixmap = QPixmap(image_path)
-                if not pixmap.isNull():
-                    self.multi_view_viewers[i].set_photo(pixmap)
-                    # Apply current image adjustments to the newly loaded image
-                    self.multi_view_viewers[i].set_image_adjustments(
-                        self.brightness, self.contrast, self.gamma
-                    )
-                    self.multi_view_info_labels[i].setText(
-                        f"Image {i + 1}: {os.path.basename(image_path)}"
-                    )
-                    self.multi_view_viewers[i].show()
-
-                    # Update SAM model if needed - but only mark dirty if image actually changed
-                    if i < len(self.multi_view_models):
-                        # Check if this is a different image than what's currently loaded
-                        if not hasattr(self, "_last_multi_view_images"):
-                            self._last_multi_view_images = [None, None]
-
-                        if self._last_multi_view_images[i] != image_path:
-                            self._last_multi_view_images[i] = image_path
-                            self._mark_multi_view_sam_dirty(i)
-                else:
-                    self.multi_view_info_labels[i].setText(
-                        f"Image {i + 1}: Failed to load"
-                    )
-                    self.multi_view_viewers[i].hide()
-            else:
-                # Clear viewer
-                self.multi_view_viewers[i].set_photo(QPixmap())
-                self.multi_view_info_labels[i].setText(f"Image {i + 1}: No image")
-                self.multi_view_viewers[i].hide()
-
-        # Reset segments for new batch
-        self.multi_view_segments = [[], []]
-
-        # Update channel threshold widget for the first valid image
-        self._update_multi_view_channel_threshold_for_images()
-
-        # Clear cached images to force reload when processing is applied
-        if hasattr(self, "_cached_multi_view_original_images"):
-            self._cached_multi_view_original_images = None
-
-        # Apply any active channel thresholding to the newly loaded images
-        self._apply_multi_view_image_processing_fast()
-
-        # Disable thresholding in multi-view mode to handle mixed BW/RGB images
-        if hasattr(self.control_panel, "border_crop_widget"):
-            self.control_panel.border_crop_widget.disable_thresholding_for_multi_view()
-
-        # Update batch info
-        total_images = len(all_images)
-        batch_end = min(self.current_multi_batch_start + 2, total_images)
-        self.multi_batch_info.setText(
-            f"Batch: {self.current_multi_batch_start + 1}-{batch_end} of {total_images}"
-        )
-
-        # Update button states
-        self.multi_prev_button.setEnabled(self.current_multi_batch_start > 0)
-        self.multi_next_button.setEnabled(
-            self.current_multi_batch_start + 2 < total_images
-        )
+        # Load the pair (second image can be None)
+        self._load_multi_view_pair(current_path, next_path)
 
     def _load_next_multi_batch(self):
-        """Load the next batch of 2 images."""
-        # Use efficient file model navigation instead of full folder scan
+        """Load the next batch of 2 images using cached list."""
         if not self.current_file_index.isValid():
             return
 
-        # Find the next 2 images from current position
-        next_images = self._get_next_multi_images_from_file_model(
-            self.current_file_index, 2
-        )
-        if len(next_images) >= 2:
+        # Auto-save if enabled and we have current images (not the first load)
+        if self.multi_view_images[0] and self.control_panel.get_settings().get(
+            "auto_save", True
+        ):
+            self._save_multi_view_output()
+
+        # If cached list isn't ready, fall back to file model navigation
+        if not self.cached_image_paths:
+            self._load_next_multi_batch_fallback()
+            return
+
+        # Get current image path
+        current_path = self.file_model.filePath(self.current_file_index)
+
+        # Find current position in cached list
+        try:
+            current_index = self.cached_image_paths.index(current_path)
+        except ValueError:
+            # Current image not in cached list, use fallback
+            self._load_next_multi_batch_fallback()
+            return
+
+        # Skip 2 positions ahead in cached list
+        target_index = current_index + 2
+
+        if target_index < len(self.cached_image_paths):
+            first_image = self.cached_image_paths[target_index]
+            second_image = None
+            if target_index + 1 < len(self.cached_image_paths):
+                second_image = self.cached_image_paths[target_index + 1]
+
             # Load the new pair
-            self._load_multi_view_pair(next_images[0], next_images[1])
+            self._load_multi_view_pair(first_image, second_image)
 
             # Update current file index to the first image of the new batch
+            # Find the file model index for this path
             parent_index = self.current_file_index.parent()
             for row in range(self.file_model.rowCount(parent_index)):
                 index = self.file_model.index(row, 0, parent_index)
-                if self.file_model.filePath(index) == next_images[0]:
+                if self.file_model.filePath(index) == first_image:
                     self.current_file_index = index
                     self.right_panel.file_tree.setCurrentIndex(index)
                     break
-
-            # Update button states and batch info
-            self._update_multi_view_navigation_state()
 
     def _load_previous_multi_batch(self):
-        """Load the previous batch of 2 images."""
-        # Use efficient file model navigation instead of full folder scan
+        """Load the previous batch of 2 images using cached list."""
         if not self.current_file_index.isValid():
             return
 
-        # Find the previous 2 images from current position
-        prev_images = self._get_previous_multi_images_from_file_model(
-            self.current_file_index, 2
-        )
-        if len(prev_images) >= 2:
+        # Auto-save if enabled and we have current images (not the first load)
+        if self.multi_view_images[0] and self.control_panel.get_settings().get(
+            "auto_save", True
+        ):
+            self._save_multi_view_output()
+
+        # If cached list isn't ready, fall back to file model navigation
+        if not self.cached_image_paths:
+            self._load_previous_multi_batch_fallback()
+            return
+
+        # Get current image path
+        current_path = self.file_model.filePath(self.current_file_index)
+
+        # Find current position in cached list
+        try:
+            current_index = self.cached_image_paths.index(current_path)
+        except ValueError:
+            # Current image not in cached list, use fallback
+            self._load_previous_multi_batch_fallback()
+            return
+
+        # Skip 2 positions back in cached list
+        target_index = current_index - 2
+        if target_index < 0:
+            return  # Can't go back further
+
+        first_image = self.cached_image_paths[target_index]
+        second_image = None
+        if target_index + 1 < len(self.cached_image_paths):
+            second_image = self.cached_image_paths[target_index + 1]
+
+        # Load the new pair
+        self._load_multi_view_pair(first_image, second_image)
+
+        # Update current file index to the first image of the new batch
+        # Find the file model index for this path
+        parent_index = self.current_file_index.parent()
+        for row in range(self.file_model.rowCount(parent_index)):
+            index = self.file_model.index(row, 0, parent_index)
+            if self.file_model.filePath(index) == first_image:
+                self.current_file_index = index
+                self.right_panel.file_tree.setCurrentIndex(index)
+                break
+
+    def _load_next_multi_batch_fallback(self):
+        """Fallback navigation using file model when cached list isn't available."""
+        # Auto-save if enabled and we have current images (not the first load)
+        if self.multi_view_images[0] and self.control_panel.get_settings().get(
+            "auto_save", True
+        ):
+            self._save_multi_view_output()
+
+        parent_index = self.current_file_index.parent()
+        current_row = self.current_file_index.row()
+
+        # Skip 2 positions ahead and get 2 images from there
+        target_row = current_row + 2
+        images = []
+
+        for row in range(target_row, self.file_model.rowCount(parent_index)):
+            if len(images) >= 2:
+                break
+            index = self.file_model.index(row, 0, parent_index)
+            if index.isValid():
+                path = self.file_model.filePath(index)
+                if os.path.isfile(path) and self.file_manager.is_image_file(path):
+                    images.append(path)
+
+        if len(images) >= 2:
             # Load the new pair
-            self._load_multi_view_pair(prev_images[0], prev_images[1])
+            self._load_multi_view_pair(images[0], images[1])
 
             # Update current file index to the first image of the new batch
-            parent_index = self.current_file_index.parent()
             for row in range(self.file_model.rowCount(parent_index)):
                 index = self.file_model.index(row, 0, parent_index)
-                if self.file_model.filePath(index) == prev_images[0]:
+                if self.file_model.filePath(index) == images[0]:
                     self.current_file_index = index
                     self.right_panel.file_tree.setCurrentIndex(index)
                     break
 
-            # Update button states and batch info
-            self._update_multi_view_navigation_state()
+    def _load_previous_multi_batch_fallback(self):
+        """Fallback navigation using file model when cached list isn't available."""
+        # Auto-save if enabled and we have current images (not the first load)
+        if self.multi_view_images[0] and self.control_panel.get_settings().get(
+            "auto_save", True
+        ):
+            self._save_multi_view_output()
+
+        parent_index = self.current_file_index.parent()
+        current_row = self.current_file_index.row()
+
+        # Skip 2 positions back and get 2 consecutive images from there
+        target_row = current_row - 2
+        if target_row < 0:
+            return  # Can't go back further
+
+        images = []
+
+        # Get 2 consecutive images starting from target_row going forward
+        for row in range(target_row, self.file_model.rowCount(parent_index)):
+            if len(images) >= 2:
+                break
+            index = self.file_model.index(row, 0, parent_index)
+            if index.isValid():
+                path = self.file_model.filePath(index)
+                if os.path.isfile(path) and self.file_manager.is_image_file(path):
+                    images.append(path)
+
+        if len(images) >= 2:
+            # Load the new pair
+            self._load_multi_view_pair(images[0], images[1])
+
+            # Update current file index to the first image of the new batch
+            for row in range(self.file_model.rowCount(parent_index)):
+                index = self.file_model.index(row, 0, parent_index)
+                if self.file_model.filePath(index) == images[0]:
+                    self.current_file_index = index
+                    self.right_panel.file_tree.setCurrentIndex(index)
+                    break
 
     def _update_multi_view_navigation_state(self):
         """Update multi-view navigation button states and batch info without folder scan."""
         if not self.current_file_index.isValid():
             return
-
-        # Check if there are previous images available (efficient check)
-        prev_available = (
-            len(
-                self._get_previous_multi_images_from_file_model(
-                    self.current_file_index, 1
-                )
-            )
-            > 0
-        )
-        self.multi_prev_button.setEnabled(prev_available)
-
-        # Check if there are next images available (efficient check)
-        next_available = (
-            len(self._get_next_multi_images_from_file_model(self.current_file_index, 2))
-            >= 2
-        )
-        self.multi_next_button.setEnabled(next_available)
-
-        # Update batch info to show current image names instead of indices
-        if (
-            hasattr(self, "multi_view_images")
-            and self.multi_view_images[0]
-            and self.multi_view_images[1]
-        ):
-            img1_name = os.path.basename(self.multi_view_images[0])
-            img2_name = os.path.basename(self.multi_view_images[1])
-            self.multi_batch_info.setText(f"Batch: {img1_name} + {img2_name}")
-        elif hasattr(self, "multi_view_images") and self.multi_view_images[0]:
-            img1_name = os.path.basename(self.multi_view_images[0])
-            self.multi_batch_info.setText(f"Batch: {img1_name} (single)")
-        else:
-            self.multi_batch_info.setText("Batch: No images loaded")
 
     def _update_file_tree_selection_for_multi_view(self):
         """Update file tree selection to reflect the first image in the current multi-view batch."""

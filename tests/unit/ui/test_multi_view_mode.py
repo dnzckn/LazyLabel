@@ -86,7 +86,7 @@ def test_multi_view_initialization(main_window_with_multi_view):
     assert window.multi_view_images == [None, None]
     assert window.multi_view_linked == [True, True]
     assert window.multi_view_segments == [[], []]
-    assert window.current_multi_batch_start == 0
+    # Note: current_multi_batch_start removed - now uses relative navigation
 
 
 def test_multi_view_mode_switch_without_folder(main_window_with_multi_view):
@@ -234,109 +234,79 @@ def test_multi_view_models_cleanup(main_window_with_multi_view):
 
 
 def test_multi_view_batch_loading(main_window_with_multi_view):
-    """Test loading a batch of images in multi-view mode."""
+    """Test loading a pair of images from cached list position."""
     window = main_window_with_multi_view
 
-    # Mock dependencies
-    window._get_all_images = MagicMock(
-        return_value=[
-            "/path/to/image1.jpg",
-            "/path/to/image2.jpg",
-            "/path/to/image3.jpg",
-            "/path/to/image4.jpg",
-        ]
+    # Mock cached image list (the global list from folder scan)
+    window.cached_image_paths = [
+        "/path/to/image1.jpg",
+        "/path/to/image2.jpg",
+        "/path/to/image3.jpg",
+        "/path/to/image4.jpg",
+    ]
+
+    # Mock file model approach
+    window.current_file_index = MagicMock()
+    window.current_file_index.isValid.return_value = True
+    window.file_model = MagicMock()
+    window.file_model.filePath.return_value = "/path/to/image1.jpg"
+    window._load_multi_view_pair = MagicMock()
+    window.file_manager = MagicMock()
+    window.file_manager.is_image_file.return_value = True
+
+    # Mock os.path.isfile
+    with patch("os.path.isfile", return_value=True):
+        # Test relative loading from cached list
+        window._load_current_multi_view_pair_from_file_model()
+
+    # Verify it calls the pair loading function with correct paths from cached list
+    window._load_multi_view_pair.assert_called_once_with(
+        "/path/to/image1.jpg", "/path/to/image2.jpg"
     )
-    window.multi_view_models = [MagicMock(), MagicMock()]
-    window.multi_view_viewers = [MagicMock(), MagicMock()]
-    window.multi_view_info_labels = [MagicMock(), MagicMock()]
-    window.multi_batch_info = MagicMock()
-    window.multi_prev_button = MagicMock()
-    window.multi_next_button = MagicMock()
-
-    # Mock control panel
-    window.control_panel = MagicMock()
-    window.control_panel.border_crop_widget = MagicMock()
-    window.control_panel.border_crop_widget.disable_thresholding_for_multi_view = (
-        MagicMock()
-    )
-
-    # Mock QPixmap creation
-    with patch("lazylabel.ui.main_window.QPixmap") as mock_pixmap_class:
-        mock_pixmap = MagicMock()
-        mock_pixmap.isNull.return_value = False
-        mock_pixmap_class.return_value = mock_pixmap
-
-        # Mock the method that tries to convert pixmap to numpy array
-        window._update_multi_view_channel_threshold_for_images = MagicMock()
-        window._apply_multi_view_image_processing_fast = MagicMock()
-
-        # Test batch loading
-        window._load_current_multi_batch()
-
-    # Verify batch loading
-    assert window.multi_view_images[0] == "/path/to/image1.jpg"
-    assert window.multi_view_images[1] == "/path/to/image2.jpg"
-    assert window.multi_view_segments == [[], []]
-
-    # Verify UI updates
-    window.multi_batch_info.setText.assert_called_once()
-    window.multi_prev_button.setEnabled.assert_called_once_with(False)
-    window.multi_next_button.setEnabled.assert_called_once_with(True)
 
 
 def test_multi_view_batch_navigation(main_window_with_multi_view):
     """Test navigation between multi-view batches."""
     window = main_window_with_multi_view
 
-    # Mock the new efficient navigation methods
-    window._get_next_multi_images_from_file_model = MagicMock(
-        return_value=["/path/to/image3.jpg", "/path/to/image4.jpg"]
-    )
-    window._get_previous_multi_images_from_file_model = MagicMock(
-        return_value=["/path/to/image1.jpg", "/path/to/image2.jpg"]
-    )
-    window._load_multi_view_pair = MagicMock()
-    window._update_multi_view_navigation_state = MagicMock()
+    # Mock cached image list (the global list from folder scan)
+    window.cached_image_paths = [
+        "/path/to/image1.jpg",
+        "/path/to/image2.jpg",
+        "/path/to/image3.jpg",
+        "/path/to/image4.jpg",
+        "/path/to/image5.jpg",
+        "/path/to/image6.jpg",
+    ]
 
-    # Mock file model and current index
+    # Mock the navigation implementation
+    window._load_multi_view_pair = MagicMock()
     window.current_file_index = MagicMock()
     window.current_file_index.isValid.return_value = True
-    window.current_file_index.parent.return_value = MagicMock()
     window.file_model = MagicMock()
-    window.file_model.rowCount.return_value = 4
-    window.file_model.index.return_value = MagicMock()
-    window.file_model.filePath.return_value = "/path/to/image3.jpg"
     window.right_panel = MagicMock()
     window.right_panel.file_tree = MagicMock()
 
-    # Test next batch navigation
+    # Test next batch navigation (from image1 -> image3+4)
+    window.file_model.filePath.return_value = "/path/to/image1.jpg"
     window._load_next_multi_batch()
 
-    # Verify the new efficient navigation was called (check call count and args)
-    assert window._get_next_multi_images_from_file_model.call_count == 1
-    call_args = window._get_next_multi_images_from_file_model.call_args
-    assert call_args[0][1] == 2  # Second argument should be 2
+    # Verify _load_multi_view_pair was called with images at index 2 and 3
     window._load_multi_view_pair.assert_called_once_with(
         "/path/to/image3.jpg", "/path/to/image4.jpg"
     )
-    window._update_multi_view_navigation_state.assert_called_once()
 
     # Reset mocks for previous batch test
-    window._get_previous_multi_images_from_file_model.reset_mock()
     window._load_multi_view_pair.reset_mock()
-    window._update_multi_view_navigation_state.reset_mock()
 
-    # Test previous batch navigation
+    # Test previous batch navigation (from image5 -> image3+4)
+    window.file_model.filePath.return_value = "/path/to/image5.jpg"
     window._load_previous_multi_batch()
 
-    # Verify the new efficient navigation was called (check call count and args)
-    assert window._get_previous_multi_images_from_file_model.call_count == 1
-    call_args = window._get_previous_multi_images_from_file_model.call_args
-    assert call_args[0][1] == 2  # Second argument should be 2
+    # Verify _load_multi_view_pair was called with images at index 2 and 3
     window._load_multi_view_pair.assert_called_once_with(
-        "/path/to/image1.jpg", "/path/to/image2.jpg"
+        "/path/to/image3.jpg", "/path/to/image4.jpg"
     )
-    window._update_multi_view_navigation_state.assert_called_once()
 
 
 def test_multi_view_ai_click_handling(main_window_with_multi_view):
@@ -544,25 +514,19 @@ def test_multi_view_mouse_event_delegation(main_window_with_multi_view):
 
 
 def test_multi_view_empty_batch_handling(main_window_with_multi_view):
-    """Test handling of empty batch in multi-view mode."""
+    """Test handling when no valid file index exists."""
     window = main_window_with_multi_view
 
-    # Mock dependencies
-    window._get_all_images = MagicMock(return_value=[])
-    window._show_warning_notification = MagicMock()
-    window.multi_view_viewers = [MagicMock(), MagicMock()]
-    window.multi_view_info_labels = [MagicMock(), MagicMock()]
-    window.multi_batch_info = MagicMock()
+    # Mock invalid file index
+    window.current_file_index = MagicMock()
+    window.current_file_index.isValid.return_value = False
+    window._load_multi_view_pair = MagicMock()
 
-    # Test empty batch handling
-    window._load_current_multi_batch()
+    # Test empty handling - should return early and not call pair loading
+    window._load_current_multi_view_pair_from_file_model()
 
-    # Verify warning was shown
-    window._show_warning_notification.assert_called_once()
-
-    # Verify viewers were hidden
-    for viewer in window.multi_view_viewers:
-        viewer.hide.assert_called_once()
+    # Verify no pair loading was attempted
+    window._load_multi_view_pair.assert_not_called()
 
 
 def test_multi_view_segment_selection_with_mouse_click(main_window_with_multi_view):
