@@ -316,7 +316,9 @@ def test_multi_view_batch_navigation(main_window_with_multi_view):
     assert window._get_next_multi_images_from_file_model.call_count == 1
     call_args = window._get_next_multi_images_from_file_model.call_args
     assert call_args[0][1] == 2  # Second argument should be 2
-    window._load_multi_view_pair.assert_called_once_with("/path/to/image3.jpg", "/path/to/image4.jpg")
+    window._load_multi_view_pair.assert_called_once_with(
+        "/path/to/image3.jpg", "/path/to/image4.jpg"
+    )
     window._update_multi_view_navigation_state.assert_called_once()
 
     # Reset mocks for previous batch test
@@ -331,7 +333,9 @@ def test_multi_view_batch_navigation(main_window_with_multi_view):
     assert window._get_previous_multi_images_from_file_model.call_count == 1
     call_args = window._get_previous_multi_images_from_file_model.call_args
     assert call_args[0][1] == 2  # Second argument should be 2
-    window._load_multi_view_pair.assert_called_once_with("/path/to/image1.jpg", "/path/to/image2.jpg")
+    window._load_multi_view_pair.assert_called_once_with(
+        "/path/to/image1.jpg", "/path/to/image2.jpg"
+    )
     window._update_multi_view_navigation_state.assert_called_once()
 
 
