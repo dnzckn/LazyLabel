@@ -657,6 +657,7 @@ class MainWindow(QMainWindow):
         self.ai_bbox_preview_rect = None
 
         self._setup_ui()
+        logger.info("Step 5/8: Discovering available models...")
         self._setup_model_manager()  # Just setup manager, don't load model
         self._setup_connections()
         self._setup_shortcuts()
@@ -832,7 +833,10 @@ class MainWindow(QMainWindow):
         self.control_panel.populate_models(models)
 
         if models:
-            logger.info(f"Step 6/8: Found {len(models)} model(s) in models directory")
+            if len(models) == 1:
+                logger.info("Step 6/8: Found 1 model in models directory")
+            else:
+                logger.info(f"Step 6/8: Found {len(models)} models in models directory")
         else:
             logger.info("Step 6/8: No models found in models directory")
 
@@ -1411,29 +1415,387 @@ class MainWindow(QMainWindow):
 
     def _load_selected_image_multi_view(self, index, path):
         """Load selected image in multi-view mode starting from the selected file."""
-        # Get all images in the directory
-        all_images = self._get_all_images()
+        # Auto-save if enabled and we have current images (not the first load)
+        if (self.multi_view_images[0] and
+            self.control_panel.get_settings().get("auto_save", True)):
+            self._save_multi_view_output()
 
-        if not all_images:
-            self._show_warning_notification("No images found")
-            return
+        # Load current image and next image directly from file model
+        current_image = path
+        next_image = self._get_next_image_from_file_model(index)
 
-        # Find the index of the selected image in the all_images list
-        try:
-            selected_index = all_images.index(path)
-        except ValueError:
-            self._show_warning_notification("Selected image not found in directory")
-            return
-
-        # Set the multi-view batch start to the selected image
-        self.current_multi_batch_start = selected_index
-
-        # Load the batch starting from the selected image
-        self._load_current_multi_batch()
+        # Load the two images into multi-view
+        self._load_multi_view_pair(current_image, next_image)
 
         # Set the current file index for consistency
         self.current_file_index = index
         self.right_panel.file_tree.setCurrentIndex(index)
+
+    def _get_next_image_from_file_model(self, current_index):
+        """Get the next image file from the file model without scanning all files."""
+        if not self.file_model or not current_index.isValid():
+            return None
+
+        parent_index = current_index.parent()
+        current_row = current_index.row()
+
+        # Look for the next image file starting from the next row
+        for row in range(current_row + 1, self.file_model.rowCount(parent_index)):
+            next_index = self.file_model.index(row, 0, parent_index)
+            if next_index.isValid():
+                next_path = self.file_model.filePath(next_index)
+                if os.path.isfile(next_path) and self.file_manager.is_image_file(next_path):
+                    return next_path
+
+        return None
+
+    def _load_multi_view_pair(self, image1_path, image2_path):
+        """Load a pair of images into multi-view without relying on batch system."""
+        # Only cancel ongoing SAM loading if it's safe to do so
+        # Avoid canceling if workers are in critical PyTorch/CUDA operations
+        self._safe_cancel_multi_view_sam_loading()
+
+        # Clear all previous state like single view mode does
+        self._reset_multi_view_state()
+
+        # Store the current images
+        self.multi_view_images[0] = image1_path
+        self.multi_view_images[1] = image2_path
+
+        # Load first image
+        if image1_path:
+            pixmap1 = QPixmap(image1_path)
+            if not pixmap1.isNull():
+                self.multi_view_viewers[0].set_photo(pixmap1)
+                # Apply current image adjustments to the newly loaded image
+                self.multi_view_viewers[0].set_image_adjustments(
+                    self.brightness, self.contrast, self.gamma
+                )
+                self.multi_view_viewers[0].show()
+                self.multi_view_info_labels[0].setText(f"Image 1: {Path(image1_path).name}")
+            else:
+                self.multi_view_viewers[0].set_photo(QPixmap())
+                self.multi_view_info_labels[0].setText("Image 1: Failed to load")
+        else:
+            self.multi_view_viewers[0].set_photo(QPixmap())
+            self.multi_view_info_labels[0].setText("Image 1: No image")
+
+        # Load second image
+        if image2_path:
+            pixmap2 = QPixmap(image2_path)
+            if not pixmap2.isNull():
+                self.multi_view_viewers[1].set_photo(pixmap2)
+                # Apply current image adjustments to the newly loaded image
+                self.multi_view_viewers[1].set_image_adjustments(
+                    self.brightness, self.contrast, self.gamma
+                )
+                self.multi_view_viewers[1].show()
+                self.multi_view_info_labels[1].setText(f"Image 2: {Path(image2_path).name}")
+            else:
+                self.multi_view_viewers[1].set_photo(QPixmap())
+                self.multi_view_info_labels[1].setText("Image 2: Failed to load")
+        else:
+            self.multi_view_viewers[1].set_photo(QPixmap())
+            self.multi_view_info_labels[1].setText("Image 2: No image")
+
+        # Update batch info without requiring full file scan
+        if image1_path and image2_path:
+            self.multi_batch_info.setText(f"Viewing: {Path(image1_path).name} + {Path(image2_path).name}")
+        elif image1_path:
+            self.multi_batch_info.setText(f"Viewing: {Path(image1_path).name} (single)")
+        else:
+            self.multi_batch_info.setText("No images loaded")
+
+        # Update SAM models if needed - mark dirty if image actually changed
+        if not hasattr(self, "_last_multi_view_images"):
+            self._last_multi_view_images = [None, None]
+
+        # Check and update SAM models for both viewers
+        for i, image_path in enumerate([image1_path, image2_path]):
+            if i < len(self.multi_view_models) and self._last_multi_view_images[i] != image_path:
+                self._last_multi_view_images[i] = image_path
+                self._mark_multi_view_sam_dirty(i)
+
+        # Load existing segments for both viewers
+        self._load_multi_view_segments(image1_path, image2_path)
+
+    def _reset_multi_view_state(self):
+        """Reset all state when loading new images in multi-view mode (like _reset_state for single view)."""
+        # Clear all points and temporary elements
+        self.clear_all_points()
+
+        # Clear segment manager - same as single view
+        self.segment_manager.clear()
+
+        # Clear multi-view specific scene items
+        for viewer_idx, viewer in enumerate(self.multi_view_viewers):
+            # Remove all items except the pixmap from each viewer's scene
+            items_to_remove = [
+                item for item in viewer.scene().items()
+                if item is not viewer._pixmap_item
+            ]
+            for item in items_to_remove:
+                viewer.scene().removeItem(item)
+
+        # Clear action history
+        self.action_history.clear()
+        self.redo_history.clear()
+
+        # Update UI lists to reflect cleared state
+        self._update_all_lists()
+
+    def _load_multi_view_segments(self, image1_path, image2_path):
+        """Load existing segments for both viewers and merge them into multi-view format."""
+        try:
+            viewer0_segments = []
+            viewer1_segments = []
+
+            # Load segments for viewer 0
+            if image1_path:
+                try:
+                    self.file_manager.load_class_aliases(image1_path)
+                    self.file_manager.load_existing_mask(image1_path)
+                    viewer0_segments = list(self.segment_manager.segments)
+                    self.segment_manager.segments.clear()
+                except Exception as e:
+                    print(f"Error loading segments for viewer 0: {e}")
+
+            # Load segments for viewer 1
+            if image2_path:
+                try:
+                    self.file_manager.load_class_aliases(image2_path)
+                    self.file_manager.load_existing_mask(image2_path)
+                    viewer1_segments = list(self.segment_manager.segments)
+                    self.segment_manager.segments.clear()
+                except Exception as e:
+                    print(f"Error loading segments for viewer 1: {e}")
+
+            # Only proceed if we have segments to merge
+            if viewer0_segments or viewer1_segments:
+                # Merge segments intelligently
+                merged_segments = self._merge_multi_view_segments(
+                    viewer0_segments, viewer1_segments
+                )
+
+                self.segment_manager.segments = merged_segments
+
+                # Display the loaded segments
+                self._display_all_segments()
+
+        except Exception as e:
+            print(f"Error in _load_multi_view_segments: {e}")
+            # Ensure segments are cleared on error to prevent inconsistent state
+            self.segment_manager.segments.clear()
+
+    def _merge_multi_view_segments(self, viewer0_segs, viewer1_segs):
+        """Merge segments from two viewers into multi-view format."""
+        merged = []
+        used_viewer1_indices = set()
+
+        # Convert viewer 0 segments
+        for seg0 in viewer0_segs:
+            multi_seg = {
+                "type": seg0["type"],
+                "class_id": seg0["class_id"],
+                "views": {
+                    0: {
+                        "mask": seg0["mask"],
+                        "vertices": seg0.get("vertices"),
+                        "type": seg0["type"],
+                        "class_id": seg0["class_id"]
+                    }
+                }
+            }
+
+            # Try to find matching segment in viewer 1
+            # (same class_id and similar mask overlap)
+            match_idx = self._find_matching_segment(
+                seg0, viewer1_segs, used_viewer1_indices
+            )
+
+            if match_idx is not None:
+                seg1 = viewer1_segs[match_idx]
+                multi_seg["views"][1] = {
+                    "mask": seg1["mask"],
+                    "vertices": seg1.get("vertices"),
+                    "type": seg1["type"],
+                    "class_id": seg1["class_id"]
+                }
+                used_viewer1_indices.add(match_idx)
+
+            merged.append(multi_seg)
+
+        # Add remaining viewer 1 segments that weren't matched
+        for i, seg1 in enumerate(viewer1_segs):
+            if i not in used_viewer1_indices:
+                merged.append({
+                    "type": seg1["type"],
+                    "class_id": seg1["class_id"],
+                    "views": {
+                        1: {
+                            "mask": seg1["mask"],
+                            "vertices": seg1.get("vertices"),
+                            "type": seg1["type"],
+                            "class_id": seg1["class_id"]
+                        }
+                    }
+                })
+
+        return merged
+
+    def _find_matching_segment(self, seg0, viewer1_segs, used_indices):
+        """Find matching segment based on class_id and mask overlap."""
+        for i, seg1 in enumerate(viewer1_segs):
+            if i in used_indices:
+                continue
+
+            # First check if class_id matches
+            if seg0["class_id"] == seg1["class_id"]:
+                # For AI/Polygon segments created in multi-view,
+                # they likely have the same class_id
+                return i
+
+        return None
+
+    def _cancel_multi_view_sam_loading(self):
+        """Cancel any ongoing SAM model loading operations to prevent conflicts."""
+        # Stop all running SAM update workers safely
+        for i in range(len(self.multi_view_update_workers)):
+            if self.multi_view_update_workers[i] and self.multi_view_update_workers[i].isRunning():
+                # Request the worker to stop gracefully
+                self.multi_view_update_workers[i].stop()
+                self.multi_view_update_workers[i].quit()
+
+                # Give it a reasonable time to finish gracefully
+                if self.multi_view_update_workers[i].wait(2000):  # Wait up to 2 seconds
+                    # Worker finished gracefully
+                    self.multi_view_update_workers[i].deleteLater()
+                    self.multi_view_update_workers[i] = None
+                else:
+                    # Worker didn't finish - mark it for cleanup but don't force terminate
+                    # Let the timeout mechanism handle it to avoid crashes
+                    pass
+
+        # Clean up all timeout timers
+        if hasattr(self, 'multi_view_update_timers'):
+            for i, timer in list(self.multi_view_update_timers.items()):
+                timer.stop()
+                timer.deleteLater()
+                del self.multi_view_update_timers[i]
+
+        # Reset loading state flags
+        for i in range(len(self.multi_view_models_updating)):
+            self.multi_view_models_updating[i] = False
+
+        # Reset progress tracking to avoid stale state
+        if hasattr(self, '_multi_view_loading_step'):
+            self._multi_view_loading_step = 0
+        if hasattr(self, '_multi_view_total_steps'):
+            self._multi_view_total_steps = 0
+
+    def _safe_cancel_multi_view_sam_loading(self):
+        """Safely cancel SAM loading without forcing termination to avoid crashes."""
+        # Clean up timeout timers first (these are safe to cancel)
+        if hasattr(self, 'multi_view_update_timers'):
+            for i, timer in list(self.multi_view_update_timers.items()):
+                timer.stop()
+                timer.deleteLater()
+                del self.multi_view_update_timers[i]
+
+        # For workers, just request stop but don't force cleanup
+        # Let them finish gracefully or timeout naturally
+        for i in range(len(self.multi_view_update_workers)):
+            if self.multi_view_update_workers[i] and self.multi_view_update_workers[i].isRunning():
+                # Request graceful stop but don't wait or force cleanup
+                self.multi_view_update_workers[i].stop()
+
+        # Reset progress tracking to clean state
+        if hasattr(self, '_multi_view_loading_step'):
+            self._multi_view_loading_step = 0
+        if hasattr(self, '_multi_view_total_steps'):
+            self._multi_view_total_steps = 0
+
+    def _load_next_multi_view_pair(self):
+        """Load the next pair of images in multi-view mode."""
+        if not self.current_file_index.isValid():
+            return
+
+        # Auto-save if enabled and we have current images (not the first load)
+        if (self.multi_view_images[0] and
+            self.control_panel.get_settings().get("auto_save", True)):
+            self._save_multi_view_output()
+
+        # Get the next image from current position
+        next_index = self._get_next_image_index_from_file_model(self.current_file_index)
+        if next_index:
+            next_path = self.file_model.filePath(next_index)
+            next_next_path = self._get_next_image_from_file_model(next_index)
+
+            # Load the new pair
+            self._load_multi_view_pair(next_path, next_next_path)
+
+            # Update current file index
+            self.current_file_index = next_index
+            self.right_panel.file_tree.setCurrentIndex(next_index)
+
+    def _load_previous_multi_view_pair(self):
+        """Load the previous pair of images in multi-view mode."""
+        if not self.current_file_index.isValid():
+            return
+
+        # Auto-save if enabled and we have current images (not the first load)
+        if (self.multi_view_images[0] and
+            self.control_panel.get_settings().get("auto_save", True)):
+            self._save_multi_view_output()
+
+        # Get the previous image from current position
+        prev_index = self._get_previous_image_index_from_file_model(self.current_file_index)
+        if prev_index:
+            prev_path = self.file_model.filePath(prev_index)
+            next_path = self._get_next_image_from_file_model(prev_index)
+
+            # Load the new pair
+            self._load_multi_view_pair(prev_path, next_path)
+
+            # Update current file index
+            self.current_file_index = prev_index
+            self.right_panel.file_tree.setCurrentIndex(prev_index)
+
+    def _get_next_image_index_from_file_model(self, current_index):
+        """Get the next image file index from the file model."""
+        if not self.file_model or not current_index.isValid():
+            return None
+
+        parent_index = current_index.parent()
+        current_row = current_index.row()
+
+        # Look for the next image file starting from the next row
+        for row in range(current_row + 1, self.file_model.rowCount(parent_index)):
+            next_index = self.file_model.index(row, 0, parent_index)
+            if next_index.isValid():
+                next_path = self.file_model.filePath(next_index)
+                if os.path.isfile(next_path) and self.file_manager.is_image_file(next_path):
+                    return next_index
+
+        return None
+
+    def _get_previous_image_index_from_file_model(self, current_index):
+        """Get the previous image file index from the file model."""
+        if not self.file_model or not current_index.isValid():
+            return None
+
+        parent_index = current_index.parent()
+        current_row = current_index.row()
+
+        # Look for the previous image file starting from the previous row
+        for row in range(current_row - 1, -1, -1):
+            prev_index = self.file_model.index(row, 0, parent_index)
+            if prev_index.isValid():
+                prev_path = self.file_model.filePath(prev_index)
+                if os.path.isfile(prev_path) and self.file_manager.is_image_file(prev_path):
+                    return prev_index
+
+        return None
 
     def _update_sam_model_image(self):
         """Updates the SAM model's image based on the 'Operate On View' setting."""
@@ -1456,9 +1818,9 @@ class MainWindow(QMainWindow):
 
     def _load_next_image(self):
         """Load next image in the file list."""
-        # Handle multi-view mode by loading next batch
+        # Handle multi-view mode by loading next pair
         if hasattr(self, "view_mode") and self.view_mode == "multi":
-            self._load_next_multi_batch()
+            self._load_next_multi_view_pair()
             return
 
         if not self.current_file_index.isValid():
@@ -1475,9 +1837,9 @@ class MainWindow(QMainWindow):
 
     def _load_previous_image(self):
         """Load previous image in the file list."""
-        # Handle multi-view mode by loading previous batch
+        # Handle multi-view mode by loading previous pair
         if hasattr(self, "view_mode") and self.view_mode == "multi":
-            self._load_previous_multi_batch()
+            self._load_previous_multi_view_pair()
             return
 
         if not self.current_file_index.isValid():
@@ -2348,6 +2710,7 @@ class MainWindow(QMainWindow):
             return
 
         saved_files = []
+        self._saved_file_paths = []  # Track files for highlighting
         for i in range(2):
             image_path = self.multi_view_images[i]
 
@@ -2388,9 +2751,10 @@ class MainWindow(QMainWindow):
                             None,  # No crop coords in multi-view for now
                         )
                         saved_files.append(os.path.basename(npz_path))
-                        # Update file list
-                        self.file_model.update_cache_for_path(npz_path)
-                        self.file_model.set_highlighted_path(npz_path)
+                        # Track saved file for highlighting later
+                        if not hasattr(self, '_saved_file_paths'):
+                            self._saved_file_paths = []
+                        self._saved_file_paths.append(npz_path)
 
                     # Restore original segments
                     self.segment_manager.segments = original_segments
@@ -2417,7 +2781,11 @@ class MainWindow(QMainWindow):
                             class_labels,
                             None,  # No crop coords in multi-view for now
                         )
-                        self.file_model.update_cache_for_path(txt_path)
+                        saved_files.append(os.path.basename(txt_path))
+                        # Track saved file for highlighting later
+                        if not hasattr(self, '_saved_file_paths'):
+                            self._saved_file_paths = []
+                        self._saved_file_paths.append(txt_path)
 
                     # Restore original segments
                     self.segment_manager.segments = original_segments
@@ -2444,6 +2812,23 @@ class MainWindow(QMainWindow):
                 self._show_error_notification(
                     f"Error saving {os.path.basename(image_path)}: {str(e)}"
                 )
+
+        # Update file list with green flash and tick marks (like single view mode)
+        if hasattr(self, '_saved_file_paths') and self._saved_file_paths:
+            for path in self._saved_file_paths:
+                if path:
+                    self.file_model.update_cache_for_path(path)
+                    self.file_model.set_highlighted_path(path)
+                    QTimer.singleShot(
+                        1500,
+                        lambda p=path: (
+                            self.file_model.set_highlighted_path(None)
+                            if self.file_model.highlighted_path == p
+                            else None
+                        ),
+                    )
+            # Clear the tracking list for next save
+            self._saved_file_paths = []
 
         if saved_files:
             self._show_success_notification(
@@ -5298,16 +5683,8 @@ class MainWindow(QMainWindow):
                 self.view_tab_widget.setCurrentIndex(0)
                 return
 
-            # Check if we have images to work with
-            all_images = self._get_all_images()
-            if not all_images:
-                self._show_warning_notification(
-                    "No images found. Please open a folder with images first."
-                )
-                # Switch back to single view
-                self.view_mode = "single"
-                self.view_tab_widget.setCurrentIndex(0)
-                return
+            # Skip image count check during mode switching - let multi-view mode handle empty state
+            # Images will be discovered in background if needed
 
             self.view_mode = "multi"
 
@@ -5375,14 +5752,31 @@ class MainWindow(QMainWindow):
 
         if self._multi_view_total_steps > 0:
             self._show_notification("Loading images into AI models...", duration=0)
-            # Load images into the models
+            # Mark all models as dirty first
             for i in range(len(self.multi_view_models)):
                 if self.multi_view_images[i] and self.multi_view_models[i]:
                     self._mark_multi_view_sam_dirty(i)
-                    # Immediately trigger image loading
-                    self._ensure_multi_view_sam_updated(i)
+
+            # Start sequential loading with the first model
+            self._start_sequential_multi_view_sam_loading()
         else:
-            self._show_notification("AI models ready for prompting", duration=3000)
+            self._show_success_notification("AI models ready for prompting", duration=3000)
+
+    def _start_sequential_multi_view_sam_loading(self):
+        """Start loading images into SAM models sequentially to avoid resource conflicts."""
+        # Find the next dirty model that needs updating
+        for i in range(len(self.multi_view_models)):
+            if (self.multi_view_images[i] and
+                self.multi_view_models[i] and
+                self.multi_view_models_dirty[i] and
+                not self.multi_view_models_updating[i]):
+                # Start updating this model
+                self._ensure_multi_view_sam_updated(i)
+                return
+
+        # If no more models to update, we're done
+        if self._multi_view_loading_step >= self._multi_view_total_steps:
+            self._show_success_notification("AI models ready for prompting", duration=3000)
 
     def _on_multi_view_init_error(self, error_message):
         """Handle multi-view model initialization error."""
@@ -5472,7 +5866,7 @@ class MainWindow(QMainWindow):
         if self.settings.operate_on_view:
             current_image = self._get_multi_view_modified_image(viewer_index)
 
-        # Create and start update worker
+        # Create and start update worker with timeout
         self.multi_view_update_workers[viewer_index] = MultiViewSAMUpdateWorker(
             viewer_index,
             self.multi_view_models[viewer_index],
@@ -5493,10 +5887,72 @@ class MainWindow(QMainWindow):
         # Start the worker
         self.multi_view_update_workers[viewer_index].start()
 
+        # Add timeout mechanism to prevent hanging (30 seconds)
+        timeout_timer = QTimer()
+        timeout_timer.setSingleShot(True)
+        timeout_timer.timeout.connect(
+            lambda: self._on_multi_view_sam_timeout(viewer_index, timeout_timer)
+        )
+        timeout_timer.start(30000)  # 30 seconds timeout
+
+        # Store timer reference to clean up later
+        if not hasattr(self, 'multi_view_update_timers'):
+            self.multi_view_update_timers = {}
+        self.multi_view_update_timers[viewer_index] = timeout_timer
+
+    def _on_multi_view_sam_timeout(self, viewer_index, timer):
+        """Handle SAM model update timeout."""
+        logger.warning(f"SAM model update timeout for viewer {viewer_index + 1}")
+
+        # Stop and clean up the worker safely
+        if self.multi_view_update_workers[viewer_index]:
+            self.multi_view_update_workers[viewer_index].stop()
+            self.multi_view_update_workers[viewer_index].quit()
+
+            # Give the worker time to finish gracefully
+            if self.multi_view_update_workers[viewer_index].wait(3000):  # Wait up to 3 seconds
+                # Worker finished gracefully
+                self.multi_view_update_workers[viewer_index].deleteLater()
+                self.multi_view_update_workers[viewer_index] = None
+            else:
+                # Worker is stuck - don't force terminate to avoid crashes
+                # Just mark it as None and let garbage collection handle it eventually
+                logger.warning(f"Worker for viewer {viewer_index + 1} did not respond to stop request")
+                self.multi_view_update_workers[viewer_index] = None
+
+        # Clean up timer
+        timer.stop()
+        timer.deleteLater()
+        if hasattr(self, 'multi_view_update_timers') and viewer_index in self.multi_view_update_timers:
+            del self.multi_view_update_timers[viewer_index]
+
+        # Mark as not updating and not dirty to prevent retry loops
+        self.multi_view_models_updating[viewer_index] = False
+        self.multi_view_models_dirty[viewer_index] = False
+
+        # Show timeout error
+        self._show_error_notification(
+            f"AI model {viewer_index + 1} loading timed out after 30 seconds",
+            duration=8000,
+        )
+
+        # Update progress and continue with next model
+        if hasattr(self, "_multi_view_loading_step"):
+            self._multi_view_loading_step += 1
+
+        # Continue sequential loading
+        self._start_sequential_multi_view_sam_loading()
+
     def _on_multi_view_sam_update_finished(self, viewer_index):
         """Handle completion of multi-view SAM model update."""
         self.multi_view_models_dirty[viewer_index] = False
         self.multi_view_models_updating[viewer_index] = False
+
+        # Clean up timeout timer
+        if hasattr(self, 'multi_view_update_timers') and viewer_index in self.multi_view_update_timers:
+            self.multi_view_update_timers[viewer_index].stop()
+            self.multi_view_update_timers[viewer_index].deleteLater()
+            del self.multi_view_update_timers[viewer_index]
 
         # Clean up worker
         if self.multi_view_update_workers[viewer_index]:
@@ -5514,30 +5970,19 @@ class MainWindow(QMainWindow):
                     duration=0,
                 )
 
-        # Check if all models are ready
-        all_ready = all(
-            not self.multi_view_models_updating[i]
-            and not self.multi_view_models_dirty[i]
-            for i in range(len(self.multi_view_models))
-            if self.multi_view_models[i] is not None
-        )
-
-        if all_ready:
-            # All models and images loaded - show ready message
-            self._show_success_notification(
-                "AI models ready for prompting. Click or drag to create predictions.",
-                duration=5000,
-            )
-            # Clean up progress tracking
-            if hasattr(self, "_multi_view_loading_step"):
-                delattr(self, "_multi_view_loading_step")
-            if hasattr(self, "_multi_view_total_steps"):
-                delattr(self, "_multi_view_total_steps")
+        # Continue sequential loading of the next SAM model
+        self._start_sequential_multi_view_sam_loading()
 
     def _on_multi_view_sam_update_error(self, viewer_index, error_message):
         """Handle multi-view SAM model update error."""
         self.multi_view_models_updating[viewer_index] = False
         self.multi_view_models_dirty[viewer_index] = False  # Prevent retry loops
+
+        # Clean up timeout timer
+        if hasattr(self, 'multi_view_update_timers') and viewer_index in self.multi_view_update_timers:
+            self.multi_view_update_timers[viewer_index].stop()
+            self.multi_view_update_timers[viewer_index].deleteLater()
+            del self.multi_view_update_timers[viewer_index]
 
         # Show error notification
         self._show_error_notification(
@@ -5554,6 +5999,13 @@ class MainWindow(QMainWindow):
             self.multi_view_update_workers[viewer_index].wait()
             self.multi_view_update_workers[viewer_index].deleteLater()
             self.multi_view_update_workers[viewer_index] = None
+
+        # Update progress even on error
+        if hasattr(self, "_multi_view_loading_step"):
+            self._multi_view_loading_step += 1
+
+        # Continue sequential loading even if this model failed
+        self._start_sequential_multi_view_sam_loading()
 
     def _cleanup_multi_view_models(self):
         """Clean up multi-view model instances."""

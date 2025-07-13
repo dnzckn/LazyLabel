@@ -121,10 +121,10 @@ def test_multi_view_mode_switch_with_no_images(main_window_with_multi_view):
     # Simulate switching to multi-view with no images
     window._on_view_mode_changed(1)  # 1 = multi-view
 
-    # Should show warning and switch back to single view
-    window._show_warning_notification.assert_called_once()
-    window.view_tab_widget.setCurrentIndex.assert_called_once_with(0)
-    assert window.view_mode == "single"
+    # Should switch to multi-view mode without warnings (no file scanning)
+    window._show_warning_notification.assert_not_called()
+    window.view_tab_widget.setCurrentIndex.assert_not_called()
+    assert window.view_mode == "multi"
 
 
 @patch("lazylabel.models.sam_model.SamModel")

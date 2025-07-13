@@ -70,6 +70,10 @@ class PhotoViewer(QGraphicsView):
             self._original_image = None
             self._adjusted_pixmap = None
             self._original_image_bgr = None
+            # Check if _pixmap_item still exists, recreate if deleted
+            if self._pixmap_item not in self._scene.items():
+                self._pixmap_item = QGraphicsPixmapItem()
+                self._scene.addItem(self._pixmap_item)
             self._pixmap_item.setPixmap(QPixmap())
 
     def set_image_adjustments(self, brightness: float, contrast: float, gamma: float):

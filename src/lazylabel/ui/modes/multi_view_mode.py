@@ -46,15 +46,39 @@ class MultiViewModeHandler(BaseModeHandler):
         if viewer_index >= len(self.main_window.multi_view_models):
             return
 
-        # Check if any model is still updating or needs update
-        if any(
-            self.main_window.multi_view_models_updating[i]
-            or self.main_window.multi_view_models_dirty[i]
-            for i in range(len(self.main_window.multi_view_models))
-            if i < len(self.main_window.multi_view_models)
-        ):
-            # Models are still loading - user should wait
+        # Check if the specific viewer's model is updating
+        if self.main_window.multi_view_models_updating[viewer_index]:
+            # This specific model is still loading - user should wait
+            self.main_window._show_notification(
+                f"AI model for viewer {viewer_index + 1} is still loading...", duration=2000
+            )
             return
+
+        # Check if the specific viewer's model needs the current image loaded
+        if self.main_window.multi_view_models_dirty[viewer_index]:
+            # This model exists but doesn't have the current image loaded yet
+
+            # Check if any loading session is already in progress to avoid conflicts
+            any_loading = any(self.main_window.multi_view_models_updating[i]
+                            for i in range(len(self.main_window.multi_view_models_updating)))
+            if any_loading:
+                self.main_window._show_notification(
+                    "AI models are already loading, please wait...", duration=2000
+                )
+                return
+
+            self.main_window._show_notification(
+                f"Loading image into AI model for viewer {viewer_index + 1}...", duration=0
+            )
+            # Start sequential loading but only show progress for models that need updating
+            dirty_count = sum(1 for i in range(len(self.main_window.multi_view_models))
+                            if self.main_window.multi_view_models_dirty[i] and self.main_window.multi_view_images[i])
+            if dirty_count > 0:
+                # Initialize progress tracking for lazy loading
+                self.main_window._multi_view_loading_step = 0
+                self.main_window._multi_view_total_steps = dirty_count
+                self.main_window._start_sequential_multi_view_sam_loading()
+            return  # Exit early, let image load in background
 
         # Skip AI prediction if model is not ready
         if self.main_window.multi_view_models[viewer_index] is None:
