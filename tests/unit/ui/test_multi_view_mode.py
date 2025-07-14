@@ -6,7 +6,19 @@ import numpy as np
 import pytest
 from PyQt6.QtCore import QPointF, Qt
 
-from lazylabel.ui.main_window import MainWindow
+# Try to import required dependencies, skip module if not available
+try:
+    import sam2  # noqa: F401
+except ImportError:
+    pytest.skip("SAM-2 dependencies not available", allow_module_level=True)
+
+# Mock SAM-2 modules before importing MainWindow to prevent import errors
+with (
+    patch("lazylabel.models.sam2_model.build_sam2"),
+    patch("lazylabel.models.sam2_model.SAM2ImagePredictor"),
+    patch("lazylabel.models.sam2_model.logger"),
+):
+    from lazylabel.ui.main_window import MainWindow
 
 
 @pytest.fixture
