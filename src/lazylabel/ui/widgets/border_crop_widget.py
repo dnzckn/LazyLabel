@@ -188,6 +188,17 @@ class BorderCropWidget(QWidget):
         """Check if crop coordinates are set."""
         return self.get_crop_coordinates() is not None
 
+    def disable_thresholding_for_multi_view(self):
+        """Disable thresholding controls for multi-view mode."""
+        # This method is called when entering multi-view mode
+        # to handle mixed BW/RGB images
+        pass
+
+    def enable_thresholding(self):
+        """Re-enable thresholding controls when exiting multi-view mode."""
+        # This method is called when exiting multi-view mode
+        pass
+
     def _get_button_style(self):
         """Get consistent button styling."""
         return """

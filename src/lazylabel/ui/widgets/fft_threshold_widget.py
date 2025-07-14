@@ -24,6 +24,100 @@ from .channel_threshold_widget import MultiIndicatorSlider
 class FFTThresholdSlider(MultiIndicatorSlider):
     """Custom slider for FFT thresholds that allows removing all indicators."""
 
+    def paintEvent(self, event):
+        """Paint the slider with appropriate labels."""
+        # Call parent paint method but skip its label drawing
+        from PyQt6.QtCore import QRect, Qt
+        from PyQt6.QtGui import QBrush, QColor, QFont, QPainter, QPen
+
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+        # Draw channel label
+        font = QFont()
+        font.setPointSize(9)
+        painter.setFont(font)
+        painter.setPen(QPen(QColor(255, 255, 255)))
+        painter.drawText(5, 15, f"{self.channel_name}")
+
+        # Draw slider track
+        slider_rect = self.get_slider_rect()
+        painter.setPen(QPen(QColor(100, 100, 100), 2))
+        painter.setBrush(QBrush(QColor(50, 50, 50)))
+        painter.drawRoundedRect(slider_rect, 5, 5)
+
+        # Draw value segments (copied from parent)
+        channel_color = self.get_channel_color()
+        sorted_indicators = sorted(self.indicators)
+
+        # Handle case with no indicators - draw single segment
+        if not sorted_indicators:
+            segment_rect = QRect(
+                slider_rect.left(),
+                slider_rect.top(),
+                slider_rect.width(),
+                slider_rect.height(),
+            )
+            segment_color = QColor(channel_color)
+            segment_color.setAlpha(50)
+            painter.setBrush(QBrush(segment_color))
+            painter.setPen(QPen(Qt.GlobalColor.transparent))
+            painter.drawRoundedRect(segment_rect, 5, 5)
+        else:
+            # Draw segments between indicators
+            for i in range(len(sorted_indicators) + 1):
+                start_val = self.minimum if i == 0 else sorted_indicators[i - 1]
+                end_val = (
+                    self.maximum
+                    if i == len(sorted_indicators)
+                    else sorted_indicators[i]
+                )
+
+                start_x = self.value_to_x(start_val)
+                end_x = self.value_to_x(end_val)
+
+                segment_value = (
+                    i / len(sorted_indicators) if len(sorted_indicators) > 0 else 0
+                )
+                alpha = int(50 + segment_value * 150)
+
+                segment_color = QColor(channel_color)
+                segment_color.setAlpha(alpha)
+
+                segment_rect = QRect(
+                    start_x, slider_rect.top(), end_x - start_x, slider_rect.height()
+                )
+                painter.setBrush(QBrush(segment_color))
+                painter.setPen(QPen(Qt.GlobalColor.transparent))
+                painter.drawRoundedRect(segment_rect, 5, 5)
+
+        # Draw indicators without labels
+        for i, value in enumerate(self.indicators):
+            x = self.value_to_x(value)
+            handle_rect = QRect(
+                x - 6, slider_rect.top() - 3, 12, slider_rect.height() + 6
+            )
+
+            if i == self.dragging_index:
+                painter.setBrush(QBrush(QColor(255, 255, 100)))
+                painter.setPen(QPen(QColor(200, 200, 50), 2))
+            else:
+                painter.setBrush(QBrush(QColor(255, 255, 255)))
+                painter.setPen(QPen(QColor(150, 150, 150), 1))
+
+            painter.drawRoundedRect(handle_rect, 3, 3)
+
+        # Now draw our custom labels
+        painter.setPen(QPen(QColor(255, 255, 255)))
+        for value in self.indicators:
+            x = self.value_to_x(value)
+            if self.maximum == 10000:  # Frequency slider (percentage)
+                percentage = round(value / 100.0)
+                label = f"{percentage}%"
+            else:  # Intensity slider (integer pixel values)
+                label = f"{int(value)}"
+            painter.drawText(x - 15, slider_rect.bottom() + 15, label)
+
     def contextMenuEvent(self, event):
         """Handle right-click to remove indicator (allows removing all indicators)."""
         from PyQt6.QtCore import QRect
@@ -58,7 +152,7 @@ class FFTThresholdWidget(QWidget):
             0  # 0 = no image, 1 = grayscale, 3+ = not supported
         )
         self.frequency_thresholds = []  # List of frequency threshold percentages (0-100)
-        self.intensity_thresholds = []  # List of intensity threshold percentages (0-100)
+        self.intensity_thresholds = []  # List of intensity threshold pixel values (0-255)
         self._setup_ui()
         self._connect_signals()
 
@@ -66,7 +160,7 @@ class FFTThresholdWidget(QWidget):
         """Setup the UI layout."""
         group = QGroupBox("FFT Frequency Band Thresholding")
         layout = QVBoxLayout(group)
-        layout.setSpacing(8)
+        layout.setSpacing(4)  # Reduce spacing between widgets
 
         # Enable checkbox
         self.enable_checkbox = QCheckBox("Enable FFT Frequency Thresholding")
@@ -81,45 +175,45 @@ class FFTThresholdWidget(QWidget):
         layout.addWidget(self.status_label)
 
         # Frequency threshold slider (percentage-based)
-        freq_label = QLabel("Frequency Thresholds (Double-click to add):")
-        freq_label.setStyleSheet("font-weight: bold; margin-top: 5px;")
+        freq_label = QLabel("Frequency Thresholds\n(Double-click to add):")
+        freq_label.setStyleSheet("font-weight: bold; margin-top: 2px; font-size: 10px;")
         layout.addWidget(freq_label)
 
         self.frequency_slider = FFTThresholdSlider(
-            channel_name="Frequency Bands", minimum=0, maximum=100, parent=self
+            channel_name="Frequency Bands", minimum=0, maximum=10000, parent=self
         )
         self.frequency_slider.setEnabled(False)
         self.frequency_slider.setToolTip(
-            "Double-click to add frequency cutoff points. Each frequency band gets mapped to a different intensity level."
+            "Double-click to add frequency cutoff points.\nEach band gets mapped to different intensity."
         )
         layout.addWidget(self.frequency_slider)
 
         # Intensity threshold slider (percentage-based)
-        intensity_label = QLabel("Intensity Thresholds (Double-click to add):")
-        intensity_label.setStyleSheet("font-weight: bold; margin-top: 10px;")
+        intensity_label = QLabel("Intensity Thresholds\n(Double-click to add):")
+        intensity_label.setStyleSheet(
+            "font-weight: bold; margin-top: 5px; font-size: 10px;"
+        )
         layout.addWidget(intensity_label)
 
         self.intensity_slider = FFTThresholdSlider(
-            channel_name="Intensity Levels", minimum=0, maximum=100, parent=self
+            channel_name="Intensity Levels", minimum=0, maximum=255, parent=self
         )
         self.intensity_slider.setEnabled(False)
         self.intensity_slider.setToolTip(
-            "Double-click to add intensity threshold points. Applied after frequency band processing."
+            "Double-click to add intensity threshold points.\nApplied after frequency band processing."
         )
         layout.addWidget(self.intensity_slider)
 
-        # Instructions
-        instructions = QLabel(
-            "1. Add frequency thresholds to create bands: low freq → dark, high freq → bright.\n"
-            "2. Add intensity thresholds to further process the result with quantization levels."
-        )
-        instructions.setStyleSheet("color: #888; font-size: 9px;")
+        # Compact instructions
+        instructions = QLabel("Freq: low→dark, high→bright | Intensity: quantization")
+        instructions.setStyleSheet("color: #888; font-size: 8px; margin-top: 2px;")
         instructions.setWordWrap(True)
         layout.addWidget(instructions)
 
-        # Main layout
+        # Main layout with reduced spacing
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(2)  # Reduce spacing between elements
         main_layout.addWidget(group)
 
     def _connect_signals(self):
@@ -162,7 +256,7 @@ class FFTThresholdWidget(QWidget):
 
     def _on_intensity_slider_changed(self, indicators):
         """Handle intensity threshold slider change (receives list of threshold indicators)."""
-        # Store the intensity threshold indicators (percentages 0-100)
+        # Store the intensity threshold indicators (pixel values 0-255)
         self.intensity_thresholds = indicators[:]  # Copy the list
         self._emit_change_if_active()
 
@@ -295,8 +389,8 @@ class FFTThresholdWidget(QWidget):
             # Create frequency bands based on thresholds
             sorted_thresholds = sorted(self.frequency_thresholds)
             freq_thresholds_normalized = [
-                t / 100.0 for t in sorted_thresholds
-            ]  # Convert to 0-1
+                t / 10000.0 for t in sorted_thresholds
+            ]  # Convert to 0-1 (from 0-10000 range, giving 0.01% precision)
 
             # Number of bands = number of thresholds + 1
             num_bands = len(freq_thresholds_normalized) + 1
@@ -347,8 +441,8 @@ class FFTThresholdWidget(QWidget):
         if not sorted_thresholds:
             return image_array
 
-        # Convert thresholds from percentages to intensity values (0-255)
-        intensity_thresholds = [t * 255 / 100.0 for t in sorted_thresholds]
+        # Thresholds are already in pixel values (0-255), no conversion needed
+        intensity_thresholds = sorted_thresholds
 
         # Number of levels = number of thresholds + 1
         num_levels = len(intensity_thresholds) + 1

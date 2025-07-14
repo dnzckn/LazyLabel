@@ -1,11 +1,15 @@
 import cv2
 import numpy as np
-from PyQt6.QtCore import QRectF, Qt
+from PyQt6.QtCore import QRectF, Qt, pyqtSignal
 from PyQt6.QtGui import QCursor, QImage, QPixmap
 from PyQt6.QtWidgets import QGraphicsPixmapItem, QGraphicsScene, QGraphicsView
 
 
 class PhotoViewer(QGraphicsView):
+    # Signals for multi-view synchronization
+    zoom_changed = pyqtSignal(float)  # Emits zoom factor
+    view_changed = pyqtSignal()  # Emits when view (pan/zoom) changes
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self._scene = QGraphicsScene(self)
@@ -18,6 +22,7 @@ class PhotoViewer(QGraphicsView):
         self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.setDragMode(QGraphicsView.DragMode.NoDrag)
+        self.setMouseTracking(True)  # Enable mouse tracking for hover events
 
         self._original_image = None
         self._adjusted_pixmap = None
@@ -41,6 +46,10 @@ class PhotoViewer(QGraphicsView):
         if pixmap and not pixmap.isNull():
             self._original_image = pixmap.toImage()
             self._adjusted_pixmap = pixmap
+            # Check if _pixmap_item still exists, recreate if deleted
+            if self._pixmap_item not in self._scene.items():
+                self._pixmap_item = QGraphicsPixmapItem()
+                self._scene.addItem(self._pixmap_item)
             self._pixmap_item.setPixmap(pixmap)
 
             # Convert QImage to ARGB32 for consistent processing
@@ -61,11 +70,20 @@ class PhotoViewer(QGraphicsView):
             self._original_image = None
             self._adjusted_pixmap = None
             self._original_image_bgr = None
+            # Check if _pixmap_item still exists, recreate if deleted
+            if self._pixmap_item not in self._scene.items():
+                self._pixmap_item = QGraphicsPixmapItem()
+                self._scene.addItem(self._pixmap_item)
             self._pixmap_item.setPixmap(QPixmap())
 
     def set_image_adjustments(self, brightness: float, contrast: float, gamma: float):
-        if self._original_image_bgr is None:
+        if self._original_image_bgr is None or self._original_image is None:
             return
+
+        # Ensure _pixmap_item exists and is valid
+        if self._pixmap_item not in self._scene.items():
+            self._pixmap_item = QGraphicsPixmapItem()
+            self._scene.addItem(self._pixmap_item)
 
         img_bgr = self._original_image_bgr.copy()
 
@@ -90,7 +108,10 @@ class PhotoViewer(QGraphicsView):
             adjusted_img.data, w, h, bytes_per_line, QImage.Format.Format_BGR888
         )
         self._adjusted_pixmap = QPixmap.fromImage(adjusted_qimage)
-        self._pixmap_item.setPixmap(self._adjusted_pixmap)
+
+        # Ensure the pixmap is valid before setting it
+        if not self._adjusted_pixmap.isNull():
+            self._pixmap_item.setPixmap(self._adjusted_pixmap)
 
     def set_cursor(self, cursor_shape):
         self.viewport().setCursor(QCursor(cursor_shape))
@@ -102,4 +123,11 @@ class PhotoViewer(QGraphicsView):
     def wheelEvent(self, event):
         if not self._pixmap_item.pixmap().isNull():
             factor = 1.25 if event.angleDelta().y() > 0 else 0.8
+            self.scale(factor, factor)
+            # Emit zoom signal for multi-view synchronization
+            self.zoom_changed.emit(factor)
+
+    def sync_zoom(self, factor):
+        """Synchronize zoom from another viewer."""
+        if not self._pixmap_item.pixmap().isNull():
             self.scale(factor, factor)

@@ -30,3 +30,10 @@ env/
 
 # OS
 Thumbs.db
+*:Zone.Identifier
+
+# LLM's 
+.claude
+
+# Test images
+test_images/

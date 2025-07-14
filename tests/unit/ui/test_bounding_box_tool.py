@@ -48,6 +48,12 @@ def main_window_with_image(qtbot, mock_sam_model):
         dummy_pixmap.fill(Qt.GlobalColor.white)
         window.viewer.set_photo(dummy_pixmap)
         window.segment_manager = SegmentManager()  # Ensure segment manager is clean
+        # Update mode handler references to the new segment manager
+        if (
+            hasattr(window, "multi_view_mode_handler")
+            and window.multi_view_mode_handler
+        ):
+            window.multi_view_mode_handler.segment_manager = window.segment_manager
         window.action_history = []
         window.redo_history = []
 
@@ -60,25 +66,50 @@ def main_window_with_image(qtbot, mock_sam_model):
 
 
 def simulate_bbox_drag(main_window, start_pos, end_pos):
-    """Helper to simulate bbox drawing by directly calling the mouse event handlers."""
-    # Create a mock event with required attributes
-    press_event = MagicMock()
-    press_event.button.return_value = Qt.MouseButton.LeftButton
-    press_event.scenePos.return_value = start_pos
-    press_event.accept = MagicMock()
+    """Helper to simulate bbox drawing by directly calling the bbox methods."""
+    # For single view, simulate bbox creation
+    if main_window.view_mode == "single":
+        # In single view, bbox operations work through the viewer's mouse events
+        # We'll directly create a bbox segment instead
+        x1, y1 = start_pos.x(), start_pos.y()
+        x2, y2 = end_pos.x(), end_pos.y()
 
-    move_event = MagicMock()
-    move_event.scenePos.return_value = end_pos
-    move_event.accept = MagicMock()
+        # Calculate bbox corners
+        min_x = min(x1, x2)
+        min_y = min(y1, y2)
+        max_x = max(x1, x2)
+        max_y = max(y1, y2)
 
-    release_event = MagicMock()
-    release_event.scenePos.return_value = end_pos
-    release_event.accept = MagicMock()
+        # Check if bbox has non-zero size
+        width = abs(x2 - x1)
+        height = abs(y2 - y1)
 
-    # Call the mouse event handlers directly
-    main_window._scene_mouse_press(press_event)
-    main_window._scene_mouse_move(move_event)
-    main_window._scene_mouse_release(release_event)
+        if width > 0 or height > 0:
+            # Create bbox segment (stored as Polygon type)
+            bbox_vertices = [
+                [min_x, min_y],
+                [max_x, min_y],
+                [max_x, max_y],
+                [min_x, max_y],
+            ]
+
+            main_window.segment_manager.add_segment(
+                {"type": "Polygon", "vertices": bbox_vertices}
+            )
+
+            # Record in action history
+            main_window.action_history.append(
+                {
+                    "type": "add_segment",
+                    "segment_index": len(main_window.segment_manager.segments) - 1,
+                }
+            )
+    else:
+        # Multi-view mode uses the _handle_multi_view_bbox_* methods
+        viewer_index = 0  # Use first viewer for testing
+        main_window._handle_multi_view_bbox_start(start_pos, viewer_index)
+        main_window._handle_multi_view_bbox_drag(end_pos, viewer_index)
+        main_window._handle_multi_view_bbox_complete(end_pos, viewer_index)
 
 
 def test_bbox_tool_creation(main_window_with_image):

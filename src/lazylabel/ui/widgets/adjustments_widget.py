@@ -50,9 +50,9 @@ class AdjustmentsWidget(QWidget):
                 Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
             )
 
-            # Text edit with smaller width
+            # Text edit with width to show numbers like 1.00 and -1.00
             text_edit = QLineEdit(str(default_value))
-            text_edit.setFixedWidth(35)
+            text_edit.setFixedWidth(45)  # Increased from 35 to 45
 
             # Slider takes remaining space
             slider = QSlider(Qt.Orientation.Horizontal)

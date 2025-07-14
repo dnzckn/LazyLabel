@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 
 import cv2
 import numpy as np
@@ -45,8 +46,91 @@ class Sam2Model:
             logger.info(f"SAM2: Loading model from {model_path}...")
             logger.info(f"SAM2: Using config: {config_path}")
 
+            # Ensure config_path is absolute
+            if not os.path.isabs(config_path):
+                # Try to make it absolute if it's relative
+                import sam2
+
+                sam2_dir = os.path.dirname(sam2.__file__)
+                config_path = os.path.join(sam2_dir, "configs", config_path)
+
+            # Verify the config exists before passing to build_sam2
+            if not os.path.exists(config_path):
+                raise FileNotFoundError(f"Config file not found: {config_path}")
+
+            logger.info(f"SAM2: Resolved config path: {config_path}")
+
             # Build SAM2 model
-            self.model = build_sam2(config_path, model_path, device=self.device)
+            # SAM2 uses Hydra for configuration - we need to pass the right config name
+            # Try different approaches based on what's available
+
+            model_filename = Path(model_path).name.lower()
+
+            # First, try using the auto-detected config path directly
+            try:
+                logger.info(f"SAM2: Attempting to load with config path: {config_path}")
+                self.model = self._build_sam2_with_fallback(config_path, model_path)
+                logger.info("SAM2: Successfully loaded with config path")
+            except Exception as e1:
+                logger.debug(f"SAM2: Config path approach failed: {e1}")
+
+                # Second, try just the config filename without path
+                try:
+                    config_filename = Path(config_path).name
+                    logger.info(
+                        f"SAM2: Attempting to load with config filename: {config_filename}"
+                    )
+                    self.model = self._build_sam2_with_fallback(
+                        config_filename, model_path
+                    )
+                    logger.info("SAM2: Successfully loaded with config filename")
+                except Exception as e2:
+                    logger.debug(f"SAM2: Config filename approach failed: {e2}")
+
+                    # Third, try the base config name without version
+                    try:
+                        # Map model sizes to base config names
+                        if (
+                            "tiny" in model_filename
+                            or "_t." in model_filename
+                            or "_t_" in model_filename
+                        ):
+                            base_config = "sam2_hiera_t.yaml"
+                        elif (
+                            "small" in model_filename
+                            or "_s." in model_filename
+                            or "_s_" in model_filename
+                        ):
+                            base_config = "sam2_hiera_s.yaml"
+                        elif (
+                            "base_plus" in model_filename
+                            or "_b+." in model_filename
+                            or "_b+_" in model_filename
+                        ):
+                            base_config = "sam2_hiera_b+.yaml"
+                        elif (
+                            "large" in model_filename
+                            or "_l." in model_filename
+                            or "_l_" in model_filename
+                        ):
+                            base_config = "sam2_hiera_l.yaml"
+                        else:
+                            base_config = "sam2_hiera_l.yaml"
+
+                        logger.info(
+                            f"SAM2: Attempting to load with base config: {base_config}"
+                        )
+                        self.model = self._build_sam2_with_fallback(
+                            base_config, model_path
+                        )
+                        logger.info("SAM2: Successfully loaded with base config")
+                    except Exception as e3:
+                        # All approaches failed
+                        raise Exception(
+                            f"Failed to load SAM2 model with any config approach. "
+                            f"Tried: {config_path}, {config_filename}, {base_config}. "
+                            f"Last error: {e3}"
+                        ) from e3
 
             # Create predictor
             self.predictor = SAM2ImagePredictor(self.model)
@@ -61,14 +145,15 @@ class Sam2Model:
 
     def _auto_detect_config(self, model_path: str) -> str:
         """Auto-detect the appropriate config file based on model filename."""
-        filename = os.path.basename(model_path).lower()
+        model_path = Path(model_path)
+        filename = model_path.name.lower()
 
         # Get the sam2 package directory
         try:
             import sam2
 
-            sam2_dir = os.path.dirname(sam2.__file__)
-            configs_dir = os.path.join(sam2_dir, "configs")
+            sam2_dir = Path(sam2.__file__).parent
+            configs_dir = sam2_dir / "configs"
 
             # Map model types to config files
             if "tiny" in filename or "_t" in filename:
@@ -95,26 +180,89 @@ class Sam2Model:
 
             # Check sam2.1 configs first, then fall back to sam2
             if "2.1" in filename:
-                config_path = os.path.join(configs_dir, "sam2.1", config_file)
+                config_path = configs_dir / "sam2.1" / config_file
             else:
-                config_path = os.path.join(
-                    configs_dir, "sam2", config_file.replace("2.1_", "")
-                )
+                config_path = configs_dir / "sam2" / config_file.replace("2.1_", "")
 
-            if os.path.exists(config_path):
-                return config_path
+            logger.debug(f"SAM2: Checking config path: {config_path}")
+            if config_path.exists():
+                return str(config_path.absolute())
 
             # Fallback to default large config
-            fallback_config = os.path.join(configs_dir, "sam2.1", "sam2.1_hiera_l.yaml")
-            if os.path.exists(fallback_config):
-                return fallback_config
+            fallback_config = configs_dir / "sam2.1" / "sam2.1_hiera_l.yaml"
+            logger.debug(f"SAM2: Checking fallback config: {fallback_config}")
+            if fallback_config.exists():
+                return str(fallback_config.absolute())
 
-            raise FileNotFoundError(f"No suitable config found for {filename}")
+            # Try without version subdirectory
+            direct_config = configs_dir / config_file
+            logger.debug(f"SAM2: Checking direct config: {direct_config}")
+            if direct_config.exists():
+                return str(direct_config.absolute())
+
+            raise FileNotFoundError(
+                f"No suitable config found for {filename} in {configs_dir}"
+            )
 
         except Exception as e:
             logger.error(f"SAM2: Failed to auto-detect config: {e}")
-            # Return a reasonable default path
-            return "sam2.1_hiera_l.yaml"
+            # Try to construct a full path even if auto-detection failed
+            try:
+                import sam2
+
+                sam2_dir = Path(sam2.__file__).parent
+                # Return full path to default config
+                return str(sam2_dir / "configs" / "sam2.1" / "sam2.1_hiera_l.yaml")
+            except Exception:
+                # Last resort - return just the config name and let hydra handle it
+                return "sam2.1_hiera_l.yaml"
+
+    def _build_sam2_with_fallback(self, config_path, model_path):
+        """Build SAM2 model with fallback for state_dict compatibility issues."""
+        try:
+            # First, try the standard build_sam2 approach
+            return build_sam2(config_path, model_path, device=self.device)
+        except RuntimeError as e:
+            if "Unexpected key(s) in state_dict" in str(e):
+                logger.warning(f"SAM2: Detected state_dict compatibility issue: {e}")
+                logger.info("SAM2: Attempting to load with state_dict filtering...")
+
+                # Build model without loading weights first
+                model = build_sam2(config_path, None, device=self.device)
+
+                # Load checkpoint and handle nested structure
+                checkpoint = torch.load(model_path, map_location=self.device)
+
+                # Check if checkpoint has nested 'model' key (common in SAM2.1)
+                if "model" in checkpoint and isinstance(checkpoint["model"], dict):
+                    logger.info(
+                        "SAM2: Detected nested checkpoint structure, extracting model weights"
+                    )
+                    model_weights = checkpoint["model"]
+                else:
+                    # Flat structure - filter out the known problematic keys
+                    model_weights = {}
+                    problematic_keys = {
+                        "no_obj_embed_spatial",
+                        "obj_ptr_tpos_proj.weight",
+                        "obj_ptr_tpos_proj.bias",
+                    }
+                    for key, value in checkpoint.items():
+                        if key not in problematic_keys:
+                            model_weights[key] = value
+
+                    logger.info(
+                        f"SAM2: Filtered out problematic keys: {list(problematic_keys & set(checkpoint.keys()))}"
+                    )
+
+                # Load the model weights
+                model.load_state_dict(model_weights, strict=False)
+                logger.info("SAM2: Successfully loaded model with state_dict filtering")
+
+                return model
+            else:
+                # Re-raise if it's a different type of error
+                raise
 
     def set_image_from_path(self, image_path: str) -> bool:
         """Set image for SAM2 model from file path."""
@@ -204,7 +352,7 @@ class Sam2Model:
                 config_path = self._auto_detect_config(model_path)
 
             # Load new model
-            self.model = build_sam2(config_path, model_path, device=self.device)
+            self.model = self._build_sam2_with_fallback(config_path, model_path)
             self.predictor = SAM2ImagePredictor(self.model)
             self.current_model_path = model_path
             self.is_loaded = True

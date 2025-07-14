@@ -15,7 +15,7 @@ class TestUndoRedo:
         """Create a mocked MainWindow with necessary attributes."""
         with (
             patch("lazylabel.ui.main_window.MainWindow._setup_ui"),
-            patch("lazylabel.ui.main_window.MainWindow._setup_model"),
+            patch("lazylabel.ui.main_window.MainWindow._setup_model_manager"),
             patch("lazylabel.ui.main_window.MainWindow._setup_connections"),
             patch("lazylabel.ui.main_window.MainWindow._setup_shortcuts"),
             patch("lazylabel.ui.main_window.MainWindow._load_settings"),

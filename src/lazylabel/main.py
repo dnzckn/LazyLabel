@@ -23,6 +23,7 @@ def main():
     logger.info("Step 3/8: Applying dark theme...")
     qdarktheme.setup_theme()
 
+    logger.info("Step 4/8: Setting up main window...")
     main_window = MainWindow()
 
     logger.info("Step 7/8: Showing main window...")
