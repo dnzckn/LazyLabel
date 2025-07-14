@@ -34,3 +34,6 @@ Thumbs.db
 
 # LLM's 
 .claude
+
+# Test images
+test_images/

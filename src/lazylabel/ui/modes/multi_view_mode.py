@@ -19,7 +19,23 @@ class MultiViewModeHandler(BaseModeHandler):
         super().__init__(main_window)
         # Initialize multi-view segment tracking
         if not hasattr(main_window, "multi_view_segment_items"):
-            main_window.multi_view_segment_items = {0: {}, 1: {}}
+            # Initialize with dynamic viewer count
+            num_viewers = self._get_num_viewers()
+            main_window.multi_view_segment_items = {i: {} for i in range(num_viewers)}
+
+    def _get_num_viewers(self):
+        """Get the number of viewers based on current configuration."""
+        if hasattr(self.main_window, "multi_view_viewers"):
+            return len(self.main_window.multi_view_viewers)
+        else:
+            # Fallback to settings
+            config = self.main_window._get_multi_view_config()
+            return config["num_viewers"]
+
+    def _get_other_viewer_indices(self, current_viewer_index):
+        """Get indices of all other viewers (excluding current)."""
+        num_viewers = self._get_num_viewers()
+        return [i for i in range(num_viewers) if i != current_viewer_index]
 
     def handle_ai_click(self, pos, event, viewer_index=0):
         """Handle AI mode click in multi view."""
@@ -102,9 +118,11 @@ class MultiViewModeHandler(BaseModeHandler):
         if positive:
             # Left-click: Set up for potential drag (similar to single-view AI mode)
             if not hasattr(self.main_window, "multi_view_ai_click_starts"):
-                self.main_window.multi_view_ai_click_starts = [None, None]
+                num_viewers = self._get_num_viewers()
+                self.main_window.multi_view_ai_click_starts = [None] * num_viewers
             if not hasattr(self.main_window, "multi_view_ai_rects"):
-                self.main_window.multi_view_ai_rects = [None, None]
+                num_viewers = self._get_num_viewers()
+                self.main_window.multi_view_ai_rects = [None] * num_viewers
 
             self.main_window.multi_view_ai_click_starts[viewer_index] = pos
             # We'll determine if it's a click or drag in the move/release handlers
@@ -132,7 +150,10 @@ class MultiViewModeHandler(BaseModeHandler):
 
         # Track point items for clearing
         if not hasattr(self.main_window, "multi_view_point_items"):
-            self.main_window.multi_view_point_items = {0: [], 1: []}
+            num_viewers = self._get_num_viewers()
+            self.main_window.multi_view_point_items = {
+                i: [] for i in range(num_viewers)
+            }
         self.main_window.multi_view_point_items[viewer_index].append(point_item)
 
         # Record the action for undo
@@ -158,9 +179,15 @@ class MultiViewModeHandler(BaseModeHandler):
 
             # Initialize point accumulation for multiview mode (like single view)
             if not hasattr(self.main_window, "multi_view_positive_points"):
-                self.main_window.multi_view_positive_points = {0: [], 1: []}
+                num_viewers = self._get_num_viewers()
+                self.main_window.multi_view_positive_points = {
+                    i: [] for i in range(num_viewers)
+                }
             if not hasattr(self.main_window, "multi_view_negative_points"):
-                self.main_window.multi_view_negative_points = {0: [], 1: []}
+                num_viewers = self._get_num_viewers()
+                self.main_window.multi_view_negative_points = {
+                    i: [] for i in range(num_viewers)
+                }
 
             # Add current point to accumulated lists
             if positive:
@@ -216,11 +243,12 @@ class MultiViewModeHandler(BaseModeHandler):
                 # Show preview mask
                 self._display_ai_preview(mask, viewer_index)
 
-                # Generate prediction for the other viewer with same coordinates
-                other_viewer_index = 1 - viewer_index
-                self._generate_paired_ai_preview(
-                    viewer_index, other_viewer_index, pos, model_pos, positive
-                )
+                # Generate predictions for all other viewers with same coordinates
+                other_viewer_indices = self._get_other_viewer_indices(viewer_index)
+                for other_viewer_index in other_viewer_indices:
+                    self._generate_paired_ai_preview(
+                        viewer_index, other_viewer_index, pos, model_pos, positive
+                    )
 
         except Exception as e:
             logger.error(f"Error processing AI click for viewer {viewer_index}: {e}")
@@ -264,9 +292,11 @@ class MultiViewModeHandler(BaseModeHandler):
         """Handle bbox mode start in multi view."""
         # Initialize storage if needed
         if not hasattr(self.main_window, "multi_view_bbox_starts"):
-            self.main_window.multi_view_bbox_starts = [None, None]
+            num_viewers = self._get_num_viewers()
+            self.main_window.multi_view_bbox_starts = [None] * num_viewers
         if not hasattr(self.main_window, "multi_view_bbox_rects"):
-            self.main_window.multi_view_bbox_rects = [None, None]
+            num_viewers = self._get_num_viewers()
+            self.main_window.multi_view_bbox_rects = [None] * num_viewers
 
         self.main_window.multi_view_bbox_starts[viewer_index] = pos
 
@@ -334,10 +364,28 @@ class MultiViewModeHandler(BaseModeHandler):
             "mask": None,
         }
 
-        # Use the paired segment method for bounding boxes to create segments for both views
-        self.main_window._add_multi_view_paired_segment(
-            "Polygon", None, view_data, view_data
+        # Create segment with views structure for all viewers (like polygon mode)
+        num_viewers = self._get_num_viewers()
+
+        paired_segment = {"type": "Polygon", "views": {}}
+
+        # Add view data for all viewers with same coordinates
+        for viewer_idx in range(num_viewers):
+            paired_segment["views"][viewer_idx] = {
+                "vertices": view_data["vertices"].copy(),
+                "mask": None,
+            }
+
+        # Add to segment manager
+        self.main_window.segment_manager.add_segment(paired_segment)
+
+        # Record for undo
+        self.main_window.action_history.append(
+            {"type": "add_segment", "data": paired_segment}
         )
+
+        # Clear redo history when a new action is performed
+        self.main_window.redo_history.clear()
 
         # Clean up
         self.main_window.multi_view_bbox_starts[viewer_index] = None
@@ -365,7 +413,8 @@ class MultiViewModeHandler(BaseModeHandler):
                             pass
 
         # Initialize segment items tracking for multi-view
-        self.main_window.multi_view_segment_items = {0: {}, 1: {}}
+        num_viewers = self._get_num_viewers()
+        self.main_window.multi_view_segment_items = {i: {} for i in range(num_viewers)}
 
         # Display segments on each viewer
         for i, segment in enumerate(self.segment_manager.segments):
@@ -647,8 +696,9 @@ class MultiViewModeHandler(BaseModeHandler):
             return
 
         # Create paired segments with views structure for multi-view mode
-        if len(predictions) == 2:
-            # Both viewers have predictions - create paired segment with views structure
+        num_viewers = self._get_num_viewers()
+        if len(predictions) >= 2:
+            # Multiple viewers have predictions - create paired segment with views structure
             # Get the current active class or determine next class ID
             active_class = self.main_window.segment_manager.get_active_class()
             if active_class is None:
@@ -664,7 +714,7 @@ class MultiViewModeHandler(BaseModeHandler):
             paired_segment = {"type": "AI", "class_id": next_class_id, "views": {}}
 
             # Add view data for each viewer
-            for viewer_index in [0, 1]:
+            for viewer_index in range(num_viewers):
                 if viewer_index in predictions:
                     view_data = {"mask": predictions[viewer_index]["mask"]}
                     # Add points/labels if they exist (point-based prediction)
@@ -724,57 +774,43 @@ class MultiViewModeHandler(BaseModeHandler):
             "mask": None,
         }
 
-        # Check if there's a pending polygon on the other viewer to pair with
-        other_viewer_index = 1 - viewer_index
-        if (
-            hasattr(self.main_window, "_pending_polygon_segments")
-            and other_viewer_index in self.main_window._pending_polygon_segments
-        ):
-            # Pair with the pending polygon from the other viewer
-            other_view_data = self.main_window._pending_polygon_segments[
-                other_viewer_index
-            ]
+        # Mirror the polygon to all other viewers automatically
+        num_viewers = self._get_num_viewers()
 
-            # Create paired segment with both polygons
-            if viewer_index == 0:
-                self.main_window._add_multi_view_paired_segment(
-                    "Polygon", None, view_data, other_view_data
-                )
-            else:
-                self.main_window._add_multi_view_paired_segment(
-                    "Polygon", None, other_view_data, view_data
-                )
+        # Create segment with views structure for all viewers
+        paired_segment = {"type": "Polygon", "views": {}}
 
-            # Clean up pending polygon
-            del self.main_window._pending_polygon_segments[other_viewer_index]
+        # Add the current viewer's data
+        paired_segment["views"][viewer_index] = view_data
 
-            # Update UI
-            self.main_window._update_all_lists()
-        else:
-            # No pending polygon to pair with - mirror the polygon to the other viewer automatically
-            # Create mirrored view data (same coordinates as they should align between linked images)
-            mirrored_view_data = {
-                "vertices": view_data[
-                    "vertices"
-                ].copy(),  # Use same coordinates for mirrored polygon
-                "mask": None,
-            }
+        # Mirror to all other viewers with same coordinates (they should align between linked images)
+        for other_viewer_index in range(num_viewers):
+            if other_viewer_index != viewer_index:
+                mirrored_view_data = {
+                    "vertices": view_data[
+                        "vertices"
+                    ].copy(),  # Use same coordinates for mirrored polygon
+                    "mask": None,
+                }
+                paired_segment["views"][other_viewer_index] = mirrored_view_data
 
-            # Create paired segment with both polygons using same coordinates
-            if viewer_index == 0:
-                self.main_window._add_multi_view_paired_segment(
-                    "Polygon", None, view_data, mirrored_view_data
-                )
-            else:
-                self.main_window._add_multi_view_paired_segment(
-                    "Polygon", None, mirrored_view_data, view_data
-                )
+        # Add to segment manager
+        self.main_window.segment_manager.add_segment(paired_segment)
 
-            # Update UI
-            self.main_window._update_all_lists()
-            self.main_window._show_notification(
-                "Polygon created and mirrored to both viewers."
-            )
+        # Record for undo
+        self.main_window.action_history.append(
+            {"type": "add_segment", "data": paired_segment}
+        )
+
+        # Clear redo history when a new action is performed
+        self.main_window.redo_history.clear()
+
+        # Update UI
+        self.main_window._update_all_lists()
+        viewer_count_text = "all viewers" if num_viewers > 2 else "both viewers"
+        self.main_window._show_notification(
+            f"Polygon created and mirrored to {viewer_count_text}."
+        )
 
         # Clear polygon state for this viewer
         self._clear_multi_view_polygon(viewer_index)
@@ -997,11 +1033,12 @@ class MultiViewModeHandler(BaseModeHandler):
                 # Show preview mask
                 self._display_ai_preview(mask, viewer_index)
 
-                # Generate prediction for the other viewer with same bounding box
-                other_viewer_index = 1 - viewer_index
-                self._generate_paired_ai_bbox_preview(
-                    viewer_index, other_viewer_index, box
-                )
+                # Generate predictions for all other viewers with same bounding box
+                other_viewer_indices = self._get_other_viewer_indices(viewer_index)
+                for other_viewer_index in other_viewer_indices:
+                    self._generate_paired_ai_bbox_preview(
+                        viewer_index, other_viewer_index, box
+                    )
 
         except Exception as e:
             logger.error(
@@ -1031,7 +1068,11 @@ class MultiViewModeHandler(BaseModeHandler):
 
         # Track point items for clearing
         if not hasattr(self.main_window, "multi_view_point_items"):
-            self.main_window.multi_view_point_items = {0: [], 1: []}
+            # Initialize with dynamic viewer count
+            num_viewers = self._get_num_viewers()
+            self.main_window.multi_view_point_items = {
+                i: [] for i in range(num_viewers)
+            }
         self.main_window.multi_view_point_items[viewer_index].append(point_item)
 
         # Record the action for undo
@@ -1057,9 +1098,15 @@ class MultiViewModeHandler(BaseModeHandler):
 
             # Initialize point accumulation for multiview mode (like single view)
             if not hasattr(self.main_window, "multi_view_positive_points"):
-                self.main_window.multi_view_positive_points = {0: [], 1: []}
+                num_viewers = self._get_num_viewers()
+                self.main_window.multi_view_positive_points = {
+                    i: [] for i in range(num_viewers)
+                }
             if not hasattr(self.main_window, "multi_view_negative_points"):
-                self.main_window.multi_view_negative_points = {0: [], 1: []}
+                num_viewers = self._get_num_viewers()
+                self.main_window.multi_view_negative_points = {
+                    i: [] for i in range(num_viewers)
+                }
 
             # Add current point to accumulated lists
             if positive:
@@ -1115,11 +1162,12 @@ class MultiViewModeHandler(BaseModeHandler):
                 # Show preview mask
                 self._display_ai_preview(mask, viewer_index)
 
-                # Generate prediction for the other viewer with same coordinates
-                other_viewer_index = 1 - viewer_index
-                self._generate_paired_ai_preview(
-                    viewer_index, other_viewer_index, pos, model_pos, positive
-                )
+                # Generate predictions for all other viewers with same coordinates
+                other_viewer_indices = self._get_other_viewer_indices(viewer_index)
+                for other_viewer_index in other_viewer_indices:
+                    self._generate_paired_ai_preview(
+                        viewer_index, other_viewer_index, pos, model_pos, positive
+                    )
 
         except Exception as e:
             logger.error(f"Error processing AI click for viewer {viewer_index}: {e}")

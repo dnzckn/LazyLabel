@@ -42,6 +42,9 @@ class Settings:
     # UI State
     annotation_size_multiplier: float = 1.0
 
+    # Multi-view Settings
+    multi_view_grid_mode: str = "2_view"  # "2_view" or "4_view"
+
     def save_to_file(self, filepath: str) -> None:
         """Save settings to JSON file."""
         os.makedirs(os.path.dirname(filepath), exist_ok=True)

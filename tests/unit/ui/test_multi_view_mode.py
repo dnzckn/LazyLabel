@@ -24,8 +24,10 @@ def mock_sam_model():
 @pytest.fixture
 def mock_sam_models_list():
     """Create a list of mock SAM models for multi-view testing."""
+    # Support both 2-view and 4-view configurations
+    max_viewers = 4  # Support up to 4 viewers for testing
     models = []
-    for _ in range(2):
+    for _ in range(max_viewers):
         mock_model = MagicMock()
         mock_model.is_loaded = True
         mock_model.device = "CUDA"
@@ -80,12 +82,19 @@ def test_multi_view_initialization(main_window_with_multi_view):
     """Test that multi-view state is properly initialized."""
     window = main_window_with_multi_view
 
+    # Get expected configuration
+    config = window._get_multi_view_config()
+    num_viewers = config["num_viewers"]
+
     # Check initial multi-view state
     assert window.view_mode == "single"
     assert window.multi_view_models == []
-    assert window.multi_view_images == [None, None]
-    assert window.multi_view_linked == [True, True]
-    assert window.multi_view_segments == [[], []]
+    assert len(window.multi_view_images) == num_viewers
+    assert all(img is None for img in window.multi_view_images)
+    assert len(window.multi_view_linked) == num_viewers
+    assert all(linked for linked in window.multi_view_linked)
+    assert len(window.multi_view_segments) == num_viewers
+    assert all(segments == [] for segments in window.multi_view_segments)
     # Note: current_multi_batch_start removed - now uses relative navigation
 
 
@@ -145,19 +154,23 @@ def test_multi_view_model_initialization_sam1(
     window.model_manager.sam_model.current_model_type = "vit_h"
     window.model_manager.sam_model.current_model_path = "/path/to/model.pth"
 
+    # Get dynamic viewer count
+    config = window._get_multi_view_config()
+    num_viewers = config["num_viewers"]
+
     # Mock model instances
-    mock_models = [MagicMock(), MagicMock()]
+    mock_models = [MagicMock() for _ in range(num_viewers)]
     for model in mock_models:
         model.is_loaded = True
     mock_sam_model_class.side_effect = mock_models
 
     # Test initialization - directly call the worker completion handlers
-    window._on_multi_view_model_initialized(0, mock_models[0])
-    window._on_multi_view_model_initialized(1, mock_models[1])
-    window._on_all_multi_view_models_initialized(2)
+    for i in range(num_viewers):
+        window._on_multi_view_model_initialized(i, mock_models[i])
+    window._on_all_multi_view_models_initialized(num_viewers)
 
     # Verify models were created
-    assert len(window.multi_view_models) == 2
+    assert len(window.multi_view_models) == num_viewers
 
 
 @patch("lazylabel.models.sam2_model.Sam2Model")
@@ -178,19 +191,23 @@ def test_multi_view_model_initialization_sam2(
     window.model_manager.sam_model._is_sam2 = True
     window.model_manager.sam_model.model_path = "/path/to/sam2_model.pth"
 
+    # Get dynamic viewer count
+    config = window._get_multi_view_config()
+    num_viewers = config["num_viewers"]
+
     # Mock model instances
-    mock_models = [MagicMock(), MagicMock()]
+    mock_models = [MagicMock() for _ in range(num_viewers)]
     for model in mock_models:
         model.is_loaded = True
     mock_sam2_model_class.side_effect = mock_models
 
     # Test initialization - directly call the worker completion handlers
-    window._on_multi_view_model_initialized(0, mock_models[0])
-    window._on_multi_view_model_initialized(1, mock_models[1])
-    window._on_all_multi_view_models_initialized(2)
+    for i in range(num_viewers):
+        window._on_multi_view_model_initialized(i, mock_models[i])
+    window._on_all_multi_view_models_initialized(num_viewers)
 
     # Verify SAM2 models were created
-    assert len(window.multi_view_models) == 2
+    assert len(window.multi_view_models) == num_viewers
 
 
 def test_multi_view_model_initialization_failure(main_window_with_multi_view):
@@ -218,8 +235,10 @@ def test_multi_view_models_cleanup(main_window_with_multi_view):
     """Test multi-view models cleanup."""
     window = main_window_with_multi_view
 
-    # Create mock models
-    mock_models = [MagicMock(), MagicMock()]
+    # Get dynamic viewer count and create mock models
+    config = window._get_multi_view_config()
+    num_viewers = config["num_viewers"]
+    mock_models = [MagicMock() for _ in range(num_viewers)]
     for model in mock_models:
         model.model = MagicMock()
     window.multi_view_models = mock_models
@@ -237,6 +256,16 @@ def test_multi_view_batch_loading(main_window_with_multi_view):
     """Test loading a pair of images from cached list position."""
     window = main_window_with_multi_view
 
+    # Override config to use 2-view mode for this test
+    window._get_multi_view_config = MagicMock(
+        return_value={
+            "num_viewers": 2,
+            "grid_rows": 1,
+            "grid_cols": 2,
+            "use_grid": False,
+        }
+    )
+
     # Mock cached image list (the global list from folder scan)
     window.cached_image_paths = [
         "/path/to/image1.jpg",
@@ -250,7 +279,7 @@ def test_multi_view_batch_loading(main_window_with_multi_view):
     window.current_file_index.isValid.return_value = True
     window.file_model = MagicMock()
     window.file_model.filePath.return_value = "/path/to/image1.jpg"
-    window._load_multi_view_pair = MagicMock()
+    window._load_multi_view_images = MagicMock()
     window.file_manager = MagicMock()
     window.file_manager.is_image_file.return_value = True
 
@@ -259,15 +288,25 @@ def test_multi_view_batch_loading(main_window_with_multi_view):
         # Test relative loading from cached list
         window._load_current_multi_view_pair_from_file_model()
 
-    # Verify it calls the pair loading function with correct paths from cached list
-    window._load_multi_view_pair.assert_called_once_with(
-        "/path/to/image1.jpg", "/path/to/image2.jpg"
+    # Verify it calls the image loading function with correct paths from cached list
+    window._load_multi_view_images.assert_called_once_with(
+        ["/path/to/image1.jpg", "/path/to/image2.jpg"]
     )
 
 
 def test_multi_view_batch_navigation(main_window_with_multi_view):
     """Test navigation between multi-view batches."""
     window = main_window_with_multi_view
+
+    # Override config to use 2-view mode for this test
+    window._get_multi_view_config = MagicMock(
+        return_value={
+            "num_viewers": 2,
+            "grid_rows": 1,
+            "grid_cols": 2,
+            "use_grid": False,
+        }
+    )
 
     # Mock cached image list (the global list from folder scan)
     window.cached_image_paths = [
@@ -280,32 +319,37 @@ def test_multi_view_batch_navigation(main_window_with_multi_view):
     ]
 
     # Mock the navigation implementation
-    window._load_multi_view_pair = MagicMock()
+    window._load_multi_view_images = MagicMock()
     window.current_file_index = MagicMock()
     window.current_file_index.isValid.return_value = True
     window.file_model = MagicMock()
     window.right_panel = MagicMock()
     window.right_panel.file_tree = MagicMock()
 
+    # Mock the class filter combo to avoid the >= comparison issue
+    mock_combo = MagicMock()
+    mock_combo.findText.return_value = -1  # Return integer instead of MagicMock
+    window.right_panel.class_filter_combo = mock_combo
+
     # Test next batch navigation (from image1 -> image3+4)
     window.file_model.filePath.return_value = "/path/to/image1.jpg"
     window._load_next_multi_batch()
 
-    # Verify _load_multi_view_pair was called with images at index 2 and 3
-    window._load_multi_view_pair.assert_called_once_with(
-        "/path/to/image3.jpg", "/path/to/image4.jpg"
+    # Verify _load_multi_view_images was called with images at index 2 and 3
+    window._load_multi_view_images.assert_called_once_with(
+        ["/path/to/image3.jpg", "/path/to/image4.jpg"]
     )
 
     # Reset mocks for previous batch test
-    window._load_multi_view_pair.reset_mock()
+    window._load_multi_view_images.reset_mock()
 
     # Test previous batch navigation (from image5 -> image3+4)
     window.file_model.filePath.return_value = "/path/to/image5.jpg"
     window._load_previous_multi_batch()
 
-    # Verify _load_multi_view_pair was called with images at index 2 and 3
-    window._load_multi_view_pair.assert_called_once_with(
-        "/path/to/image3.jpg", "/path/to/image4.jpg"
+    # Verify _load_multi_view_images was called with images at index 2 and 3
+    window._load_multi_view_images.assert_called_once_with(
+        ["/path/to/image3.jpg", "/path/to/image4.jpg"]
     )
 
 
@@ -408,13 +452,23 @@ def test_multi_view_save_batch(main_window_with_multi_view):
     """Test saving annotations for multi-view batch."""
     window = main_window_with_multi_view
 
-    # Setup multi-view state
+    # Setup multi-view state for 2-view mode
     window.multi_view_images = ["/path/to/image1.jpg", "/path/to/image2.jpg"]
     window.multi_view_linked = [True, True]
     window.multi_view_segments = [
         [{"class": "test", "mask": np.zeros((100, 100))}],
         [{"class": "test", "mask": np.zeros((100, 100))}],
     ]
+
+    # Mock config to return 2-view mode for this test
+    window._get_multi_view_config = MagicMock(
+        return_value={
+            "num_viewers": 2,
+            "grid_rows": 1,
+            "grid_cols": 2,
+            "use_grid": False,
+        }
+    )
 
     # Mock file manager and dependencies
     window.file_manager = MagicMock()
