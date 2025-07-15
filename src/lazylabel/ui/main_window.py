@@ -1601,14 +1601,19 @@ class MainWindow(QMainWindow):
             if self.current_image_path:
                 self._mark_sam_dirty()
 
-            # Handle multi view mode - mark models as dirty so they get updated with adjusted images
+            # Handle multi view mode - use fast updates for adjusted images instead of marking dirty
             elif self.view_mode == "multi" and hasattr(self, "multi_view_models"):
+                changed_indices = []
                 for i in range(len(self.multi_view_models)):
                     if (
                         self.multi_view_images[i]
                         and self.multi_view_models[i] is not None
                     ):
-                        self._mark_multi_view_sam_dirty(i)
+                        changed_indices.append(i)
+
+                # Use fast updates instead of marking all models dirty
+                if changed_indices:
+                    self._fast_update_multi_view_images(changed_indices)
 
     # File management methods
     def _open_folder_dialog(self):
@@ -1805,17 +1810,28 @@ class MainWindow(QMainWindow):
         while len(self._last_multi_view_images) < num_viewers:
             self._last_multi_view_images.append(None)
 
-        # Check and update SAM models for all viewers
+        # Check and update SAM models for all viewers - USE FAST UPDATES for existing models
+        changed_indices = []
         for i in range(num_viewers):
             image_path = (
                 self.multi_view_images[i] if i < len(self.multi_view_images) else None
             )
-            if (
-                i < len(self.multi_view_models)
-                and self._last_multi_view_images[i] != image_path
-            ):
+            if self._last_multi_view_images[i] != image_path:
                 self._last_multi_view_images[i] = image_path
-                self._mark_multi_view_sam_dirty(i)
+
+                # Only mark dirty if model doesn't exist yet (needs initialization)
+                if (
+                    i >= len(self.multi_view_models)
+                    or self.multi_view_models[i] is None
+                ):
+                    self._mark_multi_view_sam_dirty(i)
+                else:
+                    # Model exists - use fast image update instead of recreation
+                    changed_indices.append(i)
+
+        # Perform fast batch updates for existing models
+        if changed_indices:
+            self._fast_update_multi_view_images(changed_indices)
 
         # Load existing segments for all loaded images
         valid_image_paths = [path for path in image_paths if path is not None]
@@ -4944,11 +4960,19 @@ class MainWindow(QMainWindow):
             if hasattr(self, "multi_view_images") and any(self.multi_view_images):
                 self._apply_multi_view_image_processing_fast()
 
-                # Mark multi-view SAM models as dirty if needed
+                # Use fast updates for multi-view SAM models instead of marking dirty
                 if self.settings.operate_on_view:
+                    changed_indices = []
                     for i in range(len(self.multi_view_images)):
-                        if self.multi_view_images[i]:
-                            self._mark_multi_view_sam_dirty(i)
+                        if (
+                            self.multi_view_images[i]
+                            and i < len(self.multi_view_models)
+                            and self.multi_view_models[i] is not None
+                        ):
+                            changed_indices.append(i)
+
+                    if changed_indices:
+                        self._fast_update_multi_view_images(changed_indices)
             return
 
         # Handle single-view mode
@@ -4972,11 +4996,19 @@ class MainWindow(QMainWindow):
             if hasattr(self, "multi_view_images") and any(self.multi_view_images):
                 self._apply_multi_view_image_processing_fast()
 
-                # Mark multi-view SAM models as dirty if needed
+                # Use fast updates for multi-view SAM models instead of marking dirty
                 if self.settings.operate_on_view:
+                    changed_indices = []
                     for i in range(len(self.multi_view_images)):
-                        if self.multi_view_images[i]:
-                            self._mark_multi_view_sam_dirty(i)
+                        if (
+                            self.multi_view_images[i]
+                            and i < len(self.multi_view_models)
+                            and self.multi_view_models[i] is not None
+                        ):
+                            changed_indices.append(i)
+
+                    if changed_indices:
+                        self._fast_update_multi_view_images(changed_indices)
             return
 
         # Handle single-view mode
@@ -6511,9 +6543,57 @@ class MainWindow(QMainWindow):
             )
 
     def _mark_multi_view_sam_dirty(self, viewer_index):
-        """Mark multi-view SAM model as dirty (needs image update)."""
+        """Mark multi-view SAM model as dirty (needs model recreation)."""
         if 0 <= viewer_index < len(self.multi_view_models_dirty):
             self.multi_view_models_dirty[viewer_index] = True
+
+    def _update_multi_view_model_image(self, viewer_index, image_path):
+        """Fast update: Set new image in existing model without recreating model."""
+        if (
+            viewer_index >= len(self.multi_view_models)
+            or self.multi_view_models[viewer_index] is None
+            or not image_path
+        ):
+            return False
+
+        model = self.multi_view_models[viewer_index]
+
+        try:
+            # Get current modified image if operate_on_view is enabled
+            if self.settings.operate_on_view:
+                current_image = self._get_multi_view_modified_image(viewer_index)
+                if current_image is not None:
+                    return model.set_image_from_array(current_image)
+
+            # Use original image path
+            return model.set_image_from_path(image_path)
+
+        except Exception as e:
+            logger.error(f"Failed to update image for model {viewer_index}: {e}")
+            return False
+
+    def _fast_update_multi_view_images(self, changed_indices):
+        """Fast batch update of images in existing models without recreation."""
+        if not changed_indices:
+            return
+
+        logger.debug(f"Fast updating images for viewers: {changed_indices}")
+
+        for viewer_index in changed_indices:
+            if viewer_index >= len(self.multi_view_images):
+                continue
+
+            image_path = self.multi_view_images[viewer_index]
+            if image_path:
+                success = self._update_multi_view_model_image(viewer_index, image_path)
+                if success:
+                    logger.debug(f"Fast updated model {viewer_index} with new image")
+                else:
+                    # Fall back to full model update if fast update fails
+                    logger.warning(
+                        f"Fast update failed for viewer {viewer_index}, marking dirty"
+                    )
+                    self._mark_multi_view_sam_dirty(viewer_index)
 
     def _ensure_multi_view_sam_updated(self, viewer_index):
         """Ensure multi-view SAM model is updated for the given viewer."""
