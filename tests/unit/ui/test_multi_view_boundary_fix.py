@@ -4,6 +4,12 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+# Try to import required dependencies, skip module if not available
+try:
+    import sam2  # noqa: F401
+except ImportError:
+    pytest.skip("SAM-2 dependencies not available", allow_module_level=True)
+
 # Mock SAM-2 modules before importing MainWindow to prevent import errors
 with (
     patch("lazylabel.models.sam2_model.build_sam2"),
