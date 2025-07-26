@@ -1,5 +1,7 @@
 """Right panel with file explorer and segment management."""
 
+from pathlib import Path
+
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtWidgets import (
     QComboBox,
@@ -14,6 +16,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from ..utils.fast_file_manager import FastFileManager
 from .reorderable_class_table import ReorderableClassTable
 
 
@@ -23,6 +26,7 @@ class RightPanel(QWidget):
     # Signals
     open_folder_requested = pyqtSignal()
     image_selected = pyqtSignal("QModelIndex")
+    image_path_selected = pyqtSignal(Path)  # New signal for path-based selection
     merge_selection_requested = pyqtSignal()
     delete_selection_requested = pyqtSignal()
     segments_selection_changed = pyqtSignal()
@@ -109,8 +113,13 @@ class RightPanel(QWidget):
         self.btn_open_folder.setToolTip("Open a directory of images")
         layout.addWidget(self.btn_open_folder)
 
-        self.file_tree = QTreeView()
-        layout.addWidget(self.file_tree)
+        # Use new FastFileManager instead of QTreeView
+        self.file_manager = FastFileManager()
+        layout.addWidget(self.file_manager)
+
+        # Keep file_tree reference for compatibility
+        self.file_tree = QTreeView()  # Hidden, for backward compatibility
+        self.file_tree.hide()
 
         splitter.addWidget(file_explorer_widget)
 
@@ -195,6 +204,8 @@ class RightPanel(QWidget):
         """Connect internal signals."""
         self.btn_open_folder.clicked.connect(self.open_folder_requested)
         self.file_tree.doubleClicked.connect(self.image_selected)
+        # Connect new file manager signal
+        self.file_manager.fileSelected.connect(self.image_path_selected)
         self.btn_merge_selection.clicked.connect(self.merge_selection_requested)
         self.btn_delete_selection.clicked.connect(self.delete_selection_requested)
         self.segment_table.itemSelectionChanged.connect(self.segments_selection_changed)
@@ -276,12 +287,28 @@ class RightPanel(QWidget):
 
     def setup_file_model(self, file_model):
         """Setup the file model for the tree view."""
+        # Keep for backward compatibility
         self.file_tree.setModel(file_model)
         self.file_tree.setColumnWidth(0, 200)
 
     def set_folder(self, folder_path, file_model):
         """Set the folder for file browsing."""
+        # Keep old tree view for compatibility
         self.file_tree.setRootIndex(file_model.setRootPath(folder_path))
+        # Use new file manager
+        self.file_manager.setDirectory(Path(folder_path))
+
+    def navigate_next_image(self):
+        """Navigate to next image in the file manager."""
+        self.file_manager.navigateNext()
+
+    def navigate_previous_image(self):
+        """Navigate to previous image in the file manager."""
+        self.file_manager.navigatePrevious()
+
+    def select_file(self, file_path: Path):
+        """Select a specific file in the file manager."""
+        self.file_manager.selectFile(file_path)
 
     def get_selected_segment_indices(self):
         """Get indices of selected segments."""

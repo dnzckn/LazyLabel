@@ -1176,6 +1176,8 @@ class MainWindow(QMainWindow):
         # Right panel connections
         self.right_panel.open_folder_requested.connect(self._open_folder_dialog)
         self.right_panel.image_selected.connect(self._load_selected_image)
+        # Connect new path-based signal from FastFileManager
+        self.right_panel.image_path_selected.connect(self._load_image_from_path)
         self.right_panel.merge_selection_requested.connect(
             self._assign_selected_to_class
         )
@@ -1625,6 +1627,13 @@ class MainWindow(QMainWindow):
             self._start_background_image_discovery()
         self.viewer.setFocus()
 
+    def _load_image_from_path(self, file_path: Path):
+        """Load image from a Path object (used by FastFileManager)."""
+        if file_path.is_file() and self.file_manager.is_image_file(str(file_path)):
+            # Convert Path to QModelIndex for compatibility
+            # This allows existing code to work while using the new file manager
+            self._load_image_by_path(str(file_path))
+
     def _load_selected_image(self, index):
         """Load the selected image. Auto-saves previous work if enabled."""
 
@@ -1685,6 +1694,131 @@ class MainWindow(QMainWindow):
         self._cache_original_image()
 
         self._show_success_notification(f"Loaded: {Path(self.current_image_path).name}")
+
+    def _load_image_by_path(self, path: str):
+        """Load image by file path directly (for FastFileManager)."""
+        # Check if we're in multi-view mode
+        if hasattr(self, "view_mode") and self.view_mode == "multi":
+            # For multi-view, we need to handle differently
+            # Load the selected image and consecutive ones
+            self._load_multi_view_from_path(path)
+            return
+
+        if path == self.current_image_path:  # Only reset if loading a new image
+            return
+
+        # Auto-save if enabled and we have a current image (not the first load)
+        if self.current_image_path and self.control_panel.get_settings().get(
+            "auto_save", True
+        ):
+            self._save_output_to_npz()
+
+        self.segment_manager.clear()
+        # Remove all scene items except the pixmap
+        items_to_remove = [
+            item
+            for item in self.viewer.scene().items()
+            if item is not self.viewer._pixmap_item
+        ]
+        for item in items_to_remove:
+            self.viewer.scene().removeItem(item)
+        self.current_image_path = path
+
+        # Load the image
+        original_image = cv2.imread(path)
+        if original_image is None:
+            logger.error(f"Failed to load image: {path}")
+            return
+
+        # Convert BGR to RGB
+        if len(original_image.shape) == 3:
+            original_image = cv2.cvtColor(original_image, cv2.COLOR_BGR2RGB)
+        self.original_image = original_image
+
+        # Convert to QImage and display
+        height, width = original_image.shape[:2]
+        bytes_per_line = 3 * width if len(original_image.shape) == 3 else width
+
+        if len(original_image.shape) == 3:
+            q_image = QImage(
+                original_image.data.tobytes(),
+                width,
+                height,
+                bytes_per_line,
+                QImage.Format.Format_RGB888,
+            )
+        else:
+            q_image = QImage(
+                original_image.data.tobytes(),
+                width,
+                height,
+                bytes_per_line,
+                QImage.Format.Format_Grayscale8,
+            )
+
+        pixmap = QPixmap.fromImage(q_image)
+        self.viewer.set_photo(pixmap)
+
+        # Load existing segments and class aliases
+        self.file_manager.load_class_aliases(path)
+        self.file_manager.load_existing_mask(path)
+
+        # Update UI lists to reflect loaded segments
+        self._update_all_lists()
+
+        # Update display if we have an update method
+        if hasattr(self, "_update_display"):
+            self._update_display()
+        self._show_success_notification(f"Loaded: {Path(path).name}")
+
+        # Update file selection in the file manager
+        self.right_panel.select_file(Path(path))
+
+    def _load_multi_view_from_path(self, path: str):
+        """Load multi-view starting from a specific path using FastFileManager."""
+        config = self._get_multi_view_config()
+        num_viewers = config["num_viewers"]
+
+        # Auto-save if enabled
+        if (
+            hasattr(self, "multi_view_images")
+            and self.multi_view_images
+            and self.multi_view_images[0]
+            and self.control_panel.get_settings().get("auto_save", True)
+        ):
+            self._save_multi_view_output()
+
+        # Get all files from the FastFileManager model
+        file_manager_model = self.right_panel.file_manager._model
+        all_files = []
+        current_idx = -1
+
+        # Collect all files from the model
+        for i in range(file_manager_model.rowCount()):
+            file_info = file_manager_model.getFileInfo(i)
+            if file_info:
+                all_files.append(str(file_info.path))
+                if str(file_info.path) == path:
+                    current_idx = i
+
+        if current_idx == -1:
+            # File not found in current list
+            return
+
+        # Load consecutive images
+        images_to_load = []
+        for i in range(num_viewers):
+            idx = current_idx + i
+            if idx < len(all_files):
+                images_to_load.append(all_files[idx])
+            else:
+                images_to_load.append(None)
+
+        # Load the images
+        self._load_multi_view_images(images_to_load)
+
+        # Update file manager selection
+        self.right_panel.select_file(Path(path))
 
     def _load_selected_image_multi_view(self, index, path):
         """Load selected image in multi-view mode starting from the selected file."""
@@ -2141,17 +2275,9 @@ class MainWindow(QMainWindow):
             self._load_next_multi_batch()
             return
 
-        if not self.current_file_index.isValid():
-            return
-        parent = self.current_file_index.parent()
-        row = self.current_file_index.row()
-        # Find next valid image file
-        for next_row in range(row + 1, self.file_model.rowCount(parent)):
-            next_index = self.file_model.index(next_row, 0, parent)
-            path = self.file_model.filePath(next_index)
-            if os.path.isfile(path) and self.file_manager.is_image_file(path):
-                self._load_selected_image(next_index)
-                return
+        # Use new file manager navigation
+        self.right_panel.navigate_next_image()
+        return
 
     def _load_previous_image(self):
         """Load previous image in the file list."""
@@ -2160,17 +2286,9 @@ class MainWindow(QMainWindow):
             self._load_previous_multi_batch()
             return
 
-        if not self.current_file_index.isValid():
-            return
-        parent = self.current_file_index.parent()
-        row = self.current_file_index.row()
-        # Find previous valid image file
-        for prev_row in range(row - 1, -1, -1):
-            prev_index = self.file_model.index(prev_row, 0, parent)
-            path = self.file_model.filePath(prev_index)
-            if os.path.isfile(path) and self.file_manager.is_image_file(path):
-                self._load_selected_image(prev_index)
-                return
+        # Use new file manager navigation
+        self.right_panel.navigate_previous_image()
+        return
 
     # Segment management methods
     def _assign_selected_to_class(self):
@@ -2823,20 +2941,34 @@ class MainWindow(QMainWindow):
 
     def _handle_enter_press(self):
         """Handle enter key press."""
+        logger.debug(f"Enter pressed - mode: {self.mode}, view_mode: {self.view_mode}")
+
         if self.mode == "polygon":
-            if self.view_mode == "single" and self.polygon_points:
-                self._finalize_polygon()
-            elif self.view_mode == "multi" and hasattr(
-                self, "multi_view_polygon_points"
-            ):
+            logger.debug(
+                f"Polygon mode - polygon_points: {len(self.polygon_points) if hasattr(self, 'polygon_points') and self.polygon_points else 0}"
+            )
+            if self.view_mode == "single":
+                # If there are pending polygon points, finalize them first
+                if self.polygon_points:
+                    logger.debug("Finalizing pending polygon")
+                    self._finalize_polygon()
+                # Always save after handling pending work to show checkmarks and notifications
+                logger.debug("Saving polygon segments to NPZ")
+                self._save_output_to_npz()
+            elif self.view_mode == "multi":
                 # Complete polygons for all viewers that have points
-                for i, points in enumerate(self.multi_view_polygon_points):
-                    if points and len(points) >= 3:
-                        # Use the multi-view mode handler for proper pairing logic
-                        if hasattr(self, "multi_view_mode_handler"):
-                            self.multi_view_mode_handler._finalize_multi_view_polygon(i)
-                        else:
-                            self._finalize_multi_view_polygon(i)
+                if hasattr(self, "multi_view_polygon_points"):
+                    for i, points in enumerate(self.multi_view_polygon_points):
+                        if points and len(points) >= 3:
+                            # Use the multi-view mode handler for proper pairing logic
+                            if hasattr(self, "multi_view_mode_handler"):
+                                self.multi_view_mode_handler._finalize_multi_view_polygon(
+                                    i
+                                )
+                            else:
+                                self._finalize_multi_view_polygon(i)
+                # Always save after handling pending work to show checkmarks and notifications
+                self._save_output_to_npz()
         else:
             # First accept any AI segments (same as spacebar), then save
             self._accept_ai_segment()
@@ -3198,7 +3330,13 @@ class MainWindow(QMainWindow):
                             try:
                                 os.remove(file_path)
                                 deleted_files.append(os.path.basename(file_path))
-                                self.file_model.update_cache_for_path(file_path)
+                                # Update FastFileManager after file deletion
+                                if hasattr(self, "right_panel") and hasattr(
+                                    self.right_panel, "file_manager"
+                                ):
+                                    self.right_panel.file_manager.updateNpzStatus(
+                                        Path(image_path)
+                                    )
                             except Exception as e:
                                 self._show_error_notification(
                                     f"Error deleting {file_path}: {e}"
@@ -3213,20 +3351,15 @@ class MainWindow(QMainWindow):
                     f"Error saving {os.path.basename(image_path)}: {str(e)}"
                 )
 
-        # Update file list with green flash and tick marks (like single view mode)
-        if hasattr(self, "_saved_file_paths") and self._saved_file_paths:
-            for path in self._saved_file_paths:
-                if path:
-                    self.file_model.update_cache_for_path(path)
-                    self.file_model.set_highlighted_path(path)
-                    QTimer.singleShot(
-                        1500,
-                        lambda p=path: (
-                            self.file_model.set_highlighted_path(None)
-                            if self.file_model.highlighted_path == p
-                            else None
-                        ),
-                    )
+        # Update FastFileManager to show NPZ checkmarks for multi-view
+        if hasattr(self, "multi_view_images") and self.multi_view_images:
+            for image_path in self.multi_view_images:
+                if (
+                    image_path
+                    and hasattr(self, "right_panel")
+                    and hasattr(self.right_panel, "file_manager")
+                ):
+                    self.right_panel.file_manager.updateNpzStatus(Path(image_path))
             # Clear the tracking list for next save
             self._saved_file_paths = []
 
@@ -3258,7 +3391,13 @@ class MainWindow(QMainWindow):
                     try:
                         os.remove(file_path)
                         deleted_files.append(file_path)
-                        self.file_model.update_cache_for_path(file_path)
+                        # Update FastFileManager after file deletion
+                        if hasattr(self, "right_panel") and hasattr(
+                            self.right_panel, "file_manager"
+                        ):
+                            self.right_panel.file_manager.updateNpzStatus(
+                                Path(self.current_image_path)
+                            )
                     except Exception as e:
                         self._show_error_notification(
                             f"Error deleting {file_path}: {e}"
@@ -3276,24 +3415,35 @@ class MainWindow(QMainWindow):
         try:
             settings = self.control_panel.get_settings()
             npz_path = None
-            txt_path = None
+
+            # Debug logging
+            logger.debug(f"Starting save process for: {self.current_image_path}")
+            logger.debug(f"Number of segments: {len(self.segment_manager.segments)}")
+
             if settings.get("save_npz", True):
                 h, w = (
                     self.viewer._pixmap_item.pixmap().height(),
                     self.viewer._pixmap_item.pixmap().width(),
                 )
                 class_order = self.segment_manager.get_unique_class_ids()
+                logger.debug(f"Class order for saving: {class_order}")
+
                 if class_order:
+                    logger.debug(
+                        f"Attempting to save NPZ to: {os.path.splitext(self.current_image_path)[0]}.npz"
+                    )
                     npz_path = self.file_manager.save_npz(
                         self.current_image_path,
                         (h, w),
                         class_order,
                         self.current_crop_coords,
                     )
+                    logger.debug(f"NPZ save completed: {npz_path}")
                     self._show_success_notification(
                         f"Saved: {os.path.basename(npz_path)}"
                     )
                 else:
+                    logger.warning("No classes defined for saving")
                     self._show_warning_notification("No classes defined for saving.")
             if settings.get("save_txt", True):
                 h, w = (
@@ -3308,27 +3458,25 @@ class MainWindow(QMainWindow):
                 else:
                     class_labels = [str(cid) for cid in class_order]
                 if class_order:
-                    txt_path = self.file_manager.save_yolo_txt(
+                    self.file_manager.save_yolo_txt(
                         self.current_image_path,
                         (h, w),
                         class_order,
                         class_labels,
                         self.current_crop_coords,
                     )
-            # Efficiently update file list tickboxes and highlight
-            for path in [npz_path, txt_path]:
-                if path:
-                    self.file_model.update_cache_for_path(path)
-                    self.file_model.set_highlighted_path(path)
-                    QTimer.singleShot(
-                        1500,
-                        lambda p=path: (
-                            self.file_model.set_highlighted_path(None)
-                            if self.file_model.highlighted_path == p
-                            else None
-                        ),
-                    )
+            # Update FastFileManager to show NPZ checkmarks
+            if (
+                npz_path
+                and hasattr(self, "right_panel")
+                and hasattr(self.right_panel, "file_manager")
+            ):
+                # Update the NPZ status in the FastFileManager
+                self.right_panel.file_manager.updateNpzStatus(
+                    Path(self.current_image_path)
+                )
         except Exception as e:
+            logger.error(f"Error saving file: {str(e)}", exc_info=True)
             self._show_error_notification(f"Error saving: {str(e)}")
 
     def _handle_merge_press(self):

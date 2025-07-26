@@ -24,16 +24,48 @@ class FileManager:
         crop_coords: tuple[int, int, int, int] | None = None,
     ) -> str:
         """Save segments as NPZ file."""
+        logger.debug(f"Saving NPZ for image: {image_path}")
+        logger.debug(f"Image size: {image_size}, Class order: {class_order}")
+
+        # Validate inputs
+        if not class_order:
+            raise ValueError("No classes defined for saving")
+
         final_mask_tensor = self.segment_manager.create_final_mask_tensor(
             image_size, class_order
         )
 
+        # Validate mask tensor
+        if final_mask_tensor.size == 0:
+            raise ValueError("Empty mask tensor generated")
+
+        logger.debug(f"Final mask tensor shape: {final_mask_tensor.shape}")
+
         # Apply crop if coordinates are provided
         if crop_coords:
             final_mask_tensor = self._apply_crop_to_mask(final_mask_tensor, crop_coords)
+            logger.debug(f"Applied crop: {crop_coords}")
 
         npz_path = os.path.splitext(image_path)[0] + ".npz"
-        np.savez_compressed(npz_path, mask=final_mask_tensor.astype(np.uint8))
+
+        # Create parent directory if it doesn't exist
+        parent_dir = os.path.dirname(npz_path)
+        if parent_dir:  # Only create if there's actually a parent directory
+            os.makedirs(parent_dir, exist_ok=True)
+            logger.debug(f"Ensured directory exists: {parent_dir}")
+
+        # Save the NPZ file
+        try:
+            np.savez_compressed(npz_path, mask=final_mask_tensor.astype(np.uint8))
+            logger.debug(f"Saved NPZ file: {npz_path}")
+        except Exception as e:
+            raise OSError(f"Failed to save NPZ file {npz_path}: {str(e)}") from e
+
+        # Verify the file was actually created
+        if not os.path.exists(npz_path):
+            raise OSError(f"NPZ file was not created: {npz_path}")
+
+        logger.info(f"Successfully saved NPZ: {os.path.basename(npz_path)}")
         return npz_path
 
     def save_yolo_txt(
