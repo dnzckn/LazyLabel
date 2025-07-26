@@ -136,6 +136,7 @@ class FastFileModel(QAbstractTableModel):
     def __init__(self):
         super().__init__()
         self._files: list[FileInfo] = []
+        self._path_to_index: dict[str, int] = {}  # For O(1) lookups
         self._scanner: FileScanner | None = None
 
     def rowCount(self, parent=QModelIndex()):
@@ -218,6 +219,7 @@ class FastFileModel(QAbstractTableModel):
         # Clear current files
         self.beginResetModel()
         self._files.clear()
+        self._path_to_index.clear()
         self.endResetModel()
 
         # Start new scan
@@ -231,7 +233,13 @@ class FastFileModel(QAbstractTableModel):
         start_row = len(self._files)
         end_row = start_row + len(files) - 1
         self.beginInsertRows(QModelIndex(), start_row, end_row)
-        self._files.extend(files)
+
+        # Add files and update path-to-index mapping
+        for i, file_info in enumerate(files):
+            idx = start_row + i
+            self._files.append(file_info)
+            self._path_to_index[str(file_info.path)] = idx
+
         self.endInsertRows()
 
     def _on_scan_complete(self, total: int):
@@ -262,12 +270,80 @@ class FastFileModel(QAbstractTableModel):
                     self.dataChanged.emit(index, index)
                 break
 
+    def updateFileStatus(self, image_path: Path):
+        """Update both NPZ and TXT status for a specific image file"""
+        image_path_str = str(image_path)
+        npz_path = image_path.with_suffix(".npz")
+        txt_path = image_path.with_suffix(".txt")
+        has_npz = npz_path.exists()
+        has_txt = txt_path.exists()
+
+        # O(1) lookup using path-to-index mapping
+        if image_path_str not in self._path_to_index:
+            return  # File not in current view
+
+        i = self._path_to_index[image_path_str]
+        file_info = self._files[i]
+
+        # Update status and emit changes only if needed
+        old_has_npz = file_info.has_npz
+        old_has_txt = file_info.has_txt
+        file_info.has_npz = has_npz
+        file_info.has_txt = has_txt
+
+        # Emit dataChanged for NPZ column if status changed
+        if old_has_npz != has_npz:
+            index = self.index(i, 3)  # NPZ column
+            self.dataChanged.emit(index, index)
+
+        # Emit dataChanged for TXT column if status changed
+        if old_has_txt != has_txt:
+            index = self.index(i, 4)  # TXT column
+            self.dataChanged.emit(index, index)
+
     def getFileIndex(self, path: Path) -> int:
         """Get index of file by path"""
-        for i, file_info in enumerate(self._files):
-            if file_info.path == path:
-                return i
-        return -1
+        return self._path_to_index.get(str(path), -1)
+
+    def batchUpdateFileStatus(self, image_paths: list[Path]):
+        """Batch update file status for multiple files"""
+        if not image_paths:
+            return
+
+        changed_indices = []
+
+        for image_path in image_paths:
+            image_path_str = str(image_path)
+
+            # O(1) lookup using path-to-index mapping
+            if image_path_str not in self._path_to_index:
+                continue  # File not in current view
+
+            i = self._path_to_index[image_path_str]
+            file_info = self._files[i]
+
+            # Check file existence
+            npz_path = image_path.with_suffix(".npz")
+            txt_path = image_path.with_suffix(".txt")
+            has_npz = npz_path.exists()
+            has_txt = txt_path.exists()
+
+            # Update status and track changes
+            old_has_npz = file_info.has_npz
+            old_has_txt = file_info.has_txt
+            file_info.has_npz = has_npz
+            file_info.has_txt = has_txt
+
+            # Track changed indices for batch emission
+            if old_has_npz != has_npz:
+                changed_indices.append((i, 3))  # NPZ column
+            if old_has_txt != has_txt:
+                changed_indices.append((i, 4))  # TXT column
+
+        # Batch emit dataChanged signals
+        for i, col in changed_indices:
+            index = self.index(i, col)
+            self.dataChanged.emit(index, index)
 
 
 class FileSortProxyModel(QSortFilterProxyModel):
@@ -551,9 +627,88 @@ class FastFileManager(QWidget):
         """Update NPZ status for a specific image file"""
         self._model.updateNpzStatus(image_path)
 
+    def updateFileStatus(self, image_path: Path):
+        """Update both NPZ and TXT status for a specific image file"""
+        self._model.updateFileStatus(image_path)
+
     def refreshFile(self, image_path: Path):
-        """Refresh status for a specific file (alias for updateNpzStatus)"""
-        self.updateNpzStatus(image_path)
+        """Refresh status for a specific file"""
+        self.updateFileStatus(image_path)
+
+    def batchUpdateFileStatus(self, image_paths: list[Path]):
+        """Batch update file status for multiple files"""
+        self._model.batchUpdateFileStatus(image_paths)
+
+    def getSurroundingFiles(self, current_path: Path, count: int) -> list[Path]:
+        """Get files in current sorted/filtered order surrounding the given path"""
+        files = []
+
+        # Find current file in proxy model order
+        current_index = -1
+        for row in range(self._proxy_model.rowCount()):
+            proxy_index = self._proxy_model.index(row, 0)
+            source_index = self._proxy_model.mapToSource(proxy_index)
+            file_info = self._model.getFileInfo(source_index.row())
+            if file_info and file_info.path == current_path:
+                current_index = row
+                break
+
+        if current_index == -1:
+            return []  # File not found in current view
+
+        # Get surrounding files in proxy order
+        for i in range(count):
+            row = current_index + i
+            if row < self._proxy_model.rowCount():
+                proxy_index = self._proxy_model.index(row, 0)
+                source_index = self._proxy_model.mapToSource(proxy_index)
+                file_info = self._model.getFileInfo(source_index.row())
+                if file_info:
+                    files.append(file_info.path)
+                else:
+                    files.append(None)
+            else:
+                files.append(None)
+
+        return files
+
+    def getPreviousFiles(self, current_path: Path, count: int) -> list[Path]:
+        """Get previous files in current sorted/filtered order before the given path"""
+        files = []
+
+        # Find current file in proxy model order
+        current_index = -1
+        for row in range(self._proxy_model.rowCount()):
+            proxy_index = self._proxy_model.index(row, 0)
+            source_index = self._proxy_model.mapToSource(proxy_index)
+            file_info = self._model.getFileInfo(source_index.row())
+            if file_info and file_info.path == current_path:
+                current_index = row
+                break
+
+        if current_index == -1:
+            return []  # File not found in current view
+
+        # Get previous files going backward from current position
+        start_row = current_index - count
+        if start_row < 0:
+            start_row = 0
+
+        # Get consecutive files starting from start_row
+        for i in range(count):
+            row = start_row + i
+            if row < current_index and row >= 0:
+                proxy_index = self._proxy_model.index(row, 0)
+                source_index = self._proxy_model.mapToSource(proxy_index)
+                file_info = self._model.getFileInfo(source_index.row())
+                if file_info:
+                    files.append(file_info.path)
+                else:
+                    files.append(None)
+            else:
+                files.append(None)
+
+        return files
 
     def _on_item_clicked(self, index: QModelIndex):
         """Handle item click"""

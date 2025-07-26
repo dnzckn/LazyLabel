@@ -1788,31 +1788,12 @@ class MainWindow(QMainWindow):
         ):
             self._save_multi_view_output()
 
-        # Get all files from the FastFileManager model
-        file_manager_model = self.right_panel.file_manager._model
-        all_files = []
-        current_idx = -1
+        # Get surrounding files in current sorted/filtered order
+        file_manager = self.right_panel.file_manager
+        surrounding_files = file_manager.getSurroundingFiles(Path(path), num_viewers)
 
-        # Collect all files from the model
-        for i in range(file_manager_model.rowCount()):
-            file_info = file_manager_model.getFileInfo(i)
-            if file_info:
-                all_files.append(str(file_info.path))
-                if str(file_info.path) == path:
-                    current_idx = i
-
-        if current_idx == -1:
-            # File not found in current list
-            return
-
-        # Load consecutive images
-        images_to_load = []
-        for i in range(num_viewers):
-            idx = current_idx + i
-            if idx < len(all_files):
-                images_to_load.append(all_files[idx])
-            else:
-                images_to_load.append(None)
+        # Convert to strings for loading
+        images_to_load = [str(p) if p else None for p in surrounding_files]
 
         # Load the images
         self._load_multi_view_images(images_to_load)
@@ -3320,6 +3301,18 @@ class MainWindow(QMainWindow):
                     # Restore original segments
                     self.segment_manager.segments = original_segments
 
+                # Save class aliases if enabled
+                if settings.get("save_class_aliases", False) and viewer_segments:
+                    # Temporarily set segments for this viewer to save correct aliases
+                    original_segments = self.segment_manager.segments
+                    self.segment_manager.segments = viewer_segments
+
+                    aliases_path = self.file_manager.save_class_aliases(image_path)
+                    saved_files.append(os.path.basename(aliases_path))
+
+                    # Restore original segments
+                    self.segment_manager.segments = original_segments
+
                 # If no segments for this viewer, delete associated files
                 if not viewer_segments:
                     base, _ = os.path.splitext(image_path)
@@ -3334,7 +3327,7 @@ class MainWindow(QMainWindow):
                                 if hasattr(self, "right_panel") and hasattr(
                                     self.right_panel, "file_manager"
                                 ):
-                                    self.right_panel.file_manager.updateNpzStatus(
+                                    self.right_panel.file_manager.updateFileStatus(
                                         Path(image_path)
                                     )
                             except Exception as e:
@@ -3353,13 +3346,13 @@ class MainWindow(QMainWindow):
 
         # Update FastFileManager to show NPZ checkmarks for multi-view
         if hasattr(self, "multi_view_images") and self.multi_view_images:
-            for image_path in self.multi_view_images:
-                if (
-                    image_path
-                    and hasattr(self, "right_panel")
-                    and hasattr(self.right_panel, "file_manager")
-                ):
-                    self.right_panel.file_manager.updateNpzStatus(Path(image_path))
+            if hasattr(self, "right_panel") and hasattr(
+                self.right_panel, "file_manager"
+            ):
+                # Batch update for better performance
+                valid_paths = [Path(img) for img in self.multi_view_images if img]
+                if valid_paths:
+                    self.right_panel.file_manager.batchUpdateFileStatus(valid_paths)
             # Clear the tracking list for next save
             self._saved_file_paths = []
 
@@ -3395,7 +3388,7 @@ class MainWindow(QMainWindow):
                         if hasattr(self, "right_panel") and hasattr(
                             self.right_panel, "file_manager"
                         ):
-                            self.right_panel.file_manager.updateNpzStatus(
+                            self.right_panel.file_manager.updateFileStatus(
                                 Path(self.current_image_path)
                             )
                     except Exception as e:
@@ -3445,6 +3438,8 @@ class MainWindow(QMainWindow):
                 else:
                     logger.warning("No classes defined for saving")
                     self._show_warning_notification("No classes defined for saving.")
+            # Save TXT file if enabled
+            txt_path = None
             if settings.get("save_txt", True):
                 h, w = (
                     self.viewer._pixmap_item.pixmap().height(),
@@ -3458,21 +3453,38 @@ class MainWindow(QMainWindow):
                 else:
                     class_labels = [str(cid) for cid in class_order]
                 if class_order:
-                    self.file_manager.save_yolo_txt(
+                    txt_path = self.file_manager.save_yolo_txt(
                         self.current_image_path,
                         (h, w),
                         class_order,
                         class_labels,
                         self.current_crop_coords,
                     )
-            # Update FastFileManager to show NPZ checkmarks
+                    if txt_path:
+                        logger.debug(f"TXT save completed: {txt_path}")
+                        self._show_success_notification(
+                            f"Saved: {os.path.basename(txt_path)}"
+                        )
+
+            # Save class aliases if enabled
+            if settings.get("save_class_aliases", False):
+                aliases_path = self.file_manager.save_class_aliases(
+                    self.current_image_path
+                )
+                if aliases_path:
+                    logger.debug(f"Class aliases saved: {aliases_path}")
+                    self._show_success_notification(
+                        f"Saved: {os.path.basename(aliases_path)}"
+                    )
+
+            # Update FastFileManager to show NPZ/TXT checkmarks
             if (
-                npz_path
+                (npz_path or txt_path)
                 and hasattr(self, "right_panel")
                 and hasattr(self.right_panel, "file_manager")
             ):
-                # Update the NPZ status in the FastFileManager
-                self.right_panel.file_manager.updateNpzStatus(
+                # Update the file status in the FastFileManager
+                self.right_panel.file_manager.updateFileStatus(
                     Path(self.current_image_path)
                 )
         except Exception as e:
@@ -7236,23 +7248,72 @@ class MainWindow(QMainWindow):
         self._load_multi_view_images(image_paths)
 
     def _load_next_multi_batch(self):
-        """Load the next batch of images using cached list."""
-        if not self.current_file_index.isValid():
-            return
-
-        # Auto-save if enabled and we have current images (not the first load)
-        if self.multi_view_images[0] and self.control_panel.get_settings().get(
-            "auto_save", True
+        """Load the next batch of images using fast file manager or cached list."""
+        # Auto-save if enabled and we have current images
+        if (
+            hasattr(self, "multi_view_images")
+            and self.multi_view_images
+            and self.multi_view_images[0]
+            and self.control_panel.get_settings().get("auto_save", True)
         ):
             self._save_multi_view_output()
 
-        # If cached list isn't ready, fall back to file model navigation
+        # Get current image path - look for any valid image in multi-view state
+        current_path = None
+        if hasattr(self, "multi_view_images") and self.multi_view_images:
+            # Find the first valid image path in the current multi-view state
+            for img_path in self.multi_view_images:
+                if img_path:
+                    current_path = img_path
+                    break
+
+        # Fallback to current_image_path if no valid multi-view images found
+        if (
+            not current_path
+            and hasattr(self, "current_image_path")
+            and self.current_image_path
+        ):
+            current_path = self.current_image_path
+
+        # If no valid path found, can't navigate forward
+        if not current_path:
+            return
+
+        # Get the number of viewers for multi-view mode
+        config = self._get_multi_view_config()
+        num_viewers = config["num_viewers"]
+
+        # Try to use fast file manager first (respects sorting/filtering)
+        try:
+            if (
+                hasattr(self, "right_panel")
+                and hasattr(self.right_panel, "file_manager")
+                and hasattr(self.right_panel.file_manager, "getSurroundingFiles")
+            ):
+                file_manager = self.right_panel.file_manager
+                surrounding_files = file_manager.getSurroundingFiles(
+                    Path(current_path), num_viewers * 2
+                )
+
+                if len(surrounding_files) > num_viewers:
+                    # Skip ahead by num_viewers to get the next batch
+                    next_batch = surrounding_files[num_viewers : num_viewers * 2]
+
+                    # Convert to strings and load
+                    images_to_load = [str(p) if p else None for p in next_batch]
+                    self._load_multi_view_images(images_to_load)
+
+                    # Update file manager selection to first image of new batch
+                    if next_batch and next_batch[0]:
+                        self.right_panel.select_file(next_batch[0])
+                    return
+        except Exception:
+            pass  # Fall back to cached list approach
+
+        # Fall back to cached list approach (for backward compatibility / tests)
         if not self.cached_image_paths:
             self._load_next_multi_batch_fallback()
             return
-
-        # Get current image path
-        current_path = self.file_model.filePath(self.current_file_index)
 
         # Find current position in cached list
         try:
@@ -7262,13 +7323,14 @@ class MainWindow(QMainWindow):
             self._load_next_multi_batch_fallback()
             return
 
-        # Get the number of viewers for multi-view mode
-        config = self._get_multi_view_config()
-        num_viewers = config["num_viewers"]
-
         # Skip num_viewers positions ahead in cached list
         target_index = current_index + num_viewers
 
+        # Check if we can navigate forward (at least one valid image at target position)
+        if target_index >= len(self.cached_image_paths):
+            return  # Can't navigate forward - at or past the end
+
+        # Check if we have at least one valid image at the target position
         if target_index < len(self.cached_image_paths):
             # Collect consecutive images
             image_paths = []
@@ -7278,6 +7340,114 @@ class MainWindow(QMainWindow):
                 else:
                     image_paths.append(None)
 
+            # Only proceed if we have at least one valid image (prevent all-None batches)
+            if any(path is not None for path in image_paths):
+                # Load all images
+                self._load_multi_view_images(image_paths)
+
+                # Update current file index to the first image of the new batch
+                # Find the file model index for this path
+                if image_paths and image_paths[0]:
+                    parent_index = self.current_file_index.parent()
+                    for row in range(self.file_model.rowCount(parent_index)):
+                        index = self.file_model.index(row, 0, parent_index)
+                        if self.file_model.filePath(index) == image_paths[0]:
+                            self.current_file_index = index
+                            self.right_panel.file_tree.setCurrentIndex(index)
+                            break
+            # If all would be None, don't navigate (stay at current position)
+
+    def _load_previous_multi_batch(self):
+        """Load the previous batch of images using fast file manager or cached list."""
+        # Auto-save if enabled and we have current images
+        if (
+            hasattr(self, "multi_view_images")
+            and self.multi_view_images
+            and self.multi_view_images[0]
+            and self.control_panel.get_settings().get("auto_save", True)
+        ):
+            self._save_multi_view_output()
+
+        # Get current image path - look for any valid image in multi-view state
+        current_path = None
+        if hasattr(self, "multi_view_images") and self.multi_view_images:
+            # Find the first valid image path in the current multi-view state
+            for img_path in self.multi_view_images:
+                if img_path:
+                    current_path = img_path
+                    break
+
+        # Fallback to current_image_path if no valid multi-view images found
+        if (
+            not current_path
+            and hasattr(self, "current_image_path")
+            and self.current_image_path
+        ):
+            current_path = self.current_image_path
+
+        # If no valid path found, can't navigate backward
+        if not current_path:
+            return
+
+        # Get the number of viewers for multi-view mode
+        config = self._get_multi_view_config()
+        num_viewers = config["num_viewers"]
+
+        # Try to use fast file manager first (respects sorting/filtering)
+        try:
+            if (
+                hasattr(self, "right_panel")
+                and hasattr(self.right_panel, "file_manager")
+                and hasattr(self.right_panel.file_manager, "getPreviousFiles")
+            ):
+                file_manager = self.right_panel.file_manager
+                previous_batch = file_manager.getPreviousFiles(
+                    Path(current_path), num_viewers
+                )
+
+                if previous_batch and any(previous_batch):
+                    # Convert to strings and load
+                    images_to_load = [str(p) if p else None for p in previous_batch]
+                    self._load_multi_view_images(images_to_load)
+
+                    # Update file manager selection to first image of new batch
+                    if previous_batch and previous_batch[0]:
+                        self.right_panel.select_file(previous_batch[0])
+                    return
+        except Exception:
+            pass  # Fall back to cached list approach
+
+        # Fall back to cached list approach (for backward compatibility / tests)
+        if not self.cached_image_paths:
+            self._load_previous_multi_batch_fallback()
+            return
+
+        # Find current position in cached list
+        try:
+            current_index = self.cached_image_paths.index(current_path)
+        except ValueError:
+            # Current image not in cached list, use fallback
+            self._load_previous_multi_batch_fallback()
+            return
+
+        # Skip num_viewers positions back in cached list
+        target_index = current_index - num_viewers
+        if target_index < 0:
+            return  # Can't go back further
+
+        # Collect consecutive images
+        image_paths = []
+        for i in range(num_viewers):
+            if (
+                target_index + i < len(self.cached_image_paths)
+                and target_index + i >= 0
+            ):
+                image_paths.append(self.cached_image_paths[target_index + i])
+            else:
+                image_paths.append(None)
+
+        # Only proceed if we have at least one valid image (prevent all-None batches)
+        if any(path is not None for path in image_paths):
             # Load all images
             self._load_multi_view_images(image_paths)
 
@@ -7291,64 +7461,7 @@ class MainWindow(QMainWindow):
                         self.current_file_index = index
                         self.right_panel.file_tree.setCurrentIndex(index)
                         break
-
-    def _load_previous_multi_batch(self):
-        """Load the previous batch of images using cached list."""
-        if not self.current_file_index.isValid():
-            return
-
-        # Auto-save if enabled and we have current images (not the first load)
-        if self.multi_view_images[0] and self.control_panel.get_settings().get(
-            "auto_save", True
-        ):
-            self._save_multi_view_output()
-
-        # If cached list isn't ready, fall back to file model navigation
-        if not self.cached_image_paths:
-            self._load_previous_multi_batch_fallback()
-            return
-
-        # Get current image path
-        current_path = self.file_model.filePath(self.current_file_index)
-
-        # Find current position in cached list
-        try:
-            current_index = self.cached_image_paths.index(current_path)
-        except ValueError:
-            # Current image not in cached list, use fallback
-            self._load_previous_multi_batch_fallback()
-            return
-
-        # Get the number of viewers for multi-view mode
-        config = self._get_multi_view_config()
-        num_viewers = config["num_viewers"]
-
-        # Skip num_viewers positions back in cached list
-        target_index = current_index - num_viewers
-        if target_index < 0:
-            return  # Can't go back further
-
-        # Collect consecutive images
-        image_paths = []
-        for i in range(num_viewers):
-            if target_index + i < len(self.cached_image_paths):
-                image_paths.append(self.cached_image_paths[target_index + i])
-            else:
-                image_paths.append(None)
-
-        # Load all images
-        self._load_multi_view_images(image_paths)
-
-        # Update current file index to the first image of the new batch
-        # Find the file model index for this path
-        if image_paths and image_paths[0]:
-            parent_index = self.current_file_index.parent()
-            for row in range(self.file_model.rowCount(parent_index)):
-                index = self.file_model.index(row, 0, parent_index)
-                if self.file_model.filePath(index) == image_paths[0]:
-                    self.current_file_index = index
-                    self.right_panel.file_tree.setCurrentIndex(index)
-                    break
+        # If all would be None, don't navigate (stay at current position)
 
     def _load_next_multi_batch_fallback(self):
         """Fallback navigation using file model when cached list isn't available."""

@@ -345,6 +345,12 @@ def test_multi_view_batch_navigation(main_window_with_multi_view):
 
     # Test next batch navigation (from image1 -> image3+4)
     window.file_model.filePath.return_value = "/path/to/image1.jpg"
+    # Set up current state to start from image1
+    window.multi_view_images = ["/path/to/image1.jpg", "/path/to/image2.jpg"]
+    # Mock control panel to avoid auto-save
+    window.control_panel = MagicMock()
+    window.control_panel.get_settings.return_value = {"auto_save": False}
+
     window._load_next_multi_batch()
 
     # Verify _load_multi_view_images was called with images at index 2 and 3
@@ -357,6 +363,9 @@ def test_multi_view_batch_navigation(main_window_with_multi_view):
 
     # Test previous batch navigation (from image5 -> image3+4)
     window.file_model.filePath.return_value = "/path/to/image5.jpg"
+    # Set up current state to start from image5+6
+    window.multi_view_images = ["/path/to/image5.jpg", "/path/to/image6.jpg"]
+
     window._load_previous_multi_batch()
 
     # Verify _load_multi_view_images was called with images at index 2 and 3
