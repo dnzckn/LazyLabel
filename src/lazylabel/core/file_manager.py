@@ -65,7 +65,7 @@ class FileManager:
         if not os.path.exists(npz_path):
             raise OSError(f"NPZ file was not created: {npz_path}")
 
-        logger.info(f"Successfully saved NPZ: {os.path.basename(npz_path)}")
+        logger.debug(f"Successfully saved NPZ: {os.path.basename(npz_path)}")
         return npz_path
 
     def save_yolo_txt(

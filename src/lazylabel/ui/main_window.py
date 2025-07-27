@@ -19,12 +19,14 @@ from PyQt6.QtGui import (
     QShortcut,
 )
 from PyQt6.QtWidgets import (
+    QApplication,
     QDialog,
     QFileDialog,
     QGraphicsEllipseItem,
     QGraphicsLineItem,
     QGraphicsPolygonItem,
     QGraphicsRectItem,
+    QGridLayout,
     QHBoxLayout,
     QLabel,
     QMainWindow,
@@ -878,12 +880,7 @@ class MainWindow(QMainWindow):
         grid_widget = QWidget()
 
         # Use grid layout for 4-view, horizontal layout for 2-view
-        if use_grid:
-            from PyQt6.QtWidgets import QGridLayout
-
-            grid_layout = QGridLayout(grid_widget)
-        else:
-            grid_layout = QHBoxLayout(grid_widget)
+        grid_layout = QGridLayout(grid_widget) if use_grid else QHBoxLayout(grid_widget)
         grid_layout.setSpacing(5)
 
         self.multi_view_viewers = []
@@ -952,29 +949,30 @@ class MainWindow(QMainWindow):
         grid_mode_label = QLabel("View Mode:")
         controls_layout.addWidget(grid_mode_label)
 
-        from PyQt6.QtWidgets import QComboBox
+        from lazylabel.ui.widgets.model_selection_widget import CustomDropdown
 
-        self.grid_mode_combo = QComboBox()
+        self.grid_mode_combo = CustomDropdown()
+        self.grid_mode_combo.setText("View Mode")  # Default text
         self.grid_mode_combo.addItem("2 Views (1x2)", "2_view")
         self.grid_mode_combo.addItem("4 Views (2x2)", "4_view")
 
         # Set current selection based on settings
         current_mode = self.settings.multi_view_grid_mode
-        for i in range(self.grid_mode_combo.count()):
+        for i in range(len(self.grid_mode_combo.items)):
             if self.grid_mode_combo.itemData(i) == current_mode:
                 self.grid_mode_combo.setCurrentIndex(i)
                 break
 
-        self.grid_mode_combo.currentTextChanged.connect(self._on_grid_mode_changed)
+        self.grid_mode_combo.activated.connect(self._on_grid_mode_changed)
         controls_layout.addWidget(self.grid_mode_combo)
 
         controls_layout.addStretch()
 
         layout.addWidget(controls_widget)
 
-    def _on_grid_mode_changed(self):
+    def _on_grid_mode_changed(self, index):
         """Handle grid mode change from combo box."""
-        current_data = self.grid_mode_combo.currentData()
+        current_data = self.grid_mode_combo.itemData(index)
         if current_data and current_data != self.settings.multi_view_grid_mode:
             # Update settings
             self.settings.multi_view_grid_mode = current_data
@@ -1063,8 +1061,7 @@ class MainWindow(QMainWindow):
                 layout.deleteLater()
             except Exception as e:
                 # If layout clearing fails, just reset the viewer lists
-                print(f"Layout clearing failed: {e}")
-                pass
+                logger.error(f"Layout clearing failed: {e}")
 
     def _clear_multi_view_layout(self):
         """Clear the existing multi-view layout."""
@@ -2058,7 +2055,9 @@ class MainWindow(QMainWindow):
                         all_segments.extend(viewer_segments)
                         self.segment_manager.segments.clear()
                     except Exception as e:
-                        print(f"Error loading segments for viewer {viewer_index}: {e}")
+                        logger.error(
+                            f"Error loading segments for viewer {viewer_index}: {e}"
+                        )
 
             # Set all segments at once
             self.segment_manager.segments = all_segments
@@ -2078,7 +2077,7 @@ class MainWindow(QMainWindow):
                 self._update_all_lists()
 
         except Exception as e:
-            print(f"Error in _load_multi_view_segments: {e}")
+            logger.error(f"Error in _load_multi_view_segments: {e}")
             self.segment_manager.segments.clear()
 
     def _cancel_multi_view_sam_loading(self):
@@ -3406,6 +3405,8 @@ class MainWindow(QMainWindow):
                 valid_paths = [Path(img) for img in self.multi_view_images if img]
                 if valid_paths:
                     self.right_panel.file_manager.batchUpdateFileStatus(valid_paths)
+                    # Force immediate GUI update
+                    QApplication.processEvents()
             # Clear the tracking list for next save
             self._saved_file_paths = []
 
@@ -3454,6 +3455,8 @@ class MainWindow(QMainWindow):
                 )
                 # Update UI immediately when files are deleted
                 self._update_all_lists()
+                # Force immediate GUI update
+                QApplication.processEvents()
             else:
                 self._show_warning_notification("No segments to save.")
             return
@@ -3531,15 +3534,16 @@ class MainWindow(QMainWindow):
                     )
 
             # Update FastFileManager to show NPZ/TXT checkmarks
-            if (
-                (npz_path or txt_path)
-                and hasattr(self, "right_panel")
-                and hasattr(self.right_panel, "file_manager")
+            # Always update file status after save attempt (regardless of what was saved)
+            if hasattr(self, "right_panel") and hasattr(
+                self.right_panel, "file_manager"
             ):
                 # Update the file status in the FastFileManager
                 self.right_panel.file_manager.updateFileStatus(
                     Path(self.current_image_path)
                 )
+                # Force immediate GUI update
+                QApplication.processEvents()
         except Exception as e:
             logger.error(f"Error saving file: {str(e)}", exc_info=True)
             self._show_error_notification(f"Error saving: {str(e)}")
@@ -7195,7 +7199,6 @@ class MainWindow(QMainWindow):
                 )
 
                 # Load existing segments for the current image
-                print(f"Loading segments for single-view: {self.current_image_path}")
                 try:
                     # Clear any leftover multi-view segments first
                     self.segment_manager.clear()
@@ -7212,7 +7215,7 @@ class MainWindow(QMainWindow):
                     self._update_all_lists()
 
                 except Exception as e:
-                    print(f"Error loading segments for single-view: {e}")
+                    logger.error(f"Error loading segments for single-view: {e}")
 
                 # Redisplay segments for single view
                 if hasattr(self, "single_view_mode_handler"):

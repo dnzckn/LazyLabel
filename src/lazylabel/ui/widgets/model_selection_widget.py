@@ -111,6 +111,15 @@ class CustomDropdown(QToolButton):
             text, _ = self.items[index]
             self.setText(text)
 
+    def count(self):
+        """Get number of items."""
+        return len(self.items)
+
+    def currentData(self):
+        """Get data of currently selected item."""
+        current_idx = self.currentIndex()
+        return self.itemData(current_idx)
+
     def blockSignals(self, block):
         """Block/unblock signals."""
         super().blockSignals(block)

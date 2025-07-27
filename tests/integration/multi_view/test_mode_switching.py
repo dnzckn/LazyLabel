@@ -208,10 +208,9 @@ def test_mode_change_handler_logic(main_window):
 
     # Simulate changing to 4_view
     window.grid_mode_combo.setCurrentIndex(1)  # Assuming 4_view is at index 1
-    window.settings.multi_view_grid_mode = "4_view"  # Simulate the change
 
     # Trigger the change handler
-    window._on_grid_mode_changed()
+    window._on_grid_mode_changed(1)
 
     # Verify settings were saved and notification was shown
     window.settings.save_to_file.assert_called_once()
@@ -226,6 +225,8 @@ def test_mode_change_handler_logic(main_window):
     window._show_notification.reset_mock()
 
     # Test that no change doesn't trigger save/notification
-    window._on_grid_mode_changed()  # Call again with same setting
+    window._on_grid_mode_changed(
+        window.grid_mode_combo.currentIndex()
+    )  # Call again with same setting
     window.settings.save_to_file.assert_not_called()
     window._show_notification.assert_not_called()
