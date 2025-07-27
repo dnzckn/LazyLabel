@@ -308,6 +308,8 @@ class FFTThresholdWidget(QWidget):
                 self.status_label.setStyleSheet(
                     "color: #F44336; font-size: 9px; font-style: italic;"
                 )
+                # Disable FFT processing for color images
+                self.enable_checkbox.setChecked(False)
         else:
             # Unknown format
             self.current_image_channels = 0
@@ -315,6 +317,8 @@ class FFTThresholdWidget(QWidget):
             self.status_label.setStyleSheet(
                 "color: #F44336; font-size: 9px; font-style: italic;"
             )
+            # Disable FFT processing for unsupported formats
+            self.enable_checkbox.setChecked(False)
 
     def is_active(self):
         """Check if FFT processing is active (checkbox enabled and image is grayscale)."""

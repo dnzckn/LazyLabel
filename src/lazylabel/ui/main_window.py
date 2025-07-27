@@ -772,6 +772,7 @@ class MainWindow(QMainWindow):
         logger.info("Step 5/8: Discovering available models...")
         self._setup_model_manager()  # Just setup manager, don't load model
         self._setup_connections()
+        self._fix_fft_connection()  # Workaround for FFT signal connection issue
         self._setup_shortcuts()
         self._load_settings()
 
@@ -1121,6 +1122,48 @@ class MainWindow(QMainWindow):
             # Switch to polygon mode if SAM is disabled and we're in SAM/AI mode
             self.set_polygon_mode()
 
+    def _fix_fft_connection(self):
+        """Fix FFT signal connection issue - workaround for connection timing problem."""
+        try:
+            # Get the FFT widget directly and connect to its signal
+            fft_widget = self.control_panel.get_fft_threshold_widget()
+            if fft_widget:
+                # Direct connection bypass - connect FFT widget directly to main window handler
+                # This bypasses the control panel signal forwarding which has timing issues
+                # Use a wrapper to ensure the connection works reliably
+                def fft_signal_wrapper():
+                    self._handle_fft_threshold_changed()
+
+                fft_widget.fft_threshold_changed.connect(fft_signal_wrapper)
+
+                logger.info("FFT signal connection bypass established successfully")
+            else:
+                logger.warning("FFT widget not found during connection fix")
+        except Exception as e:
+            logger.warning(f"Failed to establish FFT connection bypass: {e}")
+
+        # Also fix channel threshold connection for RGB images
+        try:
+            channel_widget = self.control_panel.get_channel_threshold_widget()
+            if channel_widget:
+                # Direct connection bypass for channel threshold widget too
+                def channel_signal_wrapper():
+                    self._handle_channel_threshold_changed()
+
+                channel_widget.thresholdChanged.connect(channel_signal_wrapper)
+
+                logger.info(
+                    "Channel threshold signal connection bypass established successfully"
+                )
+            else:
+                logger.warning(
+                    "Channel threshold widget not found during connection fix"
+                )
+        except Exception as e:
+            logger.warning(
+                f"Failed to establish channel threshold connection bypass: {e}"
+            )
+
     def _setup_connections(self):
         """Setup signal connections."""
         # Control panel connections
@@ -1169,9 +1212,13 @@ class MainWindow(QMainWindow):
         )
 
         # FFT threshold connections
-        self.control_panel.fft_threshold_changed.connect(
-            self._handle_fft_threshold_changed
-        )
+        try:
+            self.control_panel.fft_threshold_changed.connect(
+                self._handle_fft_threshold_changed
+            )
+            logger.debug("FFT threshold connection established in _setup_connections")
+        except Exception as e:
+            logger.error(f"Failed to establish FFT threshold connection: {e}")
 
         # Right panel connections
         self.right_panel.open_folder_requested.connect(self._open_folder_dialog)
@@ -1774,6 +1821,9 @@ class MainWindow(QMainWindow):
         # Update file selection in the file manager
         self.right_panel.select_file(Path(path))
 
+        # Update threshold widgets for new image (this was missing!)
+        self._update_channel_threshold_for_image(pixmap)
+
     def _load_multi_view_from_path(self, path: str):
         """Load multi-view starting from a specific path using FastFileManager."""
         config = self._get_multi_view_config()
@@ -1947,6 +1997,9 @@ class MainWindow(QMainWindow):
         # Perform fast batch updates for existing models
         if changed_indices:
             self._fast_update_multi_view_images(changed_indices)
+
+        # Update threshold widgets for the loaded images
+        self._update_multi_view_channel_threshold_for_images()
 
         # Load existing segments for all loaded images
         valid_image_paths = [path for path in image_paths if path is not None]
@@ -5714,27 +5767,50 @@ class MainWindow(QMainWindow):
 
     def _update_channel_threshold_for_image(self, pixmap):
         """Update channel threshold widget for the given image pixmap."""
-        if pixmap.isNull():
+        if pixmap.isNull() or not self.current_image_path:
             self.control_panel.update_channel_threshold_for_image(None)
             return
 
-        # Convert pixmap to numpy array
-        qimage = pixmap.toImage()
-        ptr = qimage.constBits()
-        ptr.setsize(qimage.bytesPerLine() * qimage.height())
-        image_np = np.array(ptr).reshape(qimage.height(), qimage.width(), 4)
-        # Convert from BGRA to RGB, ignore alpha
-        image_rgb = image_np[:, :, [2, 1, 0]]
+        # Use cv2.imread for more robust loading instead of QPixmap conversion
+        try:
+            import cv2
 
-        # Check if image is grayscale (all channels are the same)
-        if np.array_equal(image_rgb[:, :, 0], image_rgb[:, :, 1]) and np.array_equal(
-            image_rgb[:, :, 1], image_rgb[:, :, 2]
-        ):
-            # Convert to single channel grayscale
-            image_array = image_rgb[:, :, 0]
-        else:
-            # Keep as RGB
-            image_array = image_rgb
+            image_array = cv2.imread(self.current_image_path)
+            if image_array is None:
+                self.control_panel.update_channel_threshold_for_image(None)
+                return
+
+            # Convert from BGR to RGB
+            if len(image_array.shape) == 3 and image_array.shape[2] == 3:
+                image_array = cv2.cvtColor(image_array, cv2.COLOR_BGR2RGB)
+
+            # Check if image is grayscale (all channels are the same)
+            if (
+                len(image_array.shape) == 3
+                and np.array_equal(image_array[:, :, 0], image_array[:, :, 1])
+                and np.array_equal(image_array[:, :, 1], image_array[:, :, 2])
+            ):
+                # Convert to single channel grayscale
+                image_array = image_array[:, :, 0]
+
+        except Exception:
+            # Fallback to QPixmap conversion if cv2 fails
+            qimage = pixmap.toImage()
+            ptr = qimage.constBits()
+            ptr.setsize(qimage.bytesPerLine() * qimage.height())
+            image_np = np.array(ptr).reshape(qimage.height(), qimage.width(), 4)
+            # Convert from BGRA to RGB, ignore alpha
+            image_rgb = image_np[:, :, [2, 1, 0]]
+
+            # Check if image is grayscale (all channels are the same)
+            if np.array_equal(
+                image_rgb[:, :, 0], image_rgb[:, :, 1]
+            ) and np.array_equal(image_rgb[:, :, 1], image_rgb[:, :, 2]):
+                # Convert to single channel grayscale
+                image_array = image_rgb[:, :, 0]
+            else:
+                # Keep as RGB
+                image_array = image_rgb
 
         # Update the channel threshold widget
         self.control_panel.update_channel_threshold_for_image(image_array)
@@ -5762,29 +5838,51 @@ class MainWindow(QMainWindow):
             self.control_panel.update_channel_threshold_for_image(None)
             return
 
-        # Load and convert the first image to update the widget
-        pixmap = QPixmap(first_image_path)
-        if pixmap.isNull():
-            self.control_panel.update_channel_threshold_for_image(None)
-            return
+        # Use cv2.imread for more robust loading instead of QPixmap conversion
+        try:
+            import cv2
 
-        # Convert pixmap to numpy array
-        qimage = pixmap.toImage()
-        ptr = qimage.constBits()
-        ptr.setsize(qimage.bytesPerLine() * qimage.height())
-        image_np = np.array(ptr).reshape(qimage.height(), qimage.width(), 4)
-        # Convert from BGRA to RGB, ignore alpha
-        image_rgb = image_np[:, :, [2, 1, 0]]
+            image_array = cv2.imread(first_image_path)
+            if image_array is None:
+                self.control_panel.update_channel_threshold_for_image(None)
+                return
 
-        # Check if image is grayscale (all channels are the same)
-        if np.array_equal(image_rgb[:, :, 0], image_rgb[:, :, 1]) and np.array_equal(
-            image_rgb[:, :, 1], image_rgb[:, :, 2]
-        ):
-            # Convert to single channel grayscale
-            image_array = image_rgb[:, :, 0]
-        else:
-            # Keep as RGB
-            image_array = image_rgb
+            # Convert from BGR to RGB
+            if len(image_array.shape) == 3 and image_array.shape[2] == 3:
+                image_array = cv2.cvtColor(image_array, cv2.COLOR_BGR2RGB)
+
+            # Check if image is grayscale (all channels are the same)
+            if (
+                len(image_array.shape) == 3
+                and np.array_equal(image_array[:, :, 0], image_array[:, :, 1])
+                and np.array_equal(image_array[:, :, 1], image_array[:, :, 2])
+            ):
+                # Convert to single channel grayscale
+                image_array = image_array[:, :, 0]
+
+        except Exception:
+            # Fallback to QPixmap conversion if cv2 fails
+            pixmap = QPixmap(first_image_path)
+            if pixmap.isNull():
+                self.control_panel.update_channel_threshold_for_image(None)
+                return
+
+            qimage = pixmap.toImage()
+            ptr = qimage.constBits()
+            ptr.setsize(qimage.bytesPerLine() * qimage.height())
+            image_np = np.array(ptr).reshape(qimage.height(), qimage.width(), 4)
+            # Convert from BGRA to RGB, ignore alpha
+            image_rgb = image_np[:, :, [2, 1, 0]]
+
+            # Check if image is grayscale (all channels are the same)
+            if np.array_equal(
+                image_rgb[:, :, 0], image_rgb[:, :, 1]
+            ) and np.array_equal(image_rgb[:, :, 1], image_rgb[:, :, 2]):
+                # Convert to single channel grayscale
+                image_array = image_rgb[:, :, 0]
+            else:
+                # Keep as RGB
+                image_array = image_rgb
 
         # Update the channel threshold widget
         self.control_panel.update_channel_threshold_for_image(image_array)

@@ -270,10 +270,6 @@ class MultiIndicatorSlider(QWidget):
         """Handle right-click to remove indicator."""
         slider_rect = self.get_slider_rect()
 
-        # Only allow removal if more than 1 indicator
-        if len(self.indicators) <= 1:
-            return
-
         # Check if right-clicking on an indicator
         for i, value in enumerate(self.indicators):
             x = self.value_to_x(value)
@@ -473,7 +469,7 @@ class ChannelThresholdWidget(QWidget):
 
         if self.current_image_channels == 1:
             # Grayscale image
-            if "Gray" in self.sliders:
+            if "Gray" in self.sliders and self.sliders["Gray"].is_enabled():
                 result = self._apply_channel_thresholding(
                     result, self.sliders["Gray"].get_indicators()
                 )
@@ -481,7 +477,10 @@ class ChannelThresholdWidget(QWidget):
             # RGB image
             channel_names = ["Red", "Green", "Blue"]
             for i, channel_name in enumerate(channel_names):
-                if channel_name in self.sliders:
+                if (
+                    channel_name in self.sliders
+                    and self.sliders[channel_name].is_enabled()
+                ):
                     result[:, :, i] = self._apply_channel_thresholding(
                         result[:, :, i], self.sliders[channel_name].get_indicators()
                     )
@@ -494,7 +493,7 @@ class ChannelThresholdWidget(QWidget):
         if not indicators:
             return channel_data
 
-            # Sort indicators
+        # Sort indicators
         sorted_indicators = sorted(indicators)
 
         # Create output array
@@ -527,9 +526,9 @@ class ChannelThresholdWidget(QWidget):
         return result
 
     def has_active_thresholding(self):
-        """Check if any channel has active thresholding (indicators present)."""
+        """Check if any channel has active thresholding (enabled and indicators present)."""
         for slider_widget in self.sliders.values():
-            if slider_widget.get_indicators():
+            if slider_widget.is_enabled() and slider_widget.get_indicators():
                 return True
         return False
 

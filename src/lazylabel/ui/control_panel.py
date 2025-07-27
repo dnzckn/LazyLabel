@@ -612,10 +612,10 @@ class ControlPanel(QWidget):
         layout.addWidget(crop_collapsible)
 
         # Channel Threshold - collapsible
-        threshold_collapsible = SimpleCollapsible(
+        self.channel_threshold_collapsible = SimpleCollapsible(
             "Channel Threshold", self.channel_threshold_widget
         )
-        layout.addWidget(threshold_collapsible)
+        layout.addWidget(self.channel_threshold_collapsible)
 
         # FFT Threshold - collapsible (default collapsed)
         self.fft_threshold_collapsible = SimpleCollapsible(
@@ -879,6 +879,11 @@ class ControlPanel(QWidget):
     def update_channel_threshold_for_image(self, image_array):
         """Update channel threshold widget for new image."""
         self.channel_threshold_widget.update_for_image(image_array)
+
+        # Auto-expand channel threshold panel when any image is loaded
+        if image_array is not None and hasattr(self, "channel_threshold_collapsible"):
+            # Find and expand the Channel Threshold panel
+            self.channel_threshold_collapsible.set_collapsed(False)
 
     def get_channel_threshold_widget(self):
         """Get the channel threshold widget."""
