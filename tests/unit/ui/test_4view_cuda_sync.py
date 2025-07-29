@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from PyQt6.QtWidgets import QApplication
 
-from lazylabel.ui.main_window import MultiViewSAMUpdateWorker
+from lazylabel.ui.workers import MultiViewSAMUpdateWorker
 
 
 @pytest.fixture
@@ -34,7 +34,9 @@ def test_cuda_synchronization_in_update_worker():
     with (
         patch("torch.cuda.is_available", return_value=True) as mock_cuda_available,
         patch("torch.cuda.synchronize") as mock_sync,
-        patch("lazylabel.ui.main_window.QPixmap") as mock_pixmap,
+        patch(
+            "lazylabel.ui.workers.multi_view_sam_update_worker.QPixmap"
+        ) as mock_pixmap,
     ):
         # Mock a valid pixmap
         mock_pixmap_instance = MagicMock()
