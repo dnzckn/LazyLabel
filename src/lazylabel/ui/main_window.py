@@ -1186,7 +1186,17 @@ class MainWindow(QMainWindow):
                 self._save_output_to_npz()
 
             self.current_image_path = path
-            pixmap = QPixmap(self.current_image_path)
+            # Load image with explicit transparency support
+            qimage = QImage(self.current_image_path)
+            if qimage.isNull():
+                return
+            # For PNG files, always ensure proper alpha format handling
+            if self.current_image_path.lower().endswith(".png"):
+                # PNG files can have alpha channels, use ARGB32_Premultiplied for proper handling
+                qimage = qimage.convertToFormat(
+                    QImage.Format.Format_ARGB32_Premultiplied
+                )
+            pixmap = QPixmap.fromImage(qimage)
             if not pixmap.isNull():
                 self._reset_state()
                 self.viewer.set_photo(pixmap)
@@ -1427,7 +1437,21 @@ class MainWindow(QMainWindow):
                 image_path = self.multi_view_images[i]
 
                 if image_path:
-                    pixmap = QPixmap(image_path)
+                    # Load image with explicit transparency support
+                    qimage = QImage(image_path)
+                    if qimage.isNull():
+                        self.multi_view_viewers[i].set_photo(QPixmap())
+                        self.multi_view_info_labels[i].setText(
+                            f"Image {i + 1}: Failed to load"
+                        )
+                        continue
+                    # For PNG files, always ensure proper alpha format handling
+                    if image_path.lower().endswith(".png"):
+                        # PNG files can have alpha channels, use ARGB32_Premultiplied for proper handling
+                        qimage = qimage.convertToFormat(
+                            QImage.Format.Format_ARGB32_Premultiplied
+                        )
+                    pixmap = QPixmap.fromImage(qimage)
                     if not pixmap.isNull():
                         self.multi_view_viewers[i].set_photo(pixmap)
                         # Apply current image adjustments to the newly loaded image

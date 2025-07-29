@@ -1,7 +1,7 @@
 import cv2
 import numpy as np
 from PyQt6.QtCore import QRectF, Qt, pyqtSignal
-from PyQt6.QtGui import QBrush, QColor, QCursor, QImage, QPainter, QPixmap
+from PyQt6.QtGui import QCursor, QImage, QPainter, QPixmap
 from PyQt6.QtWidgets import QGraphicsPixmapItem, QGraphicsScene, QGraphicsView
 
 
@@ -17,8 +17,13 @@ class PhotoViewer(QGraphicsView):
         self._scene.addItem(self._pixmap_item)
         self.setScene(self._scene)
 
-        # Set checkered background to make transparency visible
-        self._set_transparency_background()
+        # Enable proper alpha blending for transparency
+        self.setRenderHint(QPainter.RenderHint.Antialiasing)
+        self.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
+
+        # Ensure viewport supports transparency
+        self.viewport().setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
+        self.setStyleSheet("background: transparent;")
 
         self.setTransformationAnchor(QGraphicsView.ViewportAnchor.AnchorUnderMouse)
         self.setResizeAnchor(QGraphicsView.ViewportAnchor.AnchorViewCenter)
@@ -30,21 +35,6 @@ class PhotoViewer(QGraphicsView):
         self._original_image = None
         self._adjusted_pixmap = None
         self._original_image_bgra = None
-
-    def _set_transparency_background(self):
-        """Create checkered background pattern to show transparency."""
-        # Create a small checkered pattern
-        size = 20
-        checkered = QPixmap(size * 2, size * 2)
-        checkered.fill(QColor(220, 220, 220))  # Light gray
-
-        painter = QPainter(checkered)
-        painter.fillRect(0, 0, size, size, QColor(180, 180, 180))  # Darker gray
-        painter.fillRect(size, size, size, size, QColor(180, 180, 180))  # Darker gray
-        painter.end()
-
-        # Set as background brush for the scene
-        self._scene.setBackgroundBrush(QBrush(checkered))
 
     def fitInView(self, scale=True):
         rect = QRectF(self._pixmap_item.pixmap().rect())
@@ -68,6 +58,9 @@ class PhotoViewer(QGraphicsView):
             if self._pixmap_item not in self._scene.items():
                 self._pixmap_item = QGraphicsPixmapItem()
                 self._scene.addItem(self._pixmap_item)
+
+            # PNG files are now loaded with proper alpha format at source
+
             self._pixmap_item.setPixmap(pixmap)
 
             # Convert QImage to ARGB32 for consistent processing
@@ -80,8 +73,10 @@ class PhotoViewer(QGraphicsView):
             img_np = np.array(ptr).reshape(
                 converted_image.height(), converted_image.width(), 4
             )
-            # Keep BGRA format to preserve transparency
-            self._original_image_bgra = img_np
+            # QImage ARGB32 is stored as BGRA in memory, keep this format
+            self._original_image_bgra = (
+                img_np.copy()
+            )  # Make a copy to avoid memory issues
 
             self.fitInView()
         else:
@@ -131,6 +126,10 @@ class PhotoViewer(QGraphicsView):
         bytes_per_line = ch * w
         adjusted_qimage = QImage(
             adjusted_bgra.data, w, h, bytes_per_line, QImage.Format.Format_ARGB32
+        )
+        # Convert to premultiplied alpha for proper blending
+        adjusted_qimage = adjusted_qimage.convertToFormat(
+            QImage.Format.Format_ARGB32_Premultiplied
         )
         self._adjusted_pixmap = QPixmap.fromImage(adjusted_qimage)
 
