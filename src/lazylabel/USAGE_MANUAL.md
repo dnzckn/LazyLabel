@@ -14,9 +14,10 @@ This manual provides detailed instructions for using LazyLabel's image segmentat
 4. [Image Management](#image-management)
 5. [Advanced Features](#advanced-features)
 6. [Export and Data Management](#export-and-data-management)
-7. [Keyboard Shortcuts](#keyboard-shortcuts)
-8. [Configuration and Settings](#configuration-and-settings)
-9. [Troubleshooting](#troubleshooting)
+7. [Segment Management](#segment-management)
+8. [Keyboard Shortcuts](#keyboard-shortcuts)
+9. [Configuration and Settings](#configuration-and-settings)
+10. [Troubleshooting](#troubleshooting)
 
 ---
 
