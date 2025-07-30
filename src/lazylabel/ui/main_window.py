@@ -1250,6 +1250,11 @@ class MainWindow(QMainWindow):
         ):
             self._save_output_to_npz()
 
+        self.current_image_path = path
+
+        # CRITICAL: Reset state and mark SAM as dirty when loading new image
+        self._reset_state()
+
         self.segment_manager.clear()
         # Remove all scene items except the pixmap
         items_to_remove = [
@@ -1259,7 +1264,6 @@ class MainWindow(QMainWindow):
         ]
         for item in items_to_remove:
             self.viewer.scene().removeItem(item)
-        self.current_image_path = path
 
         # Load the image
         original_image = cv2.imread(path)
@@ -1310,6 +1314,9 @@ class MainWindow(QMainWindow):
 
         # Update file selection in the file manager
         self.right_panel.select_file(Path(path))
+
+        # CRITICAL: Update SAM model with new image
+        self._update_sam_model_image()
 
         # Update threshold widgets for new image (this was missing!)
         self._update_channel_threshold_for_image(pixmap)
@@ -1539,6 +1546,21 @@ class MainWindow(QMainWindow):
         # Clear action history
         self.action_history.clear()
         self.redo_history.clear()
+
+        # Reset SAM model state - force reload for new images (same as single view)
+        self.current_sam_hash = None  # Invalidate SAM cache
+        self.sam_is_dirty = True  # Mark SAM as needing update
+
+        # Clear cached image data to prevent using previous images
+        self._cached_original_image = None
+        if hasattr(self, "_cached_multi_view_original_images"):
+            self._cached_multi_view_original_images = None
+
+        # Clear SAM embedding cache to ensure fresh processing
+        self.sam_embedding_cache.clear()
+
+        # Reset AI mode state
+        self.ai_click_start_pos = None
 
         # Update UI lists to reflect cleared state
         self._update_all_lists()
@@ -1804,9 +1826,18 @@ class MainWindow(QMainWindow):
             # Convert from BGRA to RGB for SAM
             image_rgb = cv2.cvtColor(image_np, cv2.COLOR_BGRA2RGB)
             self.model_manager.sam_model.set_image_from_array(image_rgb)
+            # Update hash to prevent worker thread from re-updating
+            image_hash = self._get_image_hash(image_rgb)
+            self.current_sam_hash = image_hash
         else:
             # Pass the original image path to SAM model
             self.model_manager.sam_model.set_image_from_path(self.current_image_path)
+            # Update hash to prevent worker thread from re-updating
+            image_hash = hashlib.md5(self.current_image_path.encode()).hexdigest()
+            self.current_sam_hash = image_hash
+
+        # Mark SAM as clean since we just updated it
+        self.sam_is_dirty = False
 
     def _load_next_image(self):
         """Load next image in the file list."""
@@ -3746,6 +3777,14 @@ class MainWindow(QMainWindow):
         # Reset SAM model state - force reload for new image
         self.current_sam_hash = None  # Invalidate SAM cache
         self.sam_is_dirty = True  # Mark SAM as needing update
+
+        # Clear cached image data to prevent using previous image
+        self._cached_original_image = None
+        if hasattr(self, "_cached_multi_view_original_images"):
+            self._cached_multi_view_original_images = None
+
+        # Clear SAM embedding cache to ensure fresh processing
+        self.sam_embedding_cache.clear()
 
         # Reset AI mode state
         self.ai_click_start_pos = None
