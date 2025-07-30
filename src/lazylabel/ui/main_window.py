@@ -2,11 +2,12 @@
 
 import hashlib
 import os
+import re
 from pathlib import Path
 
 import cv2
 import numpy as np
-from PyQt6.QtCore import QModelIndex, QPointF, QRectF, Qt, QThread, QTimer, pyqtSignal
+from PyQt6.QtCore import QModelIndex, QPointF, QRectF, Qt, QTimer, pyqtSignal
 from PyQt6.QtGui import (
     QBrush,
     QColor,
@@ -53,530 +54,13 @@ from .numeric_table_widget_item import NumericTableWidgetItem
 from .photo_viewer import PhotoViewer
 from .right_panel import RightPanel
 from .widgets import StatusBar
-
-
-class SAMUpdateWorker(QThread):
-    """Worker thread for updating SAM model in background."""
-
-    finished = pyqtSignal()
-    error = pyqtSignal(str)
-
-    def __init__(
-        self,
-        model_manager,
-        image_path,
-        operate_on_view,
-        current_image=None,
-        parent=None,
-    ):
-        super().__init__(parent)
-        self.model_manager = model_manager
-        self.image_path = image_path
-        self.operate_on_view = operate_on_view
-        self.current_image = current_image  # Numpy array of current modified image
-        self._should_stop = False
-        self.scale_factor = 1.0  # Track scaling factor for coordinate transformation
-
-    def stop(self):
-        """Request the worker to stop."""
-        self._should_stop = True
-
-    def get_scale_factor(self):
-        """Get the scale factor used for image resizing."""
-        return self.scale_factor
-
-    def run(self):
-        """Run SAM update in background thread."""
-        try:
-            if self._should_stop:
-                return
-
-            if self.operate_on_view and self.current_image is not None:
-                # Use the provided modified image
-                if self._should_stop:
-                    return
-
-                # Optimize image size for faster SAM processing
-                image = self.current_image
-                original_height, original_width = image.shape[:2]
-                max_size = 1024
-
-                if original_height > max_size or original_width > max_size:
-                    # Calculate scaling factor
-                    self.scale_factor = min(
-                        max_size / original_width, max_size / original_height
-                    )
-                    new_width = int(original_width * self.scale_factor)
-                    new_height = int(original_height * self.scale_factor)
-
-                    # Resize using OpenCV for speed
-                    image = cv2.resize(
-                        image, (new_width, new_height), interpolation=cv2.INTER_AREA
-                    )
-                else:
-                    self.scale_factor = 1.0
-
-                if self._should_stop:
-                    return
-
-                # Set image from numpy array (FIXED: use resized image, not original)
-                self.model_manager.set_image_from_array(image)
-            else:
-                # Load original image
-                pixmap = QPixmap(self.image_path)
-                if pixmap.isNull():
-                    self.error.emit("Failed to load image")
-                    return
-
-                if self._should_stop:
-                    return
-
-                original_width = pixmap.width()
-                original_height = pixmap.height()
-
-                # Optimize image size for faster SAM processing
-                max_size = 1024
-                if original_width > max_size or original_height > max_size:
-                    # Calculate scaling factor
-                    self.scale_factor = min(
-                        max_size / original_width, max_size / original_height
-                    )
-
-                    # Scale down while maintaining aspect ratio
-                    scaled_pixmap = pixmap.scaled(
-                        max_size,
-                        max_size,
-                        Qt.AspectRatioMode.KeepAspectRatio,
-                        Qt.TransformationMode.SmoothTransformation,
-                    )
-
-                    # Convert to numpy array for SAM
-                    qimage = scaled_pixmap.toImage()
-                    width = qimage.width()
-                    height = qimage.height()
-                    ptr = qimage.bits()
-                    ptr.setsize(height * width * 4)
-                    arr = np.array(ptr).reshape(height, width, 4)
-                    # Convert RGBA to RGB
-                    image_array = arr[:, :, :3]
-
-                    if self._should_stop:
-                        return
-
-                    # FIXED: Use the resized image array, not original path
-                    self.model_manager.set_image_from_array(image_array)
-                else:
-                    self.scale_factor = 1.0
-                    # For images that don't need resizing, use original path
-                    self.model_manager.set_image_from_path(self.image_path)
-
-            if not self._should_stop:
-                self.finished.emit()
-
-        except Exception as e:
-            if not self._should_stop:
-                self.error.emit(str(e))
-
-
-class SingleViewSAMInitWorker(QThread):
-    """Worker thread for initializing single-view SAM model in background."""
-
-    model_initialized = pyqtSignal(object)  # model_instance
-    finished = pyqtSignal()
-    error = pyqtSignal(str)
-    progress = pyqtSignal(str)  # status message
-
-    def __init__(self, model_manager, default_model_type, custom_model_path=None):
-        super().__init__()
-        self.model_manager = model_manager
-        self.default_model_type = default_model_type
-        self.custom_model_path = custom_model_path
-        self._should_stop = False
-
-    def stop(self):
-        """Stop the worker gracefully."""
-        self._should_stop = True
-
-    def run(self):
-        """Initialize SAM model in background."""
-        try:
-            if self._should_stop:
-                return
-
-            if self.custom_model_path:
-                # Load custom model
-                model_name = os.path.basename(self.custom_model_path)
-                self.progress.emit(f"Loading {model_name}...")
-
-                success = self.model_manager.load_custom_model(self.custom_model_path)
-                if not success:
-                    raise Exception(f"Failed to load custom model: {model_name}")
-
-                sam_model = self.model_manager.sam_model
-            else:
-                # Initialize the default model
-                self.progress.emit("Initializing AI model...")
-                sam_model = self.model_manager.initialize_default_model(
-                    self.default_model_type
-                )
-
-            if self._should_stop:
-                return
-
-            if sam_model and sam_model.is_loaded:
-                self.model_initialized.emit(sam_model)
-                self.progress.emit("AI model initialized")
-            else:
-                self.error.emit("Model failed to load")
-
-        except Exception as e:
-            if not self._should_stop:
-                self.error.emit(f"Failed to load AI model: {str(e)}")
-
-
-class MultiViewSAMInitWorker(QThread):
-    """Worker thread for initializing multi-view SAM models in background."""
-
-    model_initialized = pyqtSignal(int, object)  # viewer_index, model_instance
-    all_models_initialized = pyqtSignal(int)  # total_models_count
-    error = pyqtSignal(str)
-    progress = pyqtSignal(int, int)  # current, total
-
-    def __init__(self, model_manager, parent=None):
-        super().__init__(parent)
-        self.model_manager = model_manager
-        self._should_stop = False
-        self.models_created = []
-
-    def stop(self):
-        """Request the worker to stop."""
-        self._should_stop = True
-
-    def run(self):
-        """Initialize multi-view SAM models in background thread."""
-        try:
-            if self._should_stop:
-                return
-
-            # Import the required model classes
-            from ..models.sam_model import SamModel
-
-            try:
-                from ..models.sam2_model import Sam2Model
-
-                SAM2_AVAILABLE = True
-            except ImportError:
-                Sam2Model = None
-                SAM2_AVAILABLE = False
-
-            # Determine which type of model to create
-            # Get the currently selected model from the GUI
-            parent = self.parent()
-            custom_model_path = None
-            default_model_type = "vit_h"  # fallback
-
-            if parent and hasattr(parent, "control_panel"):
-                # Get the selected model path from the model selection widget
-                model_path = parent.control_panel.model_widget.get_selected_model_path()
-                if model_path:
-                    # User has selected a custom model
-                    custom_model_path = model_path
-                    # Detect model type from filename
-                    default_model_type = self.model_manager.detect_model_type(
-                        model_path
-                    )
-                else:
-                    # Using default model
-                    default_model_type = (
-                        parent.settings.default_model_type
-                        if hasattr(parent, "settings")
-                        else "vit_h"
-                    )
-
-            is_sam2 = default_model_type.startswith("sam2")
-
-            # Create model instances for all viewers - but optimize memory usage
-            config = parent._get_multi_view_config()
-            num_viewers = config["num_viewers"]
-
-            # Warn about performance implications for VIT_H in multi-view
-            if num_viewers > 2 and default_model_type == "vit_h":
-                logger.warning(
-                    f"Using vit_h model with {num_viewers} viewers may cause performance issues. Consider using vit_b for better performance."
-                )
-            for i in range(num_viewers):
-                if self._should_stop:
-                    return
-
-                self.progress.emit(i + 1, num_viewers)
-
-                try:
-                    if is_sam2 and SAM2_AVAILABLE:
-                        # Create SAM2 model instance
-                        if custom_model_path:
-                            model_instance = Sam2Model(custom_model_path)
-                        else:
-                            model_instance = Sam2Model(model_type=default_model_type)
-                    else:
-                        # Create SAM1 model instance
-                        if custom_model_path:
-                            model_instance = SamModel(
-                                model_type=default_model_type,
-                                custom_model_path=custom_model_path,
-                            )
-                        else:
-                            model_instance = SamModel(model_type=default_model_type)
-
-                    if self._should_stop:
-                        return
-
-                    if model_instance and getattr(model_instance, "is_loaded", False):
-                        self.models_created.append(model_instance)
-                        self.model_initialized.emit(i, model_instance)
-
-                        # Synchronize and clear GPU cache after each model for stability
-                        try:
-                            import torch
-
-                            if torch.cuda.is_available():
-                                torch.cuda.synchronize()  # Ensure model is fully loaded
-                                torch.cuda.empty_cache()
-                        except ImportError:
-                            pass  # PyTorch not available
-                    else:
-                        raise Exception(f"Model instance {i + 1} failed to load")
-
-                except Exception as model_error:
-                    logger.error(
-                        f"Error creating model instance {i + 1}: {model_error}"
-                    )
-                    if not self._should_stop:
-                        self.error.emit(
-                            f"Failed to create model instance {i + 1}: {model_error}"
-                        )
-                    return
-
-            if not self._should_stop:
-                self.all_models_initialized.emit(len(self.models_created))
-
-        except Exception as e:
-            if not self._should_stop:
-                self.error.emit(str(e))
-
-
-class ImageDiscoveryWorker(QThread):
-    """Worker thread for discovering all image file paths in background."""
-
-    images_discovered = pyqtSignal(list)  # List of all image file paths
-    progress = pyqtSignal(str)  # Progress message
-    error = pyqtSignal(str)
-
-    def __init__(self, file_model, file_manager, parent=None):
-        super().__init__(parent)
-        self.file_model = file_model
-        self.file_manager = file_manager
-        self._should_stop = False
-
-    def stop(self):
-        """Request the worker to stop."""
-        self._should_stop = True
-
-    def run(self):
-        """Discover all image file paths in background."""
-        try:
-            if self._should_stop:
-                return
-
-            self.progress.emit("Scanning for images...")
-
-            if (
-                not hasattr(self.file_model, "rootPath")
-                or not self.file_model.rootPath()
-            ):
-                self.images_discovered.emit([])
-                return
-
-            all_image_paths = []
-            root_index = self.file_model.index(self.file_model.rootPath())
-
-            def scan_directory(parent_index):
-                if self._should_stop:
-                    return
-
-                for row in range(self.file_model.rowCount(parent_index)):
-                    if self._should_stop:
-                        return
-
-                    index = self.file_model.index(row, 0, parent_index)
-                    if self.file_model.isDir(index):
-                        scan_directory(index)  # Recursively scan subdirectories
-                    else:
-                        path = self.file_model.filePath(index)
-                        if self.file_manager.is_image_file(path):
-                            # Simply add all image file paths without checking for NPZ
-                            all_image_paths.append(path)
-
-            scan_directory(root_index)
-
-            if not self._should_stop:
-                self.progress.emit(f"Found {len(all_image_paths)} images")
-                self.images_discovered.emit(sorted(all_image_paths))
-
-        except Exception as e:
-            if not self._should_stop:
-                self.error.emit(f"Error discovering images: {str(e)}")
-
-
-class MultiViewSAMUpdateWorker(QThread):
-    """Worker thread for updating SAM model image in multi-view mode."""
-
-    finished = pyqtSignal(int)  # viewer_index
-    error = pyqtSignal(int, str)  # viewer_index, error_message
-
-    def __init__(
-        self,
-        viewer_index,
-        model,
-        image_path,
-        operate_on_view=False,
-        current_image=None,
-        parent=None,
-    ):
-        super().__init__(parent)
-        self.viewer_index = viewer_index
-        self.model = model
-        self.image_path = image_path
-        self.operate_on_view = operate_on_view
-        self.current_image = current_image
-        self._should_stop = False
-        self.scale_factor = 1.0
-
-    def stop(self):
-        """Request the worker to stop."""
-        self._should_stop = True
-
-    def get_scale_factor(self):
-        """Get the scale factor used for image resizing."""
-        return self.scale_factor
-
-    def run(self):
-        """Update SAM model image in background thread."""
-        try:
-            if self._should_stop:
-                return
-
-            # Clear GPU cache to reduce memory pressure in multi-view mode
-            try:
-                import torch
-
-                if torch.cuda.is_available():
-                    torch.cuda.empty_cache()
-            except ImportError:
-                pass  # PyTorch not available
-
-            if self.operate_on_view and self.current_image is not None:
-                # Use the provided modified image
-                if self._should_stop:
-                    return
-
-                # Optimize image size for faster SAM processing
-                image = self.current_image
-                original_height, original_width = image.shape[:2]
-                max_size = 1024
-
-                if original_height > max_size or original_width > max_size:
-                    # Calculate scaling factor
-                    self.scale_factor = min(
-                        max_size / original_width, max_size / original_height
-                    )
-                    new_width = int(original_width * self.scale_factor)
-                    new_height = int(original_height * self.scale_factor)
-
-                    # Resize using OpenCV for speed
-                    image = cv2.resize(
-                        image, (new_width, new_height), interpolation=cv2.INTER_AREA
-                    )
-                else:
-                    self.scale_factor = 1.0
-
-                if self._should_stop:
-                    return
-
-                # Set image from numpy array
-                self.model.set_image_from_array(image)
-            else:
-                # Load original image
-                if self._should_stop:
-                    return
-
-                # Optimize image size for faster SAM processing
-                pixmap = QPixmap(self.image_path)
-                if pixmap.isNull():
-                    if not self._should_stop:
-                        self.error.emit(self.viewer_index, "Failed to load image")
-                    return
-
-                original_width = pixmap.width()
-                original_height = pixmap.height()
-                max_size = 1024
-
-                if original_width > max_size or original_height > max_size:
-                    # Calculate scaling factor
-                    self.scale_factor = min(
-                        max_size / original_width, max_size / original_height
-                    )
-
-                    # Scale down while maintaining aspect ratio
-                    scaled_pixmap = pixmap.scaled(
-                        max_size,
-                        max_size,
-                        Qt.AspectRatioMode.KeepAspectRatio,
-                        Qt.TransformationMode.SmoothTransformation,
-                    )
-
-                    # Convert to numpy array for SAM
-                    qimage = scaled_pixmap.toImage()
-                    width = qimage.width()
-                    height = qimage.height()
-                    ptr = qimage.bits()
-                    ptr.setsize(height * width * 4)
-                    arr = np.array(ptr).reshape(height, width, 4)
-                    # Convert RGBA to RGB
-                    image_array = arr[:, :, :3]
-
-                    if self._should_stop:
-                        return
-
-                    # Add CUDA synchronization for multi-model scenarios
-                    try:
-                        import torch
-
-                        if torch.cuda.is_available():
-                            torch.cuda.synchronize()
-                    except ImportError:
-                        pass
-
-                    self.model.set_image_from_array(image_array)
-                else:
-                    self.scale_factor = 1.0
-
-                    # Add CUDA synchronization for multi-model scenarios
-                    try:
-                        import torch
-
-                        if torch.cuda.is_available():
-                            torch.cuda.synchronize()
-                    except ImportError:
-                        pass
-
-                    self.model.set_image_from_path(self.image_path)
-
-            if not self._should_stop:
-                self.finished.emit(self.viewer_index)
-
-        except Exception as e:
-            if not self._should_stop:
-                self.error.emit(self.viewer_index, str(e))
+from .workers import (
+    ImageDiscoveryWorker,
+    MultiViewSAMInitWorker,
+    MultiViewSAMUpdateWorker,
+    SAMUpdateWorker,
+    SingleViewSAMInitWorker,
+)
 
 
 class PanelPopoutWindow(QDialog):
@@ -778,9 +262,28 @@ class MainWindow(QMainWindow):
         self._setup_shortcuts()
         self._load_settings()
 
+    def _get_version(self) -> str:
+        """Get version from pyproject.toml."""
+        try:
+            # Get the project root directory (3 levels up from main_window.py)
+            project_root = Path(__file__).parent.parent.parent.parent
+            pyproject_path = project_root / "pyproject.toml"
+
+            if pyproject_path.exists():
+                with open(pyproject_path, encoding="utf-8") as f:
+                    content = f.read()
+                    # Use regex to find version line
+                    match = re.search(r'version\s*=\s*"([^"]+)"', content)
+                    if match:
+                        return match.group(1)
+        except Exception:
+            pass
+        return "unknown"
+
     def _setup_ui(self):
         """Setup the main user interface."""
-        self.setWindowTitle("LazyLabel by DNC")
+        version = self._get_version()
+        self.setWindowTitle(f"LazyLabel by DNC (version {version})")
         self.setGeometry(
             50, 50, self.settings.window_width, self.settings.window_height
         )
@@ -1510,7 +1013,7 @@ class MainWindow(QMainWindow):
         if not model_text or model_text == "Default (vit_h)":
             # Clear any pending custom model and use default
             self.pending_custom_model_path = None
-            self.control_panel.set_current_model("Current: Default SAM Model")
+            self.control_panel.set_current_model("Selected: Default SAM Model")
             # Clear existing model to free memory until needed
             self._reset_sam_state_for_model_switch()
             return
@@ -1703,7 +1206,17 @@ class MainWindow(QMainWindow):
                 self._save_output_to_npz()
 
             self.current_image_path = path
-            pixmap = QPixmap(self.current_image_path)
+            # Load image with explicit transparency support
+            qimage = QImage(self.current_image_path)
+            if qimage.isNull():
+                return
+            # For PNG files, always ensure proper alpha format handling
+            if self.current_image_path.lower().endswith(".png"):
+                # PNG files can have alpha channels, use ARGB32_Premultiplied for proper handling
+                qimage = qimage.convertToFormat(
+                    QImage.Format.Format_ARGB32_Premultiplied
+                )
+            pixmap = QPixmap.fromImage(qimage)
             if not pixmap.isNull():
                 self._reset_state()
                 self.viewer.set_photo(pixmap)
@@ -1757,6 +1270,11 @@ class MainWindow(QMainWindow):
         ):
             self._save_output_to_npz()
 
+        self.current_image_path = path
+
+        # CRITICAL: Reset state and mark SAM as dirty when loading new image
+        self._reset_state()
+
         self.segment_manager.clear()
         # Remove all scene items except the pixmap
         items_to_remove = [
@@ -1766,7 +1284,6 @@ class MainWindow(QMainWindow):
         ]
         for item in items_to_remove:
             self.viewer.scene().removeItem(item)
-        self.current_image_path = path
 
         # Load the image
         original_image = cv2.imread(path)
@@ -1817,6 +1334,9 @@ class MainWindow(QMainWindow):
 
         # Update file selection in the file manager
         self.right_panel.select_file(Path(path))
+
+        # CRITICAL: Update SAM model with new image
+        self._update_sam_model_image()
 
         # Update threshold widgets for new image (this was missing!)
         self._update_channel_threshold_for_image(pixmap)
@@ -1944,7 +1464,21 @@ class MainWindow(QMainWindow):
                 image_path = self.multi_view_images[i]
 
                 if image_path:
-                    pixmap = QPixmap(image_path)
+                    # Load image with explicit transparency support
+                    qimage = QImage(image_path)
+                    if qimage.isNull():
+                        self.multi_view_viewers[i].set_photo(QPixmap())
+                        self.multi_view_info_labels[i].setText(
+                            f"Image {i + 1}: Failed to load"
+                        )
+                        continue
+                    # For PNG files, always ensure proper alpha format handling
+                    if image_path.lower().endswith(".png"):
+                        # PNG files can have alpha channels, use ARGB32_Premultiplied for proper handling
+                        qimage = qimage.convertToFormat(
+                            QImage.Format.Format_ARGB32_Premultiplied
+                        )
+                    pixmap = QPixmap.fromImage(qimage)
                     if not pixmap.isNull():
                         self.multi_view_viewers[i].set_photo(pixmap)
                         # Apply current image adjustments to the newly loaded image
@@ -2032,6 +1566,21 @@ class MainWindow(QMainWindow):
         # Clear action history
         self.action_history.clear()
         self.redo_history.clear()
+
+        # Reset SAM model state - force reload for new images (same as single view)
+        self.current_sam_hash = None  # Invalidate SAM cache
+        self.sam_is_dirty = True  # Mark SAM as needing update
+
+        # Clear cached image data to prevent using previous images
+        self._cached_original_image = None
+        if hasattr(self, "_cached_multi_view_original_images"):
+            self._cached_multi_view_original_images = None
+
+        # Clear SAM embedding cache to ensure fresh processing
+        self.sam_embedding_cache.clear()
+
+        # Reset AI mode state
+        self.ai_click_start_pos = None
 
         # Update UI lists to reflect cleared state
         self._update_all_lists()
@@ -2297,9 +1846,18 @@ class MainWindow(QMainWindow):
             # Convert from BGRA to RGB for SAM
             image_rgb = cv2.cvtColor(image_np, cv2.COLOR_BGRA2RGB)
             self.model_manager.sam_model.set_image_from_array(image_rgb)
+            # Update hash to prevent worker thread from re-updating
+            image_hash = self._get_image_hash(image_rgb)
+            self.current_sam_hash = image_hash
         else:
             # Pass the original image path to SAM model
             self.model_manager.sam_model.set_image_from_path(self.current_image_path)
+            # Update hash to prevent worker thread from re-updating
+            image_hash = hashlib.md5(self.current_image_path.encode()).hexdigest()
+            self.current_sam_hash = image_hash
+
+        # Mark SAM as clean since we just updated it
+        self.sam_is_dirty = False
 
     def _load_next_image(self):
         """Load next image in the file list."""
@@ -4235,6 +3793,18 @@ class MainWindow(QMainWindow):
         self.crop_mode = False
         self.crop_start_pos = None
         self.current_crop_coords = None
+
+        # Reset SAM model state - force reload for new image
+        self.current_sam_hash = None  # Invalidate SAM cache
+        self.sam_is_dirty = True  # Mark SAM as needing update
+
+        # Clear cached image data to prevent using previous image
+        self._cached_original_image = None
+        if hasattr(self, "_cached_multi_view_original_images"):
+            self._cached_multi_view_original_images = None
+
+        # Clear SAM embedding cache to ensure fresh processing
+        self.sam_embedding_cache.clear()
 
         # Reset AI mode state
         self.ai_click_start_pos = None

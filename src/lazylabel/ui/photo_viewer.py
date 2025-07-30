@@ -1,7 +1,7 @@
 import cv2
 import numpy as np
 from PyQt6.QtCore import QRectF, Qt, pyqtSignal
-from PyQt6.QtGui import QCursor, QImage, QPixmap
+from PyQt6.QtGui import QCursor, QImage, QPainter, QPixmap
 from PyQt6.QtWidgets import QGraphicsPixmapItem, QGraphicsScene, QGraphicsView
 
 
@@ -17,6 +17,14 @@ class PhotoViewer(QGraphicsView):
         self._scene.addItem(self._pixmap_item)
         self.setScene(self._scene)
 
+        # Enable proper alpha blending for transparency
+        self.setRenderHint(QPainter.RenderHint.Antialiasing)
+        self.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
+
+        # Ensure viewport supports transparency
+        self.viewport().setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
+        self.setStyleSheet("background: transparent;")
+
         self.setTransformationAnchor(QGraphicsView.ViewportAnchor.AnchorUnderMouse)
         self.setResizeAnchor(QGraphicsView.ViewportAnchor.AnchorViewCenter)
         self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
@@ -26,7 +34,7 @@ class PhotoViewer(QGraphicsView):
 
         self._original_image = None
         self._adjusted_pixmap = None
-        self._original_image_bgr = None
+        self._original_image_bgra = None
 
     def fitInView(self, scale=True):
         rect = QRectF(self._pixmap_item.pixmap().rect())
@@ -50,6 +58,9 @@ class PhotoViewer(QGraphicsView):
             if self._pixmap_item not in self._scene.items():
                 self._pixmap_item = QGraphicsPixmapItem()
                 self._scene.addItem(self._pixmap_item)
+
+            # PNG files are now loaded with proper alpha format at source
+
             self._pixmap_item.setPixmap(pixmap)
 
             # Convert QImage to ARGB32 for consistent processing
@@ -62,14 +73,16 @@ class PhotoViewer(QGraphicsView):
             img_np = np.array(ptr).reshape(
                 converted_image.height(), converted_image.width(), 4
             )
-            # OpenCV expects BGR, so convert from BGRA (QImage ARGB is BGRA in memory)
-            self._original_image_bgr = cv2.cvtColor(img_np, cv2.COLOR_BGRA2BGR)
+            # QImage ARGB32 is stored as BGRA in memory, keep this format
+            self._original_image_bgra = (
+                img_np.copy()
+            )  # Make a copy to avoid memory issues
 
             self.fitInView()
         else:
             self._original_image = None
             self._adjusted_pixmap = None
-            self._original_image_bgr = None
+            self._original_image_bgra = None
             # Check if _pixmap_item still exists, recreate if deleted
             if self._pixmap_item not in self._scene.items():
                 self._pixmap_item = QGraphicsPixmapItem()
@@ -77,7 +90,7 @@ class PhotoViewer(QGraphicsView):
             self._pixmap_item.setPixmap(QPixmap())
 
     def set_image_adjustments(self, brightness: float, contrast: float, gamma: float):
-        if self._original_image_bgr is None or self._original_image is None:
+        if self._original_image_bgra is None or self._original_image is None:
             return
 
         # Ensure _pixmap_item exists and is valid
@@ -85,9 +98,13 @@ class PhotoViewer(QGraphicsView):
             self._pixmap_item = QGraphicsPixmapItem()
             self._scene.addItem(self._pixmap_item)
 
-        img_bgr = self._original_image_bgr.copy()
+        img_bgra = self._original_image_bgra.copy()
 
-        # Apply brightness and contrast
+        # Separate alpha channel for transparency preservation
+        alpha_channel = img_bgra[:, :, 3:4]  # Keep dimensions
+        img_bgr = img_bgra[:, :, :3]  # RGB channels only
+
+        # Apply brightness and contrast to RGB channels only
         # new_image = alpha * old_image + beta
         adjusted_img = cv2.convertScaleAbs(
             img_bgr, alpha=1 + contrast / 100.0, beta=brightness
@@ -101,11 +118,18 @@ class PhotoViewer(QGraphicsView):
             ).astype("uint8")
             adjusted_img = cv2.LUT(adjusted_img, table)
 
-        # Convert back to QImage (BGR to RGB for QImage, then to QPixmap)
-        h, w, ch = adjusted_img.shape
+        # Recombine with alpha channel to preserve transparency
+        adjusted_bgra = np.concatenate([adjusted_img, alpha_channel], axis=2)
+
+        # Convert back to QImage with alpha support
+        h, w, ch = adjusted_bgra.shape
         bytes_per_line = ch * w
         adjusted_qimage = QImage(
-            adjusted_img.data, w, h, bytes_per_line, QImage.Format.Format_BGR888
+            adjusted_bgra.data, w, h, bytes_per_line, QImage.Format.Format_ARGB32
+        )
+        # Convert to premultiplied alpha for proper blending
+        adjusted_qimage = adjusted_qimage.convertToFormat(
+            QImage.Format.Format_ARGB32_Premultiplied
         )
         self._adjusted_pixmap = QPixmap.fromImage(adjusted_qimage)
 

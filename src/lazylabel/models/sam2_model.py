@@ -66,71 +66,152 @@ class Sam2Model:
 
             model_filename = Path(model_path).name.lower()
 
-            # First, try using the auto-detected config path directly
-            try:
-                logger.info(f"SAM2: Attempting to load with config path: {config_path}")
-                self.model = self._build_sam2_with_fallback(config_path, model_path)
-                logger.info("SAM2: Successfully loaded with config path")
-            except Exception as e1:
-                logger.debug(f"SAM2: Config path approach failed: {e1}")
+            # For SAM2.1 models, use manual Hydra initialization since configs aren't in search path
+            if "2.1" in model_filename:
+                logger.info(
+                    "SAM2: Loading SAM2.1 model with manual config initialization"
+                )
 
-                # Second, try just the config filename without path
                 try:
-                    config_filename = Path(config_path).name
-                    logger.info(
-                        f"SAM2: Attempting to load with config filename: {config_filename}"
-                    )
-                    self.model = self._build_sam2_with_fallback(
-                        config_filename, model_path
-                    )
-                    logger.info("SAM2: Successfully loaded with config filename")
-                except Exception as e2:
-                    logger.debug(f"SAM2: Config filename approach failed: {e2}")
+                    # Import required Hydra components
+                    # Get the configs directory
+                    import sam2
+                    from hydra import compose, initialize_config_dir
+                    from hydra.core.global_hydra import GlobalHydra
 
-                    # Third, try the base config name without version
-                    try:
-                        # Map model sizes to base config names
-                        if (
-                            "tiny" in model_filename
-                            or "_t." in model_filename
-                            or "_t_" in model_filename
-                        ):
-                            base_config = "sam2_hiera_t.yaml"
-                        elif (
-                            "small" in model_filename
-                            or "_s." in model_filename
-                            or "_s_" in model_filename
-                        ):
-                            base_config = "sam2_hiera_s.yaml"
-                        elif (
-                            "base_plus" in model_filename
-                            or "_b+." in model_filename
-                            or "_b+_" in model_filename
-                        ):
-                            base_config = "sam2_hiera_b+.yaml"
-                        elif (
-                            "large" in model_filename
-                            or "_l." in model_filename
-                            or "_l_" in model_filename
-                        ):
-                            base_config = "sam2_hiera_l.yaml"
-                        else:
-                            base_config = "sam2_hiera_l.yaml"
+                    sam2_configs_dir = os.path.join(
+                        os.path.dirname(sam2.__file__), "configs", "sam2.1"
+                    )
+
+                    # Clear any existing Hydra instance
+                    GlobalHydra.instance().clear()
+
+                    # Initialize Hydra with the SAM2.1 configs directory
+                    with initialize_config_dir(
+                        config_dir=sam2_configs_dir, version_base=None
+                    ):
+                        config_filename = Path(config_path).name
+                        logger.info(f"SAM2: Loading SAM2.1 config: {config_filename}")
+
+                        # Load the config
+                        cfg = compose(config_name=config_filename.replace(".yaml", ""))
+
+                        # Manually build the model using the config
+                        from hydra.utils import instantiate
+
+                        self.model = instantiate(cfg.model)
+                        self.model.to(self.device)
+
+                        # Load the checkpoint weights
+                        if model_path:
+                            checkpoint = torch.load(
+                                model_path, map_location=self.device
+                            )
+                            # Handle nested checkpoint structure
+                            if "model" in checkpoint:
+                                model_weights = checkpoint["model"]
+                            else:
+                                model_weights = checkpoint
+                            self.model.load_state_dict(model_weights, strict=False)
 
                         logger.info(
-                            f"SAM2: Attempting to load with base config: {base_config}"
+                            "SAM2: Successfully loaded SAM2.1 with manual initialization"
                         )
-                        self.model = self._build_sam2_with_fallback(
-                            base_config, model_path
+
+                except Exception as e1:
+                    logger.debug(f"SAM2: SAM2.1 manual initialization failed: {e1}")
+                    # Fallback to using a compatible SAM2.0 config as a workaround
+                    logger.warning(
+                        "SAM2: Falling back to SAM2.0 config for SAM2.1 model (may have reduced functionality)"
+                    )
+                    try:
+                        # Use the closest SAM2.0 config
+                        fallback_config = (
+                            "sam2_hiera_l.yaml"  # This works according to our test
                         )
-                        logger.info("SAM2: Successfully loaded with base config")
-                    except Exception as e3:
-                        # All approaches failed
+                        logger.info(
+                            f"SAM2: Attempting fallback with SAM2.0 config: {fallback_config}"
+                        )
+                        self.model = build_sam2(
+                            fallback_config, model_path, device=self.device
+                        )
+                        logger.warning(
+                            "SAM2: Loaded SAM2.1 model with SAM2.0 config - some features may not work"
+                        )
+                    except Exception as e2:
                         raise Exception(
-                            f"Failed to load SAM2 model with any config approach. "
-                            f"Tried: {config_path}, {config_filename}, {base_config}. "
-                            f"Last error: {e3}"
-                        ) from e3
+                            f"Failed to load SAM2.1 model. Manual initialization failed: {e1}. "
+                            f"Fallback to SAM2.0 config also failed: {e2}. "
+                            f"Try reinstalling SAM2 with latest version from official repo."
+                        ) from e2
+            else:
+                # Standard SAM2.0 loading approach
+                try:
+                    logger.info(
+                        f"SAM2: Attempting to load with config path: {config_path}"
+                    )
+                    self.model = build_sam2(config_path, model_path, device=self.device)
+                    logger.info("SAM2: Successfully loaded with config path")
+                except Exception as e1:
+                    logger.debug(f"SAM2: Config path approach failed: {e1}")
+
+                    # Try just the config filename without path (for Hydra)
+                    try:
+                        config_filename = Path(config_path).name
+                        logger.info(
+                            f"SAM2: Attempting to load with config filename: {config_filename}"
+                        )
+                        self.model = build_sam2(
+                            config_filename, model_path, device=self.device
+                        )
+                        logger.info("SAM2: Successfully loaded with config filename")
+                    except Exception as e2:
+                        logger.debug(f"SAM2: Config filename approach failed: {e2}")
+
+                        # Try the base config name for SAM2.0 models
+                        try:
+                            # Map model sizes to base config names (SAM2.0 only)
+                            if (
+                                "tiny" in model_filename
+                                or "_t." in model_filename
+                                or "_t_" in model_filename
+                            ):
+                                base_config = "sam2_hiera_t.yaml"
+                            elif (
+                                "small" in model_filename
+                                or "_s." in model_filename
+                                or "_s_" in model_filename
+                            ):
+                                base_config = "sam2_hiera_s.yaml"
+                            elif (
+                                "base_plus" in model_filename
+                                or "_b+." in model_filename
+                                or "_b+_" in model_filename
+                            ):
+                                base_config = "sam2_hiera_b+.yaml"
+                            elif (
+                                "large" in model_filename
+                                or "_l." in model_filename
+                                or "_l_" in model_filename
+                            ):
+                                base_config = "sam2_hiera_l.yaml"
+                            else:
+                                base_config = "sam2_hiera_l.yaml"
+
+                            logger.info(
+                                f"SAM2: Attempting to load with base config: {base_config}"
+                            )
+                            self.model = build_sam2(
+                                base_config, model_path, device=self.device
+                            )
+                            logger.info("SAM2: Successfully loaded with base config")
+                        except Exception as e3:
+                            # All approaches failed
+                            raise Exception(
+                                f"Failed to load SAM2 model with any config approach. "
+                                f"Tried: {config_path}, {config_filename}, {base_config}. "
+                                f"Last error: {e3}"
+                            ) from e3
 
             # Create predictor
             self.predictor = SAM2ImagePredictor(self.model)
@@ -155,53 +236,53 @@ class Sam2Model:
             sam2_dir = Path(sam2.__file__).parent
             configs_dir = sam2_dir / "configs"
 
-            # Map model types to config files
+            # Determine if this is a SAM2.1 model
+            is_sam21 = "2.1" in filename
+
+            # Map model types to config files based on version
             if "tiny" in filename or "_t" in filename:
-                config_file = (
-                    "sam2.1_hiera_t.yaml" if "2.1" in filename else "sam2_hiera_t.yaml"
-                )
+                config_file = "sam2.1_hiera_t.yaml" if is_sam21 else "sam2_hiera_t.yaml"
             elif "small" in filename or "_s" in filename:
-                config_file = (
-                    "sam2.1_hiera_s.yaml" if "2.1" in filename else "sam2_hiera_s.yaml"
-                )
+                config_file = "sam2.1_hiera_s.yaml" if is_sam21 else "sam2_hiera_s.yaml"
             elif "base_plus" in filename or "_b+" in filename:
                 config_file = (
-                    "sam2.1_hiera_b+.yaml"
-                    if "2.1" in filename
-                    else "sam2_hiera_b+.yaml"
+                    "sam2.1_hiera_b+.yaml" if is_sam21 else "sam2_hiera_b+.yaml"
                 )
             elif "large" in filename or "_l" in filename:
-                config_file = (
-                    "sam2.1_hiera_l.yaml" if "2.1" in filename else "sam2_hiera_l.yaml"
-                )
+                config_file = "sam2.1_hiera_l.yaml" if is_sam21 else "sam2_hiera_l.yaml"
             else:
-                # Default to large model
-                config_file = "sam2.1_hiera_l.yaml"
+                # Default to large model with appropriate version
+                config_file = "sam2.1_hiera_l.yaml" if is_sam21 else "sam2_hiera_l.yaml"
 
-            # Check sam2.1 configs first, then fall back to sam2
-            if "2.1" in filename:
+            # Build config path based on version
+            if is_sam21:
                 config_path = configs_dir / "sam2.1" / config_file
             else:
-                config_path = configs_dir / "sam2" / config_file.replace("2.1_", "")
+                config_path = configs_dir / "sam2" / config_file
 
             logger.debug(f"SAM2: Checking config path: {config_path}")
             if config_path.exists():
                 return str(config_path.absolute())
 
-            # Fallback to default large config
-            fallback_config = configs_dir / "sam2.1" / "sam2.1_hiera_l.yaml"
+            # Fallback to default large config of the same version
+            fallback_config_file = (
+                "sam2.1_hiera_l.yaml" if is_sam21 else "sam2_hiera_l.yaml"
+            )
+            fallback_subdir = "sam2.1" if is_sam21 else "sam2"
+            fallback_config = configs_dir / fallback_subdir / fallback_config_file
             logger.debug(f"SAM2: Checking fallback config: {fallback_config}")
             if fallback_config.exists():
                 return str(fallback_config.absolute())
 
-            # Try without version subdirectory
-            direct_config = configs_dir / config_file
-            logger.debug(f"SAM2: Checking direct config: {direct_config}")
-            if direct_config.exists():
-                return str(direct_config.absolute())
+            # Try without version subdirectory (only for SAM2.0)
+            if not is_sam21:
+                direct_config = configs_dir / config_file
+                logger.debug(f"SAM2: Checking direct config: {direct_config}")
+                if direct_config.exists():
+                    return str(direct_config.absolute())
 
             raise FileNotFoundError(
-                f"No suitable config found for {filename} in {configs_dir}"
+                f"No suitable {'SAM2.1' if is_sam21 else 'SAM2'} config found for {filename} in {configs_dir}"
             )
 
         except Exception as e:
@@ -211,58 +292,19 @@ class Sam2Model:
                 import sam2
 
                 sam2_dir = Path(sam2.__file__).parent
-                # Return full path to default config
-                return str(sam2_dir / "configs" / "sam2.1" / "sam2.1_hiera_l.yaml")
+                filename = Path(model_path).name.lower()
+                is_sam21 = "2.1" in filename
+
+                # Return full path to appropriate default config
+                if is_sam21:
+                    return str(sam2_dir / "configs" / "sam2.1" / "sam2.1_hiera_l.yaml")
+                else:
+                    return str(sam2_dir / "configs" / "sam2" / "sam2_hiera_l.yaml")
             except Exception:
                 # Last resort - return just the config name and let hydra handle it
-                return "sam2.1_hiera_l.yaml"
-
-    def _build_sam2_with_fallback(self, config_path, model_path):
-        """Build SAM2 model with fallback for state_dict compatibility issues."""
-        try:
-            # First, try the standard build_sam2 approach
-            return build_sam2(config_path, model_path, device=self.device)
-        except RuntimeError as e:
-            if "Unexpected key(s) in state_dict" in str(e):
-                logger.warning(f"SAM2: Detected state_dict compatibility issue: {e}")
-                logger.info("SAM2: Attempting to load with state_dict filtering...")
-
-                # Build model without loading weights first
-                model = build_sam2(config_path, None, device=self.device)
-
-                # Load checkpoint and handle nested structure
-                checkpoint = torch.load(model_path, map_location=self.device)
-
-                # Check if checkpoint has nested 'model' key (common in SAM2.1)
-                if "model" in checkpoint and isinstance(checkpoint["model"], dict):
-                    logger.info(
-                        "SAM2: Detected nested checkpoint structure, extracting model weights"
-                    )
-                    model_weights = checkpoint["model"]
-                else:
-                    # Flat structure - filter out the known problematic keys
-                    model_weights = {}
-                    problematic_keys = {
-                        "no_obj_embed_spatial",
-                        "obj_ptr_tpos_proj.weight",
-                        "obj_ptr_tpos_proj.bias",
-                    }
-                    for key, value in checkpoint.items():
-                        if key not in problematic_keys:
-                            model_weights[key] = value
-
-                    logger.info(
-                        f"SAM2: Filtered out problematic keys: {list(problematic_keys & set(checkpoint.keys()))}"
-                    )
-
-                # Load the model weights
-                model.load_state_dict(model_weights, strict=False)
-                logger.info("SAM2: Successfully loaded model with state_dict filtering")
-
-                return model
-            else:
-                # Re-raise if it's a different type of error
-                raise
+                filename = Path(model_path).name.lower()
+                is_sam21 = "2.1" in filename
+                return "sam2.1_hiera_l.yaml" if is_sam21 else "sam2_hiera_l.yaml"
 
     def set_image_from_path(self, image_path: str) -> bool:
         """Set image for SAM2 model from file path."""
@@ -351,8 +393,85 @@ class Sam2Model:
             if config_path is None:
                 config_path = self._auto_detect_config(model_path)
 
-            # Load new model
-            self.model = self._build_sam2_with_fallback(config_path, model_path)
+            # Load new model with same logic as __init__
+            model_filename = Path(model_path).name.lower()
+
+            # Use same loading logic as __init__
+            if "2.1" in model_filename:
+                # SAM2.1 models need manual Hydra initialization
+                logger.info(
+                    "SAM2: Loading custom SAM2.1 model with manual config initialization"
+                )
+
+                try:
+                    import sam2
+                    from hydra import compose, initialize_config_dir
+                    from hydra.core.global_hydra import GlobalHydra
+
+                    sam2_configs_dir = os.path.join(
+                        os.path.dirname(sam2.__file__), "configs", "sam2.1"
+                    )
+                    GlobalHydra.instance().clear()
+
+                    with initialize_config_dir(
+                        config_dir=sam2_configs_dir, version_base=None
+                    ):
+                        config_filename = Path(config_path).name
+                        cfg = compose(config_name=config_filename.replace(".yaml", ""))
+
+                        from hydra.utils import instantiate
+
+                        self.model = instantiate(cfg.model)
+                        self.model.to(self.device)
+
+                        if model_path:
+                            checkpoint = torch.load(
+                                model_path, map_location=self.device
+                            )
+                            model_weights = checkpoint.get("model", checkpoint)
+                            self.model.load_state_dict(model_weights, strict=False)
+
+                        logger.info(
+                            "SAM2: Successfully loaded custom SAM2.1 with manual initialization"
+                        )
+
+                except Exception as e1:
+                    # Fallback to SAM2.0 config
+                    logger.warning(
+                        "SAM2: Falling back to SAM2.0 config for custom SAM2.1 model"
+                    )
+                    try:
+                        fallback_config = "sam2_hiera_l.yaml"
+                        self.model = build_sam2(
+                            fallback_config, model_path, device=self.device
+                        )
+                        logger.warning(
+                            "SAM2: Loaded custom SAM2.1 model with SAM2.0 config"
+                        )
+                    except Exception as e2:
+                        raise Exception(
+                            f"Failed to load custom SAM2.1 model. Manual init failed: {e1}, fallback failed: {e2}"
+                        ) from e2
+            else:
+                # Standard SAM2.0 loading
+                try:
+                    logger.info(
+                        f"SAM2: Attempting to load custom model with config path: {config_path}"
+                    )
+                    self.model = build_sam2(config_path, model_path, device=self.device)
+                except Exception:
+                    try:
+                        config_filename = Path(config_path).name
+                        logger.info(
+                            f"SAM2: Attempting to load custom model with config filename: {config_filename}"
+                        )
+                        self.model = build_sam2(
+                            config_filename, model_path, device=self.device
+                        )
+                    except Exception as e2:
+                        raise Exception(
+                            f"Failed to load custom model. Last error: {e2}"
+                        ) from e2
             self.predictor = SAM2ImagePredictor(self.model)
             self.current_model_path = model_path
             self.is_loaded = True
