@@ -207,6 +207,11 @@ Advanced mode for simultaneous processing of multiple images.
 3. Apply coordinates manually or via interface
 4. All subsequent operations constrained to crop region
 
+**Output Behavior:**
+- Pixels outside crop region are blacked out in exported masks
+- Original image dimensions are preserved
+- Only the crop region contributes to segmentation results
+
 **Applications:**
 - Focus on specific image regions
 - Reduce processing overhead
