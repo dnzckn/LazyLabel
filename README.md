@@ -5,7 +5,7 @@
   <img src="https://raw.githubusercontent.com/dnzckn/LazyLabel/main/src/lazylabel/demo_pictures/logo_black.png" alt="LazyLabel Cursive" style="height:60px; vertical-align:middle;" />
 </div>
 
-**Professional Image Segmentation for Machine Learning Applications**
+**AI-Assisted Image Segmentation for Machine Learning Applications**
 
 LazyLabel integrates Meta's Segment Anything Model (SAM) with advanced editing capabilities to enable efficient, high-precision image annotation. Designed for computer vision research and machine learning dataset preparation.
 
@@ -145,4 +145,4 @@ LazyLabel welcomes contributions! Please review:
 
 ---
 
-**LazyLabel** - Professional image annotation software for computer vision research and machine learning applications.
+**LazyLabel** - Advanced image annotation software for computer vision research and machine learning applications.

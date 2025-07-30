@@ -1,6 +1,6 @@
 # LazyLabel Architecture
 
-**Modern, Modular Design for Maintainability and Extensibility**
+**Modular Design for Maintainability and Extensibility**
 
 LazyLabel uses a modular architecture with PyQt6 signal-based communication between components.
 
@@ -177,4 +177,4 @@ The modular architecture makes it easy to add:
 
 ---
 
-**Professional architecture supporting the computer vision research community**
+**Robust architecture supporting computer vision research applications**

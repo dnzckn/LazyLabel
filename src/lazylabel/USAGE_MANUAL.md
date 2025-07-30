@@ -1,6 +1,6 @@
 # LazyLabel Usage Manual
 
-**Comprehensive Guide to Professional Image Segmentation**
+**Comprehensive Guide to Image Segmentation**
 
 This manual provides detailed instructions for using LazyLabel's image segmentation and annotation capabilities. LazyLabel combines AI-assisted segmentation with manual editing tools to enable efficient, high-precision dataset preparation for machine learning applications.
 
@@ -459,4 +459,4 @@ object_class_2 = mask[:, :, 2]
 
 ---
 
-**LazyLabel** - Professional image annotation software for computer vision research and machine learning applications.
+**LazyLabel** - Advanced image annotation software for computer vision research and machine learning applications.
