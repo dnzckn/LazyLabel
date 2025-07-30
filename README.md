@@ -1,14 +1,21 @@
-# <img src="https://raw.githubusercontent.com/dnzckn/LazyLabel/main/src/lazylabel/demo_pictures/logo2.png" alt="LazyLabel Logo" style="height:60px; vertical-align:middle;" /> <img src="https://raw.githubusercontent.com/dnzckn/LazyLabel/main/src/lazylabel/demo_pictures/logo_black.png" alt="LazyLabel Cursive" style="height:60px; vertical-align:middle;" />
+# LazyLabel
 
-**AI-Assisted Image Segmentation Made Simple**
+<div align="center">
+  <img src="https://raw.githubusercontent.com/dnzckn/LazyLabel/main/src/lazylabel/demo_pictures/logo2.png" alt="LazyLabel Logo" style="height:60px; vertical-align:middle;" />
+  <img src="https://raw.githubusercontent.com/dnzckn/LazyLabel/main/src/lazylabel/demo_pictures/logo_black.png" alt="LazyLabel Cursive" style="height:60px; vertical-align:middle;" />
+</div>
 
-LazyLabel combines Meta's Segment Anything Model (SAM) with intuitive editing tools for fast, precise image labeling. Perfect for machine learning datasets and computer vision research.
+**Professional Image Segmentation for Machine Learning Applications**
 
-![LazyLabel Screenshot](https://raw.githubusercontent.com/dnzckn/LazyLabel/main/src/lazylabel/demo_pictures/gui.PNG)
+LazyLabel integrates Meta's Segment Anything Model (SAM) with advanced editing capabilities to enable efficient, high-precision image annotation. Designed for computer vision research and machine learning dataset preparation.
+
+<div align="center">
+  <img src="https://raw.githubusercontent.com/dnzckn/LazyLabel/main/src/lazylabel/demo_pictures/gui.PNG" alt="LazyLabel Screenshot" width="800"/>
+</div>
 
 ---
 
-## 🚀 Quick Start
+## Quick Start
 
 ### Installation
 ```bash
@@ -16,38 +23,38 @@ pip install lazylabel-gui
 lazylabel-gui
 ```
 
-### Optional: SAM-2 Support
-For advanced SAM-2 models, install manually:
+### Optional: SAM 2.1 Support
+For enhanced performance with SAM 2.1 models:
 ```bash
 pip install git+https://github.com/facebookresearch/sam2.git
 ```
-*Note: SAM-2 is optional - LazyLabel works with SAM 1.0 models by default*
+**Note:** SAM 2.1 is optional - LazyLabel downloads SAM 1.0 models by default.
 
 ### Usage
-1. **Open Folder** → Select your image directory
-2. **Click on image** → AI generates instant masks  
-3. **Fine-tune** → Edit polygons, merge segments
-4. **Export** → Clean `.npz` files ready for ML training
+1. **Open Folder** - Select your image directory
+2. **AI Segmentation** - Click on objects for automatic mask generation
+3. **Manual Refinement** - Edit polygons, merge segments, adjust classifications
+4. **Export** - Generate `.npz` files with one-hot encoded masks for ML training
 
 ---
 
-## ✨ Key Features
+## Key Features
 
-- **🧠 One-click AI segmentation** with Meta's SAM and SAM2 models
-- **🎨 Manual polygon drawing** with full vertex control
-- **⚡ Smart editing tools** - merge segments, adjust class names, and class order
-- **📊 ML-ready exports** - One-hot encoded `.npz` format and `.json` for YOLO format
-- **🔧 Image enhancement** - brightness, contrast, gamma adjustment
-- **🔍 Image viewer** - zoom, pan, brightness, contrast, and gamma adjustment
-- **✂️ Edge cropping** - define custom crop areas to focus on specific regions
-- **🔄 Undo/Redo** - full history of all actions
-- **💾 Auto-saving** - Automatic saving of your labels when navigating between images
-- **🎛️ Advanced filtering** - FFT thresholding and color channel thresholding
-- **⌨️ Customizable hotkeys** for all functions
+- **One-click AI segmentation** with Meta's SAM and SAM 2.1 models
+- **Manual polygon drawing** with full vertex control
+- **Smart editing tools** - merge segments, adjust class names, and class order
+- **ML-ready exports** - One-hot encoded `.npz` format and `.json` for YOLO format
+- **Image enhancement** - brightness, contrast, gamma adjustment
+- **Advanced image viewer** - zoom, pan, and real-time adjustments
+- **Edge cropping** - define custom crop areas to focus on specific regions
+- **Undo/Redo system** - full history of all actions
+- **Auto-saving** - automatic saving of labels when navigating between images
+- **Advanced filtering** - FFT thresholding and color channel thresholding
+- **Customizable hotkeys** for all functions
 
 ---
 
-## ⌨️ Essential Hotkeys
+## Essential Hotkeys
 
 | Action | Key | Description |
 |--------|-----|-------------|
@@ -60,13 +67,13 @@ pip install git+https://github.com/facebookresearch/sam2.git
 | **Positive Point** | `Left Click` | Add to segment |
 | **Negative Point** | `Right Click` | Remove from segment |
 
-💡 **All hotkeys customizable** - Click "Hotkeys" button to personalize
+**Note:** All hotkeys are fully customizable - Click "Hotkeys" button to personalize your workflow.
 
 ---
 
-## 📦 Output Format
+## Output Format
 
-Perfect for ML training - clean, structured data:
+LazyLabel exports data in standardized formats optimized for machine learning workflows:
 
 ```python
 import numpy as np
@@ -90,10 +97,9 @@ class_2_mask = mask[:, :, 2]  # Object type 2
 
 ---
 
-## 🛠️ Development
+## Development
 
-**Requirements:** Python 3.10+
-**2.5GB** disk space for SAM model (auto-downloaded)
+**Requirements:** Python 3.10+, ~2.5GB disk space for SAM models (auto-downloaded)
 
 ### Installation from Source
 ```bash
@@ -105,35 +111,38 @@ lazylabel-gui
 
 ### Testing & Quality
 ```bash
-# Run full test suite
-python -m pytest --cov=lazylabel --cov-report=html
+# Run test suite (272 tests)
+pytest --tb=short
 
-# Code formatting & linting
-ruff check . && ruff format .
+# Code quality checks
+ruff check --fix src/
 ```
 
 ### Architecture
 - **Modular design** with clean component separation
-- **Signal-based communication** between UI elements
-- **Extensible model system** for new SAM variants
-- **Comprehensive test suite** (150+ tests, 60%+ coverage)
+- **Signal-based communication** between UI elements  
+- **Extensible model system** for SAM 1.0 and SAM 2.1 variants
+- **Comprehensive test suite** (272 tests with extensive coverage)
+- **Multi-view support** for simultaneous image processing
 
 ---
 
-## 🤝 Contributing
+## Contributing
 
-LazyLabel welcomes contributions! Check out:
-- [Architecture Guide](src/lazylabel/ARCHITECTURE.md) for technical details
-- [Hotkey System](src/lazylabel/HOTKEY_FEATURE.md) for customization
-- Issues page for feature requests and bug reports
+LazyLabel welcomes contributions! Please review:
+- [Usage Manual](src/lazylabel/USAGE_MANUAL.md) for comprehensive user documentation
+- [Architecture Guide](src/lazylabel/ARCHITECTURE.md) for technical implementation details
+- [Issues page](https://github.com/dnzckn/LazyLabel/issues) for feature requests and bug reports
 
 ---
 
-## 🙏 Acknowledgments
+## Acknowledgments
 
 - [LabelMe](https://github.com/wkentaro/labelme)
 - [Segment-Anything-UI](https://github.com/branislavhesko/segment-anything-ui)
 
 ---
 
-**Made with ❤️ for the computer vision community**
+---
+
+**LazyLabel** - Professional image annotation software for computer vision research and machine learning applications.
