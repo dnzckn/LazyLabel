@@ -2,6 +2,7 @@
 
 import hashlib
 import os
+import re
 from pathlib import Path
 
 import cv2
@@ -261,9 +262,28 @@ class MainWindow(QMainWindow):
         self._setup_shortcuts()
         self._load_settings()
 
+    def _get_version(self) -> str:
+        """Get version from pyproject.toml."""
+        try:
+            # Get the project root directory (3 levels up from main_window.py)
+            project_root = Path(__file__).parent.parent.parent.parent
+            pyproject_path = project_root / "pyproject.toml"
+
+            if pyproject_path.exists():
+                with open(pyproject_path, encoding="utf-8") as f:
+                    content = f.read()
+                    # Use regex to find version line
+                    match = re.search(r'version\s*=\s*"([^"]+)"', content)
+                    if match:
+                        return match.group(1)
+        except Exception:
+            pass
+        return "unknown"
+
     def _setup_ui(self):
         """Setup the main user interface."""
-        self.setWindowTitle("LazyLabel by DNC")
+        version = self._get_version()
+        self.setWindowTitle(f"LazyLabel by DNC (version {version})")
         self.setGeometry(
             50, 50, self.settings.window_width, self.settings.window_height
         )
