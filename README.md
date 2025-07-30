@@ -140,9 +140,3 @@ LazyLabel welcomes contributions! Please review:
 
 - [LabelMe](https://github.com/wkentaro/labelme)
 - [Segment-Anything-UI](https://github.com/branislavhesko/segment-anything-ui)
-
----
-
----
-
-**LazyLabel** - Advanced image annotation software for computer vision research and machine learning applications.
