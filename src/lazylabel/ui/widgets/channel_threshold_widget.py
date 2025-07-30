@@ -372,6 +372,7 @@ class ChannelThresholdWidget(QWidget):
         super().__init__(parent)
         self.current_image_channels = 0  # 0 = no image, 1 = grayscale, 3 = RGB
         self.sliders = {}  # Dictionary of channel name -> slider
+        self.is_dragging = False  # Track if any slider is being dragged
 
         self.setupUI()
 
@@ -434,10 +435,8 @@ class ChannelThresholdWidget(QWidget):
         for channel_name in channel_names:
             slider_widget = ChannelSliderWidget(channel_name, self)
             slider_widget.valueChanged.connect(self._on_slider_changed)
-            slider_widget.dragStarted.connect(
-                self.dragStarted.emit
-            )  # Forward drag signals
-            slider_widget.dragFinished.connect(self.dragFinished.emit)
+            slider_widget.dragStarted.connect(self._on_drag_started)
+            slider_widget.dragFinished.connect(self._on_drag_finished)
             self.sliders[channel_name] = slider_widget
             self.sliders_layout.addWidget(slider_widget)
 
@@ -450,6 +449,21 @@ class ChannelThresholdWidget(QWidget):
 
     def _on_slider_changed(self):
         """Handle slider value change."""
+        # Only emit thresholdChanged if not currently dragging
+        # This prevents expensive calculations during drag operations
+        if not self.is_dragging:
+            self.thresholdChanged.emit()
+
+    def _on_drag_started(self):
+        """Handle drag start - suppress expensive calculations during drag."""
+        self.is_dragging = True
+        self.dragStarted.emit()
+
+    def _on_drag_finished(self):
+        """Handle drag finish - perform final calculation."""
+        self.is_dragging = False
+        self.dragFinished.emit()
+        # Emit threshold changed now that dragging is complete
         self.thresholdChanged.emit()
 
     def get_threshold_settings(self):
