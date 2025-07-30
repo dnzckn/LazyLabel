@@ -993,7 +993,7 @@ class MainWindow(QMainWindow):
         if not model_text or model_text == "Default (vit_h)":
             # Clear any pending custom model and use default
             self.pending_custom_model_path = None
-            self.control_panel.set_current_model("Current: Default SAM Model")
+            self.control_panel.set_current_model("Selected: Default SAM Model")
             # Clear existing model to free memory until needed
             self._reset_sam_state_for_model_switch()
             return
