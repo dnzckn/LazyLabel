@@ -54,7 +54,7 @@ When precision matters:
 Advanced preprocessing capabilities:
 - **FFT filtering**: Remove noise and enhance edges
 - **Channel thresholding**: Isolate objects by color
-- **Border cropping**: Define crop regions that black out pixels outside the area in saved outputs
+- **Border cropping**: Define crop regions that set pixels outside the area to zero in saved outputs
 - **View adjustments**: Brightness, contrast, gamma correction
 
 ### Multi-View Mode
