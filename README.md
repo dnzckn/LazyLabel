@@ -159,7 +159,7 @@ To use SAM 2.1 models:
    - If running from source: `src/lazylabel/models/`
 4. Select the SAM 2.1 model from the dropdown in LazyLabel's settings
 
-Note: SAM 1.0 models are automatically downloaded on first use. SAM 2.1 models must be manually downloaded due to licensing.
+Note: SAM 1.0 models are automatically downloaded on first use.
 
 ### Operate on View Setting
 When enabled, brightness/contrast adjustments and filters are passed to the SAM model, not just the display. This allows segmentation of processed images for better results on low-contrast data.
