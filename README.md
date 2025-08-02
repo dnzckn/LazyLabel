@@ -161,9 +161,6 @@ To use SAM 2.1 models:
 
 Note: SAM 1.0 models are automatically downloaded on first use.
 
-### Operate on View Setting
-When enabled, brightness/contrast adjustments and filters are passed to the SAM model, not just the display. This allows segmentation of processed images for better results on low-contrast data.
-
 ---
 
 ## Documentation
