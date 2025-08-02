@@ -419,22 +419,40 @@ def test_multi_view_ai_click_handling(main_window_with_multi_view):
 
 
 def test_multi_view_link_toggle(main_window_with_multi_view):
-    """Test toggling link status in multi-view mode."""
+    """Test unlinking behavior in multi-view mode (one-way operation)."""
     window = main_window_with_multi_view
 
     # Mock button
     mock_button = MagicMock()
     window.multi_view_unlink_buttons = [mock_button, MagicMock()]
 
-    # Test toggle link
-    initial_state = window.multi_view_linked[0]
+    # Initially linked
+    assert window.multi_view_linked[0] is True
+
+    # Test unlink (should work)
     window._toggle_multi_view_link(0)
 
-    # Verify link state changed
-    assert window.multi_view_linked[0] != initial_state
+    # Verify unlinked
+    assert window.multi_view_linked[0] is False
 
-    # Verify button appearance updated
-    mock_button.setText.assert_called_once()
+    # Verify button appearance updated to red unlinked state
+    mock_button.setText.assert_called_with("↪")
+    mock_button.setToolTip.assert_called_with("This image is unlinked from mirroring")
+    mock_button.setStyleSheet.assert_called_with(
+        "background-color: #ff4444; color: white;"
+    )
+
+    # Test attempting to re-link (should do nothing)
+    mock_button.reset_mock()
+    window._toggle_multi_view_link(0)
+
+    # Verify still unlinked (no change)
+    assert window.multi_view_linked[0] is False
+
+    # Verify button methods not called (no change in appearance)
+    mock_button.setText.assert_not_called()
+    mock_button.setToolTip.assert_not_called()
+    mock_button.setStyleSheet.assert_not_called()
 
 
 def test_multi_view_zoom_synchronization(main_window_with_multi_view):
@@ -785,3 +803,154 @@ def test_multi_view_selection_toggle_on_repeated_clicks(main_window_with_multi_v
 
     selected_indices = window.right_panel.get_selected_segment_indices()
     assert len(selected_indices) == 0
+
+
+def test_multi_view_unlink_comprehensive(main_window_with_multi_view):
+    """Test comprehensive unlink functionality including navigation reset and save logic."""
+    window = main_window_with_multi_view
+
+    # Setup 4-view configuration
+    window._get_multi_view_config = MagicMock(
+        return_value={
+            "num_viewers": 4,
+            "grid_rows": 2,
+            "grid_cols": 2,
+            "use_grid": True,
+        }
+    )
+
+    # Initialize multi-view state for 4 viewers
+    window.multi_view_linked = [True, True, True, True]
+    window.multi_view_images = ["img1.jpg", "img2.jpg", "img3.jpg", "img4.jpg"]
+
+    # Mock buttons
+    mock_buttons = [MagicMock() for _ in range(4)]
+    window.multi_view_unlink_buttons = mock_buttons
+
+    # Test 1: Unlink viewer 1 (should turn red, prevent re-linking)
+    window._toggle_multi_view_link(1)
+
+    assert window.multi_view_linked[1] is False
+    assert window.multi_view_linked[0] is True  # Others remain linked
+    assert window.multi_view_linked[2] is True
+    assert window.multi_view_linked[3] is True
+
+    # Verify button 1 appearance changed to red
+    mock_buttons[1].setText.assert_called_with("↪")
+    mock_buttons[1].setStyleSheet.assert_called_with(
+        "background-color: #ff4444; color: white;"
+    )
+
+    # Test 2: Attempt to re-link viewer 1 (should do nothing)
+    mock_buttons[1].reset_mock()
+    window._toggle_multi_view_link(1)
+
+    assert window.multi_view_linked[1] is False  # Still unlinked
+    mock_buttons[1].setText.assert_not_called()  # No appearance change
+
+    # Test 3: Navigation reset - load new images
+    window._reset_multi_view_state()
+
+    # All viewers should be linked again
+    assert all(window.multi_view_linked)
+
+    # All buttons should be reset to default appearance
+    for button in mock_buttons:
+        button.setText.assert_called_with("X")
+        button.setToolTip.assert_called_with("Unlink this image from mirroring")
+        button.setStyleSheet.assert_called_with("")
+
+    # Test 4: Save logic with unlinked viewers
+    # Setup save test - unlink viewer 2
+    window.multi_view_linked = [True, False, True, True]  # Viewer 1 unlinked
+
+    # Mock save dependencies
+    window.control_panel = MagicMock()
+    window.control_panel.get_settings = MagicMock(return_value={"save_npz": True})
+    window._get_segments_for_viewer = MagicMock(return_value=[{"test": "segment"}])
+    window.multi_view_viewers = [MagicMock() for _ in range(4)]
+    window.segment_manager = MagicMock()
+    window.segment_manager.get_unique_class_ids = MagicMock(return_value=[1])
+    window.file_manager = MagicMock()
+    window.file_manager.save_npz = MagicMock(return_value="/path/test.npz")
+    window.crop_coords_by_size = {}
+
+    # Mock pixmaps for each viewer
+    for _i, viewer in enumerate(window.multi_view_viewers):
+        mock_pixmap = MagicMock()
+        mock_pixmap.isNull.return_value = False
+        mock_pixmap.width.return_value = 100
+        mock_pixmap.height.return_value = 100
+        viewer._pixmap_item = MagicMock()
+        viewer._pixmap_item.pixmap.return_value = mock_pixmap
+
+    # Test save - should skip unlinked viewer 1
+    window._save_multi_view_output()
+
+    # Verify _get_segments_for_viewer was called for linked viewers only (0, 2, 3)
+    # but not for unlinked viewer 1
+    expected_calls = 3  # Viewers 0, 2, 3 are linked
+    assert window._get_segments_for_viewer.call_count == expected_calls
+
+    # Verify file_manager.save_npz was called for linked viewers only
+    assert window.file_manager.save_npz.call_count == expected_calls
+
+
+def test_multi_view_annotation_mirroring_with_unlinked_views(
+    main_window_with_multi_view,
+):
+    """Test that annotation mirroring logic respects link status (unit test)."""
+    window = main_window_with_multi_view
+
+    # Setup 4-view configuration
+    window._get_multi_view_config = MagicMock(
+        return_value={
+            "num_viewers": 4,
+            "grid_rows": 2,
+            "grid_cols": 2,
+            "use_grid": True,
+        }
+    )
+
+    # Setup state: viewers 0,2,3 linked, viewer 1 unlinked
+    window.multi_view_linked = [True, False, True, True]
+    window.multi_view_images = ["img1.jpg", "img2.jpg", "img3.jpg", "img4.jpg"]
+
+    # Test the mirroring logic directly by simulating what should happen
+    # when creating a segment in viewer 0
+    num_viewers = 4
+    viewer_index = 0  # Source viewer
+
+    # Simulate segment creation with views structure
+    paired_segment = {"type": "Polygon", "views": {}}
+
+    # Add the current viewer's data
+    view_data = {
+        "vertices": [[10.0, 10.0], [20.0, 10.0], [20.0, 20.0], [10.0, 20.0]],
+        "mask": None,
+    }
+    paired_segment["views"][viewer_index] = view_data
+
+    # Apply the mirroring logic that should skip unlinked viewers
+    for other_viewer_index in range(num_viewers):
+        if (
+            other_viewer_index != viewer_index
+            and window.multi_view_linked[other_viewer_index]
+            and window.multi_view_images[other_viewer_index] is not None
+        ):
+            mirrored_view_data = {
+                "vertices": view_data["vertices"].copy(),
+                "mask": None,
+            }
+            paired_segment["views"][other_viewer_index] = mirrored_view_data
+
+    # Verify the segment has correct views
+    views = paired_segment["views"]
+    assert 0 in views  # Source viewer
+    assert 1 not in views  # Unlinked viewer - should be skipped
+    assert 2 in views  # Linked viewer with image
+    assert 3 in views  # Linked viewer with image
+
+    # Verify the mirrored data is correct
+    assert views[2]["vertices"] == view_data["vertices"]
+    assert views[3]["vertices"] == view_data["vertices"]

@@ -369,12 +369,20 @@ class MultiViewModeHandler(BaseModeHandler):
 
         paired_segment = {"type": "Polygon", "views": {}}
 
-        # Add view data for all viewers with same coordinates
+        # Add view data for current viewer and mirror to linked viewers only
+        paired_segment["views"][viewer_index] = view_data
+
+        # Mirror to other viewers only if they are linked
         for viewer_idx in range(num_viewers):
-            paired_segment["views"][viewer_idx] = {
-                "vertices": view_data["vertices"].copy(),
-                "mask": None,
-            }
+            if (
+                viewer_idx != viewer_index
+                and self.main_window.multi_view_linked[viewer_idx]
+                and self.main_window.multi_view_images[viewer_idx] is not None
+            ):
+                paired_segment["views"][viewer_idx] = {
+                    "vertices": view_data["vertices"].copy(),
+                    "mask": None,
+                }
 
         # Add to segment manager
         self.main_window.segment_manager.add_segment(paired_segment)
@@ -783,9 +791,13 @@ class MultiViewModeHandler(BaseModeHandler):
         # Add the current viewer's data
         paired_segment["views"][viewer_index] = view_data
 
-        # Mirror to all other viewers with same coordinates (they should align between linked images)
+        # Mirror to all other viewers with same coordinates (only if they are linked)
         for other_viewer_index in range(num_viewers):
-            if other_viewer_index != viewer_index:
+            if (
+                other_viewer_index != viewer_index
+                and self.main_window.multi_view_linked[other_viewer_index]
+                and self.main_window.multi_view_images[other_viewer_index] is not None
+            ):
                 mirrored_view_data = {
                     "vertices": view_data[
                         "vertices"
@@ -807,10 +819,26 @@ class MultiViewModeHandler(BaseModeHandler):
 
         # Update UI
         self.main_window._update_all_lists()
-        viewer_count_text = "all viewers" if num_viewers > 2 else "both viewers"
-        self.main_window._show_notification(
-            f"Polygon created and mirrored to {viewer_count_text}."
+
+        # Count linked viewers (excluding the source viewer)
+        linked_viewers_count = sum(
+            1
+            for i in range(num_viewers)
+            if i != viewer_index
+            and self.main_window.multi_view_linked[i]
+            and self.main_window.multi_view_images[i] is not None
         )
+
+        if linked_viewers_count == 0:
+            viewer_count_text = "created (no linked viewers to mirror to)"
+        elif linked_viewers_count == 1:
+            viewer_count_text = "created and mirrored to 1 linked viewer"
+        else:
+            viewer_count_text = (
+                f"created and mirrored to {linked_viewers_count} linked viewers"
+            )
+
+        self.main_window._show_notification(f"Polygon {viewer_count_text}.")
 
         # Clear polygon state for this viewer
         self._clear_multi_view_polygon(viewer_index)

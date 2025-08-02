@@ -53,6 +53,15 @@ def test_4view_polygon_mode_mirroring(main_window_4view):
     """Test that polygon mode mirrors to all 4 viewers in 4-view mode."""
     window = main_window_4view
 
+    # Set up proper multi-view state for the new link-aware implementation
+    window.multi_view_linked = [True, True, True, True]  # All viewers linked
+    window.multi_view_images = [
+        "img1.jpg",
+        "img2.jpg",
+        "img3.jpg",
+        "img4.jpg",
+    ]  # All have images
+
     # Create test polygon points for viewer 0
     test_points = [QPointF(10, 10), QPointF(50, 10), QPointF(50, 50), QPointF(10, 50)]
 
@@ -92,6 +101,15 @@ def test_4view_polygon_mode_mirroring(main_window_4view):
 def test_4view_bbox_mode_mirroring(main_window_4view):
     """Test that bbox mode mirrors to all 4 viewers in 4-view mode."""
     window = main_window_4view
+
+    # Set up proper multi-view state for the new link-aware implementation
+    window.multi_view_linked = [True, True, True, True]  # All viewers linked
+    window.multi_view_images = [
+        "img1.jpg",
+        "img2.jpg",
+        "img3.jpg",
+        "img4.jpg",
+    ]  # All have images
 
     # Initialize bbox arrays for 4 viewers
     window.multi_view_bbox_starts = [None] * 4
