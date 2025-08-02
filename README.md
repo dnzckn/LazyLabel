@@ -128,9 +128,11 @@ For challenging images:
 | AI Mode | `1` | SAM point-click segmentation |
 | Draw Mode | `2` | Manual polygon creation |
 | Edit Mode | `E` | Modify existing segments |
+| Accept AI Segment | `Space` | Confirm AI segment suggestion |
 | Save | `Enter` | Save annotations |
 | Merge | `M` | Combine selected segments |
-| Pan | `Q` | Navigate image |
+| Pan Mode | `Q` | Enter pan mode |
+| Pan | `WASD` | Navigate image |
 | Delete | `V`/`Delete` | Remove segments |
 | Undo/Redo | `Ctrl+Z/Y` | Action history |
 
