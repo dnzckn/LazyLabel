@@ -78,7 +78,7 @@ data = np.load('image.npz')
 mask = data['mask']  # Shape: (height, width, num_classes)
 
 # Each channel represents one class
-background = mask[:, :, 0]
+sky = mask[:, :, 0]
 boats = mask[:, :, 1]
 cats = mask[:, :, 2]
 dogs = mask[:, :, 3]
