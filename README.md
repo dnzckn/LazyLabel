@@ -15,16 +15,6 @@ LazyLabel combines Meta's Segment Anything Model (SAM) with comprehensive manual
 
 ---
 
-## Why LazyLabel?
-
-Traditional image annotation is time-consuming and error-prone. LazyLabel accelerates this process by:
-- **AI-powered segmentation**: Click once to segment entire objects using SAM
-- **Rapid refinement**: Add/remove regions with positive/negative points
-- **Multi-image processing**: Annotate up to 4 images simultaneously with synchronized tools
-- **Direct ML integration**: Export in formats ready for PyTorch, TensorFlow, and YOLO training
-
----
-
 ## Quick Start
 
 ```bash
@@ -156,10 +146,20 @@ Access via the "Multi" tab to process multiple images:
 - Synchronized zoom maintains alignment
 
 ### SAM 2.1 Support
-For enhanced segmentation performance:
-```bash
-pip install git+https://github.com/facebookresearch/sam2.git
-```
+LazyLabel supports both SAM 1.0 (default) and SAM 2.1 models. SAM 2.1 offers improved segmentation accuracy and better handling of complex boundaries.
+
+To use SAM 2.1 models:
+1. Install the SAM 2 package:
+   ```bash
+   pip install git+https://github.com/facebookresearch/sam2.git
+   ```
+2. Download a SAM 2.1 model (e.g., `sam2.1_hiera_large.pt`) from the [SAM 2 repository](https://github.com/facebookresearch/sam2)
+3. Place the model file in LazyLabel's models folder:
+   - If installed via pip: `~/.local/share/lazylabel/models/` (or equivalent on your system)
+   - If running from source: `src/lazylabel/models/`
+4. Select the SAM 2.1 model from the dropdown in LazyLabel's settings
+
+Note: SAM 1.0 models are automatically downloaded on first use. SAM 2.1 models must be manually downloaded due to licensing.
 
 ### Operate on View Setting
 When enabled, brightness/contrast adjustments and filters are passed to the SAM model, not just the display. This allows segmentation of processed images for better results on low-contrast data.
