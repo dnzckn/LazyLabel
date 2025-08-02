@@ -144,7 +144,6 @@ For challenging images:
 Access via the "Multi" tab to process multiple images:
 - 2-view (side-by-side) or 4-view (grid) layouts
 - Annotations mirror across linked views automatically
-- Unlink button per view for independent annotation
 - Synchronized zoom maintains alignment
 
 ### SAM 2.1 Support
