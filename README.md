@@ -76,12 +76,12 @@ import numpy as np
 
 data = np.load('image.npz')
 mask = data['mask']  # Shape: (height, width, num_classes)
-class_names = data['class_names']  # Optional class labels
 
 # Each channel represents one class
 background = mask[:, :, 0]
-class_1 = mask[:, :, 1]
-class_2 = mask[:, :, 2]
+boats = mask[:, :, 1]
+cats = mask[:, :, 2]
+dogs = mask[:, :, 3]
 ```
 
 ### YOLO Format (Object Detection)
