@@ -121,23 +121,6 @@ For challenging images:
 
 ---
 
-## Key Shortcuts
-
-| Action | Key | Description |
-|--------|-----|-------------|
-| AI Mode | `1` | SAM point-click segmentation |
-| Draw Mode | `2` | Manual polygon creation |
-| Edit Mode | `E` | Modify existing segments |
-| Accept AI Segment | `Space` | Confirm AI segment suggestion |
-| Save | `Enter` | Save annotations |
-| Merge | `M` | Combine selected segments |
-| Pan Mode | `Q` | Enter pan mode |
-| Pan | `WASD` | Navigate image |
-| Delete | `V`/`Delete` | Remove segments |
-| Undo/Redo | `Ctrl+Z/Y` | Action history |
-
----
-
 ## Advanced Features
 
 ### Multi-View Mode
@@ -161,6 +144,23 @@ To use SAM 2.1 models:
 4. Select the SAM 2.1 model from the dropdown in LazyLabel's settings
 
 Note: SAM 1.0 models are automatically downloaded on first use.
+
+---
+
+## Key Shortcuts
+
+| Action | Key | Description |
+|--------|-----|-------------|
+| AI Mode | `1` | SAM point-click segmentation |
+| Draw Mode | `2` | Manual polygon creation |
+| Edit Mode | `E` | Modify existing segments |
+| Accept AI Segment | `Space` | Confirm AI segment suggestion |
+| Save | `Enter` | Save annotations |
+| Merge | `M` | Combine selected segments |
+| Pan Mode | `Q` | Enter pan mode |
+| Pan | `WASD` | Navigate image |
+| Delete | `V`/`Delete` | Remove segments |
+| Undo/Redo | `Ctrl+Z/Y` | Action history |
 
 ---
 
