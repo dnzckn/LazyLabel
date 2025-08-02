@@ -5,13 +5,23 @@
   <img src="https://raw.githubusercontent.com/dnzckn/LazyLabel/main/src/lazylabel/demo_pictures/logo_black.png" alt="LazyLabel Cursive" style="height:60px; vertical-align:middle;" />
 </div>
 
-**AI-Assisted Image Segmentation for Machine Learning**
+**AI-Assisted Image Segmentation for Machine Learning Dataset Preparation**
 
-LazyLabel combines Meta's Segment Anything Model (SAM) with manual editing tools to create pixel-perfect segmentation masks for computer vision datasets.
+LazyLabel combines Meta's Segment Anything Model (SAM) with comprehensive manual annotation tools to accelerate the creation of pixel-perfect segmentation masks for computer vision applications.
 
 <div align="center">
   <img src="https://raw.githubusercontent.com/dnzckn/LazyLabel/main/src/lazylabel/demo_pictures/gui.PNG" alt="LazyLabel Screenshot" width="800"/>
 </div>
+
+---
+
+## Why LazyLabel?
+
+Traditional image annotation is time-consuming and error-prone. LazyLabel accelerates this process by:
+- **AI-powered segmentation**: Click once to segment entire objects using SAM
+- **Rapid refinement**: Add/remove regions with positive/negative points
+- **Multi-image processing**: Annotate up to 4 images simultaneously with synchronized tools
+- **Direct ML integration**: Export in formats ready for PyTorch, TensorFlow, and YOLO training
 
 ---
 
@@ -34,123 +44,133 @@ lazylabel-gui
 
 ---
 
-## Key Features
+## Core Features
 
 ### AI-Powered Segmentation
-- Click objects to generate masks using SAM
-- Refine with positive/negative points
-- Supports SAM 1.0 and 2.1 models
-- GPU acceleration with CPU fallback
+LazyLabel leverages Meta's SAM for intelligent object detection:
+- Single-click object segmentation
+- Interactive refinement with positive/negative points  
+- Support for both SAM 1.0 and SAM 2.1 models
+- GPU acceleration with automatic CPU fallback
 
-### Manual Tools
-- Polygon drawing with vertex editing
-- Bounding box annotations
-- Segment merging and editing
-- Multi-segment selection
+### Manual Annotation Tools
+When precision matters:
+- Polygon drawing with vertex-level editing
+- Bounding box annotations for object detection
+- Edit mode for adjusting existing segments
+- Merge tool for combining related segments
 
-### Export Formats
+### Image Processing & Filtering
+Advanced preprocessing capabilities:
+- **FFT filtering**: Remove noise and enhance edges
+- **Channel thresholding**: Isolate objects by color
+- **View adjustments**: Brightness, contrast, gamma correction
+- **Operate on View mode**: Apply filters to AI segmentation (not just display)
 
-**NPZ (Semantic Segmentation):**
+### Multi-View Mode
+Process multiple images efficiently:
+- Annotate up to 4 images simultaneously
+- Synchronized zoom and pan across views
+- Mirror annotations to all linked images
+- Independent unlink option per view
+
+---
+
+## Export Formats
+
+### NPZ Format (Semantic Segmentation)
+One-hot encoded masks optimized for deep learning:
+
 ```python
 import numpy as np
 
 data = np.load('image.npz')
 mask = data['mask']  # Shape: (height, width, num_classes)
-class_names = data['class_names']
+class_names = data['class_names']  # Optional class labels
 
-# One-hot encoded masks
+# Each channel represents one class
 background = mask[:, :, 0]
-object_class_1 = mask[:, :, 1]
-object_class_2 = mask[:, :, 2]
+class_1 = mask[:, :, 1]
+class_2 = mask[:, :, 2]
 ```
 
-**YOLO Format:**
+### YOLO Format (Object Detection)
+Normalized polygon coordinates for YOLO training:
 ```
-0 0.234 0.456 0.289 0.478 0.301 0.523 ...  # Class 0 polygon
-1 0.567 0.123 0.598 0.145 0.612 0.189 ...  # Class 1 polygon
+0 0.234 0.456 0.289 0.478 0.301 0.523 ...
+1 0.567 0.123 0.598 0.145 0.612 0.189 ...
 ```
 
-**JSON Format:**
+### Class Aliases (JSON)
+Maintains consistent class naming across datasets:
 ```json
 {
-  "version": "1.3.6",
-  "image": "example.png",
-  "annotations": [
-    {
-      "class_id": 1,
-      "class_name": "object",
-      "polygon": [[x1, y1], [x2, y2], ...],
-      "bbox": [x_min, y_min, width, height]
-    }
-  ]
+  "0": "background",
+  "1": "person",
+  "2": "vehicle"
 }
 ```
 
-### Additional Features
-- Real-time brightness/contrast adjustment
-- FFT and channel-based filtering
-- Multi-view mode (up to 4 images)
-- Customizable hotkeys
-- Undo/redo support
-- Auto-save on navigation
+---
+
+## Typical Workflow
+
+1. **Open folder** containing your images
+2. **Click objects** to generate AI masks (mode 1)
+3. **Refine** with additional points or manual tools
+4. **Assign classes** and organize in the class table
+5. **Export** as NPZ or YOLO format
+
+### Advanced Preprocessing Workflow
+
+For challenging images:
+1. Apply **FFT filtering** to reduce noise
+2. Use **channel thresholding** to isolate color ranges
+3. Enable **"Operate on View"** to pass filtered images to SAM
+4. Fine-tune with manual tools
 
 ---
 
-## Hotkeys
+## Key Shortcuts
 
 | Action | Key | Description |
 |--------|-----|-------------|
-| AI Mode | `1` | Point-click segmentation |
-| Draw Mode | `2` | Manual polygon drawing |
-| Edit Mode | `E` | Select and modify shapes |
+| AI Mode | `1` | SAM point-click segmentation |
+| Draw Mode | `2` | Manual polygon creation |
+| Edit Mode | `E` | Modify existing segments |
 | Save | `Space` | Confirm current segment |
 | Merge | `M` | Combine selected segments |
 | Pan | `Q` | Navigate image |
-| Undo/Redo | `Ctrl+Z/Y` | History navigation |
-| Delete | `V` or `Delete` | Remove segments |
+| Delete | `V`/`Delete` | Remove segments |
+| Undo/Redo | `Ctrl+Z/Y` | Action history |
 
 ---
 
-## Workflow Example
-
-1. **Open folder** containing images
-2. **Click on objects** to generate AI masks (mode 1)
-3. **Refine boundaries** with manual tools (mode 2 or E)
-4. **Assign classes** and reorder as needed
-5. **Export** as NPZ for training
-
----
-
-## Advanced Usage
+## Advanced Features
 
 ### Multi-View Mode
-- Press `G` to enable
-- Process multiple images simultaneously
-- Synchronized navigation with Shift-drag
+Access via the "Multi" tab to process multiple images:
+- 2-view (side-by-side) or 4-view (grid) layouts
+- Annotations mirror across linked views automatically
+- Unlink button per view for independent annotation
+- Synchronized zoom maintains alignment
 
 ### SAM 2.1 Support
+For enhanced segmentation performance:
 ```bash
 pip install git+https://github.com/facebookresearch/sam2.git
 ```
 
-### Image Preprocessing
-- Adjust brightness/contrast for better segmentation
-- Use FFT filtering for noisy images
-- Apply channel thresholding for color-based selection
+### Operate on View Setting
+When enabled, brightness/contrast adjustments and filters are passed to the SAM model, not just the display. This allows segmentation of processed images for better results on low-contrast data.
 
 ---
 
-## Development
+## Documentation
 
-```bash
-# Run tests
-pytest --tb=short
-
-# Code quality
-ruff check --fix src/
-```
-
-See [ARCHITECTURE.md](src/lazylabel/ARCHITECTURE.md) for technical details.
+- [Usage Manual](src/lazylabel/USAGE_MANUAL.md) - Comprehensive feature guide
+- [Architecture Guide](src/lazylabel/ARCHITECTURE.md) - Technical implementation details
+- [GitHub Issues](https://github.com/dnzckn/LazyLabel/issues) - Report bugs or request features
 
 ---
 
@@ -162,26 +182,12 @@ pip install torch torchvision --index-url https://download.pytorch.org/whl/cu118
 ```
 
 **Poor segmentation quality:**
+- Enable "Operate on View" for low-contrast images
+- Apply preprocessing filters (FFT, channel threshold)
+- Use more positive/negative points
 - Try different SAM model variants
-- Add more positive/negative points
-- Adjust image brightness/contrast
-- Use manual refinement
 
----
-
-## Citation
-
-```bibtex
-@software{lazylabel,
-  author = {Cakan, Deniz N.},
-  title = {LazyLabel: AI-Assisted Image Segmentation},
-  url = {https://github.com/dnzckn/LazyLabel},
-  year = {2024}
-}
-```
-
----
-
-## License
-
-MIT License - see [LICENSE](LICENSE) for details.
+**Multi-view mode issues:**
+- Ensure sufficient RAM for multiple model instances
+- Check that all images have the same dimensions
+- Use unlink button for images requiring different annotations
