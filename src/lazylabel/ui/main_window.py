@@ -6293,22 +6293,23 @@ class MainWindow(QMainWindow):
             )
 
     def _start_sequential_multi_view_sam_loading(self):
-        """Start loading images into SAM models sequentially to avoid resource conflicts."""
+        """Start loading images into SAM models in parallel for faster processing."""
         # Check if any loading is already in progress to prevent duplicate workers
         any_updating = any(self.multi_view_models_updating)
         if any_updating:
-            # Sequential loading already in progress, don't start another
+            # Loading already in progress, don't start another
             updating_indices = [
                 i
                 for i, updating in enumerate(self.multi_view_models_updating)
                 if updating
             ]
             logger.debug(
-                f"Sequential loading already in progress for viewers: {updating_indices}"
+                f"Parallel loading already in progress for viewers: {updating_indices}"
             )
             return
 
-        # Find the next dirty model that needs updating
+        # Find all dirty models that need updating and start them in parallel
+        models_to_update = []
         for i in range(len(self.multi_view_models)):
             if (
                 self.multi_view_images[i]
@@ -6316,15 +6317,24 @@ class MainWindow(QMainWindow):
                 and self.multi_view_models_dirty[i]
                 and not self.multi_view_models_updating[i]
             ):
-                # Start updating this model
-                self._ensure_multi_view_sam_updated(i)
-                return
+                models_to_update.append(i)
 
-        # If no more models to update, we're done
-        if self._multi_view_loading_step >= self._multi_view_total_steps:
-            self._show_success_notification(
-                "AI models ready for prompting", duration=3000
+        if models_to_update:
+            logger.debug(f"Starting parallel loading for viewers: {models_to_update}")
+            # Show notification about parallel loading
+            self._show_notification(
+                f"Loading embeddings for {len(models_to_update)} images in parallel...",
+                duration=0,
             )
+            # Start all workers in parallel
+            for i in models_to_update:
+                self._ensure_multi_view_sam_updated(i)
+        else:
+            # If no more models to update and none are running, we're done
+            if not any(self.multi_view_models_updating):
+                self._show_success_notification(
+                    "AI models ready for prompting", duration=3000
+                )
 
     def _on_multi_view_init_error(self, error_message):
         """Handle multi-view model initialization error."""
@@ -6466,14 +6476,8 @@ class MainWindow(QMainWindow):
 
         logger.debug(f"Starting SAM image loading worker for viewer {viewer_index + 1}")
 
-        # Show enumerated progress notification
-        image_name = Path(image_path).name if image_path else "unknown"
-        config = self._get_multi_view_config()
-        num_viewers = config["num_viewers"]
-        self._show_notification(
-            f"Computing embeddings for image {viewer_index + 1}/{num_viewers}: {image_name}",
-            duration=0,  # Persistent until completion
-        )
+        # Individual notifications are now handled by the parallel loading start
+        # No need for per-viewer notifications when loading in parallel
 
         # Get current modified image if operate_on_view is enabled
         current_image = None
@@ -6561,8 +6565,16 @@ class MainWindow(QMainWindow):
         if hasattr(self, "_multi_view_loading_step"):
             self._multi_view_loading_step += 1
 
-        # Continue sequential loading
-        self._start_sequential_multi_view_sam_loading()
+        # Check if all models are done (either loaded, failed, or timed out)
+        if not any(self.multi_view_models_updating) and not any(
+            self.multi_view_models_dirty
+        ):
+            # All models processed
+            self._show_success_notification("AI model loading complete", duration=3000)
+        elif not any(self.multi_view_models_updating):
+            # No models are currently updating but some may still be dirty
+            # Try to load remaining models
+            self._start_sequential_multi_view_sam_loading()
 
     def _on_multi_view_sam_update_finished(self, viewer_index):
         """Handle completion of multi-view SAM model update."""
@@ -6596,14 +6608,19 @@ class MainWindow(QMainWindow):
         # Update progress
         if hasattr(self, "_multi_view_loading_step"):
             self._multi_view_loading_step += 1
-            if self._multi_view_loading_step < self._multi_view_total_steps:
-                self._show_notification(
-                    f"Loading image {self._multi_view_loading_step + 1} of {self._multi_view_total_steps}...",
-                    duration=0,
-                )
 
-        # Continue sequential loading of the next SAM model
-        self._start_sequential_multi_view_sam_loading()
+        # Check if all models are done loading
+        if not any(self.multi_view_models_updating) and not any(
+            self.multi_view_models_dirty
+        ):
+            # All models loaded successfully
+            self._show_success_notification(
+                "AI models ready for prompting", duration=3000
+            )
+        elif not any(self.multi_view_models_updating):
+            # No models are currently updating but some may still be dirty
+            # This can happen if there was an error, try to load remaining models
+            self._start_sequential_multi_view_sam_loading()
 
     def _on_multi_view_sam_update_error(self, viewer_index, error_message):
         """Handle multi-view SAM model update error."""
@@ -6639,8 +6656,16 @@ class MainWindow(QMainWindow):
         if hasattr(self, "_multi_view_loading_step"):
             self._multi_view_loading_step += 1
 
-        # Continue sequential loading even if this model failed
-        self._start_sequential_multi_view_sam_loading()
+        # Check if all models are done (either loaded or failed)
+        if not any(self.multi_view_models_updating) and not any(
+            self.multi_view_models_dirty
+        ):
+            # All models processed (some may have failed)
+            self._show_success_notification("AI model loading complete", duration=3000)
+        elif not any(self.multi_view_models_updating):
+            # No models are currently updating but some may still be dirty
+            # Try to load remaining models
+            self._start_sequential_multi_view_sam_loading()
 
     def _cleanup_multi_view_models(self):
         """Clean up multi-view model instances."""

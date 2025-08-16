@@ -45,7 +45,7 @@ def main_window_4view(app, qtbot):
 
 
 def test_4view_enumerated_loading_messages(main_window_4view):
-    """Test that loading messages show enumeration (1/4, 2/4, etc.)."""
+    """Test that parallel loading shows appropriate messages."""
     window = main_window_4view
 
     # Mock the notification method to capture messages
@@ -54,7 +54,7 @@ def test_4view_enumerated_loading_messages(main_window_4view):
     # Set up mock images
     window.multi_view_images = ["img1.jpg", "img2.jpg", "img3.jpg", "img4.jpg"]
     window.multi_view_models = [MagicMock() for _ in range(4)]
-    window.multi_view_models_dirty = [True, False, False, False]
+    window.multi_view_models_dirty = [True, True, True, True]
     window.multi_view_models_updating = [False, False, False, False]
 
     # Mock the worker to avoid actual model operations
@@ -64,12 +64,12 @@ def test_4view_enumerated_loading_messages(main_window_4view):
         mock_worker = MagicMock()
         mock_worker_class.return_value = mock_worker
 
-        # Trigger image loading for viewer 0
-        window._ensure_multi_view_sam_updated(0)
+        # Trigger parallel loading for all viewers
+        window._start_sequential_multi_view_sam_loading()
 
-        # Verify the enumerated message was shown
+        # Verify the parallel loading message was shown
         window._show_notification.assert_called_with(
-            "Computing embeddings for image 1/4: img1.jpg", duration=0
+            "Loading embeddings for 4 images in parallel...", duration=0
         )
 
 
@@ -123,7 +123,7 @@ def test_4view_increased_timeout(main_window_4view):
 
 
 def test_4view_sequential_loading_enumeration(main_window_4view):
-    """Test that sequential loading shows proper enumeration for all viewers."""
+    """Test that parallel loading shows proper notification for all viewers."""
     window = main_window_4view
 
     # Mock the notification method to capture all messages
@@ -133,6 +133,7 @@ def test_4view_sequential_loading_enumeration(main_window_4view):
         notifications.append(message)
 
     window._show_notification = capture_notification
+    window._show_success_notification = capture_notification
 
     # Set up all 4 images and models
     window.multi_view_images = ["img1.jpg", "img2.jpg", "img3.jpg", "img4.jpg"]
@@ -145,18 +146,21 @@ def test_4view_sequential_loading_enumeration(main_window_4view):
         patch("lazylabel.ui.main_window.MultiViewSAMUpdateWorker"),
         patch("lazylabel.ui.main_window.QTimer"),
     ):
-        # Start sequential loading
+        # Start parallel loading
         window._start_sequential_multi_view_sam_loading()
 
-        # Should start with the first image
-        assert any("Computing embeddings for image 1/4" in msg for msg in notifications)
+        # Should show parallel loading message for all 4 images
+        assert any(
+            "Loading embeddings for 4 images in parallel" in msg
+            for msg in notifications
+        )
 
-        # Simulate completion of first image and trigger next
-        window.multi_view_models_dirty[0] = False
-        window.multi_view_models_updating[0] = False
+        # Simulate completion of all images
+        window.multi_view_models_dirty = [False, False, False, False]
+        window.multi_view_models_updating = [False, False, False, False]
         notifications.clear()
 
         window._start_sequential_multi_view_sam_loading()
 
-        # Should now start second image
-        assert any("Computing embeddings for image 2/4" in msg for msg in notifications)
+        # Should now show completion message since all are done
+        assert any("AI models ready" in msg for msg in notifications)
