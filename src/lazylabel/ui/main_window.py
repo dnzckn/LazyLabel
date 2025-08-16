@@ -1582,6 +1582,19 @@ class MainWindow(QMainWindow):
         # Reset AI mode state
         self.ai_click_start_pos = None
 
+        # Reset all link states to linked when navigating to new images
+        config = self._get_multi_view_config()
+        num_viewers = config["num_viewers"]
+        self.multi_view_linked = [True] * num_viewers
+
+        # Reset unlink button appearances to default linked state
+        if hasattr(self, "multi_view_unlink_buttons"):
+            for i, button in enumerate(self.multi_view_unlink_buttons):
+                if i < num_viewers:
+                    button.setText("X")
+                    button.setToolTip("Unlink this image from mirroring")
+                    button.setStyleSheet("")
+
         # Update UI lists to reflect cleared state
         self._update_all_lists()
 
@@ -2829,7 +2842,8 @@ class MainWindow(QMainWindow):
         for i in range(num_viewers):
             image_path = self.multi_view_images[i]
 
-            if not image_path:
+            # Skip if no image or if this viewer is unlinked
+            if not image_path or not self.multi_view_linked[i]:
                 continue
 
             # Filter segments for this viewer
@@ -6827,25 +6841,20 @@ class MainWindow(QMainWindow):
 
     def _toggle_multi_view_link(self, image_index):
         """Toggle the link status for a specific image in multi-view."""
-        config = self._get_multi_view_config()
-        num_viewers = config["num_viewers"]
+        # Check bounds and link status - only allow unlinking when currently linked
+        if (
+            0 <= image_index < len(self.multi_view_linked)
+            and self.multi_view_linked[image_index]
+        ):
+            # Currently linked - allow unlinking
+            self.multi_view_linked[image_index] = False
 
-        if 0 <= image_index < num_viewers and image_index < len(self.multi_view_linked):
-            self.multi_view_linked[image_index] = not self.multi_view_linked[
-                image_index
-            ]
-
-            # Update button appearance
-            if image_index < len(self.multi_view_unlink_buttons):
-                button = self.multi_view_unlink_buttons[image_index]
-                if self.multi_view_linked[image_index]:
-                    button.setText("X")
-                    button.setToolTip("Unlink this image from mirroring")
-                    button.setStyleSheet("")
-                else:
-                    button.setText("↪")
-                    button.setToolTip("Link this image to mirroring")
-                    button.setStyleSheet("background-color: #ffcccc;")
+            # Update button appearance to show unlinked state
+            button = self.multi_view_unlink_buttons[image_index]
+            button.setText("↪")
+            button.setToolTip("This image is unlinked from mirroring")
+            button.setStyleSheet("background-color: #ff4444; color: white;")
+        # If already unlinked or invalid index, do nothing (prevent re-linking)
 
     def _start_background_image_discovery(self):
         """Start background discovery of all image files."""
