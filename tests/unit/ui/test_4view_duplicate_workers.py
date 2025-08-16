@@ -45,7 +45,7 @@ def main_window_4view(app, qtbot):
 
 
 def test_prevent_duplicate_sequential_loading(main_window_4view):
-    """Test that _start_sequential_multi_view_sam_loading prevents duplicate workers."""
+    """Test that _start_sequential_multi_view_sam_loading starts parallel workers and prevents duplicates."""
     window = main_window_4view
 
     # Set up initial state with models and images
@@ -56,12 +56,16 @@ def test_prevent_duplicate_sequential_loading(main_window_4view):
 
     # Mock the worker creation
     with patch.object(window, "_ensure_multi_view_sam_updated") as mock_ensure:
-        # First call should start loading for viewer 0
+        # First call should start loading for all 4 viewers in parallel
         window._start_sequential_multi_view_sam_loading()
-        mock_ensure.assert_called_once_with(0)
+        assert mock_ensure.call_count == 4
+        mock_ensure.assert_any_call(0)
+        mock_ensure.assert_any_call(1)
+        mock_ensure.assert_any_call(2)
+        mock_ensure.assert_any_call(3)
 
-        # Simulate viewer 0 starting to update
-        window.multi_view_models_updating[0] = True
+        # Simulate all viewers starting to update
+        window.multi_view_models_updating = [True, True, True, True]
         mock_ensure.reset_mock()
 
         # Second call should be prevented (any_updating = True)
@@ -103,7 +107,7 @@ def test_prevent_duplicate_ai_click_workers(main_window_4view):
 
 
 def test_sequential_loading_with_multiple_calls(main_window_4view):
-    """Test that multiple sequential loading calls don't create duplicate workers."""
+    """Test that multiple parallel loading calls don't create duplicate workers."""
     window = main_window_4view
 
     # Set up initial state
@@ -125,20 +129,23 @@ def test_sequential_loading_with_multiple_calls(main_window_4view):
 
     window._ensure_multi_view_sam_updated = mock_ensure
 
-    # Multiple rapid calls should only result in one worker
+    # First call should start all 4 workers in parallel
     window._start_sequential_multi_view_sam_loading()
+    assert call_count == 4  # All 4 start in parallel
+
+    # Multiple rapid calls should not create more workers
     window._start_sequential_multi_view_sam_loading()
     window._start_sequential_multi_view_sam_loading()
 
-    # Should only have been called once
-    assert call_count == 1
+    # Should still only have 4 calls total (no duplicates)
+    assert call_count == 4
 
     # Restore original method
     window._ensure_multi_view_sam_updated = original_ensure
 
 
 def test_sequential_loading_progression(main_window_4view):
-    """Test that sequential loading properly progresses through all viewers."""
+    """Test that parallel loading starts all viewers at once."""
     window = main_window_4view
 
     # Set up initial state
@@ -157,22 +164,15 @@ def test_sequential_loading_progression(main_window_4view):
 
     window._ensure_multi_view_sam_updated = mock_ensure
 
-    # Should start with viewer 0
+    # Should start all viewers at once in parallel
     window._start_sequential_multi_view_sam_loading()
-    assert called_viewers == [0]
+    assert sorted(called_viewers) == [0, 1, 2, 3]  # All started in parallel
 
-    # Simulate viewer 0 completion
-    window.multi_view_models_dirty[0] = False
-    window.multi_view_models_updating[0] = False
+    # Simulate all viewers completion
+    window.multi_view_models_dirty = [False, False, False, False]
+    window.multi_view_models_updating = [False, False, False, False]
+    called_viewers.clear()
 
-    # Should move to viewer 1
+    # Should not start any more since all are done
     window._start_sequential_multi_view_sam_loading()
-    assert called_viewers == [0, 1]
-
-    # Simulate viewer 1 completion
-    window.multi_view_models_dirty[1] = False
-    window.multi_view_models_updating[1] = False
-
-    # Should move to viewer 2
-    window._start_sequential_multi_view_sam_loading()
-    assert called_viewers == [0, 1, 2]
+    assert called_viewers == []
