@@ -778,6 +778,7 @@ class MainWindow(QMainWindow):
             "select_all": lambda: self.right_panel.select_all_segments(),
             "toggle_recent_class": self._toggle_recent_class,
             "save_segment": self._handle_space_press,
+            "erase_segment": self._handle_shift_space_press,
             "save_output": self._handle_enter_press,
             "save_output_alt": self._handle_enter_press,
             "fit_view": self._handle_fit_view,
@@ -2525,7 +2526,7 @@ class MainWindow(QMainWindow):
 
         if self.mode == "polygon":
             if self.view_mode == "single" and self.polygon_points:
-                self._finalize_polygon()
+                self._finalize_polygon(erase_mode=False)
             elif self.view_mode == "multi" and hasattr(
                 self, "multi_view_polygon_points"
             ):
@@ -2537,12 +2538,65 @@ class MainWindow(QMainWindow):
                             self.multi_view_mode_handler._finalize_multi_view_polygon(i)
                         else:
                             self._finalize_multi_view_polygon(i)
+        elif self.mode == "ai":
+            # For AI mode, use accept method (normal mode)
+            if self.view_mode == "single":
+                self._accept_ai_segment(erase_mode=False)
+            elif self.view_mode == "multi":
+                # Handle multi-view AI acceptance (normal mode)
+                if (
+                    hasattr(self, "multi_view_mode_handler")
+                    and self.multi_view_mode_handler
+                ):
+                    self.multi_view_mode_handler.save_ai_predictions()
+                    self._show_notification("AI segment(s) accepted")
+                else:
+                    self._accept_ai_segment(erase_mode=False)
         else:
-            # For AI mode, use accept method, otherwise save current segment
-            if self.mode == "ai" and self.view_mode == "single":
-                self._accept_ai_segment()
-            else:
-                self._save_current_segment()
+            # For other modes, save current segment
+            self._save_current_segment()
+
+    def _handle_shift_space_press(self):
+        """Handle Shift+Space key press for erase functionality."""
+        logger.debug(
+            f"Shift+Space pressed - mode: {self.mode}, view_mode: {self.view_mode}"
+        )
+
+        if self.mode == "polygon":
+            if self.view_mode == "single" and self.polygon_points:
+                self._finalize_polygon(erase_mode=True)
+            elif self.view_mode == "multi" and hasattr(
+                self, "multi_view_polygon_points"
+            ):
+                # Complete polygons for all viewers that have points
+                for i, points in enumerate(self.multi_view_polygon_points):
+                    if points and len(points) >= 3:
+                        # Use the multi-view mode handler for proper pairing logic
+                        if hasattr(self, "multi_view_mode_handler"):
+                            self.multi_view_mode_handler._finalize_multi_view_polygon(i)
+                        else:
+                            self._finalize_multi_view_polygon(i)
+        elif self.mode == "ai":
+            # For AI mode, use accept method with erase mode
+            if self.view_mode == "single":
+                self._accept_ai_segment(erase_mode=True)
+            elif self.view_mode == "multi":
+                # Handle multi-view AI acceptance with erase mode
+                if (
+                    hasattr(self, "multi_view_mode_handler")
+                    and self.multi_view_mode_handler
+                ):
+                    logger.debug(
+                        "Shift+Space pressed in multi-view AI mode - erase not yet implemented"
+                    )
+                    self._show_notification(
+                        "Eraser not yet implemented for multi-view AI mode"
+                    )
+                else:
+                    self._accept_ai_segment(erase_mode=True)
+        else:
+            # For other modes, show notification that erase isn't available
+            self._show_notification(f"Erase mode not available in {self.mode} mode")
 
     def _handle_enter_press(self):
         """Handle enter key press."""
@@ -2766,24 +2820,51 @@ class MainWindow(QMainWindow):
         # Convert back to boolean mask
         return (filtered_mask > 0).astype(bool)
 
-    def _finalize_polygon(self):
+    def _finalize_polygon(self, erase_mode=False):
         """Finalize polygon drawing."""
         if len(self.polygon_points) < 3:
             return
 
-        new_segment = {
-            "vertices": [[p.x(), p.y()] for p in self.polygon_points],
-            "type": "Polygon",
-            "mask": None,
-        }
-        self.segment_manager.add_segment(new_segment)
-        # Record the action for undo
-        self.action_history.append(
-            {
-                "type": "add_segment",
-                "segment_index": len(self.segment_manager.segments) - 1,
+        if erase_mode:
+            # Erase overlapping segments using polygon vertices
+            image_height = self.viewer._pixmap_item.pixmap().height()
+            image_width = self.viewer._pixmap_item.pixmap().width()
+            image_size = (image_height, image_width)
+            removed_indices, removed_segments_data = (
+                self.segment_manager.erase_segments_with_shape(
+                    self.polygon_points, image_size
+                )
+            )
+
+            if removed_indices:
+                # Record the action for undo
+                self.action_history.append(
+                    {
+                        "type": "erase_segments",
+                        "removed_segments": removed_segments_data,
+                    }
+                )
+                self._show_notification(
+                    f"Applied eraser to {len(removed_indices)} segment(s)"
+                )
+            else:
+                self._show_notification("No segments to erase")
+        else:
+            # Create new polygon segment (normal mode)
+            new_segment = {
+                "vertices": [[p.x(), p.y()] for p in self.polygon_points],
+                "type": "Polygon",
+                "mask": None,
             }
-        )
+            self.segment_manager.add_segment(new_segment)
+            # Record the action for undo
+            self.action_history.append(
+                {
+                    "type": "add_segment",
+                    "segment_index": len(self.segment_manager.segments) - 1,
+                }
+            )
+
         # Clear redo history when a new action is performed
         self.redo_history.clear()
 
@@ -3529,9 +3610,11 @@ class MainWindow(QMainWindow):
         """Clear notification from status bar."""
         self.status_bar.clear_message()
 
-    def _accept_ai_segment(self):
+    def _accept_ai_segment(self, erase_mode=False):
         """Accept the current AI segment preview (spacebar handler)."""
-        logger.debug(f"_accept_ai_segment called - view_mode: {self.view_mode}")
+        logger.debug(
+            f"_accept_ai_segment called - view_mode: {self.view_mode}, erase_mode: {erase_mode}"
+        )
 
         if self.view_mode == "single":
             # Single view mode - check for preview mask (both point-based and bbox)
@@ -3548,7 +3631,7 @@ class MainWindow(QMainWindow):
             )
 
             logger.debug(
-                f"Single view - has_preview_item: {has_preview_item}, has_preview_mask: {has_preview_mask}, has_bbox_preview: {has_bbox_preview}"
+                f"Single view - has_preview_item: {has_preview_item}, has_preview_mask: {has_preview_mask}, has_bbox_preview: {has_bbox_preview}, erase_mode: {erase_mode}"
             )
 
             # Handle bbox preview first
@@ -3557,21 +3640,56 @@ class MainWindow(QMainWindow):
                     self.ai_bbox_preview_mask
                 )
                 if filtered_mask is not None:
-                    # Create actual segment
-                    new_segment = {
-                        "type": "AI",
-                        "mask": filtered_mask,
-                        "vertices": None,
-                    }
-                    self.segment_manager.add_segment(new_segment)
+                    if erase_mode:
+                        # Erase overlapping segments
+                        logger.debug(
+                            "Erase mode active for bbox preview - applying eraser to AI segment"
+                        )
+                        image_height = self.viewer._pixmap_item.pixmap().height()
+                        image_width = self.viewer._pixmap_item.pixmap().width()
+                        image_size = (image_height, image_width)
+                        removed_indices, removed_segments_data = (
+                            self.segment_manager.erase_segments_with_mask(
+                                filtered_mask, image_size
+                            )
+                        )
+                        logger.debug(
+                            f"Bbox erase operation completed - modified {len(removed_indices)} segments"
+                        )
 
-                    # Record the action for undo
-                    self.action_history.append(
-                        {
-                            "type": "add_segment",
-                            "segment_index": len(self.segment_manager.segments) - 1,
+                        if removed_indices:
+                            # Record the action for undo
+                            self.action_history.append(
+                                {
+                                    "type": "erase_segments",
+                                    "removed_segments": removed_segments_data,
+                                }
+                            )
+                            self._show_success_notification(
+                                f"Erased {len(removed_indices)} segment(s)!"
+                            )
+                        else:
+                            self._show_notification("No segments to erase")
+                    else:
+                        # Create actual segment (normal mode)
+                        new_segment = {
+                            "type": "AI",
+                            "mask": filtered_mask,
+                            "vertices": None,
                         }
-                    )
+                        self.segment_manager.add_segment(new_segment)
+
+                        # Record the action for undo
+                        self.action_history.append(
+                            {
+                                "type": "add_segment",
+                                "segment_index": len(self.segment_manager.segments) - 1,
+                            }
+                        )
+                        self._show_success_notification(
+                            "AI bounding box segment saved!"
+                        )
+
                     # Clear redo history when a new action is performed
                     self.redo_history.clear()
 
@@ -3587,7 +3705,6 @@ class MainWindow(QMainWindow):
                     # Clear all points
                     self.clear_all_points()
                     self._update_all_lists()
-                    self._show_success_notification("AI bounding box segment saved!")
                 else:
                     self._show_warning_notification(
                         "All segments filtered out by fragment threshold"
@@ -3598,28 +3715,60 @@ class MainWindow(QMainWindow):
                     self.current_preview_mask
                 )
                 if filtered_mask is not None:
-                    # Create actual segment
-                    new_segment = {
-                        "type": "AI",
-                        "mask": filtered_mask,
-                        "vertices": None,
-                    }
-                    self.segment_manager.add_segment(new_segment)
+                    if erase_mode:
+                        # Erase overlapping segments
+                        logger.debug(
+                            "Erase mode active for regular AI preview - applying eraser to AI segment"
+                        )
+                        image_height = self.viewer._pixmap_item.pixmap().height()
+                        image_width = self.viewer._pixmap_item.pixmap().width()
+                        image_size = (image_height, image_width)
+                        removed_indices, removed_segments_data = (
+                            self.segment_manager.erase_segments_with_mask(
+                                filtered_mask, image_size
+                            )
+                        )
+                        logger.debug(
+                            f"Regular AI erase operation completed - modified {len(removed_indices)} segments"
+                        )
 
-                    # Record the action for undo
-                    self.action_history.append(
-                        {
-                            "type": "add_segment",
-                            "segment_index": len(self.segment_manager.segments) - 1,
+                        if removed_indices:
+                            # Record the action for undo
+                            self.action_history.append(
+                                {
+                                    "type": "erase_segments",
+                                    "removed_segments": removed_segments_data,
+                                }
+                            )
+                            self._show_notification(
+                                f"Applied eraser to {len(removed_indices)} segment(s)"
+                            )
+                        else:
+                            self._show_notification("No segments to erase")
+                    else:
+                        # Create actual segment (normal mode)
+                        new_segment = {
+                            "type": "AI",
+                            "mask": filtered_mask,
+                            "vertices": None,
                         }
-                    )
+                        self.segment_manager.add_segment(new_segment)
+
+                        # Record the action for undo
+                        self.action_history.append(
+                            {
+                                "type": "add_segment",
+                                "segment_index": len(self.segment_manager.segments) - 1,
+                            }
+                        )
+                        self._show_notification("AI segment accepted")
+
                     # Clear redo history when a new action is performed
                     self.redo_history.clear()
 
                     # Clear all points after accepting
                     self.clear_all_points()
                     self._update_all_lists()
-                    self._show_notification("AI segment accepted")
                 else:
                     self._show_warning_notification(
                         "All segments filtered out by fragment threshold"
@@ -3629,6 +3778,18 @@ class MainWindow(QMainWindow):
                         self.viewer.scene().removeItem(self.preview_mask_item)
                     self.preview_mask_item = None
                     self.current_preview_mask = None
+            else:
+                # No AI preview found in single view
+                if erase_mode:
+                    logger.debug(
+                        "No AI segment preview to erase - no preview mask found in single view"
+                    )
+                    self._show_notification("No AI segment preview to erase")
+                else:
+                    logger.debug(
+                        "No AI segment preview to accept - no preview mask found in single view"
+                    )
+                    self._show_notification("No AI segment preview to accept")
 
         elif self.view_mode == "multi":
             # Multi-view mode - use the multi-view mode handler to save AI predictions
@@ -3708,7 +3869,13 @@ class MainWindow(QMainWindow):
                 self._show_success_notification("AI segment(s) accepted")
                 self._update_all_lists()
             else:
-                self._show_notification("No AI segment preview to accept")
+                if erase_mode:
+                    logger.debug(
+                        "No AI segment preview to erase - no preview mask found"
+                    )
+                    self._show_notification("No AI segment preview to erase")
+                else:
+                    self._show_notification("No AI segment preview to accept")
 
     def _show_hotkey_dialog(self):
         """Show the hotkey configuration dialog."""
@@ -4069,28 +4236,64 @@ class MainWindow(QMainWindow):
             self.drag_start_pos = None
 
             if rect.width() >= 2 and rect.height() >= 2:
-                # Convert QRectF to QPolygonF
+                # Check if shift is pressed for erase functionality
+                modifiers = QApplication.keyboardModifiers()
+                shift_pressed = bool(modifiers & Qt.KeyboardModifier.ShiftModifier)
+
+                if shift_pressed:
+                    logger.debug("Shift+bbox release - activating erase mode")
+
+                # Convert QRectF to QPolygonF for vertex representation
                 polygon = QPolygonF()
                 polygon.append(rect.topLeft())
                 polygon.append(rect.topRight())
                 polygon.append(rect.bottomRight())
                 polygon.append(rect.bottomLeft())
 
-                new_segment = {
-                    "vertices": [[p.x(), p.y()] for p in list(polygon)],
-                    "type": "Polygon",  # Bounding boxes are stored as polygons
-                    "mask": None,
-                }
+                polygon_vertices = [QPointF(p.x(), p.y()) for p in list(polygon)]
 
-                self.segment_manager.add_segment(new_segment)
+                if shift_pressed:
+                    # Erase overlapping segments using bbox vertices
+                    image_height = self.viewer._pixmap_item.pixmap().height()
+                    image_width = self.viewer._pixmap_item.pixmap().width()
+                    image_size = (image_height, image_width)
+                    removed_indices, removed_segments_data = (
+                        self.segment_manager.erase_segments_with_shape(
+                            polygon_vertices, image_size
+                        )
+                    )
 
-                # Record the action for undo
-                self.action_history.append(
-                    {
-                        "type": "add_segment",
-                        "segment_index": len(self.segment_manager.segments) - 1,
+                    if removed_indices:
+                        # Record the action for undo
+                        self.action_history.append(
+                            {
+                                "type": "erase_segments",
+                                "removed_segments": removed_segments_data,
+                            }
+                        )
+                        self._show_notification(
+                            f"Applied eraser to {len(removed_indices)} segment(s)"
+                        )
+                    else:
+                        self._show_notification("No segments to erase")
+                else:
+                    # Create new bbox segment (normal mode)
+                    new_segment = {
+                        "vertices": [[p.x(), p.y()] for p in polygon_vertices],
+                        "type": "Polygon",  # Bounding boxes are stored as polygons
+                        "mask": None,
                     }
-                )
+
+                    self.segment_manager.add_segment(new_segment)
+
+                    # Record the action for undo
+                    self.action_history.append(
+                        {
+                            "type": "add_segment",
+                            "segment_index": len(self.segment_manager.segments) - 1,
+                        }
+                    )
+
                 # Clear redo history when a new action is performed
                 self.redo_history.clear()
                 self._update_all_lists()
@@ -4314,6 +4517,10 @@ class MainWindow(QMainWindow):
 
     def _handle_polygon_click(self, pos):
         """Handle polygon drawing clicks."""
+        # Check if shift is pressed for erase functionality
+        modifiers = QApplication.keyboardModifiers()
+        shift_pressed = bool(modifiers & Qt.KeyboardModifier.ShiftModifier)
+
         # Check if clicking near the first point to close polygon
         if self.polygon_points and len(self.polygon_points) > 2:
             first_point = self.polygon_points[0]
@@ -4321,7 +4528,11 @@ class MainWindow(QMainWindow):
                 pos.y() - first_point.y()
             ) ** 2
             if distance_squared < self.polygon_join_threshold**2:
-                self._finalize_polygon()
+                if shift_pressed:
+                    logger.debug(
+                        "Shift+click polygon completion - activating erase mode"
+                    )
+                self._finalize_polygon(erase_mode=shift_pressed)
                 return
 
         # Add new point to polygon

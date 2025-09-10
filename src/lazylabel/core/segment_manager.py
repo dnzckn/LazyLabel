@@ -204,6 +204,154 @@ class SegmentManager:
 
         return None
 
+    def erase_segments_with_shape(
+        self, erase_vertices: list[QPointF], image_size: tuple[int, int]
+    ) -> list[int]:
+        """Erase segments that overlap with the given shape.
+
+        Args:
+            erase_vertices: Vertices of the erase shape
+            image_size: Size of the image (height, width)
+
+        Returns:
+            List of indices of segments that were removed
+        """
+        if not erase_vertices or not self.segments:
+            return [], []
+
+        # Create mask from erase shape
+        erase_mask = self.rasterize_polygon(erase_vertices, image_size)
+        if erase_mask is None:
+            return [], []
+
+        return self.erase_segments_with_mask(erase_mask, image_size)
+
+    def erase_segments_with_mask(
+        self, erase_mask: np.ndarray, image_size: tuple[int, int]
+    ) -> list[int]:
+        """Erase overlapping pixels from segments that overlap with the given mask.
+
+        Args:
+            erase_mask: Binary mask indicating pixels to erase
+            image_size: Size of the image (height, width)
+
+        Returns:
+            List of indices of segments that were modified or removed
+        """
+        if erase_mask is None or not self.segments:
+            return [], []
+
+        modified_indices = []
+        segments_to_remove = []
+        segments_to_add = []
+        removed_segments_data = []  # Store segment data for undo
+
+        # Iterate through all segments to find overlaps
+        for i, segment in enumerate(self.segments):
+            segment_mask = self._get_segment_mask(segment, image_size)
+            if segment_mask is None:
+                continue
+
+            # Check if there's any overlap between erase mask and segment mask
+            overlap = np.logical_and(erase_mask, segment_mask)
+            overlap_area = np.sum(overlap)
+
+            if overlap_area > 0:
+                modified_indices.append(i)
+
+                # Store original segment data before modification
+                removed_segments_data.append({"index": i, "segment": segment.copy()})
+
+                # Create new mask by removing erased pixels
+                new_mask = np.logical_and(segment_mask, ~erase_mask)
+                remaining_area = np.sum(new_mask)
+
+                if remaining_area == 0:
+                    # All pixels were erased, remove segment entirely
+                    segments_to_remove.append(i)
+                else:
+                    # Some pixels remain, check for disconnected components
+                    # Use connected component analysis to split into separate segments
+                    connected_segments = self._split_mask_into_components(
+                        new_mask, segment.get("class_id")
+                    )
+
+                    # Mark original for removal and add all connected components
+                    segments_to_remove.append(i)
+                    segments_to_add.extend(connected_segments)
+
+        # Remove segments in reverse order to maintain indices
+        for i in sorted(segments_to_remove, reverse=True):
+            del self.segments[i]
+
+        # Add new segments (modified versions)
+        for new_segment in segments_to_add:
+            self.segments.append(new_segment)
+
+        if modified_indices:
+            self._update_next_class_id()
+
+        return modified_indices, removed_segments_data
+
+    def _get_segment_mask(
+        self, segment: dict[str, Any], image_size: tuple[int, int]
+    ) -> np.ndarray | None:
+        """Get binary mask for a segment.
+
+        Args:
+            segment: Segment data
+            image_size: Size of the image (height, width)
+
+        Returns:
+            Binary mask for the segment or None if unable to create
+        """
+        if segment["type"] == "Polygon" and "vertices" in segment:
+            # Convert stored list of lists back to QPointF objects for rasterization
+            qpoints = [QPointF(p[0], p[1]) for p in segment["vertices"]]
+            return self.rasterize_polygon(qpoints, image_size)
+        elif "mask" in segment and segment["mask"] is not None:
+            return segment["mask"]
+        return None
+
+    def _split_mask_into_components(
+        self, mask: np.ndarray, class_id: int | None
+    ) -> list[dict[str, Any]]:
+        """Split a mask into separate segments for each connected component.
+
+        Args:
+            mask: Binary mask to split
+            class_id: Class ID to assign to all resulting segments
+
+        Returns:
+            List of segment dictionaries, one for each connected component
+        """
+        if mask is None or np.sum(mask) == 0:
+            return []
+
+        # Convert boolean mask to uint8 for OpenCV
+        mask_uint8 = mask.astype(np.uint8)
+
+        # Find connected components
+        num_labels, labels = cv2.connectedComponents(mask_uint8, connectivity=8)
+
+        segments = []
+
+        # Create a segment for each component (skip label 0 which is background)
+        for label in range(1, num_labels):
+            component_mask = labels == label
+
+            # Only create segment if component has significant size
+            if np.sum(component_mask) > 10:  # Minimum 10 pixels
+                new_segment = {
+                    "type": "AI",  # Convert to mask-based segment
+                    "mask": component_mask,
+                    "vertices": None,
+                    "class_id": class_id,
+                }
+                segments.append(new_segment)
+
+        return segments
+
     def _update_next_class_id(self) -> None:
         """Update the next available class ID."""
         all_ids = {
