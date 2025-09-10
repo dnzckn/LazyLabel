@@ -108,7 +108,11 @@ class SegmentManager:
         return mask.astype(bool)
 
     def create_final_mask_tensor(
-        self, image_size: tuple[int, int], class_order: list[int]
+        self,
+        image_size: tuple[int, int],
+        class_order: list[int],
+        pixel_priority_enabled: bool = False,
+        pixel_priority_ascending: bool = True,
     ) -> np.ndarray:
         """Create final mask tensor for saving."""
         h, w = image_size
@@ -135,7 +139,58 @@ class SegmentManager:
                     final_mask_tensor[:, :, new_channel_idx], mask
                 )
 
+        # Apply pixel priority if enabled
+        if pixel_priority_enabled:
+            final_mask_tensor = self._apply_pixel_priority(
+                final_mask_tensor, pixel_priority_ascending
+            )
+
         return final_mask_tensor
+
+    def _apply_pixel_priority(
+        self, mask_tensor: np.ndarray, ascending: bool
+    ) -> np.ndarray:
+        """Apply pixel priority to mask tensor so only one class can occupy each pixel.
+
+        Args:
+            mask_tensor: 3D array of shape (height, width, num_classes)
+            ascending: If True, lower class indices have priority; if False, higher indices have priority
+
+        Returns:
+            Modified mask tensor with pixel priority applied
+        """
+        # Create a copy to avoid modifying the original
+        prioritized_mask = mask_tensor.copy()
+
+        # Find pixels with multiple class overlaps (sum > 1 across class dimension)
+        overlap_pixels = np.sum(mask_tensor, axis=2) > 1
+
+        if not np.any(overlap_pixels):
+            # No overlapping pixels, return original
+            return prioritized_mask
+
+        # Get coordinates of overlapping pixels
+        overlap_coords = np.where(overlap_pixels)
+
+        for y, x in zip(overlap_coords[0], overlap_coords[1], strict=False):
+            # Get all classes present at this pixel
+            classes_at_pixel = np.where(mask_tensor[y, x, :] > 0)[0]
+
+            if len(classes_at_pixel) <= 1:
+                continue  # No overlap, skip
+
+            # Determine priority class based on ascending/descending setting
+            if ascending:
+                priority_class = np.min(classes_at_pixel)  # Lowest index has priority
+            else:
+                priority_class = np.max(classes_at_pixel)  # Highest index has priority
+
+            # Set all classes to 0 at this pixel
+            prioritized_mask[y, x, :] = 0
+            # Set only the priority class to 1
+            prioritized_mask[y, x, priority_class] = 1
+
+        return prioritized_mask
 
     def reassign_class_ids(self, new_order: list[int]) -> None:
         """Reassign class IDs based on new order."""

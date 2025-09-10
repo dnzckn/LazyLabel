@@ -2976,6 +2976,8 @@ class MainWindow(QMainWindow):
                             (h, w),
                             class_order,
                             crop_coords,  # Pass crop coordinates if available
+                            settings.get("pixel_priority_enabled", False),
+                            settings.get("pixel_priority_ascending", True),
                         )
                         saved_files.append(os.path.basename(npz_path))
                         # Track saved file for highlighting later
@@ -3010,6 +3012,8 @@ class MainWindow(QMainWindow):
                             class_order,
                             class_labels,
                             crop_coords,  # Pass crop coordinates if available
+                            settings.get("pixel_priority_enabled", False),
+                            settings.get("pixel_priority_ascending", True),
                         )
                         saved_files.append(os.path.basename(txt_path))
                         # Track saved file for highlighting later
@@ -3153,6 +3157,8 @@ class MainWindow(QMainWindow):
                         (h, w),
                         class_order,
                         self.current_crop_coords,
+                        settings.get("pixel_priority_enabled", False),
+                        settings.get("pixel_priority_ascending", True),
                     )
                     logger.debug(f"NPZ save completed: {npz_path}")
                     self._show_success_notification(
@@ -3182,6 +3188,8 @@ class MainWindow(QMainWindow):
                         class_order,
                         class_labels,
                         self.current_crop_coords,
+                        settings.get("pixel_priority_enabled", False),
+                        settings.get("pixel_priority_ascending", True),
                     )
                     if txt_path:
                         logger.debug(f"TXT save completed: {txt_path}")
