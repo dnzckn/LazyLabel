@@ -182,6 +182,9 @@ class MainWindow(QMainWindow):
         self.pan_multiplier = self.settings.pan_multiplier
         self.polygon_join_threshold = self.settings.polygon_join_threshold
         self.fragment_threshold = self.settings.fragment_threshold
+        self.last_ai_filter_value = (
+            100 if self.fragment_threshold == 0 else self.fragment_threshold
+        )
 
         # Image adjustment state
         self.brightness = self.settings.brightness
@@ -788,6 +791,7 @@ class MainWindow(QMainWindow):
             "pan_down": lambda: self._handle_pan_key("down"),
             "pan_left": lambda: self._handle_pan_key("left"),
             "pan_right": lambda: self._handle_pan_key("right"),
+            "toggle_ai_filter": self._toggle_ai_filter,
         }
 
         # Create shortcuts for each action
@@ -1056,6 +1060,8 @@ class MainWindow(QMainWindow):
 
     def _set_fragment_threshold(self, value):
         """Set fragment threshold for AI segment filtering."""
+        if value > 0:
+            self.last_ai_filter_value = value
         self.fragment_threshold = value
         self.settings.fragment_threshold = value
 
@@ -2775,6 +2781,13 @@ class MainWindow(QMainWindow):
                 self._show_warning_notification(
                     "All segments filtered out by fragment threshold"
                 )
+
+    def _toggle_ai_filter(self):
+        """Toggle AI filter between 0 and last set value."""
+        new_value = self.last_ai_filter_value if self.fragment_threshold == 0 else 0
+
+        # Update the control panel widget
+        self.control_panel.set_fragment_threshold(new_value)
 
     def _apply_fragment_threshold(self, mask):
         """Apply fragment threshold filtering to remove small segments."""

@@ -122,8 +122,12 @@ class TestHotkeyManager:
             action_name = manager.is_key_in_use("X")
             assert action_name == "toggle_recent_class"
 
-            # Check a key that is not in use
+            # Check a key that is now in use
             action_name = manager.is_key_in_use("Z")
+            assert action_name == "toggle_ai_filter"
+
+            # Check a key that is not in use
+            action_name = manager.is_key_in_use("F")
             assert action_name is None
 
             # Check a key that is in use but exclude the action

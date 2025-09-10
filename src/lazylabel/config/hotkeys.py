@@ -74,6 +74,9 @@ class HotkeyManager:
             HotkeyAction(
                 "escape", "Cancel/Clear Selection", "Escape", category="Actions"
             ),
+            HotkeyAction(
+                "toggle_ai_filter", "Toggle AI Filter", "Z", category="Actions"
+            ),
             # Segments
             HotkeyAction(
                 "merge_segments", "Merge Selected Segments", "M", category="Segments"
