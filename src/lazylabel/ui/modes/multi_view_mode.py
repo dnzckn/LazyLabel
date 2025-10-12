@@ -1,8 +1,8 @@
 """Multi view mode handler."""
 
-from PyQt6.QtCore import QPointF, Qt
+from PyQt6.QtCore import QPointF, QRectF, Qt
 from PyQt6.QtGui import QBrush, QColor, QPen, QPolygonF
-from PyQt6.QtWidgets import QGraphicsEllipseItem, QGraphicsRectItem
+from PyQt6.QtWidgets import QApplication, QGraphicsEllipseItem, QGraphicsRectItem
 
 from lazylabel.utils.logger import logger
 
@@ -257,6 +257,10 @@ class MultiViewModeHandler(BaseModeHandler):
         """Handle polygon mode click in multi view."""
         points = self.main_window.multi_view_polygon_points[viewer_index]
 
+        # Check if shift is pressed for erase functionality
+        modifiers = QApplication.keyboardModifiers()
+        shift_pressed = bool(modifiers & Qt.KeyboardModifier.ShiftModifier)
+
         # Check if clicking near first point to close polygon
         if points and len(points) > 2:
             first_point = points[0]
@@ -264,7 +268,13 @@ class MultiViewModeHandler(BaseModeHandler):
                 pos.y() - first_point.y()
             ) ** 2
             if distance_squared < self.main_window.polygon_join_threshold**2:
-                self._finalize_multi_view_polygon(viewer_index)
+                if shift_pressed:
+                    logger.debug(
+                        "Shift+click polygon completion in multi-view - activating erase mode"
+                    )
+                self._finalize_multi_view_polygon(
+                    viewer_index, erase_mode=shift_pressed
+                )
                 return
 
         # Add point to polygon
@@ -346,20 +356,90 @@ class MultiViewModeHandler(BaseModeHandler):
         # Remove temporary rectangle
         self.main_window.multi_view_viewers[viewer_index].scene().removeItem(rect_item)
 
-        # Only create segment if minimum size is met (2x2 pixels)
+        # Only process if minimum size is met (2x2 pixels)
         if width < 2 or height < 2:
             # Clean up and return without creating segment
             self.main_window.multi_view_bbox_starts[viewer_index] = None
             self.main_window.multi_view_bbox_rects[viewer_index] = None
             return
 
+        # Check if shift is pressed for erase functionality
+        modifiers = QApplication.keyboardModifiers()
+        shift_pressed = bool(modifiers & Qt.KeyboardModifier.ShiftModifier)
+
+        # Create rectangle for processing
+        rect = QRectF(x, y, width, height)
+
+        if shift_pressed:
+            logger.debug("Shift+bbox completion in multi-view - activating erase mode")
+            self._handle_shift_bbox_erase(rect, viewer_index)
+        else:
+            # Normal bbox segment creation
+            self._create_bbox_segment(rect, viewer_index)
+
+        # Clean up
+        self.main_window.multi_view_bbox_starts[viewer_index] = None
+        self.main_window.multi_view_bbox_rects[viewer_index] = None
+
+    def _handle_shift_bbox_erase(self, rect, viewer_index):
+        """Handle shift+bbox erase operation for specific viewer."""
+        # Convert rectangle to polygon vertices (like single-view implementation)
+        polygon_vertices = [
+            QPointF(rect.left(), rect.top()),
+            QPointF(rect.right(), rect.top()),
+            QPointF(rect.right(), rect.bottom()),
+            QPointF(rect.left(), rect.bottom()),
+        ]
+
+        # Get viewer and image size - use original image dimensions for consistency
+        viewer = self.main_window.multi_view_viewers[viewer_index]
+        if not hasattr(viewer, "_original_image") or viewer._original_image is None:
+            return
+
+        # Use original image dimensions (consistent with how segments were created)
+        original_image = viewer._original_image
+        image_height = original_image.height()
+        image_width = original_image.width()
+        image_size = (image_height, image_width)
+
+        # Apply erase operation using the bounding box shape
+        removed_indices, removed_segments_data = (
+            self.main_window.segment_manager.erase_segments_with_shape(
+                polygon_vertices, image_size, viewer_index
+            )
+        )
+
+        if removed_indices:
+            # Record the action for undo
+            self.main_window.action_history.append(
+                {
+                    "type": "erase_segments",
+                    "removed_segments": removed_segments_data,
+                }
+            )
+
+            # Clear redo history when a new action is performed
+            self.main_window.redo_history.clear()
+
+            # Update UI
+            self.main_window._update_all_lists()
+            self.main_window._show_notification(
+                f"Erased {len(removed_indices)} segment(s) with bounding box"
+            )
+        else:
+            self.main_window._show_notification(
+                "No segments to erase with bounding box"
+            )
+
+    def _create_bbox_segment(self, rect, viewer_index):
+        """Create normal bounding box segment (non-erase mode)."""
         # Create view-specific bbox data as polygon
         view_data = {
             "vertices": [
-                [x, y],
-                [x + width, y],
-                [x + width, y + height],
-                [x, y + height],
+                [rect.left(), rect.top()],
+                [rect.right(), rect.top()],
+                [rect.right(), rect.bottom()],
+                [rect.left(), rect.bottom()],
             ],
             "mask": None,
         }
@@ -394,10 +474,6 @@ class MultiViewModeHandler(BaseModeHandler):
 
         # Clear redo history when a new action is performed
         self.main_window.redo_history.clear()
-
-        # Clean up
-        self.main_window.multi_view_bbox_starts[viewer_index] = None
-        self.main_window.multi_view_bbox_rects[viewer_index] = None
 
     def display_all_segments(self):
         """Display all segments in multi view."""
@@ -770,12 +846,181 @@ class MultiViewModeHandler(BaseModeHandler):
         # Clear previews after saving
         self._clear_ai_previews()
 
-    def _finalize_multi_view_polygon(self, viewer_index):
+    def erase_ai_predictions(self):
+        """Erase existing segments using AI predictions as masks."""
+        if not hasattr(self.main_window, "multi_view_ai_predictions"):
+            return
+
+        predictions = self.main_window.multi_view_ai_predictions
+        if len(predictions) == 0:
+            return
+
+        total_removed = 0
+        all_removed_segments_data = []
+
+        # Apply erase operation for each prediction
+        for viewer_index, prediction in predictions.items():
+            if viewer_index >= len(self.main_window.multi_view_viewers):
+                continue
+
+            viewer = self.main_window.multi_view_viewers[viewer_index]
+            if not hasattr(viewer, "_pixmap_item") or not viewer._pixmap_item:
+                continue
+
+            pixmap = viewer._pixmap_item.pixmap()
+            if pixmap.isNull():
+                continue
+
+            image_height = pixmap.height()
+            image_width = pixmap.width()
+            image_size = (image_height, image_width)
+
+            # Get the prediction mask
+            mask = prediction["mask"]
+
+            # Apply erase operation using the mask with viewer context
+            removed_indices, removed_segments_data = (
+                self.main_window.segment_manager.erase_segments_with_mask(
+                    mask, image_size, viewer_index
+                )
+            )
+
+            if removed_indices:
+                total_removed += len(removed_indices)
+                all_removed_segments_data.extend(removed_segments_data)
+                logger.debug(
+                    f"Viewer {viewer_index + 1}: Erased {len(removed_indices)} segments"
+                )
+
+        if total_removed > 0:
+            # Record the action for undo
+            self.main_window.action_history.append(
+                {
+                    "type": "erase_segments",
+                    "removed_segments": all_removed_segments_data,
+                }
+            )
+            self.main_window._update_all_lists()
+            self.main_window._show_notification(
+                f"Applied eraser to {total_removed} segment(s)"
+            )
+        else:
+            self.main_window._show_notification("No segments to erase")
+
+        # Clear previews after erasing
+        self._clear_ai_previews()
+
+    def _finalize_multi_view_polygon(self, viewer_index, erase_mode=False):
         """Finalize polygon drawing for a specific viewer."""
         points = self.main_window.multi_view_polygon_points[viewer_index]
         if len(points) < 3:
             return
 
+        if erase_mode:
+            # Apply erase operation using polygon vertices
+            self._handle_shift_polygon_erase(points, viewer_index)
+        else:
+            # Create normal polygon segment
+            self._create_polygon_segment(points, viewer_index)
+
+        # Clear polygon state for this viewer
+        self._clear_multi_view_polygon(viewer_index)
+
+    def _handle_shift_ai_bbox_erase(self, rect, viewer_index):
+        """Handle shift+AI bbox erase operation for specific viewer."""
+        # Convert rectangle to polygon vertices (like single-view and bbox implementation)
+        polygon_vertices = [
+            QPointF(rect.left(), rect.top()),
+            QPointF(rect.right(), rect.top()),
+            QPointF(rect.right(), rect.bottom()),
+            QPointF(rect.left(), rect.bottom()),
+        ]
+
+        # Get viewer and image size - use original image dimensions for consistency
+        viewer = self.main_window.multi_view_viewers[viewer_index]
+        if not hasattr(viewer, "_original_image") or viewer._original_image is None:
+            return
+
+        # Use original image dimensions (consistent with how segments were created)
+        original_image = viewer._original_image
+        image_height = original_image.height()
+        image_width = original_image.width()
+        image_size = (image_height, image_width)
+
+        # Apply erase operation using the bounding box shape
+        removed_indices, removed_segments_data = (
+            self.main_window.segment_manager.erase_segments_with_shape(
+                polygon_vertices, image_size, viewer_index
+            )
+        )
+
+        if removed_indices:
+            # Record the action for undo
+            self.main_window.action_history.append(
+                {
+                    "type": "erase_segments",
+                    "removed_segments": removed_segments_data,
+                }
+            )
+
+            # Clear redo history when a new action is performed
+            self.main_window.redo_history.clear()
+
+            # Update UI
+            self.main_window._update_all_lists()
+            self.main_window._show_notification(
+                f"Erased {len(removed_indices)} segment(s) with AI bounding box"
+            )
+        else:
+            self.main_window._show_notification(
+                "No segments to erase with AI bounding box"
+            )
+
+    def _handle_shift_polygon_erase(self, points, viewer_index):
+        """Handle shift+polygon erase operation for specific viewer."""
+        # Get viewer and image size - use original image dimensions for consistency
+        viewer = self.main_window.multi_view_viewers[viewer_index]
+        if not hasattr(viewer, "_original_image") or viewer._original_image is None:
+            return
+
+        # Use original image dimensions (consistent with how segments were created)
+        original_image = viewer._original_image
+        image_height = original_image.height()
+        image_width = original_image.width()
+        image_size = (image_height, image_width)
+
+        # Convert points to QPointF for erase operation
+        polygon_vertices = [QPointF(p.x(), p.y()) for p in points]
+
+        # Apply erase operation using the polygon shape
+        removed_indices, removed_segments_data = (
+            self.main_window.segment_manager.erase_segments_with_shape(
+                polygon_vertices, image_size, viewer_index
+            )
+        )
+
+        if removed_indices:
+            # Record the action for undo
+            self.main_window.action_history.append(
+                {
+                    "type": "erase_segments",
+                    "removed_segments": removed_segments_data,
+                }
+            )
+
+            # Clear redo history when a new action is performed
+            self.main_window.redo_history.clear()
+
+            # Update UI
+            self.main_window._update_all_lists()
+            self.main_window._show_notification(
+                f"Erased {len(removed_indices)} segment(s) with polygon"
+            )
+        else:
+            self.main_window._show_notification("No segments to erase with polygon")
+
+    def _create_polygon_segment(self, points, viewer_index):
+        """Create normal polygon segment (non-erase mode)."""
         # Create view-specific polygon data
         view_data = {
             "vertices": [[p.x(), p.y()] for p in points],
@@ -839,9 +1084,6 @@ class MultiViewModeHandler(BaseModeHandler):
             )
 
         self.main_window._show_notification(f"Polygon {viewer_count_text}.")
-
-        # Clear polygon state for this viewer
-        self._clear_multi_view_polygon(viewer_index)
 
     def _clear_multi_view_polygon(self, viewer_index):
         """Clear polygon state for a specific viewer."""
@@ -999,7 +1241,18 @@ class MultiViewModeHandler(BaseModeHandler):
             self.main_window.multi_view_ai_click_starts[viewer_index] = None
 
             if rect.width() > 10 and rect.height() > 10:  # Minimum box size
-                self._handle_multi_view_ai_bounding_box(rect, viewer_index)
+                # Check if shift is pressed for direct erase functionality
+                modifiers = QApplication.keyboardModifiers()
+                shift_pressed = bool(modifiers & Qt.KeyboardModifier.ShiftModifier)
+
+                if shift_pressed:
+                    logger.debug(
+                        "Shift+AI bbox drag in multi-view - activating direct erase mode"
+                    )
+                    self._handle_shift_ai_bbox_erase(rect, viewer_index)
+                else:
+                    # Normal AI prediction
+                    self._handle_multi_view_ai_bounding_box(rect, viewer_index)
         else:
             # This was a click - add positive point
             self.main_window.multi_view_ai_click_starts[viewer_index] = None

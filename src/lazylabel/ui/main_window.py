@@ -818,6 +818,10 @@ class MainWindow(QMainWindow):
 
     def _load_settings(self):
         """Load and apply settings."""
+        logger.debug(
+            f"Loading settings: pixel_priority_enabled={self.settings.pixel_priority_enabled}, "
+            f"pixel_priority_ascending={self.settings.pixel_priority_ascending}"
+        )
         self.control_panel.set_settings(self.settings.__dict__)
         self.control_panel.set_annotation_size(
             int(self.settings.annotation_size_multiplier * 10)
@@ -1090,8 +1094,8 @@ class MainWindow(QMainWindow):
             self.current_image_path
             and hasattr(self.viewer, "_original_image")
             and self.viewer._original_image is not None
-            and hasattr(self.viewer, "_original_image_bgr")
-            and self.viewer._original_image_bgr is not None
+            and hasattr(self.viewer, "_original_image_bgra")
+            and self.viewer._original_image_bgra is not None
         ):
             self.viewer.set_image_adjustments(
                 self.brightness, self.contrast, self.gamma
@@ -1105,8 +1109,8 @@ class MainWindow(QMainWindow):
                     and self.multi_view_images[i] is not None
                     and hasattr(viewer, "_original_image")
                     and viewer._original_image is not None
-                    and hasattr(viewer, "_original_image_bgr")
-                    and viewer._original_image_bgr is not None
+                    and hasattr(viewer, "_original_image_bgra")
+                    and viewer._original_image_bgra is not None
                 ):
                     viewer.set_image_adjustments(
                         self.brightness, self.contrast, self.gamma
@@ -1133,7 +1137,16 @@ class MainWindow(QMainWindow):
         old_operate_on_view = self.settings.operate_on_view
 
         # Update the main window's settings object with the latest from the widget
-        self.settings.update(**self.control_panel.settings_widget.get_settings())
+        widget_settings = self.control_panel.settings_widget.get_settings()
+        logger.debug(
+            f"Settings changed: pixel_priority_enabled={widget_settings.get('pixel_priority_enabled')}, "
+            f"pixel_priority_ascending={widget_settings.get('pixel_priority_ascending')}"
+        )
+        self.settings.update(**widget_settings)
+        logger.debug(
+            f"Settings object updated: pixel_priority_enabled={self.settings.pixel_priority_enabled}, "
+            f"pixel_priority_ascending={self.settings.pixel_priority_ascending}"
+        )
 
         # Only mark SAM as dirty if operate_on_view setting actually changed (lazy loading)
         if (
@@ -1153,24 +1166,40 @@ class MainWindow(QMainWindow):
 
     def _handle_image_adjustment_changed(self):
         """Handle changes in image adjustments (brightness, contrast, gamma)."""
+        # Always apply brightness/contrast/gamma to display regardless of operate_on_view setting
+        # This ensures live updating and consistent behavior with other sliders
+
+        # Handle multi-view mode
+        if self.view_mode == "multi":
+            # Check if any multi-view images are loaded
+            if hasattr(self, "multi_view_images") and any(self.multi_view_images):
+                self._apply_multi_view_image_processing_fast()
+
+                # Additionally update SAM models if operate_on_view is enabled
+                if self.settings.operate_on_view and hasattr(self, "multi_view_models"):
+                    changed_indices = []
+                    for i in range(len(self.multi_view_models)):
+                        if (
+                            self.multi_view_images[i]
+                            and i < len(self.multi_view_models)
+                            and self.multi_view_models[i] is not None
+                        ):
+                            changed_indices.append(i)
+
+                    if changed_indices:
+                        self._fast_update_multi_view_images(changed_indices)
+            return
+
+        # Handle single-view mode
+        if not self.current_image_path:
+            return
+
+        # Always update display immediately for responsive UI
+        self._apply_image_processing_fast()
+
+        # Additionally mark SAM as dirty if operate_on_view is enabled
         if self.settings.operate_on_view:
-            # Handle single view mode - mark as dirty for lazy loading
-            if self.current_image_path:
-                self._mark_sam_dirty()
-
-            # Handle multi view mode - use fast updates for adjusted images instead of marking dirty
-            elif self.view_mode == "multi" and hasattr(self, "multi_view_models"):
-                changed_indices = []
-                for i in range(len(self.multi_view_models)):
-                    if (
-                        self.multi_view_images[i]
-                        and self.multi_view_models[i] is not None
-                    ):
-                        changed_indices.append(i)
-
-                # Use fast updates instead of marking all models dirty
-                if changed_indices:
-                    self._fast_update_multi_view_images(changed_indices)
+            self._mark_sam_dirty()
 
     # File management methods
     def _open_folder_dialog(self):
@@ -2574,12 +2603,14 @@ class MainWindow(QMainWindow):
             elif self.view_mode == "multi" and hasattr(
                 self, "multi_view_polygon_points"
             ):
-                # Complete polygons for all viewers that have points
+                # Complete polygons for all viewers that have points with erase mode
                 for i, points in enumerate(self.multi_view_polygon_points):
                     if points and len(points) >= 3:
-                        # Use the multi-view mode handler for proper pairing logic
+                        # Use the multi-view mode handler for proper pairing logic with erase mode
                         if hasattr(self, "multi_view_mode_handler"):
-                            self.multi_view_mode_handler._finalize_multi_view_polygon(i)
+                            self.multi_view_mode_handler._finalize_multi_view_polygon(
+                                i, erase_mode=True
+                            )
                         else:
                             self._finalize_multi_view_polygon(i)
         elif self.mode == "ai":
@@ -2592,12 +2623,8 @@ class MainWindow(QMainWindow):
                     hasattr(self, "multi_view_mode_handler")
                     and self.multi_view_mode_handler
                 ):
-                    logger.debug(
-                        "Shift+Space pressed in multi-view AI mode - erase not yet implemented"
-                    )
-                    self._show_notification(
-                        "Eraser not yet implemented for multi-view AI mode"
-                    )
+                    self.multi_view_mode_handler.erase_ai_predictions()
+                    logger.debug("Shift+Space pressed - multi-view AI erase applied")
                 else:
                     self._accept_ai_segment(erase_mode=True)
         else:
@@ -3813,13 +3840,19 @@ class MainWindow(QMainWindow):
                     self._show_notification("No AI segment preview to accept")
 
         elif self.view_mode == "multi":
-            # Multi-view mode - use the multi-view mode handler to save AI predictions
+            # Multi-view mode - use the multi-view mode handler
             if (
                 hasattr(self, "multi_view_mode_handler")
                 and self.multi_view_mode_handler
             ):
-                self.multi_view_mode_handler.save_ai_predictions()
-                self._show_notification("AI segment(s) accepted")
+                if erase_mode:
+                    # Use erase function instead of save
+                    self.multi_view_mode_handler.erase_ai_predictions()
+                    self._show_notification("AI segment(s) used for erasing")
+                else:
+                    # Normal save operation
+                    self.multi_view_mode_handler.save_ai_predictions()
+                    self._show_notification("AI segment(s) accepted")
                 return
 
             # Fallback to old logic if mode handler not available
@@ -3978,6 +4011,10 @@ class MainWindow(QMainWindow):
             self.image_discovery_worker.deleteLater()
 
         # Save settings
+        logger.debug(
+            f"Saving settings: pixel_priority_enabled={self.settings.pixel_priority_enabled}, "
+            f"pixel_priority_ascending={self.settings.pixel_priority_ascending}"
+        )
         self.settings.save_to_file(str(self.paths.settings_file))
         super().closeEvent(event)
 
@@ -4187,6 +4224,20 @@ class MainWindow(QMainWindow):
 
     def _scene_mouse_release(self, event):
         """Handle mouse release events in the scene."""
+        # Delegate to multi-view handler if in multi-view mode
+        if self.view_mode == "multi":
+            # Find which viewer this event is for and delegate
+            for i, viewer in enumerate(self.viewers):
+                if (
+                    hasattr(viewer, "scene")
+                    and viewer.scene() == event.widget().scene()
+                ):
+                    self._multi_view_mouse_release(event, i)
+                    return
+            # Fallback: delegate to first viewer
+            self._multi_view_mouse_release(event, 0)
+            return
+
         if self.mode == "edit" and self.is_dragging_polygon:
             # Record the action for undo
             final_vertices = {
@@ -6975,11 +7026,12 @@ class MainWindow(QMainWindow):
             # Convert from BGRA to BGR for consistency with _original_image_bgr
             result_image = cv2.cvtColor(image_np, cv2.COLOR_BGRA2BGR)
         elif (
-            hasattr(viewer, "_original_image_bgr")
-            and viewer._original_image_bgr is not None
+            hasattr(viewer, "_original_image_bgra")
+            and viewer._original_image_bgra is not None
         ):
             # Fallback to original image if no adjusted pixmap
-            result_image = viewer._original_image_bgr.copy()
+            # Convert from BGRA to BGR for consistency
+            result_image = cv2.cvtColor(viewer._original_image_bgra, cv2.COLOR_BGRA2BGR)
         else:
             return None
 
@@ -8163,6 +8215,10 @@ class MainWindow(QMainWindow):
         """Handle polygon mode click for a specific viewer - matches single view pattern."""
         points = self.multi_view_polygon_points[viewer_index]
 
+        # Check if shift is pressed for erase functionality
+        modifiers = QApplication.keyboardModifiers()
+        shift_pressed = bool(modifiers & Qt.KeyboardModifier.ShiftModifier)
+
         # Check if clicking near first point to close polygon
         if points and len(points) > 2:
             first_point = points[0]
@@ -8170,10 +8226,15 @@ class MainWindow(QMainWindow):
                 pos.y() - first_point.y()
             ) ** 2
             if distance_squared < self.polygon_join_threshold**2:
+                if shift_pressed:
+                    logger.debug(
+                        "Shift+click polygon completion in multi-view - activating erase mode"
+                    )
+
                 # Use the multi-view mode handler for proper pairing logic
                 if hasattr(self, "multi_view_mode_handler"):
                     self.multi_view_mode_handler._finalize_multi_view_polygon(
-                        viewer_index
+                        viewer_index, erase_mode=shift_pressed
                     )
                 else:
                     self._finalize_multi_view_polygon(viewer_index)
@@ -8838,44 +8899,61 @@ class MainWindow(QMainWindow):
                 self.multi_view_bbox_rects[other_viewer_index] = None
                 self.multi_view_bbox_starts[other_viewer_index] = None
 
-        # Only create segment if minimum size is met (2x2 pixels) and from first viewer to avoid duplication
-        if (
-            width >= 2
-            and height >= 2
-            and (viewer_index == 0 or self.multi_view_bbox_starts[0] is None)
-        ):
-            # Convert bbox to polygon vertices
-            vertices = [
-                [x, y],
-                [x + width, y],
-                [x + width, y + height],
-                [x, y + height],
-            ]
+        # Only process if minimum size is met (2x2 pixels)
+        if width >= 2 and height >= 2:
+            # Check if shift is pressed for erase functionality
+            modifiers = QApplication.keyboardModifiers()
+            shift_pressed = bool(modifiers & Qt.KeyboardModifier.ShiftModifier)
 
-            # Create segment with views structure for all viewers (like polygon mode)
-            config = self._get_multi_view_config()
-            num_viewers = config["num_viewers"]
+            if shift_pressed:
+                logger.debug("Shift+bbox release in multi-view - activating erase mode")
+                # Create rectangle for erase operation
+                rect = QRectF(x, y, width, height)
+                # Use the multi-view mode handler for erase
+                if (
+                    hasattr(self, "multi_view_mode_handler")
+                    and self.multi_view_mode_handler
+                ):
+                    self.multi_view_mode_handler._handle_shift_bbox_erase(
+                        rect, viewer_index
+                    )
+            else:
+                # Only create normal segment from first viewer to avoid duplication
+                if viewer_index == 0 or self.multi_view_bbox_starts[0] is None:
+                    # Convert bbox to polygon vertices
+                    vertices = [
+                        [x, y],
+                        [x + width, y],
+                        [x + width, y + height],
+                        [x, y + height],
+                    ]
 
-            paired_segment = {"type": "Polygon", "views": {}}
+                    # Create segment with views structure for all viewers (like polygon mode)
+                    config = self._get_multi_view_config()
+                    num_viewers = config["num_viewers"]
 
-            # Add view data for all viewers with same coordinates
-            for viewer_idx in range(num_viewers):
-                paired_segment["views"][viewer_idx] = {
-                    "vertices": vertices.copy(),
-                    "mask": None,
-                }
+                    paired_segment = {"type": "Polygon", "views": {}}
 
-            # Add to segment manager
-            self.segment_manager.add_segment(paired_segment)
+                    # Add view data for all viewers with same coordinates
+                    for viewer_idx in range(num_viewers):
+                        paired_segment["views"][viewer_idx] = {
+                            "vertices": vertices.copy(),
+                            "mask": None,
+                        }
 
-            # Record for undo
-            self.action_history.append({"type": "add_segment", "data": paired_segment})
+                    # Add to segment manager
+                    self.segment_manager.add_segment(paired_segment)
 
-            # Clear redo history when a new action is performed
-            self.redo_history.clear()
+                    # Record for undo
+                    self.action_history.append(
+                        {"type": "add_segment", "data": paired_segment}
+                    )
 
-            # Update lists
-            self._update_all_lists()
+                    # Clear redo history when a new action is performed
+                    self.redo_history.clear()
+
+                    # Update lists
+                    self._update_all_lists()
 
         # Clean up both viewers
         self.multi_view_bbox_starts[viewer_index] = None

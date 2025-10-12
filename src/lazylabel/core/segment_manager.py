@@ -260,13 +260,17 @@ class SegmentManager:
         return None
 
     def erase_segments_with_shape(
-        self, erase_vertices: list[QPointF], image_size: tuple[int, int]
+        self,
+        erase_vertices: list[QPointF],
+        image_size: tuple[int, int],
+        viewer_index: int | None = None,
     ) -> list[int]:
         """Erase segments that overlap with the given shape.
 
         Args:
             erase_vertices: Vertices of the erase shape
             image_size: Size of the image (height, width)
+            viewer_index: Viewer index for multi-view segments (optional)
 
         Returns:
             List of indices of segments that were removed
@@ -279,16 +283,20 @@ class SegmentManager:
         if erase_mask is None:
             return [], []
 
-        return self.erase_segments_with_mask(erase_mask, image_size)
+        return self.erase_segments_with_mask(erase_mask, image_size, viewer_index)
 
     def erase_segments_with_mask(
-        self, erase_mask: np.ndarray, image_size: tuple[int, int]
+        self,
+        erase_mask: np.ndarray,
+        image_size: tuple[int, int],
+        viewer_index: int | None = None,
     ) -> list[int]:
         """Erase overlapping pixels from segments that overlap with the given mask.
 
         Args:
             erase_mask: Binary mask indicating pixels to erase
             image_size: Size of the image (height, width)
+            viewer_index: Viewer index for multi-view segments (optional)
 
         Returns:
             List of indices of segments that were modified or removed
@@ -296,25 +304,207 @@ class SegmentManager:
         if erase_mask is None or not self.segments:
             return [], []
 
+        if viewer_index is not None:
+            # Handle multi-view case - only modify viewer-specific data
+            return self._erase_segments_multi_view_aware(
+                erase_mask, image_size, viewer_index
+            )
+        else:
+            # Handle single-view case (legacy)
+            return self._erase_segments_single_view(erase_mask, image_size)
+
+    def _erase_segments_multi_view_aware(
+        self, erase_mask: np.ndarray, image_size: tuple[int, int], viewer_index: int
+    ) -> list[int]:
+        """Erase segments with mirrored operation across all viewers in multi-view segments."""
         modified_indices = []
         segments_to_remove = []
         segments_to_add = []
-        removed_segments_data = []  # Store segment data for undo
+        removed_segments_data = []
 
-        # Iterate through all segments to find overlaps
+        # Process each segment
         for i, segment in enumerate(self.segments):
-            segment_mask = self._get_segment_mask(segment, image_size)
+            segment_mask = self._get_segment_mask(segment, image_size, viewer_index)
             if segment_mask is None:
                 continue
 
-            # Check if there's any overlap between erase mask and segment mask
+            # Ensure masks have the same dimensions before comparison
+            if segment_mask.shape != erase_mask.shape:
+                import cv2
+
+                segment_mask = cv2.resize(
+                    segment_mask.astype(np.uint8),
+                    (erase_mask.shape[1], erase_mask.shape[0]),
+                    interpolation=cv2.INTER_NEAREST,
+                ).astype(bool)
+
+            # Check for overlap
             overlap = np.logical_and(erase_mask, segment_mask)
             overlap_area = np.sum(overlap)
 
             if overlap_area > 0:
                 modified_indices.append(i)
+                removed_segments_data.append({"index": i, "segment": segment.copy()})
 
-                # Store original segment data before modification
+                # Always mark for removal - we'll recreate what's needed
+                segments_to_remove.append(i)
+
+                # Create new mask by removing erased pixels
+                new_mask = np.logical_and(segment_mask, ~erase_mask)
+                remaining_area = np.sum(new_mask)
+
+                if "views" in segment:
+                    # Multi-view segment: mirror erase operation to ALL viewers
+                    if remaining_area > 0:
+                        # Some pixels remain: create split segments for ALL viewers
+                        split_segments = self._split_mask_into_components(
+                            new_mask, segment.get("class_id"), segment, viewer_index
+                        )
+
+                        # Apply the same erase pattern to all viewers' data
+                        for split_segment in split_segments:
+                            final_segment = split_segment.copy()
+
+                            # Mirror the erase operation to all other viewers
+                            mirrored_views = {}
+                            for view_id, view_data in segment["views"].items():
+                                if view_id == viewer_index:
+                                    # Keep the erased result for the source viewer
+                                    mirrored_views[view_id] = final_segment["views"][
+                                        view_id
+                                    ]
+                                else:
+                                    # Apply same erase pattern to other viewers
+                                    mirrored_views[view_id] = self._apply_erase_to_view(
+                                        view_data, erase_mask, image_size
+                                    )
+
+                            final_segment["views"] = mirrored_views
+                            segments_to_add.append(final_segment)
+                    # If remaining_area == 0, all pixels erased - segment completely removed from all viewers
+                else:
+                    # Single-view segment: handle normally
+                    if remaining_area > 0:
+                        split_segments = self._split_mask_into_components(
+                            new_mask, segment.get("class_id"), segment, None
+                        )
+                        segments_to_add.extend(split_segments)
+                    # If remaining_area == 0, segment is completely removed
+
+        # Remove affected segments
+        for i in sorted(segments_to_remove, reverse=True):
+            del self.segments[i]
+
+        # Add new/modified segments
+        for new_segment in segments_to_add:
+            self.segments.append(new_segment)
+
+        if modified_indices:
+            self._update_next_class_id()
+
+        return modified_indices, removed_segments_data
+
+    def _apply_erase_to_view(
+        self, view_data: dict, erase_mask: np.ndarray, image_size: tuple[int, int]
+    ) -> dict:
+        """Apply the same erase pattern to another viewer's data."""
+        if "vertices" in view_data and view_data["vertices"]:
+            # For polygon-based segments, create a mask and apply erase
+            import cv2
+
+            # Convert vertices to QPointF format for rasterize_polygon
+            from PyQt6.QtCore import QPointF
+
+            vertices_as_points = [QPointF(v[0], v[1]) for v in view_data["vertices"]]
+            view_mask = self.rasterize_polygon(vertices_as_points, image_size)
+            if view_mask is None:
+                return view_data  # Return original if mask creation fails
+
+            # Ensure mask dimensions match
+            if view_mask.shape != erase_mask.shape:
+                view_mask = cv2.resize(
+                    view_mask.astype(np.uint8),
+                    (erase_mask.shape[1], erase_mask.shape[0]),
+                    interpolation=cv2.INTER_NEAREST,
+                ).astype(bool)
+
+            # Apply erase operation
+            new_mask = np.logical_and(view_mask, ~erase_mask)
+
+            # Convert back to vertices if any pixels remain
+            if np.sum(new_mask) > 0:
+                # Find contours and convert back to vertices
+                contours, _ = cv2.findContours(
+                    new_mask.astype(np.uint8),
+                    cv2.RETR_EXTERNAL,
+                    cv2.CHAIN_APPROX_SIMPLE,
+                )
+                if contours:
+                    # Use the largest contour
+                    largest_contour = max(contours, key=cv2.contourArea)
+                    new_vertices = [
+                        [int(point[0][0]), int(point[0][1])]
+                        for point in largest_contour
+                    ]
+                    return {"vertices": new_vertices, "mask": None}
+
+            # If no pixels remain, return empty
+            return {"vertices": [], "mask": None}
+
+        elif "mask" in view_data and view_data["mask"] is not None:
+            # For mask-based segments, apply erase directly
+            import cv2
+
+            view_mask = view_data["mask"]
+
+            # Ensure mask dimensions match
+            if view_mask.shape != erase_mask.shape:
+                view_mask = cv2.resize(
+                    view_mask.astype(np.uint8),
+                    (erase_mask.shape[1], erase_mask.shape[0]),
+                    interpolation=cv2.INTER_NEAREST,
+                ).astype(bool)
+
+            # Apply erase operation
+            new_mask = np.logical_and(view_mask, ~erase_mask)
+            return {"vertices": None, "mask": new_mask}
+
+        # Fallback: return original data if we can't process it
+        return view_data
+
+    def _erase_segments_single_view(
+        self, erase_mask: np.ndarray, image_size: tuple[int, int]
+    ) -> list[int]:
+        """Handle single-view erase (legacy behavior)."""
+        modified_indices = []
+        segments_to_remove = []
+        segments_to_add = []
+        removed_segments_data = []
+
+        # Iterate through all segments to find overlaps
+        for i, segment in enumerate(self.segments):
+            segment_mask = self._get_segment_mask(
+                segment, image_size, viewer_index=None
+            )
+            if segment_mask is None:
+                continue
+
+            # Ensure masks have the same dimensions before comparison
+            if segment_mask.shape != erase_mask.shape:
+                import cv2
+
+                segment_mask = cv2.resize(
+                    segment_mask.astype(np.uint8),
+                    (erase_mask.shape[1], erase_mask.shape[0]),
+                    interpolation=cv2.INTER_NEAREST,
+                ).astype(bool)
+
+            # Check for overlap
+            overlap = np.logical_and(erase_mask, segment_mask)
+            overlap_area = np.sum(overlap)
+
+            if overlap_area > 0:
+                modified_indices.append(i)
                 removed_segments_data.append({"index": i, "segment": segment.copy()})
 
                 # Create new mask by removing erased pixels
@@ -326,9 +516,8 @@ class SegmentManager:
                     segments_to_remove.append(i)
                 else:
                     # Some pixels remain, check for disconnected components
-                    # Use connected component analysis to split into separate segments
                     connected_segments = self._split_mask_into_components(
-                        new_mask, segment.get("class_id")
+                        new_mask, segment.get("class_id"), segment, viewer_index=None
                     )
 
                     # Mark original for removal and add all connected components
@@ -349,17 +538,36 @@ class SegmentManager:
         return modified_indices, removed_segments_data
 
     def _get_segment_mask(
-        self, segment: dict[str, Any], image_size: tuple[int, int]
+        self,
+        segment: dict[str, Any],
+        image_size: tuple[int, int],
+        viewer_index: int | None = None,
     ) -> np.ndarray | None:
         """Get binary mask for a segment.
 
         Args:
             segment: Segment data
             image_size: Size of the image (height, width)
+            viewer_index: Viewer index for multi-view segments (optional)
 
         Returns:
             Binary mask for the segment or None if unable to create
         """
+        # Handle multi-view format with "views" structure
+        if "views" in segment and viewer_index is not None:
+            if viewer_index not in segment["views"]:
+                return None  # This segment doesn't exist in this viewer
+
+            view_data = segment["views"][viewer_index]
+            if segment["type"] == "Polygon" and "vertices" in view_data:
+                # Convert stored list of lists back to QPointF objects for rasterization
+                qpoints = [QPointF(p[0], p[1]) for p in view_data["vertices"]]
+                return self.rasterize_polygon(qpoints, image_size)
+            elif "mask" in view_data and view_data["mask"] is not None:
+                return view_data["mask"]
+            return None
+
+        # Handle legacy single-view format
         if segment["type"] == "Polygon" and "vertices" in segment:
             # Convert stored list of lists back to QPointF objects for rasterization
             qpoints = [QPointF(p[0], p[1]) for p in segment["vertices"]]
@@ -369,13 +577,19 @@ class SegmentManager:
         return None
 
     def _split_mask_into_components(
-        self, mask: np.ndarray, class_id: int | None
+        self,
+        mask: np.ndarray,
+        class_id: int | None,
+        original_segment: dict[str, Any] | None = None,
+        viewer_index: int | None = None,
     ) -> list[dict[str, Any]]:
         """Split a mask into separate segments for each connected component.
 
         Args:
             mask: Binary mask to split
             class_id: Class ID to assign to all resulting segments
+            original_segment: Original segment being split (for multi-view format)
+            viewer_index: Viewer index for multi-view segments
 
         Returns:
             List of segment dictionaries, one for each connected component
@@ -397,12 +611,31 @@ class SegmentManager:
 
             # Only create segment if component has significant size
             if np.sum(component_mask) > 10:  # Minimum 10 pixels
-                new_segment = {
-                    "type": "AI",  # Convert to mask-based segment
-                    "mask": component_mask,
-                    "vertices": None,
-                    "class_id": class_id,
-                }
+                # Handle multi-view format
+                if (
+                    original_segment
+                    and "views" in original_segment
+                    and viewer_index is not None
+                ):
+                    # Create multi-view segment with same structure as original
+                    new_segment = {
+                        "type": "AI",  # Convert to mask-based segment
+                        "class_id": class_id,
+                        "views": {
+                            viewer_index: {
+                                "mask": component_mask,
+                                "vertices": None,
+                            }
+                        },
+                    }
+                else:
+                    # Legacy single-view format
+                    new_segment = {
+                        "type": "AI",  # Convert to mask-based segment
+                        "mask": component_mask,
+                        "vertices": None,
+                        "class_id": class_id,
+                    }
                 segments.append(new_segment)
 
         return segments
