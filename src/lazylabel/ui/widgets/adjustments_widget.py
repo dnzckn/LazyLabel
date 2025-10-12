@@ -24,6 +24,9 @@ class AdjustmentsWidget(QWidget):
     gamma_changed = pyqtSignal(int)
     reset_requested = pyqtSignal()
     image_adjustment_changed = pyqtSignal()
+    # New signals for tracking slider drag state
+    slider_drag_started = pyqtSignal()
+    slider_drag_finished = pyqtSignal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -148,16 +151,19 @@ class AdjustmentsWidget(QWidget):
         self.join_slider.valueChanged.connect(self._on_join_slider_changed)
         self.join_edit.editingFinished.connect(self._on_join_edit_finished)
         self.brightness_slider.valueChanged.connect(self._on_brightness_slider_changed)
+        self.brightness_slider.sliderPressed.connect(self.slider_drag_started)
         self.brightness_slider.sliderReleased.connect(
             self._on_image_adjustment_slider_released
         )
         self.brightness_edit.editingFinished.connect(self._on_brightness_edit_finished)
         self.contrast_slider.valueChanged.connect(self._on_contrast_slider_changed)
+        self.contrast_slider.sliderPressed.connect(self.slider_drag_started)
         self.contrast_slider.sliderReleased.connect(
             self._on_image_adjustment_slider_released
         )
         self.contrast_edit.editingFinished.connect(self._on_contrast_edit_finished)
         self.gamma_slider.valueChanged.connect(self._on_gamma_slider_changed)
+        self.gamma_slider.sliderPressed.connect(self.slider_drag_started)
         self.gamma_slider.sliderReleased.connect(
             self._on_image_adjustment_slider_released
         )
@@ -256,6 +262,7 @@ class AdjustmentsWidget(QWidget):
 
     def _on_image_adjustment_slider_released(self):
         """Emit signal when any image adjustment slider is released."""
+        self.slider_drag_finished.emit()
         self.image_adjustment_changed.emit()
 
     def get_annotation_size(self):

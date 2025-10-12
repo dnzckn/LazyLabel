@@ -236,8 +236,23 @@ class MainWindow(QMainWindow):
         self.sam_update_delay = 500  # 500ms delay for regular value changes
         self.drag_finish_delay = 150  # 150ms delay when drag finishes (more responsive)
         self.any_slider_dragging = False  # Track if any slider is being dragged
+        self.any_channel_threshold_dragging = (
+            False  # Track if channel threshold slider is being dragged
+        )
         self.sam_is_dirty = False  # Track if SAM needs updating
         self.sam_is_updating = False  # Track if SAM is currently updating
+
+        # Throttling timer for smooth slider updates during dragging
+        self.slider_throttle_timer = QTimer()
+        self.slider_throttle_timer.setSingleShot(True)
+        self.slider_throttle_timer.timeout.connect(self._apply_throttled_slider_updates)
+        self.slider_throttle_interval = (
+            50  # 50ms = 20fps, good balance of smoothness and performance
+        )
+        self.pending_slider_update = False  # Track if we have pending slider updates
+        self.pending_channel_threshold_update = (
+            False  # Track if we have pending channel threshold updates
+        )
 
         # SAM update threading for better responsiveness
         self.sam_worker_thread = None
@@ -703,6 +718,9 @@ class MainWindow(QMainWindow):
         self.control_panel.image_adjustment_changed.connect(
             self._handle_image_adjustment_changed
         )
+        # Connect slider drag tracking signals
+        self.control_panel.slider_drag_started.connect(self._on_slider_drag_started)
+        self.control_panel.slider_drag_finished.connect(self._on_slider_drag_finished)
 
         # Border crop connections
         self.control_panel.crop_draw_requested.connect(self._start_crop_drawing)
@@ -712,6 +730,12 @@ class MainWindow(QMainWindow):
         # Channel threshold connections
         self.control_panel.channel_threshold_changed.connect(
             self._handle_channel_threshold_changed
+        )
+        self.control_panel.channel_threshold_drag_started.connect(
+            self._on_channel_threshold_drag_started
+        )
+        self.control_panel.channel_threshold_drag_finished.connect(
+            self._on_channel_threshold_drag_finished
         )
 
         # FFT threshold connections
@@ -1069,23 +1093,61 @@ class MainWindow(QMainWindow):
         self.fragment_threshold = value
         self.settings.fragment_threshold = value
 
+    def _on_slider_drag_started(self):
+        """Handle slider drag start."""
+        self.any_slider_dragging = True
+
+    def _on_slider_drag_finished(self):
+        """Handle slider drag finish."""
+        self.any_slider_dragging = False
+        # Apply any pending updates immediately when drag finishes
+        if self.pending_slider_update:
+            self.slider_throttle_timer.stop()
+            self.pending_slider_update = False
+            self._apply_image_adjustments_to_all_viewers()
+
     def _set_brightness(self, value):
         """Set image brightness."""
         self.brightness = value
         self.settings.brightness = value
-        self._apply_image_adjustments_to_all_viewers()
+        self._request_slider_update()
 
     def _set_contrast(self, value):
         """Set image contrast."""
         self.contrast = value
         self.settings.contrast = value
-        self._apply_image_adjustments_to_all_viewers()
+        self._request_slider_update()
 
     def _set_gamma(self, value):
         """Set image gamma."""
         self.gamma = value / 100.0  # Convert slider value to 0.01-2.0 range
         self.settings.gamma = self.gamma
-        self._apply_image_adjustments_to_all_viewers()
+        self._request_slider_update()
+
+    def _request_slider_update(self):
+        """Request a slider update with throttling for smooth performance."""
+        # If operate_on_view is ON and dragging: defer until drag ends
+        if self.settings.operate_on_view and self.any_slider_dragging:
+            return
+
+        # If dragging (operate_on_view is OFF): use throttling for smooth updates
+        if self.any_slider_dragging:
+            self.pending_slider_update = True
+            if not self.slider_throttle_timer.isActive():
+                self.slider_throttle_timer.start(self.slider_throttle_interval)
+        else:
+            # Not dragging: apply immediately
+            self._apply_image_adjustments_to_all_viewers()
+
+    def _apply_throttled_slider_updates(self):
+        """Apply pending slider updates (called by throttle timer)."""
+        if self.pending_slider_update:
+            self.pending_slider_update = False
+            self._apply_image_adjustments_to_all_viewers()
+
+        if self.pending_channel_threshold_update:
+            self.pending_channel_threshold_update = False
+            self._apply_channel_threshold_now()
 
     def _apply_image_adjustments_to_all_viewers(self):
         """Apply current image adjustments to all active viewers."""
@@ -1167,35 +1229,40 @@ class MainWindow(QMainWindow):
     def _handle_image_adjustment_changed(self):
         """Handle changes in image adjustments (brightness, contrast, gamma)."""
         # Always apply brightness/contrast/gamma to display regardless of operate_on_view setting
-        # This ensures live updating and consistent behavior with other sliders
+        # This ensures changes are applied when slider is released (especially important in operate_on_view mode)
+
+        # First, always apply the image adjustments to ensure the display is updated
+        self._apply_image_adjustments_to_all_viewers()
 
         # Handle multi-view mode
         if self.view_mode == "multi":
-            # Check if any multi-view images are loaded
-            if hasattr(self, "multi_view_images") and any(self.multi_view_images):
-                self._apply_multi_view_image_processing_fast()
+            # Check if any multi-view images are loaded and update SAM models if operate_on_view is enabled
+            if (
+                hasattr(self, "multi_view_images")
+                and any(self.multi_view_images)
+                and self.settings.operate_on_view
+                and hasattr(self, "multi_view_models")
+            ):
+                changed_indices = []
+                for i in range(len(self.multi_view_models)):
+                    if (
+                        self.multi_view_images[i]
+                        and i < len(self.multi_view_models)
+                        and self.multi_view_models[i] is not None
+                    ):
+                        changed_indices.append(i)
 
-                # Additionally update SAM models if operate_on_view is enabled
-                if self.settings.operate_on_view and hasattr(self, "multi_view_models"):
-                    changed_indices = []
-                    for i in range(len(self.multi_view_models)):
-                        if (
-                            self.multi_view_images[i]
-                            and i < len(self.multi_view_models)
-                            and self.multi_view_models[i] is not None
-                        ):
-                            changed_indices.append(i)
-
-                    if changed_indices:
-                        self._fast_update_multi_view_images(changed_indices)
+                if changed_indices:
+                    self._fast_update_multi_view_images(changed_indices)
             return
 
-        # Handle single-view mode
+        # Handle single-view mode - update SAM model if in operate_on_view mode
         if not self.current_image_path:
             return
 
-        # Always update display immediately for responsive UI
-        self._apply_image_processing_fast()
+        # Update SAM model if in operate_on_view mode
+        if self.settings.operate_on_view:
+            self._apply_image_processing_fast()
 
         # Additionally mark SAM as dirty if operate_on_view is enabled
         if self.settings.operate_on_view:
@@ -5045,15 +5112,44 @@ class MainWindow(QMainWindow):
 
     # Additional methods for new features
 
+    def _on_channel_threshold_drag_started(self):
+        """Handle channel threshold drag start."""
+        self.any_channel_threshold_dragging = True
+
+    def _on_channel_threshold_drag_finished(self):
+        """Handle channel threshold drag finish."""
+        self.any_channel_threshold_dragging = False
+        # Apply any pending updates immediately when drag finishes
+        if self.pending_channel_threshold_update:
+            self.slider_throttle_timer.stop()
+            self.pending_channel_threshold_update = False
+        # Always apply changes when drag finishes
+        self._apply_channel_threshold_now()
+
     def _handle_channel_threshold_changed(self):
         """Handle changes in channel thresholding - optimized to avoid unnecessary work."""
+        # If operate_on_view is ON and dragging: defer until drag ends
+        if self.settings.operate_on_view and self.any_channel_threshold_dragging:
+            return
+
+        # If dragging (operate_on_view is OFF): use throttling for smooth updates
+        if self.any_channel_threshold_dragging:
+            self.pending_channel_threshold_update = True
+            if not self.slider_throttle_timer.isActive():
+                self.slider_throttle_timer.start(self.slider_throttle_interval)
+        else:
+            # Not dragging: apply immediately
+            self._apply_channel_threshold_now()
+
+    def _apply_channel_threshold_now(self):
+        """Apply channel threshold changes immediately (used by throttling)."""
         # Handle multi-view mode
         if self.view_mode == "multi":
             # Check if any multi-view images are loaded
             if hasattr(self, "multi_view_images") and any(self.multi_view_images):
                 self._apply_multi_view_image_processing_fast()
 
-                # Use fast updates for multi-view SAM models instead of marking dirty
+                # Update SAM models if operate_on_view is enabled
                 if self.settings.operate_on_view:
                     changed_indices = []
                     for i in range(len(self.multi_view_images)):
@@ -5072,12 +5168,9 @@ class MainWindow(QMainWindow):
         if not self.current_image_path:
             return
 
-        # Always update visuals immediately for responsive UI
-        # Use combined method to handle both channel and FFT thresholding
         self._apply_image_processing_fast()
 
-        # Mark SAM as dirty instead of updating immediately
-        # Only update SAM when user actually needs it (enters SAM mode)
+        # Update SAM model if operate_on_view is enabled
         if self.settings.operate_on_view:
             self._mark_sam_dirty()
 
