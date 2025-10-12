@@ -449,10 +449,9 @@ class ChannelThresholdWidget(QWidget):
 
     def _on_slider_changed(self):
         """Handle slider value change."""
-        # Only emit thresholdChanged if not currently dragging
-        # This prevents expensive calculations during drag operations
-        if not self.is_dragging:
-            self.thresholdChanged.emit()
+        # Always emit thresholdChanged for real-time updates
+        # The main window will decide whether to apply changes based on operate_on_view mode
+        self.thresholdChanged.emit()
 
     def _on_drag_started(self):
         """Handle drag start - suppress expensive calculations during drag."""
