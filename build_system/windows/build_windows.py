@@ -24,10 +24,11 @@ AUTHOR = "Deniz N. Cakan"
 DESCRIPTION = "AI-Assisted Image Segmentation for Machine Learning"
 
 # Paths
-ROOT_DIR = Path(__file__).parent
+SCRIPT_DIR = Path(__file__).parent
+ROOT_DIR = SCRIPT_DIR.parent.parent  # Go up to project root
 DIST_DIR = ROOT_DIR / "dist"
 BUILD_DIR = ROOT_DIR / "build"
-INSTALLER_DIR = ROOT_DIR / "installer"
+INSTALLER_DIR = SCRIPT_DIR / "installer"
 
 
 def print_banner(text):
@@ -122,7 +123,7 @@ VSVersionInfo(
 )
 """
 
-    version_file = ROOT_DIR / "version_info.txt"
+    version_file = SCRIPT_DIR / "version_info.txt"
     with open(version_file, "w", encoding="utf-8") as f:
         f.write(version_info)
 
@@ -148,11 +149,12 @@ def build_executable():
     """Build the executable using PyInstaller."""
     print_banner("Building Executable with PyInstaller")
 
+    spec_file = SCRIPT_DIR / "lazylabel.spec"
     cmd = [
         sys.executable,
         "-m",
         "PyInstaller",
-        "lazylabel.spec",
+        str(spec_file),
         "--clean",
         "--noconfirm",
     ]

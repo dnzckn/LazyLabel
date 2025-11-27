@@ -6,7 +6,12 @@ Creates a standalone Windows application with all dependencies bundled.
 
 import sys
 import os
+from pathlib import Path
 from PyInstaller.utils.hooks import collect_data_files, collect_submodules
+
+# Adjust paths - script is in build_system/windows, project root is two levels up
+SCRIPT_DIR = Path(__file__).parent
+ROOT_DIR = SCRIPT_DIR.parent.parent
 
 block_cipher = None
 
@@ -15,15 +20,15 @@ sam_datas = collect_data_files('segment_anything')
 sam2_datas = collect_data_files('sam2', include_py_files=True)
 pyqt_datas = collect_data_files('PyQt6')
 
-# Collect model files
+# Collect model files (using absolute paths from project root)
 model_files = [
-    ('src/lazylabel/models/sam_vit_h_4b8939.pth', 'models'),
-    ('src/lazylabel/models/sam2.1_hiera_large.pt', 'models'),
+    (str(ROOT_DIR / 'src/lazylabel/models/sam_vit_h_4b8939.pth'), 'models'),
+    (str(ROOT_DIR / 'src/lazylabel/models/sam2.1_hiera_large.pt'), 'models'),
 ]
 
 # Collect demo pictures and other resources
 demo_datas = [
-    ('src/lazylabel/demo_pictures', 'demo_pictures'),
+    (str(ROOT_DIR / 'src/lazylabel/demo_pictures'), 'demo_pictures'),
 ]
 
 # Combine all data files
@@ -78,7 +83,7 @@ hiddenimports += collect_submodules('torch')
 hiddenimports += collect_submodules('sam2')
 
 a = Analysis(
-    ['src/lazylabel/main.py'],
+    [str(ROOT_DIR / 'src/lazylabel/main.py')],
     pathex=[],
     binaries=[],
     datas=datas,
@@ -121,8 +126,8 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon='src/lazylabel/demo_pictures/logo2.png',  # Application icon
-    version='version_info.txt',  # Version information
+    icon=str(ROOT_DIR / 'src/lazylabel/demo_pictures/logo2.png'),  # Application icon
+    version=str(SCRIPT_DIR / 'version_info.txt'),  # Version information
 )
 
 coll = COLLECT(
