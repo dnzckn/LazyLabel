@@ -9,9 +9,9 @@ import os
 from pathlib import Path
 from PyInstaller.utils.hooks import collect_data_files, collect_submodules
 
-# Adjust paths - script is in build_system/windows, project root is two levels up
-SCRIPT_DIR = Path(__file__).parent
-ROOT_DIR = SCRIPT_DIR.parent.parent
+# SPECPATH is provided by PyInstaller - it's the directory containing this spec file
+SCRIPT_DIR = Path(SPECPATH)
+ROOT_DIR = SCRIPT_DIR.parent.parent  # Go up to project root
 
 block_cipher = None
 
