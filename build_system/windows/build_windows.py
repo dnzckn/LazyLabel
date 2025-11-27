@@ -19,7 +19,7 @@ from pathlib import Path
 
 # Build configuration
 APP_NAME = "LazyLabel"
-VERSION = "1.3.11"
+VERSION = "1.4.0"
 AUTHOR = "Deniz N. Cakan"
 DESCRIPTION = "AI-Assisted Image Segmentation for Machine Learning"
 
