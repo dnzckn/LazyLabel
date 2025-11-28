@@ -139,9 +139,7 @@ def test_auto_save_on_image_navigation_when_enabled(main_window, qtbot):
             patch("numpy.array") as mock_np_array,
         ):
             # Mock numpy array creation to return proper shaped data
-            mock_np_array.return_value = np.random.randint(
-                0, 256, (100, 100, 4), dtype=np.uint8
-            )
+            mock_np_array.return_value = np.zeros((100, 100, 4), dtype=np.uint8)
 
             # Create a valid QModelIndex with proper parent
             test_index = MagicMock()
