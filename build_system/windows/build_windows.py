@@ -175,6 +175,10 @@ def create_installer():
     """Create NSIS installer."""
     print_banner("Creating Windows Installer")
 
+    print("⚠ NOTE: NSIS has limitations with large files (>2GB)")
+    print("  For this 7-8GB application, ZIP distribution is recommended")
+    print("  Attempting NSIS installer creation anyway...\n")
+
     # Check if NSIS is available
     nsis_paths = [
         r"C:\Program Files (x86)\NSIS\makensis.exe",
@@ -239,8 +243,14 @@ def print_summary():
         print("\n  2. Distribute the installer:")
         print(f"     {installer_path}")
     else:
-        print("\n  2. Zip and distribute the folder:")
+        print("\n  2. Create a ZIP for distribution:")
+        print(
+            f"     Compress-Archive -Path '{DIST_DIR / APP_NAME}' -DestinationPath 'LazyLabel-{VERSION}-Windows.zip'"
+        )
+        print("\n     Or use 7-Zip/WinRAR to compress:")
         print(f"     {DIST_DIR / APP_NAME}")
+        print("\n     Note: NSIS installer doesn't support files >2GB")
+        print("     ZIP distribution is recommended for large applications")
 
     print("\n  3. Users can run offline - no internet required!")
     print("\n")
