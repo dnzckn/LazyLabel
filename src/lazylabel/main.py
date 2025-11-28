@@ -5,8 +5,8 @@ import sys
 import qdarktheme
 from PyQt6.QtWidgets import QApplication
 
-from .ui.main_window import MainWindow
-from .utils.logger import logger
+from lazylabel.ui.main_window import MainWindow
+from lazylabel.utils.logger import logger
 
 
 def main():
