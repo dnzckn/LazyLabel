@@ -108,7 +108,6 @@ a = Analysis(
         'IPython',
         'sphinx',
         'pytest',
-        'setuptools',
     ],
     win_no_prefer_redirects=False,
     win_private_assemblies=False,
@@ -134,7 +133,7 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=str(ROOT_DIR / 'src/lazylabel/demo_pictures/logo2.png'),  # Application icon
+    icon=str(ROOT_DIR / 'src/lazylabel/demo_pictures/logo2.ico'),  # Application icon
     version=str(SCRIPT_DIR / 'version_info.txt'),  # Version information
 )
 
