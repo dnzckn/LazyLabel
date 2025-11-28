@@ -6,6 +6,7 @@
 *.dll
 *.so
 *.dylib
+*.txt
 src/lazylabel/.DS_Store
 .DS_Store
 /src/lazylabel.egg-info
@@ -18,7 +19,6 @@ build_system/windows/build/
 *.json
 
 # Build system artifacts (exclude executables, keep source)
-build_system/windows/version_info.txt
 build_system/windows/installer/*.exe
 *.spec.bak
 
