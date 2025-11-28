@@ -163,6 +163,26 @@ Note: SAM 1.0 models are automatically downloaded on first use.
 
 ---
 
+## Building Windows Executable
+
+Create a standalone Windows executable with bundled models (no Python required):
+
+**Requirements:**
+- Windows (native, not WSL)
+- Python 3.10+
+- PyInstaller: `pip install pyinstaller`
+
+**Build steps:**
+```bash
+git clone https://github.com/dnzckn/LazyLabel.git
+cd LazyLabel
+python build_system/windows/build_windows.py
+```
+
+The executable will be created in `dist/LazyLabel/`. The entire folder (~7-8GB) can be moved anywhere and runs offline.
+
+---
+
 ## Documentation
 
 - [Usage Manual](src/lazylabel/USAGE_MANUAL.md) - Comprehensive feature guide
