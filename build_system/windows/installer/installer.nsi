@@ -13,7 +13,7 @@
 
 ; Application name and version
 !define APP_NAME "LazyLabel"
-!define APP_VERSION "1.3.11"
+!define APP_VERSION "1.4.0"
 !define APP_PUBLISHER "Deniz N. Cakan"
 !define APP_URL "https://github.com/dnzckn/LazyLabel"
 !define APP_DESCRIPTION "AI-Assisted Image Segmentation for Machine Learning"
@@ -35,8 +35,8 @@ SetCompressor /SOLID lzma
 ; Interface Settings
 
 !define MUI_ABORTWARNING
-!define MUI_ICON "..\src\lazylabel\demo_pictures\logo2.png"
-!define MUI_UNICON "..\src\lazylabel\demo_pictures\logo2.png"
+!define MUI_ICON "..\src\lazylabel\demo_pictures\logo2.ico"
+!define MUI_UNICON "..\src\lazylabel\demo_pictures\logo2.ico"
 
 ; Welcome page
 !define MUI_WELCOMEPAGE_TITLE "Welcome to ${APP_NAME} Setup"
