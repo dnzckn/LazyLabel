@@ -71,6 +71,14 @@ hiddenimports = [
     'tqdm',
     'huggingface_hub',
     'pyqtdarktheme',
+
+    # pkg_resources and setuptools dependencies
+    'pkg_resources',
+    'setuptools',
+    'jaraco',
+    'jaraco.text',
+    'jaraco.functools',
+    'jaraco.context',
 ]
 
 # Add all PyQt6 submodules
