@@ -140,7 +140,13 @@ def clean_build_dirs():
     for dir_path in dirs_to_clean:
         if dir_path.exists():
             print(f"  Removing {dir_path}")
-            shutil.rmtree(dir_path)
+            try:
+                shutil.rmtree(dir_path)
+            except PermissionError as e:
+                print(f"\n❌ Error: Cannot delete {dir_path}")
+                print("   LazyLabel.exe or another file is still running or locked")
+                print("   Please close the application and try again\n")
+                raise SystemExit(1) from e
 
     print("✓ Build directories cleaned")
 
