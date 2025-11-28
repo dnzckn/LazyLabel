@@ -1,4 +1,5 @@
 import os
+import sys
 
 import cv2
 import numpy as np
@@ -93,26 +94,37 @@ class SamModel:
                 )
 
                 # Use models folder instead of cache folder
-                models_dir = os.path.dirname(__file__)  # Already in models directory
-                os.makedirs(models_dir, exist_ok=True)
+                # In PyInstaller bundle, use sys._MEIPASS
+                if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
+                    models_dir = os.path.join(sys._MEIPASS, "models")
+                else:
+                    models_dir = os.path.dirname(
+                        __file__
+                    )  # Already in models directory
+                    os.makedirs(models_dir, exist_ok=True)
+
                 model_path = os.path.join(models_dir, model_filename)
 
-                # Also check the old cache location and move it if it exists
-                old_cache_dir = os.path.join(
-                    os.path.expanduser("~"), ".cache", "lazylabel"
-                )
-                old_model_path = os.path.join(old_cache_dir, model_filename)
-
-                if os.path.exists(old_model_path) and not os.path.exists(model_path):
-                    logger.info(
-                        "Step 5/8: Moving existing model from cache to models folder..."
+                # Only try to download/move models if not in frozen bundle
+                if not getattr(sys, "frozen", False):
+                    # Also check the old cache location and move it if it exists
+                    old_cache_dir = os.path.join(
+                        os.path.expanduser("~"), ".cache", "lazylabel"
                     )
-                    import shutil
+                    old_model_path = os.path.join(old_cache_dir, model_filename)
 
-                    shutil.move(old_model_path, model_path)
-                elif not os.path.exists(model_path):
-                    # Download the model if it doesn't exist
-                    download_model(model_url, model_path)
+                    if os.path.exists(old_model_path) and not os.path.exists(
+                        model_path
+                    ):
+                        logger.info(
+                            "Step 5/8: Moving existing model from cache to models folder..."
+                        )
+                        import shutil
+
+                        shutil.move(old_model_path, model_path)
+                    elif not os.path.exists(model_path):
+                        # Download the model if it doesn't exist
+                        download_model(model_url, model_path)
 
                 logger.info(f"Step 5/8: Loading default SAM model from {model_path}...")
 
