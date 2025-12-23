@@ -36,6 +36,10 @@ datas = sam_datas + sam2_datas + pyqt_datas + model_files + demo_datas
 
 # Hidden imports that PyInstaller might miss
 hiddenimports = [
+    # LazyLabel package and version module
+    'lazylabel',
+    'lazylabel._version',
+
     # PyQt6 modules
     'PyQt6.QtCore',
     'PyQt6.QtGui',
@@ -92,7 +96,7 @@ hiddenimports += collect_submodules('sam2')
 
 a = Analysis(
     [str(ROOT_DIR / 'src/lazylabel/main.py')],
-    pathex=[],
+    pathex=[str(ROOT_DIR / 'src')],  # Add src to path for lazylabel package imports
     binaries=[],
     datas=datas,
     hiddenimports=hiddenimports,

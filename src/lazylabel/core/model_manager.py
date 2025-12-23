@@ -107,7 +107,9 @@ class ModelManager:
         try:
             # Clear existing model from memory
             if self.sam_model is not None:
-                del self.sam_model
+                old_model = self.sam_model
+                self.sam_model = None  # Set to None first to maintain attribute
+                del old_model
                 import torch
 
                 torch.cuda.empty_cache() if torch.cuda.is_available() else None
