@@ -27,6 +27,7 @@ class TestUndoRedo:
             window._show_notification = MagicMock()
             window._show_warning_notification = MagicMock()
             window._update_all_lists = MagicMock()
+            window._update_lists_incremental = MagicMock()
             window.right_panel = MagicMock()
             window.right_panel.clear_selections = MagicMock()
             window.segment_manager = MagicMock()
@@ -86,7 +87,8 @@ class TestUndoRedo:
         mock_main_window._show_notification.assert_called_once_with(
             "Redid: Add Segment"
         )
-        mock_main_window._update_all_lists.assert_called()
+        # Redo now uses incremental update for better performance
+        mock_main_window._update_lists_incremental.assert_called()
 
     def test_undo_redo_move_vertex(self, mock_main_window):
         """Test undoing and redoing move vertex action."""

@@ -34,17 +34,7 @@ def test_cuda_synchronization_in_update_worker():
     with (
         patch("torch.cuda.is_available", return_value=True) as mock_cuda_available,
         patch("torch.cuda.synchronize") as mock_sync,
-        patch(
-            "lazylabel.ui.workers.multi_view_sam_update_worker.QPixmap"
-        ) as mock_pixmap,
     ):
-        # Mock a valid pixmap
-        mock_pixmap_instance = MagicMock()
-        mock_pixmap_instance.isNull.return_value = False
-        mock_pixmap_instance.width.return_value = 100
-        mock_pixmap_instance.height.return_value = 100
-        mock_pixmap.return_value = mock_pixmap_instance
-
         # Run the worker
         worker.run()
 

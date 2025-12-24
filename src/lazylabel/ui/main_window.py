@@ -2332,6 +2332,9 @@ class MainWindow(QMainWindow):
             self._update_class_list()
             self._update_segment_table()
             self._update_class_filter()
+            # Invalidate segment cache before displaying to ensure fresh pixmaps
+            # This is critical after erase operations where segment masks change
+            self._invalidate_segment_cache()
             self._display_all_segments()
             if self.mode == "edit":
                 if self.view_mode == "multi":
@@ -2527,6 +2530,45 @@ class MainWindow(QMainWindow):
             for key in highlight_keys_to_remove:
                 del self._highlight_pixmap_cache[key]
 
+    def _shift_segment_cache_after_deletion(self, deleted_index):
+        """Shift cache entries after a segment deletion to preserve cached pixmaps.
+
+        When a segment is deleted, all indices after it shift down by 1.
+        This method updates cache keys to reflect the new indices, avoiding
+        expensive pixmap regeneration.
+
+        Args:
+            deleted_index: The index of the segment that was deleted
+        """
+        # Shift segment pixmap cache
+        new_cache = {}
+        for key, value in self._segment_pixmap_cache.items():
+            segment_idx, viewer_idx, color_rgb, alpha = key
+            if segment_idx == deleted_index:
+                # Skip deleted segment's cache entries
+                continue
+            elif segment_idx > deleted_index:
+                # Shift index down by 1
+                new_key = (segment_idx - 1, viewer_idx, color_rgb, alpha)
+                new_cache[new_key] = value
+            else:
+                # Keep as-is
+                new_cache[key] = value
+        self._segment_pixmap_cache = new_cache
+
+        # Shift highlight pixmap cache
+        new_highlight_cache = {}
+        for key, value in self._highlight_pixmap_cache.items():
+            segment_idx, color_rgb, alpha = key
+            if segment_idx == deleted_index:
+                continue
+            elif segment_idx > deleted_index:
+                new_key = (segment_idx - 1, color_rgb, alpha)
+                new_highlight_cache[new_key] = value
+            else:
+                new_highlight_cache[key] = value
+        self._highlight_pixmap_cache = new_highlight_cache
+
     def _get_cached_highlight_pixmap(self, segment_index, mask, color_rgb, alpha=180):
         """Get or create a cached highlight pixmap.
 
@@ -2685,10 +2727,13 @@ class MainWindow(QMainWindow):
 
             # Handle segment display incrementally
             if removed_indices:
-                for idx in removed_indices:
+                # Sort in descending order to handle multiple deletions correctly
+                for idx in sorted(removed_indices, reverse=True):
                     self._remove_segment_from_display(idx)
-                # After removal, indices shift - need full refresh
-                self._display_all_segments()
+                    # Shift segment_items indices after deletion
+                    self._shift_segment_items_after_deletion(idx)
+                    # Shift cache entries to preserve cached pixmaps
+                    self._shift_segment_cache_after_deletion(idx)
             elif added_segment_index is not None:
                 # Just add the new segment
                 self._add_segment_to_display(added_segment_index)
@@ -2709,6 +2754,45 @@ class MainWindow(QMainWindow):
                     self._clear_edit_handles()
         finally:
             self._updating_lists = False
+
+    def _shift_segment_items_after_deletion(self, deleted_index):
+        """Shift segment_items dict keys after a segment deletion.
+
+        Args:
+            deleted_index: The index of the segment that was deleted
+        """
+        if self.view_mode == "multi":
+            # Shift multi-view segment items
+            if hasattr(self, "multi_view_segment_items"):
+                for viewer_idx in self.multi_view_segment_items:
+                    new_items = {}
+                    for seg_idx, items in self.multi_view_segment_items[
+                        viewer_idx
+                    ].items():
+                        if seg_idx > deleted_index:
+                            new_items[seg_idx - 1] = items
+                            # Update segment info on items
+                            for item in items:
+                                if hasattr(item, "set_segment_info"):
+                                    item.set_segment_info(seg_idx - 1, self)
+                        elif seg_idx < deleted_index:
+                            new_items[seg_idx] = items
+                        # Skip deleted_index entries
+                    self.multi_view_segment_items[viewer_idx] = new_items
+        else:
+            # Shift single-view segment items
+            new_segment_items = {}
+            for seg_idx, items in self.segment_items.items():
+                if seg_idx > deleted_index:
+                    new_segment_items[seg_idx - 1] = items
+                    # Update segment info on items
+                    for item in items:
+                        if hasattr(item, "set_segment_info"):
+                            item.set_segment_info(seg_idx - 1, self)
+                elif seg_idx < deleted_index:
+                    new_segment_items[seg_idx] = items
+                # Skip deleted_index entries (already removed from scene)
+            self.segment_items = new_segment_items
 
     def _display_all_multi_view_segments(self):
         """Display all segments in multi-view mode."""
@@ -3275,10 +3359,14 @@ class MainWindow(QMainWindow):
 
         self.polygon_points.clear()
         self.clear_all_points()
-        # Use incremental update for better performance
-        self._update_lists_incremental(
-            added_segment_index=len(self.segment_manager.segments) - 1
-        )
+
+        # Use appropriate update method based on operation type
+        if erase_mode:
+            self._update_all_lists()  # Erase modifies masks, need full refresh
+        else:
+            self._update_lists_incremental(
+                added_segment_index=len(self.segment_manager.segments) - 1
+            )
 
     def _get_segments_for_viewer(self, viewer_index):
         """Get segments that apply to a specific viewer."""
@@ -3649,11 +3737,9 @@ class MainWindow(QMainWindow):
                 self.segment_manager.delete_segments([segment_index])
                 self.right_panel.clear_selections()  # Clear selection to prevent phantom highlights
 
-                # Clear pixmap caches - indices get reused after deletion
-                self._segment_pixmap_cache.clear()
-                self._highlight_pixmap_cache.clear()
-
-                self._update_all_lists()
+                # Use incremental update with cache shifting for performance
+                # This avoids regenerating all pixmaps - just shifts indices
+                self._update_lists_incremental(removed_indices=[segment_index])
                 self._show_notification("Undid: Add Segment")
         elif action_type == "add_point":
             point_type = last_action.get("point_type")
@@ -3831,7 +3917,10 @@ class MainWindow(QMainWindow):
             if "segment_data" in last_action:
                 segment_data = last_action["segment_data"]
                 self.segment_manager.add_segment(segment_data)
-                self._update_all_lists()
+                # Use incremental update for better performance
+                self._update_lists_incremental(
+                    added_segment_index=len(self.segment_manager.segments) - 1
+                )
                 self._show_notification("Redid: Add Segment")
             else:
                 # If we don't have the segment data (shouldn't happen), we can't redo
@@ -4434,6 +4523,7 @@ class MainWindow(QMainWindow):
         # Reset SAM model state - force reload for new image
         self.current_sam_hash = None  # Invalidate SAM cache
         self.sam_is_dirty = True  # Mark SAM as needing update
+        self.sam_scale_factor = 1.0  # Reset scale factor to prevent coordinate mismatch
 
         # Clear cached image data to prevent using previous image
         self._cached_original_image = None
@@ -4765,7 +4855,14 @@ class MainWindow(QMainWindow):
 
                 # Clear redo history when a new action is performed
                 self.redo_history.clear()
-                self._update_all_lists()
+
+                # Use appropriate update method based on operation type
+                if shift_pressed:
+                    self._update_all_lists()  # Erase modifies masks, need full refresh
+                else:
+                    self._update_lists_incremental(
+                        added_segment_index=len(self.segment_manager.segments) - 1
+                    )
             event.accept()
             return
 
