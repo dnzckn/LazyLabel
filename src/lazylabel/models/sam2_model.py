@@ -383,11 +383,23 @@ class Sam2Model:
             return None
 
         try:
-            # SAM2ImagePredictor stores features differently than SAM1
+            # SAM2ImagePredictor stores _features as a dict of tensors
+            features = self.predictor._features
+            if features is None:
+                return None
+
+            # Clone each tensor in the features dict to CPU
+            if isinstance(features, dict):
+                features_copy = {
+                    k: v.cpu().clone() if hasattr(v, "cpu") else v
+                    for k, v in features.items()
+                }
+            else:
+                # Fallback if it's a tensor
+                features_copy = features.cpu().clone()
+
             return {
-                "features": self.predictor._features.cpu().clone()
-                if self.predictor._features is not None
-                else None,
+                "features": features_copy,
                 "orig_hw": self.predictor._orig_hw,
                 "image": self.image.copy() if self.image is not None else None,
             }
@@ -408,8 +420,17 @@ class Sam2Model:
             return False
 
         try:
-            if embeddings_data.get("features") is not None:
-                self.predictor._features = embeddings_data["features"].to(self.device)
+            features = embeddings_data.get("features")
+            if features is not None:
+                # Restore features dict - move each tensor back to device
+                if isinstance(features, dict):
+                    self.predictor._features = {
+                        k: v.to(self.device) if hasattr(v, "to") else v
+                        for k, v in features.items()
+                    }
+                else:
+                    self.predictor._features = features.to(self.device)
+
                 self.predictor._orig_hw = embeddings_data["orig_hw"]
                 self.predictor._is_image_set = True
                 self.image = embeddings_data.get("image")
