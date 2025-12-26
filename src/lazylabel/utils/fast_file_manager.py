@@ -962,19 +962,25 @@ class FastFileManager(QWidget):
         self._table_view.viewport().update()
         self._table_view.repaint()
 
+    def _get_proxy_row_for_path(self, path: Path) -> int:
+        """Get proxy model row for a given path using O(1) lookup."""
+        # Use source model's O(1) path-to-index lookup
+        source_row = self._model.getFileIndex(path)
+        if source_row < 0:
+            return -1
+        # Map to proxy model row
+        source_index = self._model.index(source_row, 0)
+        proxy_index = self._proxy_model.mapFromSource(source_index)
+        if proxy_index.isValid():
+            return proxy_index.row()
+        return -1
+
     def getSurroundingFiles(self, current_path: Path, count: int) -> list[Path]:
         """Get files in current sorted/filtered order surrounding the given path"""
         files = []
 
-        # Find current file in proxy model order
-        current_index = -1
-        for row in range(self._proxy_model.rowCount()):
-            proxy_index = self._proxy_model.index(row, 0)
-            source_index = self._proxy_model.mapToSource(proxy_index)
-            file_info = self._model.getFileInfo(source_index.row())
-            if file_info and file_info.path == current_path:
-                current_index = row
-                break
+        # Use O(1) lookup instead of iterating all rows
+        current_index = self._get_proxy_row_for_path(current_path)
 
         if current_index == -1:
             return []  # File not found in current view
@@ -999,15 +1005,8 @@ class FastFileManager(QWidget):
         """Get previous files in current sorted/filtered order before the given path"""
         files = []
 
-        # Find current file in proxy model order
-        current_index = -1
-        for row in range(self._proxy_model.rowCount()):
-            proxy_index = self._proxy_model.index(row, 0)
-            source_index = self._proxy_model.mapToSource(proxy_index)
-            file_info = self._model.getFileInfo(source_index.row())
-            if file_info and file_info.path == current_path:
-                current_index = row
-                break
+        # Use O(1) lookup instead of iterating all rows
+        current_index = self._get_proxy_row_for_path(current_path)
 
         if current_index == -1:
             return []  # File not found in current view

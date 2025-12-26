@@ -251,39 +251,67 @@ class RightPanel(QWidget):
                 pass
 
     def update_active_class_display(self, active_class_id):
-        """Update the visual display to show which class is active."""
+        """Update the visual display to show which class is active.
+
+        Uses O(1) update by only modifying changed rows instead of all rows.
+        """
         # Block signals to prevent triggering change events during update
         self.class_table.blockSignals(True)
 
+        # Find the new active row
+        new_active_row = None
         for row in range(self.class_table.rowCount()):
             id_item = self.class_table.item(row, 1)
-            alias_item = self.class_table.item(row, 0)
-            if id_item and alias_item:
+            if id_item:
                 try:
-                    class_id = int(id_item.text())
-                    if class_id == active_class_id:
-                        # Make active class bold and add indicator
-                        font = alias_item.font()
-                        font.setBold(True)
-                        alias_item.setFont(font)
-                        id_item.setFont(font)
-                        # Add visual indicator
-                        if not alias_item.text().startswith("🔸 "):
-                            alias_item.setText(f"🔸 {alias_item.text()}")
-                    else:
-                        # Make inactive classes normal
-                        font = alias_item.font()
-                        font.setBold(False)
-                        alias_item.setFont(font)
-                        id_item.setFont(font)
-                        # Remove visual indicator
-                        if alias_item.text().startswith("🔸 "):
-                            alias_item.setText(alias_item.text()[2:])
+                    if int(id_item.text()) == active_class_id:
+                        new_active_row = row
+                        break
                 except (ValueError, AttributeError):
                     pass
 
+        # Get previously active row (if tracked)
+        prev_active_row = getattr(self, "_prev_active_class_row", None)
+
+        # Only update if there's a change
+        if new_active_row != prev_active_row:
+            # Deactivate previous row
+            if (
+                prev_active_row is not None
+                and prev_active_row < self.class_table.rowCount()
+            ):
+                self._set_class_row_active(prev_active_row, False)
+
+            # Activate new row
+            if new_active_row is not None:
+                self._set_class_row_active(new_active_row, True)
+
+            # Track for next time
+            self._prev_active_class_row = new_active_row
+
         # Re-enable signals
         self.class_table.blockSignals(False)
+
+    def _set_class_row_active(self, row, active):
+        """Set a class table row to active or inactive state."""
+        alias_item = self.class_table.item(row, 0)
+        id_item = self.class_table.item(row, 1)
+        if not alias_item or not id_item:
+            return
+
+        font = alias_item.font()
+        font.setBold(active)
+        alias_item.setFont(font)
+        id_item.setFont(font)
+
+        if active:
+            # Add visual indicator if not present
+            if not alias_item.text().startswith("🔸 "):
+                alias_item.setText(f"🔸 {alias_item.text()}")
+        else:
+            # Remove visual indicator if present
+            if alias_item.text().startswith("🔸 "):
+                alias_item.setText(alias_item.text()[2:])
 
     def setup_file_model(self, file_model):
         """Setup the file model for the tree view."""

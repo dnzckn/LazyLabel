@@ -2251,7 +2251,10 @@ class MainWindow(QMainWindow):
             # If in edit mode, we could consider skipping non-polygons.
             if self.mode != "edit":
                 mask = segment_data.get("mask")
-                pixmap = mask_to_pixmap(mask, (255, 255, 0), alpha=180)
+                # Use cached highlight pixmap for performance
+                pixmap = self._get_cached_highlight_pixmap(
+                    segment_index, mask, (255, 255, 0), alpha=180
+                )
                 highlight_item = viewer.scene().addPixmap(pixmap)
                 highlight_item.setZValue(1000)
                 self.multi_view_highlight_items[viewer_idx].append(highlight_item)
@@ -2519,8 +2522,14 @@ class MainWindow(QMainWindow):
         finally:
             table.blockSignals(False)
 
-    def _update_all_lists(self):
-        """Update all UI lists."""
+    def _update_all_lists(self, invalidate_cache=True):
+        """Update all UI lists.
+
+        Args:
+            invalidate_cache: If True, invalidate segment cache before display.
+                             Set False for selection-only changes to avoid
+                             unnecessary pixmap regeneration.
+        """
         if self._updating_lists:
             return  # Prevent recursion
 
@@ -2531,7 +2540,8 @@ class MainWindow(QMainWindow):
             self._update_class_filter()
             # Invalidate segment cache before displaying to ensure fresh pixmaps
             # This is critical after erase operations where segment masks change
-            self._invalidate_segment_cache()
+            if invalidate_cache:
+                self._invalidate_segment_cache()
             self._display_all_segments()
             if self.mode == "edit":
                 if self.view_mode == "multi":
@@ -9479,16 +9489,15 @@ class MainWindow(QMainWindow):
                 color_rgb = base_color.getRgb()[:3]
 
                 # Create hoverable item with proper class-based colors
+                segment_index = len(self.segment_manager.segments) - 1
                 mask_item = HoverablePixmapItem()
-                default_pixmap = mask_to_pixmap(
-                    mask, color_rgb, alpha=70
-                )  # Match single view transparency
-                hover_pixmap = mask_to_pixmap(
-                    mask, color_rgb, alpha=170
-                )  # Match single view hover
+                # Use cached pixmaps for performance
+                default_pixmap, hover_pixmap = self._get_cached_pixmaps(
+                    segment_index, mask, color_rgb, viewer_index=viewer_index
+                )
                 mask_item.set_pixmaps(default_pixmap, hover_pixmap)
                 mask_item.setPos(0, 0)
-                mask_item.set_segment_info(len(self.segment_manager.segments) - 1, self)
+                mask_item.set_segment_info(segment_index, self)
 
                 viewer.scene().addItem(mask_item)
 
