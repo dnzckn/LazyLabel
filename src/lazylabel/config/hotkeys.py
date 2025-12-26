@@ -93,6 +93,12 @@ class HotkeyManager:
             HotkeyAction(
                 "select_all", "Select All Segments", "Ctrl+A", category="Segments"
             ),
+            HotkeyAction(
+                "convert_to_polygons",
+                "Toggle Auto-Convert AI to Polygon",
+                "P",
+                category="Segments",
+            ),
             # Classes
             HotkeyAction(
                 "toggle_recent_class", "Toggle Recent Class", "X", category="Classes"

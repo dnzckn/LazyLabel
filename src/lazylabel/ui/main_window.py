@@ -192,6 +192,10 @@ class MainWindow(QMainWindow):
             100 if self.fragment_threshold == 0 else self.fragment_threshold
         )
 
+        # Auto-polygon conversion state
+        self.auto_polygon_enabled = False
+        self.polygon_epsilon_factor = 0.001  # Default epsilon for polygon approximation
+
         # Image adjustment state
         self.brightness = self.settings.brightness
         self.contrast = self.settings.contrast
@@ -778,6 +782,13 @@ class MainWindow(QMainWindow):
         except Exception as e:
             logger.error(f"Failed to establish FFT threshold connection: {e}")
 
+        # AI segment auto-conversion
+        self.control_panel.auto_polygon_toggled.connect(self._on_auto_polygon_toggled)
+        self.control_panel.polygon_resolution_changed.connect(
+            self._on_polygon_resolution_changed
+        )
+        self.control_panel.auto_polygon_reset.connect(self._on_auto_polygon_reset)
+
         # Right panel connections
         self.right_panel.open_folder_requested.connect(self._open_folder_dialog)
         self.right_panel.image_selected.connect(self._load_selected_image)
@@ -796,6 +807,10 @@ class MainWindow(QMainWindow):
         self.right_panel.reassign_classes_requested.connect(self._reassign_class_ids)
         self.right_panel.class_filter_changed.connect(self._update_segment_table)
         self.right_panel.class_toggled.connect(self._handle_class_toggle)
+        # File manager display settings
+        self.right_panel.file_manager.displaySettingsChanged.connect(
+            self._on_file_manager_settings_changed
+        )
 
         # Panel pop-out functionality
         self.control_panel.pop_out_requested.connect(self._pop_out_left_panel)
@@ -831,6 +846,7 @@ class MainWindow(QMainWindow):
             "delete_segments": self._delete_selected_segments,
             "delete_segments_alt": self._delete_selected_segments,
             "merge_segments": self._handle_merge_press,
+            "convert_to_polygons": self._toggle_auto_polygon,
             "undo": self._undo_last_action,
             "redo": self._redo_last_action,
             "select_all": lambda: self.right_panel.select_all_segments(),
@@ -884,6 +900,24 @@ class MainWindow(QMainWindow):
         self.control_panel.set_pan_speed(int(self.settings.pan_multiplier * 10))
         self.control_panel.set_join_threshold(self.settings.polygon_join_threshold)
         self.control_panel.set_fragment_threshold(self.settings.fragment_threshold)
+        # Restore auto-polygon settings
+        self.control_panel.set_auto_polygon_enabled(self.settings.auto_polygon_enabled)
+        self.control_panel.polygon_resolution_slider.setValue(
+            self.settings.polygon_resolution
+        )
+        self.auto_polygon_enabled = self.settings.auto_polygon_enabled
+        self.polygon_epsilon_factor = self.control_panel.get_polygon_epsilon()
+        # Restore file manager display settings
+        self.right_panel.file_manager.setDisplaySettings(
+            {
+                "show_name": self.settings.file_manager_show_name,
+                "show_npz": self.settings.file_manager_show_npz,
+                "show_txt": self.settings.file_manager_show_txt,
+                "show_modified": self.settings.file_manager_show_modified,
+                "show_size": self.settings.file_manager_show_size,
+                "sort_order": self.settings.file_manager_sort_order,
+            }
+        )
         self.control_panel.set_brightness(int(self.settings.brightness))
         self.control_panel.set_contrast(int(self.settings.contrast))
         self.control_panel.set_gamma(int(self.settings.gamma * 100))
@@ -2133,6 +2167,73 @@ class MainWindow(QMainWindow):
 
         self._update_all_lists()
 
+    def _on_auto_polygon_toggled(self, enabled: bool):
+        """Handle auto-polygon toggle state change."""
+        self.auto_polygon_enabled = enabled
+        self.settings.auto_polygon_enabled = enabled
+        self._save_settings()
+        status = "ON" if enabled else "OFF"
+        self._show_notification(f"Auto-Convert AI to Polygon: {status}")
+        logger.debug(f"Auto-polygon conversion: {status}")
+
+    def _on_polygon_resolution_changed(self, epsilon: float):
+        """Handle polygon resolution slider change."""
+        self.polygon_epsilon_factor = epsilon
+        self.settings.polygon_resolution = (
+            self.control_panel.polygon_resolution_slider.value()
+        )
+        self._save_settings()
+
+    def _toggle_auto_polygon(self):
+        """Toggle auto-polygon conversion feature (hotkey handler)."""
+        self.control_panel.toggle_auto_polygon()
+
+    def _on_auto_polygon_reset(self):
+        """Handle auto-polygon settings reset to defaults."""
+        self._show_notification("Auto-polygon settings reset to defaults")
+
+    def _on_file_manager_settings_changed(self):
+        """Handle file manager display settings change."""
+        settings = self.right_panel.file_manager.getDisplaySettings()
+        self.settings.file_manager_show_name = settings["show_name"]
+        self.settings.file_manager_show_npz = settings["show_npz"]
+        self.settings.file_manager_show_txt = settings["show_txt"]
+        self.settings.file_manager_show_modified = settings["show_modified"]
+        self.settings.file_manager_show_size = settings["show_size"]
+        self.settings.file_manager_sort_order = settings["sort_order"]
+        self._save_settings()
+
+    def _create_segment_from_mask(self, mask):
+        """Create a segment from a mask, optionally converting to polygon.
+
+        If auto_polygon_enabled is True, creates a Polygon segment.
+        Otherwise, creates an AI (mask-based) segment.
+
+        Args:
+            mask: Binary mask (numpy array)
+
+        Returns:
+            Segment dictionary ready to be added to segment_manager
+        """
+        if self.auto_polygon_enabled:
+            # Convert mask to polygon vertices
+            vertices = self.segment_manager._mask_to_polygon_vertices(
+                mask, self.polygon_epsilon_factor
+            )
+            if vertices and len(vertices) >= 3:
+                return {
+                    "type": "Polygon",
+                    "vertices": vertices,
+                    "mask": None,
+                }
+
+        # Fallback to AI segment (or if polygon conversion failed)
+        return {
+            "type": "AI",
+            "mask": mask,
+            "vertices": None,
+        }
+
     def _highlight_selected_segments(self):
         """Highlight selected segments. In edit mode, use a brighter hover-like effect."""
         # Remove previous highlight overlays
@@ -2179,7 +2280,6 @@ class MainWindow(QMainWindow):
                 highlight_brush = QBrush(QColor(255, 255, 0, 180))
 
             if seg["type"] == "Polygon" and seg.get("vertices"):
-                # Convert stored list of lists back to QPointF objects
                 qpoints = [QPointF(p[0], p[1]) for p in seg["vertices"]]
                 poly_item = QGraphicsPolygonItem(QPolygonF(qpoints))
                 poly_item.setBrush(highlight_brush)
@@ -2246,7 +2346,6 @@ class MainWindow(QMainWindow):
         viewer = self.multi_view_viewers[viewer_idx]
 
         if segment["type"] == "Polygon" and segment_data.get("vertices"):
-            # Convert stored list of lists back to QPointF objects
             qpoints = [QPointF(p[0], p[1]) for p in segment_data["vertices"]]
             poly_item = QGraphicsPolygonItem(QPolygonF(qpoints))
             poly_item.setBrush(highlight_brush)
@@ -3489,7 +3588,7 @@ class MainWindow(QMainWindow):
                     "vertices": None,
                 }
                 self.segment_manager.add_segment(new_segment)
-                logger.info(
+                logger.debug(
                     f"Added AI segment. Total segments: {len(self.segment_manager.segments)}"
                 )
                 # Record the action for undo
@@ -4439,11 +4538,8 @@ class MainWindow(QMainWindow):
                             self._show_notification("No segments to erase")
                     else:
                         # Create actual segment (normal mode)
-                        new_segment = {
-                            "type": "AI",
-                            "mask": filtered_mask,
-                            "vertices": None,
-                        }
+                        # Use helper method to auto-convert to polygon if enabled
+                        new_segment = self._create_segment_from_mask(filtered_mask)
                         self.segment_manager.add_segment(new_segment)
 
                         # Record the action for undo
@@ -4453,8 +4549,11 @@ class MainWindow(QMainWindow):
                                 "segment_index": len(self.segment_manager.segments) - 1,
                             }
                         )
+                        seg_type = (
+                            "polygon" if new_segment["type"] == "Polygon" else "AI"
+                        )
                         self._show_success_notification(
-                            "AI bounding box segment saved!"
+                            f"AI bounding box segment saved as {seg_type}!"
                         )
 
                     # Clear redo history when a new action is performed
@@ -4523,11 +4622,8 @@ class MainWindow(QMainWindow):
                             self._show_notification("No segments to erase")
                     else:
                         # Create actual segment (normal mode)
-                        new_segment = {
-                            "type": "AI",
-                            "mask": filtered_mask,
-                            "vertices": None,
-                        }
+                        # Use helper method to auto-convert to polygon if enabled
+                        new_segment = self._create_segment_from_mask(filtered_mask)
                         self.segment_manager.add_segment(new_segment)
 
                         # Record the action for undo
@@ -4537,7 +4633,10 @@ class MainWindow(QMainWindow):
                                 "segment_index": len(self.segment_manager.segments) - 1,
                             }
                         )
-                        self._show_notification("AI segment accepted")
+                        seg_type = (
+                            "polygon" if new_segment["type"] == "Polygon" else "AI"
+                        )
+                        self._show_notification(f"Segment saved as {seg_type}")
 
                     # Clear redo history when a new action is performed
                     self.redo_history.clear()
@@ -4751,6 +4850,10 @@ class MainWindow(QMainWindow):
         )
         self.settings.save_to_file(str(self.paths.settings_file))
         super().closeEvent(event)
+
+    def _save_settings(self):
+        """Save settings to file immediately."""
+        self.settings.save_to_file(str(self.paths.settings_file))
 
     def _reset_state(self):
         """Reset application state."""
@@ -5500,10 +5603,22 @@ class MainWindow(QMainWindow):
         selected_indices = self.right_panel.get_selected_segment_indices()
         handle_radius = self.point_radius
         handle_diam = handle_radius * 2
+        max_editable_vertices = 200  # Performance limit for edit handles
+
         for seg_idx in selected_indices:
             seg = self.segment_manager.segments[seg_idx]
             if seg["type"] == "Polygon" and seg.get("vertices"):
-                for v_idx, pt_list in enumerate(seg["vertices"]):
+                vertices = seg["vertices"]
+
+                # Skip complex polygons - too many handles is slow and unusable
+                if len(vertices) > max_editable_vertices:
+                    self._show_warning_notification(
+                        f"Polygon has {len(vertices)} vertices (max {max_editable_vertices} for editing). "
+                        "Use lower resolution setting when creating polygons."
+                    )
+                    continue
+
+                for v_idx, pt_list in enumerate(vertices):
                     pt = QPointF(pt_list[0], pt_list[1])  # Convert list to QPointF
                     handle = EditableVertexItem(
                         self,
@@ -5551,7 +5666,8 @@ class MainWindow(QMainWindow):
                 new_pos.y(),  # Store as list
             ]
             self._update_polygon_item(segment_index)
-            self._highlight_selected_segments()  # Keep the highlight in sync with the new shape
+            # Note: Highlight update is done on mouse release to avoid performance issues
+            # during continuous drag with high-detail polygons
 
     def update_multi_view_vertex_pos(
         self, segment_index, vertex_index, viewer_index, new_pos, record_undo=True
@@ -5618,7 +5734,8 @@ class MainWindow(QMainWindow):
 
             # Update visual representation
             self._update_multi_view_polygon_item(segment_index, viewer_index)
-            self._highlight_multi_view_selected_segments()
+            # Note: Highlight update is done on mouse release to avoid performance issues
+            # during continuous drag with high-detail polygons
 
     def _sync_multi_view_vertex_edit(
         self, segment_index, vertex_index, source_viewer_index, new_pos
@@ -9808,6 +9925,7 @@ class MainWindow(QMainWindow):
         selected_indices = self.right_panel.get_selected_segment_indices()
         handle_radius = self.point_radius
         handle_diam = handle_radius * 2
+        max_editable_vertices = 200  # Performance limit for edit handles
 
         # Initialize multi-view edit handles tracking
         if not hasattr(self, "multi_view_edit_handles"):
@@ -9827,6 +9945,15 @@ class MainWindow(QMainWindow):
                         vertices = seg["views"][viewer_index].get("vertices", [])
                     else:
                         vertices = seg.get("vertices", [])
+
+                    # Skip complex polygons - too many handles is slow and unusable
+                    if len(vertices) > max_editable_vertices:
+                        if viewer_index == 0:  # Only show warning once
+                            self._show_warning_notification(
+                                f"Polygon has {len(vertices)} vertices (max {max_editable_vertices} for editing). "
+                                "Use lower resolution setting when creating polygons."
+                            )
+                        continue
 
                     # Create handles for each vertex
                     for v_idx, pt_list in enumerate(vertices):
