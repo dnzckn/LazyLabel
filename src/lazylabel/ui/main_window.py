@@ -297,6 +297,12 @@ class MainWindow(QMainWindow):
         self._sam_embedding_cache_max_size = 10  # Keep embeddings for ~10 images
         self.current_sam_hash = None  # Hash of currently loaded SAM image
 
+        # SAM preloading for next image (runs during idle time)
+        self._sam_preload_timer = QTimer()
+        self._sam_preload_timer.setSingleShot(True)
+        self._sam_preload_timer.timeout.connect(self._preload_next_sam_embeddings)
+        self._sam_preload_pending_path = None  # Path to preload
+
         # Add bounding box preview state
         self.ai_bbox_preview_mask = None
         self.ai_bbox_preview_rect = None
@@ -2064,6 +2070,10 @@ class MainWindow(QMainWindow):
             # LRU eviction
             while len(self.sam_embedding_cache) > self._sam_embedding_cache_max_size:
                 self.sam_embedding_cache.popitem(last=False)
+
+            # Schedule preloading of next image after a short delay
+            # This runs during "idle" time after the current image is ready
+            self._schedule_sam_preload()
 
     def _load_next_image(self):
         """Load next image in the file list."""
@@ -10021,3 +10031,74 @@ class MainWindow(QMainWindow):
         """Remove a finished preload worker from the list."""
         if worker in self._preload_workers:
             self._preload_workers.remove(worker)
+
+    # ==================== SAM Embedding Preloading ====================
+
+    def _schedule_sam_preload(self):
+        """Schedule preloading of next image's SAM embeddings."""
+        if not self.current_image_path:
+            return
+
+        # Get next image path
+        next_files = self.right_panel.file_manager.getSurroundingFiles(
+            self.current_image_path, 2
+        )
+        if len(next_files) >= 2 and next_files[1]:
+            next_path = str(next_files[1])
+            # Check if already cached
+            next_hash = hashlib.md5(next_path.encode()).hexdigest()
+            if next_hash not in self.sam_embedding_cache:
+                self._sam_preload_pending_path = next_path
+                # Start preload after 200ms delay (let UI settle first)
+                self._sam_preload_timer.start(200)
+
+    def _preload_next_sam_embeddings(self):
+        """Preload SAM embeddings for the next image during idle time."""
+        if not self._sam_preload_pending_path:
+            return
+
+        # Don't preload if model not available
+        if not self.model_manager.is_model_available():
+            return
+
+        # Don't preload if we're currently updating SAM for the active image
+        if self.sam_is_dirty or self.sam_is_updating:
+            # Retry later
+            self._sam_preload_timer.start(500)
+            return
+
+        path = self._sam_preload_pending_path
+        self._sam_preload_pending_path = None
+
+        # Double-check it's not already cached
+        image_hash = hashlib.md5(path.encode()).hexdigest()
+        if image_hash in self.sam_embedding_cache:
+            return
+
+        # Store current state so we can restore after preloading
+        current_hash = self.current_sam_hash
+
+        try:
+            # Load and compute embeddings for next image
+            self.model_manager.sam_model.set_image_from_path(path)
+
+            # Cache the embeddings
+            embeddings = self.model_manager.sam_model.get_embeddings()
+            if embeddings is not None:
+                self.sam_embedding_cache[image_hash] = embeddings
+                # LRU eviction
+                while (
+                    len(self.sam_embedding_cache) > self._sam_embedding_cache_max_size
+                ):
+                    self.sam_embedding_cache.popitem(last=False)
+
+            # Restore current image's embeddings if we had them cached
+            if current_hash and current_hash in self.sam_embedding_cache:
+                self.model_manager.sam_model.set_embeddings(
+                    self.sam_embedding_cache[current_hash]
+                )
+                self.current_sam_hash = current_hash
+
+        except Exception:
+            # Silently fail - preloading is optional optimization
+            pass
