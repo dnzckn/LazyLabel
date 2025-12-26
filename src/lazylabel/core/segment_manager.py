@@ -653,3 +653,131 @@ class SegmentManager:
             self.next_class_id = 0
         else:
             self.next_class_id = max(all_ids) + 1
+
+    def convert_ai_segments_to_polygons(
+        self, epsilon_factor: float = 0.001
+    ) -> tuple[int, int]:
+        """Convert all live AI segments to polygon segments.
+
+        Only converts segments with type="AI" (live AI segments).
+        Does NOT convert:
+        - type="Loaded" (masks loaded from NPZ files)
+        - type="Polygon" (already polygons)
+
+        Args:
+            epsilon_factor: Controls polygon simplification. Higher values
+                create simpler polygons with fewer points. Typical range: 0.0005-0.005.
+                Default 0.001 gives a good balance of accuracy and simplicity.
+
+        Returns:
+            Tuple of (converted_count, skipped_count)
+        """
+        converted_count = 0
+        skipped_count = 0
+
+        # Process segments in place
+        for i, segment in enumerate(self.segments):
+            seg_type = segment.get("type", "")
+
+            # Only convert live AI segments
+            if seg_type != "AI":
+                if seg_type == "Loaded":
+                    skipped_count += 1
+                continue
+
+            # Handle multi-view segments
+            if "views" in segment:
+                converted_views = {}
+                all_views_converted = True
+
+                for view_id, view_data in segment["views"].items():
+                    mask = view_data.get("mask")
+                    if mask is None:
+                        all_views_converted = False
+                        continue
+
+                    vertices = self._mask_to_polygon_vertices(mask, epsilon_factor)
+                    if vertices is not None and len(vertices) >= 3:
+                        converted_views[view_id] = {
+                            "vertices": vertices,
+                            "mask": None,
+                        }
+                    else:
+                        all_views_converted = False
+
+                if all_views_converted and converted_views:
+                    # Update segment to polygon type
+                    self.segments[i] = {
+                        "type": "Polygon",
+                        "class_id": segment.get("class_id"),
+                        "views": converted_views,
+                    }
+                    converted_count += 1
+
+            else:
+                # Handle single-view (legacy) segments
+                mask = segment.get("mask")
+                if mask is None:
+                    continue
+
+                vertices = self._mask_to_polygon_vertices(mask, epsilon_factor)
+                if vertices is not None and len(vertices) >= 3:
+                    # Replace AI segment with polygon segment
+                    self.segments[i] = {
+                        "type": "Polygon",
+                        "vertices": vertices,
+                        "mask": None,
+                        "class_id": segment.get("class_id"),
+                    }
+                    converted_count += 1
+
+        return converted_count, skipped_count
+
+    def _mask_to_polygon_vertices(
+        self, mask: np.ndarray, epsilon_factor: float = 0.001
+    ) -> list[list[int]] | None:
+        """Convert a binary mask to polygon vertices.
+
+        Uses contour detection and polygon approximation to create
+        a simplified polygon from the mask.
+
+        Args:
+            mask: Binary mask (boolean numpy array)
+            epsilon_factor: Controls polygon simplification (0.0005-0.005 typical)
+
+        Returns:
+            List of [x, y] vertex coordinates, or None if conversion fails
+        """
+        if mask is None or np.sum(mask) == 0:
+            return None
+
+        # Convert boolean mask to uint8
+        mask_uint8 = (mask * 255).astype(np.uint8)
+
+        # Find contours
+        contours, _ = cv2.findContours(
+            mask_uint8, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
+        )
+
+        if not contours:
+            return None
+
+        # Use the largest contour (by area)
+        largest_contour = max(contours, key=cv2.contourArea)
+
+        # Calculate epsilon for polygon approximation
+        # Larger epsilon = fewer points = simpler polygon
+        arc_length = cv2.arcLength(largest_contour, closed=True)
+        epsilon = epsilon_factor * arc_length
+
+        # Approximate the contour as a polygon
+        approx_polygon = cv2.approxPolyDP(largest_contour, epsilon, closed=True)
+
+        # Convert to list of [x, y] coordinates
+        vertices = [[int(point[0][0]), int(point[0][1])] for point in approx_polygon]
+
+        # Ensure we have at least 3 vertices for a valid polygon
+        if len(vertices) < 3:
+            return None
+
+        return vertices
