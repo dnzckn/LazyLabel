@@ -153,6 +153,10 @@ class FFTThresholdWidget(QWidget):
         )
         self.frequency_thresholds = []  # List of frequency threshold percentages (0-100)
         self.intensity_thresholds = []  # List of intensity threshold pixel values (0-255)
+        # FFT cache - avoid recomputing FFT on every threshold change
+        self._cached_fft_shifted = None
+        self._cached_freq_distance = None
+        self._cached_image_shape = None
         self._setup_ui()
         self._connect_signals()
 
@@ -267,6 +271,11 @@ class FFTThresholdWidget(QWidget):
 
     def update_fft_threshold_for_image(self, image_array):
         """Update widget based on loaded image."""
+        # Invalidate FFT cache when image changes
+        self._cached_fft_shifted = None
+        self._cached_freq_distance = None
+        self._cached_image_shape = None
+
         if image_array is None:
             self.current_image_channels = 0
             self.status_label.setText("Load a single channel (grayscale) image")
@@ -366,25 +375,41 @@ class FFTThresholdWidget(QWidget):
             return image_array
 
     def _apply_frequency_band_thresholding(self, image_array):
-        """Apply frequency band thresholding with multiple frequency cutoffs."""
-        # Convert to float for processing
-        image_float = image_array.astype(np.float64)
-        height, width = image_float.shape
+        """Apply frequency band thresholding with multiple frequency cutoffs.
 
-        # Apply FFT
-        fft_image = fft2(image_float)
-        fft_shifted = fftshift(fft_image)
+        Uses cached FFT result when available to avoid expensive recomputation.
+        """
+        height, width = image_array.shape
 
-        # Create frequency coordinate arrays (normalized 0-1)
-        y_coords, x_coords = np.ogrid[:height, :width]
-        center_y, center_x = height // 2, width // 2
+        # Check if we can use cached FFT (same image dimensions)
+        if self._cached_fft_shifted is not None and self._cached_image_shape == (
+            height,
+            width,
+        ):
+            fft_shifted = self._cached_fft_shifted
+            freq_distance = self._cached_freq_distance
+        else:
+            # Compute and cache FFT
+            image_float = image_array.astype(np.float64)
+            fft_image = fft2(image_float)
+            fft_shifted = fftshift(fft_image)
 
-        # Calculate distance from center (frequency magnitude)
-        max_freq = np.sqrt((height / 2) ** 2 + (width / 2) ** 2)
-        freq_distance = (
-            np.sqrt((y_coords - center_y) ** 2 + (x_coords - center_x) ** 2) / max_freq
-        )
-        freq_distance = np.clip(freq_distance, 0, 1)  # Normalize to 0-1
+            # Create frequency coordinate arrays (normalized 0-1)
+            y_coords, x_coords = np.ogrid[:height, :width]
+            center_y, center_x = height // 2, width // 2
+
+            # Calculate distance from center (frequency magnitude)
+            max_freq = np.sqrt((height / 2) ** 2 + (width / 2) ** 2)
+            freq_distance = (
+                np.sqrt((y_coords - center_y) ** 2 + (x_coords - center_x) ** 2)
+                / max_freq
+            )
+            freq_distance = np.clip(freq_distance, 0, 1)  # Normalize to 0-1
+
+            # Cache for reuse
+            self._cached_fft_shifted = fft_shifted
+            self._cached_freq_distance = freq_distance
+            self._cached_image_shape = (height, width)
 
         if not self.frequency_thresholds:
             # No frequency thresholds - use original FFT
