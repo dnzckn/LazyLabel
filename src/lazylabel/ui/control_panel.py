@@ -188,6 +188,9 @@ class ControlPanel(QWidget):
     gamma_changed = pyqtSignal(int)
     reset_adjustments_requested = pyqtSignal()
     image_adjustment_changed = pyqtSignal()
+    # Slider drag tracking signals
+    slider_drag_started = pyqtSignal()
+    slider_drag_finished = pyqtSignal()
     hotkeys_requested = pyqtSignal()
     pop_out_requested = pyqtSignal()
     settings_changed = pyqtSignal()
@@ -197,6 +200,8 @@ class ControlPanel(QWidget):
     crop_applied = pyqtSignal(int, int, int, int)  # x1, y1, x2, y2
     # Channel threshold signals
     channel_threshold_changed = pyqtSignal()
+    channel_threshold_drag_started = pyqtSignal()
+    channel_threshold_drag_finished = pyqtSignal()
     # FFT threshold signals
     fft_threshold_changed = pyqtSignal()
 
@@ -675,6 +680,9 @@ class ControlPanel(QWidget):
         self.adjustments_widget.image_adjustment_changed.connect(
             self.image_adjustment_changed
         )
+        # Connect slider drag tracking signals
+        self.adjustments_widget.slider_drag_started.connect(self.slider_drag_started)
+        self.adjustments_widget.slider_drag_finished.connect(self.slider_drag_finished)
 
         # Fragment threshold widget signals
         self.fragment_widget.fragment_threshold_changed.connect(
@@ -689,6 +697,12 @@ class ControlPanel(QWidget):
         # Channel threshold signals
         self.channel_threshold_widget.thresholdChanged.connect(
             self.channel_threshold_changed
+        )
+        self.channel_threshold_widget.dragStarted.connect(
+            self.channel_threshold_drag_started
+        )
+        self.channel_threshold_widget.dragFinished.connect(
+            self.channel_threshold_drag_finished
         )
 
         # FFT threshold signals
