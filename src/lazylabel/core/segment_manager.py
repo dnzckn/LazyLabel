@@ -15,6 +15,7 @@ class SegmentManager:
         self.class_aliases: dict[int, str] = {}
         self.next_class_id: int = 0
         self.active_class_id: int | None = None  # Currently active/toggled class
+        self.last_toggled_class_id: int | None = None  # Most recently toggled class
 
     def clear(self) -> None:
         """Clear all segments and reset state."""
@@ -22,6 +23,7 @@ class SegmentManager:
         self.class_aliases.clear()
         self.next_class_id = 0
         self.active_class_id = None
+        self.last_toggled_class_id = None
 
     def add_segment(self, segment_data: dict[str, Any]) -> None:
         """Add a new segment.
@@ -35,6 +37,9 @@ class SegmentManager:
                 segment_data["class_id"] = self.active_class_id
             else:
                 segment_data["class_id"] = self.next_class_id
+
+        # Track the class used for this segment as the most recently used
+        self.last_toggled_class_id = segment_data["class_id"]
 
         # Convert QPointF to list for storage if it's a polygon and contains QPointF objects
         if (
@@ -168,12 +173,36 @@ class SegmentManager:
 
     def toggle_active_class(self, class_id: int) -> bool:
         """Toggle a class as active. Returns True if now active, False if deactivated."""
+        # Track this as the last toggled class
+        self.last_toggled_class_id = class_id
+
         if self.active_class_id == class_id:
             self.active_class_id = None
             return False
         else:
             self.active_class_id = class_id
             return True
+
+    def get_last_toggled_class(self) -> int | None:
+        """Get the most recently toggled class ID."""
+        return self.last_toggled_class_id
+
+    def get_class_to_toggle_with_hotkey(self) -> int | None:
+        """Get the class ID to toggle when using the hotkey.
+
+        Returns the most recent class used/toggled, or if no recent class
+        was used then returns the last class in the class list.
+        """
+        # If we have a recently toggled class, use that
+        if self.last_toggled_class_id is not None:
+            return self.last_toggled_class_id
+
+        # Otherwise, get the last class in the class list (highest ID)
+        unique_class_ids = self.get_unique_class_ids()
+        if unique_class_ids:
+            return unique_class_ids[-1]  # Last (highest) class ID
+
+        return None
 
     def _update_next_class_id(self) -> None:
         """Update the next available class ID."""

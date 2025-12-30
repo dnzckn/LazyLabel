@@ -84,6 +84,10 @@ class HotkeyManager:
             HotkeyAction(
                 "select_all", "Select All Segments", "Ctrl+A", category="Segments"
             ),
+            # Classes
+            HotkeyAction(
+                "toggle_recent_class", "Toggle Recent Class", "X", category="Classes"
+            ),
             # View
             HotkeyAction("zoom_in", "Zoom In", "Ctrl+Plus", category="View"),
             HotkeyAction("zoom_out", "Zoom Out", "Ctrl+Minus", category="View"),

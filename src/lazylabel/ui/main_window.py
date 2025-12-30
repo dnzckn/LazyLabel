@@ -776,6 +776,7 @@ class MainWindow(QMainWindow):
             "undo": self._undo_last_action,
             "redo": self._redo_last_action,
             "select_all": lambda: self.right_panel.select_all_segments(),
+            "toggle_recent_class": self._toggle_recent_class,
             "save_segment": self._handle_space_press,
             "save_output": self._handle_enter_press,
             "save_output_alt": self._handle_enter_press,
@@ -4611,6 +4612,14 @@ class MainWindow(QMainWindow):
             )
             # Update visual display to clear active class
             self.right_panel.update_active_class_display(None)
+
+    def _toggle_recent_class(self):
+        """Toggle the most recent class used/toggled, or the last class in the list."""
+        class_id = self.segment_manager.get_class_to_toggle_with_hotkey()
+        if class_id is not None:
+            self._handle_class_toggle(class_id)
+        else:
+            self._show_notification("No classes available to toggle")
 
     def _pop_out_left_panel(self):
         """Pop out the left control panel into a separate window."""

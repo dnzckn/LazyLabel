@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "lazylabel-gui"
-version = "1.3.8"
+version = "1.3.9"
 authors = [
   { name="Deniz N. Cakan", email="deniz.n.cakan@gmail.com" },
 ]
