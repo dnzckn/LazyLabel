@@ -64,7 +64,7 @@ class SingleViewModeHandler(BaseModeHandler):
         self.main_window.point_items.append(point_item)
 
         # Record the action for undo
-        self.main_window.action_history.append(
+        self.main_window.undo_redo_manager.record_action(
             {
                 "type": "add_point",
                 "point_type": "positive" if positive else "negative",
@@ -74,8 +74,6 @@ class SingleViewModeHandler(BaseModeHandler):
                 "viewer_mode": "single",
             }
         )
-        # Clear redo history when a new action is performed
-        self.main_window.redo_history.clear()
 
         # Generate prediction
         self.main_window._update_segmentation()
@@ -165,13 +163,12 @@ class SingleViewModeHandler(BaseModeHandler):
                 self.segment_manager.add_segment(new_segment)
 
                 # Record action for undo
-                self.main_window.action_history.append(
+                self.main_window.undo_redo_manager.record_action(
                     {
                         "type": "add_segment",
                         "segment_index": len(self.segment_manager.segments) - 1,
                     }
                 )
-                self.main_window.redo_history.clear()
 
                 self.main_window._update_all_lists()
 
@@ -189,7 +186,9 @@ class SingleViewModeHandler(BaseModeHandler):
         for i, segment in enumerate(self.segment_manager.segments):
             self.main_window.segment_items[i] = []
             class_id = segment.get("class_id")
-            base_color = self.main_window._get_color_for_class(class_id)
+            base_color = self.main_window.segment_display_manager.get_color_for_class(
+                class_id
+            )
 
             if segment["type"] == "Polygon" and segment.get("vertices"):
                 # Convert stored list of lists back to QPointF objects
@@ -286,13 +285,12 @@ class SingleViewModeHandler(BaseModeHandler):
         self.segment_manager.add_segment(new_segment)
 
         # Record action for undo
-        self.main_window.action_history.append(
+        self.main_window.undo_redo_manager.record_action(
             {
                 "type": "add_segment",
                 "segment_index": len(self.segment_manager.segments) - 1,
             }
         )
-        self.main_window.redo_history.clear()
 
         self.main_window.polygon_points.clear()
         self.clear_all_points()

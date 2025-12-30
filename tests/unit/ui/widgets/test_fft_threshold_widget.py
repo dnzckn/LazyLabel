@@ -4,15 +4,8 @@ Unit tests for FFT Threshold Widget.
 
 import numpy as np
 import pytest
-from PyQt6.QtWidgets import QApplication
 
 from lazylabel.ui.widgets.fft_threshold_widget import FFTThresholdWidget
-
-
-@pytest.fixture
-def app():
-    """Create QApplication instance."""
-    return QApplication.instance() or QApplication([])
 
 
 @pytest.fixture

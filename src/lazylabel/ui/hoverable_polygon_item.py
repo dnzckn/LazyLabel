@@ -44,6 +44,7 @@ class HoverablePolygonItem(QGraphicsPolygonItem):
             self.main_window
             and hasattr(self.main_window, "view_mode")
             and self.main_window.view_mode == "multi"
+            and hasattr(self.main_window, "_trigger_segment_hover")
         ):
             self.main_window._trigger_segment_hover(self.segment_id, False, self)
         super().hoverLeaveEvent(event)

@@ -2,18 +2,11 @@
 
 import numpy as np
 import pytest
-from PyQt6.QtWidgets import QApplication
 
 from lazylabel.ui.widgets.channel_threshold_widget import (
     ChannelThresholdWidget,
     MultiIndicatorSlider,
 )
-
-
-@pytest.fixture
-def app():
-    """Create QApplication instance."""
-    return QApplication.instance() or QApplication([])
 
 
 @pytest.fixture

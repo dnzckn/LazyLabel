@@ -5,6 +5,13 @@
   <img src="https://raw.githubusercontent.com/dnzckn/LazyLabel/main/src/lazylabel/demo_pictures/logo_black.png" alt="LazyLabel Cursive" style="height:60px; vertical-align:middle;" />
 </div>
 
+<div align="center">
+
+[![Python](https://img.shields.io/pypi/pyversions/lazylabel-gui)](https://pypi.org/project/lazylabel-gui/)
+[![License](https://img.shields.io/github/license/dnzckn/LazyLabel)](https://github.com/dnzckn/LazyLabel/blob/main/LICENSE)
+
+</div>
+
 **AI-Assisted Image Segmentation for Machine Learning Dataset Preparation**
 
 LazyLabel combines Meta's Segment Anything Model (SAM) with comprehensive manual annotation tools to accelerate the creation of pixel-perfect segmentation masks for computer vision applications.
@@ -187,6 +194,7 @@ The executable will be created in `dist/LazyLabel/`. The entire folder (~7-8GB) 
 
 - [Usage Manual](src/lazylabel/USAGE_MANUAL.md) - Comprehensive feature guide
 - [Architecture Guide](src/lazylabel/ARCHITECTURE.md) - Technical implementation details
+- [Changelog](CHANGELOG.md) - Version history and release notes
 - [GitHub Issues](https://github.com/dnzckn/LazyLabel/issues) - Report bugs or request features
 
 ---

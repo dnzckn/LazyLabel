@@ -4,6 +4,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from lazylabel.core import UndoRedoManager
 from lazylabel.ui.main_window import MainWindow
 
 
@@ -35,13 +36,26 @@ class TestUndoRedo:
             window._display_edit_handles = MagicMock()
             window._highlight_selected_segments = MagicMock()
 
+            # Initialize undo/redo manager (normally done in _setup_ui)
+            window.undo_redo_manager = UndoRedoManager(window)
+
+            # Initialize crop_manager mock (normally done in _setup_ui)
+            window.crop_manager = MagicMock()
+
+            # Initialize panel_popout_manager mock (normally done in _setup_ui)
+            window.panel_popout_manager = MagicMock()
+
+            # Initialize segment_display_manager mock (normally done in _setup_ui)
+            window.segment_display_manager = MagicMock()
+
             return window
 
     def test_undo_redo_add_segment(self, mock_main_window):
         """Test undoing and redoing add segment action."""
-        # Setup
-        mock_main_window.action_history = [{"type": "add_segment", "segment_index": 0}]
-        mock_main_window.redo_history = []
+        # Setup - use undo_redo_manager directly
+        undo_redo = mock_main_window.undo_redo_manager
+        undo_redo.action_history = [{"type": "add_segment", "segment_index": 0}]
+        undo_redo.redo_history = []
         mock_main_window.segment_manager.segments = [
             {"type": "Polygon", "vertices": []}
         ]
@@ -49,8 +63,8 @@ class TestUndoRedo:
         # Mock segment_manager.delete_segments to store the segment data
         def mock_delete_segments(indices):
             # The action has already been moved to redo_history by this point
-            if mock_main_window.redo_history:
-                mock_main_window.redo_history[-1]["segment_data"] = (
+            if undo_redo.redo_history:
+                undo_redo.redo_history[-1]["segment_data"] = (
                     mock_main_window.segment_manager.segments[0].copy()
                 )
             mock_main_window.segment_manager.segments = []
@@ -58,12 +72,12 @@ class TestUndoRedo:
         mock_main_window.segment_manager.delete_segments = mock_delete_segments
 
         # Test undo
-        mock_main_window._undo_last_action()
+        undo_redo.undo()
 
         # Verify undo
-        assert len(mock_main_window.action_history) == 0
-        assert len(mock_main_window.redo_history) == 1
-        assert mock_main_window.redo_history[0]["type"] == "add_segment"
+        assert len(undo_redo.action_history) == 0
+        assert len(undo_redo.redo_history) == 1
+        assert undo_redo.redo_history[0]["type"] == "add_segment"
         mock_main_window._show_notification.assert_called_once_with(
             "Undid: Add Segment"
         )
@@ -78,12 +92,12 @@ class TestUndoRedo:
         mock_main_window.segment_manager.add_segment = mock_add_segment
 
         # Test redo
-        mock_main_window._redo_last_action()
+        undo_redo.redo()
 
         # Verify redo
-        assert len(mock_main_window.redo_history) == 0
-        assert len(mock_main_window.action_history) == 1
-        assert mock_main_window.action_history[0]["type"] == "add_segment"
+        assert len(undo_redo.redo_history) == 0
+        assert len(undo_redo.action_history) == 1
+        assert undo_redo.action_history[0]["type"] == "add_segment"
         mock_main_window._show_notification.assert_called_once_with(
             "Redid: Add Segment"
         )
@@ -93,9 +107,10 @@ class TestUndoRedo:
     def test_undo_redo_move_vertex(self, mock_main_window):
         """Test undoing and redoing move vertex action."""
         # Setup
+        undo_redo = mock_main_window.undo_redo_manager
         old_pos = [10, 10]
         new_pos = [20, 20]
-        mock_main_window.action_history = [
+        undo_redo.action_history = [
             {
                 "type": "move_vertex",
                 "segment_index": 0,
@@ -104,17 +119,17 @@ class TestUndoRedo:
                 "new_pos": new_pos,
             }
         ]
-        mock_main_window.redo_history = []
+        undo_redo.redo_history = []
         mock_main_window.segment_manager.segments = [
             {"type": "Polygon", "vertices": [new_pos]}
         ]
 
         # Test undo
-        mock_main_window._undo_last_action()
+        undo_redo.undo()
 
         # Verify undo
-        assert len(mock_main_window.action_history) == 0
-        assert len(mock_main_window.redo_history) == 1
+        assert len(undo_redo.action_history) == 0
+        assert len(undo_redo.redo_history) == 1
         assert mock_main_window.segment_manager.segments[0]["vertices"][0] == old_pos
         mock_main_window._update_polygon_item.assert_called_once_with(0)
         mock_main_window._display_edit_handles.assert_called_once()
@@ -130,11 +145,11 @@ class TestUndoRedo:
         mock_main_window._highlight_selected_segments.reset_mock()
 
         # Test redo
-        mock_main_window._redo_last_action()
+        undo_redo.redo()
 
         # Verify redo
-        assert len(mock_main_window.redo_history) == 0
-        assert len(mock_main_window.action_history) == 1
+        assert len(undo_redo.redo_history) == 0
+        assert len(undo_redo.action_history) == 1
         assert mock_main_window.segment_manager.segments[0]["vertices"][0] == new_pos
         mock_main_window._update_polygon_item.assert_called_once_with(0)
         mock_main_window._display_edit_handles.assert_called_once()
@@ -146,6 +161,7 @@ class TestUndoRedo:
     def test_undo_redo_move_bbox_vertex(self, mock_main_window):
         """Test undoing and redoing move vertex action for a bounding box."""
         # Setup: A bounding box is a polygon with 4 vertices
+        undo_redo = mock_main_window.undo_redo_manager
         old_bbox_vertices = [[10, 10], [100, 10], [100, 100], [10, 100]]
 
         # Simulate initial state where a bbox exists
@@ -161,7 +177,7 @@ class TestUndoRedo:
             105,
         ]  # Slightly different from new_bbox_vertices for a single vertex move
 
-        mock_main_window.action_history = [
+        undo_redo.action_history = [
             {
                 "type": "move_vertex",
                 "segment_index": 0,
@@ -170,7 +186,7 @@ class TestUndoRedo:
                 "new_pos": moved_vertex_new_pos,
             }
         ]
-        mock_main_window.redo_history = []
+        undo_redo.redo_history = []
 
         # Before undo, the segment should reflect the new_pos for the moved vertex
         mock_main_window.segment_manager.segments[0]["vertices"][2] = (
@@ -178,11 +194,11 @@ class TestUndoRedo:
         )
 
         # Test undo
-        mock_main_window._undo_last_action()
+        undo_redo.undo()
 
         # Verify undo
-        assert len(mock_main_window.action_history) == 0
-        assert len(mock_main_window.redo_history) == 1
+        assert len(undo_redo.action_history) == 0
+        assert len(undo_redo.redo_history) == 1
         # Check if the specific vertex reverted to its old position
         assert (
             mock_main_window.segment_manager.segments[0]["vertices"][2]
@@ -202,11 +218,11 @@ class TestUndoRedo:
         mock_main_window._highlight_selected_segments.reset_mock()
 
         # Test redo
-        mock_main_window._redo_last_action()
+        undo_redo.redo()
 
         # Verify redo
-        assert len(mock_main_window.redo_history) == 0
-        assert len(mock_main_window.action_history) == 1
+        assert len(undo_redo.redo_history) == 0
+        assert len(undo_redo.action_history) == 1
         # Check if the specific vertex moved back to its new position
         assert (
             mock_main_window.segment_manager.segments[0]["vertices"][2]
@@ -222,25 +238,27 @@ class TestUndoRedo:
     def test_nothing_to_undo_redo(self, mock_main_window):
         """Test behavior when there's nothing to undo or redo."""
         # Setup
-        mock_main_window.action_history = []
-        mock_main_window.redo_history = []
+        undo_redo = mock_main_window.undo_redo_manager
+        undo_redo.action_history = []
+        undo_redo.redo_history = []
 
         # Test undo with empty history
-        mock_main_window._undo_last_action()
+        undo_redo.undo()
         mock_main_window._show_notification.assert_called_once_with("Nothing to undo.")
 
         # Reset mock
         mock_main_window._show_notification.reset_mock()
 
         # Test redo with empty history
-        mock_main_window._redo_last_action()
+        undo_redo.redo()
         mock_main_window._show_notification.assert_called_once_with("Nothing to redo.")
 
     def test_reset_state_clears_histories(self, mock_main_window):
         """Test that reset_state clears both action and redo histories."""
         # Setup
-        mock_main_window.action_history = [{"type": "add_segment"}]
-        mock_main_window.redo_history = [{"type": "add_segment"}]
+        undo_redo = mock_main_window.undo_redo_manager
+        undo_redo.action_history = [{"type": "add_segment"}]
+        undo_redo.redo_history = [{"type": "add_segment"}]
         mock_main_window.clear_all_points = MagicMock()
         mock_main_window.segment_manager.clear = MagicMock()
         mock_main_window.viewer = MagicMock()
@@ -252,5 +270,5 @@ class TestUndoRedo:
         mock_main_window._reset_state()
 
         # Verify histories are cleared
-        assert len(mock_main_window.action_history) == 0
-        assert len(mock_main_window.redo_history) == 0
+        assert len(undo_redo.action_history) == 0
+        assert len(undo_redo.redo_history) == 0

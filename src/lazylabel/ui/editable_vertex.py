@@ -50,7 +50,7 @@ class EditableVertexItem(QGraphicsEllipseItem):
     def mouseReleaseEvent(self, event):
         """Handle mouse release events."""
         if self.initial_pos and self.initial_pos != self.pos():
-            self.main_window.action_history.append(
+            self.main_window.undo_redo_manager.record_action(
                 {
                     "type": "move_vertex",
                     "segment_index": self.segment_index,
@@ -122,7 +122,7 @@ class MultiViewEditableVertexItem(QGraphicsEllipseItem):
     def mouseReleaseEvent(self, event):
         """Handle mouse release events."""
         if self.initial_pos and self.initial_pos != self.pos():
-            self.main_window.action_history.append(
+            self.main_window.undo_redo_manager.record_action(
                 {
                     "type": "move_vertex",
                     "viewer_mode": "multi",

@@ -338,6 +338,16 @@ class RightPanel(QWidget):
         """Select a specific file in the file manager."""
         self.file_manager.selectFile(file_path)
 
+    def get_next_file_pair(self, current_path: Path) -> tuple[Path | None, Path | None]:
+        """Get next pair of files for multi-view navigation (respects sort order)."""
+        return self.file_manager.getNextFilePair(current_path)
+
+    def get_previous_file_pair(
+        self, current_path: Path
+    ) -> tuple[Path | None, Path | None]:
+        """Get previous pair of files for multi-view navigation (respects sort order)."""
+        return self.file_manager.getPreviousFilePair(current_path)
+
     def get_selected_segment_indices(self):
         """Get indices of selected segments."""
         selected_items = self.segment_table.selectedItems()

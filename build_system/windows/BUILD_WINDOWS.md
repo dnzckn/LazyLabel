@@ -98,12 +98,12 @@ python build_windows.py
 ```
 
 **What happens:**
-1. ✓ Checks all requirements
-2. ✓ Creates version information
-3. ✓ Cleans previous builds
-4. ✓ Runs PyInstaller (this takes 10-30 minutes)
-5. ✓ Creates NSIS installer
-6. ✓ Shows build summary
+1. Checks all requirements
+2. Creates version information
+3. Cleans previous builds
+4. Runs PyInstaller (this takes 10-30 minutes)
+5. Creates NSIS installer
+6. Shows build summary
 
 ### Step 6: Test the Build
 
@@ -251,8 +251,8 @@ Your users need:
 - **RAM:** 8 GB minimum, 16 GB recommended
 - **Disk:** 10 GB free space
 - **GPU:** NVIDIA GPU with CUDA support (optional, for faster performance)
-- **NO Python required** ✓
-- **NO internet required** ✓
+- **NO Python required**
+- **NO internet required**
 
 ## Support
 

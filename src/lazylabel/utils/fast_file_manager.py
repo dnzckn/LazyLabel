@@ -1039,6 +1039,148 @@ class FastFileManager(QWidget):
 
         return files
 
+    def getNextFilePair(self, current_path: Path) -> tuple[Path | None, Path | None]:
+        """Get the next pair of files after current position (for multi-view navigation).
+
+        Args:
+            current_path: Path of current first viewer's image
+
+        Returns:
+            Tuple of (next_file_1, next_file_2) in sorted order, None if at end
+        """
+        current_index = self._get_proxy_row_for_path(current_path)
+        if current_index == -1:
+            return (None, None)
+
+        # Next pair starts 2 positions ahead (skip current pair)
+        next_start = current_index + 2
+        total_rows = self._proxy_model.rowCount()
+
+        if next_start >= total_rows:
+            return (None, None)  # At end of list
+
+        file1 = None
+        file2 = None
+
+        # Get first file of next pair
+        proxy_index = self._proxy_model.index(next_start, 0)
+        source_index = self._proxy_model.mapToSource(proxy_index)
+        file_info = self._model.getFileInfo(source_index.row())
+        if file_info:
+            file1 = file_info.path
+
+        # Get second file of next pair
+        if next_start + 1 < total_rows:
+            proxy_index = self._proxy_model.index(next_start + 1, 0)
+            source_index = self._proxy_model.mapToSource(proxy_index)
+            file_info = self._model.getFileInfo(source_index.row())
+            if file_info:
+                file2 = file_info.path
+
+        return (file1, file2)
+
+    def getPreviousFilePair(
+        self, current_path: Path
+    ) -> tuple[Path | None, Path | None]:
+        """Get the previous pair of files before current position (for multi-view navigation).
+
+        Args:
+            current_path: Path of current first viewer's image
+
+        Returns:
+            Tuple of (prev_file_1, prev_file_2) in sorted order, None if at start
+        """
+        current_index = self._get_proxy_row_for_path(current_path)
+        if current_index == -1:
+            return (None, None)
+
+        # Previous pair starts 2 positions back
+        prev_start = current_index - 2
+
+        if prev_start < 0:
+            return (None, None)  # At start of list
+
+        file1 = None
+        file2 = None
+
+        # Get first file of previous pair
+        proxy_index = self._proxy_model.index(prev_start, 0)
+        source_index = self._proxy_model.mapToSource(proxy_index)
+        file_info = self._model.getFileInfo(source_index.row())
+        if file_info:
+            file1 = file_info.path
+
+        # Get second file of previous pair
+        if prev_start + 1 < self._proxy_model.rowCount():
+            proxy_index = self._proxy_model.index(prev_start + 1, 0)
+            source_index = self._proxy_model.mapToSource(proxy_index)
+            file_info = self._model.getFileInfo(source_index.row())
+            if file_info:
+                file2 = file_info.path
+
+        return (file1, file2)
+
+    def getFilePairAtIndex(self, start_index: int) -> tuple[Path | None, Path | None]:
+        """Get a pair of consecutive files starting at the given proxy index.
+
+        Args:
+            start_index: Starting row index in the sorted/filtered view
+
+        Returns:
+            Tuple of (file1, file2), None for missing files
+        """
+        total_rows = self._proxy_model.rowCount()
+        if start_index < 0 or start_index >= total_rows:
+            return (None, None)
+
+        file1 = None
+        file2 = None
+
+        # Get first file
+        proxy_index = self._proxy_model.index(start_index, 0)
+        source_index = self._proxy_model.mapToSource(proxy_index)
+        file_info = self._model.getFileInfo(source_index.row())
+        if file_info:
+            file1 = file_info.path
+
+        # Get second file
+        if start_index + 1 < total_rows:
+            proxy_index = self._proxy_model.index(start_index + 1, 0)
+            source_index = self._proxy_model.mapToSource(proxy_index)
+            file_info = self._model.getFileInfo(source_index.row())
+            if file_info:
+                file2 = file_info.path
+
+        return (file1, file2)
+
+    def getConsecutiveFile(self, current_path: Path) -> Path | None:
+        """Get the next consecutive file after the given path in current sorted order.
+
+        This respects the current sort order of the file list, so if the list is
+        sorted in reverse order, it returns the file that appears next in the
+        displayed list (which may be "earlier" alphabetically).
+
+        Args:
+            current_path: Path of the current file
+
+        Returns:
+            Path of the next file in sorted order, or None if at end
+        """
+        current_index = self._get_proxy_row_for_path(current_path)
+        if current_index == -1:
+            return None
+
+        next_index = current_index + 1
+        if next_index >= self._proxy_model.rowCount():
+            return None
+
+        proxy_index = self._proxy_model.index(next_index, 0)
+        source_index = self._proxy_model.mapToSource(proxy_index)
+        file_info = self._model.getFileInfo(source_index.row())
+        if file_info:
+            return file_info.path
+        return None
+
     def _on_item_clicked(self, index: QModelIndex):
         """Handle item click"""
         # Map proxy index to source index

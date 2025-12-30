@@ -8,7 +8,6 @@ import os
 import sys
 
 from PyQt6.QtCore import QPointF, QRectF
-from PyQt6.QtWidgets import QApplication
 
 # Add the src directory to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
@@ -45,13 +44,9 @@ def test_boundary_detection():
     print("✓ Boundary detection logic works correctly")
 
 
-def test_coordinate_mapping():
+def test_coordinate_mapping(app):
     """Test coordinate mapping between scene and view."""
     from lazylabel.ui.photo_viewer import PhotoViewer
-
-    app = QApplication.instance()
-    if app is None:
-        app = QApplication(sys.argv)
 
     # Create a test viewer
     viewer = PhotoViewer()

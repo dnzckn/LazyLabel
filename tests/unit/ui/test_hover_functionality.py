@@ -7,20 +7,9 @@ import sys
 from unittest.mock import Mock
 
 import pytest
-from PyQt6.QtWidgets import QApplication
 
 # Add the src directory to path for testing
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
-
-
-# Create QApplication for Qt tests
-@pytest.fixture(scope="module")
-def qapp():
-    """Create QApplication for tests."""
-    app = QApplication.instance()
-    if app is None:
-        app = QApplication(sys.argv)
-    yield app
 
 
 class TestHoverSetup:
