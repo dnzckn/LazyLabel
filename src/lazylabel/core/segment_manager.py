@@ -152,43 +152,56 @@ class SegmentManager:
     ) -> np.ndarray:
         """Apply pixel priority to mask tensor so only one class can occupy each pixel.
 
+        Uses vectorized numpy operations for performance.
+
         Args:
             mask_tensor: 3D array of shape (height, width, num_classes)
-            ascending: If True, lower class indices have priority; if False, higher indices have priority
+            ascending: If True, lower class indices have priority; if False, higher
 
         Returns:
             Modified mask tensor with pixel priority applied
         """
-        # Create a copy to avoid modifying the original
+        # Find pixels with multiple class overlaps (sum > 1 across class dimension)
+        class_count = np.sum(mask_tensor > 0, axis=2)
+        overlap_mask = class_count > 1
+
+        if not np.any(overlap_mask):
+            # No overlapping pixels, return original
+            return mask_tensor.copy()
+
+        # Create output array
         prioritized_mask = mask_tensor.copy()
 
-        # Find pixels with multiple class overlaps (sum > 1 across class dimension)
-        overlap_pixels = np.sum(mask_tensor, axis=2) > 1
+        # For overlapping pixels, find the priority class
+        # We need to find argmin or argmax of non-zero classes
+        # Use masking: set zero classes to a very high or low value for argmin/argmax
 
-        if not np.any(overlap_pixels):
-            # No overlapping pixels, return original
-            return prioritized_mask
+        if ascending:
+            # For ascending priority (lower class index wins):
+            # Replace 0s with num_classes (high value) so argmin finds lowest non-zero
+            num_classes = mask_tensor.shape[2]
+            # Create class index array: [0, 1, 2, ..., num_classes-1]
+            class_indices = np.arange(num_classes)
+            # For each pixel, find the minimum class index where mask > 0
+            # Mask out zeros by setting them to num_classes (larger than any valid index)
+            masked = np.where(mask_tensor > 0, class_indices, num_classes)
+            priority_class = np.argmin(masked, axis=2)
+        else:
+            # For descending priority (higher class index wins):
+            # Replace 0s with -1 (low value) so argmax finds highest non-zero
+            class_indices = np.arange(mask_tensor.shape[2])
+            masked = np.where(mask_tensor > 0, class_indices, -1)
+            priority_class = np.argmax(masked, axis=2)
 
         # Get coordinates of overlapping pixels
-        overlap_coords = np.where(overlap_pixels)
+        overlap_y, overlap_x = np.where(overlap_mask)
 
-        for y, x in zip(overlap_coords[0], overlap_coords[1], strict=False):
-            # Get all classes present at this pixel
-            classes_at_pixel = np.where(mask_tensor[y, x, :] > 0)[0]
+        # Zero out all classes at overlapping pixels
+        prioritized_mask[overlap_y, overlap_x, :] = 0
 
-            if len(classes_at_pixel) <= 1:
-                continue  # No overlap, skip
-
-            # Determine priority class based on ascending/descending setting
-            if ascending:
-                priority_class = np.min(classes_at_pixel)  # Lowest index has priority
-            else:
-                priority_class = np.max(classes_at_pixel)  # Highest index has priority
-
-            # Set all classes to 0 at this pixel
-            prioritized_mask[y, x, :] = 0
-            # Set only the priority class to 1
-            prioritized_mask[y, x, priority_class] = 1
+        # Set only the priority class to 1 at overlapping pixels
+        priority_classes_at_overlap = priority_class[overlap_y, overlap_x]
+        prioritized_mask[overlap_y, overlap_x, priority_classes_at_overlap] = 1
 
         return prioritized_mask
 
@@ -328,10 +341,8 @@ class SegmentManager:
             if segment_mask is None:
                 continue
 
-            # Ensure masks have the same dimensions before comparison
+            # Ensure masks have the same dimensions (backward compat for old NPZ files)
             if segment_mask.shape != erase_mask.shape:
-                import cv2
-
                 segment_mask = cv2.resize(
                     segment_mask.astype(np.uint8),
                     (erase_mask.shape[1], erase_mask.shape[0]),
@@ -410,17 +421,12 @@ class SegmentManager:
         """Apply the same erase pattern to another viewer's data."""
         if "vertices" in view_data and view_data["vertices"]:
             # For polygon-based segments, create a mask and apply erase
-            import cv2
-
-            # Convert vertices to QPointF format for rasterize_polygon
-            from PyQt6.QtCore import QPointF
-
             vertices_as_points = [QPointF(v[0], v[1]) for v in view_data["vertices"]]
             view_mask = self.rasterize_polygon(vertices_as_points, image_size)
             if view_mask is None:
                 return view_data  # Return original if mask creation fails
 
-            # Ensure mask dimensions match
+            # Ensure mask dimensions match (backward compat for old NPZ files)
             if view_mask.shape != erase_mask.shape:
                 view_mask = cv2.resize(
                     view_mask.astype(np.uint8),
@@ -453,11 +459,9 @@ class SegmentManager:
 
         elif "mask" in view_data and view_data["mask"] is not None:
             # For mask-based segments, apply erase directly
-            import cv2
-
             view_mask = view_data["mask"]
 
-            # Ensure mask dimensions match
+            # Ensure mask dimensions match (backward compat for old NPZ files)
             if view_mask.shape != erase_mask.shape:
                 view_mask = cv2.resize(
                     view_mask.astype(np.uint8),
@@ -489,10 +493,8 @@ class SegmentManager:
             if segment_mask is None:
                 continue
 
-            # Ensure masks have the same dimensions before comparison
+            # Ensure masks have the same dimensions (backward compat for old NPZ files)
             if segment_mask.shape != erase_mask.shape:
-                import cv2
-
                 segment_mask = cv2.resize(
                     segment_mask.astype(np.uint8),
                     (erase_mask.shape[1], erase_mask.shape[0]),
@@ -651,3 +653,131 @@ class SegmentManager:
             self.next_class_id = 0
         else:
             self.next_class_id = max(all_ids) + 1
+
+    def convert_ai_segments_to_polygons(
+        self, epsilon_factor: float = 0.001
+    ) -> tuple[int, int]:
+        """Convert all live AI segments to polygon segments.
+
+        Only converts segments with type="AI" (live AI segments).
+        Does NOT convert:
+        - type="Loaded" (masks loaded from NPZ files)
+        - type="Polygon" (already polygons)
+
+        Args:
+            epsilon_factor: Controls polygon simplification. Higher values
+                create simpler polygons with fewer points. Typical range: 0.0005-0.005.
+                Default 0.001 gives a good balance of accuracy and simplicity.
+
+        Returns:
+            Tuple of (converted_count, skipped_count)
+        """
+        converted_count = 0
+        skipped_count = 0
+
+        # Process segments in place
+        for i, segment in enumerate(self.segments):
+            seg_type = segment.get("type", "")
+
+            # Only convert live AI segments
+            if seg_type != "AI":
+                if seg_type == "Loaded":
+                    skipped_count += 1
+                continue
+
+            # Handle multi-view segments
+            if "views" in segment:
+                converted_views = {}
+                all_views_converted = True
+
+                for view_id, view_data in segment["views"].items():
+                    mask = view_data.get("mask")
+                    if mask is None:
+                        all_views_converted = False
+                        continue
+
+                    vertices = self._mask_to_polygon_vertices(mask, epsilon_factor)
+                    if vertices is not None and len(vertices) >= 3:
+                        converted_views[view_id] = {
+                            "vertices": vertices,
+                            "mask": None,
+                        }
+                    else:
+                        all_views_converted = False
+
+                if all_views_converted and converted_views:
+                    # Update segment to polygon type
+                    self.segments[i] = {
+                        "type": "Polygon",
+                        "class_id": segment.get("class_id"),
+                        "views": converted_views,
+                    }
+                    converted_count += 1
+
+            else:
+                # Handle single-view (legacy) segments
+                mask = segment.get("mask")
+                if mask is None:
+                    continue
+
+                vertices = self._mask_to_polygon_vertices(mask, epsilon_factor)
+                if vertices is not None and len(vertices) >= 3:
+                    # Replace AI segment with polygon segment
+                    self.segments[i] = {
+                        "type": "Polygon",
+                        "vertices": vertices,
+                        "mask": None,
+                        "class_id": segment.get("class_id"),
+                    }
+                    converted_count += 1
+
+        return converted_count, skipped_count
+
+    def _mask_to_polygon_vertices(
+        self, mask: np.ndarray, epsilon_factor: float = 0.001
+    ) -> list[list[int]] | None:
+        """Convert a binary mask to polygon vertices.
+
+        Uses contour detection and polygon approximation to create
+        a simplified polygon from the mask.
+
+        Args:
+            mask: Binary mask (boolean numpy array)
+            epsilon_factor: Controls polygon simplification (0.0005-0.005 typical)
+
+        Returns:
+            List of [x, y] vertex coordinates, or None if conversion fails
+        """
+        if mask is None or np.sum(mask) == 0:
+            return None
+
+        # Convert boolean mask to uint8
+        mask_uint8 = (mask * 255).astype(np.uint8)
+
+        # Find contours
+        contours, _ = cv2.findContours(
+            mask_uint8, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
+        )
+
+        if not contours:
+            return None
+
+        # Use the largest contour (by area)
+        largest_contour = max(contours, key=cv2.contourArea)
+
+        # Calculate epsilon for polygon approximation
+        # Larger epsilon = fewer points = simpler polygon
+        arc_length = cv2.arcLength(largest_contour, closed=True)
+        epsilon = epsilon_factor * arc_length
+
+        # Approximate the contour as a polygon
+        approx_polygon = cv2.approxPolyDP(largest_contour, epsilon, closed=True)
+
+        # Convert to list of [x, y] coordinates
+        vertices = [[int(point[0][0]), int(point[0][1])] for point in approx_polygon]
+
+        # Ensure we have at least 3 vertices for a valid polygon
+        if len(vertices) < 3:
+            return None
+
+        return vertices

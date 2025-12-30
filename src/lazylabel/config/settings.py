@@ -22,6 +22,10 @@ class Settings:
     polygon_join_threshold: int = 2
     fragment_threshold: int = 0
 
+    # Auto-Polygon Conversion Settings
+    auto_polygon_enabled: bool = False
+    polygon_resolution: int = 80  # Slider value 1-100, maps to epsilon factor
+
     # Image Adjustment Settings
     brightness: float = 0.0
     contrast: float = 0.0
@@ -48,6 +52,14 @@ class Settings:
     # Pixel Priority Settings
     pixel_priority_enabled: bool = False
     pixel_priority_ascending: bool = True
+
+    # File Manager Display Settings
+    file_manager_show_name: bool = True
+    file_manager_show_npz: bool = True
+    file_manager_show_txt: bool = True
+    file_manager_show_modified: bool = True
+    file_manager_show_size: bool = True
+    file_manager_sort_order: int = 0  # 0=Name(A-Z), 1=Name(Z-A), 2=Date(Oldest), etc.
 
     def save_to_file(self, filepath: str) -> None:
         """Save settings to JSON file."""

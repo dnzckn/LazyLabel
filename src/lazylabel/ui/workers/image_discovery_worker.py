@@ -1,13 +1,20 @@
 """Worker thread for discovering image files in background."""
 
+import os
+
 from PyQt6.QtCore import QThread, pyqtSignal
+
+# Same extensions as FastFileManager for consistency
+IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".tiff", ".tif", ".bmp", ".gif", ".webp"}
 
 
 class ImageDiscoveryWorker(QThread):
-    """Worker thread for discovering all image file paths in background."""
+    """Worker thread for discovering all image file paths in background.
+
+    Uses os.scandir() for fast filesystem scanning instead of QFileSystemModel.
+    """
 
     images_discovered = pyqtSignal(list)  # List of all image file paths
-    progress = pyqtSignal(str)  # Progress message
     error = pyqtSignal(str)
 
     def __init__(self, file_model, file_manager, parent=None):
@@ -21,44 +28,39 @@ class ImageDiscoveryWorker(QThread):
         self._should_stop = True
 
     def run(self):
-        """Discover all image file paths in background."""
+        """Discover all image file paths using fast os.scandir()."""
         try:
             if self._should_stop:
                 return
 
-            self.progress.emit("Scanning for images...")
+            root_path = None
+            if hasattr(self.file_model, "rootPath"):
+                root_path = self.file_model.rootPath()
 
-            if (
-                not hasattr(self.file_model, "rootPath")
-                or not self.file_model.rootPath()
-            ):
+            if not root_path or not os.path.isdir(root_path):
                 self.images_discovered.emit([])
                 return
 
             all_image_paths = []
-            root_index = self.file_model.index(self.file_model.rootPath())
 
-            def scan_directory(parent_index):
-                if self._should_stop:
-                    return
+            # Use os.scandir() for fast directory scanning
+            # This is much faster than QFileSystemModel iteration
+            try:
+                with os.scandir(root_path) as entries:
+                    for entry in entries:
+                        if self._should_stop:
+                            break
 
-                for row in range(self.file_model.rowCount(parent_index)):
-                    if self._should_stop:
-                        return
-
-                    index = self.file_model.index(row, 0, parent_index)
-                    if self.file_model.isDir(index):
-                        scan_directory(index)  # Recursively scan subdirectories
-                    else:
-                        path = self.file_model.filePath(index)
-                        if self.file_manager.is_image_file(path):
-                            # Simply add all image file paths without checking for NPZ
-                            all_image_paths.append(path)
-
-            scan_directory(root_index)
+                        # Only process files (not directories for now - single level)
+                        if entry.is_file(follow_symlinks=False):
+                            ext = os.path.splitext(entry.name)[1].lower()
+                            if ext in IMAGE_EXTENSIONS:
+                                all_image_paths.append(entry.path)
+            except PermissionError:
+                pass  # Skip directories we can't access
 
             if not self._should_stop:
-                self.progress.emit(f"Found {len(all_image_paths)} images")
+                # Sort for consistent ordering
                 self.images_discovered.emit(sorted(all_image_paths))
 
         except Exception as e:

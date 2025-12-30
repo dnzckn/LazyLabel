@@ -621,10 +621,14 @@ class FastFileManager(QWidget):
     """Main file manager widget with improved performance"""
 
     fileSelected = pyqtSignal(Path)
+    displaySettingsChanged = (
+        pyqtSignal()
+    )  # Emitted when column visibility or sort changes
 
     def __init__(self):
         super().__init__()
         self._current_directory = None
+        self._current_sort_index = 0  # Default: Name (A-Z)
         self._init_ui()
 
     def _init_ui(self):
@@ -884,6 +888,8 @@ class FastFileManager(QWidget):
         order = order_map.get(index, Qt.SortOrder.AscendingOrder)
 
         self._table_view.sortByColumn(column, order)
+        self._current_sort_index = index
+        self.displaySettingsChanged.emit()
 
     def _refresh(self):
         """Refresh current directory"""
@@ -897,6 +903,7 @@ class FastFileManager(QWidget):
 
         # Update header sizing for visible columns
         self._update_header_sizing()
+        self.displaySettingsChanged.emit()
 
     def _update_header_sizing(self):
         """Update header column sizing for visible columns"""
@@ -962,19 +969,25 @@ class FastFileManager(QWidget):
         self._table_view.viewport().update()
         self._table_view.repaint()
 
+    def _get_proxy_row_for_path(self, path: Path) -> int:
+        """Get proxy model row for a given path using O(1) lookup."""
+        # Use source model's O(1) path-to-index lookup
+        source_row = self._model.getFileIndex(path)
+        if source_row < 0:
+            return -1
+        # Map to proxy model row
+        source_index = self._model.index(source_row, 0)
+        proxy_index = self._proxy_model.mapFromSource(source_index)
+        if proxy_index.isValid():
+            return proxy_index.row()
+        return -1
+
     def getSurroundingFiles(self, current_path: Path, count: int) -> list[Path]:
         """Get files in current sorted/filtered order surrounding the given path"""
         files = []
 
-        # Find current file in proxy model order
-        current_index = -1
-        for row in range(self._proxy_model.rowCount()):
-            proxy_index = self._proxy_model.index(row, 0)
-            source_index = self._proxy_model.mapToSource(proxy_index)
-            file_info = self._model.getFileInfo(source_index.row())
-            if file_info and file_info.path == current_path:
-                current_index = row
-                break
+        # Use O(1) lookup instead of iterating all rows
+        current_index = self._get_proxy_row_for_path(current_path)
 
         if current_index == -1:
             return []  # File not found in current view
@@ -999,15 +1012,8 @@ class FastFileManager(QWidget):
         """Get previous files in current sorted/filtered order before the given path"""
         files = []
 
-        # Find current file in proxy model order
-        current_index = -1
-        for row in range(self._proxy_model.rowCount()):
-            proxy_index = self._proxy_model.index(row, 0)
-            source_index = self._proxy_model.mapToSource(proxy_index)
-            file_info = self._model.getFileInfo(source_index.row())
-            if file_info and file_info.path == current_path:
-                current_index = row
-                break
+        # Use O(1) lookup instead of iterating all rows
+        current_index = self._get_proxy_row_for_path(current_path)
 
         if current_index == -1:
             return []  # File not found in current view
@@ -1173,3 +1179,58 @@ class FastFileManager(QWidget):
             file_info = self._model.getFileInfo(source_index.row())
             if file_info:
                 self.fileSelected.emit(file_info.path)
+
+    # Display settings getter/setter methods
+    def getDisplaySettings(self) -> dict:
+        """Get current display settings as a dictionary."""
+        return {
+            "show_name": self._column_dropdown.isItemChecked(0),
+            "show_npz": self._column_dropdown.isItemChecked(1),
+            "show_txt": self._column_dropdown.isItemChecked(2),
+            "show_modified": self._column_dropdown.isItemChecked(3),
+            "show_size": self._column_dropdown.isItemChecked(4),
+            "sort_order": self._current_sort_index,
+        }
+
+    def setDisplaySettings(self, settings: dict):
+        """Set display settings from a dictionary (no signals emitted)."""
+        # Block signals during setup to avoid triggering saves
+        self._column_dropdown.blockSignals(True)
+        self._sort_combo.blockSignals(True)
+
+        # Set column visibility
+        self._column_dropdown.setItemChecked(0, settings.get("show_name", True))
+        self._column_dropdown.setItemChecked(1, settings.get("show_npz", True))
+        self._column_dropdown.setItemChecked(2, settings.get("show_txt", True))
+        self._column_dropdown.setItemChecked(3, settings.get("show_modified", True))
+        self._column_dropdown.setItemChecked(4, settings.get("show_size", True))
+
+        # Apply to model
+        for i in range(5):
+            is_checked = self._column_dropdown.isItemChecked(i)
+            self._model.setColumnVisible(i, is_checked)
+
+        # Set sort order
+        sort_index = settings.get("sort_order", 0)
+        self._current_sort_index = sort_index
+
+        # Apply sort by simulating the index selection
+        column_map = {0: 0, 1: 0, 2: 2, 3: 2, 4: 1, 5: 1}
+        order_map = {
+            0: Qt.SortOrder.AscendingOrder,
+            1: Qt.SortOrder.DescendingOrder,
+            2: Qt.SortOrder.AscendingOrder,
+            3: Qt.SortOrder.DescendingOrder,
+            4: Qt.SortOrder.AscendingOrder,
+            5: Qt.SortOrder.DescendingOrder,
+        }
+        column = column_map.get(sort_index, 0)
+        order = order_map.get(sort_index, Qt.SortOrder.AscendingOrder)
+        self._table_view.sortByColumn(column, order)
+
+        # Update UI
+        self._update_header_sizing()
+
+        # Restore signals
+        self._column_dropdown.blockSignals(False)
+        self._sort_combo.blockSignals(False)

@@ -243,3 +243,44 @@ class SamModel:
         except Exception as e:
             logger.error(f"Error during box prediction: {e}")
             return None
+
+    def get_embeddings(self):
+        """Extract current image embeddings for caching.
+
+        Returns:
+            Dict with embeddings data, or None if no image is set
+        """
+        if not self.is_loaded or not self.predictor.is_image_set:
+            return None
+
+        try:
+            return {
+                "features": self.predictor.features.cpu().clone(),
+                "original_size": self.predictor.original_size,
+                "input_size": self.predictor.input_size,
+            }
+        except Exception as e:
+            logger.error(f"Error extracting embeddings: {e}")
+            return None
+
+    def set_embeddings(self, embeddings_data):
+        """Restore cached embeddings to skip image encoding.
+
+        Args:
+            embeddings_data: Dict from get_embeddings()
+
+        Returns:
+            True if successful, False otherwise
+        """
+        if not self.is_loaded or embeddings_data is None:
+            return False
+
+        try:
+            self.predictor.features = embeddings_data["features"].to(self.device)
+            self.predictor.original_size = embeddings_data["original_size"]
+            self.predictor.input_size = embeddings_data["input_size"]
+            self.predictor.is_image_set = True
+            return True
+        except Exception as e:
+            logger.error(f"Error restoring embeddings: {e}")
+            return False

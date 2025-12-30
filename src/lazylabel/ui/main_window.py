@@ -2,6 +2,7 @@
 
 import hashlib
 import os
+from collections import OrderedDict
 from pathlib import Path
 
 import cv2
@@ -55,6 +56,7 @@ from .right_panel import RightPanel
 from .widgets import StatusBar
 from .workers import (
     ImageDiscoveryWorker,
+    ImagePreloadWorker,
     MultiViewSAMInitWorker,
     MultiViewSAMUpdateWorker,
     SAMUpdateWorker,
@@ -157,6 +159,11 @@ class MainWindow(QMainWindow):
         self.cached_image_paths = []  # Cached list of image file paths (not image data)
         self.images_discovery_in_progress = False
 
+        # Image preloading for instant navigation
+        self._preload_cache = OrderedDict()  # path -> QPixmap (LRU cache)
+        self._preload_cache_max_size = 5  # Keep up to 5 preloaded images
+        self._preload_workers = []  # Active preload workers
+
         # Multi-view polygon state (using same pattern as single view)
         # Initialize with default 2-viewer config, will be updated when multi-view is activated
         self.multi_view_polygon_points = [[], []]  # QPointF objects for each viewer
@@ -184,6 +191,10 @@ class MainWindow(QMainWindow):
         self.last_ai_filter_value = (
             100 if self.fragment_threshold == 0 else self.fragment_threshold
         )
+
+        # Auto-polygon conversion state
+        self.auto_polygon_enabled = False
+        self.polygon_epsilon_factor = 0.001  # Default epsilon for polygon approximation
 
         # Image adjustment state
         self.brightness = self.settings.brightness
@@ -231,7 +242,9 @@ class MainWindow(QMainWindow):
         # Segment pixmap cache for performance optimization
         # Key: (segment_index, viewer_index, color_rgb, alpha) -> QPixmap
         # This avoids regenerating pixmaps on every display refresh
-        self._segment_pixmap_cache = {}
+        # Uses OrderedDict for LRU eviction when cache exceeds max size
+        self._segment_pixmap_cache = OrderedDict()
+        self._segment_cache_max_size = 500  # Max pixmaps to keep in cache
         self._segment_cache_valid = True  # Flag to invalidate cache when needed
 
         # Color cache for class colors - avoids recalculating HSV colors
@@ -240,7 +253,9 @@ class MainWindow(QMainWindow):
 
         # Highlight pixmap cache - avoids regenerating highlight pixmaps
         # Key: (segment_index, highlight_color_rgb, alpha) -> QPixmap
-        self._highlight_pixmap_cache = {}
+        # Uses OrderedDict for LRU eviction
+        self._highlight_pixmap_cache = OrderedDict()
+        self._highlight_cache_max_size = 200  # Max highlight pixmaps to keep
 
         # SAM model update debouncing for "operate on view" mode
         self.sam_update_timer = QTimer()
@@ -282,8 +297,15 @@ class MainWindow(QMainWindow):
         self.save_pending = False  # Track if a save is in progress
 
         # Smart caching for SAM embeddings to avoid redundant processing
-        self.sam_embedding_cache = {}  # Cache SAM embeddings by content hash
+        self.sam_embedding_cache = OrderedDict()  # LRU cache for SAM embeddings
+        self._sam_embedding_cache_max_size = 10  # Keep embeddings for ~10 images
         self.current_sam_hash = None  # Hash of currently loaded SAM image
+
+        # SAM preloading for next image (runs during idle time)
+        self._sam_preload_timer = QTimer()
+        self._sam_preload_timer.setSingleShot(True)
+        self._sam_preload_timer.timeout.connect(self._preload_next_sam_embeddings)
+        self._sam_preload_pending_path = None  # Path to preload
 
         # Add bounding box preview state
         self.ai_bbox_preview_mask = None
@@ -760,6 +782,13 @@ class MainWindow(QMainWindow):
         except Exception as e:
             logger.error(f"Failed to establish FFT threshold connection: {e}")
 
+        # AI segment auto-conversion
+        self.control_panel.auto_polygon_toggled.connect(self._on_auto_polygon_toggled)
+        self.control_panel.polygon_resolution_changed.connect(
+            self._on_polygon_resolution_changed
+        )
+        self.control_panel.auto_polygon_reset.connect(self._on_auto_polygon_reset)
+
         # Right panel connections
         self.right_panel.open_folder_requested.connect(self._open_folder_dialog)
         self.right_panel.image_selected.connect(self._load_selected_image)
@@ -778,6 +807,10 @@ class MainWindow(QMainWindow):
         self.right_panel.reassign_classes_requested.connect(self._reassign_class_ids)
         self.right_panel.class_filter_changed.connect(self._update_segment_table)
         self.right_panel.class_toggled.connect(self._handle_class_toggle)
+        # File manager display settings
+        self.right_panel.file_manager.displaySettingsChanged.connect(
+            self._on_file_manager_settings_changed
+        )
 
         # Panel pop-out functionality
         self.control_panel.pop_out_requested.connect(self._pop_out_left_panel)
@@ -813,6 +846,7 @@ class MainWindow(QMainWindow):
             "delete_segments": self._delete_selected_segments,
             "delete_segments_alt": self._delete_selected_segments,
             "merge_segments": self._handle_merge_press,
+            "convert_to_polygons": self._toggle_auto_polygon,
             "undo": self._undo_last_action,
             "redo": self._redo_last_action,
             "select_all": lambda: self.right_panel.select_all_segments(),
@@ -866,6 +900,24 @@ class MainWindow(QMainWindow):
         self.control_panel.set_pan_speed(int(self.settings.pan_multiplier * 10))
         self.control_panel.set_join_threshold(self.settings.polygon_join_threshold)
         self.control_panel.set_fragment_threshold(self.settings.fragment_threshold)
+        # Restore auto-polygon settings
+        self.control_panel.set_auto_polygon_enabled(self.settings.auto_polygon_enabled)
+        self.control_panel.polygon_resolution_slider.setValue(
+            self.settings.polygon_resolution
+        )
+        self.auto_polygon_enabled = self.settings.auto_polygon_enabled
+        self.polygon_epsilon_factor = self.control_panel.get_polygon_epsilon()
+        # Restore file manager display settings
+        self.right_panel.file_manager.setDisplaySettings(
+            {
+                "show_name": self.settings.file_manager_show_name,
+                "show_npz": self.settings.file_manager_show_npz,
+                "show_txt": self.settings.file_manager_show_txt,
+                "show_modified": self.settings.file_manager_show_modified,
+                "show_size": self.settings.file_manager_show_size,
+                "sort_order": self.settings.file_manager_sort_order,
+            }
+        )
         self.control_panel.set_brightness(int(self.settings.brightness))
         self.control_panel.set_contrast(int(self.settings.contrast))
         self.control_panel.set_gamma(int(self.settings.gamma * 100))
@@ -1287,7 +1339,7 @@ class MainWindow(QMainWindow):
         folder_path = QFileDialog.getExistingDirectory(self, "Select Image Folder")
         if folder_path:
             self.right_panel.set_folder(folder_path, self.file_model)
-            # Start background image discovery for global image list
+            # Start fast background image discovery using os.scandir()
             self._start_background_image_discovery()
         self.viewer.setFocus()
 
@@ -1323,17 +1375,22 @@ class MainWindow(QMainWindow):
                 self._save_output_to_npz()
 
             self.current_image_path = path
-            # Load image with explicit transparency support
-            qimage = QImage(self.current_image_path)
-            if qimage.isNull():
-                return
-            # For PNG files, always ensure proper alpha format handling
-            if self.current_image_path.lower().endswith(".png"):
-                # PNG files can have alpha channels, use ARGB32_Premultiplied for proper handling
-                qimage = qimage.convertToFormat(
-                    QImage.Format.Format_ARGB32_Premultiplied
-                )
-            pixmap = QPixmap.fromImage(qimage)
+
+            # Try to use preloaded pixmap first (instant navigation)
+            pixmap = self._get_preloaded_pixmap(path)
+            if pixmap is None:
+                # Load image with explicit transparency support
+                qimage = QImage(self.current_image_path)
+                if qimage.isNull():
+                    return
+                # For PNG files, always ensure proper alpha format handling
+                if self.current_image_path.lower().endswith(".png"):
+                    # PNG files can have alpha channels, use ARGB32_Premultiplied
+                    qimage = qimage.convertToFormat(
+                        QImage.Format.Format_ARGB32_Premultiplied
+                    )
+                pixmap = QPixmap.fromImage(qimage)
+
             if not pixmap.isNull():
                 self._reset_state()
                 self.viewer.set_photo(pixmap)
@@ -1368,6 +1425,9 @@ class MainWindow(QMainWindow):
         self._cache_original_image()
 
         self._show_success_notification(f"Loaded: {Path(self.current_image_path).name}")
+
+        # Preload adjacent images for instant navigation
+        self._preload_adjacent_images()
 
     def _load_image_by_path(self, path: str):
         """Load image by file path directly (for FastFileManager)."""
@@ -1457,6 +1517,9 @@ class MainWindow(QMainWindow):
 
         # Update threshold widgets for new image (this was missing!)
         self._update_channel_threshold_for_image(pixmap)
+
+        # Preload adjacent images for instant navigation
+        self._preload_adjacent_images()
 
     def _load_multi_view_from_path(self, path: str):
         """Load multi-view starting from a specific path using FastFileManager."""
@@ -1698,8 +1761,8 @@ class MainWindow(QMainWindow):
         if hasattr(self, "_cached_multi_view_original_images"):
             self._cached_multi_view_original_images = None
 
-        # Clear SAM embedding cache to ensure fresh processing
-        self.sam_embedding_cache.clear()
+        # Note: SAM embedding cache is intentionally NOT cleared here
+        # The cache persists across image navigations for performance
 
         # Reset AI mode state
         self.ai_click_start_pos = None
@@ -1974,7 +2037,11 @@ class MainWindow(QMainWindow):
         return images[::-1]
 
     def _update_sam_model_image(self):
-        """Updates the SAM model's image based on the 'Operate On View' setting."""
+        """Updates the SAM model's image based on the 'Operate On View' setting.
+
+        Uses LRU cache for embeddings to avoid expensive recomputation when
+        returning to previously viewed images.
+        """
         if not self.model_manager.is_model_available() or not self.current_image_path:
             return
 
@@ -1987,19 +2054,60 @@ class MainWindow(QMainWindow):
             image_np = np.array(ptr).reshape(qimage.height(), qimage.width(), 4)
             # Convert from BGRA to RGB for SAM
             image_rgb = cv2.cvtColor(image_np, cv2.COLOR_BGRA2RGB)
-            self.model_manager.sam_model.set_image_from_array(image_rgb)
-            # Update hash to prevent worker thread from re-updating
             image_hash = self._get_image_hash(image_rgb)
+
+            # Check cache first
+            if image_hash in self.sam_embedding_cache:
+                # Move to end for LRU
+                self.sam_embedding_cache.move_to_end(image_hash)
+                embeddings = self.sam_embedding_cache[image_hash]
+                if self.model_manager.sam_model.set_embeddings(embeddings):
+                    self.current_sam_hash = image_hash
+                    self.sam_is_dirty = False
+                    return
+
+            # Not cached - compute embeddings
+            self.model_manager.sam_model.set_image_from_array(image_rgb)
             self.current_sam_hash = image_hash
+
+            # Cache the new embeddings
+            self._cache_sam_embeddings(image_hash)
         else:
             # Pass the original image path to SAM model
-            self.model_manager.sam_model.set_image_from_path(self.current_image_path)
-            # Update hash to prevent worker thread from re-updating
             image_hash = hashlib.md5(self.current_image_path.encode()).hexdigest()
+
+            # Check cache first
+            if image_hash in self.sam_embedding_cache:
+                # Move to end for LRU
+                self.sam_embedding_cache.move_to_end(image_hash)
+                embeddings = self.sam_embedding_cache[image_hash]
+                if self.model_manager.sam_model.set_embeddings(embeddings):
+                    self.current_sam_hash = image_hash
+                    self.sam_is_dirty = False
+                    return
+
+            # Not cached - load and compute embeddings
+            self.model_manager.sam_model.set_image_from_path(self.current_image_path)
             self.current_sam_hash = image_hash
+
+            # Cache the new embeddings
+            self._cache_sam_embeddings(image_hash)
 
         # Mark SAM as clean since we just updated it
         self.sam_is_dirty = False
+
+    def _cache_sam_embeddings(self, image_hash):
+        """Cache SAM embeddings with LRU eviction."""
+        embeddings = self.model_manager.sam_model.get_embeddings()
+        if embeddings is not None:
+            self.sam_embedding_cache[image_hash] = embeddings
+            # LRU eviction
+            while len(self.sam_embedding_cache) > self._sam_embedding_cache_max_size:
+                self.sam_embedding_cache.popitem(last=False)
+
+            # Schedule preloading of next image after a short delay
+            # This runs during "idle" time after the current image is ready
+            self._schedule_sam_preload()
 
     def _load_next_image(self):
         """Load next image in the file list."""
@@ -2059,6 +2167,73 @@ class MainWindow(QMainWindow):
 
         self._update_all_lists()
 
+    def _on_auto_polygon_toggled(self, enabled: bool):
+        """Handle auto-polygon toggle state change."""
+        self.auto_polygon_enabled = enabled
+        self.settings.auto_polygon_enabled = enabled
+        self._save_settings()
+        status = "ON" if enabled else "OFF"
+        self._show_notification(f"Auto-Convert AI to Polygon: {status}")
+        logger.debug(f"Auto-polygon conversion: {status}")
+
+    def _on_polygon_resolution_changed(self, epsilon: float):
+        """Handle polygon resolution slider change."""
+        self.polygon_epsilon_factor = epsilon
+        self.settings.polygon_resolution = (
+            self.control_panel.polygon_resolution_slider.value()
+        )
+        self._save_settings()
+
+    def _toggle_auto_polygon(self):
+        """Toggle auto-polygon conversion feature (hotkey handler)."""
+        self.control_panel.toggle_auto_polygon()
+
+    def _on_auto_polygon_reset(self):
+        """Handle auto-polygon settings reset to defaults."""
+        self._show_notification("Auto-polygon settings reset to defaults")
+
+    def _on_file_manager_settings_changed(self):
+        """Handle file manager display settings change."""
+        settings = self.right_panel.file_manager.getDisplaySettings()
+        self.settings.file_manager_show_name = settings["show_name"]
+        self.settings.file_manager_show_npz = settings["show_npz"]
+        self.settings.file_manager_show_txt = settings["show_txt"]
+        self.settings.file_manager_show_modified = settings["show_modified"]
+        self.settings.file_manager_show_size = settings["show_size"]
+        self.settings.file_manager_sort_order = settings["sort_order"]
+        self._save_settings()
+
+    def _create_segment_from_mask(self, mask):
+        """Create a segment from a mask, optionally converting to polygon.
+
+        If auto_polygon_enabled is True, creates a Polygon segment.
+        Otherwise, creates an AI (mask-based) segment.
+
+        Args:
+            mask: Binary mask (numpy array)
+
+        Returns:
+            Segment dictionary ready to be added to segment_manager
+        """
+        if self.auto_polygon_enabled:
+            # Convert mask to polygon vertices
+            vertices = self.segment_manager._mask_to_polygon_vertices(
+                mask, self.polygon_epsilon_factor
+            )
+            if vertices and len(vertices) >= 3:
+                return {
+                    "type": "Polygon",
+                    "vertices": vertices,
+                    "mask": None,
+                }
+
+        # Fallback to AI segment (or if polygon conversion failed)
+        return {
+            "type": "AI",
+            "mask": mask,
+            "vertices": None,
+        }
+
     def _highlight_selected_segments(self):
         """Highlight selected segments. In edit mode, use a brighter hover-like effect."""
         # Remove previous highlight overlays
@@ -2105,7 +2280,6 @@ class MainWindow(QMainWindow):
                 highlight_brush = QBrush(QColor(255, 255, 0, 180))
 
             if seg["type"] == "Polygon" and seg.get("vertices"):
-                # Convert stored list of lists back to QPointF objects
                 qpoints = [QPointF(p[0], p[1]) for p in seg["vertices"]]
                 poly_item = QGraphicsPolygonItem(QPolygonF(qpoints))
                 poly_item.setBrush(highlight_brush)
@@ -2172,7 +2346,6 @@ class MainWindow(QMainWindow):
         viewer = self.multi_view_viewers[viewer_idx]
 
         if segment["type"] == "Polygon" and segment_data.get("vertices"):
-            # Convert stored list of lists back to QPointF objects
             qpoints = [QPointF(p[0], p[1]) for p in segment_data["vertices"]]
             poly_item = QGraphicsPolygonItem(QPolygonF(qpoints))
             poly_item.setBrush(highlight_brush)
@@ -2187,7 +2360,10 @@ class MainWindow(QMainWindow):
             # If in edit mode, we could consider skipping non-polygons.
             if self.mode != "edit":
                 mask = segment_data.get("mask")
-                pixmap = mask_to_pixmap(mask, (255, 255, 0), alpha=180)
+                # Use cached highlight pixmap for performance
+                pixmap = self._get_cached_highlight_pixmap(
+                    segment_index, mask, (255, 255, 0), alpha=180
+                )
                 highlight_item = viewer.scene().addPixmap(pixmap)
                 highlight_item.setZValue(1000)
                 self.multi_view_highlight_items[viewer_idx].append(highlight_item)
@@ -2322,8 +2498,147 @@ class MainWindow(QMainWindow):
         active_class = self.segment_manager.get_active_class()
         self.right_panel.update_active_class_display(active_class)
 
-    def _update_all_lists(self):
-        """Update all UI lists."""
+    def _get_current_table_filter(self):
+        """Get the current table filter settings.
+
+        Returns:
+            Tuple of (show_all: bool, filter_class_id: int)
+        """
+        filter_text = self.right_panel.class_filter_combo.currentText()
+        show_all = filter_text == "All Classes"
+        filter_class_id = -1
+        if not show_all:
+            try:
+                if ":" in filter_text:
+                    filter_class_id = int(filter_text.split(":")[-1].strip())
+                else:
+                    filter_class_id = int(filter_text.split()[-1])
+            except (ValueError, IndexError):
+                show_all = True
+        return show_all, filter_class_id
+
+    def _segment_passes_filter(self, segment, show_all, filter_class_id):
+        """Check if a segment passes the current filter.
+
+        Args:
+            segment: The segment dict
+            show_all: Whether "All Classes" filter is active
+            filter_class_id: The class ID to filter by (if not show_all)
+
+        Returns:
+            True if segment should be shown in table
+        """
+        if show_all:
+            return True
+        return segment.get("class_id") == filter_class_id
+
+    def _add_row_to_segment_table(self, segment_index):
+        """Add a single row to the segment table for a new segment.
+
+        This is O(1) compared to full table rebuild which is O(n).
+
+        Args:
+            segment_index: Index of the newly added segment
+        """
+        if segment_index >= len(self.segment_manager.segments):
+            return
+
+        segment = self.segment_manager.segments[segment_index]
+        show_all, filter_class_id = self._get_current_table_filter()
+
+        # Check if segment passes current filter
+        if not self._segment_passes_filter(segment, show_all, filter_class_id):
+            return  # Segment filtered out, no table change needed
+
+        table = self.right_panel.segment_table
+        table.blockSignals(True)
+
+        try:
+            # Add new row at end
+            row = table.rowCount()
+            table.insertRow(row)
+
+            # Get segment data
+            class_id = segment.get("class_id")
+            color = self._get_color_for_class(class_id)
+            class_id_str = str(class_id) if class_id is not None else "N/A"
+            alias_str = (
+                self.segment_manager.get_class_alias(class_id)
+                if class_id is not None
+                else "N/A"
+            )
+
+            # Create table items (1-based segment ID for display)
+            index_item = NumericTableWidgetItem(str(segment_index + 1))
+            class_item = NumericTableWidgetItem(class_id_str)
+            alias_item = QTableWidgetItem(alias_str)
+
+            # Set items as non-editable
+            index_item.setFlags(index_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+            class_item.setFlags(class_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+            alias_item.setFlags(alias_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+
+            # Store original index for selection tracking
+            index_item.setData(Qt.ItemDataRole.UserRole, segment_index)
+
+            # Set items in table
+            table.setItem(row, 0, index_item)
+            table.setItem(row, 1, class_item)
+            table.setItem(row, 2, alias_item)
+
+            # Set background color
+            for col in range(table.columnCount()):
+                if table.item(row, col):
+                    table.item(row, col).setBackground(QBrush(color))
+        finally:
+            table.blockSignals(False)
+
+    def _remove_row_from_segment_table(self, segment_index):
+        """Remove a row from segment table and shift remaining indices.
+
+        This is O(n) for the shift but avoids full table rebuild overhead.
+
+        Args:
+            segment_index: Index of the removed segment
+        """
+        table = self.right_panel.segment_table
+        table.blockSignals(True)
+
+        try:
+            # Find the row with this segment index
+            row_to_remove = None
+            for row in range(table.rowCount()):
+                item = table.item(row, 0)
+                if item and item.data(Qt.ItemDataRole.UserRole) == segment_index:
+                    row_to_remove = row
+                    break
+
+            if row_to_remove is not None:
+                # Remove the row
+                table.removeRow(row_to_remove)
+
+            # Shift indices for all rows with segment_index > removed index
+            for row in range(table.rowCount()):
+                item = table.item(row, 0)
+                if item:
+                    stored_index = item.data(Qt.ItemDataRole.UserRole)
+                    if stored_index is not None and stored_index > segment_index:
+                        # Decrement the stored index
+                        new_index = stored_index - 1
+                        item.setData(Qt.ItemDataRole.UserRole, new_index)
+                        # Update the displayed text (1-based)
+                        item.setText(str(new_index + 1))
+        finally:
+            table.blockSignals(False)
+
+    def _update_all_lists(self, invalidate_cache=True):
+        """Update all UI lists.
+
+        Args:
+            invalidate_cache: If True, invalidate segment cache before display.
+                             Set False for selection-only changes to avoid
+                             unnecessary pixmap regeneration.
+        """
         if self._updating_lists:
             return  # Prevent recursion
 
@@ -2334,7 +2649,8 @@ class MainWindow(QMainWindow):
             self._update_class_filter()
             # Invalidate segment cache before displaying to ensure fresh pixmaps
             # This is critical after erase operations where segment masks change
-            self._invalidate_segment_cache()
+            if invalidate_cache:
+                self._invalidate_segment_cache()
             self._display_all_segments()
             if self.mode == "edit":
                 if self.view_mode == "multi":
@@ -2485,12 +2801,15 @@ class MainWindow(QMainWindow):
         cache_key_default = (segment_index, viewer_index, color_rgb, 70)
         cache_key_hover = (segment_index, viewer_index, color_rgb, 170)
 
-        # Check if we have valid cached pixmaps
+        # Check if we have valid cached pixmaps (use LRU move_to_end for access tracking)
         if (
             self._segment_cache_valid
             and cache_key_default in self._segment_pixmap_cache
             and cache_key_hover in self._segment_pixmap_cache
         ):
+            # Move accessed items to end (most recently used)
+            self._segment_pixmap_cache.move_to_end(cache_key_default)
+            self._segment_pixmap_cache.move_to_end(cache_key_hover)
             return (
                 self._segment_pixmap_cache[cache_key_default],
                 self._segment_pixmap_cache[cache_key_hover],
@@ -2500,7 +2819,11 @@ class MainWindow(QMainWindow):
         default_pixmap = mask_to_pixmap(mask, color_rgb, alpha=70)
         hover_pixmap = mask_to_pixmap(mask, color_rgb, alpha=170)
 
-        # Cache them
+        # LRU eviction: remove oldest entries if cache is full
+        while len(self._segment_pixmap_cache) >= self._segment_cache_max_size:
+            self._segment_pixmap_cache.popitem(last=False)  # Remove oldest (first)
+
+        # Cache new pixmaps (added at end = most recently used)
         self._segment_pixmap_cache[cache_key_default] = default_pixmap
         self._segment_pixmap_cache[cache_key_hover] = hover_pixmap
 
@@ -2540,8 +2863,8 @@ class MainWindow(QMainWindow):
         Args:
             deleted_index: The index of the segment that was deleted
         """
-        # Shift segment pixmap cache
-        new_cache = {}
+        # Shift segment pixmap cache (preserve LRU order with OrderedDict)
+        new_cache = OrderedDict()
         for key, value in self._segment_pixmap_cache.items():
             segment_idx, viewer_idx, color_rgb, alpha = key
             if segment_idx == deleted_index:
@@ -2556,8 +2879,8 @@ class MainWindow(QMainWindow):
                 new_cache[key] = value
         self._segment_pixmap_cache = new_cache
 
-        # Shift highlight pixmap cache
-        new_highlight_cache = {}
+        # Shift highlight pixmap cache (preserve LRU order with OrderedDict)
+        new_highlight_cache = OrderedDict()
         for key, value in self._highlight_pixmap_cache.items():
             segment_idx, color_rgb, alpha = key
             if segment_idx == deleted_index:
@@ -2584,9 +2907,15 @@ class MainWindow(QMainWindow):
         cache_key = (segment_index, color_rgb, alpha)
 
         if cache_key in self._highlight_pixmap_cache:
+            # Move to end for LRU tracking
+            self._highlight_pixmap_cache.move_to_end(cache_key)
             return self._highlight_pixmap_cache[cache_key]
 
-        # Generate new pixmap
+        # LRU eviction: remove oldest entries if cache is full
+        while len(self._highlight_pixmap_cache) >= self._highlight_cache_max_size:
+            self._highlight_pixmap_cache.popitem(last=False)
+
+        # Generate new pixmap and cache it
         pixmap = mask_to_pixmap(mask, color_rgb, alpha=alpha)
         self._highlight_pixmap_cache[cache_key] = pixmap
         return pixmap
@@ -2710,6 +3039,7 @@ class MainWindow(QMainWindow):
         """Update UI lists with incremental segment display updates.
 
         This is more efficient than _update_all_lists when only adding/removing segments.
+        Uses O(1) table operations instead of O(n) full rebuild.
 
         Args:
             added_segment_index: Index of newly added segment (if any)
@@ -2720,26 +3050,33 @@ class MainWindow(QMainWindow):
 
         self._updating_lists = True
         try:
-            # Always update these (they're relatively cheap)
+            # Always update class list (relatively cheap, needed for new classes)
             self._update_class_list()
-            self._update_segment_table()
-            self._update_class_filter()
 
-            # Handle segment display incrementally
+            # Handle segment table incrementally
             if removed_indices:
                 # Sort in descending order to handle multiple deletions correctly
                 for idx in sorted(removed_indices, reverse=True):
+                    # Remove from table first (before display removal)
+                    self._remove_row_from_segment_table(idx)
+                    # Remove from display
                     self._remove_segment_from_display(idx)
                     # Shift segment_items indices after deletion
                     self._shift_segment_items_after_deletion(idx)
                     # Shift cache entries to preserve cached pixmaps
                     self._shift_segment_cache_after_deletion(idx)
             elif added_segment_index is not None:
-                # Just add the new segment
+                # Add row to table (O(1))
+                self._add_row_to_segment_table(added_segment_index)
+                # Add to display
                 self._add_segment_to_display(added_segment_index)
             else:
-                # Fallback to full refresh
+                # Fallback to full refresh for table and display
+                self._update_segment_table()
                 self._display_all_segments()
+
+            # Update class filter (may have new classes)
+            self._update_class_filter()
 
             # Handle edit handles
             if self.mode == "edit":
@@ -2800,79 +3137,95 @@ class MainWindow(QMainWindow):
             f"Displaying {len(self.segment_manager.segments)} segments in multi-view mode"
         )
 
-        # Clear existing segment items from all viewers
-        if hasattr(self, "multi_view_segment_items"):
-            for viewer_idx, viewer_segments in self.multi_view_segment_items.items():
-                for _segment_idx, items in viewer_segments.items():
-                    for item in items[
-                        :
-                    ]:  # Create a copy to avoid modification during iteration
-                        try:
-                            if item.scene():
-                                self.multi_view_viewers[viewer_idx].scene().removeItem(
-                                    item
-                                )
-                        except RuntimeError:
-                            # Object has been deleted, skip it
-                            pass
+        # Batch scene operations for better performance
+        # Disable updates and block signals during bulk changes
+        for viewer in self.multi_view_viewers:
+            viewer.setUpdatesEnabled(False)
+            viewer.scene().blockSignals(True)
 
-        # Clear all segment-related items from scenes (defensive cleanup)
-        # Only remove items that are actually segment display items, not UI elements
-        for _viewer_idx, viewer in enumerate(self.multi_view_viewers):
-            items_to_remove = []
-            for item in viewer.scene().items():
-                # Only remove items that are confirmed segment display items
-                # Skip pixmap items (could be the image itself) and temporary graphics items
-                if (
-                    hasattr(item, "segment_id")
-                    or isinstance(item, HoverablePixmapItem | HoverablePolygonItem)
-                ) or (
-                    hasattr(item, "__class__")
-                    and item.__class__.__name__ == "QGraphicsPolygonItem"
-                    and hasattr(item, "segment_id")
-                ):
-                    items_to_remove.append(item)
+        try:
+            # Clear existing segment items from all viewers
+            if hasattr(self, "multi_view_segment_items"):
+                for (
+                    viewer_idx,
+                    viewer_segments,
+                ) in self.multi_view_segment_items.items():
+                    for _segment_idx, items in viewer_segments.items():
+                        for item in items[
+                            :
+                        ]:  # Create a copy to avoid modification during iteration
+                            try:
+                                if item.scene():
+                                    self.multi_view_viewers[
+                                        viewer_idx
+                                    ].scene().removeItem(item)
+                            except RuntimeError:
+                                # Object has been deleted, skip it
+                                pass
 
-            for item in items_to_remove:
-                try:
-                    if item.scene():
-                        viewer.scene().removeItem(item)
-                except RuntimeError:
-                    # Object has been deleted, skip it
-                    pass
+            # Clear all segment-related items from scenes (defensive cleanup)
+            # Only remove items that are actually segment display items, not UI elements
+            for _viewer_idx, viewer in enumerate(self.multi_view_viewers):
+                items_to_remove = []
+                for item in viewer.scene().items():
+                    # Only remove items that are confirmed segment display items
+                    # Skip pixmap items (could be the image itself) and temporary graphics items
+                    if (
+                        hasattr(item, "segment_id")
+                        or isinstance(item, HoverablePixmapItem | HoverablePolygonItem)
+                    ) or (
+                        hasattr(item, "__class__")
+                        and item.__class__.__name__ == "QGraphicsPolygonItem"
+                        and hasattr(item, "segment_id")
+                    ):
+                        items_to_remove.append(item)
 
-        # Initialize segment items tracking for multi-view
-        config = self._get_multi_view_config()
-        num_viewers = config["num_viewers"]
-        self.multi_view_segment_items = {i: {} for i in range(num_viewers)}
+                for item in items_to_remove:
+                    try:
+                        if item.scene():
+                            viewer.scene().removeItem(item)
+                    except RuntimeError:
+                        # Object has been deleted, skip it
+                        pass
 
-        # Display segments on each viewer
-        for i, segment in enumerate(self.segment_manager.segments):
-            class_id = segment.get("class_id")
-            base_color = self._get_color_for_class(class_id)
+            # Initialize segment items tracking for multi-view
+            config = self._get_multi_view_config()
+            num_viewers = config["num_viewers"]
+            self.multi_view_segment_items = {i: {} for i in range(num_viewers)}
 
-            # Check if segment has view-specific data
-            if "views" in segment:
-                # New multi-view format with paired data
-                for viewer_idx in range(len(self.multi_view_viewers)):
-                    if viewer_idx in segment["views"]:
-                        self._display_segment_in_multi_view_viewer(
-                            i, segment, viewer_idx, base_color
-                        )
-            else:
-                # Legacy single-view format - display only in source viewer
-                source_viewer = segment.get("_source_viewer")
-                if source_viewer is not None:
-                    # Display only in the viewer it was loaded from
-                    self._display_segment_in_multi_view_viewer(
-                        i, segment, source_viewer, base_color
-                    )
-                else:
-                    # Fallback for segments without source info - display in all viewers
+            # Display segments on each viewer
+            for i, segment in enumerate(self.segment_manager.segments):
+                class_id = segment.get("class_id")
+                base_color = self._get_color_for_class(class_id)
+
+                # Check if segment has view-specific data
+                if "views" in segment:
+                    # New multi-view format with paired data
                     for viewer_idx in range(len(self.multi_view_viewers)):
+                        if viewer_idx in segment["views"]:
+                            self._display_segment_in_multi_view_viewer(
+                                i, segment, viewer_idx, base_color
+                            )
+                else:
+                    # Legacy single-view format - display only in source viewer
+                    source_viewer = segment.get("_source_viewer")
+                    if source_viewer is not None:
+                        # Display only in the viewer it was loaded from
                         self._display_segment_in_multi_view_viewer(
-                            i, segment, viewer_idx, base_color
+                            i, segment, source_viewer, base_color
                         )
+                    else:
+                        # Fallback for segments without source info - display in all viewers
+                        for viewer_idx in range(len(self.multi_view_viewers)):
+                            self._display_segment_in_multi_view_viewer(
+                                i, segment, viewer_idx, base_color
+                            )
+        finally:
+            # Re-enable updates and signals for all viewers
+            for viewer in self.multi_view_viewers:
+                viewer.scene().blockSignals(False)
+                viewer.setUpdatesEnabled(True)
+                viewer.viewport().update()
 
     def _display_segment_in_multi_view_viewer(
         self, segment_index, segment, viewer_index, base_color
@@ -3235,7 +3588,7 @@ class MainWindow(QMainWindow):
                     "vertices": None,
                 }
                 self.segment_manager.add_segment(new_segment)
-                logger.info(
+                logger.debug(
                     f"Added AI segment. Total segments: {len(self.segment_manager.segments)}"
                 )
                 # Record the action for undo
@@ -4185,11 +4538,8 @@ class MainWindow(QMainWindow):
                             self._show_notification("No segments to erase")
                     else:
                         # Create actual segment (normal mode)
-                        new_segment = {
-                            "type": "AI",
-                            "mask": filtered_mask,
-                            "vertices": None,
-                        }
+                        # Use helper method to auto-convert to polygon if enabled
+                        new_segment = self._create_segment_from_mask(filtered_mask)
                         self.segment_manager.add_segment(new_segment)
 
                         # Record the action for undo
@@ -4199,8 +4549,11 @@ class MainWindow(QMainWindow):
                                 "segment_index": len(self.segment_manager.segments) - 1,
                             }
                         )
+                        seg_type = (
+                            "polygon" if new_segment["type"] == "Polygon" else "AI"
+                        )
                         self._show_success_notification(
-                            "AI bounding box segment saved!"
+                            f"AI bounding box segment saved as {seg_type}!"
                         )
 
                     # Clear redo history when a new action is performed
@@ -4269,11 +4622,8 @@ class MainWindow(QMainWindow):
                             self._show_notification("No segments to erase")
                     else:
                         # Create actual segment (normal mode)
-                        new_segment = {
-                            "type": "AI",
-                            "mask": filtered_mask,
-                            "vertices": None,
-                        }
+                        # Use helper method to auto-convert to polygon if enabled
+                        new_segment = self._create_segment_from_mask(filtered_mask)
                         self.segment_manager.add_segment(new_segment)
 
                         # Record the action for undo
@@ -4283,7 +4633,10 @@ class MainWindow(QMainWindow):
                                 "segment_index": len(self.segment_manager.segments) - 1,
                             }
                         )
-                        self._show_notification("AI segment accepted")
+                        seg_type = (
+                            "polygon" if new_segment["type"] == "Polygon" else "AI"
+                        )
+                        self._show_notification(f"Segment saved as {seg_type}")
 
                     # Clear redo history when a new action is performed
                     self.redo_history.clear()
@@ -4498,6 +4851,10 @@ class MainWindow(QMainWindow):
         self.settings.save_to_file(str(self.paths.settings_file))
         super().closeEvent(event)
 
+    def _save_settings(self):
+        """Save settings to file immediately."""
+        self.settings.save_to_file(str(self.paths.settings_file))
+
     def _reset_state(self):
         """Reset application state."""
         self.clear_all_points()
@@ -4530,8 +4887,8 @@ class MainWindow(QMainWindow):
         if hasattr(self, "_cached_multi_view_original_images"):
             self._cached_multi_view_original_images = None
 
-        # Clear SAM embedding cache to ensure fresh processing
-        self.sam_embedding_cache.clear()
+        # Note: SAM embedding cache is intentionally NOT cleared here
+        # The cache persists across image navigations for performance
 
         # Reset AI mode state
         self.ai_click_start_pos = None
@@ -5135,35 +5492,47 @@ class MainWindow(QMainWindow):
 
     def _draw_polygon_preview(self):
         """Draw polygon preview lines and fill."""
-        # Remove old preview lines and polygons (keep dots)
-        for item in self.polygon_preview_items[:]:
-            if not isinstance(item, QGraphicsEllipseItem):
-                if item.scene():
-                    self.viewer.scene().removeItem(item)
-                self.polygon_preview_items.remove(item)
+        scene = self.viewer.scene()
 
-        if len(self.polygon_points) > 2:
-            # Create preview polygon fill
-            preview_poly = QGraphicsPolygonItem(QPolygonF(self.polygon_points))
-            preview_poly.setBrush(QBrush(QColor(0, 255, 255, 100)))
-            preview_poly.setPen(QPen(Qt.GlobalColor.transparent))
-            self.viewer.scene().addItem(preview_poly)
-            self.polygon_preview_items.append(preview_poly)
+        # Batch scene operations for better performance
+        self.viewer.setUpdatesEnabled(False)
+        scene.blockSignals(True)
 
-        if len(self.polygon_points) > 1:
-            # Create preview lines between points
-            line_color = QColor(Qt.GlobalColor.cyan)
-            line_color.setAlpha(150)
-            for i in range(len(self.polygon_points) - 1):
-                line = QGraphicsLineItem(
-                    self.polygon_points[i].x(),
-                    self.polygon_points[i].y(),
-                    self.polygon_points[i + 1].x(),
-                    self.polygon_points[i + 1].y(),
-                )
-                line.setPen(QPen(line_color, self.line_thickness))
-                self.viewer.scene().addItem(line)
-                self.polygon_preview_items.append(line)
+        try:
+            # Remove old preview lines and polygons (keep dots)
+            for item in self.polygon_preview_items[:]:
+                if not isinstance(item, QGraphicsEllipseItem):
+                    if item.scene():
+                        scene.removeItem(item)
+                    self.polygon_preview_items.remove(item)
+
+            if len(self.polygon_points) > 2:
+                # Create preview polygon fill
+                preview_poly = QGraphicsPolygonItem(QPolygonF(self.polygon_points))
+                preview_poly.setBrush(QBrush(QColor(0, 255, 255, 100)))
+                preview_poly.setPen(QPen(Qt.GlobalColor.transparent))
+                scene.addItem(preview_poly)
+                self.polygon_preview_items.append(preview_poly)
+
+            if len(self.polygon_points) > 1:
+                # Create preview lines between points
+                line_color = QColor(Qt.GlobalColor.cyan)
+                line_color.setAlpha(150)
+                for i in range(len(self.polygon_points) - 1):
+                    line = QGraphicsLineItem(
+                        self.polygon_points[i].x(),
+                        self.polygon_points[i].y(),
+                        self.polygon_points[i + 1].x(),
+                        self.polygon_points[i + 1].y(),
+                    )
+                    line.setPen(QPen(line_color, self.line_thickness))
+                    scene.addItem(line)
+                    self.polygon_preview_items.append(line)
+        finally:
+            # Re-enable updates and signals
+            scene.blockSignals(False)
+            self.viewer.setUpdatesEnabled(True)
+            self.viewer.viewport().update()
 
     def _handle_segment_selection_click(self, pos):
         """Handle segment selection clicks (toggle behavior)."""
@@ -5234,10 +5603,22 @@ class MainWindow(QMainWindow):
         selected_indices = self.right_panel.get_selected_segment_indices()
         handle_radius = self.point_radius
         handle_diam = handle_radius * 2
+        max_editable_vertices = 200  # Performance limit for edit handles
+
         for seg_idx in selected_indices:
             seg = self.segment_manager.segments[seg_idx]
             if seg["type"] == "Polygon" and seg.get("vertices"):
-                for v_idx, pt_list in enumerate(seg["vertices"]):
+                vertices = seg["vertices"]
+
+                # Skip complex polygons - too many handles is slow and unusable
+                if len(vertices) > max_editable_vertices:
+                    self._show_warning_notification(
+                        f"Polygon has {len(vertices)} vertices (max {max_editable_vertices} for editing). "
+                        "Use lower resolution setting when creating polygons."
+                    )
+                    continue
+
+                for v_idx, pt_list in enumerate(vertices):
                     pt = QPointF(pt_list[0], pt_list[1])  # Convert list to QPointF
                     handle = EditableVertexItem(
                         self,
@@ -5285,7 +5666,8 @@ class MainWindow(QMainWindow):
                 new_pos.y(),  # Store as list
             ]
             self._update_polygon_item(segment_index)
-            self._highlight_selected_segments()  # Keep the highlight in sync with the new shape
+            # Note: Highlight update is done on mouse release to avoid performance issues
+            # during continuous drag with high-detail polygons
 
     def update_multi_view_vertex_pos(
         self, segment_index, vertex_index, viewer_index, new_pos, record_undo=True
@@ -5352,7 +5734,8 @@ class MainWindow(QMainWindow):
 
             # Update visual representation
             self._update_multi_view_polygon_item(segment_index, viewer_index)
-            self._highlight_multi_view_selected_segments()
+            # Note: Highlight update is done on mouse release to avoid performance issues
+            # during continuous drag with high-detail polygons
 
     def _sync_multi_view_vertex_edit(
         self, segment_index, vertex_index, source_viewer_index, new_pos
@@ -7707,7 +8090,6 @@ class MainWindow(QMainWindow):
         self.image_discovery_worker.images_discovered.connect(
             self._on_images_discovered
         )
-        self.image_discovery_worker.progress.connect(self._on_image_discovery_progress)
         self.image_discovery_worker.error.connect(self._on_image_discovery_error)
         self.image_discovery_worker.start()
 
@@ -7726,12 +8108,6 @@ class MainWindow(QMainWindow):
         # If we're in multi-view mode and no images are loaded, try loading now
         if self.view_mode == "multi" and not any(self.multi_view_images):
             self._load_current_multi_view_pair_from_file_model()
-
-        # Don't show notification - image discovery happens in background
-
-    def _on_image_discovery_progress(self, message):
-        """Handle image discovery progress updates."""
-        self._show_notification(message)
 
     def _on_image_discovery_error(self, error_message):
         """Handle image discovery errors."""
@@ -9240,16 +9616,15 @@ class MainWindow(QMainWindow):
                 color_rgb = base_color.getRgb()[:3]
 
                 # Create hoverable item with proper class-based colors
+                segment_index = len(self.segment_manager.segments) - 1
                 mask_item = HoverablePixmapItem()
-                default_pixmap = mask_to_pixmap(
-                    mask, color_rgb, alpha=70
-                )  # Match single view transparency
-                hover_pixmap = mask_to_pixmap(
-                    mask, color_rgb, alpha=170
-                )  # Match single view hover
+                # Use cached pixmaps for performance
+                default_pixmap, hover_pixmap = self._get_cached_pixmaps(
+                    segment_index, mask, color_rgb, viewer_index=viewer_index
+                )
                 mask_item.set_pixmaps(default_pixmap, hover_pixmap)
                 mask_item.setPos(0, 0)
-                mask_item.set_segment_info(len(self.segment_manager.segments) - 1, self)
+                mask_item.set_segment_info(segment_index, self)
 
                 viewer.scene().addItem(mask_item)
 
@@ -9550,6 +9925,7 @@ class MainWindow(QMainWindow):
         selected_indices = self.right_panel.get_selected_segment_indices()
         handle_radius = self.point_radius
         handle_diam = handle_radius * 2
+        max_editable_vertices = 200  # Performance limit for edit handles
 
         # Initialize multi-view edit handles tracking
         if not hasattr(self, "multi_view_edit_handles"):
@@ -9569,6 +9945,15 @@ class MainWindow(QMainWindow):
                         vertices = seg["views"][viewer_index].get("vertices", [])
                     else:
                         vertices = seg.get("vertices", [])
+
+                    # Skip complex polygons - too many handles is slow and unusable
+                    if len(vertices) > max_editable_vertices:
+                        if viewer_index == 0:  # Only show warning once
+                            self._show_warning_notification(
+                                f"Polygon has {len(vertices)} vertices (max {max_editable_vertices} for editing). "
+                                "Use lower resolution setting when creating polygons."
+                            )
+                        continue
 
                     # Create handles for each vertex
                     for v_idx, pt_list in enumerate(vertices):
@@ -9710,3 +10095,137 @@ class MainWindow(QMainWindow):
             self._apply_crop_coordinates(x1, y1, x2, y2)
             self.crop_mode = False
             self._set_mode("sam_points")  # Return to default mode
+
+    # ========== Image Preloading for Instant Navigation ==========
+
+    def _preload_adjacent_images(self):
+        """Preload next and previous images in background for instant navigation."""
+        if not self.cached_image_paths or not self.current_image_path:
+            return
+
+        try:
+            current_index = self.cached_image_paths.index(self.current_image_path)
+        except ValueError:
+            return
+
+        # Determine which images to preload (next 2 and previous 1)
+        paths_to_preload = []
+        for offset in [1, 2, -1]:  # Next, next+1, previous
+            target_index = current_index + offset
+            if 0 <= target_index < len(self.cached_image_paths):
+                path = self.cached_image_paths[target_index]
+                # Skip if already in cache
+                if path not in self._preload_cache:
+                    paths_to_preload.append(path)
+
+        # Cancel any existing workers for paths we're about to preload
+        self._cleanup_preload_workers()
+
+        # Start preload workers for new paths
+        for path in paths_to_preload:
+            worker = ImagePreloadWorker(path, self)
+            worker.image_loaded.connect(self._on_image_preloaded)
+            worker.finished.connect(lambda w=worker: self._remove_preload_worker(w))
+            self._preload_workers.append(worker)
+            worker.start()
+
+    def _on_image_preloaded(self, path: str, pixmap):
+        """Handle preloaded image completion."""
+        # LRU eviction if cache is full
+        while len(self._preload_cache) >= self._preload_cache_max_size:
+            self._preload_cache.popitem(last=False)
+
+        # Add to cache
+        self._preload_cache[path] = pixmap
+
+    def _get_preloaded_pixmap(self, path: str):
+        """Get preloaded pixmap if available, None otherwise."""
+        if path in self._preload_cache:
+            # Move to end for LRU
+            self._preload_cache.move_to_end(path)
+            return self._preload_cache[path]
+        return None
+
+    def _cleanup_preload_workers(self):
+        """Stop and clean up preload workers."""
+        for worker in self._preload_workers[:]:
+            if worker.isRunning():
+                worker.stop()
+                worker.wait(100)  # Wait up to 100ms
+            self._preload_workers.remove(worker)
+
+    def _remove_preload_worker(self, worker):
+        """Remove a finished preload worker from the list."""
+        if worker in self._preload_workers:
+            self._preload_workers.remove(worker)
+
+    # ==================== SAM Embedding Preloading ====================
+
+    def _schedule_sam_preload(self):
+        """Schedule preloading of next image's SAM embeddings."""
+        if not self.current_image_path:
+            return
+
+        # Get next image path
+        next_files = self.right_panel.file_manager.getSurroundingFiles(
+            self.current_image_path, 2
+        )
+        if len(next_files) >= 2 and next_files[1]:
+            next_path = str(next_files[1])
+            # Check if already cached
+            next_hash = hashlib.md5(next_path.encode()).hexdigest()
+            if next_hash not in self.sam_embedding_cache:
+                self._sam_preload_pending_path = next_path
+                # Start preload after 200ms delay (let UI settle first)
+                self._sam_preload_timer.start(200)
+
+    def _preload_next_sam_embeddings(self):
+        """Preload SAM embeddings for the next image during idle time."""
+        if not self._sam_preload_pending_path:
+            return
+
+        # Don't preload if model not available
+        if not self.model_manager.is_model_available():
+            return
+
+        # Don't preload if we're currently updating SAM for the active image
+        if self.sam_is_dirty or self.sam_is_updating:
+            # Retry later
+            self._sam_preload_timer.start(500)
+            return
+
+        path = self._sam_preload_pending_path
+        self._sam_preload_pending_path = None
+
+        # Double-check it's not already cached
+        image_hash = hashlib.md5(path.encode()).hexdigest()
+        if image_hash in self.sam_embedding_cache:
+            return
+
+        # Store current state so we can restore after preloading
+        current_hash = self.current_sam_hash
+
+        try:
+            # Load and compute embeddings for next image
+            self.model_manager.sam_model.set_image_from_path(path)
+
+            # Cache the embeddings
+            embeddings = self.model_manager.sam_model.get_embeddings()
+            if embeddings is not None:
+                self.sam_embedding_cache[image_hash] = embeddings
+                # LRU eviction
+                while (
+                    len(self.sam_embedding_cache) > self._sam_embedding_cache_max_size
+                ):
+                    self.sam_embedding_cache.popitem(last=False)
+
+            # Restore current image's embeddings if we had them cached
+            if current_hash and current_hash in self.sam_embedding_cache:
+                self.model_manager.sam_model.set_embeddings(
+                    self.sam_embedding_cache[current_hash]
+                )
+                self.current_sam_hash = current_hash
+
+        except Exception:
+            # Silently fail - preloading is optional optimization
+            pass

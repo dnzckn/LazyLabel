@@ -373,6 +373,73 @@ class Sam2Model:
             logger.error(f"SAM2: Error during box prediction: {e}")
             return None
 
+    def get_embeddings(self):
+        """Extract current image embeddings for caching.
+
+        Returns:
+            Dict with embeddings data, or None if no image is set
+        """
+        if not self.is_loaded or not hasattr(self.predictor, "_features"):
+            return None
+
+        try:
+            # SAM2ImagePredictor stores _features as a dict of tensors
+            features = self.predictor._features
+            if features is None:
+                return None
+
+            # Clone each tensor in the features dict to CPU
+            if isinstance(features, dict):
+                features_copy = {
+                    k: v.cpu().clone() if hasattr(v, "cpu") else v
+                    for k, v in features.items()
+                }
+            else:
+                # Fallback if it's a tensor
+                features_copy = features.cpu().clone()
+
+            return {
+                "features": features_copy,
+                "orig_hw": self.predictor._orig_hw,
+                "image": self.image.copy() if self.image is not None else None,
+            }
+        except Exception as e:
+            logger.error(f"SAM2: Error extracting embeddings: {e}")
+            return None
+
+    def set_embeddings(self, embeddings_data):
+        """Restore cached embeddings to skip image encoding.
+
+        Args:
+            embeddings_data: Dict from get_embeddings()
+
+        Returns:
+            True if successful, False otherwise
+        """
+        if not self.is_loaded or embeddings_data is None:
+            return False
+
+        try:
+            features = embeddings_data.get("features")
+            if features is not None:
+                # Restore features dict - move each tensor back to device
+                if isinstance(features, dict):
+                    self.predictor._features = {
+                        k: v.to(self.device) if hasattr(v, "to") else v
+                        for k, v in features.items()
+                    }
+                else:
+                    self.predictor._features = features.to(self.device)
+
+                self.predictor._orig_hw = embeddings_data["orig_hw"]
+                self.predictor._is_image_set = True
+                self.image = embeddings_data.get("image")
+                return True
+            return False
+        except Exception as e:
+            logger.error(f"SAM2: Error restoring embeddings: {e}")
+            return False
+
     def load_custom_model(
         self, model_path: str, config_path: str | None = None
     ) -> bool:

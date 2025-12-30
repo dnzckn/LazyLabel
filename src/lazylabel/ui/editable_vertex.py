@@ -60,6 +60,8 @@ class EditableVertexItem(QGraphicsEllipseItem):
                 }
             )
         self.initial_pos = None
+        # Note: Highlight updates are intentionally skipped for performance.
+        # The polygon shape updates live, and highlights sync on next user action.
         super().mouseReleaseEvent(event)
         event.accept()
 
@@ -132,5 +134,7 @@ class MultiViewEditableVertexItem(QGraphicsEllipseItem):
                 }
             )
         self.initial_pos = None
+        # Note: Highlight updates are intentionally skipped for performance.
+        # The polygon shape updates live, and highlights sync on next user action.
         super().mouseReleaseEvent(event)
         event.accept()

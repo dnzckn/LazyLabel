@@ -1,7 +1,5 @@
 """Worker thread for async file save operations."""
 
-import copy
-
 from PyQt6.QtCore import QThread, pyqtSignal
 
 
@@ -34,8 +32,10 @@ class SaveWorker(QThread):
         self.image_path = image_path
         self.image_size = image_size
         self.class_order = class_order
-        # Deep copy segments to avoid race conditions with UI modifications
-        self.segments_snapshot = copy.deepcopy(segments_snapshot)
+        # Shallow copy of list with shallow copy of segment dicts
+        # This is safe because save operations only READ segment data, never modify it
+        # Masks are numpy arrays which are not mutated during save
+        self.segments_snapshot = [seg.copy() for seg in segments_snapshot]
         self.crop_coords = crop_coords
         self.pixel_priority_enabled = pixel_priority_enabled
         self.pixel_priority_ascending = pixel_priority_ascending

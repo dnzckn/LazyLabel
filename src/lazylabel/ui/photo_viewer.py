@@ -35,6 +35,9 @@ class PhotoViewer(QGraphicsView):
         self._original_image = None
         self._adjusted_pixmap = None
         self._original_image_bgra = None
+        # Cache gamma LUT to avoid recalculating on every slider move
+        self._cached_gamma = None
+        self._cached_gamma_lut = None
 
     def fitInView(self, scale=True):
         rect = QRectF(self._pixmap_item.pixmap().rect())
@@ -110,13 +113,16 @@ class PhotoViewer(QGraphicsView):
             img_bgr, alpha=1 + contrast / 100.0, beta=brightness
         )
 
-        # Apply gamma correction
+        # Apply gamma correction with cached LUT
         if gamma != 1.0:
-            inv_gamma = 1.0 / gamma
-            table = np.array(
-                [((i / 255.0) ** inv_gamma) * 255 for i in np.arange(0, 256)]
-            ).astype("uint8")
-            adjusted_img = cv2.LUT(adjusted_img, table)
+            # Use cached LUT if gamma hasn't changed
+            if gamma != self._cached_gamma:
+                inv_gamma = 1.0 / gamma
+                self._cached_gamma_lut = np.array(
+                    [((i / 255.0) ** inv_gamma) * 255 for i in range(256)]
+                ).astype("uint8")
+                self._cached_gamma = gamma
+            adjusted_img = cv2.LUT(adjusted_img, self._cached_gamma_lut)
 
         # Recombine with alpha channel to preserve transparency
         adjusted_bgra = np.concatenate([adjusted_img, alpha_channel], axis=2)
