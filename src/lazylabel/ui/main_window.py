@@ -182,6 +182,9 @@ class MainWindow(QMainWindow):
         self.pan_multiplier = self.settings.pan_multiplier
         self.polygon_join_threshold = self.settings.polygon_join_threshold
         self.fragment_threshold = self.settings.fragment_threshold
+        self.last_ai_filter_value = (
+            100 if self.fragment_threshold == 0 else self.fragment_threshold
+        )
 
         # Image adjustment state
         self.brightness = self.settings.brightness
@@ -778,6 +781,7 @@ class MainWindow(QMainWindow):
             "select_all": lambda: self.right_panel.select_all_segments(),
             "toggle_recent_class": self._toggle_recent_class,
             "save_segment": self._handle_space_press,
+            "erase_segment": self._handle_shift_space_press,
             "save_output": self._handle_enter_press,
             "save_output_alt": self._handle_enter_press,
             "fit_view": self._handle_fit_view,
@@ -787,6 +791,7 @@ class MainWindow(QMainWindow):
             "pan_down": lambda: self._handle_pan_key("down"),
             "pan_left": lambda: self._handle_pan_key("left"),
             "pan_right": lambda: self._handle_pan_key("right"),
+            "toggle_ai_filter": self._toggle_ai_filter,
         }
 
         # Create shortcuts for each action
@@ -813,6 +818,10 @@ class MainWindow(QMainWindow):
 
     def _load_settings(self):
         """Load and apply settings."""
+        logger.debug(
+            f"Loading settings: pixel_priority_enabled={self.settings.pixel_priority_enabled}, "
+            f"pixel_priority_ascending={self.settings.pixel_priority_ascending}"
+        )
         self.control_panel.set_settings(self.settings.__dict__)
         self.control_panel.set_annotation_size(
             int(self.settings.annotation_size_multiplier * 10)
@@ -1055,6 +1064,8 @@ class MainWindow(QMainWindow):
 
     def _set_fragment_threshold(self, value):
         """Set fragment threshold for AI segment filtering."""
+        if value > 0:
+            self.last_ai_filter_value = value
         self.fragment_threshold = value
         self.settings.fragment_threshold = value
 
@@ -1083,8 +1094,8 @@ class MainWindow(QMainWindow):
             self.current_image_path
             and hasattr(self.viewer, "_original_image")
             and self.viewer._original_image is not None
-            and hasattr(self.viewer, "_original_image_bgr")
-            and self.viewer._original_image_bgr is not None
+            and hasattr(self.viewer, "_original_image_bgra")
+            and self.viewer._original_image_bgra is not None
         ):
             self.viewer.set_image_adjustments(
                 self.brightness, self.contrast, self.gamma
@@ -1098,8 +1109,8 @@ class MainWindow(QMainWindow):
                     and self.multi_view_images[i] is not None
                     and hasattr(viewer, "_original_image")
                     and viewer._original_image is not None
-                    and hasattr(viewer, "_original_image_bgr")
-                    and viewer._original_image_bgr is not None
+                    and hasattr(viewer, "_original_image_bgra")
+                    and viewer._original_image_bgra is not None
                 ):
                     viewer.set_image_adjustments(
                         self.brightness, self.contrast, self.gamma
@@ -1126,7 +1137,16 @@ class MainWindow(QMainWindow):
         old_operate_on_view = self.settings.operate_on_view
 
         # Update the main window's settings object with the latest from the widget
-        self.settings.update(**self.control_panel.settings_widget.get_settings())
+        widget_settings = self.control_panel.settings_widget.get_settings()
+        logger.debug(
+            f"Settings changed: pixel_priority_enabled={widget_settings.get('pixel_priority_enabled')}, "
+            f"pixel_priority_ascending={widget_settings.get('pixel_priority_ascending')}"
+        )
+        self.settings.update(**widget_settings)
+        logger.debug(
+            f"Settings object updated: pixel_priority_enabled={self.settings.pixel_priority_enabled}, "
+            f"pixel_priority_ascending={self.settings.pixel_priority_ascending}"
+        )
 
         # Only mark SAM as dirty if operate_on_view setting actually changed (lazy loading)
         if (
@@ -1146,24 +1166,40 @@ class MainWindow(QMainWindow):
 
     def _handle_image_adjustment_changed(self):
         """Handle changes in image adjustments (brightness, contrast, gamma)."""
+        # Always apply brightness/contrast/gamma to display regardless of operate_on_view setting
+        # This ensures live updating and consistent behavior with other sliders
+
+        # Handle multi-view mode
+        if self.view_mode == "multi":
+            # Check if any multi-view images are loaded
+            if hasattr(self, "multi_view_images") and any(self.multi_view_images):
+                self._apply_multi_view_image_processing_fast()
+
+                # Additionally update SAM models if operate_on_view is enabled
+                if self.settings.operate_on_view and hasattr(self, "multi_view_models"):
+                    changed_indices = []
+                    for i in range(len(self.multi_view_models)):
+                        if (
+                            self.multi_view_images[i]
+                            and i < len(self.multi_view_models)
+                            and self.multi_view_models[i] is not None
+                        ):
+                            changed_indices.append(i)
+
+                    if changed_indices:
+                        self._fast_update_multi_view_images(changed_indices)
+            return
+
+        # Handle single-view mode
+        if not self.current_image_path:
+            return
+
+        # Always update display immediately for responsive UI
+        self._apply_image_processing_fast()
+
+        # Additionally mark SAM as dirty if operate_on_view is enabled
         if self.settings.operate_on_view:
-            # Handle single view mode - mark as dirty for lazy loading
-            if self.current_image_path:
-                self._mark_sam_dirty()
-
-            # Handle multi view mode - use fast updates for adjusted images instead of marking dirty
-            elif self.view_mode == "multi" and hasattr(self, "multi_view_models"):
-                changed_indices = []
-                for i in range(len(self.multi_view_models)):
-                    if (
-                        self.multi_view_images[i]
-                        and self.multi_view_models[i] is not None
-                    ):
-                        changed_indices.append(i)
-
-                # Use fast updates instead of marking all models dirty
-                if changed_indices:
-                    self._fast_update_multi_view_images(changed_indices)
+            self._mark_sam_dirty()
 
     # File management methods
     def _open_folder_dialog(self):
@@ -2525,7 +2561,7 @@ class MainWindow(QMainWindow):
 
         if self.mode == "polygon":
             if self.view_mode == "single" and self.polygon_points:
-                self._finalize_polygon()
+                self._finalize_polygon(erase_mode=False)
             elif self.view_mode == "multi" and hasattr(
                 self, "multi_view_polygon_points"
             ):
@@ -2537,12 +2573,63 @@ class MainWindow(QMainWindow):
                             self.multi_view_mode_handler._finalize_multi_view_polygon(i)
                         else:
                             self._finalize_multi_view_polygon(i)
+        elif self.mode == "ai":
+            # For AI mode, use accept method (normal mode)
+            if self.view_mode == "single":
+                self._accept_ai_segment(erase_mode=False)
+            elif self.view_mode == "multi":
+                # Handle multi-view AI acceptance (normal mode)
+                if (
+                    hasattr(self, "multi_view_mode_handler")
+                    and self.multi_view_mode_handler
+                ):
+                    self.multi_view_mode_handler.save_ai_predictions()
+                    self._show_notification("AI segment(s) accepted")
+                else:
+                    self._accept_ai_segment(erase_mode=False)
         else:
-            # For AI mode, use accept method, otherwise save current segment
-            if self.mode == "ai" and self.view_mode == "single":
-                self._accept_ai_segment()
-            else:
-                self._save_current_segment()
+            # For other modes, save current segment
+            self._save_current_segment()
+
+    def _handle_shift_space_press(self):
+        """Handle Shift+Space key press for erase functionality."""
+        logger.debug(
+            f"Shift+Space pressed - mode: {self.mode}, view_mode: {self.view_mode}"
+        )
+
+        if self.mode == "polygon":
+            if self.view_mode == "single" and self.polygon_points:
+                self._finalize_polygon(erase_mode=True)
+            elif self.view_mode == "multi" and hasattr(
+                self, "multi_view_polygon_points"
+            ):
+                # Complete polygons for all viewers that have points with erase mode
+                for i, points in enumerate(self.multi_view_polygon_points):
+                    if points and len(points) >= 3:
+                        # Use the multi-view mode handler for proper pairing logic with erase mode
+                        if hasattr(self, "multi_view_mode_handler"):
+                            self.multi_view_mode_handler._finalize_multi_view_polygon(
+                                i, erase_mode=True
+                            )
+                        else:
+                            self._finalize_multi_view_polygon(i)
+        elif self.mode == "ai":
+            # For AI mode, use accept method with erase mode
+            if self.view_mode == "single":
+                self._accept_ai_segment(erase_mode=True)
+            elif self.view_mode == "multi":
+                # Handle multi-view AI acceptance with erase mode
+                if (
+                    hasattr(self, "multi_view_mode_handler")
+                    and self.multi_view_mode_handler
+                ):
+                    self.multi_view_mode_handler.erase_ai_predictions()
+                    logger.debug("Shift+Space pressed - multi-view AI erase applied")
+                else:
+                    self._accept_ai_segment(erase_mode=True)
+        else:
+            # For other modes, show notification that erase isn't available
+            self._show_notification(f"Erase mode not available in {self.mode} mode")
 
     def _handle_enter_press(self):
         """Handle enter key press."""
@@ -2722,6 +2809,13 @@ class MainWindow(QMainWindow):
                     "All segments filtered out by fragment threshold"
                 )
 
+    def _toggle_ai_filter(self):
+        """Toggle AI filter between 0 and last set value."""
+        new_value = self.last_ai_filter_value if self.fragment_threshold == 0 else 0
+
+        # Update the control panel widget
+        self.control_panel.set_fragment_threshold(new_value)
+
     def _apply_fragment_threshold(self, mask):
         """Apply fragment threshold filtering to remove small segments."""
         if self.fragment_threshold == 0:
@@ -2766,24 +2860,51 @@ class MainWindow(QMainWindow):
         # Convert back to boolean mask
         return (filtered_mask > 0).astype(bool)
 
-    def _finalize_polygon(self):
+    def _finalize_polygon(self, erase_mode=False):
         """Finalize polygon drawing."""
         if len(self.polygon_points) < 3:
             return
 
-        new_segment = {
-            "vertices": [[p.x(), p.y()] for p in self.polygon_points],
-            "type": "Polygon",
-            "mask": None,
-        }
-        self.segment_manager.add_segment(new_segment)
-        # Record the action for undo
-        self.action_history.append(
-            {
-                "type": "add_segment",
-                "segment_index": len(self.segment_manager.segments) - 1,
+        if erase_mode:
+            # Erase overlapping segments using polygon vertices
+            image_height = self.viewer._pixmap_item.pixmap().height()
+            image_width = self.viewer._pixmap_item.pixmap().width()
+            image_size = (image_height, image_width)
+            removed_indices, removed_segments_data = (
+                self.segment_manager.erase_segments_with_shape(
+                    self.polygon_points, image_size
+                )
+            )
+
+            if removed_indices:
+                # Record the action for undo
+                self.action_history.append(
+                    {
+                        "type": "erase_segments",
+                        "removed_segments": removed_segments_data,
+                    }
+                )
+                self._show_notification(
+                    f"Applied eraser to {len(removed_indices)} segment(s)"
+                )
+            else:
+                self._show_notification("No segments to erase")
+        else:
+            # Create new polygon segment (normal mode)
+            new_segment = {
+                "vertices": [[p.x(), p.y()] for p in self.polygon_points],
+                "type": "Polygon",
+                "mask": None,
             }
-        )
+            self.segment_manager.add_segment(new_segment)
+            # Record the action for undo
+            self.action_history.append(
+                {
+                    "type": "add_segment",
+                    "segment_index": len(self.segment_manager.segments) - 1,
+                }
+            )
+
         # Clear redo history when a new action is performed
         self.redo_history.clear()
 
@@ -2882,6 +3003,8 @@ class MainWindow(QMainWindow):
                             (h, w),
                             class_order,
                             crop_coords,  # Pass crop coordinates if available
+                            settings.get("pixel_priority_enabled", False),
+                            settings.get("pixel_priority_ascending", True),
                         )
                         saved_files.append(os.path.basename(npz_path))
                         # Track saved file for highlighting later
@@ -2916,6 +3039,8 @@ class MainWindow(QMainWindow):
                             class_order,
                             class_labels,
                             crop_coords,  # Pass crop coordinates if available
+                            settings.get("pixel_priority_enabled", False),
+                            settings.get("pixel_priority_ascending", True),
                         )
                         saved_files.append(os.path.basename(txt_path))
                         # Track saved file for highlighting later
@@ -3059,6 +3184,8 @@ class MainWindow(QMainWindow):
                         (h, w),
                         class_order,
                         self.current_crop_coords,
+                        settings.get("pixel_priority_enabled", False),
+                        settings.get("pixel_priority_ascending", True),
                     )
                     logger.debug(f"NPZ save completed: {npz_path}")
                     self._show_success_notification(
@@ -3088,6 +3215,8 @@ class MainWindow(QMainWindow):
                         class_order,
                         class_labels,
                         self.current_crop_coords,
+                        settings.get("pixel_priority_enabled", False),
+                        settings.get("pixel_priority_ascending", True),
                     )
                     if txt_path:
                         logger.debug(f"TXT save completed: {txt_path}")
@@ -3529,9 +3658,11 @@ class MainWindow(QMainWindow):
         """Clear notification from status bar."""
         self.status_bar.clear_message()
 
-    def _accept_ai_segment(self):
+    def _accept_ai_segment(self, erase_mode=False):
         """Accept the current AI segment preview (spacebar handler)."""
-        logger.debug(f"_accept_ai_segment called - view_mode: {self.view_mode}")
+        logger.debug(
+            f"_accept_ai_segment called - view_mode: {self.view_mode}, erase_mode: {erase_mode}"
+        )
 
         if self.view_mode == "single":
             # Single view mode - check for preview mask (both point-based and bbox)
@@ -3548,7 +3679,7 @@ class MainWindow(QMainWindow):
             )
 
             logger.debug(
-                f"Single view - has_preview_item: {has_preview_item}, has_preview_mask: {has_preview_mask}, has_bbox_preview: {has_bbox_preview}"
+                f"Single view - has_preview_item: {has_preview_item}, has_preview_mask: {has_preview_mask}, has_bbox_preview: {has_bbox_preview}, erase_mode: {erase_mode}"
             )
 
             # Handle bbox preview first
@@ -3557,21 +3688,56 @@ class MainWindow(QMainWindow):
                     self.ai_bbox_preview_mask
                 )
                 if filtered_mask is not None:
-                    # Create actual segment
-                    new_segment = {
-                        "type": "AI",
-                        "mask": filtered_mask,
-                        "vertices": None,
-                    }
-                    self.segment_manager.add_segment(new_segment)
+                    if erase_mode:
+                        # Erase overlapping segments
+                        logger.debug(
+                            "Erase mode active for bbox preview - applying eraser to AI segment"
+                        )
+                        image_height = self.viewer._pixmap_item.pixmap().height()
+                        image_width = self.viewer._pixmap_item.pixmap().width()
+                        image_size = (image_height, image_width)
+                        removed_indices, removed_segments_data = (
+                            self.segment_manager.erase_segments_with_mask(
+                                filtered_mask, image_size
+                            )
+                        )
+                        logger.debug(
+                            f"Bbox erase operation completed - modified {len(removed_indices)} segments"
+                        )
 
-                    # Record the action for undo
-                    self.action_history.append(
-                        {
-                            "type": "add_segment",
-                            "segment_index": len(self.segment_manager.segments) - 1,
+                        if removed_indices:
+                            # Record the action for undo
+                            self.action_history.append(
+                                {
+                                    "type": "erase_segments",
+                                    "removed_segments": removed_segments_data,
+                                }
+                            )
+                            self._show_success_notification(
+                                f"Erased {len(removed_indices)} segment(s)!"
+                            )
+                        else:
+                            self._show_notification("No segments to erase")
+                    else:
+                        # Create actual segment (normal mode)
+                        new_segment = {
+                            "type": "AI",
+                            "mask": filtered_mask,
+                            "vertices": None,
                         }
-                    )
+                        self.segment_manager.add_segment(new_segment)
+
+                        # Record the action for undo
+                        self.action_history.append(
+                            {
+                                "type": "add_segment",
+                                "segment_index": len(self.segment_manager.segments) - 1,
+                            }
+                        )
+                        self._show_success_notification(
+                            "AI bounding box segment saved!"
+                        )
+
                     # Clear redo history when a new action is performed
                     self.redo_history.clear()
 
@@ -3587,7 +3753,6 @@ class MainWindow(QMainWindow):
                     # Clear all points
                     self.clear_all_points()
                     self._update_all_lists()
-                    self._show_success_notification("AI bounding box segment saved!")
                 else:
                     self._show_warning_notification(
                         "All segments filtered out by fragment threshold"
@@ -3598,28 +3763,60 @@ class MainWindow(QMainWindow):
                     self.current_preview_mask
                 )
                 if filtered_mask is not None:
-                    # Create actual segment
-                    new_segment = {
-                        "type": "AI",
-                        "mask": filtered_mask,
-                        "vertices": None,
-                    }
-                    self.segment_manager.add_segment(new_segment)
+                    if erase_mode:
+                        # Erase overlapping segments
+                        logger.debug(
+                            "Erase mode active for regular AI preview - applying eraser to AI segment"
+                        )
+                        image_height = self.viewer._pixmap_item.pixmap().height()
+                        image_width = self.viewer._pixmap_item.pixmap().width()
+                        image_size = (image_height, image_width)
+                        removed_indices, removed_segments_data = (
+                            self.segment_manager.erase_segments_with_mask(
+                                filtered_mask, image_size
+                            )
+                        )
+                        logger.debug(
+                            f"Regular AI erase operation completed - modified {len(removed_indices)} segments"
+                        )
 
-                    # Record the action for undo
-                    self.action_history.append(
-                        {
-                            "type": "add_segment",
-                            "segment_index": len(self.segment_manager.segments) - 1,
+                        if removed_indices:
+                            # Record the action for undo
+                            self.action_history.append(
+                                {
+                                    "type": "erase_segments",
+                                    "removed_segments": removed_segments_data,
+                                }
+                            )
+                            self._show_notification(
+                                f"Applied eraser to {len(removed_indices)} segment(s)"
+                            )
+                        else:
+                            self._show_notification("No segments to erase")
+                    else:
+                        # Create actual segment (normal mode)
+                        new_segment = {
+                            "type": "AI",
+                            "mask": filtered_mask,
+                            "vertices": None,
                         }
-                    )
+                        self.segment_manager.add_segment(new_segment)
+
+                        # Record the action for undo
+                        self.action_history.append(
+                            {
+                                "type": "add_segment",
+                                "segment_index": len(self.segment_manager.segments) - 1,
+                            }
+                        )
+                        self._show_notification("AI segment accepted")
+
                     # Clear redo history when a new action is performed
                     self.redo_history.clear()
 
                     # Clear all points after accepting
                     self.clear_all_points()
                     self._update_all_lists()
-                    self._show_notification("AI segment accepted")
                 else:
                     self._show_warning_notification(
                         "All segments filtered out by fragment threshold"
@@ -3629,15 +3826,33 @@ class MainWindow(QMainWindow):
                         self.viewer.scene().removeItem(self.preview_mask_item)
                     self.preview_mask_item = None
                     self.current_preview_mask = None
+            else:
+                # No AI preview found in single view
+                if erase_mode:
+                    logger.debug(
+                        "No AI segment preview to erase - no preview mask found in single view"
+                    )
+                    self._show_notification("No AI segment preview to erase")
+                else:
+                    logger.debug(
+                        "No AI segment preview to accept - no preview mask found in single view"
+                    )
+                    self._show_notification("No AI segment preview to accept")
 
         elif self.view_mode == "multi":
-            # Multi-view mode - use the multi-view mode handler to save AI predictions
+            # Multi-view mode - use the multi-view mode handler
             if (
                 hasattr(self, "multi_view_mode_handler")
                 and self.multi_view_mode_handler
             ):
-                self.multi_view_mode_handler.save_ai_predictions()
-                self._show_notification("AI segment(s) accepted")
+                if erase_mode:
+                    # Use erase function instead of save
+                    self.multi_view_mode_handler.erase_ai_predictions()
+                    self._show_notification("AI segment(s) used for erasing")
+                else:
+                    # Normal save operation
+                    self.multi_view_mode_handler.save_ai_predictions()
+                    self._show_notification("AI segment(s) accepted")
                 return
 
             # Fallback to old logic if mode handler not available
@@ -3708,7 +3923,13 @@ class MainWindow(QMainWindow):
                 self._show_success_notification("AI segment(s) accepted")
                 self._update_all_lists()
             else:
-                self._show_notification("No AI segment preview to accept")
+                if erase_mode:
+                    logger.debug(
+                        "No AI segment preview to erase - no preview mask found"
+                    )
+                    self._show_notification("No AI segment preview to erase")
+                else:
+                    self._show_notification("No AI segment preview to accept")
 
     def _show_hotkey_dialog(self):
         """Show the hotkey configuration dialog."""
@@ -3790,6 +4011,10 @@ class MainWindow(QMainWindow):
             self.image_discovery_worker.deleteLater()
 
         # Save settings
+        logger.debug(
+            f"Saving settings: pixel_priority_enabled={self.settings.pixel_priority_enabled}, "
+            f"pixel_priority_ascending={self.settings.pixel_priority_ascending}"
+        )
         self.settings.save_to_file(str(self.paths.settings_file))
         super().closeEvent(event)
 
@@ -3999,6 +4224,20 @@ class MainWindow(QMainWindow):
 
     def _scene_mouse_release(self, event):
         """Handle mouse release events in the scene."""
+        # Delegate to multi-view handler if in multi-view mode
+        if self.view_mode == "multi":
+            # Find which viewer this event is for and delegate
+            for i, viewer in enumerate(self.viewers):
+                if (
+                    hasattr(viewer, "scene")
+                    and viewer.scene() == event.widget().scene()
+                ):
+                    self._multi_view_mouse_release(event, i)
+                    return
+            # Fallback: delegate to first viewer
+            self._multi_view_mouse_release(event, 0)
+            return
+
         if self.mode == "edit" and self.is_dragging_polygon:
             # Record the action for undo
             final_vertices = {
@@ -4069,28 +4308,64 @@ class MainWindow(QMainWindow):
             self.drag_start_pos = None
 
             if rect.width() >= 2 and rect.height() >= 2:
-                # Convert QRectF to QPolygonF
+                # Check if shift is pressed for erase functionality
+                modifiers = QApplication.keyboardModifiers()
+                shift_pressed = bool(modifiers & Qt.KeyboardModifier.ShiftModifier)
+
+                if shift_pressed:
+                    logger.debug("Shift+bbox release - activating erase mode")
+
+                # Convert QRectF to QPolygonF for vertex representation
                 polygon = QPolygonF()
                 polygon.append(rect.topLeft())
                 polygon.append(rect.topRight())
                 polygon.append(rect.bottomRight())
                 polygon.append(rect.bottomLeft())
 
-                new_segment = {
-                    "vertices": [[p.x(), p.y()] for p in list(polygon)],
-                    "type": "Polygon",  # Bounding boxes are stored as polygons
-                    "mask": None,
-                }
+                polygon_vertices = [QPointF(p.x(), p.y()) for p in list(polygon)]
 
-                self.segment_manager.add_segment(new_segment)
+                if shift_pressed:
+                    # Erase overlapping segments using bbox vertices
+                    image_height = self.viewer._pixmap_item.pixmap().height()
+                    image_width = self.viewer._pixmap_item.pixmap().width()
+                    image_size = (image_height, image_width)
+                    removed_indices, removed_segments_data = (
+                        self.segment_manager.erase_segments_with_shape(
+                            polygon_vertices, image_size
+                        )
+                    )
 
-                # Record the action for undo
-                self.action_history.append(
-                    {
-                        "type": "add_segment",
-                        "segment_index": len(self.segment_manager.segments) - 1,
+                    if removed_indices:
+                        # Record the action for undo
+                        self.action_history.append(
+                            {
+                                "type": "erase_segments",
+                                "removed_segments": removed_segments_data,
+                            }
+                        )
+                        self._show_notification(
+                            f"Applied eraser to {len(removed_indices)} segment(s)"
+                        )
+                    else:
+                        self._show_notification("No segments to erase")
+                else:
+                    # Create new bbox segment (normal mode)
+                    new_segment = {
+                        "vertices": [[p.x(), p.y()] for p in polygon_vertices],
+                        "type": "Polygon",  # Bounding boxes are stored as polygons
+                        "mask": None,
                     }
-                )
+
+                    self.segment_manager.add_segment(new_segment)
+
+                    # Record the action for undo
+                    self.action_history.append(
+                        {
+                            "type": "add_segment",
+                            "segment_index": len(self.segment_manager.segments) - 1,
+                        }
+                    )
+
                 # Clear redo history when a new action is performed
                 self.redo_history.clear()
                 self._update_all_lists()
@@ -4314,6 +4589,10 @@ class MainWindow(QMainWindow):
 
     def _handle_polygon_click(self, pos):
         """Handle polygon drawing clicks."""
+        # Check if shift is pressed for erase functionality
+        modifiers = QApplication.keyboardModifiers()
+        shift_pressed = bool(modifiers & Qt.KeyboardModifier.ShiftModifier)
+
         # Check if clicking near the first point to close polygon
         if self.polygon_points and len(self.polygon_points) > 2:
             first_point = self.polygon_points[0]
@@ -4321,7 +4600,11 @@ class MainWindow(QMainWindow):
                 pos.y() - first_point.y()
             ) ** 2
             if distance_squared < self.polygon_join_threshold**2:
-                self._finalize_polygon()
+                if shift_pressed:
+                    logger.debug(
+                        "Shift+click polygon completion - activating erase mode"
+                    )
+                self._finalize_polygon(erase_mode=shift_pressed)
                 return
 
         # Add new point to polygon
@@ -6743,11 +7026,12 @@ class MainWindow(QMainWindow):
             # Convert from BGRA to BGR for consistency with _original_image_bgr
             result_image = cv2.cvtColor(image_np, cv2.COLOR_BGRA2BGR)
         elif (
-            hasattr(viewer, "_original_image_bgr")
-            and viewer._original_image_bgr is not None
+            hasattr(viewer, "_original_image_bgra")
+            and viewer._original_image_bgra is not None
         ):
             # Fallback to original image if no adjusted pixmap
-            result_image = viewer._original_image_bgr.copy()
+            # Convert from BGRA to BGR for consistency
+            result_image = cv2.cvtColor(viewer._original_image_bgra, cv2.COLOR_BGRA2BGR)
         else:
             return None
 
@@ -7931,6 +8215,10 @@ class MainWindow(QMainWindow):
         """Handle polygon mode click for a specific viewer - matches single view pattern."""
         points = self.multi_view_polygon_points[viewer_index]
 
+        # Check if shift is pressed for erase functionality
+        modifiers = QApplication.keyboardModifiers()
+        shift_pressed = bool(modifiers & Qt.KeyboardModifier.ShiftModifier)
+
         # Check if clicking near first point to close polygon
         if points and len(points) > 2:
             first_point = points[0]
@@ -7938,10 +8226,15 @@ class MainWindow(QMainWindow):
                 pos.y() - first_point.y()
             ) ** 2
             if distance_squared < self.polygon_join_threshold**2:
+                if shift_pressed:
+                    logger.debug(
+                        "Shift+click polygon completion in multi-view - activating erase mode"
+                    )
+
                 # Use the multi-view mode handler for proper pairing logic
                 if hasattr(self, "multi_view_mode_handler"):
                     self.multi_view_mode_handler._finalize_multi_view_polygon(
-                        viewer_index
+                        viewer_index, erase_mode=shift_pressed
                     )
                 else:
                     self._finalize_multi_view_polygon(viewer_index)
@@ -8606,44 +8899,61 @@ class MainWindow(QMainWindow):
                 self.multi_view_bbox_rects[other_viewer_index] = None
                 self.multi_view_bbox_starts[other_viewer_index] = None
 
-        # Only create segment if minimum size is met (2x2 pixels) and from first viewer to avoid duplication
-        if (
-            width >= 2
-            and height >= 2
-            and (viewer_index == 0 or self.multi_view_bbox_starts[0] is None)
-        ):
-            # Convert bbox to polygon vertices
-            vertices = [
-                [x, y],
-                [x + width, y],
-                [x + width, y + height],
-                [x, y + height],
-            ]
+        # Only process if minimum size is met (2x2 pixels)
+        if width >= 2 and height >= 2:
+            # Check if shift is pressed for erase functionality
+            modifiers = QApplication.keyboardModifiers()
+            shift_pressed = bool(modifiers & Qt.KeyboardModifier.ShiftModifier)
 
-            # Create segment with views structure for all viewers (like polygon mode)
-            config = self._get_multi_view_config()
-            num_viewers = config["num_viewers"]
+            if shift_pressed:
+                logger.debug("Shift+bbox release in multi-view - activating erase mode")
+                # Create rectangle for erase operation
+                rect = QRectF(x, y, width, height)
+                # Use the multi-view mode handler for erase
+                if (
+                    hasattr(self, "multi_view_mode_handler")
+                    and self.multi_view_mode_handler
+                ):
+                    self.multi_view_mode_handler._handle_shift_bbox_erase(
+                        rect, viewer_index
+                    )
+            else:
+                # Only create normal segment from first viewer to avoid duplication
+                if viewer_index == 0 or self.multi_view_bbox_starts[0] is None:
+                    # Convert bbox to polygon vertices
+                    vertices = [
+                        [x, y],
+                        [x + width, y],
+                        [x + width, y + height],
+                        [x, y + height],
+                    ]
 
-            paired_segment = {"type": "Polygon", "views": {}}
+                    # Create segment with views structure for all viewers (like polygon mode)
+                    config = self._get_multi_view_config()
+                    num_viewers = config["num_viewers"]
 
-            # Add view data for all viewers with same coordinates
-            for viewer_idx in range(num_viewers):
-                paired_segment["views"][viewer_idx] = {
-                    "vertices": vertices.copy(),
-                    "mask": None,
-                }
+                    paired_segment = {"type": "Polygon", "views": {}}
 
-            # Add to segment manager
-            self.segment_manager.add_segment(paired_segment)
+                    # Add view data for all viewers with same coordinates
+                    for viewer_idx in range(num_viewers):
+                        paired_segment["views"][viewer_idx] = {
+                            "vertices": vertices.copy(),
+                            "mask": None,
+                        }
 
-            # Record for undo
-            self.action_history.append({"type": "add_segment", "data": paired_segment})
+                    # Add to segment manager
+                    self.segment_manager.add_segment(paired_segment)
 
-            # Clear redo history when a new action is performed
-            self.redo_history.clear()
+                    # Record for undo
+                    self.action_history.append(
+                        {"type": "add_segment", "data": paired_segment}
+                    )
 
-            # Update lists
-            self._update_all_lists()
+                    # Clear redo history when a new action is performed
+                    self.redo_history.clear()
+
+                    # Update lists
+                    self._update_all_lists()
 
         # Clean up both viewers
         self.multi_view_bbox_starts[viewer_index] = None

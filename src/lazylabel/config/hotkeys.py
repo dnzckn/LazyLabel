@@ -57,6 +57,12 @@ class HotkeyManager:
             HotkeyAction(
                 "save_segment", "Save Current Segment", "Space", category="Actions"
             ),
+            HotkeyAction(
+                "erase_segment",
+                "Erase with Current Segment",
+                "Shift+Space",
+                category="Actions",
+            ),
             HotkeyAction("save_output", "Save Output", "Return", category="Actions"),
             HotkeyAction(
                 "save_output_alt", "Save Output (Alt)", "Enter", category="Actions"
@@ -67,6 +73,9 @@ class HotkeyManager:
             ),
             HotkeyAction(
                 "escape", "Cancel/Clear Selection", "Escape", category="Actions"
+            ),
+            HotkeyAction(
+                "toggle_ai_filter", "Toggle AI Filter", "Z", category="Actions"
             ),
             # Segments
             HotkeyAction(

@@ -45,6 +45,10 @@ class Settings:
     # Multi-view Settings
     multi_view_grid_mode: str = "2_view"  # "2_view" or "4_view"
 
+    # Pixel Priority Settings
+    pixel_priority_enabled: bool = False
+    pixel_priority_ascending: bool = True
+
     def save_to_file(self, filepath: str) -> None:
         """Save settings to JSON file."""
         os.makedirs(os.path.dirname(filepath), exist_ok=True)

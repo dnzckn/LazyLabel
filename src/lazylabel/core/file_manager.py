@@ -22,6 +22,8 @@ class FileManager:
         image_size: tuple[int, int],
         class_order: list[int],
         crop_coords: tuple[int, int, int, int] | None = None,
+        pixel_priority_enabled: bool = False,
+        pixel_priority_ascending: bool = True,
     ) -> str:
         """Save segments as NPZ file."""
         logger.debug(f"Saving NPZ for image: {image_path}")
@@ -32,7 +34,7 @@ class FileManager:
             raise ValueError("No classes defined for saving")
 
         final_mask_tensor = self.segment_manager.create_final_mask_tensor(
-            image_size, class_order
+            image_size, class_order, pixel_priority_enabled, pixel_priority_ascending
         )
 
         # Validate mask tensor
@@ -75,10 +77,12 @@ class FileManager:
         class_order: list[int],
         class_labels: list[str],
         crop_coords: tuple[int, int, int, int] | None = None,
+        pixel_priority_enabled: bool = False,
+        pixel_priority_ascending: bool = True,
     ) -> str | None:
         """Save segments as YOLO format TXT file."""
         final_mask_tensor = self.segment_manager.create_final_mask_tensor(
-            image_size, class_order
+            image_size, class_order, pixel_priority_enabled, pixel_priority_ascending
         )
 
         # Apply crop if coordinates are provided
