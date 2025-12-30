@@ -2,7 +2,6 @@
 
 import hashlib
 import os
-import re
 from pathlib import Path
 
 import cv2
@@ -229,6 +228,20 @@ class MainWindow(QMainWindow):
         # Channel threshold widget cache
         self._cached_original_image = None  # Cache for performance optimization
 
+        # Segment pixmap cache for performance optimization
+        # Key: (segment_index, viewer_index, color_rgb, alpha) -> QPixmap
+        # This avoids regenerating pixmaps on every display refresh
+        self._segment_pixmap_cache = {}
+        self._segment_cache_valid = True  # Flag to invalidate cache when needed
+
+        # Color cache for class colors - avoids recalculating HSV colors
+        # Key: class_id -> QColor
+        self._class_color_cache = {}
+
+        # Highlight pixmap cache - avoids regenerating highlight pixmaps
+        # Key: (segment_index, highlight_color_rgb, alpha) -> QPixmap
+        self._highlight_pixmap_cache = {}
+
         # SAM model update debouncing for "operate on view" mode
         self.sam_update_timer = QTimer()
         self.sam_update_timer.setSingleShot(True)  # Only fire once
@@ -264,6 +277,10 @@ class MainWindow(QMainWindow):
         self.single_view_sam_init_worker = None
         self.single_view_model_initializing = False
 
+        # Async save worker for background file I/O
+        self.save_worker = None
+        self.save_pending = False  # Track if a save is in progress
+
         # Smart caching for SAM embeddings to avoid redundant processing
         self.sam_embedding_cache = {}  # Cache SAM embeddings by content hash
         self.current_sam_hash = None  # Hash of currently loaded SAM image
@@ -281,19 +298,15 @@ class MainWindow(QMainWindow):
         self._load_settings()
 
     def _get_version(self) -> str:
-        """Get version from pyproject.toml."""
-        try:
-            # Get the project root directory (3 levels up from main_window.py)
-            project_root = Path(__file__).parent.parent.parent.parent
-            pyproject_path = project_root / "pyproject.toml"
+        """Get version from the lazylabel package.
 
-            if pyproject_path.exists():
-                with open(pyproject_path, encoding="utf-8") as f:
-                    content = f.read()
-                    # Use regex to find version line
-                    match = re.search(r'version\s*=\s*"([^"]+)"', content)
-                    if match:
-                        return match.group(1)
+        Uses the centralized version detection in lazylabel/__init__.py
+        which handles pip-installed, development, and PyInstaller bundle cases.
+        """
+        try:
+            import lazylabel
+
+            return lazylabel.__version__
         except Exception:
             pass
         return "unknown"
@@ -1656,6 +1669,11 @@ class MainWindow(QMainWindow):
         # Clear segment manager - same as single view
         self.segment_manager.clear()
 
+        # Clear all performance caches when resetting state
+        self._segment_pixmap_cache.clear()
+        self._class_color_cache.clear()
+        self._highlight_pixmap_cache.clear()
+
         # Clear multi-view specific scene items
         for _viewer_idx, viewer in enumerate(self.multi_view_viewers):
             # Remove all items except the pixmap from each viewer's scene
@@ -1728,6 +1746,11 @@ class MainWindow(QMainWindow):
             # Set all segments at once
             self.segment_manager.segments = all_segments
 
+            # Clear pixmap caches when loading new segments
+            # (indices may have been reused from previous session)
+            self._segment_pixmap_cache.clear()
+            self._highlight_pixmap_cache.clear()
+
             # Update all UI components to reflect the loaded segments
             if all_segments:
                 # Update segment list, class list, and display segments
@@ -1745,6 +1768,8 @@ class MainWindow(QMainWindow):
         except Exception as e:
             logger.error(f"Error in _load_multi_view_segments: {e}")
             self.segment_manager.segments.clear()
+            self._segment_pixmap_cache.clear()
+            self._highlight_pixmap_cache.clear()
 
     def _cancel_multi_view_sam_loading(self):
         """Cancel any ongoing SAM model loading operations to prevent conflicts."""
@@ -2026,6 +2051,12 @@ class MainWindow(QMainWindow):
 
         selected_indices = self.right_panel.get_selected_segment_indices()
         self.segment_manager.delete_segments(selected_indices)
+
+        # Clear ALL pixmap caches when segments are deleted
+        # because segment indices get reused and old cached pixmaps would be wrong
+        self._segment_pixmap_cache.clear()
+        self._highlight_pixmap_cache.clear()
+
         self._update_all_lists()
 
     def _highlight_selected_segments(self):
@@ -2083,11 +2114,14 @@ class MainWindow(QMainWindow):
                 self.viewer.scene().addItem(poly_item)
                 self.highlight_items.append(poly_item)
             elif seg.get("mask") is not None:
-                # For non-polygon types, we still use the mask-to-pixmap approach.
-                # If in edit mode, we could consider skipping non-polygons.
+                # For non-polygon types, use cached highlight pixmaps
+                # Skip in edit mode as we use hover effect instead
                 if self.mode != "edit":
                     mask = seg.get("mask")
-                    pixmap = mask_to_pixmap(mask, (255, 255, 0), alpha=180)
+                    # Use cached highlight pixmap for better performance
+                    pixmap = self._get_cached_highlight_pixmap(
+                        i, mask, (255, 255, 0), alpha=180
+                    )
                     highlight_item = self.viewer.scene().addPixmap(pixmap)
                     highlight_item.setZValue(1000)
                     self.highlight_items.append(highlight_item)
@@ -2374,49 +2408,307 @@ class MainWindow(QMainWindow):
             return
 
         # Single-view mode
-        # Clear existing segment items
-        for _i, items in self.segment_items.items():
-            for item in items:
+        scene = self.viewer.scene()
+
+        # Batch scene operations for better performance
+        # Disable updates and block signals during bulk changes
+        self.viewer.setUpdatesEnabled(False)
+        scene.blockSignals(True)
+
+        try:
+            # Clear existing segment items
+            for _i, items in self.segment_items.items():
+                for item in items:
+                    if item.scene():
+                        scene.removeItem(item)
+            self.segment_items.clear()
+            self._clear_edit_handles()
+
+            # Display segments from segment manager
+            for i, segment in enumerate(self.segment_manager.segments):
+                self.segment_items[i] = []
+                class_id = segment.get("class_id")
+                base_color = self._get_color_for_class(class_id)
+
+                if segment["type"] == "Polygon" and segment.get("vertices"):
+                    # Convert stored list of lists back to QPointF objects
+                    qpoints = [QPointF(p[0], p[1]) for p in segment["vertices"]]
+
+                    poly_item = HoverablePolygonItem(QPolygonF(qpoints))
+                    default_brush = QBrush(
+                        QColor(
+                            base_color.red(), base_color.green(), base_color.blue(), 70
+                        )
+                    )
+                    hover_brush = QBrush(
+                        QColor(
+                            base_color.red(), base_color.green(), base_color.blue(), 170
+                        )
+                    )
+                    poly_item.set_brushes(default_brush, hover_brush)
+                    poly_item.set_segment_info(i, self)
+                    poly_item.setPen(QPen(Qt.GlobalColor.transparent))
+                    scene.addItem(poly_item)
+                    self.segment_items[i].append(poly_item)
+                elif segment.get("mask") is not None:
+                    default_pixmap, hover_pixmap = self._get_cached_pixmaps(
+                        i, segment["mask"], base_color.getRgb()[:3]
+                    )
+                    pixmap_item = HoverablePixmapItem()
+                    pixmap_item.set_pixmaps(default_pixmap, hover_pixmap)
+                    pixmap_item.set_segment_info(i, self)
+                    scene.addItem(pixmap_item)
+                    pixmap_item.setZValue(i + 1)
+                    self.segment_items[i].append(pixmap_item)
+        finally:
+            # Re-enable updates and signals
+            scene.blockSignals(False)
+            self.viewer.setUpdatesEnabled(True)
+            self.viewer.viewport().update()
+
+    def _get_cached_pixmaps(self, segment_index, mask, color_rgb, viewer_index=None):
+        """Get or create cached pixmaps for a segment mask.
+
+        Args:
+            segment_index: Index of the segment
+            mask: The segment mask (numpy array)
+            color_rgb: RGB tuple for the color
+            viewer_index: Optional viewer index for multi-view mode
+
+        Returns:
+            Tuple of (default_pixmap, hover_pixmap)
+        """
+        # Create cache key based on segment index, color, and optional viewer index
+        cache_key_default = (segment_index, viewer_index, color_rgb, 70)
+        cache_key_hover = (segment_index, viewer_index, color_rgb, 170)
+
+        # Check if we have valid cached pixmaps
+        if (
+            self._segment_cache_valid
+            and cache_key_default in self._segment_pixmap_cache
+            and cache_key_hover in self._segment_pixmap_cache
+        ):
+            return (
+                self._segment_pixmap_cache[cache_key_default],
+                self._segment_pixmap_cache[cache_key_hover],
+            )
+
+        # Generate new pixmaps
+        default_pixmap = mask_to_pixmap(mask, color_rgb, alpha=70)
+        hover_pixmap = mask_to_pixmap(mask, color_rgb, alpha=170)
+
+        # Cache them
+        self._segment_pixmap_cache[cache_key_default] = default_pixmap
+        self._segment_pixmap_cache[cache_key_hover] = hover_pixmap
+
+        return default_pixmap, hover_pixmap
+
+    def _invalidate_segment_cache(self, segment_indices=None):
+        """Invalidate cached pixmaps for specific segments or all segments.
+
+        Args:
+            segment_indices: List of segment indices to invalidate, or None for all
+        """
+        if segment_indices is None:
+            self._segment_pixmap_cache.clear()
+            self._highlight_pixmap_cache.clear()
+        else:
+            # Remove specific segment entries
+            keys_to_remove = [
+                key for key in self._segment_pixmap_cache if key[0] in segment_indices
+            ]
+            for key in keys_to_remove:
+                del self._segment_pixmap_cache[key]
+
+            # Also clear highlight cache for these segments
+            highlight_keys_to_remove = [
+                key for key in self._highlight_pixmap_cache if key[0] in segment_indices
+            ]
+            for key in highlight_keys_to_remove:
+                del self._highlight_pixmap_cache[key]
+
+    def _get_cached_highlight_pixmap(self, segment_index, mask, color_rgb, alpha=180):
+        """Get or create a cached highlight pixmap.
+
+        Args:
+            segment_index: Index of the segment
+            mask: The segment mask (numpy array)
+            color_rgb: RGB tuple for the highlight color
+            alpha: Alpha value for the highlight
+
+        Returns:
+            Cached or newly generated QPixmap
+        """
+        cache_key = (segment_index, color_rgb, alpha)
+
+        if cache_key in self._highlight_pixmap_cache:
+            return self._highlight_pixmap_cache[cache_key]
+
+        # Generate new pixmap
+        pixmap = mask_to_pixmap(mask, color_rgb, alpha=alpha)
+        self._highlight_pixmap_cache[cache_key] = pixmap
+        return pixmap
+
+    def _add_segment_to_display(self, segment_index):
+        """Add a single segment to the display without clearing existing segments.
+
+        This is an O(1) operation compared to _display_all_segments which is O(n).
+
+        Args:
+            segment_index: Index of the segment to display
+        """
+        if self.view_mode == "multi":
+            self._add_segment_to_multi_view_display(segment_index)
+            return
+
+        # Single-view mode
+        if segment_index >= len(self.segment_manager.segments):
+            return
+
+        segment = self.segment_manager.segments[segment_index]
+        self.segment_items[segment_index] = []
+        class_id = segment.get("class_id")
+        base_color = self._get_color_for_class(class_id)
+
+        if segment["type"] == "Polygon" and segment.get("vertices"):
+            qpoints = [QPointF(p[0], p[1]) for p in segment["vertices"]]
+            poly_item = HoverablePolygonItem(QPolygonF(qpoints))
+            default_brush = QBrush(
+                QColor(base_color.red(), base_color.green(), base_color.blue(), 70)
+            )
+            hover_brush = QBrush(
+                QColor(base_color.red(), base_color.green(), base_color.blue(), 170)
+            )
+            poly_item.set_brushes(default_brush, hover_brush)
+            poly_item.set_segment_info(segment_index, self)
+            poly_item.setPen(QPen(Qt.GlobalColor.transparent))
+            self.viewer.scene().addItem(poly_item)
+            self.segment_items[segment_index].append(poly_item)
+        elif segment.get("mask") is not None:
+            default_pixmap, hover_pixmap = self._get_cached_pixmaps(
+                segment_index, segment["mask"], base_color.getRgb()[:3]
+            )
+            pixmap_item = HoverablePixmapItem()
+            pixmap_item.set_pixmaps(default_pixmap, hover_pixmap)
+            pixmap_item.set_segment_info(segment_index, self)
+            self.viewer.scene().addItem(pixmap_item)
+            pixmap_item.setZValue(segment_index + 1)
+            self.segment_items[segment_index].append(pixmap_item)
+
+    def _add_segment_to_multi_view_display(self, segment_index):
+        """Add a single segment to multi-view display without clearing existing segments."""
+        if segment_index >= len(self.segment_manager.segments):
+            return
+
+        segment = self.segment_manager.segments[segment_index]
+        class_id = segment.get("class_id")
+        base_color = self._get_color_for_class(class_id)
+
+        # Check if segment has view-specific data
+        if "views" in segment:
+            for viewer_idx in range(len(self.multi_view_viewers)):
+                if viewer_idx in segment["views"]:
+                    self._display_segment_in_multi_view_viewer(
+                        segment_index, segment, viewer_idx, base_color
+                    )
+        else:
+            # Legacy single-view format
+            source_viewer = segment.get("_source_viewer")
+            if source_viewer is not None:
+                self._display_segment_in_multi_view_viewer(
+                    segment_index, segment, source_viewer, base_color
+                )
+            else:
+                for viewer_idx in range(len(self.multi_view_viewers)):
+                    self._display_segment_in_multi_view_viewer(
+                        segment_index, segment, viewer_idx, base_color
+                    )
+
+    def _remove_segment_from_display(self, segment_index):
+        """Remove a single segment from display.
+
+        Args:
+            segment_index: Index of the segment to remove
+        """
+        if self.view_mode == "multi":
+            self._remove_segment_from_multi_view_display(segment_index)
+            return
+
+        # Single-view mode
+        if segment_index in self.segment_items:
+            for item in self.segment_items[segment_index]:
                 if item.scene():
                     self.viewer.scene().removeItem(item)
-        self.segment_items.clear()
-        self._clear_edit_handles()
+            del self.segment_items[segment_index]
 
-        # Display segments from segment manager
-        for i, segment in enumerate(self.segment_manager.segments):
-            self.segment_items[i] = []
-            class_id = segment.get("class_id")
-            base_color = self._get_color_for_class(class_id)
+        # Invalidate cache for this segment
+        self._invalidate_segment_cache([segment_index])
 
-            if segment["type"] == "Polygon" and segment.get("vertices"):
-                # Convert stored list of lists back to QPointF objects
-                qpoints = [QPointF(p[0], p[1]) for p in segment["vertices"]]
+    def _remove_segment_from_multi_view_display(self, segment_index):
+        """Remove a single segment from multi-view display."""
+        if hasattr(self, "multi_view_segment_items"):
+            for viewer_idx in self.multi_view_segment_items:
+                if segment_index in self.multi_view_segment_items[viewer_idx]:
+                    for item in self.multi_view_segment_items[viewer_idx][
+                        segment_index
+                    ]:
+                        try:
+                            if item.scene():
+                                self.multi_view_viewers[viewer_idx].scene().removeItem(
+                                    item
+                                )
+                        except RuntimeError:
+                            pass
+                    del self.multi_view_segment_items[viewer_idx][segment_index]
 
-                poly_item = HoverablePolygonItem(QPolygonF(qpoints))
-                default_brush = QBrush(
-                    QColor(base_color.red(), base_color.green(), base_color.blue(), 70)
-                )
-                hover_brush = QBrush(
-                    QColor(base_color.red(), base_color.green(), base_color.blue(), 170)
-                )
-                poly_item.set_brushes(default_brush, hover_brush)
-                poly_item.set_segment_info(i, self)
-                poly_item.setPen(QPen(Qt.GlobalColor.transparent))
-                self.viewer.scene().addItem(poly_item)
-                self.segment_items[i].append(poly_item)
-            elif segment.get("mask") is not None:
-                default_pixmap = mask_to_pixmap(
-                    segment["mask"], base_color.getRgb()[:3], alpha=70
-                )
-                hover_pixmap = mask_to_pixmap(
-                    segment["mask"], base_color.getRgb()[:3], alpha=170
-                )
-                pixmap_item = HoverablePixmapItem()
-                pixmap_item.set_pixmaps(default_pixmap, hover_pixmap)
-                pixmap_item.set_segment_info(i, self)
-                self.viewer.scene().addItem(pixmap_item)
-                pixmap_item.setZValue(i + 1)
-                self.segment_items[i].append(pixmap_item)
+        # Invalidate cache for this segment
+        self._invalidate_segment_cache([segment_index])
+
+    def _update_lists_incremental(self, added_segment_index=None, removed_indices=None):
+        """Update UI lists with incremental segment display updates.
+
+        This is more efficient than _update_all_lists when only adding/removing segments.
+
+        Args:
+            added_segment_index: Index of newly added segment (if any)
+            removed_indices: List of removed segment indices (if any)
+        """
+        if self._updating_lists:
+            return
+
+        self._updating_lists = True
+        try:
+            # Always update these (they're relatively cheap)
+            self._update_class_list()
+            self._update_segment_table()
+            self._update_class_filter()
+
+            # Handle segment display incrementally
+            if removed_indices:
+                for idx in removed_indices:
+                    self._remove_segment_from_display(idx)
+                # After removal, indices shift - need full refresh
+                self._display_all_segments()
+            elif added_segment_index is not None:
+                # Just add the new segment
+                self._add_segment_to_display(added_segment_index)
+            else:
+                # Fallback to full refresh
+                self._display_all_segments()
+
+            # Handle edit handles
+            if self.mode == "edit":
+                if self.view_mode == "multi":
+                    self._display_multi_view_edit_handles()
+                else:
+                    self._display_edit_handles()
+            else:
+                if self.view_mode == "multi":
+                    self._clear_multi_view_edit_handles()
+                else:
+                    self._clear_edit_handles()
+        finally:
+            self._updating_lists = False
 
     def _display_all_multi_view_segments(self):
         """Display all segments in multi-view mode."""
@@ -2543,12 +2835,12 @@ class MainWindow(QMainWindow):
             self.multi_view_segment_items[viewer_index][segment_index].append(poly_item)
 
         elif segment_type == "AI" and segment_data.get("mask") is not None:
-            # Display AI mask
-            default_pixmap = mask_to_pixmap(
-                segment_data["mask"], base_color.getRgb()[:3], alpha=70
-            )
-            hover_pixmap = mask_to_pixmap(
-                segment_data["mask"], base_color.getRgb()[:3], alpha=170
+            # Display AI mask with cached pixmaps
+            default_pixmap, hover_pixmap = self._get_cached_pixmaps(
+                segment_index,
+                segment_data["mask"],
+                base_color.getRgb()[:3],
+                viewer_index,
             )
             pixmap_item = HoverablePixmapItem()
             pixmap_item.set_pixmaps(default_pixmap, hover_pixmap)
@@ -2584,12 +2876,12 @@ class MainWindow(QMainWindow):
                 )
 
             elif segment_data.get("mask") is not None:
-                # Display as mask
-                default_pixmap = mask_to_pixmap(
-                    segment_data["mask"], base_color.getRgb()[:3], alpha=70
-                )
-                hover_pixmap = mask_to_pixmap(
-                    segment_data["mask"], base_color.getRgb()[:3], alpha=170
+                # Display as mask with cached pixmaps
+                default_pixmap, hover_pixmap = self._get_cached_pixmaps(
+                    segment_index,
+                    segment_data["mask"],
+                    base_color.getRgb()[:3],
+                    viewer_index,
                 )
                 pixmap_item = HoverablePixmapItem()
                 pixmap_item.set_pixmaps(default_pixmap, hover_pixmap)
@@ -2780,7 +3072,10 @@ class MainWindow(QMainWindow):
                 )
                 # Clear redo history when a new action is performed
                 self.redo_history.clear()
-                self._update_all_lists()
+                # Use incremental update for better performance
+                self._update_lists_incremental(
+                    added_segment_index=len(self.segment_manager.segments) - 1
+                )
                 self._show_success_notification("AI bounding box segmentation saved!")
             else:
                 self._show_warning_notification(
@@ -2869,7 +3164,10 @@ class MainWindow(QMainWindow):
                 # Clear redo history when a new action is performed
                 self.redo_history.clear()
                 self.clear_all_points()
-                self._update_all_lists()
+                # Use incremental update for better performance
+                self._update_lists_incremental(
+                    added_segment_index=len(self.segment_manager.segments) - 1
+                )
                 self._show_success_notification("AI segment saved!")
             else:
                 self._show_warning_notification(
@@ -2977,7 +3275,10 @@ class MainWindow(QMainWindow):
 
         self.polygon_points.clear()
         self.clear_all_points()
-        self._update_all_lists()
+        # Use incremental update for better performance
+        self._update_lists_incremental(
+            added_segment_index=len(self.segment_manager.segments) - 1
+        )
 
     def _get_segments_for_viewer(self, viewer_index):
         """Get segments that apply to a specific viewer."""
@@ -3347,6 +3648,11 @@ class MainWindow(QMainWindow):
                 # Remove the segment that was added
                 self.segment_manager.delete_segments([segment_index])
                 self.right_panel.clear_selections()  # Clear selection to prevent phantom highlights
+
+                # Clear pixmap caches - indices get reused after deletion
+                self._segment_pixmap_cache.clear()
+                self._highlight_pixmap_cache.clear()
+
                 self._update_all_lists()
                 self._show_notification("Undid: Add Segment")
         elif action_type == "add_point":
@@ -3780,6 +4086,9 @@ class MainWindow(QMainWindow):
                                     "removed_segments": removed_segments_data,
                                 }
                             )
+                            # Clear pixmap caches - segments were modified/split
+                            self._segment_pixmap_cache.clear()
+                            self._highlight_pixmap_cache.clear()
                             self._show_success_notification(
                                 f"Erased {len(removed_indices)} segment(s)!"
                             )
@@ -3819,7 +4128,13 @@ class MainWindow(QMainWindow):
 
                     # Clear all points
                     self.clear_all_points()
-                    self._update_all_lists()
+                    # Use incremental update for better performance
+                    if erase_mode:
+                        self._update_all_lists()  # Erase changes indices, need full refresh
+                    else:
+                        self._update_lists_incremental(
+                            added_segment_index=len(self.segment_manager.segments) - 1
+                        )
                 else:
                     self._show_warning_notification(
                         "All segments filtered out by fragment threshold"
@@ -3855,6 +4170,9 @@ class MainWindow(QMainWindow):
                                     "removed_segments": removed_segments_data,
                                 }
                             )
+                            # Clear pixmap caches - segments were modified/split
+                            self._segment_pixmap_cache.clear()
+                            self._highlight_pixmap_cache.clear()
                             self._show_notification(
                                 f"Applied eraser to {len(removed_indices)} segment(s)"
                             )
@@ -3883,7 +4201,13 @@ class MainWindow(QMainWindow):
 
                     # Clear all points after accepting
                     self.clear_all_points()
-                    self._update_all_lists()
+                    # Use incremental update for better performance
+                    if erase_mode:
+                        self._update_all_lists()  # Erase changes indices, need full refresh
+                    else:
+                        self._update_lists_incremental(
+                            added_segment_index=len(self.segment_manager.segments) - 1
+                        )
                 else:
                     self._show_warning_notification(
                         "All segments filtered out by fragment threshold"
@@ -4089,6 +4413,12 @@ class MainWindow(QMainWindow):
         """Reset application state."""
         self.clear_all_points()
         self.segment_manager.clear()
+
+        # Clear all performance caches when resetting state
+        self._segment_pixmap_cache.clear()
+        self._class_color_cache.clear()
+        self._highlight_pixmap_cache.clear()
+
         self._update_all_lists()
 
         # Clean up crop visuals
@@ -4782,13 +5112,21 @@ class MainWindow(QMainWindow):
         self.viewer.setFocus()
 
     def _get_color_for_class(self, class_id):
-        """Get color for a class ID."""
+        """Get color for a class ID with caching."""
         if class_id is None:
             return QColor.fromHsv(0, 0, 128)
+
+        # Check cache first
+        if class_id in self._class_color_cache:
+            return self._class_color_cache[class_id]
+
+        # Calculate and cache the color
         hue = int((class_id * 222.4922359) % 360)
         color = QColor.fromHsv(hue, 220, 220)
         if not color.isValid():
-            return QColor(Qt.GlobalColor.white)
+            color = QColor(Qt.GlobalColor.white)
+
+        self._class_color_cache[class_id] = color
         return color
 
     def _display_edit_handles(self):
@@ -7197,6 +7535,11 @@ class MainWindow(QMainWindow):
                 try:
                     # Clear any leftover multi-view segments first
                     self.segment_manager.clear()
+
+                    # Clear all performance caches when switching view modes
+                    self._segment_pixmap_cache.clear()
+                    self._class_color_cache.clear()
+                    self._highlight_pixmap_cache.clear()
 
                     # Load segments and class aliases for the current image
                     self.file_manager.load_class_aliases(self.current_image_path)

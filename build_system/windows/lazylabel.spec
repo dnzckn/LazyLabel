@@ -36,6 +36,10 @@ datas = sam_datas + sam2_datas + pyqt_datas + model_files + demo_datas
 
 # Hidden imports that PyInstaller might miss
 hiddenimports = [
+    # LazyLabel package and version module
+    'lazylabel',
+    'lazylabel._version',
+
     # PyQt6 modules
     'PyQt6.QtCore',
     'PyQt6.QtGui',
@@ -71,6 +75,14 @@ hiddenimports = [
     'tqdm',
     'huggingface_hub',
     'pyqtdarktheme',
+
+    # pkg_resources and setuptools dependencies
+    'pkg_resources',
+    'setuptools',
+    'jaraco',
+    'jaraco.text',
+    'jaraco.functools',
+    'jaraco.context',
 ]
 
 # Add all PyQt6 submodules
@@ -84,7 +96,7 @@ hiddenimports += collect_submodules('sam2')
 
 a = Analysis(
     [str(ROOT_DIR / 'src/lazylabel/main.py')],
-    pathex=[],
+    pathex=[str(ROOT_DIR / 'src')],  # Add src to path for lazylabel package imports
     binaries=[],
     datas=datas,
     hiddenimports=hiddenimports,
@@ -100,7 +112,6 @@ a = Analysis(
         'IPython',
         'sphinx',
         'pytest',
-        'setuptools',
     ],
     win_no_prefer_redirects=False,
     win_private_assemblies=False,
@@ -126,7 +137,7 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=str(ROOT_DIR / 'src/lazylabel/demo_pictures/logo2.png'),  # Application icon
+    icon=str(ROOT_DIR / 'src/lazylabel/demo_pictures/logo2.ico'),  # Application icon
     version=str(SCRIPT_DIR / 'version_info.txt'),  # Version information
 )
 

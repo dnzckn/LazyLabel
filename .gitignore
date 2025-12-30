@@ -1,14 +1,21 @@
 *.pyc
+*.pyd
 *.pth
 *.pt
+*.enc
+*.dll
+*.so
+*.dylib
+*.txt
 src/lazylabel/.DS_Store
 .DS_Store
 /src/lazylabel.egg-info
 /src/lazylabel_gui.egg-info
 /dist
 /build
+build_system/windows/dist/
+build_system/windows/build/
 *.npz
-*.txt
 *.json
 
 # Build system artifacts (exclude executables, keep source)
