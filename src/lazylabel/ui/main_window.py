@@ -810,6 +810,7 @@ class MainWindow(QMainWindow):
         self.control_panel.brightness_changed.connect(self._set_brightness)
         self.control_panel.contrast_changed.connect(self._set_contrast)
         self.control_panel.gamma_changed.connect(self._set_gamma)
+        self.control_panel.saturation_changed.connect(self._set_saturation)
         self.control_panel.reset_adjustments_requested.connect(
             self._reset_image_adjustments
         )
@@ -1135,6 +1136,10 @@ class MainWindow(QMainWindow):
     def _set_gamma(self, value):
         """Set image gamma."""
         self.image_adjustment_manager.set_gamma(value)
+
+    def _set_saturation(self, value):
+        """Set image saturation."""
+        self.image_adjustment_manager.set_saturation(value)
 
     def _apply_throttled_slider_updates(self):
         """Apply pending slider updates (called by throttle timer)."""
@@ -2447,6 +2452,7 @@ class MainWindow(QMainWindow):
                 self.image_adjustment_manager.brightness,
                 self.image_adjustment_manager.contrast,
                 self.image_adjustment_manager.gamma,
+                self.image_adjustment_manager.saturation,
             )
             if self.model_manager.is_model_available():
                 self._update_sam_model_image()
@@ -4249,6 +4255,7 @@ class MainWindow(QMainWindow):
                 self.image_adjustment_manager.brightness,
                 self.image_adjustment_manager.contrast,
                 self.image_adjustment_manager.gamma,
+                self.image_adjustment_manager.saturation,
             )
 
     def _display_multi_view_segments(self, viewer_idx: int):
@@ -4440,6 +4447,7 @@ class MainWindow(QMainWindow):
                     self.image_adjustment_manager.brightness,
                     self.image_adjustment_manager.contrast,
                     self.image_adjustment_manager.gamma,
+                    self.image_adjustment_manager.saturation,
                 )
 
                 # Load existing segments for the current image

@@ -157,6 +157,7 @@ class FileNavigationManager:
                     self.image_adjustment_manager.brightness,
                     self.image_adjustment_manager.contrast,
                     self.image_adjustment_manager.gamma,
+                    self.image_adjustment_manager.saturation,
                 )
                 self.mw._update_sam_model_image()
                 self.file_manager.load_class_aliases(self.mw.current_image_path)
@@ -265,6 +266,14 @@ class FileNavigationManager:
 
         pixmap = QPixmap.fromImage(q_image)
         self.viewer.set_photo(pixmap)
+
+        # Apply current image adjustments to the new image
+        self.viewer.set_image_adjustments(
+            self.image_adjustment_manager.brightness,
+            self.image_adjustment_manager.contrast,
+            self.image_adjustment_manager.gamma,
+            self.image_adjustment_manager.saturation,
+        )
 
         # Load existing segments and class aliases
         self.file_manager.load_class_aliases(path)

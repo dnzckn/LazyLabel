@@ -15,6 +15,7 @@ from PyQt6.QtWidgets import (
 
 from .widgets import (
     AdjustmentsWidget,
+    AnnotationSettingsWidget,
     BorderCropWidget,
     ChannelThresholdWidget,
     FFTThresholdWidget,
@@ -187,6 +188,7 @@ class ControlPanel(QWidget):
     brightness_changed = pyqtSignal(int)
     contrast_changed = pyqtSignal(int)
     gamma_changed = pyqtSignal(int)
+    saturation_changed = pyqtSignal(int)
     reset_adjustments_requested = pyqtSignal()
     image_adjustment_changed = pyqtSignal()
     # Slider drag tracking signals
@@ -229,6 +231,7 @@ class ControlPanel(QWidget):
         self.channel_threshold_widget = ChannelThresholdWidget()
         self.fft_threshold_widget = FFTThresholdWidget()
         self.settings_widget = SettingsWidget()
+        self.annotation_settings_widget = AnnotationSettingsWidget()
         self.adjustments_widget = AdjustmentsWidget()
         self.fragment_widget = FragmentThresholdWidget()
 
@@ -754,6 +757,12 @@ class ControlPanel(QWidget):
         self.fft_threshold_collapsible.set_collapsed(True)  # Default to collapsed
         layout.addWidget(self.fft_threshold_collapsible)
 
+        # Annotation Settings - collapsible
+        annotation_settings_collapsible = SimpleCollapsible(
+            "Annotation Settings", self.annotation_settings_widget
+        )
+        layout.addWidget(annotation_settings_collapsible)
+
         # Image Adjustments - collapsible
         adjustments_collapsible = SimpleCollapsible(
             "Image Adjustments", self.adjustments_widget
@@ -788,17 +797,22 @@ class ControlPanel(QWidget):
         # Settings widget signals
         self.settings_widget.settings_changed.connect(self.settings_changed)
 
-        # Adjustments widget signals
-        self.adjustments_widget.annotation_size_changed.connect(
+        # Annotation settings widget signals
+        self.annotation_settings_widget.annotation_size_changed.connect(
             self.annotation_size_changed
         )
-        self.adjustments_widget.pan_speed_changed.connect(self.pan_speed_changed)
-        self.adjustments_widget.join_threshold_changed.connect(
+        self.annotation_settings_widget.pan_speed_changed.connect(
+            self.pan_speed_changed
+        )
+        self.annotation_settings_widget.join_threshold_changed.connect(
             self.join_threshold_changed
         )
+
+        # Image adjustments widget signals
         self.adjustments_widget.brightness_changed.connect(self.brightness_changed)
         self.adjustments_widget.contrast_changed.connect(self.contrast_changed)
         self.adjustments_widget.gamma_changed.connect(self.gamma_changed)
+        self.adjustments_widget.saturation_changed.connect(self.saturation_changed)
         self.adjustments_widget.reset_requested.connect(
             self.reset_adjustments_requested
         )
@@ -955,19 +969,19 @@ class ControlPanel(QWidget):
 
     def get_annotation_size(self):
         """Get current annotation size."""
-        return self.adjustments_widget.get_annotation_size()
+        return self.annotation_settings_widget.get_annotation_size()
 
     def set_annotation_size(self, value):
         """Set annotation size."""
-        self.adjustments_widget.set_annotation_size(value)
+        self.annotation_settings_widget.set_annotation_size(value)
 
     def set_pan_speed(self, value):
         """Set pan speed."""
-        self.adjustments_widget.set_pan_speed(value)
+        self.annotation_settings_widget.set_pan_speed(value)
 
     def set_join_threshold(self, value):
         """Set join threshold."""
-        self.adjustments_widget.set_join_threshold(value)
+        self.annotation_settings_widget.set_join_threshold(value)
 
     def set_fragment_threshold(self, value):
         """Set fragment threshold."""

@@ -30,6 +30,7 @@ class Settings:
     brightness: float = 0.0
     contrast: float = 0.0
     gamma: float = 1.0
+    saturation: float = 1.0  # 0.0 = grayscale, 1.0 = normal, 2.0 = double saturation
 
     # Model Settings
     default_model_type: str = "vit_h"

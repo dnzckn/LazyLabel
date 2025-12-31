@@ -43,6 +43,7 @@ class ImageAdjustmentManager:
         self.brightness: float = main_window.settings.brightness
         self.contrast: float = main_window.settings.contrast
         self.gamma: float = main_window.settings.gamma
+        self.saturation: float = main_window.settings.saturation
 
         # Cached image data for fast processing
         self._cached_original_image: np.ndarray | None = None
@@ -94,6 +95,17 @@ class ImageAdjustmentManager:
         self.mw.settings.gamma = self.gamma
         self._request_slider_update()
 
+    def set_saturation(self, value: float) -> None:
+        """Set image saturation.
+
+        Args:
+            value: Slider value (converted to 0.0-2.0 range internally)
+                   0 = grayscale, 100 = normal, 200 = double saturation
+        """
+        self.saturation = value / 100.0  # Convert slider value to 0.0-2.0 range
+        self.mw.settings.saturation = self.saturation
+        self._request_slider_update()
+
     def _request_slider_update(self) -> None:
         """Request a slider update with throttling for smooth performance."""
         mw = self.mw
@@ -123,7 +135,9 @@ class ImageAdjustmentManager:
             and hasattr(mw.viewer, "_original_image_bgra")
             and mw.viewer._original_image_bgra is not None
         ):
-            mw.viewer.set_image_adjustments(self.brightness, self.contrast, self.gamma)
+            mw.viewer.set_image_adjustments(
+                self.brightness, self.contrast, self.gamma, self.saturation
+            )
 
         # Apply to multi-view viewers if they have images
         if mw.view_mode == "multi" and hasattr(mw, "multi_view_viewers"):
@@ -137,7 +151,7 @@ class ImageAdjustmentManager:
                     and viewer._original_image_bgra is not None
                 ):
                     viewer.set_image_adjustments(
-                        self.brightness, self.contrast, self.gamma
+                        self.brightness, self.contrast, self.gamma, self.saturation
                     )
 
     def reset_to_defaults(self) -> None:
@@ -147,9 +161,11 @@ class ImageAdjustmentManager:
         self.brightness = 0.0
         self.contrast = 0.0
         self.gamma = 1.0
+        self.saturation = 1.0
         mw.settings.brightness = self.brightness
         mw.settings.contrast = self.contrast
         mw.settings.gamma = self.gamma
+        mw.settings.saturation = self.saturation
         mw.control_panel.adjustments_widget.reset_to_defaults()
 
         if mw.current_image_path or (
@@ -287,6 +303,7 @@ class ImageAdjustmentManager:
             self.brightness,
             self.contrast,
             self.gamma,
+            self.saturation,
         )
 
         # Reapply crop overlays if they exist
@@ -343,6 +360,7 @@ class ImageAdjustmentManager:
             self.brightness,
             self.contrast,
             self.gamma,
+            self.saturation,
         )
 
         # Reapply crop overlays if they exist
@@ -363,6 +381,7 @@ class ImageAdjustmentManager:
                 self.brightness,
                 self.contrast,
                 self.gamma,
+                self.saturation,
             )
             # Reapply crop overlays if they exist
             if self.crop_manager.current_crop_coords:

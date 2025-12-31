@@ -92,7 +92,13 @@ class PhotoViewer(QGraphicsView):
                 self._scene.addItem(self._pixmap_item)
             self._pixmap_item.setPixmap(QPixmap())
 
-    def set_image_adjustments(self, brightness: float, contrast: float, gamma: float):
+    def set_image_adjustments(
+        self,
+        brightness: float,
+        contrast: float,
+        gamma: float,
+        saturation: float = 1.0,
+    ):
         if self._original_image_bgra is None or self._original_image is None:
             return
 
@@ -106,6 +112,27 @@ class PhotoViewer(QGraphicsView):
         # Separate alpha channel for transparency preservation
         alpha_channel = img_bgra[:, :, 3:4]  # Keep dimensions
         img_bgr = img_bgra[:, :, :3]  # RGB channels only
+
+        # Apply saturation adjustment using luminance-preserving interpolation
+        # (0.0 = grayscale, 1.0 = normal, 2.0 = double saturation)
+        # This interpolates between grayscale and original color, preserving perceived brightness
+        if saturation != 1.0:
+            # Calculate luminance-based grayscale using standard weights (BT.601)
+            # Note: img_bgr is in BGR format, so B=channel 0, G=channel 1, R=channel 2
+            gray = (
+                0.114 * img_bgr[:, :, 0]  # Blue
+                + 0.587 * img_bgr[:, :, 1]  # Green
+                + 0.299 * img_bgr[:, :, 2]  # Red
+            ).astype(np.float32)
+
+            # Interpolate: output = gray + saturation * (original - gray)
+            # At saturation=0: pure grayscale
+            # At saturation=1: original color
+            # At saturation>1: boosted saturation (colors become more vivid)
+            img_float = img_bgr.astype(np.float32)
+            gray_3ch = np.stack([gray, gray, gray], axis=2)
+            adjusted = gray_3ch + saturation * (img_float - gray_3ch)
+            img_bgr = np.clip(adjusted, 0, 255).astype(np.uint8)
 
         # Apply brightness and contrast to RGB channels only
         # new_image = alpha * old_image + beta

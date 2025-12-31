@@ -1,4 +1,4 @@
-"""Adjustments widget for sliders and controls."""
+"""Image adjustments widget for brightness, contrast, gamma, and saturation controls."""
 
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtWidgets import (
@@ -14,17 +14,15 @@ from PyQt6.QtWidgets import (
 
 
 class AdjustmentsWidget(QWidget):
-    """Widget for adjustment controls."""
+    """Widget for image adjustment controls (brightness, contrast, gamma, saturation)."""
 
-    annotation_size_changed = pyqtSignal(int)
-    pan_speed_changed = pyqtSignal(int)
-    join_threshold_changed = pyqtSignal(int)
     brightness_changed = pyqtSignal(int)
     contrast_changed = pyqtSignal(int)
     gamma_changed = pyqtSignal(int)
+    saturation_changed = pyqtSignal(int)
     reset_requested = pyqtSignal()
     image_adjustment_changed = pyqtSignal()
-    # New signals for tracking slider drag state
+    # Signals for tracking slider drag state
     slider_drag_started = pyqtSignal()
     slider_drag_finished = pyqtSignal()
 
@@ -35,76 +33,34 @@ class AdjustmentsWidget(QWidget):
 
     def _setup_ui(self):
         """Setup the UI layout."""
-        group = QGroupBox("Adjustments")
+        group = QGroupBox("Image Adjustments")
         layout = QVBoxLayout(group)
-        layout.setSpacing(3)  # Reduced spacing between controls
+        layout.setSpacing(3)
 
         # Helper function to create compact slider rows
-        def create_slider_row(
-            label_text, default_value, slider_range, tooltip, is_float=False
-        ):
+        def create_slider_row(label_text, default_value, slider_range, tooltip):
             row_layout = QHBoxLayout()
             row_layout.setSpacing(8)
 
-            # Label with fixed width for alignment
             label = QLabel(label_text)
             label.setFixedWidth(80)
             label.setAlignment(
                 Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
             )
 
-            # Text edit with width to show numbers like 1.00 and -1.00
             text_edit = QLineEdit(str(default_value))
-            text_edit.setFixedWidth(45)  # Increased from 35 to 45
+            text_edit.setFixedWidth(45)
 
-            # Slider takes remaining space
             slider = QSlider(Qt.Orientation.Horizontal)
             slider.setRange(slider_range[0], slider_range[1])
-
-            # Convert default_value to appropriate type before setting slider value
-            if is_float:
-                float_value = float(default_value)
-                slider.setValue(int(float_value * 10))
-            else:
-                int_value = int(default_value)
-                slider.setValue(int_value)
-
+            slider.setValue(int(default_value))
             slider.setToolTip(tooltip)
 
             row_layout.addWidget(label)
             row_layout.addWidget(text_edit)
-            row_layout.addWidget(slider, 1)  # Stretch factor of 1
+            row_layout.addWidget(slider, 1)
 
             return row_layout, label, text_edit, slider
-
-        # Annotation size
-        size_row, self.size_label, self.size_edit, self.size_slider = create_slider_row(
-            "Size:",
-            "1.0",
-            (1, 50),
-            "Adjusts the size of points and lines (Ctrl +/-)",
-            True,
-        )
-        layout.addLayout(size_row)
-
-        # Pan speed
-        pan_row, self.pan_label, self.pan_edit, self.pan_slider = create_slider_row(
-            "Pan:",
-            "1.0",
-            (1, 100),
-            "Adjusts the speed of WASD panning. Hold Shift for 5x boost.",
-            True,
-        )
-        layout.addLayout(pan_row)
-
-        # Polygon join threshold
-        join_row, self.join_label, self.join_edit, self.join_slider = create_slider_row(
-            "Join:", "2", (1, 10), "The pixel distance to 'snap' a polygon closed."
-        )
-        layout.addLayout(join_row)
-
-        # Add separator for image adjustments
-        layout.addSpacing(8)
 
         # Brightness
         (
@@ -125,18 +81,29 @@ class AdjustmentsWidget(QWidget):
         gamma_row, self.gamma_label, self.gamma_edit, self.gamma_slider = (
             create_slider_row("Gamma:", "100", (1, 200), "Adjust image gamma")
         )
-        # Set display text to show actual gamma value
         self.gamma_edit.setText("1.0")
         layout.addLayout(gamma_row)
+
+        # Saturation (slider 0-200, where 100 = 1.0 normal saturation)
+        (
+            saturation_row,
+            self.saturation_label,
+            self.saturation_edit,
+            self.saturation_slider,
+        ) = create_slider_row(
+            "Saturate:", "100", (0, 200), "Adjust image saturation (0 = grayscale)"
+        )
+        self.saturation_edit.setText("1.0")
+        layout.addLayout(saturation_row)
 
         # Main layout
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.addWidget(group)
 
-        self.btn_reset = QPushButton("Reset to Defaults")
+        self.btn_reset = QPushButton("Reset Image Adjustments")
         self.btn_reset.setToolTip(
-            "Reset all image adjustment and annotation size settings to their default values."
+            "Reset brightness, contrast, gamma, and saturation to defaults."
         )
         self.btn_reset.setMinimumHeight(28)
         self.btn_reset.setStyleSheet(self._get_button_style())
@@ -144,12 +111,6 @@ class AdjustmentsWidget(QWidget):
 
     def _connect_signals(self):
         """Connect internal signals."""
-        self.size_slider.valueChanged.connect(self._on_size_slider_changed)
-        self.size_edit.editingFinished.connect(self._on_size_edit_finished)
-        self.pan_slider.valueChanged.connect(self._on_pan_slider_changed)
-        self.pan_edit.editingFinished.connect(self._on_pan_edit_finished)
-        self.join_slider.valueChanged.connect(self._on_join_slider_changed)
-        self.join_edit.editingFinished.connect(self._on_join_edit_finished)
         self.brightness_slider.valueChanged.connect(self._on_brightness_slider_changed)
         self.brightness_slider.sliderPressed.connect(self.slider_drag_started)
         self.brightness_slider.sliderReleased.connect(
@@ -168,53 +129,18 @@ class AdjustmentsWidget(QWidget):
             self._on_image_adjustment_slider_released
         )
         self.gamma_edit.editingFinished.connect(self._on_gamma_edit_finished)
-        self.btn_reset.clicked.connect(self.reset_requested)
+        self.saturation_slider.valueChanged.connect(self._on_saturation_slider_changed)
+        self.saturation_slider.sliderPressed.connect(self.slider_drag_started)
+        self.saturation_slider.sliderReleased.connect(
+            self._on_image_adjustment_slider_released
+        )
+        self.saturation_edit.editingFinished.connect(self._on_saturation_edit_finished)
+        self.btn_reset.clicked.connect(self._on_reset_clicked)
 
-    def _on_size_slider_changed(self, value):
-        """Handle annotation size slider change."""
-        multiplier = value / 10.0
-        self.size_edit.setText(f"{multiplier:.1f}")
-        self.annotation_size_changed.emit(value)
-
-    def _on_size_edit_finished(self):
-        try:
-            value = float(self.size_edit.text())
-            slider_value = int(value * 10)
-            slider_value = max(1, min(50, slider_value))
-            self.size_slider.setValue(slider_value)
-            self.annotation_size_changed.emit(slider_value)
-        except ValueError:
-            self.size_edit.setText(f"{self.size_slider.value() / 10.0:.1f}")
-
-    def _on_pan_slider_changed(self, value):
-        """Handle pan speed slider change."""
-        multiplier = value / 10.0
-        self.pan_edit.setText(f"{multiplier:.1f}")
-        self.pan_speed_changed.emit(value)
-
-    def _on_pan_edit_finished(self):
-        try:
-            value = float(self.pan_edit.text())
-            slider_value = int(value * 10)
-            slider_value = max(1, min(100, slider_value))
-            self.pan_slider.setValue(slider_value)
-            self.pan_speed_changed.emit(slider_value)
-        except ValueError:
-            self.pan_edit.setText(f"{self.pan_slider.value() / 10.0:.1f}")
-
-    def _on_join_slider_changed(self, value):
-        """Handle join threshold slider change."""
-        self.join_edit.setText(f"{value}")
-        self.join_threshold_changed.emit(value)
-
-    def _on_join_edit_finished(self):
-        try:
-            value = int(self.join_edit.text())
-            slider_value = max(1, min(10, value))
-            self.join_slider.setValue(slider_value)
-            self.join_threshold_changed.emit(slider_value)
-        except ValueError:
-            self.join_edit.setText(f"{self.join_slider.value()}")
+    def _on_reset_clicked(self):
+        """Handle reset button click."""
+        self.reset_to_defaults()
+        self.reset_requested.emit()
 
     def _on_brightness_slider_changed(self, value):
         """Handle brightness slider change."""
@@ -260,85 +186,71 @@ class AdjustmentsWidget(QWidget):
         except ValueError:
             self.gamma_edit.setText(f"{self.gamma_slider.value() / 100.0:.2f}")
 
+    def _on_saturation_slider_changed(self, value):
+        """Handle saturation slider change."""
+        saturation_val = value / 100.0
+        self.saturation_edit.setText(f"{saturation_val:.2f}")
+        self.saturation_changed.emit(value)
+
+    def _on_saturation_edit_finished(self):
+        try:
+            value = float(self.saturation_edit.text())
+            slider_value = int(value * 100)
+            slider_value = max(0, min(200, slider_value))
+            self.saturation_slider.setValue(slider_value)
+            self.saturation_changed.emit(slider_value)
+        except ValueError:
+            self.saturation_edit.setText(
+                f"{self.saturation_slider.value() / 100.0:.2f}"
+            )
+
     def _on_image_adjustment_slider_released(self):
         """Emit signal when any image adjustment slider is released."""
         self.slider_drag_finished.emit()
         self.image_adjustment_changed.emit()
 
-    def get_annotation_size(self):
-        """Get current annotation size value."""
-        return self.size_slider.value()
-
-    def set_annotation_size(self, value):
-        """Set annotation size value."""
-
-        self.size_slider.setValue(value)
-        self.size_edit.setText(f"{value / 10.0:.1f}")
-
-    def get_pan_speed(self):
-        """Get current pan speed value."""
-
-        return self.pan_slider.value()
-
-    def set_pan_speed(self, value):
-        """Set pan speed value."""
-
-        self.pan_slider.setValue(value)
-        self.pan_edit.setText(f"{value / 10.0:.1f}")
-
-    def get_join_threshold(self):
-        """Get current join threshold value."""
-
-        return self.join_slider.value()
-
-    def set_join_threshold(self, value):
-        """Set join threshold value."""
-
-        self.join_slider.setValue(value)
-        self.join_edit.setText(f"{value}")
-
     def get_brightness(self):
         """Get current brightness value."""
-
         return self.brightness_slider.value()
 
     def set_brightness(self, value):
         """Set brightness value."""
-
         self.brightness_slider.setValue(value)
         self.brightness_edit.setText(f"{value}")
 
     def get_contrast(self):
         """Get current contrast value."""
-
         return self.contrast_slider.value()
 
     def set_contrast(self, value):
         """Set contrast value."""
-
         self.contrast_slider.setValue(value)
         self.contrast_edit.setText(f"{value}")
 
     def get_gamma(self):
         """Get current gamma value."""
-
         return self.gamma_slider.value()
 
     def set_gamma(self, value):
         """Set gamma value."""
-
         self.gamma_slider.setValue(value)
         self.gamma_edit.setText(f"{value / 100.0:.2f}")
 
-    def reset_to_defaults(self):
-        """Reset all adjustment values to their default states."""
+    def get_saturation(self):
+        """Get current saturation value."""
+        return self.saturation_slider.value()
 
-        self.set_annotation_size(10)  # Default value
-        self.set_pan_speed(10)  # Default value
-        self.set_join_threshold(2)  # Default value
-        self.set_brightness(0)  # Default value
-        self.set_contrast(0)  # Default value
-        self.set_gamma(100)  # Default value (1.0)
+    def set_saturation(self, value):
+        """Set saturation value."""
+        self.saturation_slider.setValue(value)
+        self.saturation_edit.setText(f"{value / 100.0:.2f}")
+
+    def reset_to_defaults(self):
+        """Reset all image adjustment values to their default states."""
+        self.set_brightness(0)
+        self.set_contrast(0)
+        self.set_gamma(100)  # 1.0
+        self.set_saturation(100)  # 1.0
 
     def _get_button_style(self):
         """Get consistent button styling."""

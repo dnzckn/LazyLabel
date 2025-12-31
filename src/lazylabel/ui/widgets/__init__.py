@@ -1,6 +1,7 @@
 """Widget package initialization."""
 
 from .adjustments_widget import AdjustmentsWidget
+from .annotation_settings_widget import AnnotationSettingsWidget
 from .border_crop_widget import BorderCropWidget
 from .channel_threshold_widget import ChannelThresholdWidget
 from .fft_threshold_widget import FFTThresholdWidget
@@ -11,6 +12,7 @@ from .status_bar import StatusBar
 
 __all__ = [
     "AdjustmentsWidget",
+    "AnnotationSettingsWidget",
     "BorderCropWidget",
     "ChannelThresholdWidget",
     "FFTThresholdWidget",
