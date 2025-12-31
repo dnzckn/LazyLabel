@@ -5,6 +5,36 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.0] - 2025-12-31
+
+### Added
+
+- **Sequence Mode**: Complete workflow for propagating masks across image sequences using SAM 2's video predictor
+  - `SequenceViewMode` - State management for reference frames, propagation status, and frame navigation
+  - `PropagationManager` - SAM 2 video predictor integration with multi-reference support
+  - `PropagationWorker` - Background thread for non-blocking propagation operations
+  - `TimelineWidget` - Visual frame navigation with status-colored indicators (reference, propagated, flagged, pending)
+  - `SequenceWidget` - Control panel for reference management, propagation settings, and review navigation
+- **Multi-Reference Propagation**: Add multiple reference frames for improved propagation quality
+  - "Add Current" button to mark current frame as reference
+  - "Add All Before" button to batch-add all preceding frames as references
+  - Visual similarity-based attention (not just temporal proximity)
+- **Confidence-Based Flagging**: Automatic detection of low-quality predictions
+  - Tunable confidence threshold (0.0-1.0, default 0.95)
+  - Auto-flagging of frames below threshold for manual review
+  - "Skip Low Conf" option to exclude flagged frames from propagation
+- **Review Navigation**: Efficient workflow for reviewing flagged frames
+  - Next/Previous flagged frame navigation (N / Shift+N)
+  - Flagged frame counter in sequence widget
+- **Propagation Range Control**: Specify start and end frames for targeted propagation
+- **Memory Preloading**: Optional preloading of sequence images for fast navigation
+- **Bidirectional Propagation**: Propagate from all reference frames in both directions simultaneously
+
+### Changed
+
+- SAM 2 model now supports video predictor mode for sequence operations
+- Segment manager supports merging segments by class for consistent mask handling
+
 ## [1.5.0] - 2025-12-28
 
 ### Added
@@ -378,6 +408,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Image centering on load
 - Multi-class reindexing via drag and drop
 
+[1.6.0]: https://github.com/dnzckn/LazyLabel/compare/v1.5.0...v1.6.0
 [1.5.0]: https://github.com/dnzckn/LazyLabel/compare/v1.4.3...v1.5.0
 [1.4.3]: https://github.com/dnzckn/LazyLabel/compare/v1.4.2...v1.4.3
 [1.4.2]: https://github.com/dnzckn/LazyLabel/compare/v1.4.1...v1.4.2

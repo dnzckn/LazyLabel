@@ -13,11 +13,12 @@ This manual provides detailed instructions for using LazyLabel's image segmentat
 3. [Core Segmentation Modes](#core-segmentation-modes)
 4. [Image Management](#image-management)
 5. [Advanced Features](#advanced-features)
-6. [Export and Data Management](#export-and-data-management)
-7. [Segment Management](#segment-management)
-8. [Keyboard Shortcuts](#keyboard-shortcuts)
-9. [Configuration and Settings](#configuration-and-settings)
-10. [Troubleshooting](#troubleshooting)
+6. [Sequence Mode](#sequence-mode)
+7. [Export and Data Management](#export-and-data-management)
+8. [Segment Management](#segment-management)
+9. [Keyboard Shortcuts](#keyboard-shortcuts)
+10. [Configuration and Settings](#configuration-and-settings)
+11. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -240,6 +241,161 @@ Advanced mode for simultaneous processing of multiple images.
 - **Fragment Size Control** - Minimum segment area
 - **Connectivity Analysis** - Region grouping options
 - **Noise Reduction** - Small artifact removal
+
+---
+
+## Sequence Mode
+
+**Propagate masks across image sequences using SAM 2's video predictor.**
+
+Sequence Mode enables efficient annotation of image series by propagating masks from manually annotated reference frames to the entire sequence. This is particularly useful for video frames, time-lapse sequences, or batches of similar images.
+
+### Entering Sequence Mode
+
+1. **Open Folder** - Load a directory containing your image sequence
+2. **Switch to Sequence Mode** - Select "Sequence" from the mode dropdown in the control panel
+3. **Interface Changes** - Timeline widget appears at the bottom, sequence controls replace single-view controls
+
+### Interface Components
+
+#### Timeline Widget
+Visual representation of all frames in the sequence.
+
+**Features:**
+- **Frame Cells** - Click to navigate to any frame
+- **Status Colors**:
+  - Gray - Pending (not yet processed)
+  - Green - Reference frame (manually annotated)
+  - Blue - Propagated (mask from SAM 2)
+  - Red - Flagged (low confidence, needs review)
+- **Current Frame** - Highlighted with yellow border
+- **Scroll Support** - Navigate long sequences
+
+#### Sequence Controls Panel
+
+**Reference Frames Section:**
+- **+ Add Current** - Mark current frame as reference (keyboard: `F`)
+- **+ All Before** - Add all frames before current position as references
+- **Clear All** - Remove all reference frame designations
+
+**Propagation Section:**
+- **Propagate** - Start mask propagation from all references (keyboard: `Ctrl+P`)
+- **Range** - Specify start and end frames for propagation
+- **Skip Low Conf** - Skip frames with confidence below threshold
+- **Min Conf** - Set confidence threshold (0.0-1.0, default 0.95)
+
+**Review Section:**
+- **Flagged frames** - Count of frames needing review
+- **Prev Flagged** - Navigate to previous flagged frame (keyboard: `Shift+N`)
+- **Next Flagged** - Navigate to next flagged frame (keyboard: `N`)
+
+### Basic Workflow
+
+#### Step 1: Annotate Reference Frames
+1. Navigate to a representative frame
+2. Use AI Point Mode or Polygon Mode to create segments
+3. Press `F` or click "Add Current" to mark as reference
+4. Repeat for additional reference frames if needed
+
+#### Step 2: Configure Propagation
+1. Set the propagation range (default: full sequence)
+2. Adjust confidence threshold if needed
+3. Enable/disable "Skip Low Conf" based on your workflow
+
+#### Step 3: Run Propagation
+1. Click "Propagate" button
+2. Watch timeline update as frames are processed
+3. Button shows progress during propagation
+
+#### Step 4: Review Flagged Frames
+1. Check flagged frame count in Review section
+2. Use Next/Prev Flagged buttons to navigate
+3. Manually correct or approve flagged frames
+4. Add corrections as new reference frames if needed
+
+#### Step 5: Save Results
+1. Navigate through sequence to verify results
+2. Save individual frames or batch export
+
+### Multi-Reference Propagation
+
+**Why Multiple References?**
+- SAM 2 uses visual similarity-based attention, not just temporal proximity
+- Multiple references provide better coverage of object variations
+- Frames showing different angles/poses improve propagation quality
+
+**Best Practices:**
+- Add references showing different object views
+- Include frames at key transition points
+- For manufacturing/industrial: add references with different part orientations
+- Use "Add All Before" when you have a block of manually labeled frames
+
+**How It Works:**
+- All reference frames contribute to predictions
+- SAM 2 weights references by visual feature similarity
+- Nearby similar frames have higher influence
+- Dissimilar frames still contribute (useful for non-temporal sequences)
+
+### Confidence Threshold
+
+**Understanding Confidence:**
+- Each propagated frame receives a confidence score (0.0-1.0)
+- Scores reflect SAM 2's certainty about the prediction
+- Lower scores indicate potential quality issues
+
+**Threshold Behavior:**
+- Frames below threshold are marked as "flagged" (red in timeline)
+- Higher threshold = more frames flagged = stricter quality control
+- Default 0.95 provides good balance for most use cases
+
+**Skip Low Conf Option:**
+- When enabled: flagged frames receive no masks
+- When disabled: all frames get masks, flagged ones need manual review
+- Useful when you want to manually handle uncertain frames
+
+### Sequence Settings
+
+Access via Settings tab in control panel:
+
+**Load to Memory:**
+- Preload sequence images for faster navigation
+- Increases memory usage but improves responsiveness
+- Recommended for sequences under 500 frames
+
+### Keyboard Shortcuts (Sequence Mode)
+
+| Action | Key | Description |
+|--------|-----|-------------|
+| Add Reference | `F` | Mark current frame as reference |
+| Propagate | `Ctrl+P` | Start propagation |
+| Next Flagged | `N` | Jump to next flagged frame |
+| Prev Flagged | `Shift+N` | Jump to previous flagged frame |
+| Next Frame | `Right Arrow` | Navigate to next frame |
+| Prev Frame | `Left Arrow` | Navigate to previous frame |
+
+### Use Cases
+
+#### Video Annotation
+- Load video frames as image sequence
+- Annotate keyframes as references
+- Propagate to fill intermediate frames
+- Review flagged frames for motion blur or occlusion
+
+#### Manufacturing/Industrial Inspection
+- Frames may be randomly sorted (no temporal coherence)
+- SAM 2's visual similarity attention handles this well
+- Add references showing representative part orientations
+- Propagation matches by appearance, not frame order
+
+#### Time-Lapse Sequences
+- Annotate frames at key time points
+- Propagation handles gradual changes
+- Flag sudden changes for manual review
+
+#### Batch Processing Similar Images
+- Group similar images in sequence
+- Annotate a few representative samples
+- Propagate to annotate entire batch efficiently
 
 ---
 
@@ -498,6 +654,15 @@ LazyLabel uses three distinct segment types with different capabilities:
 | Pan Down | `S` | - | Move view downward |
 | Pan Left | `A` | - | Move view leftward |
 | Pan Right | `D` | - | Move view rightward |
+
+### Sequence Mode Controls
+
+| Action | Primary Key | Description |
+|--------|-------------|-------------|
+| Add Reference | `F` | Mark current frame as reference |
+| Start Propagation | `Ctrl+P` | Propagate masks from references |
+| Next Flagged | `N` | Navigate to next flagged frame |
+| Previous Flagged | `Shift+N` | Navigate to previous flagged frame |
 
 ### Shortcut Customization
 

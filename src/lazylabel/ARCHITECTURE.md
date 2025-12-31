@@ -49,12 +49,15 @@ src/lazylabel/
 │   ├── modes/                  # Mode Handler Implementations
 │   │   ├── base_mode.py            # Abstract base handler
 │   │   ├── single_view_mode.py     # Single-view operations
-│   │   └── multi_view_mode.py      # Multi-view operations
+│   │   ├── multi_view_mode.py      # Multi-view operations
+│   │   └── sequence_view_mode.py   # Sequence mode state management
 │   │
 │   ├── widgets/                # Reusable UI Components
 │   │   ├── status_bar.py
 │   │   ├── settings_widget.py
 │   │   ├── adjustments_widget.py
+│   │   ├── sequence_widget.py      # Sequence mode controls
+│   │   ├── timeline_widget.py      # Frame navigation timeline
 │   │   └── ... (threshold widgets, model selection)
 │   │
 │   └── workers/                # Background Processing Threads
@@ -62,6 +65,7 @@ src/lazylabel/
 │       ├── single_view_sam_init_worker.py
 │       ├── multi_view_sam_init_worker.py
 │       ├── image_preload_worker.py
+│       ├── propagation_worker.py   # SAM 2 video propagation
 │       └── save_worker.py
 │
 ├── viewmodels/              # MVVM ViewModels
@@ -246,6 +250,15 @@ Owns multi-view state for all viewers.
 - Segment table UI management
 - Class assignment and filtering
 
+**Propagation Manager (Sequence Mode):**
+
+**PropagationManager**
+- SAM 2 video predictor integration
+- Multi-reference frame propagation
+- Bidirectional mask propagation
+- Confidence-based frame flagging
+- Progress tracking and cancellation
+
 **Additional Managers:**
 - ImageAdjustmentManager - brightness, contrast, gamma
 - ImagePreloadManager - background image preloading
@@ -314,6 +327,90 @@ Implements multi-view mode with viewer coordination.
 
 ---
 
+## Sequence Mode Architecture
+
+Complete infrastructure for propagating masks across image sequences.
+
+### SequenceViewMode
+State manager for sequence mode operations.
+
+**State:**
+- Image paths for the sequence
+- Current frame index
+- Reference frame annotations (multi-reference support)
+- Frame statuses (pending, reference, propagated, flagged, saved)
+- Propagated masks and confidence scores
+- Confidence threshold for auto-flagging
+
+**Signals:**
+- `reference_changed(frame_idx)` - Reference frame updated
+- `frame_status_changed(frame_idx, status)` - Frame status updated
+- `propagation_started()`, `propagation_finished()` - Propagation lifecycle
+- `propagation_progress(current, total)` - Progress updates
+
+### PropagationManager
+Coordinates SAM 2 video predictor for mask propagation.
+
+**Responsibilities:**
+- Initialize SAM 2 video predictor with sequence images
+- Collect reference annotations from multiple frames
+- Execute bidirectional propagation from all reference points
+- Handle confidence scoring and frame flagging
+- Manage background worker for non-blocking operations
+
+**Propagation Flow:**
+```
+Reference Frames (user annotated)
+    |
+    v
+PropagationManager.start_propagation()
+    |
+    v
+PropagationWorker (background thread)
+    |
+    +--> SAM2Model.init_video_predictor()
+    |
+    +--> add_points_to_frame() for each reference
+    |
+    +--> propagate_in_video() bidirectional
+    |
+    v
+frame_done signal -> store masks, update status
+    |
+    v
+SequenceViewMode updates -> Timeline refreshes
+```
+
+### TimelineWidget
+Visual frame navigation with status indicators.
+
+**Features:**
+- Clickable frame cells for navigation
+- Color-coded status (green=reference, blue=propagated, red=flagged, gray=pending)
+- Current frame highlight
+- Scroll support for long sequences
+
+### SequenceWidget
+Control panel for sequence operations.
+
+**Controls:**
+- Reference frame management (add, clear)
+- Propagation range selection (start/end frames)
+- Confidence threshold adjustment (0.0-1.0)
+- Skip low confidence option
+- Flagged frame navigation (next/prev)
+
+### PropagationWorker
+Background thread for non-blocking propagation.
+
+**Signals:**
+- `frame_done(frame_idx, masks, confidence)` - Single frame completed
+- `progress(current, total)` - Progress update
+- `finished()` - All frames processed
+- `error(message)` - Error occurred
+
+---
+
 ## Worker Architecture
 
 Background threads for expensive operations.
@@ -323,6 +420,7 @@ Background threads for expensive operations.
 - `SingleViewSAMInitWorker` - single-view initialization
 - `MultiViewSAMInitWorker` - multi-view parallel initialization
 - `MultiViewSAMUpdateWorker` - multi-view model updates
+- `PropagationWorker` - SAM 2 video propagation across sequences
 
 **Image Workers:**
 - `ImagePreloadWorker` - background image caching
