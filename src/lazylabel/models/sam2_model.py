@@ -9,8 +9,10 @@ from ..utils.logger import logger
 
 # SAM-2 specific imports - will fail gracefully if not available
 try:
-    from sam2.build_sam import build_sam2
+    from sam2.build_sam import build_sam2, build_sam2_video_predictor
     from sam2.sam2_image_predictor import SAM2ImagePredictor
+
+    SAM2_VIDEO_AVAILABLE = True
 except ImportError as e:
     logger.error(f"SAM-2 dependencies not found: {e}")
     logger.info(
@@ -37,6 +39,13 @@ class Sam2Model:
         self.predictor = None
         self.image = None
         self.is_loaded = False
+
+        # Video predictor state (for sequence propagation)
+        self.video_predictor = None
+        self.video_inference_state = None
+        self.video_image_paths: list[str] = []
+        self.is_video_initialized = False
+        self._video_temp_dir: str | None = None  # Temp dir for non-JPEG images
 
         # Auto-detect config if not provided
         if config_path is None:
@@ -555,3 +564,429 @@ class Sam2Model:
             self.model = None
             self.predictor = None
             return False
+
+    # =========================================================================
+    # Video Predictor Methods (for sequence/video propagation)
+    # =========================================================================
+
+    def init_video_predictor(self) -> bool:
+        """Initialize the video predictor for sequence propagation.
+
+        Uses the same model checkpoint as the image predictor.
+
+        Returns:
+            True if successful, False otherwise
+        """
+        if not SAM2_VIDEO_AVAILABLE:
+            logger.error("SAM2: Video predictor not available")
+            return False
+
+        if self.video_predictor is not None:
+            logger.debug("SAM2: Video predictor already initialized")
+            return True
+
+        try:
+            logger.info("SAM2: Initializing video predictor...")
+
+            model_filename = Path(self.current_model_path).name.lower()
+
+            # Determine the config file path for build_sam2_video_predictor
+            # The function expects paths relative to the sam2 package configs dir
+            # Format: "configs/sam2.1/sam2.1_hiera_l.yaml" for SAM2.1
+            # Format: "configs/sam2/sam2_hiera_l.yaml" for SAM2.0
+            if "2.1" in model_filename:
+                # SAM2.1 model
+                if "large" in model_filename or "hiera_l" in model_filename:
+                    config_file = "configs/sam2.1/sam2.1_hiera_l.yaml"
+                elif "base" in model_filename or "hiera_b" in model_filename:
+                    config_file = "configs/sam2.1/sam2.1_hiera_b+.yaml"
+                elif "small" in model_filename or "hiera_s" in model_filename:
+                    config_file = "configs/sam2.1/sam2.1_hiera_s.yaml"
+                elif "tiny" in model_filename or "hiera_t" in model_filename:
+                    config_file = "configs/sam2.1/sam2.1_hiera_t.yaml"
+                else:
+                    # Default to large
+                    config_file = "configs/sam2.1/sam2.1_hiera_l.yaml"
+            else:
+                # SAM2.0 model
+                if "large" in model_filename or "hiera_l" in model_filename:
+                    config_file = "configs/sam2/sam2_hiera_l.yaml"
+                elif "base" in model_filename or "hiera_b" in model_filename:
+                    config_file = "configs/sam2/sam2_hiera_b+.yaml"
+                elif "small" in model_filename or "hiera_s" in model_filename:
+                    config_file = "configs/sam2/sam2_hiera_s.yaml"
+                elif "tiny" in model_filename or "hiera_t" in model_filename:
+                    config_file = "configs/sam2/sam2_hiera_t.yaml"
+                else:
+                    # Default to large
+                    config_file = "configs/sam2/sam2_hiera_l.yaml"
+
+            logger.info(f"SAM2: Using video predictor config: {config_file}")
+
+            # Ensure Hydra is properly initialized for sam2
+            # sam2.__init__ normally does this, but if image predictor cleared
+            # Hydra state, we need to re-initialize it
+            try:
+                from hydra import initialize_config_module
+                from hydra.core.global_hydra import GlobalHydra
+
+                if not GlobalHydra.instance().is_initialized():
+                    # Re-initialize with sam2 config module (same as sam2.__init__)
+                    initialize_config_module("sam2", version_base="1.2")
+                    logger.debug("SAM2: Re-initialized Hydra for video predictor")
+            except Exception as hydra_error:
+                logger.debug(f"SAM2: Hydra init note: {hydra_error}")
+
+            self.video_predictor = build_sam2_video_predictor(
+                config_file,
+                self.current_model_path,
+                device=self.device,
+            )
+
+            logger.info("SAM2: Video predictor initialized successfully")
+            return True
+
+        except Exception as e:
+            logger.error(f"SAM2: Failed to initialize video predictor: {e}")
+            self.video_predictor = None
+            return False
+
+    def init_video_state(self, image_dir: str) -> bool:
+        """Initialize video state with a directory of images.
+
+        The directory should contain images named in sortable order
+        (e.g., frame_0001.png, frame_0002.png, ...).
+
+        Note: SAM2 video predictor only supports JPEG files. If the directory
+        contains non-JPEG images (PNG, BMP, etc.), they will be converted to
+        temporary JPEG files automatically.
+
+        Args:
+            image_dir: Path to directory containing image sequence
+
+        Returns:
+            True if successful, False otherwise
+        """
+        if self.video_predictor is None and not self.init_video_predictor():
+            return False
+
+        try:
+            logger.info(f"SAM2: Initializing video state from {image_dir}...")
+
+            # Check what image types are in the directory
+            image_dir_path = Path(image_dir)
+            jpeg_extensions = {".jpg", ".jpeg"}
+            other_extensions = {".png", ".bmp", ".tiff", ".tif", ".webp"}
+            all_extensions = jpeg_extensions | other_extensions
+
+            # Get all image files
+            all_images = sorted(
+                p
+                for p in image_dir_path.iterdir()
+                if p.suffix.lower() in all_extensions
+            )
+
+            if not all_images:
+                logger.error(f"SAM2: No images found in {image_dir}")
+                return False
+
+            # Store original image paths for reference
+            self.video_image_paths = [str(p) for p in all_images]
+
+            # Check if we have JPEG files
+            jpeg_files = [p for p in all_images if p.suffix.lower() in jpeg_extensions]
+
+            if len(jpeg_files) == len(all_images):
+                # All files are JPEG, use directory directly
+                video_path = image_dir
+                logger.debug("SAM2: Using JPEG files directly")
+            else:
+                # Need to convert non-JPEG files to temporary JPEG directory
+                import tempfile
+
+                # Clean up any previous temp directory
+                self._cleanup_temp_dir()
+
+                # Create temp directory
+                self._video_temp_dir = tempfile.mkdtemp(prefix="sam2_video_")
+                logger.info(
+                    f"SAM2: Converting {len(all_images)} images to JPEG format..."
+                )
+
+                for i, img_path in enumerate(all_images):
+                    # Read image
+                    img = cv2.imread(str(img_path))
+                    if img is None:
+                        logger.warning(f"SAM2: Could not read {img_path}")
+                        continue
+
+                    # Save as JPEG with numeric name for proper sorting
+                    # SAM2 expects names like "00000.jpg" that sort numerically
+                    jpeg_path = Path(self._video_temp_dir) / f"{i:05d}.jpg"
+                    cv2.imwrite(str(jpeg_path), img, [cv2.IMWRITE_JPEG_QUALITY, 95])
+
+                video_path = self._video_temp_dir
+                logger.debug(f"SAM2: Created temp JPEG directory: {video_path}")
+
+            # SAM2 video predictor expects a directory path
+            # It will automatically load images in sorted order
+            with (
+                torch.inference_mode(),
+                torch.autocast(str(self.device), dtype=torch.bfloat16),
+            ):
+                self.video_inference_state = self.video_predictor.init_state(
+                    video_path=video_path,
+                    offload_video_to_cpu=True,  # Save GPU memory
+                    offload_state_to_cpu=False,
+                )
+
+            self.is_video_initialized = True
+            logger.info(
+                f"SAM2: Video state initialized with {len(self.video_image_paths)} frames"
+            )
+            return True
+
+        except Exception as e:
+            logger.error(f"SAM2: Failed to initialize video state: {e}")
+            self.video_inference_state = None
+            self.is_video_initialized = False
+            self._cleanup_temp_dir()
+            return False
+
+    def _cleanup_temp_dir(self) -> None:
+        """Clean up temporary JPEG directory if it exists."""
+        if self._video_temp_dir is not None:
+            try:
+                import shutil
+
+                shutil.rmtree(self._video_temp_dir, ignore_errors=True)
+                logger.debug(f"SAM2: Cleaned up temp dir: {self._video_temp_dir}")
+            except Exception as e:
+                logger.warning(f"SAM2: Failed to clean up temp dir: {e}")
+            self._video_temp_dir = None
+
+    def add_video_mask(
+        self, frame_idx: int, obj_id: int, mask: np.ndarray
+    ) -> tuple[np.ndarray, float] | None:
+        """Add a mask prompt to the video predictor.
+
+        Args:
+            frame_idx: Frame index (0-based)
+            obj_id: Object ID for tracking
+            mask: Binary mask array (H, W)
+
+        Returns:
+            Tuple of (output_mask, confidence_score) or None if failed
+        """
+        if not self.is_video_initialized:
+            logger.error("SAM2: Video state not initialized")
+            return None
+
+        try:
+            with (
+                torch.inference_mode(),
+                torch.autocast(str(self.device), dtype=torch.bfloat16),
+            ):
+                # Add mask to the video predictor
+                frame_idx_out, obj_ids, mask_logits = self.video_predictor.add_new_mask(
+                    inference_state=self.video_inference_state,
+                    frame_idx=frame_idx,
+                    obj_id=obj_id,
+                    mask=mask.astype(bool),
+                )
+
+                # Convert logits to mask and confidence
+                if mask_logits is not None and len(mask_logits) > 0:
+                    # Find the mask for our object
+                    obj_idx = list(obj_ids).index(obj_id) if obj_id in obj_ids else 0
+                    logits = mask_logits[obj_idx]
+
+                    # Convert to mask (threshold at 0)
+                    output_mask = (logits > 0).cpu().numpy().astype(np.uint8)
+
+                    # Compute confidence from logits (sigmoid of mean positive logit)
+                    positive_logits = logits[logits > 0]
+                    if len(positive_logits) > 0:
+                        confidence = float(torch.sigmoid(positive_logits.mean()).item())
+                    else:
+                        confidence = 0.5
+
+                    return output_mask, confidence
+
+            return None
+
+        except Exception as e:
+            logger.error(f"SAM2: Failed to add video mask: {e}")
+            return None
+
+    def add_video_points(
+        self,
+        frame_idx: int,
+        obj_id: int,
+        points: np.ndarray,
+        labels: np.ndarray,
+    ) -> tuple[np.ndarray, float] | None:
+        """Add point prompts to the video predictor.
+
+        Args:
+            frame_idx: Frame index (0-based)
+            obj_id: Object ID for tracking
+            points: Point coordinates array (N, 2)
+            labels: Point labels array (N,) - 1 for positive, 0 for negative
+
+        Returns:
+            Tuple of (output_mask, confidence_score) or None if failed
+        """
+        if not self.is_video_initialized:
+            logger.error("SAM2: Video state not initialized")
+            return None
+
+        try:
+            with (
+                torch.inference_mode(),
+                torch.autocast(str(self.device), dtype=torch.bfloat16),
+            ):
+                # Add points to the video predictor
+                (
+                    frame_idx_out,
+                    obj_ids,
+                    mask_logits,
+                ) = self.video_predictor.add_new_points_or_box(
+                    inference_state=self.video_inference_state,
+                    frame_idx=frame_idx,
+                    obj_id=obj_id,
+                    points=points,
+                    labels=labels,
+                    clear_old_points=True,
+                )
+
+                # Convert logits to mask and confidence
+                if mask_logits is not None and len(mask_logits) > 0:
+                    obj_idx = list(obj_ids).index(obj_id) if obj_id in obj_ids else 0
+                    logits = mask_logits[obj_idx]
+
+                    output_mask = (logits > 0).cpu().numpy().astype(np.uint8)
+
+                    positive_logits = logits[logits > 0]
+                    if len(positive_logits) > 0:
+                        confidence = float(torch.sigmoid(positive_logits.mean()).item())
+                    else:
+                        confidence = 0.5
+
+                    return output_mask, confidence
+
+            return None
+
+        except Exception as e:
+            logger.error(f"SAM2: Failed to add video points: {e}")
+            return None
+
+    def propagate_in_video(
+        self,
+        start_frame_idx: int | None = None,
+        max_frames: int | None = None,
+        reverse: bool = False,
+    ):
+        """Propagate masks through the video sequence.
+
+        This is a generator that yields results frame by frame.
+
+        Args:
+            start_frame_idx: Starting frame index (None = reference frame)
+            max_frames: Maximum number of frames to propagate (None = all)
+            reverse: If True, propagate backward instead of forward
+
+        Yields:
+            Tuple of (frame_idx, obj_id, mask, confidence) for each frame/object
+        """
+        if not self.is_video_initialized:
+            logger.error("SAM2: Video state not initialized")
+            return
+
+        try:
+            logger.debug(
+                f"SAM2: propagate_in_video called with start_frame_idx={start_frame_idx}, "
+                f"max_frames={max_frames}, reverse={reverse}"
+            )
+            frame_count = 0
+
+            with (
+                torch.inference_mode(),
+                torch.autocast(str(self.device), dtype=torch.bfloat16),
+            ):
+                # Propagate through video
+                for (
+                    frame_idx,
+                    obj_ids,
+                    mask_logits,
+                ) in self.video_predictor.propagate_in_video(
+                    inference_state=self.video_inference_state,
+                    start_frame_idx=start_frame_idx,
+                    max_frame_num_to_track=max_frames,
+                    reverse=reverse,
+                ):
+                    frame_count += 1
+                    logger.debug(
+                        f"SAM2: video_predictor yielded frame_idx={frame_idx}, "
+                        f"num_objects={len(obj_ids)}"
+                    )
+                    # Process each object in this frame
+                    for i, obj_id in enumerate(obj_ids):
+                        logits = mask_logits[i]
+
+                        # Convert to binary mask
+                        mask = (logits > 0).cpu().numpy().squeeze().astype(np.uint8)
+
+                        # Compute confidence score
+                        positive_logits = logits[logits > 0]
+                        if len(positive_logits) > 0:
+                            confidence = float(
+                                torch.sigmoid(positive_logits.mean()).item()
+                            )
+                        else:
+                            confidence = 0.0
+
+                        yield frame_idx, int(obj_id), mask, confidence
+
+            logger.debug(
+                f"SAM2: propagate_in_video completed, yielded {frame_count} frames"
+            )
+
+        except Exception as e:
+            logger.error(f"SAM2: Error during video propagation: {e}")
+            return
+
+    def reset_video_state(self) -> None:
+        """Reset the video inference state (clear all prompts)."""
+        if self.video_predictor is not None and self.video_inference_state is not None:
+            try:
+                self.video_predictor.reset_state(self.video_inference_state)
+                logger.debug("SAM2: Video state reset")
+            except Exception as e:
+                logger.error(f"SAM2: Failed to reset video state: {e}")
+
+    def cleanup_video_predictor(self) -> None:
+        """Clean up video predictor to free GPU memory."""
+        if self.video_inference_state is not None:
+            self.video_inference_state = None
+
+        if self.video_predictor is not None:
+            del self.video_predictor
+            self.video_predictor = None
+
+        self.video_image_paths = []
+        self.is_video_initialized = False
+
+        # Clean up temp directory if it exists
+        self._cleanup_temp_dir()
+
+        # Clear GPU cache
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+
+        logger.info("SAM2: Video predictor cleaned up")
+
+    @property
+    def video_frame_count(self) -> int:
+        """Get the number of frames in the current video state."""
+        return len(self.video_image_paths)

@@ -53,8 +53,8 @@ class ImageAdjustmentManager:
 
     @property
     def viewer(self) -> PhotoViewer:
-        """Get viewer from main window."""
-        return self.mw.viewer
+        """Get the active viewer (supports sequence mode)."""
+        return self.mw.active_viewer
 
     @property
     def control_panel(self) -> ControlPanel:

@@ -48,8 +48,8 @@ class EditModeManager:
 
     @property
     def viewer(self) -> PhotoViewer:
-        """Get viewer from main window."""
-        return self.mw.viewer
+        """Get the active viewer (supports sequence mode)."""
+        return self.mw.active_viewer
 
     @property
     def segment_manager(self) -> SegmentManager:
@@ -73,7 +73,14 @@ class EditModeManager:
 
     @property
     def segment_items(self) -> dict[int, list[QGraphicsItem]]:
-        """Get segment items from main window."""
+        """Get segment items from main window (handles sequence mode)."""
+        # In sequence mode, segment items are tracked in _sequence_segment_items
+        if (
+            hasattr(self.mw, "_current_view_mode")
+            and self.mw._current_view_mode == "sequence"
+            and hasattr(self.mw, "_sequence_segment_items")
+        ):
+            return self.mw._sequence_segment_items
         return self.mw.segment_items
 
     @property
@@ -96,7 +103,7 @@ class EditModeManager:
 
         for seg_idx in selected_indices:
             seg = self.segment_manager.segments[seg_idx]
-            if seg["type"] == "Polygon" and seg.get("vertices"):
+            if seg.get("type") == "Polygon" and seg.get("vertices"):
                 vertices = seg["vertices"]
 
                 # Skip complex polygons - too many handles is slow and unusable

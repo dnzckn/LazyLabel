@@ -190,7 +190,7 @@ class SingleViewModeHandler(BaseModeHandler):
                 class_id
             )
 
-            if segment["type"] == "Polygon" and segment.get("vertices"):
+            if segment.get("type") == "Polygon" and segment.get("vertices"):
                 # Convert stored list of lists back to QPointF objects
                 qpoints = [QPointF(p[0], p[1]) for p in segment["vertices"]]
 

@@ -16,6 +16,8 @@ def mock_main_window():
     mw.view_mode = "single"
     mw.right_panel = MagicMock()
     mw.viewer = MagicMock()
+    # active_viewer returns the same viewer in single-view mode
+    mw.active_viewer = mw.viewer
     mw.ai_bbox_preview_mask = None
     return mw
 

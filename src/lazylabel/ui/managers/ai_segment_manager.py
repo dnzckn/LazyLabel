@@ -51,8 +51,8 @@ class AISegmentManager:
 
     @property
     def viewer(self) -> PhotoViewer:
-        """Get viewer from main window."""
-        return self.mw.viewer
+        """Get active viewer from main window (works in sequence mode too)."""
+        return self.mw.active_viewer
 
     @property
     def segment_manager(self) -> SegmentManager:
@@ -86,6 +86,9 @@ class AISegmentManager:
             self._accept_single_view(erase_mode)
         elif self.mw.view_mode == "multi":
             self._accept_multi_view(erase_mode)
+        elif self.mw.view_mode == "sequence":
+            # Sequence mode uses similar logic to single view
+            self._accept_sequence_view(erase_mode)
 
     def _accept_single_view(self, erase_mode: bool) -> None:
         """Accept AI segment in single view mode.
@@ -196,6 +199,45 @@ class AISegmentManager:
             self.mw.preview_mask_item = None
             self.mw.current_preview_mask = None
 
+    def _accept_sequence_view(self, erase_mode: bool) -> None:
+        """Accept AI segment in sequence view mode.
+
+        Sequence mode uses the sequence_viewer but shares state with main window.
+
+        Args:
+            erase_mode: If True, erase overlapping segments
+        """
+        has_preview_item = (
+            hasattr(self.mw, "preview_mask_item") and self.mw.preview_mask_item
+        )
+        has_preview_mask = (
+            hasattr(self.mw, "current_preview_mask")
+            and self.mw.current_preview_mask is not None
+        )
+        has_bbox_preview = (
+            hasattr(self.mw, "ai_bbox_preview_mask")
+            and self.mw.ai_bbox_preview_mask is not None
+        )
+
+        logger.debug(
+            f"Sequence view - has_preview_item: {has_preview_item}, "
+            f"has_preview_mask: {has_preview_mask}, has_bbox_preview: {has_bbox_preview}"
+        )
+
+        # For now, delegate to single view logic since state is shared
+        # The preview mask and items are stored at main_window level
+        if has_bbox_preview:
+            self._accept_bbox_preview(erase_mode, has_preview_item)
+        elif has_preview_item and has_preview_mask:
+            self._accept_point_preview(erase_mode, has_preview_item)
+        else:
+            if erase_mode:
+                logger.debug("No AI segment preview to erase")
+                self.mw._show_notification("No AI segment preview to erase")
+            else:
+                logger.debug("No AI segment preview to accept")
+                self.mw._show_notification("No AI segment preview to accept")
+
     def _erase_with_mask(self, mask, source: str) -> None:
         """Erase segments overlapping with the given mask.
 
@@ -248,7 +290,7 @@ class AISegmentManager:
             }
         )
 
-        seg_type = "polygon" if new_segment["type"] == "Polygon" else "AI"
+        seg_type = "polygon" if new_segment.get("type") == "Polygon" else "AI"
         if source == "bbox":
             self.mw._show_success_notification(
                 f"AI bounding box segment saved as {seg_type}!"

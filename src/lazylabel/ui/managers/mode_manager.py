@@ -132,15 +132,16 @@ class ModeManager:
             "edit": Qt.CursorShape.SizeAllCursor,
             "pan": Qt.CursorShape.OpenHandCursor,
         }
-        mw.viewer.set_cursor(cursor_map.get(mw.mode, Qt.CursorShape.ArrowCursor))
+        active_viewer = mw.active_viewer
+        active_viewer.set_cursor(cursor_map.get(mw.mode, Qt.CursorShape.ArrowCursor))
 
         # Set drag mode
         drag_mode = (
-            mw.viewer.DragMode.ScrollHandDrag
+            active_viewer.DragMode.ScrollHandDrag
             if mw.mode == "pan"
-            else mw.viewer.DragMode.NoDrag
+            else active_viewer.DragMode.NoDrag
         )
-        mw.viewer.setDragMode(drag_mode)
+        active_viewer.setDragMode(drag_mode)
 
         # Also set drag mode for multi-view viewers
         if mw.view_mode == "multi" and hasattr(mw, "multi_view_viewers"):

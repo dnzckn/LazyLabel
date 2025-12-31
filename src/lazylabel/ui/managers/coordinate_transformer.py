@@ -25,6 +25,11 @@ class CoordinateTransformer:
     def __init__(self, main_window: MainWindow):
         self.main_window = main_window
 
+    @property
+    def viewer(self):
+        """Get the active viewer (supports sequence mode)."""
+        return self.main_window.active_viewer
+
     def transform_display_to_sam_coords(self, pos: QPointF) -> tuple[int, int]:
         """Transform display coordinates to SAM model coordinates.
 
@@ -55,14 +60,14 @@ class CoordinateTransformer:
         mw = self.main_window
 
         # Get displayed image dimensions (may include adjustments)
-        if not mw.viewer._pixmap_item or mw.viewer._pixmap_item.pixmap().isNull():
+        if not self.viewer._pixmap_item or self.viewer._pixmap_item.pixmap().isNull():
             # Fallback: use simple scaling
             return int(pos.x() * mw.sam_scale_factor), int(
                 pos.y() * mw.sam_scale_factor
             )
 
-        display_width = mw.viewer._pixmap_item.pixmap().width()
-        display_height = mw.viewer._pixmap_item.pixmap().height()
+        display_width = self.viewer._pixmap_item.pixmap().width()
+        display_height = self.viewer._pixmap_item.pixmap().height()
 
         # Get original image dimensions
         if not mw.current_image_path:
@@ -118,7 +123,7 @@ class CoordinateTransformer:
 
         # Get the appropriate viewer
         if viewer is None:
-            viewer = mw.viewer
+            viewer = self.viewer
 
         # Check if viewer has valid pixmap
         if not viewer._pixmap_item or viewer._pixmap_item.pixmap().isNull():

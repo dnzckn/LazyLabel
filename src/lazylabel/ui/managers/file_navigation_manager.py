@@ -56,8 +56,8 @@ class FileNavigationManager:
 
     @property
     def viewer(self) -> PhotoViewer:
-        """Get viewer from main window."""
-        return self.mw.viewer
+        """Get the active viewer (supports sequence mode)."""
+        return self.mw.active_viewer
 
     @property
     def file_manager(self) -> FileManager:
@@ -104,6 +104,32 @@ class FileNavigationManager:
         """Get model manager from main window."""
         return self.mw.model_manager
 
+    # ========== Helper Methods ==========
+
+    def _get_pixmap_from_memory_cache(self, path: str) -> QPixmap | None:
+        """Get a QPixmap from the sequence memory cache if available.
+
+        Args:
+            path: Path to the image
+
+        Returns:
+            QPixmap if cached, None otherwise
+        """
+        cached_array = self.mw.get_cached_sequence_image(path)
+        if cached_array is not None:
+            # Convert numpy array (RGB) to QPixmap
+            height, width = cached_array.shape[:2]
+            bytes_per_line = 3 * width
+            qimage = QImage(
+                cached_array.data.tobytes(),
+                width,
+                height,
+                bytes_per_line,
+                QImage.Format.Format_RGB888,
+            )
+            return QPixmap.fromImage(qimage)
+        return None
+
     # ========== Single-View Image Loading ==========
 
     def load_selected_image(self, index: QModelIndex) -> None:
@@ -135,8 +161,14 @@ class FileNavigationManager:
 
             self.mw.current_image_path = path
 
-            # Try to use preloaded pixmap first (instant navigation)
-            pixmap = self.image_preload_manager.get_preloaded_pixmap(path)
+            # Try memory cache first (fastest - already loaded in RAM)
+            pixmap = self._get_pixmap_from_memory_cache(path)
+
+            # Then try preloaded pixmap (still fast)
+            if pixmap is None:
+                pixmap = self.image_preload_manager.get_preloaded_pixmap(path)
+
+            # Finally load from disk (slowest)
             if pixmap is None:
                 # Load image with explicit transparency support
                 qimage = QImage(self.mw.current_image_path)
@@ -195,6 +227,10 @@ class FileNavigationManager:
         # Preload adjacent images for instant navigation
         self.image_preload_manager.preload_adjacent_images()
 
+        # If in sequence mode, trigger sequence initialization
+        if hasattr(self.mw, "view_mode") and self.mw.view_mode == "sequence":
+            self.mw._enter_sequence_mode()
+
     def load_image_by_path(self, path: str) -> None:
         """Load image by file path directly (for FastFileManager).
 
@@ -232,16 +268,23 @@ class FileNavigationManager:
         for item in items_to_remove:
             self.viewer.scene().removeItem(item)
 
-        # Load the image
-        original_image = cv2.imread(path)
-        if original_image is None:
-            logger.error(f"Failed to load image: {path}")
-            return
+        # Try memory cache first (fastest)
+        original_image = self.mw.get_cached_sequence_image(path)
 
-        # Convert BGR to RGB
-        if len(original_image.shape) == 3:
-            original_image = cv2.cvtColor(original_image, cv2.COLOR_BGR2RGB)
-        self.mw.original_image = original_image
+        if original_image is not None:
+            # Use cached image (already RGB)
+            self.mw.original_image = original_image
+        else:
+            # Load the image from disk
+            original_image = cv2.imread(path)
+            if original_image is None:
+                logger.error(f"Failed to load image: {path}")
+                return
+
+            # Convert BGR to RGB
+            if len(original_image.shape) == 3:
+                original_image = cv2.cvtColor(original_image, cv2.COLOR_BGR2RGB)
+            self.mw.original_image = original_image
 
         # Convert to QImage and display
         height, width = original_image.shape[:2]
@@ -298,6 +341,10 @@ class FileNavigationManager:
 
         # Preload adjacent images for instant navigation
         self.image_preload_manager.preload_adjacent_images()
+
+        # If in sequence mode, trigger sequence initialization
+        if hasattr(self.mw, "view_mode") and self.mw.view_mode == "sequence":
+            self.mw._enter_sequence_mode()
 
     # ========== Multi-View Image Loading ==========
 

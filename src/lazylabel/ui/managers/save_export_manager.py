@@ -48,6 +48,11 @@ class SaveExportManager:
         """
         self.mw = main_window
 
+    @property
+    def viewer(self):
+        """Get the active viewer (supports sequence mode)."""
+        return self.mw.active_viewer
+
     # ========== Property Accessors ==========
 
     @property
@@ -196,7 +201,7 @@ class SaveExportManager:
 
         # Clear preview
         if hasattr(self.mw, "preview_mask_item") and self.mw.preview_mask_item:
-            self.mw.viewer.scene().removeItem(self.mw.preview_mask_item)
+            self.viewer.scene().removeItem(self.mw.preview_mask_item)
             self.mw.preview_mask_item = None
 
         return True
@@ -352,7 +357,7 @@ class SaveExportManager:
                 if viewer_index in segment["views"]:
                     # Create a segment for this viewer with the view-specific data
                     viewer_segment = {
-                        "type": segment["type"],
+                        "type": segment.get("type"),
                         "class_id": segment.get("class_id"),
                     }
                     # Copy view-specific data to the top level
@@ -444,8 +449,8 @@ class SaveExportManager:
             Path to saved NPZ file or None
         """
         h, w = (
-            self.mw.viewer._pixmap_item.pixmap().height(),
-            self.mw.viewer._pixmap_item.pixmap().width(),
+            self.viewer._pixmap_item.pixmap().height(),
+            self.viewer._pixmap_item.pixmap().width(),
         )
         class_order = self.segment_manager.get_unique_class_ids()
         logger.debug(f"Class order for saving: {class_order}")
@@ -481,8 +486,8 @@ class SaveExportManager:
             Path to saved TXT file or None
         """
         h, w = (
-            self.mw.viewer._pixmap_item.pixmap().height(),
-            self.mw.viewer._pixmap_item.pixmap().width(),
+            self.viewer._pixmap_item.pixmap().height(),
+            self.viewer._pixmap_item.pixmap().width(),
         )
         class_order = self.segment_manager.get_unique_class_ids()
 

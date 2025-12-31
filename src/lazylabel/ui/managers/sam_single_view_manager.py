@@ -45,6 +45,11 @@ class SAMSingleViewManager:
         self.init_worker: SingleViewSAMInitWorker | None = None
         self.model_initializing = False
 
+    @property
+    def viewer(self):
+        """Get the active viewer (supports sequence mode)."""
+        return self.mw.active_viewer
+
     # ========== State Accessors ==========
 
     def is_busy(self) -> bool:
@@ -323,7 +328,7 @@ class SAMSingleViewManager:
 
         # Clear preview items
         if hasattr(self.mw, "preview_mask_item") and self.mw.preview_mask_item:
-            self.mw.viewer.scene().removeItem(self.mw.preview_mask_item)
+            self.viewer.scene().removeItem(self.mw.preview_mask_item)
             self.mw.preview_mask_item = None
 
         # Clear AI bbox preview state

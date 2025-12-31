@@ -36,6 +36,11 @@ class KeyboardEventManager:
         """
         self.mw = main_window
 
+    @property
+    def viewer(self):
+        """Get the active viewer (supports sequence mode)."""
+        return self.mw.active_viewer
+
     def handle_escape_press(self) -> None:
         """Handle escape key press - cancel operations and clear state."""
         # Clear selections based on view mode
@@ -63,7 +68,7 @@ class KeyboardEventManager:
 
             # Clear preview
             if hasattr(self.mw, "preview_mask_item") and self.mw.preview_mask_item:
-                self.mw.viewer.scene().removeItem(self.mw.preview_mask_item)
+                self.viewer.scene().removeItem(self.mw.preview_mask_item)
                 self.mw.preview_mask_item = None
 
         # Set focus to appropriate viewer
@@ -77,7 +82,7 @@ class KeyboardEventManager:
             if active_idx < len(self.mw.multi_view_viewers):
                 self.mw.multi_view_viewers[active_idx].setFocus()
         else:
-            self.mw.viewer.setFocus()
+            self.viewer.setFocus()
 
     def handle_space_press(self) -> None:
         """Handle space key press - finalize/accept current segment."""
@@ -87,6 +92,9 @@ class KeyboardEventManager:
 
         if self.mw.mode == "polygon":
             if self.mw.view_mode == "single" and self.mw.polygon_points:
+                self.mw._finalize_polygon(erase_mode=False)
+            elif self.mw.view_mode == "sequence" and self.mw.polygon_points:
+                # Sequence mode uses same logic as single view
                 self.mw._finalize_polygon(erase_mode=False)
             elif self.mw.view_mode == "multi" and hasattr(
                 self.mw, "multi_view_polygon_points"
@@ -117,6 +125,9 @@ class KeyboardEventManager:
             # For AI mode, use accept method (normal mode)
             if self.mw.view_mode == "single":
                 self.mw._accept_ai_segment(erase_mode=False)
+            elif self.mw.view_mode == "sequence":
+                # Sequence mode uses same logic as single view
+                self.mw._accept_ai_segment(erase_mode=False)
             elif self.mw.view_mode == "multi":
                 # Handle multi-view AI acceptance (normal mode)
                 if (
@@ -140,6 +151,9 @@ class KeyboardEventManager:
         if self.mw.mode == "polygon":
             if self.mw.view_mode == "single" and self.mw.polygon_points:
                 self.mw._finalize_polygon(erase_mode=True)
+            elif self.mw.view_mode == "sequence" and self.mw.polygon_points:
+                # Sequence mode uses same logic as single view
+                self.mw._finalize_polygon(erase_mode=True)
             elif self.mw.view_mode == "multi" and hasattr(
                 self.mw, "multi_view_polygon_points"
             ):
@@ -150,6 +164,9 @@ class KeyboardEventManager:
         elif self.mw.mode == "ai":
             # For AI mode, use accept method with erase mode
             if self.mw.view_mode == "single":
+                self.mw._accept_ai_segment(erase_mode=True)
+            elif self.mw.view_mode == "sequence":
+                # Sequence mode uses same logic as single view
                 self.mw._accept_ai_segment(erase_mode=True)
             elif self.mw.view_mode == "multi":
                 # Handle multi-view AI acceptance with erase mode
@@ -222,17 +239,17 @@ class KeyboardEventManager:
         self.mw.right_panel.clear_selections()
 
     def clear_all_points(self) -> None:
-        """Clear all temporary points - works in both single and multi-view mode."""
-        if self.mw.view_mode == "single":
+        """Clear all temporary points - works in single, sequence, and multi-view mode."""
+        if self.mw.view_mode in ("single", "sequence"):
             self._clear_single_view_points()
         elif self.mw.view_mode == "multi":
             self._clear_multi_view_points()
 
     def _clear_single_view_points(self) -> None:
-        """Clear all points and previews in single-view mode."""
+        """Clear all points and previews in single-view and sequence mode."""
         # Clear rubber band line
         if hasattr(self.mw, "rubber_band_line") and self.mw.rubber_band_line:
-            self.mw.viewer.scene().removeItem(self.mw.rubber_band_line)
+            self.viewer.scene().removeItem(self.mw.rubber_band_line)
             self.mw.rubber_band_line = None
 
         # Clear positive/negative points
@@ -241,18 +258,18 @@ class KeyboardEventManager:
 
         # Clear point items from scene
         for item in self.mw.point_items:
-            self.mw.viewer.scene().removeItem(item)
+            self.viewer.scene().removeItem(item)
         self.mw.point_items.clear()
 
         # Clear polygon points and preview items
         self.mw.polygon_points.clear()
         for item in self.mw.polygon_preview_items:
-            self.mw.viewer.scene().removeItem(item)
+            self.viewer.scene().removeItem(item)
         self.mw.polygon_preview_items.clear()
 
         # Clear preview mask
         if hasattr(self.mw, "preview_mask_item") and self.mw.preview_mask_item:
-            self.mw.viewer.scene().removeItem(self.mw.preview_mask_item)
+            self.viewer.scene().removeItem(self.mw.preview_mask_item)
             self.mw.preview_mask_item = None
 
         # Also clear the stored preview mask

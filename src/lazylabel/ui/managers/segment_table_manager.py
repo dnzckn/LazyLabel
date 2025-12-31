@@ -31,6 +31,11 @@ class SegmentTableManager:
         self.main_window = main_window
 
     @property
+    def viewer(self):
+        """Get the active viewer (supports sequence mode)."""
+        return self.main_window.active_viewer
+
+    @property
     def segment_manager(self) -> SegmentManager:
         """Get segment manager from main window."""
         return self.main_window.segment_manager
@@ -96,7 +101,6 @@ class SegmentTableManager:
 
     def update_segment_table(self) -> None:
         """Rebuild the segment table from scratch."""
-        mw = self.main_window
         table = self.right_panel.segment_table
         table.blockSignals(True)
         selected_indices = self.right_panel.get_selected_segment_indices()
@@ -156,7 +160,7 @@ class SegmentTableManager:
         table.setSortingEnabled(True)
 
         table.blockSignals(False)
-        mw.viewer.setFocus()
+        self.viewer.setFocus()
 
         # Update active class display
         active_class = self.segment_manager.get_active_class()

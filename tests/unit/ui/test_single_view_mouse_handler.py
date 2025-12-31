@@ -57,6 +57,9 @@ def mock_main_window():
     mw.viewer.items = Mock(return_value=[])
     mw.viewer.scene = Mock(return_value=Mock())
 
+    # Mock active_viewer (same as viewer for single view mode)
+    mw.active_viewer = mw.viewer
+
     # Mock mode - SingleViewMouseHandler uses mw.mode directly
     mw.mode = "edit"
 

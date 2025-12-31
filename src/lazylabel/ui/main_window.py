@@ -48,6 +48,7 @@ from .managers import (
     NotificationManager,
     PanelPopoutManager,
     PolygonDrawingManager,
+    PropagationManager,
     SAMMultiViewManager,
     SAMPreloadScheduler,
     SAMWorkerManager,
@@ -57,11 +58,15 @@ from .managers import (
     UILayoutManager,
     ViewportManager,
 )
+from .managers.propagation_manager import PropagationDirection
+from .modes import SequenceViewMode
 from .photo_viewer import PhotoViewer
 from .right_panel import RightPanel
-from .widgets import StatusBar
+from .widgets import SequenceWidget, StatusBar, TimelineWidget
 from .workers import (
     ImageDiscoveryWorker,
+    PropagationWorker,
+    SequenceInitWorker,
 )
 
 
@@ -84,8 +89,20 @@ class MainWindow(QMainWindow):
         # Lazy model loading state
         self.pending_custom_model_path = None  # Path to custom model for lazy loading
 
-        # View mode - single or multi
+        # View mode - single, multi, or sequence
         self.view_mode = "single"
+
+        # Viewer references (initialized in _setup_ui)
+        self.viewer = None  # Main single view viewer
+        self.sequence_viewer = None  # Sequence mode viewer
+
+        # Sequence mode state (initialized in _setup_sequence_view_tab)
+        self.sequence_view_mode: SequenceViewMode | None = None
+        self.sequence_widget: SequenceWidget | None = None
+        self.timeline_widget: TimelineWidget | None = None
+        self.propagation_manager: PropagationManager | None = None
+        self._propagation_worker: PropagationWorker | None = None
+        self._sequence_init_worker: SequenceInitWorker | None = None
 
         # Multi-view state
         self.multi_view_viewers: list[
@@ -568,6 +585,21 @@ class MainWindow(QMainWindow):
             pass
         return "unknown"
 
+    @property
+    def active_viewer(self):
+        """Get the currently active viewer based on view mode.
+
+        Returns the appropriate PhotoViewer for the current mode:
+        - single mode: self.viewer
+        - sequence mode: self.sequence_viewer
+        - multi mode: first multi-view viewer (or self.viewer as fallback)
+        """
+        if self.view_mode == "sequence" and self.sequence_viewer is not None:
+            return self.sequence_viewer
+        if self.view_mode == "multi" and self.multi_view_viewers:
+            return self.multi_view_viewers[0]
+        return self.viewer
+
     def _setup_ui(self):
         """Setup the main user interface."""
         # Initialize undo/redo manager
@@ -624,6 +656,9 @@ class MainWindow(QMainWindow):
 
         # Multi-view tab
         self._setup_multi_view_tab()
+
+        # Sequence view tab
+        self._setup_sequence_view_tab()
 
         # Initialize UI layout manager
         self.ui_layout_manager = UILayoutManager(self)
@@ -857,6 +892,17 @@ class MainWindow(QMainWindow):
         )
         self.control_panel.auto_polygon_reset.connect(self._on_auto_polygon_reset)
 
+        # Sequence settings
+        self.control_panel.sequence_max_requested.connect(
+            self._on_sequence_max_requested
+        )
+        self.control_panel.sequence_load_memory_requested.connect(
+            self._on_sequence_load_memory_requested
+        )
+        self.control_panel.sequence_clear_cache_requested.connect(
+            self._on_sequence_clear_cache_requested
+        )
+
         # Right panel connections
         self.right_panel.open_folder_requested.connect(self._open_folder_dialog)
         self.right_panel.image_selected.connect(self._load_selected_image)
@@ -1010,6 +1056,23 @@ class MainWindow(QMainWindow):
         self.viewer.scene().mouseReleaseEvent = self._scene_mouse_release
 
         # Spacebar is now handled by the hotkey manager (calls _handle_space_press)
+
+    def _setup_sequence_viewer_mouse_handlers(self):
+        """Setup mouse handlers for sequence viewer (same as single view)."""
+        if not hasattr(self, "sequence_viewer") or self.sequence_viewer is None:
+            return
+
+        # Store original handlers
+        self._seq_original_mouse_press = self.sequence_viewer.scene().mousePressEvent
+        self._seq_original_mouse_move = self.sequence_viewer.scene().mouseMoveEvent
+        self._seq_original_mouse_release = (
+            self.sequence_viewer.scene().mouseReleaseEvent
+        )
+
+        # Override with our handlers (same as single view)
+        self.sequence_viewer.scene().mousePressEvent = self._scene_mouse_press
+        self.sequence_viewer.scene().mouseMoveEvent = self._scene_mouse_move
+        self.sequence_viewer.scene().mouseReleaseEvent = self._scene_mouse_release
 
     # Mode management methods
     def set_sam_mode(self):
@@ -1224,10 +1287,24 @@ class MainWindow(QMainWindow):
 
     def _load_image_from_path(self, file_path: Path):
         """Load image from a Path object (used by FastFileManager)."""
-        if file_path.is_file() and self.file_manager.is_image_file(str(file_path)):
-            # Convert Path to QModelIndex for compatibility
-            # This allows existing code to work while using the new file manager
-            self._load_image_by_path(str(file_path))
+        if not file_path.is_file() or not self.file_manager.is_image_file(
+            str(file_path)
+        ):
+            return
+
+        # In sequence mode, check if the file is part of the loaded sequence
+        if self.view_mode == "sequence" and self.sequence_view_mode:
+            file_str = str(file_path)
+            frame_idx = self.sequence_view_mode.get_frame_idx_for_path(file_str)
+            if frame_idx is not None:
+                # File is in sequence - navigate to that frame instead of breaking
+                self._on_sequence_frame_selected(frame_idx)
+                return
+            # File is outside sequence - continue with normal loading
+            # which will switch to single view mode
+
+        # Normal loading for single view or files outside sequence
+        self._load_image_by_path(str(file_path))
 
     def _load_selected_image(self, index):
         """Load the selected image (delegates to FileNavigationManager)."""
@@ -1347,7 +1424,9 @@ class MainWindow(QMainWindow):
         if self.settings.operate_on_view:
             # Pass the adjusted image (QImage) to SAM model
             # Convert QImage to numpy array
-            qimage = self.viewer._adjusted_pixmap.toImage()
+            # Use active_viewer to support all view modes (single, sequence, multi)
+            viewer = self.active_viewer
+            qimage = viewer._adjusted_pixmap.toImage()
             ptr = qimage.constBits()
             ptr.setsize(qimage.bytesPerLine() * qimage.height())
             image_np = np.array(ptr).reshape(qimage.height(), qimage.width(), 4)
@@ -1654,7 +1733,11 @@ class MainWindow(QMainWindow):
 
     def _display_all_segments(self):
         """Display all segments on the viewer."""
-        self.segment_display_manager.display_all_segments_single_view()
+        if self.view_mode == "sequence":
+            # Sequence mode has its own segment tracking
+            self._display_sequence_segments()
+        else:
+            self.segment_display_manager.display_all_segments_single_view()
 
     def _add_segment_to_display(self, segment_index):
         """Add a single segment to the display without clearing existing segments.
@@ -1836,6 +1919,19 @@ class MainWindow(QMainWindow):
             self.image_discovery_worker.wait()
             self.image_discovery_worker.deleteLater()
 
+        # Clean up propagation workers
+        self._cleanup_propagation_worker()
+        if self._sequence_init_worker is not None:
+            if self._sequence_init_worker.isRunning():
+                self._sequence_init_worker.stop()
+                self._sequence_init_worker.wait(2000)
+            self._sequence_init_worker.deleteLater()
+            self._sequence_init_worker = None
+
+        # Clean up video predictor
+        if self.propagation_manager is not None:
+            self.propagation_manager.cleanup()
+
         # Save settings
         logger.debug(
             f"Saving settings: pixel_priority_enabled={self.settings.pixel_priority_enabled}, "
@@ -1970,11 +2066,11 @@ class MainWindow(QMainWindow):
 
                 # Clear any existing preview
                 if hasattr(self, "preview_mask_item") and self.preview_mask_item:
-                    self.viewer.scene().removeItem(self.preview_mask_item)
+                    self.active_viewer.scene().removeItem(self.preview_mask_item)
 
                 # Show preview with yellow color
                 pixmap = mask_to_pixmap(mask, (255, 255, 0))
-                self.preview_mask_item = self.viewer.scene().addPixmap(pixmap)
+                self.preview_mask_item = self.active_viewer.scene().addPixmap(pixmap)
                 self.preview_mask_item.setZValue(50)
 
                 self._show_success_notification(
@@ -2020,7 +2116,7 @@ class MainWindow(QMainWindow):
         for i in range(len(self.segment_manager.segments) - 1, -1, -1):
             seg = self.segment_manager.segments[i]
             # Determine mask for hit-testing
-            if seg["type"] == "Polygon" and seg.get("vertices"):
+            if seg.get("type") == "Polygon" and seg.get("vertices"):
                 # Rasterize polygon
                 if self.viewer._pixmap_item.pixmap().isNull():
                     continue
@@ -2076,7 +2172,7 @@ class MainWindow(QMainWindow):
             seg = segment_manager.segments[i]
 
             # Determine mask for hit-testing
-            if seg["type"] == "Polygon" and seg.get("vertices"):
+            if seg.get("type") == "Polygon" and seg.get("vertices"):
                 # Rasterize polygon
                 if viewer._pixmap_item.pixmap().isNull():
                     continue
@@ -2555,10 +2651,14 @@ class MainWindow(QMainWindow):
             # Single view mode
             self.view_mode = "single"
             self._restore_single_view_state()
-        else:
+        elif index == 1:
             # Multi-view mode
             self.view_mode = "multi"
             self._enter_multi_view_mode()
+        elif index == 2:
+            # Sequence view mode
+            self.view_mode = "sequence"
+            self._enter_sequence_mode()
 
     def _setup_multi_view_tab(self):
         """Setup the multi-view tab with two PhotoViewers side by side."""
@@ -2760,6 +2860,1208 @@ class MainWindow(QMainWindow):
         for viewer in self.multi_view_viewers:
             # Install event filter for mouse events
             viewer.viewport().installEventFilter(self)
+
+    def _setup_sequence_view_tab(self):
+        """Setup the sequence view tab with a viewer and timeline."""
+        from PyQt6.QtWidgets import QLabel
+
+        # Main sequence view widget
+        self.sequence_view_widget = QWidget()
+        sequence_layout = QVBoxLayout(self.sequence_view_widget)
+        sequence_layout.setContentsMargins(0, 0, 0, 0)
+        sequence_layout.setSpacing(2)
+
+        # Header label
+        self.sequence_info_label = QLabel("Sequence Mode: No sequence loaded")
+        self.sequence_info_label.setStyleSheet(
+            "font-weight: bold; padding: 4px; background-color: #2d2d2d;"
+        )
+        sequence_layout.addWidget(self.sequence_info_label)
+
+        # Sequence viewer - reuse the same viewer architecture as single view
+        self.sequence_viewer = PhotoViewer(self)
+        self.sequence_viewer.setMouseTracking(True)
+        sequence_layout.addWidget(self.sequence_viewer, stretch=1)
+
+        # Timeline widget at the bottom with Save All button
+        from PyQt6.QtWidgets import QPushButton
+
+        timeline_layout = QHBoxLayout()
+        timeline_layout.setContentsMargins(0, 0, 0, 0)
+        timeline_layout.setSpacing(5)
+
+        self.timeline_widget = TimelineWidget()
+        self.timeline_widget.frame_selected.connect(self._on_sequence_frame_selected)
+        timeline_layout.addWidget(self.timeline_widget, stretch=1)
+
+        self.save_all_timeline_btn = QPushButton("Save All")
+        self.save_all_timeline_btn.setToolTip(
+            "Save all propagated masks to NPZ files (or scrub timeline to save)"
+        )
+        self.save_all_timeline_btn.setMinimumWidth(80)
+        self.save_all_timeline_btn.setMaximumWidth(100)
+        self.save_all_timeline_btn.setStyleSheet(
+            "QPushButton { background-color: #4CAF50; color: black; font-weight: bold; }"
+        )
+        self.save_all_timeline_btn.clicked.connect(self._on_save_all_propagated)
+        timeline_layout.addWidget(self.save_all_timeline_btn)
+
+        sequence_layout.addLayout(timeline_layout)
+
+        # Sequence controls widget (below timeline) - in scroll area for visibility
+        self.sequence_widget = SequenceWidget()
+        from PyQt6.QtWidgets import QScrollArea
+
+        sequence_scroll = QScrollArea()
+        sequence_scroll.setWidget(self.sequence_widget)
+        sequence_scroll.setWidgetResizable(True)
+        sequence_scroll.setMinimumHeight(200)
+        sequence_scroll.setMaximumHeight(350)
+        sequence_layout.addWidget(sequence_scroll)
+
+        # Add tab
+        self.view_tab_widget.addTab(self.sequence_view_widget, "Sequence")
+
+        # Initialize sequence view mode
+        self.sequence_view_mode = SequenceViewMode(self)
+
+        # Initialize propagation manager for SAM 2 video propagation
+        self.propagation_manager = PropagationManager(self)
+
+        # Connect sequence view mode signals
+        self.sequence_view_mode.frame_status_changed.connect(
+            self._on_sequence_frame_status_changed
+        )
+        self.sequence_view_mode.reference_changed.connect(
+            self._on_sequence_reference_changed
+        )
+
+        # Connect sequence widget signals
+        self._connect_sequence_widget_signals()
+
+        # Connect mouse handlers to sequence viewer (same as single view)
+        self._setup_sequence_viewer_mouse_handlers()
+
+    def _connect_sequence_widget_signals(self):
+        """Connect sequence widget signals to handlers."""
+        if self.sequence_widget is None:
+            return
+
+        self.sequence_widget.add_reference_requested.connect(
+            self._on_add_sequence_reference
+        )
+        self.sequence_widget.add_all_before_requested.connect(
+            self._on_add_all_before_reference
+        )
+        self.sequence_widget.clear_references_requested.connect(
+            self._on_clear_sequence_references
+        )
+        self.sequence_widget.propagate_requested.connect(self._on_propagate_requested)
+        self.sequence_widget.cancel_propagation_requested.connect(
+            self._on_cancel_propagation
+        )
+        self.sequence_widget.next_flagged_requested.connect(self._on_next_flagged_frame)
+        self.sequence_widget.prev_flagged_requested.connect(self._on_prev_flagged_frame)
+        self.sequence_widget.jump_to_frame_requested.connect(
+            self._on_sequence_frame_selected
+        )
+        self.sequence_widget.confidence_threshold_changed.connect(
+            self._on_confidence_threshold_changed
+        )
+
+    def _on_sequence_frame_selected(self, frame_idx: int):
+        """Handle frame selection in sequence mode."""
+        if self.sequence_view_mode is None:
+            return
+
+        # Auto-save current frame's segments before navigating
+        current_idx = self.sequence_view_mode.current_frame_idx
+        if current_idx != frame_idx:
+            self._auto_save_sequence_frame(current_idx)
+
+        if self.sequence_view_mode.set_current_frame(frame_idx):
+            image_path = self.sequence_view_mode.get_image_path(frame_idx)
+            if image_path:
+                self._load_sequence_frame(image_path, frame_idx)
+
+    def _auto_save_sequence_frame(self, frame_idx: int):
+        """Auto-save segments for a sequence frame (or delete NPZ if empty)."""
+        if not self.sequence_view_mode:
+            return
+
+        # Check if auto-save is enabled
+        if not self.control_panel.get_settings().get("auto_save", True):
+            return
+
+        # Get the image path for this frame
+        image_path = self.sequence_view_mode.get_image_path(frame_idx)
+        if not image_path:
+            return
+
+        # Temporarily set current_image_path for the save function
+        original_path = self.current_image_path
+        self.current_image_path = image_path
+
+        try:
+            # Call save even if no segments - it will delete the NPZ file
+            has_segments = bool(self.segment_manager.segments)
+            self._save_output_to_npz()
+
+            # Update the mask cache with current segment data
+            # This ensures changes are preserved when navigating back
+            self._update_sequence_mask_cache(image_path)
+
+            if has_segments:
+                logger.debug(f"Auto-saved segments for sequence frame {frame_idx}")
+                # Mark frame as saved (no longer just propagated)
+                self.sequence_view_mode.mark_frame_saved(frame_idx)
+            else:
+                logger.debug(f"Deleted NPZ for empty sequence frame {frame_idx}")
+        except Exception as e:
+            logger.error(f"Failed to auto-save sequence frame {frame_idx}: {e}")
+        finally:
+            self.current_image_path = original_path
+
+    def _update_sequence_mask_cache(self, image_path: str):
+        """Update the sequence mask cache with current segment data.
+
+        This ensures that when navigating between frames, any changes
+        made to masks are preserved in the cache.
+
+        Args:
+            image_path: Path to the image file
+        """
+        if not hasattr(self, "_sequence_mask_cache"):
+            self._sequence_mask_cache = {}
+
+        # Copy current segments to avoid reference issues
+        import copy
+
+        segments_copy = []
+        for segment in self.segment_manager.segments:
+            segment_copy = {
+                "mask": segment["mask"].copy()
+                if segment.get("mask") is not None
+                else None,
+                "class_id": segment.get("class_id", 0),
+                "type": segment.get("type", "Loaded"),
+                "vertices": segment.get("vertices"),
+            }
+            segments_copy.append(segment_copy)
+
+        class_aliases_copy = copy.deepcopy(self.segment_manager.class_aliases)
+
+        if segments_copy:
+            self._sequence_mask_cache[image_path] = {
+                "segments": segments_copy,
+                "class_aliases": class_aliases_copy,
+            }
+        elif image_path in self._sequence_mask_cache:
+            # Remove from cache if no segments
+            del self._sequence_mask_cache[image_path]
+
+    def _load_sequence_frame(self, image_path: str, frame_idx: int):
+        """Load an image into the sequence viewer."""
+        pixmap = QPixmap(image_path)
+        if not pixmap.isNull():
+            self.sequence_viewer.set_photo(pixmap)
+            self.sequence_viewer.set_image_adjustments(
+                self.image_adjustment_manager.brightness,
+                self.image_adjustment_manager.contrast,
+                self.image_adjustment_manager.gamma,
+                self.image_adjustment_manager.saturation,
+            )
+
+            # Update current image path so AI tools work on this frame
+            self.current_image_path = image_path
+
+            # Update info label
+            from pathlib import Path
+
+            name = Path(image_path).name
+            total = self.sequence_view_mode.total_frames
+            self.sequence_info_label.setText(
+                f"Sequence Mode: {name} ({frame_idx + 1}/{total})"
+            )
+
+            # Update timeline
+            self.timeline_widget.set_current_frame(frame_idx)
+
+            # Update sequence widget
+            if self.sequence_widget:
+                self.sequence_widget.set_current_frame(frame_idx)
+
+            # Load existing segments for this frame
+            self._load_sequence_frame_segments(image_path)
+
+            # Update SAM model for this frame so AI tools work correctly
+            # Mark as dirty so next AI click computes embedding for this frame
+            self.sam_is_dirty = True
+
+    def _load_sequence_frame_segments(self, image_path: str):
+        """Load segments for the current sequence frame."""
+        # Clear current segments
+        self.segment_manager.clear()
+        self.segment_display_manager.clear_all_caches()
+
+        # Check for propagated masks FIRST - they take precedence over cache/file
+        # BUT: Reference frames should NEVER load propagated masks - they keep their
+        # hand-labeled ground truth data
+        if self.sequence_view_mode:
+            frame_idx = self.sequence_view_mode.current_frame_idx
+            is_reference = frame_idx in self.sequence_view_mode.reference_frame_indices
+
+            if not is_reference:
+                propagated_masks = self.sequence_view_mode.get_propagated_masks(
+                    frame_idx
+                )
+                if propagated_masks:
+                    # Clear any stale cache entry for this frame since we have fresh propagated data
+                    if (
+                        hasattr(self, "_sequence_mask_cache")
+                        and image_path in self._sequence_mask_cache
+                    ):
+                        del self._sequence_mask_cache[image_path]
+
+                    self._load_propagated_masks_for_frame(frame_idx)
+                    # Merge propagated masks by class to consolidate same-class segments
+                    self.segment_manager.merge_segments_by_class()
+                    self._update_all_lists()
+                    self._display_sequence_segments()
+                    return
+
+        # No propagated masks - check cache
+        cached_mask_data = self._get_cached_mask_data(image_path)
+        if cached_mask_data is not None:
+            # Use cached data - much faster than loading from disk
+            self._apply_cached_mask_data(cached_mask_data)
+            # Merge segments by class to consolidate same-class segments
+            self.segment_manager.merge_segments_by_class()
+            self._update_all_lists()
+        else:
+            # Load from file if exists
+            try:
+                self.file_manager.load_class_aliases(image_path)
+                self.file_manager.load_existing_mask(image_path)
+                self._update_all_lists()
+            except Exception as e:
+                logger.error(f"Error loading segments for sequence frame: {e}")
+
+        # Display segments on sequence viewer
+        self._display_sequence_segments()
+
+    def _get_cached_mask_data(self, image_path: str) -> dict | None:
+        """Get cached mask data for an image path.
+
+        Args:
+            image_path: Path to the image file
+
+        Returns:
+            Cached mask data dict or None if not cached
+        """
+        if not hasattr(self, "_sequence_mask_cache"):
+            return None
+        return self._sequence_mask_cache.get(image_path)
+
+    def _load_segments_for_reference_frame(self, image_path: str) -> list[dict]:
+        """Load segments for a reference frame from cache, NPZ file, or current segment manager.
+
+        Args:
+            image_path: Path to the image file
+
+        Returns:
+            List of segment dictionaries with 'mask' and 'class_id'
+        """
+        # If this is the currently loaded image, use segment_manager directly
+        # This handles the case where user created segments but hasn't navigated away
+        if (
+            self.current_image_path
+            and Path(self.current_image_path) == Path(image_path)
+            and self.segment_manager.segments
+        ):
+            return self.segment_manager.segments
+
+        # Check cache
+        cached_data = self._get_cached_mask_data(image_path)
+        if cached_data is not None:
+            return cached_data.get("segments", [])
+
+        # Fall back to loading from NPZ file
+        mask_data = self._load_mask_data_for_path(image_path)
+        if mask_data is not None:
+            return mask_data.get("segments", [])
+
+        return []
+
+    def _apply_cached_mask_data(self, mask_data: dict) -> None:
+        """Apply cached mask data to the segment manager.
+
+        Args:
+            mask_data: Dictionary with 'segments' and 'class_aliases'
+        """
+        # Apply class aliases
+        if "class_aliases" in mask_data:
+            for class_id, alias in mask_data["class_aliases"].items():
+                self.segment_manager.class_aliases[class_id] = alias
+
+        # Add segments
+        for segment in mask_data.get("segments", []):
+            self.segment_manager.add_segment(segment)
+
+    def _load_propagated_masks_for_frame(self, frame_idx: int):
+        """Load propagated masks for a frame into the segment manager."""
+        if not self.sequence_view_mode or not self.propagation_manager:
+            return
+
+        propagated_masks = self.sequence_view_mode.get_propagated_masks(frame_idx)
+        if not propagated_masks:
+            return
+
+        logger.debug(
+            f"Loading {len(propagated_masks)} propagated masks for frame {frame_idx}"
+        )
+
+        import numpy as np
+
+        for obj_id, mask in propagated_masks.items():
+            # Ensure mask is 2D boolean array (SAM2 may return 3D or 4D tensors)
+            mask = np.asarray(mask)
+            while mask.ndim > 2:
+                mask = mask.squeeze()
+            if mask.ndim != 2:
+                logger.warning(f"Invalid mask shape for obj_id {obj_id}: {mask.shape}")
+                continue
+            mask = mask.astype(bool)
+
+            # Get class info from the reference annotation
+            ref_ann = self.propagation_manager.get_reference_annotation_for_obj(obj_id)
+            if ref_ann:
+                class_id = ref_ann.class_id
+                class_name = ref_ann.class_name
+            else:
+                class_id = 0
+                class_name = "Class 0"
+
+            # Ensure class alias exists
+            if class_id not in self.segment_manager.class_aliases:
+                self.segment_manager.class_aliases[class_id] = class_name
+
+            # Add segment
+            self.segment_manager.add_segment(
+                {
+                    "mask": mask,
+                    "class_id": class_id,
+                    "type": "ai",  # Mark as AI-generated
+                }
+            )
+
+        self._update_all_lists()
+
+    def _display_sequence_segments(self):
+        """Display segments on the sequence viewer.
+
+        Uses similar logic to single view but targets sequence_viewer.
+        Simplified version without edit handles for now.
+        """
+        from PyQt6.QtCore import QPointF
+        from PyQt6.QtGui import QBrush, QColor, QPen, QPolygonF
+
+        from .hoverable_pixelmap_item import HoverablePixmapItem
+        from .hoverable_polygon_item import HoverablePolygonItem
+
+        scene = self.sequence_viewer.scene()
+        if scene is None:
+            return
+
+        # Track sequence segment items separately
+        if not hasattr(self, "_sequence_segment_items"):
+            self._sequence_segment_items: dict = {}
+
+        # Clear existing sequence segment items
+        for items in self._sequence_segment_items.values():
+            for item in items:
+                if item.scene():
+                    scene.removeItem(item)
+        self._sequence_segment_items.clear()
+
+        # Also clear any items that might have been added via segment_items
+        # (from code paths that use display_all_segments_single_view)
+        for items in self.segment_items.values():
+            for item in items:
+                if item.scene() == scene:
+                    scene.removeItem(item)
+        self.segment_items.clear()
+
+        # Display segments from segment manager
+        for i, segment in enumerate(self.segment_manager.segments):
+            self._sequence_segment_items[i] = []
+            class_id = segment.get("class_id")
+            base_color = self.segment_display_manager.get_color_for_class(class_id)
+
+            if segment.get("type") == "Polygon" and segment.get("vertices"):
+                qpoints = [QPointF(p[0], p[1]) for p in segment["vertices"]]
+                poly_item = HoverablePolygonItem(QPolygonF(qpoints))
+                default_brush = QBrush(
+                    QColor(base_color.red(), base_color.green(), base_color.blue(), 70)
+                )
+                hover_brush = QBrush(
+                    QColor(base_color.red(), base_color.green(), base_color.blue(), 170)
+                )
+                poly_item.set_brushes(default_brush, hover_brush)
+                poly_item.set_segment_info(i, self)
+                poly_item.setPen(QPen(Qt.GlobalColor.transparent))
+                scene.addItem(poly_item)
+                self._sequence_segment_items[i].append(poly_item)
+            elif segment.get("mask") is not None:
+                default_pixmap, hover_pixmap = (
+                    self.segment_display_manager.get_cached_pixmaps(
+                        i, segment["mask"], base_color.getRgb()[:3]
+                    )
+                )
+                pixmap_item = HoverablePixmapItem()
+                pixmap_item.set_pixmaps(default_pixmap, hover_pixmap)
+                pixmap_item.set_segment_info(i, self)
+                scene.addItem(pixmap_item)
+                pixmap_item.setZValue(i + 1)
+                self._sequence_segment_items[i].append(pixmap_item)
+
+    def _on_sequence_frame_status_changed(self, frame_idx: int, status: str):
+        """Handle frame status change in sequence mode."""
+        if self.timeline_widget:
+            self.timeline_widget.set_frame_status(frame_idx, status)
+
+    def _on_sequence_reference_changed(self, frame_idx: int):
+        """Handle reference frame change (from sequence view mode signal)."""
+        if self.sequence_widget and self.sequence_view_mode:
+            # Update widget with all current reference frames
+            ref_indices = self.sequence_view_mode.reference_frame_indices
+            self.sequence_widget.set_reference_frames(list(ref_indices))
+
+    def _on_add_sequence_reference(self):
+        """Add current frame as reference for propagation."""
+        if self.sequence_view_mode is None:
+            return
+
+        current_idx = self.sequence_view_mode.current_frame_idx
+        if self.sequence_view_mode.set_reference_frame(current_idx):
+            # Update the sequence widget with all reference frames
+            ref_indices = self.sequence_view_mode.reference_frame_indices
+            self.sequence_widget.set_reference_frames(ref_indices)
+            # Update timeline
+            self.timeline_widget.set_frame_status(current_idx, "reference")
+            self._show_notification(f"Added frame {current_idx + 1} as reference")
+
+    def _on_add_all_before_reference(self):
+        """Add all frames before current position as references."""
+        if self.sequence_view_mode is None:
+            return
+
+        current_idx = self.sequence_view_mode.current_frame_idx
+        if current_idx <= 0:
+            self._show_notification("No frames before current position")
+            return
+
+        # Add all frames from 0 to current_idx - 1
+        count = 0
+        for idx in range(current_idx):
+            if self.sequence_view_mode.set_reference_frame(idx):
+                self.timeline_widget.set_frame_status(idx, "reference")
+                count += 1
+
+        # Update the sequence widget with all reference frames
+        ref_indices = self.sequence_view_mode.reference_frame_indices
+        self.sequence_widget.set_reference_frames(ref_indices)
+        self._show_notification(f"Added {count} frames as references")
+
+    def _on_clear_sequence_references(self):
+        """Clear all reference frames."""
+        if self.sequence_view_mode is None:
+            return
+
+        # Get current reference frames to update timeline
+        ref_indices = list(self.sequence_view_mode.reference_frame_indices)
+
+        # Clear in sequence view mode
+        for idx in ref_indices:
+            self.sequence_view_mode.clear_reference_frame(idx)
+            self.timeline_widget.set_frame_status(idx, "pending")
+
+        # Clear in propagation manager
+        if self.propagation_manager is not None:
+            self.propagation_manager.clear_reference_frames()
+
+        # Update widget
+        self.sequence_widget.set_reference_frames([])
+        self._show_notification("Cleared all reference frames")
+
+    def _on_propagate_requested(
+        self, direction: str, start: int, end: int, skip_flagged: bool = True
+    ):
+        """Handle propagation request from sequence widget."""
+        if self.sequence_view_mode is None:
+            self._show_notification("Please enter sequence mode first")
+            return
+
+        if not self.sequence_view_mode.has_reference():
+            self._show_notification("Please set a reference frame first")
+            return
+
+        if self.propagation_manager is None:
+            self._show_notification("Propagation manager not available")
+            return
+
+        # Check if SAM 2 video predictor is available
+        if not self.model_manager.is_model_available():
+            self._show_notification("SAM model not loaded")
+            return
+
+        sam_model = self.model_manager.sam_model
+        if sam_model is None or not hasattr(sam_model, "init_video_state"):
+            self._show_notification("SAM 2 video predictor not available")
+            return
+
+        # Initialize video state if needed
+        if not self.propagation_manager.is_initialized:
+            if not self.current_image_path:
+                self._show_notification("No image loaded")
+                return
+
+            image_dir = str(Path(self.current_image_path).parent)
+            self._show_notification("Initializing propagation...")
+
+            if not self.propagation_manager.init_sequence(image_dir):
+                self._show_notification("Failed to initialize propagation")
+                return
+
+        # Clear previous propagation results before starting new propagation
+        # This ensures old masks don't persist when labels are changed
+        self.sequence_view_mode.clear_propagation_results()
+
+        # Clear propagation manager's old state and reset SAM 2 video predictor
+        self.propagation_manager.clear_reference_frames()
+        self.propagation_manager.clear_propagation_results()
+
+        if self.timeline_widget:
+            # Reset timeline to show reference frames
+            self.timeline_widget.clear_statuses()
+            # Show all reference frames on timeline
+            for ref_idx in self.sequence_view_mode.reference_frame_indices:
+                self.timeline_widget.set_frame_status(ref_idx, "reference")
+
+        # Add reference annotations from ALL reference frames
+        # Use consistent object IDs based on class_id so SAM 2 can track
+        # the same object across multiple reference frames
+        total_count = 0
+        class_to_obj_id: dict[int, int] = {}  # Map class_id -> obj_id for consistency
+
+        for ref_idx in self.sequence_view_mode.reference_frame_indices:
+            ref_image_path = self.sequence_view_mode.get_image_path(ref_idx)
+            if not ref_image_path:
+                continue
+
+            # Load segments for this reference frame from cache or NPZ
+            ref_segments = self._load_segments_for_reference_frame(ref_image_path)
+            if not ref_segments:
+                continue
+
+            self.propagation_manager.add_reference_frame(ref_idx)
+
+            for seg in ref_segments:
+                mask = seg.get("mask")
+                if mask is not None and mask.any():
+                    class_id = seg.get("class_id", 0)
+                    class_name = self.segment_manager.class_aliases.get(
+                        class_id, f"Class {class_id}"
+                    )
+
+                    # Use consistent obj_id for the same class across all reference frames
+                    # obj_id must be positive (SAM 2 requirement)
+                    if class_id not in class_to_obj_id:
+                        class_to_obj_id[class_id] = class_id + 1
+                    obj_id = class_to_obj_id[class_id]
+
+                    result_id = self.propagation_manager.add_reference_annotation(
+                        ref_idx, mask, class_id, class_name, obj_id=obj_id
+                    )
+                    if result_id > 0:
+                        total_count += 1
+
+        if total_count == 0:
+            self._show_notification("No valid segments in reference frames")
+            return
+
+        # Map direction string to enum
+        direction_map = {
+            "forward": PropagationDirection.FORWARD,
+            "backward": PropagationDirection.BACKWARD,
+            "both": PropagationDirection.BIDIRECTIONAL,
+        }
+        prop_direction = direction_map.get(direction, PropagationDirection.FORWARD)
+
+        # Store skip_flagged for use in _on_propagation_finished
+        self._propagation_skip_flagged = skip_flagged
+
+        # Start propagation worker
+        self._propagation_worker = PropagationWorker(
+            propagation_manager=self.propagation_manager,
+            direction=prop_direction,
+            range_start=start if start != 0 else None,
+            range_end=end if end != self.propagation_manager.total_frames - 1 else None,
+            skip_flagged=skip_flagged,
+        )
+
+        # Connect worker signals
+        self._propagation_worker.progress.connect(self._on_propagation_progress)
+        self._propagation_worker.frame_done.connect(self._on_propagation_frame_done)
+        self._propagation_worker.finished_propagation.connect(
+            self._on_propagation_finished
+        )
+        self._propagation_worker.error.connect(self._on_propagation_error)
+
+        # Update UI to show propagation is in progress
+        if self.sequence_widget:
+            self.sequence_widget.start_propagation()
+
+        self._show_notification(f"Starting propagation ({direction})...")
+        self._propagation_worker.start()
+
+    def _on_cancel_propagation(self):
+        """Cancel ongoing propagation."""
+        if (
+            self._propagation_worker is not None
+            and self._propagation_worker.isRunning()
+        ):
+            self._propagation_worker.stop()
+            self._propagation_worker.wait(1000)  # Wait up to 1 second
+            self._propagation_worker = None
+
+        if self.sequence_widget:
+            self.sequence_widget.end_propagation()
+
+        self._show_notification("Propagation cancelled")
+
+    def _on_propagation_progress(self, current: int, total: int):
+        """Handle propagation progress update."""
+        if self.sequence_widget:
+            self.sequence_widget.set_propagation_progress(current, total)
+
+    def _on_propagation_frame_done(self, frame_idx: int, result):
+        """Handle completion of propagation for a single frame."""
+        from PyQt6.QtWidgets import QApplication
+
+        # Update timeline to show this frame has been propagated (immediate for animation)
+        if self.timeline_widget:
+            self.timeline_widget.set_frame_status(
+                frame_idx, "propagated", immediate=True
+            )
+
+        # Update sequence view mode state
+        # Skip reference frames - they should keep their ground truth data
+        if self.sequence_view_mode and result is not None:
+            is_reference = frame_idx in self.sequence_view_mode.reference_frame_indices
+            if is_reference:
+                # Don't store propagated masks for reference frames
+                return
+
+            # Convert PropagationResult to the format expected by mark_frame_propagated
+            # result has: obj_id, mask, confidence
+            masks = {result.obj_id: result.mask}
+            confidence = result.confidence
+            self.sequence_view_mode.mark_frame_propagated(frame_idx, masks, confidence)
+
+            # If this frame has low confidence, mark it as flagged
+            if (
+                self.propagation_manager
+                and frame_idx in self.propagation_manager.flagged_frames
+            ):
+                self.sequence_view_mode.flag_frame(frame_idx)
+                if self.timeline_widget:
+                    self.timeline_widget.set_frame_status(
+                        frame_idx, "flagged", immediate=True
+                    )
+
+        # Process events to keep UI responsive during propagation
+        QApplication.processEvents()
+
+    def _on_propagation_finished(self):
+        """Handle propagation completion."""
+        if self.sequence_widget:
+            self.sequence_widget.end_propagation()
+
+        # If skip_flagged was enabled, remove all masks for flagged frames
+        # This handles the case where a frame has multiple objects and some
+        # were stored before the low-confidence one was detected
+        if (
+            getattr(self, "_propagation_skip_flagged", True)
+            and self.propagation_manager
+            and self.sequence_view_mode
+        ):
+            flagged_frames = list(self.propagation_manager.flagged_frames)
+            for frame_idx in flagged_frames:
+                # Remove from propagated_frames
+                self.propagation_manager.propagated_frames.discard(frame_idx)
+                # Remove stored results
+                if frame_idx in self.propagation_manager.state.frame_results:
+                    del self.propagation_manager.state.frame_results[frame_idx]
+                # Remove from sequence view mode's propagated masks
+                self.sequence_view_mode.clear_propagated_mask(frame_idx)
+                # Update timeline to show as flagged (not propagated)
+                if self.timeline_widget:
+                    self.timeline_widget.set_frame_status(
+                        frame_idx, "flagged", immediate=True
+                    )
+
+        # Update flagged and propagated counts
+        if self.propagation_manager and self.sequence_widget:
+            flagged_count = len(self.propagation_manager.flagged_frames)
+            propagated_count = len(self.propagation_manager.propagated_frames)
+            self.sequence_widget.set_flagged_count(flagged_count)
+            self.sequence_widget.set_propagated_count(propagated_count)
+
+        # Get stats
+        if self.propagation_manager:
+            stats = self.propagation_manager.get_propagation_stats()
+            self._show_notification(
+                f"Propagation complete: {stats['num_propagated']} frames, "
+                f"{stats['num_flagged']} flagged. Scrub timeline or click 'Save All' to save."
+            )
+        else:
+            self._show_notification("Propagation complete")
+
+        # Refresh current frame's display if it received propagated masks
+        # This ensures the user sees the results for the frame they're currently on
+        if self.sequence_view_mode:
+            current_idx = self.sequence_view_mode.current_frame_idx
+            current_path = self.sequence_view_mode.get_image_path(current_idx)
+            if current_path:
+                # Reload segments for current frame (will load propagated masks if present)
+                self._load_sequence_frame_segments(current_path)
+
+        self._cleanup_propagation_worker()
+
+    def _on_propagation_error(self, error_msg: str):
+        """Handle propagation error."""
+        if self.sequence_widget:
+            self.sequence_widget.end_propagation()
+
+        self._show_notification(f"Propagation error: {error_msg}")
+        logger.error(f"Propagation error: {error_msg}")
+        self._cleanup_propagation_worker()
+
+    def _cleanup_propagation_worker(self):
+        """Safely clean up the propagation worker thread."""
+        if self._propagation_worker is not None:
+            if self._propagation_worker.isRunning():
+                self._propagation_worker.stop()
+                self._propagation_worker.wait(2000)  # Wait up to 2 seconds
+            self._propagation_worker.deleteLater()
+            self._propagation_worker = None
+
+    def _on_next_flagged_frame(self):
+        """Navigate to next flagged frame."""
+        if self.sequence_view_mode is None:
+            return
+
+        next_frame = self.sequence_view_mode.next_flagged_frame()
+        if next_frame is not None:
+            self._on_sequence_frame_selected(next_frame)
+        else:
+            self._show_notification("No more flagged frames")
+
+    def _on_prev_flagged_frame(self):
+        """Navigate to previous flagged frame."""
+        if self.sequence_view_mode is None:
+            return
+
+        prev_frame = self.sequence_view_mode.prev_flagged_frame()
+        if prev_frame is not None:
+            self._on_sequence_frame_selected(prev_frame)
+        else:
+            self._show_notification("No more flagged frames")
+
+    def _on_confidence_threshold_changed(self, threshold: float):
+        """Handle confidence threshold change from UI."""
+        if self.propagation_manager:
+            self.propagation_manager.set_confidence_threshold(threshold)
+        if self.sequence_view_mode:
+            self.sequence_view_mode.set_confidence_threshold(threshold)
+
+    def _on_save_all_propagated(self):
+        """Save all propagated frames to NPZ files."""
+        import numpy as np
+        from PyQt6.QtWidgets import QApplication
+
+        if not self.sequence_view_mode or not self.propagation_manager:
+            return
+
+        propagated_frames = list(self.propagation_manager.propagated_frames)
+        if not propagated_frames:
+            self._show_notification("No propagated frames to save")
+            return
+
+        self._show_notification(f"Saving {len(propagated_frames)} frames...")
+
+        saved = 0
+        for frame_idx in sorted(propagated_frames):
+            # Get propagated masks for this frame
+            propagated_masks = self.sequence_view_mode.get_propagated_masks(frame_idx)
+            if not propagated_masks:
+                continue
+
+            # Get image path for this frame
+            image_path = self.sequence_view_mode.get_image_path(frame_idx)
+            if not image_path:
+                continue
+
+            # Clear and populate segment manager for this frame
+            self.segment_manager.clear()
+
+            for obj_id, mask in propagated_masks.items():
+                # Ensure mask is 2D boolean
+                mask = np.asarray(mask)
+                while mask.ndim > 2:
+                    mask = mask.squeeze()
+                if mask.ndim != 2:
+                    continue
+                mask = mask.astype(bool)
+
+                # Get class info
+                ref_ann = self.propagation_manager.get_reference_annotation_for_obj(
+                    obj_id
+                )
+                if ref_ann:
+                    class_id = ref_ann.class_id
+                    class_name = ref_ann.class_name
+                else:
+                    class_id = 0
+                    class_name = "Class 0"
+
+                if class_id not in self.segment_manager.class_aliases:
+                    self.segment_manager.class_aliases[class_id] = class_name
+
+                self.segment_manager.add_segment(
+                    {
+                        "mask": mask,
+                        "class_id": class_id,
+                        "type": "ai",
+                    }
+                )
+
+            # Save to NPZ
+            original_path = self.current_image_path
+            self.current_image_path = image_path
+            try:
+                self._save_output_to_npz()
+                self.sequence_view_mode.mark_frame_saved(frame_idx)
+                if self.timeline_widget:
+                    self.timeline_widget.set_frame_status(
+                        frame_idx, "saved", immediate=True
+                    )
+                saved += 1
+                # Process events to show animation during save
+                QApplication.processEvents()
+            except Exception as e:
+                logger.error(f"Failed to save frame {frame_idx}: {e}")
+            finally:
+                self.current_image_path = original_path
+
+        # Clear segment manager and reload current frame
+        self.segment_manager.clear()
+        current_idx = self.sequence_view_mode.current_frame_idx
+        image_path = self.sequence_view_mode.get_image_path(current_idx)
+        if image_path:
+            self._load_sequence_frame_segments(image_path)
+
+        # Update propagated count
+        if self.sequence_widget:
+            remaining = len(self.propagation_manager.propagated_frames)
+            self.sequence_widget.set_propagated_count(remaining)
+
+        self._show_notification(f"Saved {saved} frames to NPZ")
+
+    def _on_sequence_max_requested(self):
+        """Set sequence range to maximum (full folder)."""
+        if self.sequence_view_mode is None:
+            return
+
+        total = self.sequence_view_mode.total_frames
+        if total > 0:
+            self.control_panel.set_sequence_range(total)
+            self._show_notification(f"Range set to max: {total} frames")
+        else:
+            # No sequence loaded yet, try to get from current folder
+            if self.current_image_path:
+                current_path = Path(self.current_image_path)
+                image_paths = self._get_sequence_image_paths(current_path.parent)
+                total = len(image_paths)
+                if total > 0:
+                    self.control_panel.set_sequence_range_max(total)
+                    self.control_panel.set_sequence_range(total)
+                    self._show_notification(f"Range set to max: {total} frames")
+
+    def _on_sequence_load_memory_requested(self):
+        """Preload images within the current range into memory."""
+        if not self.current_image_path:
+            self._show_notification("Please load an image first")
+            return
+
+        # Initialize sequence memory caches if needed
+        if not hasattr(self, "_sequence_memory_cache"):
+            self._sequence_memory_cache: dict[str, np.ndarray] = {}
+        if not hasattr(self, "_sequence_mask_cache"):
+            self._sequence_mask_cache: dict[str, dict] = {}
+
+        current_path = Path(self.current_image_path)
+        image_paths = self._get_sequence_image_paths(current_path.parent)
+
+        if not image_paths:
+            self._show_notification("No images found in folder")
+            return
+
+        # Get the range and mask setting
+        prop_range = self.control_panel.get_sequence_range()
+        include_masks = self.control_panel.should_include_masks()
+
+        # Find current image index and calculate range
+        try:
+            current_idx = image_paths.index(str(current_path))
+        except ValueError:
+            current_idx = 0
+
+        # Calculate range centered on current (or from start if no image loaded)
+        start_idx = max(0, current_idx)
+        end_idx = min(len(image_paths), start_idx + prop_range)
+
+        # Update max range in control panel
+        self.control_panel.set_sequence_range_max(len(image_paths))
+
+        # Start loading with visual feedback
+        self.control_panel.set_load_memory_button_loading(True)
+        loading_msg = f"Loading {end_idx - start_idx} images"
+        if include_masks:
+            loading_msg += " and masks"
+        self._show_notification(f"{loading_msg} to memory...")
+
+        # Load images (could be made async with QThread for large sequences)
+        loaded_count = 0
+        masks_loaded = 0
+        total_bytes = 0
+
+        for idx in range(start_idx, end_idx):
+            path = image_paths[idx]
+            if path not in self._sequence_memory_cache:
+                try:
+                    img = cv2.imread(path)
+                    if img is not None:
+                        # Convert BGR to RGB
+                        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+                        self._sequence_memory_cache[path] = img
+                        total_bytes += img.nbytes
+                        loaded_count += 1
+                except Exception as e:
+                    logger.error(f"Failed to load image {path}: {e}")
+            else:
+                loaded_count += 1
+
+            # Also load masks if requested
+            if include_masks and path not in self._sequence_mask_cache:
+                try:
+                    mask_data = self._load_mask_data_for_path(path)
+                    if mask_data is not None:
+                        self._sequence_mask_cache[path] = mask_data
+                        # Estimate mask memory usage
+                        for seg in mask_data.get("segments", []):
+                            if "mask" in seg and seg["mask"] is not None:
+                                total_bytes += seg["mask"].nbytes
+                        masks_loaded += 1
+                except Exception as e:
+                    logger.debug(f"No mask found for {path}: {e}")
+
+        # Update status - calculate total memory used
+        total_size_mb = sum(
+            img.nbytes for img in self._sequence_memory_cache.values()
+        ) / (1024 * 1024)
+
+        # Add mask cache size
+        for mask_data in self._sequence_mask_cache.values():
+            for seg in mask_data.get("segments", []):
+                if "mask" in seg and seg["mask"] is not None:
+                    total_size_mb += seg["mask"].nbytes / (1024 * 1024)
+
+        self.control_panel.set_load_memory_button_loading(False)
+        self.control_panel.update_sequence_memory_status(
+            loaded_count, end_idx - start_idx, total_size_mb
+        )
+
+        result_msg = f"Loaded {loaded_count} images"
+        if include_masks:
+            result_msg += f" + {masks_loaded} masks"
+        result_msg += f" ({total_size_mb:.1f} MB)"
+        self._show_notification(result_msg)
+
+    def _load_mask_data_for_path(self, image_path: str) -> dict | None:
+        """Load mask data from NPZ file for an image path.
+
+        Args:
+            image_path: Path to the image file
+
+        Returns:
+            Dictionary with segments and class_aliases, or None if no mask file
+        """
+        # Construct NPZ path
+        npz_path = Path(image_path).with_suffix(".npz")
+        if not npz_path.exists():
+            return None
+
+        try:
+            data = np.load(str(npz_path), allow_pickle=True)
+            result = {
+                "segments": [],
+                "class_aliases": {},
+            }
+
+            # Load class aliases if present
+            if "class_aliases" in data:
+                try:
+                    result["class_aliases"] = data["class_aliases"].item()
+                except (AttributeError, ValueError):
+                    # Handle case where class_aliases is already a dict or other type
+                    result["class_aliases"] = dict(data["class_aliases"])
+
+            # Load from "mask" key (standard format - 3D tensor H,W,C where C = num classes)
+            if "mask" in data:
+                mask_tensor = data["mask"]
+                if mask_tensor.ndim == 3:
+                    # Each channel is a class
+                    for class_id in range(mask_tensor.shape[2]):
+                        channel_mask = mask_tensor[:, :, class_id]
+                        if channel_mask.any():
+                            result["segments"].append(
+                                {
+                                    "mask": channel_mask.astype(bool),
+                                    "class_id": class_id,
+                                    "type": "Loaded",
+                                    "vertices": None,
+                                }
+                            )
+                elif mask_tensor.ndim == 2 and mask_tensor.any():
+                    # Single mask
+                    result["segments"].append(
+                        {
+                            "mask": mask_tensor.astype(bool),
+                            "class_id": 0,
+                            "type": "Loaded",
+                            "vertices": None,
+                        }
+                    )
+
+            # Also support alternative format with "masks" and "class_ids" arrays
+            elif "masks" in data and "class_ids" in data:
+                masks = data["masks"]
+                class_ids = data["class_ids"]
+                for i in range(len(masks)):
+                    if masks[i].any():
+                        result["segments"].append(
+                            {
+                                "mask": masks[i].astype(bool),
+                                "class_id": int(class_ids[i])
+                                if i < len(class_ids)
+                                else 0,
+                                "type": "Loaded",
+                                "vertices": None,
+                            }
+                        )
+
+            return result if result["segments"] else None
+        except Exception as e:
+            logger.debug(f"Failed to load mask from {npz_path}: {e}")
+            return None
+
+    def get_cached_sequence_image(self, path: str) -> np.ndarray | None:
+        """Get a cached image from sequence memory.
+
+        Args:
+            path: Path to the image
+
+        Returns:
+            Cached numpy array (RGB format) or None if not cached
+        """
+        if hasattr(self, "_sequence_memory_cache"):
+            return self._sequence_memory_cache.get(path)
+        return None
+
+    def clear_sequence_memory_cache(self) -> None:
+        """Clear the sequence memory cache to free memory."""
+        if hasattr(self, "_sequence_memory_cache"):
+            self._sequence_memory_cache.clear()
+        if hasattr(self, "_sequence_mask_cache"):
+            self._sequence_mask_cache.clear()
+        self.control_panel.update_sequence_memory_status(0, 0)
+
+    def _on_sequence_clear_cache_requested(self):
+        """Handle clear cache button click."""
+        self.clear_sequence_memory_cache()
+        self._show_notification("Memory cache cleared")
+
+    def _enter_sequence_mode(self):
+        """Enter sequence mode and load current folder as sequence."""
+        if self.sequence_view_mode is None:
+            return
+
+        # Get all images from current folder using file manager
+        if not self.current_image_path:
+            self._show_notification("Please load an image first")
+            return
+
+        # Get list of all images in the folder
+        current_path = Path(self.current_image_path)
+        image_paths = self._get_sequence_image_paths(current_path.parent)
+
+        if not image_paths:
+            self._show_notification("No images found in folder")
+            return
+
+        # Initialize sequence mode
+        self.sequence_view_mode.set_image_paths(image_paths)
+
+        # Find current image index
+        try:
+            current_idx = image_paths.index(str(current_path))
+        except ValueError:
+            current_idx = 0
+
+        # Update widgets
+        total = len(image_paths)
+        self.timeline_widget.set_frame_count(total)
+        if self.sequence_widget:
+            self.sequence_widget.set_total_frames(total)
+
+        # Load current frame
+        self._on_sequence_frame_selected(current_idx)
+
+        self._show_notification(f"Sequence mode: {total} images loaded")
+
+    def _get_sequence_image_paths(self, folder: Path) -> list[str]:
+        """Get sorted list of image paths from a folder."""
+        image_extensions = {".png", ".jpg", ".jpeg", ".bmp", ".tiff", ".tif"}
+        paths = []
+
+        for f in sorted(folder.iterdir()):
+            if f.is_file() and f.suffix.lower() in image_extensions:
+                paths.append(str(f))
+
+        return paths
+
+    def _restore_sequence_mode_state(self):
+        """Restore sequence mode state when switching back from another mode."""
+        if self.sequence_view_mode is None:
+            return
+
+        # Reload current frame
+        current_idx = self.sequence_view_mode.current_frame_idx
+        image_path = self.sequence_view_mode.get_image_path(current_idx)
+        if image_path:
+            self._load_sequence_frame(image_path, current_idx)
 
     def eventFilter(self, obj, event):
         """Filter events to handle multi-view mouse clicks."""

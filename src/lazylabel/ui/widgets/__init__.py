@@ -7,8 +7,10 @@ from .channel_threshold_widget import ChannelThresholdWidget
 from .fft_threshold_widget import FFTThresholdWidget
 from .fragment_threshold_widget import FragmentThresholdWidget
 from .model_selection_widget import ModelSelectionWidget
+from .sequence_widget import SequenceWidget
 from .settings_widget import SettingsWidget
 from .status_bar import StatusBar
+from .timeline_widget import TimelineWidget
 
 __all__ = [
     "AdjustmentsWidget",
@@ -18,6 +20,8 @@ __all__ = [
     "FFTThresholdWidget",
     "FragmentThresholdWidget",
     "ModelSelectionWidget",
+    "SequenceWidget",
     "SettingsWidget",
     "StatusBar",
+    "TimelineWidget",
 ]

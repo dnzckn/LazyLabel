@@ -34,7 +34,7 @@ class ViewportManager:
     def pan(self, direction: str) -> None:
         """Pan the viewport in the specified direction.
 
-        Works in both single and multi-view mode. In multi-view mode,
+        Works in single, sequence, and multi-view mode. In multi-view mode,
         all viewers are panned together.
 
         Args:
@@ -42,8 +42,8 @@ class ViewportManager:
         """
         mw = self.main_window
 
-        if mw.view_mode == "single" and hasattr(mw, "viewer"):
-            self._pan_viewer(mw.viewer, direction)
+        if mw.view_mode in ("single", "sequence"):
+            self._pan_viewer(mw.active_viewer, direction)
         elif mw.view_mode == "multi" and hasattr(mw, "multi_view_viewers"):
             for viewer in mw.multi_view_viewers:
                 if viewer:
@@ -81,14 +81,13 @@ class ViewportManager:
     def fit_view(self) -> None:
         """Fit the view to show the entire image.
 
-        Works in both single and multi-view mode. In multi-view mode,
+        Works in single, sequence, and multi-view mode. In multi-view mode,
         all viewers are fitted.
         """
         mw = self.main_window
 
-        if mw.view_mode == "single":
-            if hasattr(mw, "viewer"):
-                mw.viewer.fitInView()
+        if mw.view_mode in ("single", "sequence"):
+            mw.active_viewer.fitInView()
         elif mw.view_mode == "multi" and hasattr(mw, "multi_view_viewers"):
             for viewer in mw.multi_view_viewers:
                 if viewer:

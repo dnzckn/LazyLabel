@@ -94,6 +94,81 @@ class SegmentManager:
             }
         )
 
+    def merge_segments_by_class(self) -> None:
+        """Merge all segments with the same class_id into single segments.
+
+        This consolidates multiple segments of the same class into one segment
+        per class, using logical OR to combine their masks. This is similar to
+        how create_final_mask_tensor merges segments for saving, but modifies
+        the segment list in-place.
+
+        Polygons are rasterized to masks before merging. The merged segments
+        will all be mask-based (type="Loaded").
+        """
+        if not self.segments:
+            return
+
+        # Group segments by class_id
+        class_segments: dict[int, list[dict]] = {}
+        for seg in self.segments:
+            class_id = seg.get("class_id")
+            if class_id is None:
+                continue
+            if class_id not in class_segments:
+                class_segments[class_id] = []
+            class_segments[class_id].append(seg)
+
+        # If no segments have class_id, nothing to merge
+        if not class_segments:
+            return
+
+        # Determine image size from first segment with a mask
+        image_size = None
+        for seg in self.segments:
+            mask = seg.get("mask")
+            if mask is not None:
+                image_size = mask.shape[:2]
+                break
+
+        if image_size is None:
+            # No masks found, can't merge
+            return
+
+        # Create merged segments
+        merged_segments = []
+        for class_id in sorted(class_segments.keys()):
+            segments_for_class = class_segments[class_id]
+
+            # Initialize merged mask
+            merged_mask = np.zeros(image_size, dtype=bool)
+
+            for seg in segments_for_class:
+                if seg.get("type") == "Polygon" and seg.get("vertices"):
+                    # Rasterize polygon to mask
+                    qpoints = [QPointF(p[0], p[1]) for p in seg["vertices"]]
+                    mask = self.rasterize_polygon(qpoints, image_size)
+                else:
+                    mask = seg.get("mask")
+
+                # Ensure mask exists and shape matches
+                if mask is not None and mask.shape[:2] == image_size:
+                    merged_mask = np.logical_or(merged_mask, mask)
+
+            # Only create segment if mask has content
+            if np.any(merged_mask):
+                merged_segments.append(
+                    {
+                        "mask": merged_mask,
+                        "type": "Loaded",
+                        "vertices": None,
+                        "class_id": class_id,
+                    }
+                )
+
+        # Replace segments with merged versions
+        self.segments = merged_segments
+        self._update_next_class_id()
+
     def rasterize_polygon(
         self, vertices: list[QPointF], image_size: tuple[int, int]
     ) -> np.ndarray | None:
@@ -127,7 +202,7 @@ class SegmentManager:
 
             new_channel_idx = id_map[class_id]
 
-            if seg["type"] == "Polygon":
+            if seg.get("type") == "Polygon":
                 # Convert stored list of lists back to QPointF objects for rasterization
                 qpoints = [QPointF(p[0], p[1]) for p in seg["vertices"]]
                 mask = self.rasterize_polygon(qpoints, image_size)
@@ -561,7 +636,7 @@ class SegmentManager:
                 return None  # This segment doesn't exist in this viewer
 
             view_data = segment["views"][viewer_index]
-            if segment["type"] == "Polygon" and "vertices" in view_data:
+            if segment.get("type") == "Polygon" and "vertices" in view_data:
                 # Convert stored list of lists back to QPointF objects for rasterization
                 qpoints = [QPointF(p[0], p[1]) for p in view_data["vertices"]]
                 return self.rasterize_polygon(qpoints, image_size)
@@ -570,7 +645,7 @@ class SegmentManager:
             return None
 
         # Handle legacy single-view format
-        if segment["type"] == "Polygon" and "vertices" in segment:
+        if segment.get("type") == "Polygon" and "vertices" in segment:
             # Convert stored list of lists back to QPointF objects for rasterization
             qpoints = [QPointF(p[0], p[1]) for p in segment["vertices"]]
             return self.rasterize_polygon(qpoints, image_size)

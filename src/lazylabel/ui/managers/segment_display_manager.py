@@ -54,6 +54,11 @@ class SegmentDisplayManager:
         self._highlight_pixmap_cache: OrderedDict = OrderedDict()
         self._highlight_cache_max_size: int = 200  # Max highlight pixmaps to keep
 
+    @property
+    def viewer(self):
+        """Get the active viewer (supports sequence mode)."""
+        return self.main_window.active_viewer
+
     def get_cached_pixmaps(
         self,
         segment_index: int,
@@ -293,10 +298,10 @@ class SegmentDisplayManager:
         from ..hoverable_polygon_item import HoverablePolygonItem
 
         mw = self.main_window
-        scene = mw.viewer.scene()
+        scene = self.viewer.scene()
 
         # Batch scene operations for better performance
-        mw.viewer.setUpdatesEnabled(False)
+        self.viewer.setUpdatesEnabled(False)
         scene.blockSignals(True)
 
         try:
@@ -314,7 +319,7 @@ class SegmentDisplayManager:
                 class_id = segment.get("class_id")
                 base_color = self.get_color_for_class(class_id)
 
-                if segment["type"] == "Polygon" and segment.get("vertices"):
+                if segment.get("type") == "Polygon" and segment.get("vertices"):
                     qpoints = [QPointF(p[0], p[1]) for p in segment["vertices"]]
                     poly_item = HoverablePolygonItem(QPolygonF(qpoints))
                     default_brush = QBrush(
@@ -348,8 +353,8 @@ class SegmentDisplayManager:
         finally:
             # Re-enable updates and signals
             scene.blockSignals(False)
-            mw.viewer.setUpdatesEnabled(True)
-            mw.viewer.viewport().update()
+            self.viewer.setUpdatesEnabled(True)
+            self.viewer.viewport().update()
 
     def add_segment_to_display_single_view(self, segment_index: int) -> None:
         """Add a single segment to display without clearing existing segments.
@@ -375,7 +380,7 @@ class SegmentDisplayManager:
         class_id = segment.get("class_id")
         base_color = self.get_color_for_class(class_id)
 
-        if segment["type"] == "Polygon" and segment.get("vertices"):
+        if segment.get("type") == "Polygon" and segment.get("vertices"):
             qpoints = [QPointF(p[0], p[1]) for p in segment["vertices"]]
             poly_item = HoverablePolygonItem(QPolygonF(qpoints))
             default_brush = QBrush(
@@ -387,7 +392,7 @@ class SegmentDisplayManager:
             poly_item.set_brushes(default_brush, hover_brush)
             poly_item.set_segment_info(segment_index, mw)
             poly_item.setPen(QPen(Qt.GlobalColor.transparent))
-            mw.viewer.scene().addItem(poly_item)
+            self.viewer.scene().addItem(poly_item)
             mw.segment_items[segment_index].append(poly_item)
         elif segment.get("mask") is not None:
             default_pixmap, hover_pixmap = self.get_cached_pixmaps(
@@ -396,7 +401,7 @@ class SegmentDisplayManager:
             pixmap_item = HoverablePixmapItem()
             pixmap_item.set_pixmaps(default_pixmap, hover_pixmap)
             pixmap_item.set_segment_info(segment_index, mw)
-            mw.viewer.scene().addItem(pixmap_item)
+            self.viewer.scene().addItem(pixmap_item)
             pixmap_item.setZValue(segment_index + 1)
             mw.segment_items[segment_index].append(pixmap_item)
 
@@ -411,7 +416,7 @@ class SegmentDisplayManager:
         if segment_index in mw.segment_items:
             for item in mw.segment_items[segment_index]:
                 if item.scene():
-                    mw.viewer.scene().removeItem(item)
+                    self.viewer.scene().removeItem(item)
             del mw.segment_items[segment_index]
 
         # Invalidate cache for this segment
@@ -441,13 +446,13 @@ class SegmentDisplayManager:
                 # Use the standard yellow overlay for selection
                 highlight_brush = QBrush(QColor(255, 255, 0, 180))
 
-            if seg["type"] == "Polygon" and seg.get("vertices"):
+            if seg.get("type") == "Polygon" and seg.get("vertices"):
                 qpoints = [QPointF(p[0], p[1]) for p in seg["vertices"]]
                 poly_item = QGraphicsPolygonItem(QPolygonF(qpoints))
                 poly_item.setBrush(highlight_brush)
                 poly_item.setPen(QPen(Qt.GlobalColor.transparent))
                 poly_item.setZValue(999)
-                mw.viewer.scene().addItem(poly_item)
+                self.viewer.scene().addItem(poly_item)
                 mw.highlight_items.append(poly_item)
             elif seg.get("mask") is not None:
                 # For non-polygon types, use cached highlight pixmaps
@@ -457,6 +462,6 @@ class SegmentDisplayManager:
                     pixmap = self.get_cached_highlight_pixmap(
                         i, mask, (255, 255, 0), alpha=180
                     )
-                    highlight_item = mw.viewer.scene().addPixmap(pixmap)
+                    highlight_item = self.viewer.scene().addPixmap(pixmap)
                     highlight_item.setZValue(1000)
                     mw.highlight_items.append(highlight_item)

@@ -50,8 +50,8 @@ class PolygonDrawingManager:
 
     @property
     def viewer(self):
-        """Get viewer from main window."""
-        return self.mw.viewer
+        """Get the active viewer (supports sequence mode)."""
+        return self.mw.active_viewer
 
     @property
     def segment_manager(self):

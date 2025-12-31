@@ -45,8 +45,8 @@ class SingleViewMouseHandler:
 
     @property
     def viewer(self):
-        """Get the viewer from main window."""
-        return self.mw.viewer
+        """Get the active viewer from main window (works in sequence mode too)."""
+        return self.mw.active_viewer
 
     @property
     def mode(self) -> str:

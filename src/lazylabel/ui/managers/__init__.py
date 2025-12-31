@@ -15,6 +15,7 @@ from .multi_view_coordinator import MultiViewCoordinator
 from .notification_manager import NotificationManager
 from .panel_popout_manager import PanelPopoutManager, PanelPopoutWindow
 from .polygon_drawing_manager import PolygonDrawingManager
+from .propagation_manager import PropagationManager
 from .sam_multi_view_manager import SAMMultiViewManager
 from .sam_preload_scheduler import SAMPreloadScheduler
 from .sam_single_view_manager import SAMSingleViewManager
@@ -42,6 +43,7 @@ __all__ = [
     "PanelPopoutManager",
     "PanelPopoutWindow",
     "PolygonDrawingManager",
+    "PropagationManager",
     "SAMMultiViewManager",
     "SAMPreloadScheduler",
     "SAMSingleViewManager",

@@ -2,12 +2,14 @@
 
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtWidgets import (
+    QCheckBox,
     QFrame,
     QHBoxLayout,
     QLabel,
     QPushButton,
     QScrollArea,
     QSlider,
+    QSpinBox,
     QTabWidget,
     QVBoxLayout,
     QWidget,
@@ -211,6 +213,11 @@ class ControlPanel(QWidget):
     auto_polygon_toggled = pyqtSignal(bool)  # Emits new toggle state
     polygon_resolution_changed = pyqtSignal(float)  # Emits epsilon factor
     auto_polygon_reset = pyqtSignal()  # Emits when reset to defaults
+    # Sequence settings signals
+    sequence_range_changed = pyqtSignal(int)  # Emits propagation range
+    sequence_max_requested = pyqtSignal()  # Request to set range to max (folder size)
+    sequence_load_memory_requested = pyqtSignal()  # Request to preload images to memory
+    sequence_clear_cache_requested = pyqtSignal()  # Request to clear memory cache
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -688,6 +695,168 @@ class ControlPanel(QWidget):
         )
         layout.addWidget(convert_collapsible)
 
+        # Sequence Settings - collapsible
+        sequence_widget = QWidget()
+        sequence_layout = QVBoxLayout(sequence_widget)
+        sequence_layout.setContentsMargins(0, 0, 0, 0)
+        sequence_layout.setSpacing(6)
+
+        # Propagation Range row
+        range_row = QHBoxLayout()
+        range_row.setSpacing(6)
+
+        range_label = QLabel("Propagation Range:")
+        range_label.setStyleSheet("color: #B0B0B0; font-size: 10px;")
+        range_row.addWidget(range_label)
+
+        self.sequence_range_spin = QSpinBox()
+        self.sequence_range_spin.setRange(1, 10000)
+        self.sequence_range_spin.setValue(50)
+        self.sequence_range_spin.setToolTip(
+            "Number of frames to propagate from the reference frame.\n"
+            "If you label frame 0 with range 50, frames 0-49 will be auto-labeled."
+        )
+        self.sequence_range_spin.setStyleSheet(
+            """
+            QSpinBox {
+                background-color: rgba(50, 50, 50, 0.8);
+                border: 1px solid rgba(80, 80, 80, 0.6);
+                border-radius: 4px;
+                color: #E0E0E0;
+                padding: 4px;
+                min-width: 60px;
+            }
+            QSpinBox:hover {
+                border-color: rgba(100, 100, 100, 0.8);
+            }
+            QSpinBox::up-button, QSpinBox::down-button {
+                background: rgba(70, 70, 70, 0.8);
+                border: none;
+                width: 16px;
+            }
+            QSpinBox::up-button:hover, QSpinBox::down-button:hover {
+                background: rgba(90, 90, 90, 0.9);
+            }
+        """
+        )
+        range_row.addWidget(self.sequence_range_spin)
+
+        self.btn_sequence_max = QPushButton("Max")
+        self.btn_sequence_max.setToolTip(
+            "Set range to include all images in the folder"
+        )
+        self.btn_sequence_max.setFixedWidth(50)
+        self.btn_sequence_max.setStyleSheet(
+            """
+            QPushButton {
+                background-color: rgba(80, 80, 80, 0.8);
+                border: 1px solid rgba(100, 100, 100, 0.6);
+                border-radius: 4px;
+                color: #E0E0E0;
+                font-size: 10px;
+                padding: 4px 8px;
+            }
+            QPushButton:hover {
+                background-color: rgba(100, 100, 100, 0.9);
+                border-color: rgba(120, 120, 120, 0.8);
+            }
+            QPushButton:pressed {
+                background-color: rgba(60, 60, 60, 0.9);
+            }
+        """
+        )
+        range_row.addWidget(self.btn_sequence_max)
+        range_row.addStretch()
+
+        sequence_layout.addLayout(range_row)
+
+        # Include masks checkbox
+        self.chk_include_masks = QCheckBox("Include masks (NPZ files)")
+        self.chk_include_masks.setToolTip(
+            "Also preload mask data from NPZ files.\n"
+            "This uses more memory but makes editing faster."
+        )
+        self.chk_include_masks.setChecked(False)
+        sequence_layout.addWidget(self.chk_include_masks)
+
+        # Load to Memory button
+        self.btn_load_to_memory = QPushButton("Load Range to Memory")
+        self.btn_load_to_memory.setToolTip(
+            "Preload images within the range into memory.\n"
+            "This makes scrubbing fast and speeds up AI propagation."
+        )
+        self.btn_load_to_memory.setStyleSheet(
+            """
+            QPushButton {
+                background-color: rgba(60, 100, 80, 0.8);
+                border: 1px solid rgba(80, 120, 100, 0.8);
+                border-radius: 6px;
+                color: #E0E0E0;
+                font-weight: bold;
+                font-size: 11px;
+                padding: 8px 12px;
+                min-height: 24px;
+            }
+            QPushButton:hover {
+                background-color: rgba(80, 120, 100, 0.9);
+                border-color: rgba(100, 140, 120, 0.9);
+            }
+            QPushButton:pressed {
+                background-color: rgba(40, 80, 60, 0.9);
+            }
+            QPushButton:disabled {
+                background-color: rgba(60, 60, 60, 0.5);
+                border-color: rgba(80, 80, 80, 0.4);
+                color: #888;
+            }
+        """
+        )
+        sequence_layout.addWidget(self.btn_load_to_memory)
+
+        # Memory status row with clear button
+        memory_row = QHBoxLayout()
+        memory_row.setSpacing(6)
+
+        self.sequence_memory_label = QLabel("Memory: Not loaded")
+        self.sequence_memory_label.setStyleSheet(
+            "color: #888; font-size: 9px; font-style: italic;"
+        )
+        memory_row.addWidget(self.sequence_memory_label, 1)
+
+        self.btn_clear_cache = QPushButton("Clear")
+        self.btn_clear_cache.setToolTip("Clear preloaded images from memory")
+        self.btn_clear_cache.setFixedWidth(50)
+        self.btn_clear_cache.setStyleSheet(
+            """
+            QPushButton {
+                background-color: rgba(100, 60, 60, 0.8);
+                border: 1px solid rgba(120, 80, 80, 0.6);
+                border-radius: 4px;
+                color: #E0E0E0;
+                font-size: 9px;
+                padding: 2px 6px;
+            }
+            QPushButton:hover {
+                background-color: rgba(120, 80, 80, 0.9);
+                border-color: rgba(140, 100, 100, 0.8);
+            }
+            QPushButton:pressed {
+                background-color: rgba(80, 40, 40, 0.9);
+            }
+        """
+        )
+        memory_row.addWidget(self.btn_clear_cache)
+
+        sequence_layout.addLayout(memory_row)
+
+        self.sequence_collapsible = SimpleCollapsible(
+            "Sequence Settings", sequence_widget
+        )
+        # Store the inner widget for enabling/disabling
+        self.sequence_settings_widget = sequence_widget
+        layout.addWidget(self.sequence_collapsible)
+        # Always enabled - memory preload is useful in ALL modes
+
         # Application Settings - collapsible
         settings_collapsible = SimpleCollapsible(
             "Application Settings", self.settings_widget
@@ -857,6 +1026,12 @@ class ControlPanel(QWidget):
         self.btn_reset_auto_polygon.clicked.connect(
             self._reset_auto_polygon_to_defaults
         )
+
+        # Sequence settings signals
+        self.sequence_range_spin.valueChanged.connect(self.sequence_range_changed)
+        self.btn_sequence_max.clicked.connect(self.sequence_max_requested)
+        self.btn_load_to_memory.clicked.connect(self.sequence_load_memory_requested)
+        self.btn_clear_cache.clicked.connect(self.sequence_clear_cache_requested)
 
     def _on_sam_mode_clicked(self):
         """Handle AI mode button click."""
@@ -1132,3 +1307,98 @@ class ControlPanel(QWidget):
         self.auto_polygon_toggled.emit(False)
         self.polygon_resolution_changed.emit(self.get_polygon_epsilon())
         self.auto_polygon_reset.emit()
+
+    # =========================================================================
+    # Sequence Settings Methods
+    # =========================================================================
+
+    def _set_sequence_settings_enabled(self, enabled: bool) -> None:
+        """Internal method to enable/disable sequence settings visually."""
+        # Disable all interactive elements
+        self.sequence_range_spin.setEnabled(enabled)
+        self.btn_sequence_max.setEnabled(enabled)
+        self.btn_load_to_memory.setEnabled(enabled)
+
+        # Gray out the collapsible header when disabled
+        if enabled:
+            self.sequence_collapsible.setStyleSheet("")
+            self.sequence_settings_widget.setStyleSheet("")
+        else:
+            self.sequence_collapsible.setStyleSheet("color: #666;")
+            self.sequence_settings_widget.setStyleSheet(
+                "QWidget { color: #666; } "
+                "QLabel { color: #555; } "
+                "QPushButton { background-color: rgba(50, 50, 50, 0.5); color: #555; } "
+                "QSpinBox { background-color: rgba(40, 40, 40, 0.5); color: #555; }"
+            )
+
+    def set_sequence_mode_active(self, active: bool) -> None:
+        """Enable/disable sequence settings based on whether sequence mode is active.
+
+        Call this when switching view modes.
+
+        Args:
+            active: True if entering sequence mode, False otherwise
+        """
+        self._set_sequence_settings_enabled(active)
+        # Auto-expand when entering sequence mode, collapse when leaving
+        if (
+            active
+            and self.sequence_collapsible.is_collapsed
+            or not active
+            and not self.sequence_collapsible.is_collapsed
+        ):
+            self.sequence_collapsible.toggle_collapse()
+
+    def get_sequence_range(self) -> int:
+        """Get the current propagation range value."""
+        return self.sequence_range_spin.value()
+
+    def should_include_masks(self) -> bool:
+        """Check if masks should be included when loading to memory."""
+        return self.chk_include_masks.isChecked()
+
+    def set_sequence_range(self, value: int) -> None:
+        """Set the propagation range value."""
+        self.sequence_range_spin.blockSignals(True)
+        self.sequence_range_spin.setValue(value)
+        self.sequence_range_spin.blockSignals(False)
+
+    def set_sequence_range_max(self, max_value: int) -> None:
+        """Set the maximum allowed range (e.g., folder size)."""
+        self.sequence_range_spin.setMaximum(max_value)
+
+    def update_sequence_memory_status(
+        self, loaded: int, total: int, size_mb: float = 0
+    ) -> None:
+        """Update the memory status label.
+
+        Args:
+            loaded: Number of images loaded in memory
+            total: Total images in range
+            size_mb: Approximate memory size in MB
+        """
+        if loaded == 0:
+            self.sequence_memory_label.setText("Memory: Not loaded")
+            self.sequence_memory_label.setStyleSheet(
+                "color: #888; font-size: 9px; font-style: italic;"
+            )
+        else:
+            if size_mb > 0:
+                self.sequence_memory_label.setText(
+                    f"Memory: {loaded}/{total} images ({size_mb:.1f} MB)"
+                )
+            else:
+                self.sequence_memory_label.setText(f"Memory: {loaded}/{total} images")
+            self.sequence_memory_label.setStyleSheet(
+                "color: #4CAF50; font-size: 9px; font-style: italic;"
+            )
+
+    def set_load_memory_button_loading(self, is_loading: bool) -> None:
+        """Set the load to memory button to loading state."""
+        if is_loading:
+            self.btn_load_to_memory.setText("Loading...")
+            self.btn_load_to_memory.setEnabled(False)
+        else:
+            self.btn_load_to_memory.setText("Load Range to Memory")
+            self.btn_load_to_memory.setEnabled(True)

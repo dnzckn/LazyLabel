@@ -39,6 +39,11 @@ class CropManager(QObject):
         self.multi_view_crop_start_pos: list[Any] = []
         self.multi_view_crop_rect_items: list[QGraphicsRectItem | None] = []
 
+    @property
+    def viewer(self):
+        """Get the active viewer (supports sequence mode)."""
+        return self.main_window.active_viewer
+
     def start_crop_drawing(self) -> None:
         """Start crop drawing mode."""
         mw = self.main_window
@@ -219,21 +224,19 @@ class CropManager(QObject):
 
         # Add all visual overlays to scene
         for overlay in self.crop_visual_overlays:
-            mw.viewer.scene().addItem(overlay)
+            self.viewer.scene().addItem(overlay)
 
     def remove_crop_visual_overlays(self) -> None:
         """Remove crop visual overlays."""
         for overlay in self.crop_visual_overlays:
             if overlay and overlay.scene():
-                self.main_window.viewer.scene().removeItem(overlay)
+                self.viewer.scene().removeItem(overlay)
         self.crop_visual_overlays = []
 
     def remove_crop_visual(self) -> None:
         """Remove visual crop rectangle and overlays."""
-        mw = self.main_window
-
         if self.crop_rect_item and self.crop_rect_item.scene():
-            mw.viewer.scene().removeItem(self.crop_rect_item)
+            self.viewer.scene().removeItem(self.crop_rect_item)
         self.crop_rect_item = None
 
         # Remove all crop-related visuals
@@ -309,13 +312,13 @@ class CropManager(QObject):
             overlay.hoverEnterEvent = hover_enter_event
             overlay.hoverLeaveEvent = hover_leave_event
 
-            mw.viewer.scene().addItem(overlay)
+            self.viewer.scene().addItem(overlay)
 
     def remove_crop_hover_overlay(self) -> None:
         """Remove crop hover overlays."""
         for overlay in self.crop_hover_overlays:
             if overlay and overlay.scene():
-                self.main_window.viewer.scene().removeItem(overlay)
+                self.viewer.scene().removeItem(overlay)
         self.crop_hover_overlays = []
         self.is_hovering_crop = False
 
@@ -391,13 +394,13 @@ class CropManager(QObject):
 
         # Add all hover effect items to scene
         for effect_item in self.crop_hover_effect_items:
-            mw.viewer.scene().addItem(effect_item)
+            self.viewer.scene().addItem(effect_item)
 
     def remove_crop_hover_effect(self) -> None:
         """Remove crop hover effect."""
         for effect_item in self.crop_hover_effect_items:
             if effect_item and effect_item.scene():
-                self.main_window.viewer.scene().removeItem(effect_item)
+                self.viewer.scene().removeItem(effect_item)
         self.crop_hover_effect_items = []
 
     # ========== Multi-View Crop Methods ==========
