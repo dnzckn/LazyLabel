@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.1] - 2026-01-01
+
+### Added
+
+- **Confidence Display**: Show confidence score in sequence mode info label (e.g., "Conf: 0.9923")
+- **New Timeline Button**: Rebuild timeline after already having one built
+- **Start/End Frame Colors**: Distinct highlighting colors (light green for start, red for end)
+
+### Fixed
+
+- Min confidence threshold not re-applied after timeline rebuild
+- Flagged frames incorrectly saved by "Save All" operation
+- File navigator highlighting interrupted by alternating row colors
+- SAM2 failing with non-numeric filenames (now uses symlinks transparently)
+
+### Changed
+
+- Default confidence threshold changed to 0.99 with 4 decimal precision
+
 ## [1.6.0] - 2025-12-31
 
 ### Added
