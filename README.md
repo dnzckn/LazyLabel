@@ -99,24 +99,6 @@ Maintains consistent class naming across datasets:
 
 ---
 
-## Typical Workflow
-
-1. **Open folder** containing your images
-2. **Click objects** to generate AI masks (mode 1)
-3. **Refine** with additional points or manual tools
-4. **Assign classes** and organize in the class table
-5. **Export** as NPZ or YOLO format
-
-### Advanced Preprocessing Workflow
-
-For challenging images:
-1. Apply **FFT filtering** to reduce noise
-2. Use **channel thresholding** to isolate color ranges
-3. Enable **"Operate on View"** to pass filtered images to SAM
-4. Fine-tune with manual tools
-
----
-
 ## SAM 2.1 Setup
 
 SAM 1.0 models are downloaded automatically on first use. For SAM 2.1 (improved accuracy, required for Sequence mode):
