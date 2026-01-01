@@ -43,32 +43,22 @@ lazylabel-gui
 
 ## Core Features
 
-### AI-Powered Segmentation
-LazyLabel leverages Meta's SAM for intelligent object detection:
-- Single-click object segmentation
-- Interactive refinement with positive/negative points  
-- Support for both SAM 1.0 and SAM 2.1 models
-- GPU acceleration with automatic CPU fallback
+### Annotation Tools
+- **AI (SAM)**: Single-click segmentation with point-based refinement (SAM 1.0 & 2.1, GPU/CPU)
+- **Polygon**: Vertex-level drawing and editing for precise boundaries
+- **Box**: Bounding box annotations for object detection
+- **Subtract**: Remove regions from existing masks
 
-### Manual Annotation Tools
-When precision matters:
-- Polygon drawing with vertex-level editing
-- Bounding box annotations for object detection
-- Edit mode for adjusting existing segments
-- Merge tool for combining related segments
+### Annotation Modes
+- **Single View**: Fine-tune individual masks with maximum precision
+- **Multi View**: Annotate up to 4 images simultaneously—ideal for objects in similar positions with slight variations
+- **Sequence**: Propagate a refined mask across thousands of frames using SAM 2's video predictor
 
-### Image Processing & Filtering
-Advanced preprocessing capabilities:
+### Image Processing
 - **FFT filtering**: Remove noise and enhance edges
 - **Channel thresholding**: Isolate objects by color
-- **Border cropping**: Define crop regions that set pixels outside the area to zero in saved outputs
+- **Border cropping**: Zero out pixels outside defined regions in saved outputs
 - **View adjustments**: Brightness, contrast, gamma correction
-
-### Multi-View Mode
-Process multiple images efficiently:
-- Annotate up to 4 images simultaneously
-- Synchronized zoom and pan across views
-- Mirror annotations to all linked images
 
 ---
 
