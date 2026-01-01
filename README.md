@@ -60,9 +60,7 @@ lazylabel-gui
 
 ## Export Formats
 
-### NPZ Format (`.npz`)
-One-hot encoded masks optimized for deep learning:
-
+### One-hot encoded tensors (`.npz`)
 ```python
 import numpy as np
 
@@ -76,15 +74,13 @@ cats = mask[:, :, 2]
 dogs = mask[:, :, 3]
 ```
 
-### YOLO Format (`.txt`)
-Normalized polygon coordinates for YOLO training:
+### Normalized polygoon coordinates (`.txt`)
 ```
 0 0.234 0.456 0.289 0.478 0.301 0.523 ...
 1 0.567 0.123 0.598 0.145 0.612 0.189 ...
 ```
 
 ### Class Aliases (`.json`)
-Maintains consistent class naming across datasets:
 ```json
 {
   "0": "background",
