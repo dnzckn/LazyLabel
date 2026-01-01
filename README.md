@@ -117,29 +117,16 @@ For challenging images:
 
 ---
 
-## Advanced Features
+## SAM 2.1 Setup
 
-### Multi-View Mode
-Access via the "Multi" tab to process multiple images:
-- 2-view (side-by-side) or 4-view (grid) layouts
-- Annotations mirror across linked views automatically
-- Synchronized zoom maintains alignment
+SAM 1.0 models are downloaded automatically on first use. For SAM 2.1 (improved accuracy, required for Sequence mode):
 
-### SAM 2.1 Support
-LazyLabel supports both SAM 1.0 (default) and SAM 2.1 models. SAM 2.1 offers improved segmentation accuracy and better handling of complex boundaries.
-
-To use SAM 2.1 models:
-1. Install the SAM 2 package:
-   ```bash
-   pip install git+https://github.com/facebookresearch/sam2.git
-   ```
-2. Download a SAM 2.1 model (e.g., `sam2.1_hiera_large.pt`) from the [SAM 2 repository](https://github.com/facebookresearch/sam2)
-3. Place the model file in LazyLabel's models folder:
-   - If installed via pip: `~/.local/share/lazylabel/models/` (or equivalent on your system)
-   - If running from source: `src/lazylabel/models/`
-4. Select the SAM 2.1 model from the dropdown in LazyLabel's settings
-
-Note: SAM 1.0 models are automatically downloaded on first use.
+1. Install SAM 2: `pip install git+https://github.com/facebookresearch/sam2.git`
+2. Download a model (e.g., `sam2.1_hiera_large.pt`) from the [SAM 2 repository](https://github.com/facebookresearch/sam2)
+3. Place in LazyLabel's models folder:
+   - Via pip: `~/.local/share/lazylabel/models/`
+   - From source: `src/lazylabel/models/`
+4. Select the model from the dropdown in settings
 
 ---
 
