@@ -41,7 +41,7 @@ class TestSequenceViewModeCreation:
 
     def test_initial_confidence_threshold(self, sequence_view_mode):
         """Test initial confidence threshold."""
-        assert sequence_view_mode._confidence_threshold == 0.95
+        assert sequence_view_mode._confidence_threshold == 0.99
 
     def test_auto_flag_enabled_by_default(self, sequence_view_mode):
         """Test that auto-flag is enabled by default."""
@@ -213,7 +213,7 @@ class TestMarkFramePropagated:
 
         mask = np.ones((100, 100), dtype=bool)
         with qtbot.waitSignal(sequence_view_mode.frame_status_changed):
-            sequence_view_mode.mark_frame_propagated(1, {1: mask}, confidence=0.98)
+            sequence_view_mode.mark_frame_propagated(1, {1: mask}, confidence=0.999)
 
         assert sequence_view_mode._frame_statuses[1] == FrameStatus.PROPAGATED
 
@@ -516,8 +516,8 @@ class TestGetPropagatedFrames:
         sequence_view_mode.set_image_paths([f"/{i}.png" for i in range(5)])
         mask = np.ones((10, 10), dtype=bool)
 
-        sequence_view_mode.mark_frame_propagated(1, {1: mask}, confidence=0.98)
-        sequence_view_mode.mark_frame_propagated(3, {1: mask}, confidence=0.98)
+        sequence_view_mode.mark_frame_propagated(1, {1: mask}, confidence=0.999)
+        sequence_view_mode.mark_frame_propagated(3, {1: mask}, confidence=0.999)
 
         propagated = sequence_view_mode.get_propagated_frames()
         assert set(propagated) == {1, 3}

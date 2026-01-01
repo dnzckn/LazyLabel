@@ -1,10 +1,11 @@
 """Sequence controls widget for propagation operations.
 
 Provides UI controls for sequence mode operations including
-reference frame selection, propagation controls, and review navigation.
+timeline setup, reference frame selection, propagation controls, and review navigation.
 """
 
-from PyQt6.QtCore import pyqtSignal
+from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtGui import QKeyEvent
 from PyQt6.QtWidgets import (
     QCheckBox,
     QDoubleSpinBox,
@@ -18,17 +19,47 @@ from PyQt6.QtWidgets import (
 )
 
 
+class ShortcutSpinBox(QSpinBox):
+    """SpinBox that ignores WASD keys to allow global shortcuts to work."""
+
+    def keyPressEvent(self, event: QKeyEvent) -> None:
+        """Ignore WASD keys so pan shortcuts work globally."""
+        if event.key() in (Qt.Key.Key_W, Qt.Key.Key_A, Qt.Key.Key_S, Qt.Key.Key_D):
+            event.ignore()
+            return
+        super().keyPressEvent(event)
+
+
+class ShortcutDoubleSpinBox(QDoubleSpinBox):
+    """DoubleSpinBox that ignores WASD keys to allow global shortcuts to work."""
+
+    def keyPressEvent(self, event: QKeyEvent) -> None:
+        """Ignore WASD keys so pan shortcuts work globally."""
+        if event.key() in (Qt.Key.Key_W, Qt.Key.Key_A, Qt.Key.Key_S, Qt.Key.Key_D):
+            event.ignore()
+            return
+        super().keyPressEvent(event)
+
+
 class SequenceWidget(QWidget):
     """Control panel for sequence mode operations.
 
     Provides controls for:
+    - Timeline setup (set start/end, build timeline)
     - Setting reference frame
     - Propagation direction and range
     - Progress monitoring
     - Review navigation for flagged frames
     """
 
-    # Signals
+    # Signals - Timeline Setup
+    set_start_requested = pyqtSignal()  # Request to set current file as start
+    set_end_requested = pyqtSignal()  # Request to set current file as end
+    clear_range_requested = pyqtSignal()  # Request to clear start/end selection
+    build_timeline_requested = pyqtSignal()  # Request to build timeline from range
+    exit_timeline_requested = pyqtSignal()  # Request to exit timeline and start fresh
+
+    # Signals - Propagation
     add_reference_requested = pyqtSignal()  # Request to add current frame as reference
     add_all_before_requested = (
         pyqtSignal()
@@ -51,6 +82,9 @@ class SequenceWidget(QWidget):
         self._flagged_count = 0
         self._propagated_count = 0
         self._is_propagating = False
+        self._timeline_built = False
+        self._start_frame_name: str | None = None
+        self._end_frame_name: str | None = None
 
         self._setup_ui()
 
@@ -60,9 +94,81 @@ class SequenceWidget(QWidget):
         layout.setContentsMargins(5, 5, 5, 5)
         layout.setSpacing(8)
 
-        # Reference Frame Section
-        ref_group = QGroupBox("Reference Frames")
-        ref_layout = QVBoxLayout(ref_group)
+        # Timeline Setup Section (shown before timeline is built)
+        self.setup_group = QGroupBox("Timeline Setup")
+        setup_layout = QVBoxLayout(self.setup_group)
+
+        # Instructions
+        instructions = QLabel(
+            "1. Navigate to start frame in file list\n"
+            "2. Click 'Set Start'\n"
+            "3. Navigate to end frame\n"
+            "4. Click 'Set End'\n"
+            "5. Click 'Build Timeline'"
+        )
+        instructions.setStyleSheet("color: #AAAAAA; font-size: 11px;")
+        instructions.setWordWrap(True)
+        setup_layout.addWidget(instructions)
+
+        # Start/End display
+        range_display_layout = QHBoxLayout()
+        range_display_layout.addWidget(QLabel("Start:"))
+        self.start_label = QLabel("Not set")
+        self.start_label.setStyleSheet("font-weight: bold; color: #4CAF50;")
+        self.start_label.setWordWrap(True)
+        range_display_layout.addWidget(self.start_label, 1)
+        setup_layout.addLayout(range_display_layout)
+
+        range_display_layout2 = QHBoxLayout()
+        range_display_layout2.addWidget(QLabel("End:"))
+        self.end_label = QLabel("Not set")
+        self.end_label.setStyleSheet("font-weight: bold; color: #F44336;")
+        self.end_label.setWordWrap(True)
+        range_display_layout2.addWidget(self.end_label, 1)
+        setup_layout.addLayout(range_display_layout2)
+
+        # Set Start/End buttons
+        set_btn_layout = QHBoxLayout()
+        self.set_start_btn = QPushButton("Set Start")
+        self.set_start_btn.setToolTip("Mark current file as sequence start")
+        self.set_start_btn.setStyleSheet(
+            "QPushButton { background-color: #4CAF50; color: black; font-weight: bold; }"
+        )
+        self.set_start_btn.clicked.connect(self.set_start_requested.emit)
+        set_btn_layout.addWidget(self.set_start_btn)
+
+        self.set_end_btn = QPushButton("Set End")
+        self.set_end_btn.setToolTip("Mark current file as sequence end")
+        self.set_end_btn.setStyleSheet(
+            "QPushButton { background-color: #F44336; color: black; font-weight: bold; }"
+        )
+        self.set_end_btn.clicked.connect(self.set_end_requested.emit)
+        set_btn_layout.addWidget(self.set_end_btn)
+        setup_layout.addLayout(set_btn_layout)
+
+        # Clear and Build buttons
+        action_btn_layout = QHBoxLayout()
+        self.clear_range_btn = QPushButton("Clear")
+        self.clear_range_btn.setToolTip("Clear start/end selection")
+        self.clear_range_btn.clicked.connect(self._on_clear_range)
+        self.clear_range_btn.setEnabled(False)
+        action_btn_layout.addWidget(self.clear_range_btn)
+
+        self.build_timeline_btn = QPushButton("Build Timeline")
+        self.build_timeline_btn.setToolTip("Build timeline from selected range")
+        self.build_timeline_btn.setStyleSheet(
+            "QPushButton { background-color: #2196F3; color: black; font-weight: bold; padding: 6px; }"
+        )
+        self.build_timeline_btn.clicked.connect(self.build_timeline_requested.emit)
+        self.build_timeline_btn.setEnabled(False)
+        action_btn_layout.addWidget(self.build_timeline_btn)
+        setup_layout.addLayout(action_btn_layout)
+
+        layout.addWidget(self.setup_group)
+
+        # Reference Frame Section (hidden until timeline is built)
+        self.ref_group = QGroupBox("Reference Frames")
+        ref_layout = QVBoxLayout(self.ref_group)
 
         # Reference frame display
         ref_info_layout = QHBoxLayout()
@@ -102,11 +208,11 @@ class SequenceWidget(QWidget):
 
         ref_layout.addLayout(ref_btn_layout2)
 
-        layout.addWidget(ref_group)
+        layout.addWidget(self.ref_group)
 
-        # Propagation Section
-        prop_group = QGroupBox("Propagation")
-        prop_layout = QVBoxLayout(prop_group)
+        # Propagation Section (hidden until timeline is built)
+        self.prop_group = QGroupBox("Propagation")
+        prop_layout = QVBoxLayout(self.prop_group)
 
         # Propagate button (always bidirectional from all reference frames)
         self.propagate_btn = QPushButton("Propagate")
@@ -124,7 +230,7 @@ class SequenceWidget(QWidget):
 
         # Range inputs
         options_layout.addWidget(QLabel("Range:"))
-        self.range_start_spin = QSpinBox()
+        self.range_start_spin = ShortcutSpinBox()
         self.range_start_spin.setMinimum(1)
         self.range_start_spin.setMaximum(1)
         self.range_start_spin.setToolTip("Start frame (1-indexed)")
@@ -132,7 +238,7 @@ class SequenceWidget(QWidget):
 
         options_layout.addWidget(QLabel("-"))
 
-        self.range_end_spin = QSpinBox()
+        self.range_end_spin = ShortcutSpinBox()
         self.range_end_spin.setMinimum(1)
         self.range_end_spin.setMaximum(1)
         self.range_end_spin.setToolTip("End frame (1-indexed)")
@@ -148,11 +254,11 @@ class SequenceWidget(QWidget):
 
         # Confidence threshold
         options_layout.addWidget(QLabel("Min Conf:"))
-        self.confidence_spin = QDoubleSpinBox()
+        self.confidence_spin = ShortcutDoubleSpinBox()
         self.confidence_spin.setRange(0.0, 1.0)
         self.confidence_spin.setSingleStep(0.05)
-        self.confidence_spin.setValue(0.95)
-        self.confidence_spin.setDecimals(2)
+        self.confidence_spin.setValue(0.99)
+        self.confidence_spin.setDecimals(4)
         self.confidence_spin.setToolTip("Frames below this confidence will be flagged")
         self.confidence_spin.valueChanged.connect(
             self.confidence_threshold_changed.emit
@@ -161,11 +267,11 @@ class SequenceWidget(QWidget):
 
         prop_layout.addLayout(options_layout)
 
-        layout.addWidget(prop_group)
+        layout.addWidget(self.prop_group)
 
-        # Review Section
-        review_group = QGroupBox("Review")
-        review_layout = QVBoxLayout(review_group)
+        # Review Section (hidden until timeline is built)
+        self.review_group = QGroupBox("Review")
+        review_layout = QVBoxLayout(self.review_group)
 
         # Flagged count
         flagged_layout = QHBoxLayout()
@@ -192,10 +298,24 @@ class SequenceWidget(QWidget):
 
         review_layout.addLayout(nav_layout)
 
-        layout.addWidget(review_group)
+        layout.addWidget(self.review_group)
+
+        # New Timeline button (hidden until timeline is built)
+        self.new_timeline_btn = QPushButton("New Timeline")
+        self.new_timeline_btn.setToolTip(
+            "Exit current timeline and select a new range.\n"
+            "This will clear all propagation results."
+        )
+        self.new_timeline_btn.setStyleSheet(
+            "QPushButton { background-color: #666; color: white; padding: 6px; }"
+            "QPushButton:hover { background-color: #888; }"
+        )
+        self.new_timeline_btn.clicked.connect(self.exit_timeline_requested.emit)
+        self.new_timeline_btn.setVisible(False)  # Hidden until timeline is built
+        layout.addWidget(self.new_timeline_btn)
 
         # Hidden spinbox for programmatic frame tracking (used by set_current_frame)
-        self.frame_spin = QSpinBox()
+        self.frame_spin = ShortcutSpinBox()
         self.frame_spin.setMinimum(1)
         self.frame_spin.setMaximum(1)
         self.frame_spin.setVisible(False)  # Hidden - timeline is used for navigation
@@ -206,8 +326,9 @@ class SequenceWidget(QWidget):
         # Stretch at bottom
         layout.addStretch()
 
-        # Initial state
+        # Initial state - hide propagation controls until timeline is built
         self._update_button_states()
+        self._update_timeline_visibility()
 
     def _request_propagate(self) -> None:
         """Request propagation (bidirectional within specified range)."""
@@ -330,11 +451,93 @@ class SequenceWidget(QWidget):
         )
         self._update_button_states()
 
+    def set_propagation_status(self, message: str) -> None:
+        """Update propagation button text with status message.
+
+        Args:
+            message: Status message to display on the button
+        """
+        if self._is_propagating:
+            self.propagate_btn.setText(message)
+            self.propagate_btn.repaint()  # Force immediate repaint
+
     def reset(self) -> None:
         """Reset widget to initial state."""
         self._reference_frames.clear()
         self._flagged_count = 0
         self._is_propagating = False
+        self._timeline_built = False
+        self._start_frame_name = None
+        self._end_frame_name = None
         self.reference_label.setText("None")
         self.flagged_label.setText("0")
+        self.start_label.setText("Not set")
+        self.end_label.setText("Not set")
         self._update_button_states()
+        self._update_timeline_visibility()
+        self._update_range_button_states()
+
+    def _update_timeline_visibility(self) -> None:
+        """Show/hide UI sections based on timeline state."""
+        # Setup section visible when timeline not built
+        self.setup_group.setVisible(not self._timeline_built)
+
+        # Propagation sections visible only when timeline is built
+        self.ref_group.setVisible(self._timeline_built)
+        self.prop_group.setVisible(self._timeline_built)
+        self.review_group.setVisible(self._timeline_built)
+        self.new_timeline_btn.setVisible(self._timeline_built)
+
+    def _update_range_button_states(self) -> None:
+        """Update range selection button states."""
+        has_start = self._start_frame_name is not None
+        has_end = self._end_frame_name is not None
+
+        self.clear_range_btn.setEnabled(has_start or has_end)
+        self.build_timeline_btn.setEnabled(has_start and has_end)
+
+    def _on_clear_range(self) -> None:
+        """Handle clear range button click."""
+        self._start_frame_name = None
+        self._end_frame_name = None
+        self.start_label.setText("Not set")
+        self.end_label.setText("Not set")
+        self._update_range_button_states()
+        self.clear_range_requested.emit()
+
+    def set_start_frame(self, name: str) -> None:
+        """Set the start frame for the sequence range.
+
+        Args:
+            name: Filename of the start frame
+        """
+        self._start_frame_name = name
+        self.start_label.setText(name)
+        self._update_range_button_states()
+
+    def set_end_frame(self, name: str) -> None:
+        """Set the end frame for the sequence range.
+
+        Args:
+            name: Filename of the end frame
+        """
+        self._end_frame_name = name
+        self.end_label.setText(name)
+        self._update_range_button_states()
+
+    def get_range_names(self) -> tuple[str | None, str | None]:
+        """Get the current range selection.
+
+        Returns:
+            Tuple of (start_name, end_name) or (None, None) if not set
+        """
+        return (self._start_frame_name, self._end_frame_name)
+
+    def set_timeline_built(self, built: bool) -> None:
+        """Set whether the timeline has been built.
+
+        Args:
+            built: True if timeline is built, False otherwise
+        """
+        self._timeline_built = built
+        self._update_timeline_visibility()

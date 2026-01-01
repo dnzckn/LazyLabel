@@ -7,7 +7,7 @@ from .channel_threshold_widget import ChannelThresholdWidget
 from .fft_threshold_widget import FFTThresholdWidget
 from .fragment_threshold_widget import FragmentThresholdWidget
 from .model_selection_widget import ModelSelectionWidget
-from .sequence_widget import SequenceWidget
+from .sequence_widget import SequenceWidget, ShortcutDoubleSpinBox, ShortcutSpinBox
 from .settings_widget import SettingsWidget
 from .status_bar import StatusBar
 from .timeline_widget import TimelineWidget
@@ -22,6 +22,8 @@ __all__ = [
     "ModelSelectionWidget",
     "SequenceWidget",
     "SettingsWidget",
+    "ShortcutDoubleSpinBox",
+    "ShortcutSpinBox",
     "StatusBar",
     "TimelineWidget",
 ]

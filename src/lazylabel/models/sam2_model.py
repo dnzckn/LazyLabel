@@ -651,7 +651,9 @@ class Sam2Model:
             self.video_predictor = None
             return False
 
-    def init_video_state(self, image_dir: str) -> bool:
+    def init_video_state(
+        self, image_dir: str, image_cache: dict[str, np.ndarray] | None = None
+    ) -> bool:
         """Initialize video state with a directory of images.
 
         The directory should contain images named in sortable order
@@ -663,6 +665,9 @@ class Sam2Model:
 
         Args:
             image_dir: Path to directory containing image sequence
+            image_cache: Optional dict mapping image paths to numpy arrays.
+                If provided, cached images will be used instead of reading
+                from disk, which saves I/O when images are preloaded.
 
         Returns:
             True if successful, False otherwise
@@ -693,40 +698,56 @@ class Sam2Model:
             # Store original image paths for reference
             self.video_image_paths = [str(p) for p in all_images]
 
-            # Check if we have JPEG files
-            jpeg_files = [p for p in all_images if p.suffix.lower() in jpeg_extensions]
+            # SAM2 requires numeric-only filenames (e.g., "00000.jpg")
+            # Always create a temp directory with properly named files
+            # This handles arbitrary user filenames transparently
+            import tempfile
 
-            if len(jpeg_files) == len(all_images):
-                # All files are JPEG, use directory directly
-                video_path = image_dir
-                logger.debug("SAM2: Using JPEG files directly")
-            else:
-                # Need to convert non-JPEG files to temporary JPEG directory
-                import tempfile
+            # Clean up any previous temp directory
+            self._cleanup_temp_dir()
 
-                # Clean up any previous temp directory
-                self._cleanup_temp_dir()
+            # Create temp directory
+            self._video_temp_dir = tempfile.mkdtemp(prefix="sam2_video_")
+            logger.info(
+                f"SAM2: Preparing {len(all_images)} images for video predictor..."
+            )
 
-                # Create temp directory
-                self._video_temp_dir = tempfile.mkdtemp(prefix="sam2_video_")
-                logger.info(
-                    f"SAM2: Converting {len(all_images)} images to JPEG format..."
-                )
+            cache_hits = 0
+            jpeg_extensions_set = {".jpg", ".jpeg"}
 
-                for i, img_path in enumerate(all_images):
-                    # Read image
-                    img = cv2.imread(str(img_path))
+            for i, img_path in enumerate(all_images):
+                img_path_str = str(img_path)
+                jpeg_path = Path(self._video_temp_dir) / f"{i:05d}.jpg"
+
+                # Try to use cached image first (saves disk I/O)
+                if image_cache and img_path_str in image_cache:
+                    img = image_cache[img_path_str]
+                    # Cache stores RGB, need to convert to BGR for cv2.imwrite
+                    img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
+                    cv2.imwrite(str(jpeg_path), img, [cv2.IMWRITE_JPEG_QUALITY, 95])
+                    cache_hits += 1
+                elif img_path.suffix.lower() in jpeg_extensions_set:
+                    # Already JPEG - use symlink to avoid doubling disk usage
+                    try:
+                        os.symlink(img_path_str, str(jpeg_path))
+                    except OSError:
+                        # Symlinks may fail on some systems, fall back to copy
+                        import shutil
+
+                        shutil.copy2(img_path_str, str(jpeg_path))
+                else:
+                    # Read and convert to JPEG
+                    img = cv2.imread(img_path_str)
                     if img is None:
                         logger.warning(f"SAM2: Could not read {img_path}")
                         continue
-
-                    # Save as JPEG with numeric name for proper sorting
-                    # SAM2 expects names like "00000.jpg" that sort numerically
-                    jpeg_path = Path(self._video_temp_dir) / f"{i:05d}.jpg"
                     cv2.imwrite(str(jpeg_path), img, [cv2.IMWRITE_JPEG_QUALITY, 95])
 
-                video_path = self._video_temp_dir
-                logger.debug(f"SAM2: Created temp JPEG directory: {video_path}")
+            if cache_hits > 0:
+                logger.info(f"SAM2: Used {cache_hits} cached images (saved disk I/O)")
+
+            video_path = self._video_temp_dir
+            logger.debug(f"SAM2: Created temp directory: {video_path}")
 
             # SAM2 video predictor expects a directory path
             # It will automatically load images in sorted order

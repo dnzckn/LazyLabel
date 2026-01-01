@@ -9,7 +9,6 @@ from PyQt6.QtWidgets import (
     QPushButton,
     QScrollArea,
     QSlider,
-    QSpinBox,
     QTabWidget,
     QVBoxLayout,
     QWidget,
@@ -24,6 +23,7 @@ from .widgets import (
     FragmentThresholdWidget,
     ModelSelectionWidget,
     SettingsWidget,
+    ShortcutSpinBox,
 )
 
 
@@ -709,7 +709,7 @@ class ControlPanel(QWidget):
         range_label.setStyleSheet("color: #B0B0B0; font-size: 10px;")
         range_row.addWidget(range_label)
 
-        self.sequence_range_spin = QSpinBox()
+        self.sequence_range_spin = ShortcutSpinBox()
         self.sequence_range_spin.setRange(1, 10000)
         self.sequence_range_spin.setValue(50)
         self.sequence_range_spin.setToolTip(

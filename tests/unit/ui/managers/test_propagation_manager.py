@@ -656,7 +656,7 @@ class TestDataClasses:
         assert state.is_initialized is False
         assert state.image_dir is None
         assert state.total_frames == 0
-        assert state.confidence_threshold == 0.95
+        assert state.confidence_threshold == 0.99
         assert len(state.reference_annotations) == 0
 
 

@@ -70,7 +70,7 @@ class SequenceViewMode(QObject):
         self._confidence_scores: dict[int, float] = {}
 
         # Configuration
-        self._confidence_threshold: float = 0.95
+        self._confidence_threshold: float = 0.99
         self._auto_flag_low_confidence: bool = True
 
     @property
@@ -417,7 +417,7 @@ class SequenceViewMode(QObject):
         """Restore sequence state from dict."""
         self._image_paths = data.get("image_paths", [])
         self._current_frame_idx = data.get("current_frame_idx", 0)
-        self._confidence_threshold = data.get("confidence_threshold", 0.95)
+        self._confidence_threshold = data.get("confidence_threshold", 0.99)
         self._confidence_scores = data.get("confidence_scores", {})
 
         # Restore frame statuses

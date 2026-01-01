@@ -104,6 +104,11 @@ class MainWindow(QMainWindow):
         self._propagation_worker: PropagationWorker | None = None
         self._sequence_init_worker: SequenceInitWorker | None = None
 
+        # Sequence range selection state
+        self._sequence_start_path: str | None = None
+        self._sequence_end_path: str | None = None
+        self._sequence_timeline_built: bool = False
+
         # Multi-view state
         self.multi_view_viewers: list[
             PhotoViewer
@@ -2947,6 +2952,20 @@ class MainWindow(QMainWindow):
         if self.sequence_widget is None:
             return
 
+        # Timeline setup signals
+        self.sequence_widget.set_start_requested.connect(self._on_set_sequence_start)
+        self.sequence_widget.set_end_requested.connect(self._on_set_sequence_end)
+        self.sequence_widget.clear_range_requested.connect(
+            self._on_clear_sequence_range
+        )
+        self.sequence_widget.build_timeline_requested.connect(
+            self._on_build_sequence_timeline
+        )
+        self.sequence_widget.exit_timeline_requested.connect(
+            self._on_exit_sequence_timeline
+        )
+
+        # Propagation signals
         self.sequence_widget.add_reference_requested.connect(
             self._on_add_sequence_reference
         )
@@ -3080,9 +3099,15 @@ class MainWindow(QMainWindow):
 
             name = Path(image_path).name
             total = self.sequence_view_mode.total_frames
-            self.sequence_info_label.setText(
-                f"Sequence Mode: {name} ({frame_idx + 1}/{total})"
-            )
+            confidence = self.sequence_view_mode.get_confidence_score(frame_idx)
+            if confidence > 0:
+                self.sequence_info_label.setText(
+                    f"Sequence Mode: {name} ({frame_idx + 1}/{total}) -- Conf: {confidence:.4f}"
+                )
+            else:
+                self.sequence_info_label.setText(
+                    f"Sequence Mode: {name} ({frame_idx + 1}/{total})"
+                )
 
             # Update timeline
             self.timeline_widget.set_current_frame(frame_idx)
@@ -3427,11 +3452,36 @@ class MainWindow(QMainWindow):
                 return
 
             image_dir = str(Path(self.current_image_path).parent)
-            self._show_notification("Initializing propagation...")
 
-            if not self.propagation_manager.init_sequence(image_dir):
+            # Update button to show loading status
+            if self.sequence_widget:
+                self.sequence_widget.start_propagation()
+                self.sequence_widget.set_propagation_status("Loading images...")
+
+            self._show_notification("Loading images into model...")
+
+            # Pass cached images if available (optimization: saves disk I/O)
+            image_cache = getattr(self, "_sequence_memory_cache", None)
+            if image_cache:
+                logger.info(
+                    f"Using {len(image_cache)} cached images for propagation init"
+                )
+
+            if not self.propagation_manager.init_sequence(
+                image_dir, image_cache=image_cache
+            ):
                 self._show_notification("Failed to initialize propagation")
+                if self.sequence_widget:
+                    self.sequence_widget.end_propagation()
                 return
+
+            # Re-apply confidence threshold from UI after init_sequence
+            # (init_sequence resets threshold to default 0.99)
+            if self.sequence_widget:
+                ui_threshold = self.sequence_widget.confidence_spin.value()
+                self.propagation_manager.set_confidence_threshold(ui_threshold)
+                if self.sequence_view_mode:
+                    self.sequence_view_mode.set_confidence_threshold(ui_threshold)
 
         # Clear previous propagation results before starting new propagation
         # This ensures old masks don't persist when labels are changed
@@ -3451,6 +3501,12 @@ class MainWindow(QMainWindow):
         # Add reference annotations from ALL reference frames
         # Use consistent object IDs based on class_id so SAM 2 can track
         # the same object across multiple reference frames
+        if self.sequence_widget:
+            # Ensure propagation UI state is active (may not be if already initialized)
+            if not self.sequence_widget._is_propagating:
+                self.sequence_widget.start_propagation()
+            self.sequence_widget.set_propagation_status("Adding references...")
+
         total_count = 0
         class_to_obj_id: dict[int, int] = {}  # Map class_id -> obj_id for consistency
 
@@ -3518,8 +3574,8 @@ class MainWindow(QMainWindow):
         )
         self._propagation_worker.error.connect(self._on_propagation_error)
 
-        # Update UI to show propagation is in progress
-        if self.sequence_widget:
+        # Ensure UI is in propagation state (may already be from init phase)
+        if self.sequence_widget and not self.sequence_widget._is_propagating:
             self.sequence_widget.start_propagation()
 
         self._show_notification(f"Starting propagation ({direction})...")
@@ -3544,6 +3600,8 @@ class MainWindow(QMainWindow):
         """Handle propagation progress update."""
         if self.sequence_widget:
             self.sequence_widget.set_propagation_progress(current, total)
+            # Update button with frame count
+            self.sequence_widget.set_propagation_status(f"Frame {current}/{total}")
 
     def _on_propagation_frame_done(self, frame_idx: int, result):
         """Handle completion of propagation for a single frame."""
@@ -3694,7 +3752,14 @@ class MainWindow(QMainWindow):
         if not self.sequence_view_mode or not self.propagation_manager:
             return
 
-        propagated_frames = list(self.propagation_manager.propagated_frames)
+        # Get propagated frames, explicitly excluding flagged frames
+        # (flagged frames should not be saved even if they have masks)
+        flagged_frames = self.propagation_manager.flagged_frames
+        propagated_frames = [
+            idx
+            for idx in self.propagation_manager.propagated_frames
+            if idx not in flagged_frames
+        ]
         if not propagated_frames:
             self._show_notification("No propagated frames to save")
             return
@@ -4003,43 +4068,165 @@ class MainWindow(QMainWindow):
         self.clear_sequence_memory_cache()
         self._show_notification("Memory cache cleared")
 
-    def _enter_sequence_mode(self):
-        """Enter sequence mode and load current folder as sequence."""
-        if self.sequence_view_mode is None:
-            return
-
-        # Get all images from current folder using file manager
+    def _on_set_sequence_start(self):
+        """Handle set start frame for sequence range."""
         if not self.current_image_path:
             self._show_notification("Please load an image first")
             return
 
-        # Get list of all images in the folder
-        current_path = Path(self.current_image_path)
-        image_paths = self._get_sequence_image_paths(current_path.parent)
+        self._sequence_start_path = self.current_image_path
+        name = Path(self.current_image_path).name
+        if self.sequence_widget:
+            self.sequence_widget.set_start_frame(name)
 
-        if not image_paths:
-            self._show_notification("No images found in folder")
+        # Update highlighting if both start and end are set
+        self._update_sequence_range_highlight()
+        self._show_notification(f"Start frame set: {name}")
+
+    def _on_set_sequence_end(self):
+        """Handle set end frame for sequence range."""
+        if not self.current_image_path:
+            self._show_notification("Please load an image first")
             return
 
-        # Initialize sequence mode
-        self.sequence_view_mode.set_image_paths(image_paths)
+        self._sequence_end_path = self.current_image_path
+        name = Path(self.current_image_path).name
+        if self.sequence_widget:
+            self.sequence_widget.set_end_frame(name)
 
-        # Find current image index
-        try:
-            current_idx = image_paths.index(str(current_path))
-        except ValueError:
-            current_idx = 0
+        # Update highlighting if both start and end are set
+        self._update_sequence_range_highlight()
+        self._show_notification(f"End frame set: {name}")
+
+    def _on_clear_sequence_range(self):
+        """Handle clear sequence range selection."""
+        self._sequence_start_path = None
+        self._sequence_end_path = None
+
+        # Clear highlighting in file manager
+        if hasattr(self.right_panel, "file_manager"):
+            self.right_panel.file_manager.clearHighlightedRange()
+
+        self._show_notification("Sequence range cleared")
+
+    def _update_sequence_range_highlight(self):
+        """Update file navigator highlighting for sequence range."""
+        if (
+            self._sequence_start_path
+            and self._sequence_end_path
+            and hasattr(self.right_panel, "file_manager")
+        ):
+            self.right_panel.file_manager.setHighlightedRange(
+                Path(self._sequence_start_path), Path(self._sequence_end_path)
+            )
+
+    def _on_build_sequence_timeline(self):
+        """Handle build timeline button - creates timeline from selected range."""
+        if not self._sequence_start_path or not self._sequence_end_path:
+            self._show_notification("Please set both start and end frames")
+            return
+
+        if not hasattr(self.right_panel, "file_manager"):
+            self._show_notification("File manager not available")
+            return
+
+        # Get files in the selected range
+        files_in_range = self.right_panel.file_manager.getFilesInRange(
+            Path(self._sequence_start_path), Path(self._sequence_end_path)
+        )
+
+        if not files_in_range:
+            self._show_notification("No files in selected range")
+            return
+
+        # Convert to string paths
+        image_paths = [str(p) for p in files_in_range]
+
+        # Initialize sequence mode with the selected range
+        if self.sequence_view_mode is None:
+            self._show_notification("Sequence mode not initialized")
+            return
+
+        self.sequence_view_mode.set_image_paths(image_paths)
 
         # Update widgets
         total = len(image_paths)
         self.timeline_widget.set_frame_count(total)
         if self.sequence_widget:
             self.sequence_widget.set_total_frames(total)
+            self.sequence_widget.set_timeline_built(True)
 
-        # Load current frame
-        self._on_sequence_frame_selected(current_idx)
+        self._sequence_timeline_built = True
 
-        self._show_notification(f"Sequence mode: {total} images loaded")
+        # Load the first frame
+        self._on_sequence_frame_selected(0)
+
+        self._show_notification(f"Timeline built: {total} frames")
+
+    def _on_exit_sequence_timeline(self):
+        """Handle exit timeline request - reset to setup UI for new range selection."""
+        # Clear propagation state
+        if self.propagation_manager:
+            self.propagation_manager.cleanup()
+
+        # Clear sequence view mode state
+        if self.sequence_view_mode:
+            # Reset by setting empty image paths (clears all state including references)
+            self.sequence_view_mode.set_image_paths([])
+
+        # Clear file navigator highlighting
+        if hasattr(self.right_panel, "file_manager"):
+            self.right_panel.file_manager.clearHighlightedRange()
+
+        # Reset state variables
+        self._sequence_start_path = None
+        self._sequence_end_path = None
+        self._sequence_timeline_built = False
+
+        # Reset UI to show setup screen
+        if self.sequence_widget:
+            self.sequence_widget.reset()
+
+        # Clear timeline
+        self.timeline_widget.set_frame_count(0)
+        self.timeline_widget.clear_statuses()
+
+        self._show_notification("Timeline cleared. Set new start/end frames.")
+
+    def _enter_sequence_mode(self):
+        """Enter sequence mode - shows setup UI for timeline range selection.
+
+        The timeline is NOT auto-loaded. User must:
+        1. Navigate to start frame and click 'Set Start'
+        2. Navigate to end frame and click 'Set End'
+        3. Click 'Build Timeline' to create the timeline
+        """
+        if self.sequence_view_mode is None:
+            return
+
+        # Check if timeline was already built (user switching back to sequence tab)
+        if self._sequence_timeline_built:
+            # Just restore the sequence view
+            self._restore_sequence_mode_state()
+            return
+
+        # Reset sequence widget to show setup UI
+        if self.sequence_widget:
+            self.sequence_widget.reset()
+            # Restore any previously set start/end
+            if self._sequence_start_path:
+                self.sequence_widget.set_start_frame(
+                    Path(self._sequence_start_path).name
+                )
+            if self._sequence_end_path:
+                self.sequence_widget.set_end_frame(Path(self._sequence_end_path).name)
+
+        # Clear timeline
+        self.timeline_widget.set_frame_count(0)
+
+        self._show_notification(
+            "Sequence Mode: Set start/end frames, then Build Timeline"
+        )
 
     def _get_sequence_image_paths(self, folder: Path) -> list[str]:
         """Get sorted list of image paths from a folder."""

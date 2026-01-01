@@ -15,7 +15,7 @@ from PyQt6.QtCore import (
     QThread,
     pyqtSignal,
 )
-from PyQt6.QtGui import QPixmap
+from PyQt6.QtGui import QColor, QPixmap
 from PyQt6.QtWidgets import (
     QHBoxLayout,
     QHeaderView,
@@ -270,6 +270,9 @@ class FastFileModel(QAbstractTableModel):
     """High-performance file model with background loading"""
 
     fileSelected = pyqtSignal(Path)
+    highlightChanged = pyqtSignal(
+        bool
+    )  # Emits True when highlight is active, False when cleared
 
     def __init__(self):
         super().__init__()
@@ -281,6 +284,14 @@ class FastFileModel(QAbstractTableModel):
         self._all_columns = ["Name", "NPZ", "TXT", "Modified", "Size"]
         self._column_map = {0: 0, 1: 1, 2: 2, 3: 3, 4: 4}  # logical to physical mapping
         self._visible_columns = [True, True, True, True, True]  # Default all visible
+
+        # Sequence range highlighting
+        self._highlighted_rows: set[int] = set()
+        self._start_row: int | None = None  # Start frame row
+        self._end_row: int | None = None  # End frame row
+        self._range_color = QColor(50, 90, 50)  # Dark green for range
+        self._start_color = QColor(100, 200, 100)  # Light green for start
+        self._end_color = QColor(200, 80, 80)  # Red for end
 
     def rowCount(self, parent=QModelIndex()):
         return len(self._files)
@@ -394,6 +405,19 @@ class FastFileModel(QAbstractTableModel):
             "TXT",
         ]:  # Center checkmarks
             return Qt.AlignmentFlag.AlignCenter
+        elif role == Qt.ItemDataRole.BackgroundRole:
+            row = index.row()
+            from PyQt6.QtGui import QBrush
+
+            # Start frame - light green
+            if row == self._start_row:
+                return QBrush(self._start_color)
+            # End frame - red
+            elif row == self._end_row:
+                return QBrush(self._end_color)
+            # Range between start and end - dark green
+            elif row in self._highlighted_rows:
+                return QBrush(self._range_color)
 
         return None
 
@@ -558,6 +582,91 @@ class FastFileModel(QAbstractTableModel):
             index = self.index(i, col)
             self.dataChanged.emit(index, index)
 
+    def setHighlightedRange(self, start_idx: int, end_idx: int) -> None:
+        """Set the highlighted range for sequence selection.
+
+        Args:
+            start_idx: Start row index (inclusive)
+            end_idx: End row index (inclusive)
+        """
+        # Store original order for start/end colors
+        original_start = start_idx
+        original_end = end_idx
+
+        # Ensure proper ordering for range
+        if start_idx > end_idx:
+            start_idx, end_idx = end_idx, start_idx
+
+        # Track start and end rows for special coloring
+        self._start_row = original_start
+        self._end_row = original_end
+
+        # Create new highlighted set (for range between start and end)
+        old_highlighted = self._highlighted_rows
+        old_start = getattr(self, "_start_row", None)
+        old_end = getattr(self, "_end_row", None)
+        was_highlighted = bool(old_highlighted) or old_start is not None
+        self._highlighted_rows = set(range(start_idx, end_idx + 1))
+
+        # Emit dataChanged for affected rows
+        all_affected = old_highlighted | self._highlighted_rows
+        if old_start is not None:
+            all_affected.add(old_start)
+        if old_end is not None:
+            all_affected.add(old_end)
+        if all_affected:
+            min_row = min(all_affected)
+            max_row = max(all_affected)
+            top_left = self.index(min_row, 0)
+            bottom_right = self.index(max_row, self.columnCount() - 1)
+            self.dataChanged.emit(top_left, bottom_right)
+
+        # Notify view to toggle alternating row colors
+        if not was_highlighted:
+            self.highlightChanged.emit(True)
+
+    def clearHighlightedRange(self) -> None:
+        """Clear all highlighted rows."""
+        if (
+            self._highlighted_rows
+            or self._start_row is not None
+            or self._end_row is not None
+        ):
+            old_highlighted = self._highlighted_rows.copy()
+            old_start = self._start_row
+            old_end = self._end_row
+
+            self._highlighted_rows = set()
+            self._start_row = None
+            self._end_row = None
+
+            # Emit dataChanged for previously highlighted rows
+            all_affected = old_highlighted
+            if old_start is not None:
+                all_affected.add(old_start)
+            if old_end is not None:
+                all_affected.add(old_end)
+
+            if all_affected:
+                min_row = min(all_affected)
+                max_row = max(all_affected)
+                top_left = self.index(min_row, 0)
+                bottom_right = self.index(max_row, self.columnCount() - 1)
+                self.dataChanged.emit(top_left, bottom_right)
+
+            # Notify view to restore alternating row colors
+            self.highlightChanged.emit(False)
+
+    def getHighlightedRange(self) -> tuple[int, int] | None:
+        """Get the current highlighted range.
+
+        Returns:
+            Tuple of (start_idx, end_idx) or None if no range is highlighted
+        """
+        if self._highlighted_rows:
+            return (min(self._highlighted_rows), max(self._highlighted_rows))
+        return None
+
 
 class FileSortProxyModel(QSortFilterProxyModel):
     """Custom proxy model for proper sorting of file data."""
@@ -651,6 +760,7 @@ class FastFileManager(QWidget):
         # Set up model and proxy
         self._model = FastFileModel()
         self._model.fileSelected.connect(self.fileSelected)
+        self._model.highlightChanged.connect(self._on_highlight_changed)
 
         # Set up custom sorting proxy
         self._proxy_model = FileSortProxyModel()
@@ -940,6 +1050,13 @@ class FastFileManager(QWidget):
         # For now, just update the header sizing to maintain proper resize modes
         # The QHeaderView handles the visual reordering automatically
         self._update_header_sizing()
+
+    def _on_highlight_changed(self, is_highlighted: bool):
+        """Handle highlight state change - toggle alternating row colors."""
+        # Disable alternating row colors when highlighting is active
+        # so the highlight color shows through clearly
+        self._table_view.setAlternatingRowColors(not is_highlighted)
+        self._table_view.viewport().update()
 
     def updateNpzStatus(self, image_path: Path):
         """Update NPZ status for a specific image file"""
@@ -1376,3 +1493,104 @@ class FastFileManager(QWidget):
         # Restore signals
         self._column_dropdown.blockSignals(False)
         self._sort_combo.blockSignals(False)
+
+    def setHighlightedRange(self, start_path: Path, end_path: Path) -> bool:
+        """Set the highlighted range for sequence selection.
+
+        Args:
+            start_path: Path of the start file
+            end_path: Path of the end file
+
+        Returns:
+            True if range was set successfully, False if files not found
+        """
+        start_proxy_idx = self._get_proxy_row_for_path(start_path)
+        end_proxy_idx = self._get_proxy_row_for_path(end_path)
+
+        if start_proxy_idx == -1 or end_proxy_idx == -1:
+            return False
+
+        # Map start and end to source rows for special coloring
+        start_source_idx = self._proxy_model.mapToSource(
+            self._proxy_model.index(start_proxy_idx, 0)
+        ).row()
+        end_source_idx = self._proxy_model.mapToSource(
+            self._proxy_model.index(end_proxy_idx, 0)
+        ).row()
+
+        # Get all source rows in the proxy range
+        source_rows = set()
+        min_proxy = min(start_proxy_idx, end_proxy_idx)
+        max_proxy = max(start_proxy_idx, end_proxy_idx)
+        for proxy_row in range(min_proxy, max_proxy + 1):
+            source_idx = self._proxy_model.mapToSource(
+                self._proxy_model.index(proxy_row, 0)
+            ).row()
+            source_rows.add(source_idx)
+
+        # Track old values for dataChanged signal
+        old_highlighted = self._model._highlighted_rows.copy()
+        old_start = self._model._start_row
+        old_end = self._model._end_row
+        was_highlighted = bool(old_highlighted) or old_start is not None
+
+        # Set start and end rows for special coloring (light green / red)
+        self._model._start_row = start_source_idx
+        self._model._end_row = end_source_idx
+        self._model._highlighted_rows = source_rows
+
+        # Emit dataChanged for all affected rows
+        all_affected = old_highlighted | source_rows
+        if old_start is not None:
+            all_affected.add(old_start)
+        if old_end is not None:
+            all_affected.add(old_end)
+        all_affected.add(start_source_idx)
+        all_affected.add(end_source_idx)
+
+        if all_affected:
+            min_row = min(all_affected)
+            max_row = max(all_affected)
+            top_left = self._model.index(min_row, 0)
+            bottom_right = self._model.index(max_row, self._model.columnCount() - 1)
+            self._model.dataChanged.emit(top_left, bottom_right)
+
+        # Notify view to toggle alternating row colors
+        if not was_highlighted:
+            self._model.highlightChanged.emit(True)
+
+        return True
+
+    def clearHighlightedRange(self) -> None:
+        """Clear all highlighted rows."""
+        self._model.clearHighlightedRange()
+
+    def getFilesInRange(self, start_path: Path, end_path: Path) -> list[Path]:
+        """Get all files in the range between start and end paths.
+
+        Args:
+            start_path: Path of the start file
+            end_path: Path of the end file
+
+        Returns:
+            List of paths in the range (inclusive), in proxy sort order
+        """
+        start_idx = self._get_proxy_row_for_path(start_path)
+        end_idx = self._get_proxy_row_for_path(end_path)
+
+        if start_idx == -1 or end_idx == -1:
+            return []
+
+        # Ensure proper ordering
+        if start_idx > end_idx:
+            start_idx, end_idx = end_idx, start_idx
+
+        files = []
+        for proxy_row in range(start_idx, end_idx + 1):
+            proxy_index = self._proxy_model.index(proxy_row, 0)
+            source_index = self._proxy_model.mapToSource(proxy_index)
+            file_info = self._model.getFileInfo(source_index.row())
+            if file_info:
+                files.append(file_info.path)
+
+        return files

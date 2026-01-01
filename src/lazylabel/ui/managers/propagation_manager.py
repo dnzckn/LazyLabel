@@ -78,7 +78,7 @@ class PropagationState:
     propagated_frames: set[int] = field(default_factory=set)
     flagged_frames: set[int] = field(default_factory=set)
     frame_results: dict[int, list[PropagationResult]] = field(default_factory=dict)
-    confidence_threshold: float = 0.95
+    confidence_threshold: float = 0.99
 
 
 class PropagationManager:
@@ -150,11 +150,16 @@ class PropagationManager:
 
     # ========== Initialization ==========
 
-    def init_sequence(self, image_dir: str) -> bool:
+    def init_sequence(
+        self, image_dir: str, image_cache: dict[str, np.ndarray] | None = None
+    ) -> bool:
         """Initialize the video predictor with an image sequence.
 
         Args:
             image_dir: Path to directory containing image sequence
+            image_cache: Optional dict mapping image paths to numpy arrays.
+                If provided, cached images will be used instead of reading
+                from disk, which saves I/O when images are preloaded.
 
         Returns:
             True if successful, False otherwise
@@ -168,8 +173,8 @@ class PropagationManager:
             logger.error("PropagationManager: SAM 2 video predictor not available")
             return False
 
-        # Initialize video state
-        if not self.sam2_model.init_video_state(image_dir):
+        # Initialize video state, passing cache if available
+        if not self.sam2_model.init_video_state(image_dir, image_cache=image_cache):
             logger.error("PropagationManager: Failed to initialize video state")
             return False
 
@@ -178,7 +183,7 @@ class PropagationManager:
             is_initialized=True,
             image_dir=image_dir,
             total_frames=self.sam2_model.video_frame_count,
-            confidence_threshold=0.95,
+            confidence_threshold=0.99,
         )
 
         logger.info(
