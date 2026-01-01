@@ -112,26 +112,9 @@ SAM 1.0 models are downloaded automatically on first use. For SAM 2.1 (improved 
 
 ---
 
-## Key Shortcuts
-
-| Action | Key | Description |
-|--------|-----|-------------|
-| AI Mode | `1` | SAM point-click segmentation |
-| Draw Mode | `2` | Manual polygon creation |
-| Edit Mode | `E` | Modify existing segments |
-| Accept AI Segment | `Space` | Confirm AI segment suggestion |
-| Save | `Enter` | Save annotations |
-| Merge | `M` | Combine selected segments |
-| Pan Mode | `Q` | Enter pan mode |
-| Pan | `WASD` | Navigate image |
-| Delete | `V`/`Delete` | Remove segments |
-| Undo/Redo | `Ctrl+Z/Y` | Action history |
-
----
-
 ## Building Windows Executable
 
-Create a standalone Windows executable with bundled models (no Python required):
+Create a standalone Windows executable with bundled models for offline use:
 
 **Requirements:**
 - Windows (native, not WSL)
