@@ -81,6 +81,7 @@ This manual provides detailed instructions for using LazyLabel's image segmentat
 - **Left Click** - Add positive points (include in segment)
 - **Right Click** - Add negative points (exclude from segment)
 - **Space** - Save current segment
+- **Shift+Space** - Erase overlapping segments using current AI mask
 - **C** - Clear all points
 - **Escape** - Cancel current operation
 
@@ -99,8 +100,10 @@ This manual provides detailed instructions for using LazyLabel's image segmentat
 **Usage:**
 - **Left Click** - Place polygon vertices
 - **Double Click** - Complete polygon
+- **Shift+Click** (near first point) - Complete polygon in erase mode
 - **Right Click** - Delete last vertex
 - **Space** - Save completed polygon
+- **Shift+Space** - Erase overlapping segments using current polygon shape
 - **Escape** - Cancel current polygon
 
 **Best Practices:**
@@ -479,6 +482,28 @@ Contains class name mappings and aliases used in the annotation session.
 - **Cannot remove vertices** - No vertex deletion functionality
 - **Polygon-only** - AI segments and bounding boxes cannot be edited
 
+### Segment Removal (Shift Modifier)
+
+#### Erase Mode
+**Remove overlapping segments using the current shape as an eraser.**
+
+The Shift modifier transforms any segment completion into an erase operation. Instead of adding a new segment, it subtracts the shape from all existing overlapping segments.
+
+**How to Use:**
+- **AI Mode** - Create an AI prediction with clicks, then press `Shift+Space` to erase that shape from all overlapping segments
+- **Polygon Mode** - Draw a polygon, then press `Shift+Space` to erase that shape. Alternatively, hold `Shift` while clicking near the first point to close and erase in one action
+
+**Behavior:**
+- Segments fully covered by the erase shape are removed entirely
+- Segments partially covered are split into remaining connected components
+- The erase shape itself is not saved as a segment
+- Action is recorded for undo/redo support
+
+**Use Cases:**
+- Clean up overlapping regions between adjacent segments
+- Cut holes in existing segments
+- Remove unwanted parts of AI-generated segments
+
 ### Class Management
 
 #### Active Class System
@@ -622,6 +647,7 @@ LazyLabel uses three distinct segment types with different capabilities:
 | Action | Primary Key | Secondary Key | Description |
 |--------|-------------|---------------|-------------|
 | Save Segment | `Space` | - | Confirm current annotation |
+| Erase with Segment | `Shift+Space` | - | Erase overlapping segments using current shape |
 | Save Output | `Enter` | - | Export current annotations |
 | Clear Points | `C` | - | Remove all points |
 | Undo | `Ctrl+Z` | - | Reverse last action |

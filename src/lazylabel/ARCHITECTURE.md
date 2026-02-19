@@ -65,7 +65,8 @@ src/lazylabel/
 │       ├── single_view_sam_init_worker.py
 │       ├── multi_view_sam_init_worker.py
 │       ├── image_preload_worker.py
-│       ├── propagation_worker.py   # SAM 2 video propagation
+│       ├── image_discovery_worker.py
+│       ├── propagation_worker.py   # SAM 2 propagation, sequence init, reference annotation
 │       └── save_worker.py
 │
 ├── viewmodels/              # MVVM ViewModels
@@ -228,9 +229,10 @@ Owns multi-view state for all viewers.
 - File browser operations
 - Directory scanning
 
-**MultiViewNavigationManager**
+**MultiViewCoordinator**
 - Batch navigation across viewers
 - Previous/next image in directory
+- Multi-view operation coordination
 
 **ViewportManager**
 - Zoom and pan operations
@@ -363,15 +365,17 @@ Coordinates SAM 2 video predictor for mask propagation.
 Reference Frames (user annotated)
     |
     v
-PropagationManager.start_propagation()
+SequenceInitWorker (background thread)
+    +--> PropagationManager.init_sequence(image_paths)
+    +--> progress callbacks -> UI updates
+    |
+    v
+ReferenceAnnotationWorker (background thread)
+    +--> add_points_to_frame() for each reference
+    +--> progress callbacks -> UI updates
     |
     v
 PropagationWorker (background thread)
-    |
-    +--> SAM2Model.init_video_predictor()
-    |
-    +--> add_points_to_frame() for each reference
-    |
     +--> propagate_in_video() bidirectional
     |
     v
@@ -419,8 +423,12 @@ Background threads for expensive operations.
 - `SAMUpdateWorker` - single-view model updates
 - `SingleViewSAMInitWorker` - single-view initialization
 - `MultiViewSAMInitWorker` - multi-view parallel initialization
-- `MultiViewSAMUpdateWorker` - multi-view model updates
+
+**Sequence/Propagation Workers** (all in `propagation_worker.py`):
+- `SequenceInitWorker` - background sequence initialization with progress callbacks
+- `ReferenceAnnotationWorker` - background reference annotation processing for SAM 2
 - `PropagationWorker` - SAM 2 video propagation across sequences
+- `PropagationSaveWorker` - async saving of propagated results
 
 **Image Workers:**
 - `ImagePreloadWorker` - background image caching
