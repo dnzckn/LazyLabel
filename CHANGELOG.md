@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.2] - 2026-02-18
+
+### Added
+
+- **Sequence Init Progress**: Progress callbacks during sequence initialization for real-time UI updates
+- **Reference Annotation Worker**: Background `ReferenceAnnotationWorker` to offload adding reference annotations to SAM2, preventing UI freezes
+- **Sequence Init Worker**: Background `SequenceInitWorker` to run sequence initialization off the GUI thread
+
+### Changed
+
+- Sequence initialization uses explicit image path lists instead of directory scanning
+- Sequence init, reference annotation, and propagation all run on background threads to keep the UI responsive
+- Cancellation now covers init, annotation, and propagation stages
+- Previous propagation state is cleaned up when building a new timeline
+
+### Fixed
+
+- UI freezing during sequence initialization and reference annotation processing
+
 ## [1.6.1] - 2026-01-01
 
 ### Added
@@ -427,6 +446,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Image centering on load
 - Multi-class reindexing via drag and drop
 
+[1.6.2]: https://github.com/dnzckn/LazyLabel/compare/v1.6.1...v1.6.2
+[1.6.1]: https://github.com/dnzckn/LazyLabel/compare/v1.6.0...v1.6.1
 [1.6.0]: https://github.com/dnzckn/LazyLabel/compare/v1.5.0...v1.6.0
 [1.5.0]: https://github.com/dnzckn/LazyLabel/compare/v1.4.3...v1.5.0
 [1.4.3]: https://github.com/dnzckn/LazyLabel/compare/v1.4.2...v1.4.3

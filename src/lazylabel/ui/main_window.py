@@ -66,6 +66,8 @@ from .widgets import SequenceWidget, StatusBar, TimelineWidget
 from .workers import (
     ImageDiscoveryWorker,
     PropagationWorker,
+    ReferenceAnnotationWorker,
+    ReferenceSegmentData,
     SequenceInitWorker,
 )
 
@@ -103,6 +105,7 @@ class MainWindow(QMainWindow):
         self.propagation_manager: PropagationManager | None = None
         self._propagation_worker: PropagationWorker | None = None
         self._sequence_init_worker: SequenceInitWorker | None = None
+        self._reference_worker: ReferenceAnnotationWorker | None = None
 
         # Sequence range selection state
         self._sequence_start_path: str | None = None
@@ -1932,6 +1935,12 @@ class MainWindow(QMainWindow):
                 self._sequence_init_worker.wait(2000)
             self._sequence_init_worker.deleteLater()
             self._sequence_init_worker = None
+        if self._reference_worker is not None:
+            if self._reference_worker.isRunning():
+                self._reference_worker.stop()
+                self._reference_worker.wait(2000)
+            self._reference_worker.deleteLater()
+            self._reference_worker = None
 
         # Clean up video predictor
         if self.propagation_manager is not None:
@@ -3435,6 +3444,26 @@ class MainWindow(QMainWindow):
             self._show_notification("Propagation manager not available")
             return
 
+        # Guard against double-click while init, annotation, or propagation is running
+        if (
+            self._sequence_init_worker is not None
+            and self._sequence_init_worker.isRunning()
+        ):
+            self._show_notification("Initialization already in progress")
+            return
+        if (
+            self._reference_worker is not None
+            and self._reference_worker.isRunning()
+        ):
+            self._show_notification("Adding references in progress")
+            return
+        if (
+            self._propagation_worker is not None
+            and self._propagation_worker.isRunning()
+        ):
+            self._show_notification("Propagation already in progress")
+            return
+
         # Check if SAM 2 video predictor is available
         if not self.model_manager.is_model_available():
             self._show_notification("SAM model not loaded")
@@ -3445,13 +3474,21 @@ class MainWindow(QMainWindow):
             self._show_notification("SAM 2 video predictor not available")
             return
 
-        # Initialize video state if needed
+        # Initialize video state if needed (runs on background thread)
         if not self.propagation_manager.is_initialized:
             if not self.current_image_path:
                 self._show_notification("No image loaded")
                 return
 
-            image_dir = str(Path(self.current_image_path).parent)
+            # Use only the selected series image paths (not the entire folder)
+            series_paths = [
+                self.sequence_view_mode.get_image_path(i)
+                for i in range(self.sequence_view_mode.total_frames)
+            ]
+            series_paths = [p for p in series_paths if p is not None]
+            logger.info(
+                f"Using {len(series_paths)} series images for propagation"
+            )
 
             # Update button to show loading status
             if self.sequence_widget:
@@ -3467,22 +3504,80 @@ class MainWindow(QMainWindow):
                     f"Using {len(image_cache)} cached images for propagation init"
                 )
 
-            if not self.propagation_manager.init_sequence(
-                image_dir, image_cache=image_cache
-            ):
-                self._show_notification("Failed to initialize propagation")
-                if self.sequence_widget:
-                    self.sequence_widget.end_propagation()
-                return
+            # Store propagation params so we can continue after init finishes
+            self._pending_propagation = {
+                "direction": direction,
+                "start": start,
+                "end": end,
+                "skip_flagged": skip_flagged,
+            }
 
-            # Re-apply confidence threshold from UI after init_sequence
-            # (init_sequence resets threshold to default 0.99)
+            # Run init on background thread to avoid freezing the GUI
+            self._sequence_init_worker = SequenceInitWorker(
+                propagation_manager=self.propagation_manager,
+                image_paths=series_paths,
+                image_cache=image_cache,
+            )
+            self._sequence_init_worker.progress.connect(
+                self._on_sequence_init_progress
+            )
+            self._sequence_init_worker.finished_init.connect(
+                self._on_sequence_init_finished
+            )
+            self._sequence_init_worker.error.connect(self._on_sequence_init_error)
+            self._sequence_init_worker.start()
+            return
+
+        # Already initialized — proceed directly
+        self._start_propagation(direction, start, end, skip_flagged)
+
+    def _on_sequence_init_progress(self, message: str):
+        """Handle progress updates from sequence init worker."""
+        if self.sequence_widget:
+            self.sequence_widget.set_propagation_status(message)
+
+    def _on_sequence_init_finished(self, success: bool):
+        """Handle completion of background sequence initialization."""
+        self._sequence_init_worker = None
+
+        if not success:
+            self._show_notification("Failed to initialize propagation")
             if self.sequence_widget:
-                ui_threshold = self.sequence_widget.confidence_spin.value()
-                self.propagation_manager.set_confidence_threshold(ui_threshold)
-                if self.sequence_view_mode:
-                    self.sequence_view_mode.set_confidence_threshold(ui_threshold)
+                self.sequence_widget.end_propagation()
+            self._pending_propagation = None
+            return
 
+        # Re-apply confidence threshold from UI after init_sequence
+        # (init_sequence resets threshold to default 0.99)
+        if self.sequence_widget:
+            ui_threshold = self.sequence_widget.confidence_spin.value()
+            self.propagation_manager.set_confidence_threshold(ui_threshold)
+            if self.sequence_view_mode:
+                self.sequence_view_mode.set_confidence_threshold(ui_threshold)
+
+        # Continue with the propagation that was requested
+        params = self._pending_propagation
+        self._pending_propagation = None
+        if params:
+            self._start_propagation(
+                params["direction"],
+                params["start"],
+                params["end"],
+                params["skip_flagged"],
+            )
+
+    def _on_sequence_init_error(self, error_msg: str):
+        """Handle error from sequence init worker."""
+        self._sequence_init_worker = None
+        self._pending_propagation = None
+        self._show_notification(f"Initialization error: {error_msg}")
+        if self.sequence_widget:
+            self.sequence_widget.end_propagation()
+
+    def _start_propagation(
+        self, direction: str, start: int, end: int, skip_flagged: bool
+    ):
+        """Collect reference data and start annotation worker."""
         # Clear previous propagation results before starting new propagation
         # This ensures old masks don't persist when labels are changed
         self.sequence_view_mode.clear_propagation_results()
@@ -3498,29 +3593,28 @@ class MainWindow(QMainWindow):
             for ref_idx in self.sequence_view_mode.reference_frame_indices:
                 self.timeline_widget.set_frame_status(ref_idx, "reference")
 
-        # Add reference annotations from ALL reference frames
-        # Use consistent object IDs based on class_id so SAM 2 can track
-        # the same object across multiple reference frames
+        # Ensure propagation UI state is active
         if self.sequence_widget:
-            # Ensure propagation UI state is active (may not be if already initialized)
             if not self.sequence_widget._is_propagating:
                 self.sequence_widget.start_propagation()
             self.sequence_widget.set_propagation_status("Adding references...")
 
-        total_count = 0
-        class_to_obj_id: dict[int, int] = {}  # Map class_id -> obj_id for consistency
+        # Collect reference data on main thread (fast, in-memory reads),
+        # then offload the SAM2 annotation calls to a background thread
+        reference_frames: list[int] = []
+        segments: list[ReferenceSegmentData] = []
+        class_to_obj_id: dict[int, int] = {}
 
         for ref_idx in self.sequence_view_mode.reference_frame_indices:
             ref_image_path = self.sequence_view_mode.get_image_path(ref_idx)
             if not ref_image_path:
                 continue
 
-            # Load segments for this reference frame from cache or NPZ
             ref_segments = self._load_segments_for_reference_frame(ref_image_path)
             if not ref_segments:
                 continue
 
-            self.propagation_manager.add_reference_frame(ref_idx)
+            reference_frames.append(ref_idx)
 
             for seg in ref_segments:
                 mask = seg.get("mask")
@@ -3529,22 +3623,72 @@ class MainWindow(QMainWindow):
                     class_name = self.segment_manager.class_aliases.get(
                         class_id, f"Class {class_id}"
                     )
-
-                    # Use consistent obj_id for the same class across all reference frames
-                    # obj_id must be positive (SAM 2 requirement)
                     if class_id not in class_to_obj_id:
                         class_to_obj_id[class_id] = class_id + 1
                     obj_id = class_to_obj_id[class_id]
 
-                    result_id = self.propagation_manager.add_reference_annotation(
-                        ref_idx, mask, class_id, class_name, obj_id=obj_id
+                    segments.append(
+                        ReferenceSegmentData(
+                            frame_idx=ref_idx,
+                            mask=mask,
+                            class_id=class_id,
+                            class_name=class_name,
+                            obj_id=obj_id,
+                        )
                     )
-                    if result_id > 0:
-                        total_count += 1
+
+        if not segments:
+            self._show_notification("No valid segments in reference frames")
+            if self.sequence_widget:
+                self.sequence_widget.end_propagation()
+            return
+
+        # Store propagation params for use after annotations finish
+        self._pending_propagation = {
+            "direction": direction,
+            "start": start,
+            "end": end,
+            "skip_flagged": skip_flagged,
+        }
+
+        # Run annotation adding on background thread
+        self._reference_worker = ReferenceAnnotationWorker(
+            propagation_manager=self.propagation_manager,
+            reference_frames=reference_frames,
+            segments=segments,
+        )
+        self._reference_worker.progress.connect(self._on_reference_progress)
+        self._reference_worker.finished_annotations.connect(
+            self._on_reference_annotations_finished
+        )
+        self._reference_worker.error.connect(self._on_reference_annotations_error)
+        self._reference_worker.start()
+
+    def _on_reference_progress(self, message: str):
+        """Handle progress updates from reference annotation worker."""
+        if self.sequence_widget:
+            self.sequence_widget.set_propagation_status(message)
+
+    def _on_reference_annotations_finished(self, total_count: int):
+        """Handle completion of reference annotation worker, start propagation."""
+        self._reference_worker = None
 
         if total_count == 0:
             self._show_notification("No valid segments in reference frames")
+            self._pending_propagation = None
+            if self.sequence_widget:
+                self.sequence_widget.end_propagation()
             return
+
+        params = self._pending_propagation
+        self._pending_propagation = None
+        if not params:
+            return
+
+        direction = params["direction"]
+        start = params["start"]
+        end = params["end"]
+        skip_flagged = params["skip_flagged"]
 
         # Map direction string to enum
         direction_map = {
@@ -3574,21 +3718,50 @@ class MainWindow(QMainWindow):
         )
         self._propagation_worker.error.connect(self._on_propagation_error)
 
-        # Ensure UI is in propagation state (may already be from init phase)
+        # Ensure UI is in propagation state
         if self.sequence_widget and not self.sequence_widget._is_propagating:
             self.sequence_widget.start_propagation()
 
         self._show_notification(f"Starting propagation ({direction})...")
         self._propagation_worker.start()
 
+    def _on_reference_annotations_error(self, error_msg: str):
+        """Handle error from reference annotation worker."""
+        self._reference_worker = None
+        self._pending_propagation = None
+        self._show_notification(f"Reference annotation error: {error_msg}")
+        if self.sequence_widget:
+            self.sequence_widget.end_propagation()
+
     def _on_cancel_propagation(self):
-        """Cancel ongoing propagation."""
+        """Cancel ongoing propagation, annotation, or initialization."""
+        # Cancel init worker if it's running
+        if (
+            self._sequence_init_worker is not None
+            and self._sequence_init_worker.isRunning()
+        ):
+            self._sequence_init_worker.stop()
+            self._sequence_init_worker.wait(1000)
+            self._sequence_init_worker = None
+            self._pending_propagation = None
+
+        # Cancel reference annotation worker if it's running
+        if (
+            self._reference_worker is not None
+            and self._reference_worker.isRunning()
+        ):
+            self._reference_worker.stop()
+            self._reference_worker.wait(1000)
+            self._reference_worker = None
+            self._pending_propagation = None
+
+        # Cancel propagation worker if it's running
         if (
             self._propagation_worker is not None
             and self._propagation_worker.isRunning()
         ):
             self._propagation_worker.stop()
-            self._propagation_worker.wait(1000)  # Wait up to 1 second
+            self._propagation_worker.wait(1000)
             self._propagation_worker = None
 
         if self.sequence_widget:
@@ -3876,11 +4049,23 @@ class MainWindow(QMainWindow):
         if not hasattr(self, "_sequence_mask_cache"):
             self._sequence_mask_cache: dict[str, dict] = {}
 
-        current_path = Path(self.current_image_path)
-        image_paths = self._get_sequence_image_paths(current_path.parent)
+        # Use series paths from sequence_view_mode if a timeline is built,
+        # otherwise fall back to scanning the folder
+        if (
+            self.sequence_view_mode is not None
+            and self.sequence_view_mode.total_frames > 0
+        ):
+            image_paths = [
+                self.sequence_view_mode.get_image_path(i)
+                for i in range(self.sequence_view_mode.total_frames)
+            ]
+            image_paths = [p for p in image_paths if p is not None]
+        else:
+            current_path = Path(self.current_image_path)
+            image_paths = self._get_sequence_image_paths(current_path.parent)
 
         if not image_paths:
-            self._show_notification("No images found in folder")
+            self._show_notification("No images found")
             return
 
         # Get the range and mask setting
@@ -3888,6 +4073,7 @@ class MainWindow(QMainWindow):
         include_masks = self.control_panel.should_include_masks()
 
         # Find current image index and calculate range
+        current_path = Path(self.current_image_path)
         try:
             current_idx = image_paths.index(str(current_path))
         except ValueError:
@@ -4146,6 +4332,11 @@ class MainWindow(QMainWindow):
         if self.sequence_view_mode is None:
             self._show_notification("Sequence mode not initialized")
             return
+
+        # Invalidate any existing SAM2 state from a previous timeline
+        if self.propagation_manager and self.propagation_manager.is_initialized:
+            self.propagation_manager.cleanup()
+            logger.info("Cleaned up previous propagation state for new timeline")
 
         self.sequence_view_mode.set_image_paths(image_paths)
 

@@ -6,6 +6,8 @@ from .multi_view_sam_init_worker import MultiViewSAMInitWorker
 from .propagation_worker import (
     PropagationSaveWorker,
     PropagationWorker,
+    ReferenceAnnotationWorker,
+    ReferenceSegmentData,
     SequenceInitWorker,
 )
 from .sam_update_worker import SAMUpdateWorker
@@ -18,6 +20,8 @@ __all__ = [
     "MultiViewSAMInitWorker",
     "PropagationSaveWorker",
     "PropagationWorker",
+    "ReferenceAnnotationWorker",
+    "ReferenceSegmentData",
     "SAMUpdateWorker",
     "SaveWorker",
     "SequenceInitWorker",

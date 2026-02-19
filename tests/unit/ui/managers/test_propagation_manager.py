@@ -34,12 +34,18 @@ def propagation_manager(mock_main_window):
 
 
 @pytest.fixture
-def mock_sam2_model():
+def image_paths():
+    """Create a list of image paths for testing."""
+    return [f"/path/{i}.png" for i in range(10)]
+
+
+@pytest.fixture
+def mock_sam2_model(image_paths):
     """Create a mock SAM 2 model."""
     model = MagicMock()
     model.init_video_state = MagicMock(return_value=True)
     model.video_frame_count = 10
-    model.video_image_paths = [f"/path/{i}.png" for i in range(10)]
+    model.video_image_paths = image_paths
     model.add_video_mask = MagicMock(return_value=(np.ones((100, 100)), 0.95))
     model.reset_video_state = MagicMock()
     model.cleanup_video_predictor = MagicMock()
@@ -74,7 +80,7 @@ class TestInitSequence:
 
     def test_init_sequence_without_sam_model_fails(self, propagation_manager):
         """Test that init_sequence fails without SAM model."""
-        result = propagation_manager.init_sequence("/some/path")
+        result = propagation_manager.init_sequence(["/some/path"])
         assert result is False
 
     def test_init_sequence_without_video_predictor_fails(
@@ -85,7 +91,7 @@ class TestInitSequence:
         del mock_sam2_model.init_video_state
         mock_main_window.model_manager.sam_model = mock_sam2_model
 
-        result = propagation_manager.init_sequence("/some/path")
+        result = propagation_manager.init_sequence(["/some/path"])
         assert result is False
 
     def test_init_sequence_success(
@@ -94,7 +100,7 @@ class TestInitSequence:
         """Test successful sequence initialization."""
         mock_main_window.model_manager.sam_model = mock_sam2_model
 
-        result = propagation_manager.init_sequence("/some/path")
+        result = propagation_manager.init_sequence(["/some/path"])
 
         assert result is True
         assert propagation_manager.is_initialized is True
@@ -107,11 +113,11 @@ class TestInitSequence:
         mock_main_window.model_manager.sam_model = mock_sam2_model
 
         # First initialization
-        propagation_manager.init_sequence("/path1")
+        propagation_manager.init_sequence(["/path1/0.png"])
         propagation_manager.state.propagated_frames.add(5)
 
         # Second initialization should reset
-        propagation_manager.init_sequence("/path2")
+        propagation_manager.init_sequence(["/path2/0.png"])
         assert len(propagation_manager.state.propagated_frames) == 0
 
 
@@ -123,7 +129,7 @@ class TestCleanup:
     ):
         """Test that cleanup resets all state."""
         mock_main_window.model_manager.sam_model = mock_sam2_model
-        propagation_manager.init_sequence("/path")
+        propagation_manager.init_sequence(["/path/0.png"])
 
         propagation_manager.cleanup()
 
@@ -135,7 +141,7 @@ class TestCleanup:
     ):
         """Test that cleanup calls model's cleanup method."""
         mock_main_window.model_manager.sam_model = mock_sam2_model
-        propagation_manager.init_sequence("/path")
+        propagation_manager.init_sequence(["/path/0.png"])
 
         propagation_manager.cleanup()
 
@@ -155,7 +161,7 @@ class TestReferenceFrames:
     ):
         """Test successful reference frame addition."""
         mock_main_window.model_manager.sam_model = mock_sam2_model
-        propagation_manager.init_sequence("/path")
+        propagation_manager.init_sequence(["/path/0.png"])
 
         result = propagation_manager.add_reference_frame(5)
 
@@ -167,7 +173,7 @@ class TestReferenceFrames:
     ):
         """Test that invalid index fails."""
         mock_main_window.model_manager.sam_model = mock_sam2_model
-        propagation_manager.init_sequence("/path")
+        propagation_manager.init_sequence(["/path/0.png"])
 
         assert propagation_manager.add_reference_frame(-1) is False
         assert propagation_manager.add_reference_frame(100) is False
@@ -177,7 +183,7 @@ class TestReferenceFrames:
     ):
         """Test adding multiple reference frames."""
         mock_main_window.model_manager.sam_model = mock_sam2_model
-        propagation_manager.init_sequence("/path")
+        propagation_manager.init_sequence(["/path/0.png"])
 
         propagation_manager.add_reference_frame(3)
         propagation_manager.add_reference_frame(5)
@@ -190,7 +196,7 @@ class TestReferenceFrames:
     ):
         """Test bulk adding reference frames."""
         mock_main_window.model_manager.sam_model = mock_sam2_model
-        propagation_manager.init_sequence("/path")
+        propagation_manager.init_sequence(["/path/0.png"])
 
         count = propagation_manager.add_reference_frames([0, 1, 2, 3, 4])
 
@@ -202,7 +208,7 @@ class TestReferenceFrames:
     ):
         """Test clearing all reference frames."""
         mock_main_window.model_manager.sam_model = mock_sam2_model
-        propagation_manager.init_sequence("/path")
+        propagation_manager.init_sequence(["/path/0.png"])
         propagation_manager.add_reference_frame(3)
         propagation_manager.add_reference_frame(5)
 
@@ -225,7 +231,7 @@ class TestAddReferenceAnnotation:
     ):
         """Test successful annotation addition."""
         mock_main_window.model_manager.sam_model = mock_sam2_model
-        propagation_manager.init_sequence("/path")
+        propagation_manager.init_sequence(["/path/0.png"])
         propagation_manager.add_reference_frame(0)
 
         mask = np.ones((100, 100), dtype=bool)
@@ -239,7 +245,7 @@ class TestAddReferenceAnnotation:
     ):
         """Test that object IDs are auto-assigned sequentially."""
         mock_main_window.model_manager.sam_model = mock_sam2_model
-        propagation_manager.init_sequence("/path")
+        propagation_manager.init_sequence(["/path/0.png"])
         propagation_manager.add_reference_frame(0)
 
         mask = np.ones((100, 100), dtype=bool)
@@ -253,7 +259,7 @@ class TestAddReferenceAnnotation:
     ):
         """Test adding annotation with explicit object ID."""
         mock_main_window.model_manager.sam_model = mock_sam2_model
-        propagation_manager.init_sequence("/path")
+        propagation_manager.init_sequence(["/path/0.png"])
         propagation_manager.add_reference_frame(0)
 
         mask = np.ones((100, 100), dtype=bool)
@@ -268,7 +274,7 @@ class TestAddReferenceAnnotation:
     ):
         """Test adding annotations on different reference frames."""
         mock_main_window.model_manager.sam_model = mock_sam2_model
-        propagation_manager.init_sequence("/path")
+        propagation_manager.init_sequence(["/path/0.png"])
         propagation_manager.add_reference_frame(0)
         propagation_manager.add_reference_frame(5)
 
@@ -294,7 +300,7 @@ class TestAddReferenceAnnotationsFromSegments:
     ):
         """Test successful addition from segments."""
         mock_main_window.model_manager.sam_model = mock_sam2_model
-        propagation_manager.init_sequence("/path")
+        propagation_manager.init_sequence(["/path/0.png"])
         propagation_manager.add_reference_frame(0)
 
         # Set up mock segments
@@ -313,7 +319,7 @@ class TestAddReferenceAnnotationsFromSegments:
     ):
         """Test that adding from segments clears existing annotations for that frame."""
         mock_main_window.model_manager.sam_model = mock_sam2_model
-        propagation_manager.init_sequence("/path")
+        propagation_manager.init_sequence(["/path/0.png"])
         propagation_manager.add_reference_frame(0)
 
         # Add initial annotation
@@ -335,7 +341,7 @@ class TestAddReferenceAnnotationsFromSegments:
     ):
         """Test that empty masks are skipped."""
         mock_main_window.model_manager.sam_model = mock_sam2_model
-        propagation_manager.init_sequence("/path")
+        propagation_manager.init_sequence(["/path/0.png"])
         propagation_manager.add_reference_frame(0)
 
         mock_main_window.segment_manager.segments = [
@@ -357,7 +363,7 @@ class TestClearReferenceAnnotations:
     ):
         """Test clearing all reference annotations."""
         mock_main_window.model_manager.sam_model = mock_sam2_model
-        propagation_manager.init_sequence("/path")
+        propagation_manager.init_sequence(["/path/0.png"])
         propagation_manager.add_reference_frame(0)
 
         mask = np.ones((100, 100), dtype=bool)
@@ -403,7 +409,7 @@ class TestGetFrameStatus:
     ):
         """Test getting status for reference frame."""
         mock_main_window.model_manager.sam_model = mock_sam2_model
-        propagation_manager.init_sequence("/path")
+        propagation_manager.init_sequence(["/path/0.png"])
         propagation_manager.add_reference_frame(3)
 
         assert propagation_manager.get_frame_status(3) == FrameStatus.REFERENCE
@@ -413,7 +419,7 @@ class TestGetFrameStatus:
     ):
         """Test getting status for multiple reference frames."""
         mock_main_window.model_manager.sam_model = mock_sam2_model
-        propagation_manager.init_sequence("/path")
+        propagation_manager.init_sequence(["/path/0.png"])
         propagation_manager.add_reference_frame(3)
         propagation_manager.add_reference_frame(7)
 
@@ -472,7 +478,7 @@ class TestGetReferenceAnnotationForObj:
     ):
         """Test getting reference annotation by object ID."""
         mock_main_window.model_manager.sam_model = mock_sam2_model
-        propagation_manager.init_sequence("/path")
+        propagation_manager.init_sequence(["/path/0.png"])
         propagation_manager.add_reference_frame(0)
 
         mask = np.ones((100, 100), dtype=bool)
@@ -585,7 +591,7 @@ class TestGetPropagationStats:
     ):
         """Test getting propagation statistics."""
         mock_main_window.model_manager.sam_model = mock_sam2_model
-        propagation_manager.init_sequence("/path")
+        propagation_manager.init_sequence(["/path/0.png"])
         propagation_manager.add_reference_frame(5)
 
         mask = np.ones((100, 100), dtype=bool)
@@ -606,7 +612,7 @@ class TestGetPropagationStats:
     ):
         """Test getting stats with multiple reference frames."""
         mock_main_window.model_manager.sam_model = mock_sam2_model
-        propagation_manager.init_sequence("/path")
+        propagation_manager.init_sequence(["/path/0.png"])
         propagation_manager.add_reference_frame(0)
         propagation_manager.add_reference_frame(5)
         propagation_manager.add_reference_frame(9)

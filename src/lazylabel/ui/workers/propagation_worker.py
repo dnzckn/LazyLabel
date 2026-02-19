@@ -1,9 +1,11 @@
-"""Worker thread for SAM 2 video propagation in background."""
+"""Worker threads for SAM 2 video propagation in background."""
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+import numpy as np
 from PyQt6.QtCore import QThread, pyqtSignal
 
 from ...utils.logger import logger
@@ -120,24 +122,31 @@ class SequenceInitWorker(QThread):
     def __init__(
         self,
         propagation_manager: PropagationManager,
-        image_dir: str,
+        image_paths: list[str],
+        image_cache: dict | None = None,
         parent=None,
     ):
         """Initialize the sequence init worker.
 
         Args:
             propagation_manager: The propagation manager to use
-            image_dir: Directory containing the image sequence
+            image_paths: List of image file paths for the sequence
+            image_cache: Optional dict mapping image paths to numpy arrays
             parent: Parent QObject
         """
         super().__init__(parent)
         self.propagation_manager = propagation_manager
-        self.image_dir = image_dir
+        self.image_paths = image_paths
+        self.image_cache = image_cache
         self._should_stop = False
 
     def stop(self) -> None:
         """Request the worker to stop."""
         self._should_stop = True
+
+    def _on_progress(self, current: int, total: int, message: str) -> None:
+        """Callback for per-image progress from init_video_state."""
+        self.progress.emit(message)
 
     def run(self) -> None:
         """Run sequence initialization in background thread."""
@@ -145,13 +154,17 @@ class SequenceInitWorker(QThread):
             if self._should_stop:
                 return
 
-            self.progress.emit("Initializing video predictor...")
+            self.progress.emit("Preparing images...")
 
             if self._should_stop:
                 return
 
-            # Initialize the sequence
-            success = self.propagation_manager.init_sequence(self.image_dir)
+            # Initialize the sequence with per-image progress callback
+            success = self.propagation_manager.init_sequence(
+                self.image_paths,
+                image_cache=self.image_cache,
+                progress_callback=self._on_progress,
+            )
 
             if self._should_stop:
                 return
@@ -170,6 +183,92 @@ class SequenceInitWorker(QThread):
 
         except Exception as e:
             logger.error(f"SequenceInitWorker: Error during initialization: {e}")
+            if not self._should_stop:
+                self.error.emit(str(e))
+
+
+@dataclass
+class ReferenceSegmentData:
+    """Pre-collected reference segment data for background annotation."""
+
+    frame_idx: int
+    mask: np.ndarray
+    class_id: int
+    class_name: str
+    obj_id: int
+
+
+class ReferenceAnnotationWorker(QThread):
+    """Worker thread for adding reference annotations to SAM 2 in background.
+
+    This worker takes pre-collected reference data and adds the annotations
+    to the propagation manager on a background thread, avoiding GUI freezes
+    for large masks or many reference frames.
+    """
+
+    # Signals
+    progress = pyqtSignal(str)  # status message
+    finished_annotations = pyqtSignal(int)  # total annotations added
+    error = pyqtSignal(str)
+
+    def __init__(
+        self,
+        propagation_manager: PropagationManager,
+        reference_frames: list[int],
+        segments: list[ReferenceSegmentData],
+        parent=None,
+    ):
+        """Initialize the reference annotation worker.
+
+        Args:
+            propagation_manager: The propagation manager to use
+            reference_frames: List of reference frame indices to register
+            segments: Pre-collected segment data for all reference frames
+            parent: Parent QObject
+        """
+        super().__init__(parent)
+        self.propagation_manager = propagation_manager
+        self.reference_frames = reference_frames
+        self.segments = segments
+        self._should_stop = False
+
+    def stop(self) -> None:
+        """Request the worker to stop."""
+        self._should_stop = True
+
+    def run(self) -> None:
+        """Add reference annotations in background thread."""
+        try:
+            # Register reference frames
+            for ref_idx in self.reference_frames:
+                if self._should_stop:
+                    return
+                self.propagation_manager.add_reference_frame(ref_idx)
+
+            # Add annotations
+            total_count = 0
+            total_segments = len(self.segments)
+            for i, seg in enumerate(self.segments):
+                if self._should_stop:
+                    return
+
+                result_id = self.propagation_manager.add_reference_annotation(
+                    seg.frame_idx, seg.mask, seg.class_id, seg.class_name,
+                    obj_id=seg.obj_id,
+                )
+                if result_id > 0:
+                    total_count += 1
+
+                self.progress.emit(
+                    f"Adding reference {i + 1}/{total_segments}"
+                )
+
+            self.finished_annotations.emit(total_count)
+
+        except Exception as e:
+            logger.error(
+                f"ReferenceAnnotationWorker: Error adding annotations: {e}"
+            )
             if not self._should_stop:
                 self.error.emit(str(e))
 

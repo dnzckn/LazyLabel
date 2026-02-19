@@ -10,6 +10,7 @@ This manager handles:
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
@@ -151,15 +152,21 @@ class PropagationManager:
     # ========== Initialization ==========
 
     def init_sequence(
-        self, image_dir: str, image_cache: dict[str, np.ndarray] | None = None
+        self,
+        image_paths: list[str],
+        image_cache: dict[str, np.ndarray] | None = None,
+        progress_callback: Callable[[int, int, str], None] | None = None,
     ) -> bool:
         """Initialize the video predictor with an image sequence.
 
         Args:
-            image_dir: Path to directory containing image sequence
+            image_paths: List of image file paths for the sequence. Only
+                these images are loaded into the video predictor.
             image_cache: Optional dict mapping image paths to numpy arrays.
                 If provided, cached images will be used instead of reading
                 from disk, which saves I/O when images are preloaded.
+            progress_callback: Optional callback(current, total, message)
+                for reporting per-image progress to the UI.
 
         Returns:
             True if successful, False otherwise
@@ -173,15 +180,18 @@ class PropagationManager:
             logger.error("PropagationManager: SAM 2 video predictor not available")
             return False
 
-        # Initialize video state, passing cache if available
-        if not self.sam2_model.init_video_state(image_dir, image_cache=image_cache):
+        # Initialize video state with only the selected series images
+        if not self.sam2_model.init_video_state(
+            image_paths,
+            image_cache=image_cache,
+            progress_callback=progress_callback,
+        ):
             logger.error("PropagationManager: Failed to initialize video state")
             return False
 
         # Reset propagation state
         self.state = PropagationState(
             is_initialized=True,
-            image_dir=image_dir,
             total_frames=self.sam2_model.video_frame_count,
             confidence_threshold=0.99,
         )

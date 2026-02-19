@@ -1,4 +1,5 @@
 import os
+from collections.abc import Callable
 from pathlib import Path
 
 import cv2
@@ -652,22 +653,25 @@ class Sam2Model:
             return False
 
     def init_video_state(
-        self, image_dir: str, image_cache: dict[str, np.ndarray] | None = None
+        self,
+        image_paths: list[str],
+        image_cache: dict[str, np.ndarray] | None = None,
+        progress_callback: Callable[[int, int, str], None] | None = None,
     ) -> bool:
-        """Initialize video state with a directory of images.
+        """Initialize video state with an explicit list of image paths.
 
-        The directory should contain images named in sortable order
-        (e.g., frame_0001.png, frame_0002.png, ...).
-
-        Note: SAM2 video predictor only supports JPEG files. If the directory
-        contains non-JPEG images (PNG, BMP, etc.), they will be converted to
-        temporary JPEG files automatically.
+        Note: SAM2 video predictor only supports JPEG files. If the images
+        are non-JPEG (PNG, BMP, etc.), they will be converted to temporary
+        JPEG files automatically.
 
         Args:
-            image_dir: Path to directory containing image sequence
+            image_paths: List of image file paths for the sequence. Only
+                these images are loaded into the video predictor.
             image_cache: Optional dict mapping image paths to numpy arrays.
                 If provided, cached images will be used instead of reading
                 from disk, which saves I/O when images are preloaded.
+            progress_callback: Optional callback(current, total, message)
+                called after each image is prepared, for UI progress updates.
 
         Returns:
             True if successful, False otherwise
@@ -676,23 +680,13 @@ class Sam2Model:
             return False
 
         try:
-            logger.info(f"SAM2: Initializing video state from {image_dir}...")
-
-            # Check what image types are in the directory
-            image_dir_path = Path(image_dir)
-            jpeg_extensions = {".jpg", ".jpeg"}
-            other_extensions = {".png", ".bmp", ".tiff", ".tif", ".webp"}
-            all_extensions = jpeg_extensions | other_extensions
-
-            # Get all image files
-            all_images = sorted(
-                p
-                for p in image_dir_path.iterdir()
-                if p.suffix.lower() in all_extensions
+            all_images = [Path(p) for p in image_paths]
+            logger.info(
+                f"SAM2: Initializing video state with {len(all_images)} images"
             )
 
             if not all_images:
-                logger.error(f"SAM2: No images found in {image_dir}")
+                logger.error("SAM2: No images provided")
                 return False
 
             # Store original image paths for reference
@@ -715,6 +709,7 @@ class Sam2Model:
             cache_hits = 0
             jpeg_extensions_set = {".jpg", ".jpeg"}
 
+            total_images = len(all_images)
             for i, img_path in enumerate(all_images):
                 img_path_str = str(img_path)
                 jpeg_path = Path(self._video_temp_dir) / f"{i:05d}.jpg"
@@ -743,6 +738,13 @@ class Sam2Model:
                         continue
                     cv2.imwrite(str(jpeg_path), img, [cv2.IMWRITE_JPEG_QUALITY, 95])
 
+                if progress_callback is not None:
+                    progress_callback(
+                        i + 1,
+                        total_images,
+                        f"Preparing image {i + 1}/{total_images}",
+                    )
+
             if cache_hits > 0:
                 logger.info(f"SAM2: Used {cache_hits} cached images (saved disk I/O)")
 
@@ -751,6 +753,13 @@ class Sam2Model:
 
             # SAM2 video predictor expects a directory path
             # It will automatically load images in sorted order
+            if progress_callback is not None:
+                progress_callback(
+                    total_images,
+                    total_images,
+                    "Initializing SAM 2 video predictor...",
+                )
+
             with (
                 torch.inference_mode(),
                 torch.autocast(str(self.device), dtype=torch.bfloat16),
