@@ -81,7 +81,7 @@ This manual provides detailed instructions for using LazyLabel's image segmentat
 - **Left Click** - Add positive points (include in segment)
 - **Right Click** - Add negative points (exclude from segment)
 - **Space** - Save current segment
-- **Shift+Space** - Erase overlapping segments using current AI mask
+- **Shift+Space** - Erase: remove the AI mask shape from all overlapping segments
 - **C** - Clear all points
 - **Escape** - Cancel current operation
 
@@ -100,10 +100,8 @@ This manual provides detailed instructions for using LazyLabel's image segmentat
 **Usage:**
 - **Left Click** - Place polygon vertices
 - **Double Click** - Complete polygon
-- **Shift+Click** (near first point) - Complete polygon in erase mode
+- **Shift+Click** (near first point) - Complete polygon and erase that shape from overlapping segments
 - **Right Click** - Delete last vertex
-- **Space** - Save completed polygon
-- **Shift+Space** - Erase overlapping segments using current polygon shape
 - **Escape** - Cancel current polygon
 
 **Best Practices:**
@@ -119,6 +117,7 @@ This manual provides detailed instructions for using LazyLabel's image segmentat
 
 **Usage:**
 - **Click and Drag** - Draw bounding rectangle
+- **Shift+Release** - Release drag with Shift held to erase that rectangle from overlapping segments
 - **Space** - Save bounding box
 - **Escape** - Cancel current box
 
@@ -490,8 +489,12 @@ Contains class name mappings and aliases used in the annotation session.
 The Shift modifier transforms any segment completion into an erase operation. Instead of adding a new segment, it subtracts the shape from all existing overlapping segments.
 
 **How to Use:**
-- **AI Mode** - Create an AI prediction with clicks, then press `Shift+Space` to erase that shape from all overlapping segments
-- **Polygon Mode** - Draw a polygon, then press `Shift+Space` to erase that shape. Alternatively, hold `Shift` while clicking near the first point to close and erase in one action
+
+Hold `Shift` during the normal completion gesture for any mode:
+
+- **AI Mode** - Place points, then `Shift+Space` (Space completes, Shift makes it erase)
+- **Polygon Mode** - Draw vertices, then `Shift+Click` near the first point (click-to-close completes, Shift makes it erase)
+- **Bounding Box Mode** - Drag a rectangle, then release with `Shift` held (release completes, Shift makes it erase)
 
 **Behavior:**
 - Segments fully covered by the erase shape are removed entirely
@@ -647,7 +650,7 @@ LazyLabel uses three distinct segment types with different capabilities:
 | Action | Primary Key | Secondary Key | Description |
 |--------|-------------|---------------|-------------|
 | Save Segment | `Space` | - | Confirm current annotation |
-| Erase with Segment | `Shift+Space` | - | Erase overlapping segments using current shape |
+| Erase with Segment | `Shift`+completion | - | Hold Shift during completion to erase instead of add |
 | Save Output | `Enter` | - | Export current annotations |
 | Clear Points | `C` | - | Remove all points |
 | Undo | `Ctrl+Z` | - | Reverse last action |
