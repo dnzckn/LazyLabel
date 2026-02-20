@@ -244,11 +244,8 @@ class PropagationManager:
                     f"with mismatched dimensions, {len(filtered_paths)} remaining"
                 )
         else:
-            # No filtering - 1:1 mapping
+            # No filtering - mapping built after init succeeds
             filtered_paths = list(image_paths)
-            for i in range(len(image_paths)):
-                sam2_to_timeline[i] = i
-                timeline_to_sam2[i] = i
 
         if not filtered_paths:
             logger.error("PropagationManager: No images match reference dimensions")
@@ -262,6 +259,13 @@ class PropagationManager:
         ):
             logger.error("PropagationManager: Failed to initialize video state")
             return False
+
+        # For no-filtering case, build 1:1 mapping using actual frame count from SAM2
+        if reference_dimensions is None:
+            actual_count = self.sam2_model.video_frame_count
+            for i in range(actual_count):
+                sam2_to_timeline[i] = i
+                timeline_to_sam2[i] = i
 
         # Reset propagation state with index mapping
         self.state = PropagationState(
