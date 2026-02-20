@@ -154,9 +154,7 @@ class TestSequenceInitWorkerQt:
         self, app, qtbot, mock_propagation_manager, image_paths
     ):
         """Test that exceptions emit error signal."""
-        mock_propagation_manager.init_sequence.side_effect = RuntimeError(
-            "Test error"
-        )
+        mock_propagation_manager.init_sequence.side_effect = RuntimeError("Test error")
 
         worker = SequenceInitWorker(
             propagation_manager=mock_propagation_manager,
@@ -183,9 +181,7 @@ class TestReferenceAnnotationWorkerQt:
             reference_frames=[0, 3],
             segments=sample_segments,
         )
-        with qtbot.waitSignal(
-            worker.finished_annotations, timeout=5000
-        ) as blocker:
+        with qtbot.waitSignal(worker.finished_annotations, timeout=5000) as blocker:
             worker.start()
 
         assert blocker.args == [3]
@@ -258,9 +254,7 @@ class TestReferenceAnnotationWorkerQt:
             reference_frames=[0, 3],
             segments=sample_segments,
         )
-        with qtbot.waitSignal(
-            worker.finished_annotations, timeout=5000
-        ) as blocker:
+        with qtbot.waitSignal(worker.finished_annotations, timeout=5000) as blocker:
             worker.start()
 
         assert blocker.args == [2]
@@ -283,18 +277,14 @@ class TestReferenceAnnotationWorkerQt:
 
         assert "GPU error" in blocker.args[0]
 
-    def test_empty_segments_emits_zero(
-        self, app, qtbot, mock_propagation_manager
-    ):
+    def test_empty_segments_emits_zero(self, app, qtbot, mock_propagation_manager):
         """Test that empty segments list emits 0 count."""
         worker = ReferenceAnnotationWorker(
             propagation_manager=mock_propagation_manager,
             reference_frames=[],
             segments=[],
         )
-        with qtbot.waitSignal(
-            worker.finished_annotations, timeout=5000
-        ) as blocker:
+        with qtbot.waitSignal(worker.finished_annotations, timeout=5000) as blocker:
             worker.start()
 
         assert blocker.args == [0]

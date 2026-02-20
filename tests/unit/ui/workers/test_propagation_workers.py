@@ -170,7 +170,9 @@ class TestInitSequenceAPI:
 class TestWorkerLifecycle:
     """Tests for worker stop flags and direct run() calls (no Qt needed)."""
 
-    def test_sequence_init_worker_stop_flag(self, mock_propagation_manager, image_paths):
+    def test_sequence_init_worker_stop_flag(
+        self, mock_propagation_manager, image_paths
+    ):
         """Test SequenceInitWorker stop flag prevents execution."""
         worker = SequenceInitWorker(
             propagation_manager=mock_propagation_manager,
