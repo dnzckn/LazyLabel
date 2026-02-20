@@ -41,6 +41,7 @@ class FrameStatus(Enum):
     REFERENCE = "reference"
     PROPAGATED = "propagated"
     FLAGGED = "flagged"
+    SKIPPED = "skipped"
 
 
 @dataclass
@@ -74,12 +75,20 @@ class PropagationState:
     total_frames: int = 0
     reference_frame_indices: set[int] = field(
         default_factory=set
-    )  # Multiple reference frames
+    )  # Multiple reference frames (SAM2 space)
     reference_annotations: list[ReferenceAnnotation] = field(default_factory=list)
-    propagated_frames: set[int] = field(default_factory=set)
-    flagged_frames: set[int] = field(default_factory=set)
-    frame_results: dict[int, list[PropagationResult]] = field(default_factory=dict)
+    propagated_frames: set[int] = field(default_factory=set)  # Timeline space
+    flagged_frames: set[int] = field(default_factory=set)  # Timeline space
+    frame_results: dict[int, list[PropagationResult]] = field(
+        default_factory=dict
+    )  # Timeline space
     confidence_threshold: float = 0.99
+
+    # Dimension filtering and index mapping
+    sam2_to_timeline: dict[int, int] = field(default_factory=dict)
+    timeline_to_sam2: dict[int, int] = field(default_factory=dict)
+    skipped_frame_indices: set[int] = field(default_factory=set)
+    reference_dimensions: tuple[int, int] | None = None
 
 
 class PropagationManager:
@@ -154,14 +163,21 @@ class PropagationManager:
     def init_sequence(
         self,
         image_paths: list[str],
+        reference_dimensions: tuple[int, int] | None = None,
         image_cache: dict[str, np.ndarray] | None = None,
         progress_callback: Callable[[int, int, str], None] | None = None,
     ) -> bool:
         """Initialize the video predictor with an image sequence.
 
+        Images with dimensions that don't match reference_dimensions are
+        automatically filtered out. A mapping between SAM2 frame indices
+        and timeline frame indices is stored in self.state.
+
         Args:
             image_paths: List of image file paths for the sequence. Only
                 these images are loaded into the video predictor.
+            reference_dimensions: Optional (height, width) tuple. If provided,
+                images with different dimensions are skipped.
             image_cache: Optional dict mapping image paths to numpy arrays.
                 If provided, cached images will be used instead of reading
                 from disk, which saves I/O when images are preloaded.
@@ -171,6 +187,8 @@ class PropagationManager:
         Returns:
             True if successful, False otherwise
         """
+        import cv2
+
         if self.sam2_model is None:
             logger.error("PropagationManager: SAM 2 model not available")
             return False
@@ -180,24 +198,85 @@ class PropagationManager:
             logger.error("PropagationManager: SAM 2 video predictor not available")
             return False
 
-        # Initialize video state with only the selected series images
+        # Filter images by reference dimensions
+        filtered_paths: list[str] = []
+        sam2_to_timeline: dict[int, int] = {}
+        timeline_to_sam2: dict[int, int] = {}
+        skipped: set[int] = set()
+
+        if reference_dimensions is not None:
+            ref_h, ref_w = reference_dimensions
+            total_images = len(image_paths)
+            for timeline_idx, path in enumerate(image_paths):
+                # Get image dimensions
+                if image_cache and path in image_cache:
+                    h, w = image_cache[path].shape[:2]
+                else:
+                    img = cv2.imread(path)
+                    if img is None:
+                        skipped.add(timeline_idx)
+                        continue
+                    h, w = img.shape[:2]
+
+                if (h, w) != (ref_h, ref_w):
+                    skipped.add(timeline_idx)
+                    logger.info(
+                        f"PropagationManager: Skipping frame {timeline_idx}: "
+                        f"dimensions ({w}x{h}) != reference ({ref_w}x{ref_h})"
+                    )
+                    if progress_callback:
+                        progress_callback(
+                            timeline_idx + 1,
+                            total_images,
+                            f"Skipping frame {timeline_idx + 1} "
+                            f"(dimension mismatch: {w}x{h})",
+                        )
+                    continue
+
+                sam2_idx = len(filtered_paths)
+                sam2_to_timeline[sam2_idx] = timeline_idx
+                timeline_to_sam2[timeline_idx] = sam2_idx
+                filtered_paths.append(path)
+
+            if skipped:
+                logger.info(
+                    f"PropagationManager: Filtered {len(skipped)} images "
+                    f"with mismatched dimensions, {len(filtered_paths)} remaining"
+                )
+        else:
+            # No filtering - 1:1 mapping
+            filtered_paths = list(image_paths)
+            for i in range(len(image_paths)):
+                sam2_to_timeline[i] = i
+                timeline_to_sam2[i] = i
+
+        if not filtered_paths:
+            logger.error("PropagationManager: No images match reference dimensions")
+            return False
+
+        # Initialize video state with only the matching images
         if not self.sam2_model.init_video_state(
-            image_paths,
+            filtered_paths,
             image_cache=image_cache,
             progress_callback=progress_callback,
         ):
             logger.error("PropagationManager: Failed to initialize video state")
             return False
 
-        # Reset propagation state
+        # Reset propagation state with index mapping
         self.state = PropagationState(
             is_initialized=True,
             total_frames=self.sam2_model.video_frame_count,
             confidence_threshold=0.99,
+            sam2_to_timeline=sam2_to_timeline,
+            timeline_to_sam2=timeline_to_sam2,
+            skipped_frame_indices=skipped,
+            reference_dimensions=reference_dimensions,
         )
 
         logger.info(
             f"PropagationManager: Initialized with {self.state.total_frames} frames"
+            f" ({len(skipped)} skipped)"
         )
         return True
 
@@ -218,7 +297,8 @@ class PropagationManager:
         """Add a frame to the reference set.
 
         Args:
-            frame_idx: Index of the reference frame (0-based)
+            frame_idx: Timeline index of the reference frame (0-based).
+                Automatically translated to SAM2 internal index.
 
         Returns:
             True if successful
@@ -227,19 +307,27 @@ class PropagationManager:
             logger.error("PropagationManager: Not initialized")
             return False
 
-        if frame_idx < 0 or frame_idx >= self.state.total_frames:
-            logger.error(f"PropagationManager: Invalid frame index {frame_idx}")
+        # Translate timeline index to SAM2 index
+        sam2_idx = self.state.timeline_to_sam2.get(frame_idx, frame_idx)
+
+        if sam2_idx < 0 or sam2_idx >= self.state.total_frames:
+            logger.error(
+                f"PropagationManager: Invalid frame index {frame_idx} "
+                f"(SAM2: {sam2_idx})"
+            )
             return False
 
-        self.state.reference_frame_indices.add(frame_idx)
-        logger.info(f"PropagationManager: Added reference frame {frame_idx}")
+        self.state.reference_frame_indices.add(sam2_idx)
+        logger.info(
+            f"PropagationManager: Added reference frame {frame_idx} (SAM2: {sam2_idx})"
+        )
         return True
 
     def add_reference_frames(self, frame_indices: list[int]) -> int:
         """Add multiple frames to the reference set.
 
         Args:
-            frame_indices: List of frame indices to add
+            frame_indices: List of timeline frame indices to add
 
         Returns:
             Number of frames successfully added
@@ -250,8 +338,9 @@ class PropagationManager:
 
         count = 0
         for idx in frame_indices:
-            if 0 <= idx < self.state.total_frames:
-                self.state.reference_frame_indices.add(idx)
+            sam2_idx = self.state.timeline_to_sam2.get(idx, idx)
+            if 0 <= sam2_idx < self.state.total_frames:
+                self.state.reference_frame_indices.add(sam2_idx)
                 count += 1
 
         logger.info(f"PropagationManager: Added {count} reference frames")
@@ -274,7 +363,8 @@ class PropagationManager:
         """Add a reference annotation for propagation.
 
         Args:
-            frame_idx: Frame index where the annotation is located
+            frame_idx: Timeline frame index where the annotation is located.
+                Automatically translated to SAM2 internal index.
             mask: Binary mask array (H, W)
             class_id: Class ID for the annotation
             class_name: Class name for the annotation
@@ -287,8 +377,14 @@ class PropagationManager:
             logger.error("PropagationManager: Not initialized")
             return -1
 
-        # Ensure the frame is marked as a reference (in case add_reference_frame wasn't called)
-        self.state.reference_frame_indices.add(frame_idx)
+        # Translate timeline index to SAM2 index
+        sam2_idx = self.state.timeline_to_sam2.get(frame_idx)
+        if sam2_idx is None:
+            logger.error(f"PropagationManager: Frame {frame_idx} is skipped or unknown")
+            return -1
+
+        # Ensure the frame is marked as a reference
+        self.state.reference_frame_indices.add(sam2_idx)
 
         # Auto-assign object ID if not provided
         if obj_id is None:
@@ -296,7 +392,7 @@ class PropagationManager:
             obj_id = max(existing_ids, default=0) + 1
 
         annotation = ReferenceAnnotation(
-            frame_idx=frame_idx,
+            frame_idx=sam2_idx,
             obj_id=obj_id,
             mask=mask.copy(),
             class_id=class_id,
@@ -304,16 +400,17 @@ class PropagationManager:
         )
         self.state.reference_annotations.append(annotation)
 
-        # Add mask to SAM 2 video predictor
+        # Add mask to SAM 2 video predictor using SAM2 index
         if self.sam2_model is not None:
             result = self.sam2_model.add_video_mask(
-                frame_idx=frame_idx,
+                frame_idx=sam2_idx,
                 obj_id=obj_id,
                 mask=mask,
             )
             if result is not None:
                 logger.info(
                     f"PropagationManager: Added reference annotation obj_id={obj_id}, "
+                    f"frame={frame_idx} (SAM2: {sam2_idx}), "
                     f"class={class_name}, confidence={result[1]:.2f}"
                 )
 
@@ -382,6 +479,42 @@ class PropagationManager:
         self.state.flagged_frames.clear()
         logger.info("PropagationManager: Cleared propagation results")
 
+    # ========== Index Translation ==========
+
+    def _timeline_to_nearest_sam2(
+        self, timeline_idx: int, prefer_higher: bool = False
+    ) -> int:
+        """Convert a timeline index to the nearest SAM2 index.
+
+        When the exact timeline index was skipped, finds the closest
+        mapped index in the preferred direction.
+
+        Args:
+            timeline_idx: Timeline frame index
+            prefer_higher: If True, prefer the next higher SAM2 index;
+                otherwise prefer the next lower one.
+
+        Returns:
+            Nearest valid SAM2 frame index
+        """
+        if timeline_idx in self.state.timeline_to_sam2:
+            return self.state.timeline_to_sam2[timeline_idx]
+
+        mapped = sorted(self.state.timeline_to_sam2.keys())
+        if not mapped:
+            return timeline_idx
+
+        if prefer_higher:
+            for t in mapped:
+                if t >= timeline_idx:
+                    return self.state.timeline_to_sam2[t]
+            return self.state.timeline_to_sam2[mapped[-1]]
+        else:
+            for t in reversed(mapped):
+                if t <= timeline_idx:
+                    return self.state.timeline_to_sam2[t]
+            return self.state.timeline_to_sam2[mapped[0]]
+
     # ========== Propagation Execution ==========
 
     def request_cancel(self) -> None:
@@ -424,29 +557,40 @@ class PropagationManager:
         self._cancel_requested = False
 
         # Determine range based on direction
-        # Use primary (min) reference for forward, max for backward
+        # Reference indices are stored in SAM2 space
         ref_indices = self.state.reference_frame_indices
         min_ref = min(ref_indices) if ref_indices else 0
         max_ref = max(ref_indices) if ref_indices else 0
 
+        # Convert timeline range to SAM2 space
+        sam2_start = (
+            self._timeline_to_nearest_sam2(range_start, prefer_higher=True)
+            if range_start is not None
+            else None
+        )
+        sam2_end = (
+            self._timeline_to_nearest_sam2(range_end, prefer_higher=False)
+            if range_end is not None
+            else None
+        )
+
         if direction == PropagationDirection.FORWARD:
-            start = range_start if range_start is not None else min_ref
-            end = range_end if range_end is not None else self.state.total_frames - 1
+            start = sam2_start if sam2_start is not None else min_ref
+            end = sam2_end if sam2_end is not None else self.state.total_frames - 1
             yield from self._propagate_range(
                 start, end, reverse=False, skip_flagged=skip_flagged
             )
 
         elif direction == PropagationDirection.BACKWARD:
-            start = range_start if range_start is not None else 0
-            end = range_end if range_end is not None else max_ref
+            start = sam2_start if sam2_start is not None else 0
+            end = sam2_end if sam2_end is not None else max_ref
             yield from self._propagate_range(
                 end, start, reverse=True, skip_flagged=skip_flagged
             )
 
         elif direction == PropagationDirection.BIDIRECTIONAL:
             # Propagate forward from min reference to end
-            # Starting from min_ref ensures SAM2 properly propagates through all frames
-            end = range_end if range_end is not None else self.state.total_frames - 1
+            end = sam2_end if sam2_end is not None else self.state.total_frames - 1
             yield from self._propagate_range(
                 min_ref, end, reverse=False, skip_flagged=skip_flagged
             )
@@ -454,8 +598,8 @@ class PropagationManager:
             if self._cancel_requested:
                 return
 
-            # Then propagate backward from min reference to start (if min_ref > range_start)
-            start = range_start if range_start is not None else 0
+            # Then propagate backward from min reference to start
+            start = sam2_start if sam2_start is not None else 0
             if min_ref > start:
                 yield from self._propagate_range(
                     min_ref, start, reverse=True, skip_flagged=skip_flagged
@@ -466,14 +610,17 @@ class PropagationManager:
     ):
         """Propagate through a range of frames.
 
+        All indices in this method are in SAM2 space internally.
+        Yielded frame indices are translated to timeline space.
+
         Args:
-            start_idx: Starting frame index
-            end_idx: Ending frame index
+            start_idx: Starting SAM2 frame index
+            end_idx: Ending SAM2 frame index
             reverse: If True, propagate backward
             skip_flagged: If True, don't store results for low confidence frames
 
         Yields:
-            Tuple of (current_frame, total_to_process, results_for_frame)
+            Tuple of (timeline_frame_idx, total_to_process, results_for_frame)
         """
         total = start_idx - end_idx if reverse else end_idx - start_idx
 
@@ -494,7 +641,7 @@ class PropagationManager:
             max_frames=None,
             reverse=reverse,
         ):
-            # Check if frame is within our desired range
+            # Check if frame is within our desired range (SAM2 space)
             if reverse:
                 if frame_idx < end_idx:
                     break
@@ -505,12 +652,16 @@ class PropagationManager:
                 logger.info("PropagationManager: Propagation cancelled")
                 return
 
+            # Translate SAM2 frame index to timeline index
+            timeline_idx = self.state.sam2_to_timeline.get(frame_idx, frame_idx)
+
             logger.debug(
-                f"PropagationManager: SAM2 yielded frame_idx={frame_idx}, "
+                f"PropagationManager: SAM2 yielded frame_idx={frame_idx} "
+                f"(timeline: {timeline_idx}), "
                 f"obj_id={obj_id}, confidence={confidence:.3f}"
             )
 
-            # Skip reference frames
+            # Skip reference frames (checked in SAM2 space)
             if frame_idx in self.state.reference_frame_indices:
                 logger.debug(
                     f"PropagationManager: Skipping reference frame {frame_idx}"
@@ -522,45 +673,46 @@ class PropagationManager:
 
             # Skip flagged frames entirely if requested (no mask created)
             if is_flagged and skip_flagged:
-                self.state.flagged_frames.add(frame_idx)
+                self.state.flagged_frames.add(timeline_idx)
                 logger.debug(
-                    f"Skipping flagged frame {frame_idx} (confidence={confidence:.2f})"
+                    f"Skipping flagged frame {timeline_idx} "
+                    f"(confidence={confidence:.2f})"
                 )
                 continue
 
-            # Get image path for this frame
+            # Get image path for this frame (SAM2 space index)
             image_path = ""
             if frame_idx < len(self.sam2_model.video_image_paths):
                 image_path = self.sam2_model.video_image_paths[frame_idx]
 
-            # Create result
+            # Create result with timeline index
             result = PropagationResult(
-                frame_idx=frame_idx,
+                frame_idx=timeline_idx,
                 obj_id=obj_id,
                 mask=mask,
                 confidence=confidence,
                 image_path=image_path,
             )
 
-            # Store result
-            if frame_idx not in self.state.frame_results:
-                self.state.frame_results[frame_idx] = []
-            self.state.frame_results[frame_idx].append(result)
+            # Store result keyed by timeline index
+            if timeline_idx not in self.state.frame_results:
+                self.state.frame_results[timeline_idx] = []
+            self.state.frame_results[timeline_idx].append(result)
 
             logger.debug(
-                f"PropagationManager: Stored result for frame {frame_idx}, "
+                f"PropagationManager: Stored result for frame {timeline_idx}, "
                 f"obj_id={obj_id}, mask_shape={mask.shape if mask is not None else None}"
             )
 
-            # Update status
-            self.state.propagated_frames.add(frame_idx)
+            # Update status using timeline indices
+            self.state.propagated_frames.add(timeline_idx)
             if is_flagged:
-                self.state.flagged_frames.add(frame_idx)
+                self.state.flagged_frames.add(timeline_idx)
 
             frame_count += 1
 
-            # Yield progress
-            yield frame_idx, total, result
+            # Yield progress with timeline index
+            yield timeline_idx, total, result
 
     # ========== Result Access ==========
 
@@ -568,12 +720,16 @@ class PropagationManager:
         """Get the status of a frame.
 
         Args:
-            frame_idx: Frame index
+            frame_idx: Timeline frame index
 
         Returns:
             Frame status enum
         """
-        if frame_idx in self.state.reference_frame_indices:
+        if frame_idx in self.state.skipped_frame_indices:
+            return FrameStatus.SKIPPED
+        # Check if this timeline idx maps to a reference SAM2 idx
+        sam2_idx = self.state.timeline_to_sam2.get(frame_idx)
+        if sam2_idx is not None and sam2_idx in self.state.reference_frame_indices:
             return FrameStatus.REFERENCE
         if frame_idx in self.state.flagged_frames:
             return FrameStatus.FLAGGED

@@ -24,6 +24,7 @@ class FrameStatus(Enum):
     PROPAGATED = "propagated"  # Mask propagated from reference
     FLAGGED = "flagged"  # Low confidence, needs review
     SAVED = "saved"  # Saved to disk (NPZ)
+    SKIPPED = "skipped"  # Skipped due to dimension mismatch
 
 
 @dataclass
@@ -69,6 +70,10 @@ class SequenceViewMode(QObject):
         self._propagated_masks: dict[int, dict[int, np.ndarray]] = {}
         self._confidence_scores: dict[int, float] = {}
 
+        # Dimension tracking for sequence consistency
+        self._reference_dimensions: tuple[int, int] | None = None  # (height, width)
+        self._skipped_frame_indices: set[int] = set()
+
         # Configuration
         self._confidence_threshold: float = 0.99
         self._auto_flag_low_confidence: bool = True
@@ -94,6 +99,16 @@ class SequenceViewMode(QObject):
         refs = self.reference_frame_indices
         return refs[0] if refs else -1
 
+    @property
+    def reference_dimensions(self) -> tuple[int, int] | None:
+        """Get the required image dimensions (height, width) for reference frames."""
+        return self._reference_dimensions
+
+    @property
+    def skipped_frame_indices(self) -> set[int]:
+        """Get set of frame indices skipped due to dimension mismatch."""
+        return self._skipped_frame_indices
+
     def set_image_paths(self, paths: list[str]) -> None:
         """Set the image paths for the sequence."""
         self._image_paths = list(paths)
@@ -106,6 +121,8 @@ class SequenceViewMode(QObject):
         self._frame_statuses.clear()
         self._propagated_masks.clear()
         self._confidence_scores.clear()
+        self._reference_dimensions = None
+        self._skipped_frame_indices = set()
 
         # Initialize all frames as pending
         for i in range(len(self._image_paths)):
@@ -120,9 +137,12 @@ class SequenceViewMode(QObject):
         self._propagated_masks.clear()
         self._confidence_scores.clear()
 
-        # Reset all non-reference frame statuses to pending
+        # Reset non-reference, non-skipped frame statuses to pending
         for idx in self._frame_statuses:
-            if self._frame_statuses[idx] != FrameStatus.REFERENCE:
+            if self._frame_statuses[idx] not in (
+                FrameStatus.REFERENCE,
+                FrameStatus.SKIPPED,
+            ):
                 self._frame_statuses[idx] = FrameStatus.PENDING
                 self.frame_status_changed.emit(idx, FrameStatus.PENDING.value)
 
@@ -174,7 +194,10 @@ class SequenceViewMode(QObject):
         return {idx: status.value for idx, status in self._frame_statuses.items()}
 
     def set_reference_frame(
-        self, idx: int, annotations: list[ReferenceAnnotation] | None = None
+        self,
+        idx: int,
+        annotations: list[ReferenceAnnotation] | None = None,
+        image_dimensions: tuple[int, int] | None = None,
     ) -> bool:
         """Mark a frame as reference with its annotations.
 
@@ -182,12 +205,22 @@ class SequenceViewMode(QObject):
             idx: Frame index to mark as reference
             annotations: List of annotations (masks, points, etc.) for this frame.
                         If None, will capture current annotations from segment manager.
+            image_dimensions: Optional (height, width) tuple for dimension validation.
+                If provided and reference dimensions are already set, the frame
+                will be rejected if dimensions don't match.
 
         Returns:
-            True if successful, False if invalid index
+            True if successful, False if invalid index or dimension mismatch
         """
         if not (0 <= idx < len(self._image_paths)):
             return False
+
+        # Validate image dimensions if provided
+        if image_dimensions is not None:
+            if self._reference_dimensions is None:
+                self._reference_dimensions = image_dimensions
+            elif image_dimensions != self._reference_dimensions:
+                return False
 
         if annotations is None:
             annotations = self._capture_current_annotations(idx)
@@ -229,6 +262,11 @@ class SequenceViewMode(QObject):
             del self._reference_annotations[idx]
             self._frame_statuses[idx] = FrameStatus.PENDING
             self.frame_status_changed.emit(idx, FrameStatus.PENDING.value)
+
+            # Clear stored dimensions when no references remain
+            if not self._reference_annotations:
+                self._reference_dimensions = None
+
             self.reference_changed.emit(
                 -1 if not self._reference_annotations else self.primary_reference_idx
             )
@@ -401,6 +439,18 @@ class SequenceViewMode(QObject):
             return (max(0, start), ref_idx)
         else:  # both
             return (max(0, start), min(end, len(self._image_paths) - 1))
+
+    def mark_frames_skipped(self, indices: set[int]) -> None:
+        """Mark frames as skipped due to dimension mismatch.
+
+        Args:
+            indices: Set of frame indices to mark as skipped
+        """
+        self._skipped_frame_indices = set(indices)
+        for idx in indices:
+            if 0 <= idx < len(self._image_paths):
+                self._frame_statuses[idx] = FrameStatus.SKIPPED
+                self.frame_status_changed.emit(idx, FrameStatus.SKIPPED.value)
 
     def to_dict(self) -> dict:
         """Serialize sequence state to dict (for saving)."""

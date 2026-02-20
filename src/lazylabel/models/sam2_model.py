@@ -681,9 +681,7 @@ class Sam2Model:
 
         try:
             all_images = [Path(p) for p in image_paths]
-            logger.info(
-                f"SAM2: Initializing video state with {len(all_images)} images"
-            )
+            logger.info(f"SAM2: Initializing video state with {len(all_images)} images")
 
             if not all_images:
                 logger.error("SAM2: No images provided")

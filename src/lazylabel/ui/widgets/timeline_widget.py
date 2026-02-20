@@ -27,6 +27,7 @@ class TimelineWidget(QWidget):
         "pending": QColor(100, 100, 100),  # Gray for pending
         "flagged": QColor(244, 67, 54),  # Red for flagged/needs review
         "saved": QColor(0, 188, 212),  # Cyan for saved to disk
+        "skipped": QColor(255, 235, 59),  # Bright yellow for dimension mismatch
         "current": QColor(33, 150, 243),  # Blue for current frame marker
     }
 

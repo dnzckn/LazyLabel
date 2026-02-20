@@ -3371,19 +3371,52 @@ class MainWindow(QMainWindow):
             ref_indices = self.sequence_view_mode.reference_frame_indices
             self.sequence_widget.set_reference_frames(list(ref_indices))
 
+    def _get_sequence_image_dimensions(self, image_path: str) -> tuple[int, int] | None:
+        """Get (height, width) of an image using header-only read.
+
+        Uses QImageReader which reads only the file header for
+        supported formats, avoiding full pixel decode.
+        """
+        from PyQt6.QtGui import QImageReader
+
+        reader = QImageReader(image_path)
+        size = reader.size()
+        if size.isValid():
+            return (size.height(), size.width())
+        return None
+
     def _on_add_sequence_reference(self):
         """Add current frame as reference for propagation."""
         if self.sequence_view_mode is None:
             return
 
         current_idx = self.sequence_view_mode.current_frame_idx
-        if self.sequence_view_mode.set_reference_frame(current_idx):
+        image_path = self.sequence_view_mode.get_image_path(current_idx)
+        if not image_path:
+            return
+
+        # Get image dimensions for validation
+        dims = self._get_sequence_image_dimensions(image_path)
+
+        if self.sequence_view_mode.set_reference_frame(
+            current_idx, image_dimensions=dims
+        ):
             # Update the sequence widget with all reference frames
             ref_indices = self.sequence_view_mode.reference_frame_indices
             self.sequence_widget.set_reference_frames(ref_indices)
             # Update timeline
             self.timeline_widget.set_frame_status(current_idx, "reference")
             self._show_notification(f"Added frame {current_idx + 1} as reference")
+        elif (
+            dims is not None
+            and self.sequence_view_mode.reference_dimensions is not None
+        ):
+            # Dimension mismatch
+            ref_dims = self.sequence_view_mode.reference_dimensions
+            self._show_notification(
+                f"Cannot add reference: image is {dims[1]}x{dims[0]} "
+                f"but reference requires {ref_dims[1]}x{ref_dims[0]}"
+            )
 
     def _on_add_all_before_reference(self):
         """Add all frames before current position as references."""
@@ -3397,15 +3430,25 @@ class MainWindow(QMainWindow):
 
         # Add all frames from 0 to current_idx - 1
         count = 0
+        skipped_count = 0
         for idx in range(current_idx):
-            if self.sequence_view_mode.set_reference_frame(idx):
+            image_path = self.sequence_view_mode.get_image_path(idx)
+            dims = (
+                self._get_sequence_image_dimensions(image_path) if image_path else None
+            )
+            if self.sequence_view_mode.set_reference_frame(idx, image_dimensions=dims):
                 self.timeline_widget.set_frame_status(idx, "reference")
                 count += 1
+            else:
+                skipped_count += 1
 
         # Update the sequence widget with all reference frames
         ref_indices = self.sequence_view_mode.reference_frame_indices
         self.sequence_widget.set_reference_frames(ref_indices)
-        self._show_notification(f"Added {count} frames as references")
+        msg = f"Added {count} frames as references"
+        if skipped_count > 0:
+            msg += f" ({skipped_count} skipped: dimension mismatch)"
+        self._show_notification(msg)
 
     def _on_clear_sequence_references(self):
         """Clear all reference frames."""
@@ -3415,9 +3458,17 @@ class MainWindow(QMainWindow):
         # Get current reference frames to update timeline
         ref_indices = list(self.sequence_view_mode.reference_frame_indices)
 
+        # Also clear any skipped frame indicators from timeline
+        skipped_indices = set(self.sequence_view_mode.skipped_frame_indices)
+
         # Clear in sequence view mode
         for idx in ref_indices:
             self.sequence_view_mode.clear_reference_frame(idx)
+            self.timeline_widget.set_frame_status(idx, "pending")
+
+        # Clear skipped frames (they are tied to the reference dimensions)
+        self.sequence_view_mode.mark_frames_skipped(set())
+        for idx in skipped_indices:
             self.timeline_widget.set_frame_status(idx, "pending")
 
         # Clear in propagation manager
@@ -3451,10 +3502,7 @@ class MainWindow(QMainWindow):
         ):
             self._show_notification("Initialization already in progress")
             return
-        if (
-            self._reference_worker is not None
-            and self._reference_worker.isRunning()
-        ):
+        if self._reference_worker is not None and self._reference_worker.isRunning():
             self._show_notification("Adding references in progress")
             return
         if (
@@ -3486,9 +3534,7 @@ class MainWindow(QMainWindow):
                 for i in range(self.sequence_view_mode.total_frames)
             ]
             series_paths = [p for p in series_paths if p is not None]
-            logger.info(
-                f"Using {len(series_paths)} series images for propagation"
-            )
+            logger.info(f"Using {len(series_paths)} series images for propagation")
 
             # Update button to show loading status
             if self.sequence_widget:
@@ -3512,15 +3558,19 @@ class MainWindow(QMainWindow):
                 "skip_flagged": skip_flagged,
             }
 
+            # Get reference dimensions for filtering mismatched images
+            reference_dimensions = None
+            if self.sequence_view_mode:
+                reference_dimensions = self.sequence_view_mode.reference_dimensions
+
             # Run init on background thread to avoid freezing the GUI
             self._sequence_init_worker = SequenceInitWorker(
                 propagation_manager=self.propagation_manager,
                 image_paths=series_paths,
                 image_cache=image_cache,
+                reference_dimensions=reference_dimensions,
             )
-            self._sequence_init_worker.progress.connect(
-                self._on_sequence_init_progress
-            )
+            self._sequence_init_worker.progress.connect(self._on_sequence_init_progress)
             self._sequence_init_worker.finished_init.connect(
                 self._on_sequence_init_finished
             )
@@ -3546,6 +3596,16 @@ class MainWindow(QMainWindow):
                 self.sequence_widget.end_propagation()
             self._pending_propagation = None
             return
+
+        # Mark skipped frames (dimension mismatch) in timeline and view mode
+        if self.propagation_manager and self.sequence_view_mode:
+            skipped = self.propagation_manager.state.skipped_frame_indices
+            if skipped:
+                self.sequence_view_mode.mark_frames_skipped(skipped)
+                skipped_count = len(skipped)
+                self._show_notification(
+                    f"Skipped {skipped_count} frames (dimension mismatch)"
+                )
 
         # Re-apply confidence threshold from UI after init_sequence
         # (init_sequence resets threshold to default 0.99)
@@ -3587,11 +3647,14 @@ class MainWindow(QMainWindow):
         self.propagation_manager.clear_propagation_results()
 
         if self.timeline_widget:
-            # Reset timeline to show reference frames
+            # Reset timeline to show reference and skipped frames
             self.timeline_widget.clear_statuses()
             # Show all reference frames on timeline
             for ref_idx in self.sequence_view_mode.reference_frame_indices:
                 self.timeline_widget.set_frame_status(ref_idx, "reference")
+            # Restore skipped frame indicators
+            for idx in self.sequence_view_mode.skipped_frame_indices:
+                self.timeline_widget.set_frame_status(idx, "skipped")
 
         # Ensure propagation UI state is active
         if self.sequence_widget:
@@ -3701,12 +3764,20 @@ class MainWindow(QMainWindow):
         # Store skip_flagged for use in _on_propagation_finished
         self._propagation_skip_flagged = skip_flagged
 
+        # Compare range against timeline total (not SAM2 total which may differ
+        # when frames are skipped due to dimension mismatch)
+        timeline_total = (
+            self.sequence_view_mode.total_frames
+            if self.sequence_view_mode
+            else self.propagation_manager.total_frames
+        )
+
         # Start propagation worker
         self._propagation_worker = PropagationWorker(
             propagation_manager=self.propagation_manager,
             direction=prop_direction,
             range_start=start if start != 0 else None,
-            range_end=end if end != self.propagation_manager.total_frames - 1 else None,
+            range_end=end if end != timeline_total - 1 else None,
             skip_flagged=skip_flagged,
         )
 
@@ -3746,10 +3817,7 @@ class MainWindow(QMainWindow):
             self._pending_propagation = None
 
         # Cancel reference annotation worker if it's running
-        if (
-            self._reference_worker is not None
-            and self._reference_worker.isRunning()
-        ):
+        if self._reference_worker is not None and self._reference_worker.isRunning():
             self._reference_worker.stop()
             self._reference_worker.wait(1000)
             self._reference_worker = None

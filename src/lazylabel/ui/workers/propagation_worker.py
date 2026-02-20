@@ -124,6 +124,7 @@ class SequenceInitWorker(QThread):
         propagation_manager: PropagationManager,
         image_paths: list[str],
         image_cache: dict | None = None,
+        reference_dimensions: tuple[int, int] | None = None,
         parent=None,
     ):
         """Initialize the sequence init worker.
@@ -132,12 +133,15 @@ class SequenceInitWorker(QThread):
             propagation_manager: The propagation manager to use
             image_paths: List of image file paths for the sequence
             image_cache: Optional dict mapping image paths to numpy arrays
+            reference_dimensions: Optional (height, width) for filtering
+                images with mismatched dimensions
             parent: Parent QObject
         """
         super().__init__(parent)
         self.propagation_manager = propagation_manager
         self.image_paths = image_paths
         self.image_cache = image_cache
+        self.reference_dimensions = reference_dimensions
         self._should_stop = False
 
     def stop(self) -> None:
@@ -162,6 +166,7 @@ class SequenceInitWorker(QThread):
             # Initialize the sequence with per-image progress callback
             success = self.propagation_manager.init_sequence(
                 self.image_paths,
+                reference_dimensions=self.reference_dimensions,
                 image_cache=self.image_cache,
                 progress_callback=self._on_progress,
             )
@@ -253,22 +258,21 @@ class ReferenceAnnotationWorker(QThread):
                     return
 
                 result_id = self.propagation_manager.add_reference_annotation(
-                    seg.frame_idx, seg.mask, seg.class_id, seg.class_name,
+                    seg.frame_idx,
+                    seg.mask,
+                    seg.class_id,
+                    seg.class_name,
                     obj_id=seg.obj_id,
                 )
                 if result_id > 0:
                     total_count += 1
 
-                self.progress.emit(
-                    f"Adding reference {i + 1}/{total_segments}"
-                )
+                self.progress.emit(f"Adding reference {i + 1}/{total_segments}")
 
             self.finished_annotations.emit(total_count)
 
         except Exception as e:
-            logger.error(
-                f"ReferenceAnnotationWorker: Error adding annotations: {e}"
-            )
+            logger.error(f"ReferenceAnnotationWorker: Error adding annotations: {e}")
             if not self._should_stop:
                 self.error.emit(str(e))
 
