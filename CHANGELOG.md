@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.3] - 2026-02-19
+
+### Fixed
+
+- **Sequence Mode Dimension Mismatch**: Images with different dimensions in a sequence no longer produce stretched/incorrect masks during SAM2 propagation
+- Reference frames now enforce consistent dimensions — mismatches are rejected with a notification showing expected vs actual size
+- Images with mismatched dimensions are automatically filtered out before loading into SAM2's video predictor
+- Skipped frames are colored yellow in the timeline so users can see why they were excluded
+- SAM2-to-timeline index mapping maintains correct frame indices after filtering
+- Ruff formatting in `sam2_model.py`
+
+### Added
+
+- `SKIPPED` frame status for dimension-mismatched frames, preserved across propagation resets
+
 ## [1.6.2] - 2026-02-18
 
 ### Added
@@ -446,6 +461,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Image centering on load
 - Multi-class reindexing via drag and drop
 
+[1.6.3]: https://github.com/dnzckn/LazyLabel/compare/v1.6.2...v1.6.3
 [1.6.2]: https://github.com/dnzckn/LazyLabel/compare/v1.6.1...v1.6.2
 [1.6.1]: https://github.com/dnzckn/LazyLabel/compare/v1.6.0...v1.6.1
 [1.6.0]: https://github.com/dnzckn/LazyLabel/compare/v1.5.0...v1.6.0
