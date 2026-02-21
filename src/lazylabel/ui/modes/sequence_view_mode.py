@@ -343,6 +343,10 @@ class SequenceViewMode(QObject):
         if idx in self._confidence_scores:
             del self._confidence_scores[idx]
 
+    def get_all_confidence_scores(self) -> dict[int, float]:
+        """Get confidence scores for all frames that have them."""
+        return dict(self._confidence_scores)
+
     def get_confidence_score(self, idx: int) -> float:
         """Get confidence score for a propagated frame."""
         return self._confidence_scores.get(idx, 0.0)

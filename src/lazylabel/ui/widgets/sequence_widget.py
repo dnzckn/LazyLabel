@@ -76,6 +76,7 @@ class SequenceWidget(QWidget):
     prev_flagged_requested = pyqtSignal()
     jump_to_frame_requested = pyqtSignal(int)
     confidence_threshold_changed = pyqtSignal(float)  # threshold value 0.0-1.0
+    show_histogram_requested = pyqtSignal()
 
     # Signals - Trim
     set_trim_left_requested = pyqtSignal()
@@ -298,6 +299,12 @@ class SequenceWidget(QWidget):
             self.confidence_threshold_changed.emit
         )
         options_layout.addWidget(self.confidence_spin)
+
+        self.histogram_btn = QPushButton("Hist")
+        self.histogram_btn.setMaximumWidth(40)
+        self.histogram_btn.setToolTip("Show confidence score histogram")
+        self.histogram_btn.clicked.connect(self.show_histogram_requested.emit)
+        options_layout.addWidget(self.histogram_btn)
 
         prop_layout.addLayout(options_layout)
 

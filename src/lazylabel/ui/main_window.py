@@ -3001,6 +3001,9 @@ class MainWindow(QMainWindow):
         self.sequence_widget.confidence_threshold_changed.connect(
             self._on_confidence_threshold_changed
         )
+        self.sequence_widget.show_histogram_requested.connect(
+            self._on_show_confidence_histogram
+        )
 
         # Trim signals
         self.sequence_widget.set_trim_left_requested.connect(self._on_set_trim_left)
@@ -3958,6 +3961,12 @@ class MainWindow(QMainWindow):
             self.sequence_widget.set_flagged_count(flagged_count)
             self.sequence_widget.set_propagated_count(propagated_count)
 
+        # Update timeline confidence scores
+        if self.sequence_view_mode and self.timeline_widget:
+            scores = self.sequence_view_mode.get_all_confidence_scores()
+            if scores:
+                self.timeline_widget.set_confidence_scores(scores)
+
         # Get stats
         if self.propagation_manager:
             stats = self.propagation_manager.get_propagation_stats()
@@ -4025,6 +4034,22 @@ class MainWindow(QMainWindow):
             self.propagation_manager.set_confidence_threshold(threshold)
         if self.sequence_view_mode:
             self.sequence_view_mode.set_confidence_threshold(threshold)
+
+    def _on_show_confidence_histogram(self):
+        """Show confidence score histogram dialog."""
+        if not self.sequence_view_mode:
+            return
+        scores = self.sequence_view_mode.get_all_confidence_scores()
+        if not scores:
+            self._show_notification("No confidence scores available yet")
+            return
+
+        from .widgets.confidence_histogram_dialog import ConfidenceHistogramDialog
+
+        threshold = self.sequence_widget.confidence_spin.value()
+        dlg = ConfidenceHistogramDialog(list(scores.values()), threshold, parent=self)
+        if dlg.exec() == ConfidenceHistogramDialog.DialogCode.Accepted:
+            self.sequence_widget.confidence_spin.setValue(dlg.get_threshold())
 
     def _on_save_all_propagated(self):
         """Save all propagated frames to NPZ files."""
@@ -4452,6 +4477,9 @@ class MainWindow(QMainWindow):
         # Update widgets
         total = len(image_paths)
         self.timeline_widget.set_frame_count(total)
+        self.timeline_widget.set_frame_names(
+            [Path(p).stem for p in image_paths]
+        )
         if self.sequence_widget:
             self.sequence_widget.set_total_frames(total)
             self.sequence_widget.set_timeline_built(True)
@@ -4545,9 +4573,15 @@ class MainWindow(QMainWindow):
         # Rebuild UI
         total = self.sequence_view_mode.total_frames
         self.timeline_widget.set_frame_count(total)
+        self.timeline_widget.set_frame_names(
+            [Path(p).stem for p in self.sequence_view_mode._image_paths]
+        )
         self.timeline_widget.set_batch_statuses(
             self.sequence_view_mode.get_all_frame_statuses()
         )
+        scores = self.sequence_view_mode.get_all_confidence_scores()
+        if scores:
+            self.timeline_widget.set_confidence_scores(scores)
         self.sequence_widget.set_total_frames(total)
         self.sequence_widget.set_reference_frames(
             self.sequence_view_mode.reference_frame_indices

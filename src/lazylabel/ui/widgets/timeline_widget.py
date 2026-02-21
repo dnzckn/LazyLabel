@@ -6,7 +6,7 @@ with color-coded frame statuses.
 
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QBrush, QColor, QMouseEvent, QPainter, QPen
-from PyQt6.QtWidgets import QSizePolicy, QWidget
+from PyQt6.QtWidgets import QSizePolicy, QToolTip, QWidget
 
 
 class TimelineWidget(QWidget):
@@ -37,6 +37,8 @@ class TimelineWidget(QWidget):
         self.total_frames = 0
         self.current_frame = 0
         self.frame_statuses: dict[int, str] = {}  # idx -> status
+        self._frame_names: list[str] = []
+        self._confidence_scores: dict[int, float] = {}
 
         # UI settings
         self.setMinimumHeight(30)
@@ -52,8 +54,18 @@ class TimelineWidget(QWidget):
         """Set total number of frames in the sequence."""
         self.total_frames = max(0, count)
         self.frame_statuses.clear()
+        self._frame_names.clear()
+        self._confidence_scores.clear()
         self._invalidate_geometry()
         self.update()
+
+    def set_frame_names(self, names: list[str]) -> None:
+        """Set display names for each frame (e.g. filename stems)."""
+        self._frame_names = list(names)
+
+    def set_confidence_scores(self, scores: dict[int, float]) -> None:
+        """Set confidence scores for frames."""
+        self._confidence_scores = dict(scores)
 
     def set_current_frame(self, idx: int) -> None:
         """Update current frame indicator."""
@@ -258,12 +270,32 @@ class TimelineWidget(QWidget):
             self.set_current_frame(frame)
 
     def mouseMoveEvent(self, event: QMouseEvent) -> None:
-        """Handle mouse drag to scrub through frames."""
+        """Handle mouse drag to scrub through frames, or show tooltip on hover."""
         if event.buttons() & Qt.MouseButton.LeftButton and self.total_frames > 0:
             frame = self._x_to_frame(event.pos().x())
             if frame != self.current_frame:
                 self.frame_selected.emit(frame)
                 self.set_current_frame(frame)
+        elif self.total_frames > 0:
+            frame = self._x_to_frame(event.pos().x())
+            self._show_frame_tooltip(event, frame)
+
+    def _show_frame_tooltip(self, event: QMouseEvent, frame: int) -> None:
+        """Show tooltip with frame info at cursor position."""
+        lines = [f"Frame {frame + 1}/{self.total_frames}"]
+
+        if frame < len(self._frame_names):
+            lines.append(self._frame_names[frame])
+
+        status = self.frame_statuses.get(frame, "pending")
+        lines.append(f"Status: {status}")
+
+        if frame in self._confidence_scores:
+            lines.append(f"Confidence: {self._confidence_scores[frame]:.4f}")
+
+        QToolTip.showText(
+            event.globalPosition().toPoint(), "\n".join(lines), self
+        )
 
     def resizeEvent(self, event) -> None:
         """Handle resize - invalidate cached geometry."""

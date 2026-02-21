@@ -490,3 +490,28 @@ class TestTrimUI:
         sequence_widget.reset()
         assert sequence_widget.get_trim_range() == (None, None)
         assert sequence_widget.trim_left_label.text() == "Not set"
+
+
+class TestHistogramButton:
+    """Tests for the histogram button."""
+
+    def test_histogram_button_exists(self, sequence_widget):
+        """Test that the histogram button exists."""
+        assert sequence_widget.histogram_btn is not None
+
+    def test_histogram_button_text(self, sequence_widget):
+        """Test that the histogram button has correct text."""
+        assert sequence_widget.histogram_btn.text() == "Hist"
+
+    def test_histogram_button_tooltip(self, sequence_widget):
+        """Test that the histogram button has a tooltip."""
+        assert "histogram" in sequence_widget.histogram_btn.toolTip().lower()
+
+    def test_histogram_button_max_width(self, sequence_widget):
+        """Test that the histogram button has constrained width."""
+        assert sequence_widget.histogram_btn.maximumWidth() == 40
+
+    def test_histogram_button_emits_signal(self, sequence_widget, qtbot):
+        """Test that histogram button emits show_histogram_requested signal."""
+        with qtbot.waitSignal(sequence_widget.show_histogram_requested):
+            sequence_widget.histogram_btn.click()
