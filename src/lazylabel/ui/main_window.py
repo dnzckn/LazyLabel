@@ -111,6 +111,8 @@ class MainWindow(QMainWindow):
         self._sequence_start_path: str | None = None
         self._sequence_end_path: str | None = None
         self._sequence_timeline_built: bool = False
+        self._trim_left_idx: int | None = None
+        self._trim_right_idx: int | None = None
 
         # Multi-view state
         self.multi_view_viewers: list[
@@ -2981,6 +2983,9 @@ class MainWindow(QMainWindow):
         self.sequence_widget.add_all_before_requested.connect(
             self._on_add_all_before_reference
         )
+        self.sequence_widget.add_all_labeled_requested.connect(
+            self._on_add_all_labeled_reference
+        )
         self.sequence_widget.clear_references_requested.connect(
             self._on_clear_sequence_references
         )
@@ -2996,6 +3001,12 @@ class MainWindow(QMainWindow):
         self.sequence_widget.confidence_threshold_changed.connect(
             self._on_confidence_threshold_changed
         )
+
+        # Trim signals
+        self.sequence_widget.set_trim_left_requested.connect(self._on_set_trim_left)
+        self.sequence_widget.set_trim_right_requested.connect(self._on_set_trim_right)
+        self.sequence_widget.trim_range_requested.connect(self._on_trim_range)
+        self.sequence_widget.clear_trim_requested.connect(self._on_clear_trim)
 
     def _on_sequence_frame_selected(self, frame_idx: int):
         """Handle frame selection in sequence mode."""
@@ -3446,6 +3457,36 @@ class MainWindow(QMainWindow):
         ref_indices = self.sequence_view_mode.reference_frame_indices
         self.sequence_widget.set_reference_frames(ref_indices)
         msg = f"Added {count} frames as references"
+        if skipped_count > 0:
+            msg += f" ({skipped_count} skipped: dimension mismatch)"
+        self._show_notification(msg)
+
+    def _on_add_all_labeled_reference(self):
+        """Add all frames with existing NPZ labels as references."""
+        if self.sequence_view_mode is None:
+            return
+
+        count = 0
+        skipped_count = 0
+        for idx in range(self.sequence_view_mode.total_frames):
+            image_path = self.sequence_view_mode.get_image_path(idx)
+            if not image_path:
+                continue
+            npz_path = Path(image_path).with_suffix(".npz")
+            if not npz_path.exists():
+                continue
+            dims = self._get_sequence_image_dimensions(image_path)
+            if self.sequence_view_mode.set_reference_frame(
+                idx, image_dimensions=dims
+            ):
+                self.timeline_widget.set_frame_status(idx, "reference")
+                count += 1
+            else:
+                skipped_count += 1
+
+        ref_indices = self.sequence_view_mode.reference_frame_indices
+        self.sequence_widget.set_reference_frames(ref_indices)
+        msg = f"Added {count} labeled frames as references"
         if skipped_count > 0:
             msg += f" ({skipped_count} skipped: dimension mismatch)"
         self._show_notification(msg)
@@ -4451,6 +4492,84 @@ class MainWindow(QMainWindow):
         self.timeline_widget.clear_statuses()
 
         self._show_notification("Timeline cleared. Set new start/end frames.")
+
+    # --- Trim handlers ---
+
+    def _on_set_trim_left(self):
+        """Store current frame as the left bound of the trim range."""
+        if self.sequence_view_mode is None:
+            return
+        idx = self.sequence_view_mode.current_frame_idx
+        self._trim_left_idx = idx
+        path = self.sequence_view_mode.get_image_path(idx)
+        name = Path(path).name if path else str(idx + 1)
+        self.sequence_widget.set_trim_left(name)
+
+    def _on_set_trim_right(self):
+        """Store current frame as the right bound of the trim range."""
+        if self.sequence_view_mode is None:
+            return
+        idx = self.sequence_view_mode.current_frame_idx
+        self._trim_right_idx = idx
+        path = self.sequence_view_mode.get_image_path(idx)
+        name = Path(path).name if path else str(idx + 1)
+        self.sequence_widget.set_trim_right(name)
+
+    def _on_trim_range(self):
+        """Remove all frames in [trim_left, trim_right] from the timeline."""
+        if self.sequence_view_mode is None:
+            return
+        if self._trim_left_idx is None or self._trim_right_idx is None:
+            self._show_notification("Set both trim left and right bounds first")
+            return
+
+        left = min(self._trim_left_idx, self._trim_right_idx)
+        right = max(self._trim_left_idx, self._trim_right_idx)
+        indices = set(range(left, right + 1))
+
+        if len(indices) >= self.sequence_view_mode.total_frames:
+            self._show_notification("Cannot remove all frames from the timeline")
+            return
+
+        # Perform the trim
+        try:
+            removed = self.sequence_view_mode.trim_frames(indices)
+        except ValueError as e:
+            self._show_notification(str(e))
+            return
+
+        # Invalidate propagation manager (SAM2 indices are now stale)
+        if self.propagation_manager and self.propagation_manager.is_initialized:
+            self.propagation_manager.cleanup()
+
+        # Rebuild UI
+        total = self.sequence_view_mode.total_frames
+        self.timeline_widget.set_frame_count(total)
+        self.timeline_widget.set_batch_statuses(
+            self.sequence_view_mode.get_all_frame_statuses()
+        )
+        self.sequence_widget.set_total_frames(total)
+        self.sequence_widget.set_reference_frames(
+            self.sequence_view_mode.reference_frame_indices
+        )
+        self.sequence_widget.set_flagged_count(
+            len(self.sequence_view_mode.get_flagged_frames())
+        )
+
+        # Navigate to the new current frame
+        self._on_sequence_frame_selected(self.sequence_view_mode.current_frame_idx)
+
+        # Clear trim selection
+        self._trim_left_idx = None
+        self._trim_right_idx = None
+        self.sequence_widget.clear_trim()
+
+        self._show_notification(f"Trimmed {len(removed)} frames from timeline")
+
+    def _on_clear_trim(self):
+        """Reset trim left/right state."""
+        self._trim_left_idx = None
+        self._trim_right_idx = None
 
     def _enter_sequence_mode(self):
         """Enter sequence mode - shows setup UI for timeline range selection.

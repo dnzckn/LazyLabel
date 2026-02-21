@@ -370,3 +370,123 @@ class TestSignals:
             sequence_widget.propagate_btn.click()
         direction, start, end, skip_flagged = blocker.args
         assert skip_flagged is False
+
+
+class TestAddAllLabeledButton:
+    """Tests for the Add All Labeled button."""
+
+    def test_add_all_labeled_button_exists(self, sequence_widget):
+        """Test that the Add All Labeled button exists."""
+        assert sequence_widget.add_all_labeled_btn is not None
+
+    def test_add_all_labeled_button_emits_signal(self, sequence_widget, qtbot):
+        """Test that Add All Labeled button emits the correct signal."""
+        with qtbot.waitSignal(sequence_widget.add_all_labeled_requested):
+            sequence_widget.add_all_labeled_btn.click()
+
+    def test_add_all_labeled_button_tooltip(self, sequence_widget):
+        """Test that the button has an appropriate tooltip."""
+        assert "NPZ" in sequence_widget.add_all_labeled_btn.toolTip()
+
+
+class TestTrimUI:
+    """Tests for the trim section UI."""
+
+    def test_trim_group_exists(self, sequence_widget):
+        """Test that the trim group box exists."""
+        assert sequence_widget.trim_group is not None
+
+    def test_trim_group_hidden_initially(self, sequence_widget):
+        """Test that trim group is hidden before timeline is built."""
+        assert sequence_widget.trim_group.isHidden()
+
+    def test_trim_group_shown_after_timeline_built(self, sequence_widget):
+        """Test that trim group is not hidden after timeline is built."""
+        sequence_widget.set_timeline_built(True)
+        assert not sequence_widget.trim_group.isHidden()
+
+    def test_trim_buttons_exist(self, sequence_widget):
+        """Test that all trim buttons exist."""
+        assert sequence_widget.set_trim_left_btn is not None
+        assert sequence_widget.set_trim_right_btn is not None
+        assert sequence_widget.clear_trim_btn is not None
+        assert sequence_widget.trim_range_btn is not None
+
+    def test_trim_range_disabled_without_bounds(self, sequence_widget):
+        """Test that Trim Range button is disabled without both bounds."""
+        assert not sequence_widget.trim_range_btn.isEnabled()
+
+    def test_trim_range_enabled_with_both_bounds(self, sequence_widget):
+        """Test that Trim Range button is enabled when both bounds are set."""
+        sequence_widget.set_trim_left("frame_001.png")
+        sequence_widget.set_trim_right("frame_010.png")
+        assert sequence_widget.trim_range_btn.isEnabled()
+
+    def test_clear_trim_disabled_without_bounds(self, sequence_widget):
+        """Test that Clear Trim button is disabled without any bounds."""
+        assert not sequence_widget.clear_trim_btn.isEnabled()
+
+    def test_clear_trim_enabled_with_left_bound(self, sequence_widget):
+        """Test that Clear Trim is enabled when left bound is set."""
+        sequence_widget.set_trim_left("frame_001.png")
+        assert sequence_widget.clear_trim_btn.isEnabled()
+
+    def test_set_trim_left_updates_label(self, sequence_widget):
+        """Test that set_trim_left updates the label text."""
+        sequence_widget.set_trim_left("frame_005.png")
+        assert sequence_widget.trim_left_label.text() == "frame_005.png"
+
+    def test_set_trim_right_updates_label(self, sequence_widget):
+        """Test that set_trim_right updates the label text."""
+        sequence_widget.set_trim_right("frame_020.png")
+        assert sequence_widget.trim_right_label.text() == "frame_020.png"
+
+    def test_get_trim_range(self, sequence_widget):
+        """Test that get_trim_range returns the current trim selection."""
+        sequence_widget.set_trim_left("a.png")
+        sequence_widget.set_trim_right("b.png")
+        assert sequence_widget.get_trim_range() == ("a.png", "b.png")
+
+    def test_get_trim_range_none_initially(self, sequence_widget):
+        """Test that get_trim_range returns (None, None) initially."""
+        assert sequence_widget.get_trim_range() == (None, None)
+
+    def test_clear_trim_resets_labels(self, sequence_widget):
+        """Test that clear_trim resets labels and state."""
+        sequence_widget.set_trim_left("a.png")
+        sequence_widget.set_trim_right("b.png")
+        sequence_widget.clear_trim()
+        assert sequence_widget.trim_left_label.text() == "Not set"
+        assert sequence_widget.trim_right_label.text() == "Not set"
+        assert sequence_widget.get_trim_range() == (None, None)
+
+    def test_set_trim_left_signal(self, sequence_widget, qtbot):
+        """Test that Set Left button emits signal."""
+        with qtbot.waitSignal(sequence_widget.set_trim_left_requested):
+            sequence_widget.set_trim_left_btn.click()
+
+    def test_set_trim_right_signal(self, sequence_widget, qtbot):
+        """Test that Set Right button emits signal."""
+        with qtbot.waitSignal(sequence_widget.set_trim_right_requested):
+            sequence_widget.set_trim_right_btn.click()
+
+    def test_trim_range_signal(self, sequence_widget, qtbot):
+        """Test that Trim Range button emits signal when enabled."""
+        sequence_widget.set_trim_left("a.png")
+        sequence_widget.set_trim_right("b.png")
+        with qtbot.waitSignal(sequence_widget.trim_range_requested):
+            sequence_widget.trim_range_btn.click()
+
+    def test_clear_trim_signal(self, sequence_widget, qtbot):
+        """Test that Clear Trim button emits signal."""
+        sequence_widget.set_trim_left("a.png")
+        with qtbot.waitSignal(sequence_widget.clear_trim_requested):
+            sequence_widget.clear_trim_btn.click()
+
+    def test_reset_clears_trim(self, sequence_widget):
+        """Test that reset clears trim state."""
+        sequence_widget.set_trim_left("a.png")
+        sequence_widget.set_trim_right("b.png")
+        sequence_widget.reset()
+        assert sequence_widget.get_trim_range() == (None, None)
+        assert sequence_widget.trim_left_label.text() == "Not set"

@@ -452,6 +452,84 @@ class SequenceViewMode(QObject):
                 self._frame_statuses[idx] = FrameStatus.SKIPPED
                 self.frame_status_changed.emit(idx, FrameStatus.SKIPPED.value)
 
+    def trim_frames(self, indices_to_remove: set[int]) -> list[str]:
+        """Remove frames from the timeline by index.
+
+        Rebuilds all internal state with remapped indices. Does NOT affect
+        files on disk — trimming is timeline-only.
+
+        Args:
+            indices_to_remove: Set of frame indices to remove.
+
+        Returns:
+            List of image paths that were removed.
+
+        Raises:
+            ValueError: If removing all frames.
+        """
+        total = len(self._image_paths)
+        keep = sorted(i for i in range(total) if i not in indices_to_remove)
+        if not keep:
+            raise ValueError("Cannot trim all frames from the timeline")
+
+        removed_paths = [self._image_paths[i] for i in sorted(indices_to_remove) if i < total]
+
+        # Build old-to-new index mapping
+        old_to_new: dict[int, int] = {old: new for new, old in enumerate(keep)}
+
+        # Rebuild image paths
+        self._image_paths = [self._image_paths[i] for i in keep]
+
+        # Rebuild frame statuses
+        new_statuses: dict[int, FrameStatus] = {}
+        for old_idx in keep:
+            new_idx = old_to_new[old_idx]
+            new_statuses[new_idx] = self._frame_statuses.get(old_idx, FrameStatus.PENDING)
+        self._frame_statuses = new_statuses
+
+        # Rebuild reference annotations (update frame_idx inside each annotation)
+        new_refs: dict[int, list[ReferenceAnnotation]] = {}
+        for old_idx, anns in self._reference_annotations.items():
+            if old_idx in old_to_new:
+                new_idx = old_to_new[old_idx]
+                for ann in anns:
+                    ann.frame_idx = new_idx
+                new_refs[new_idx] = anns
+        self._reference_annotations = new_refs
+
+        # Rebuild propagated masks
+        new_masks: dict[int, dict[int, np.ndarray]] = {}
+        for old_idx, masks in self._propagated_masks.items():
+            if old_idx in old_to_new:
+                new_masks[old_to_new[old_idx]] = masks
+        self._propagated_masks = new_masks
+
+        # Rebuild confidence scores
+        new_scores: dict[int, float] = {}
+        for old_idx, score in self._confidence_scores.items():
+            if old_idx in old_to_new:
+                new_scores[old_to_new[old_idx]] = score
+        self._confidence_scores = new_scores
+
+        # Rebuild skipped frame indices
+        self._skipped_frame_indices = {
+            old_to_new[i] for i in self._skipped_frame_indices if i in old_to_new
+        }
+
+        # Adjust current frame index
+        if self._current_frame_idx in old_to_new:
+            self._current_frame_idx = old_to_new[self._current_frame_idx]
+        else:
+            # Current frame was removed — find nearest valid frame
+            nearest = min(keep, key=lambda k: abs(k - self._current_frame_idx))
+            self._current_frame_idx = old_to_new[nearest]
+
+        # Clear reference dimensions if no references remain
+        if not self._reference_annotations:
+            self._reference_dimensions = None
+
+        return removed_paths
+
     def to_dict(self) -> dict:
         """Serialize sequence state to dict (for saving)."""
         return {

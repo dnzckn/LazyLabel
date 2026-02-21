@@ -64,6 +64,9 @@ class SequenceWidget(QWidget):
     add_all_before_requested = (
         pyqtSignal()
     )  # Request to add all frames before current as reference
+    add_all_labeled_requested = (
+        pyqtSignal()
+    )  # Request to add all frames with NPZ labels as reference
     clear_references_requested = pyqtSignal()  # Request to clear all references
     propagate_requested = pyqtSignal(
         str, int, int, bool
@@ -73,6 +76,12 @@ class SequenceWidget(QWidget):
     prev_flagged_requested = pyqtSignal()
     jump_to_frame_requested = pyqtSignal(int)
     confidence_threshold_changed = pyqtSignal(float)  # threshold value 0.0-1.0
+
+    # Signals - Trim
+    set_trim_left_requested = pyqtSignal()
+    set_trim_right_requested = pyqtSignal()
+    trim_range_requested = pyqtSignal()
+    clear_trim_requested = pyqtSignal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -85,8 +94,18 @@ class SequenceWidget(QWidget):
         self._timeline_built = False
         self._start_frame_name: str | None = None
         self._end_frame_name: str | None = None
+        self._trim_left_name: str | None = None
+        self._trim_right_name: str | None = None
 
         self._setup_ui()
+
+    # Shared QGroupBox styling
+    _GROUP_STYLE = (
+        "QGroupBox { border: 1px solid #555; border-radius: 4px;"
+        " margin-top: 8px; padding-top: 4px; }"
+        "QGroupBox::title { subcontrol-origin: margin;"
+        " left: 8px; padding: 0 4px; color: #CCC; }"
+    )
 
     def _setup_ui(self) -> None:
         """Create the UI layout."""
@@ -96,7 +115,10 @@ class SequenceWidget(QWidget):
 
         # Timeline Setup Section (shown before timeline is built)
         self.setup_group = QGroupBox("Timeline Setup")
+        self.setup_group.setStyleSheet(self._GROUP_STYLE)
         setup_layout = QVBoxLayout(self.setup_group)
+        setup_layout.setContentsMargins(6, 8, 6, 6)
+        setup_layout.setSpacing(4)
 
         # Instructions
         instructions = QLabel(
@@ -168,7 +190,10 @@ class SequenceWidget(QWidget):
 
         # Reference Frame Section (hidden until timeline is built)
         self.ref_group = QGroupBox("Reference Frames")
+        self.ref_group.setStyleSheet(self._GROUP_STYLE)
         ref_layout = QVBoxLayout(self.ref_group)
+        ref_layout.setContentsMargins(6, 8, 6, 6)
+        ref_layout.setSpacing(4)
 
         # Reference frame display
         ref_info_layout = QHBoxLayout()
@@ -199,12 +224,18 @@ class SequenceWidget(QWidget):
 
         # Reference buttons - row 2
         ref_btn_layout2 = QHBoxLayout()
+        self.add_all_labeled_btn = QPushButton("+ All Labeled")
+        self.add_all_labeled_btn.setToolTip(
+            "Add all frames with existing labels (NPZ files) as references"
+        )
+        self.add_all_labeled_btn.clicked.connect(self.add_all_labeled_requested.emit)
+        ref_btn_layout2.addWidget(self.add_all_labeled_btn)
+
         self.clear_references_btn = QPushButton("Clear All")
         self.clear_references_btn.setToolTip("Clear all reference frames")
         self.clear_references_btn.clicked.connect(self.clear_references_requested.emit)
         self.clear_references_btn.setEnabled(False)
         ref_btn_layout2.addWidget(self.clear_references_btn)
-        ref_btn_layout2.addStretch()
 
         ref_layout.addLayout(ref_btn_layout2)
 
@@ -212,7 +243,10 @@ class SequenceWidget(QWidget):
 
         # Propagation Section (hidden until timeline is built)
         self.prop_group = QGroupBox("Propagation")
+        self.prop_group.setStyleSheet(self._GROUP_STYLE)
         prop_layout = QVBoxLayout(self.prop_group)
+        prop_layout.setContentsMargins(6, 8, 6, 6)
+        prop_layout.setSpacing(4)
 
         # Propagate button (always bidirectional from all reference frames)
         self.propagate_btn = QPushButton("Propagate")
@@ -271,7 +305,10 @@ class SequenceWidget(QWidget):
 
         # Review Section (hidden until timeline is built)
         self.review_group = QGroupBox("Review")
+        self.review_group.setStyleSheet(self._GROUP_STYLE)
         review_layout = QVBoxLayout(self.review_group)
+        review_layout.setContentsMargins(6, 8, 6, 6)
+        review_layout.setSpacing(4)
 
         # Flagged count
         flagged_layout = QHBoxLayout()
@@ -300,6 +337,66 @@ class SequenceWidget(QWidget):
 
         layout.addWidget(self.review_group)
 
+        # Trim Section (hidden until timeline is built)
+        self.trim_group = QGroupBox("Trim")
+        self.trim_group.setStyleSheet(self._GROUP_STYLE)
+        trim_layout = QVBoxLayout(self.trim_group)
+        trim_layout.setContentsMargins(6, 8, 6, 6)
+        trim_layout.setSpacing(4)
+
+        # Left/Right frame labels
+        trim_display = QHBoxLayout()
+        trim_display.addWidget(QLabel("Left:"))
+        self.trim_left_label = QLabel("Not set")
+        self.trim_left_label.setStyleSheet("font-weight: bold; color: #8B4513;")
+        self.trim_left_label.setWordWrap(True)
+        trim_display.addWidget(self.trim_left_label, 1)
+        trim_layout.addLayout(trim_display)
+
+        trim_display2 = QHBoxLayout()
+        trim_display2.addWidget(QLabel("Right:"))
+        self.trim_right_label = QLabel("Not set")
+        self.trim_right_label.setStyleSheet("font-weight: bold; color: #8B4513;")
+        self.trim_right_label.setWordWrap(True)
+        trim_display2.addWidget(self.trim_right_label, 1)
+        trim_layout.addLayout(trim_display2)
+
+        # Set Left/Right buttons
+        trim_set_layout = QHBoxLayout()
+        self.set_trim_left_btn = QPushButton("Set Left")
+        self.set_trim_left_btn.setToolTip("Mark current frame as trim left bound")
+        self.set_trim_left_btn.clicked.connect(self.set_trim_left_requested.emit)
+        trim_set_layout.addWidget(self.set_trim_left_btn)
+
+        self.set_trim_right_btn = QPushButton("Set Right")
+        self.set_trim_right_btn.setToolTip("Mark current frame as trim right bound")
+        self.set_trim_right_btn.clicked.connect(self.set_trim_right_requested.emit)
+        trim_set_layout.addWidget(self.set_trim_right_btn)
+        trim_layout.addLayout(trim_set_layout)
+
+        # Clear Trim / Trim Range buttons
+        trim_action_layout = QHBoxLayout()
+        self.clear_trim_btn = QPushButton("Clear Trim")
+        self.clear_trim_btn.setToolTip("Reset trim selection")
+        self.clear_trim_btn.clicked.connect(self._on_clear_trim)
+        self.clear_trim_btn.setEnabled(False)
+        trim_action_layout.addWidget(self.clear_trim_btn)
+
+        self.trim_range_btn = QPushButton("Trim Range")
+        self.trim_range_btn.setToolTip(
+            "Remove all frames within the selected range (inclusive)"
+        )
+        self.trim_range_btn.setStyleSheet(
+            "QPushButton { background-color: #8B4513; color: white; font-weight: bold; }"
+            "QPushButton:hover { background-color: #A0522D; }"
+        )
+        self.trim_range_btn.clicked.connect(self.trim_range_requested.emit)
+        self.trim_range_btn.setEnabled(False)
+        trim_action_layout.addWidget(self.trim_range_btn)
+        trim_layout.addLayout(trim_action_layout)
+
+        layout.addWidget(self.trim_group)
+
         # New Timeline button (hidden until timeline is built)
         self.new_timeline_btn = QPushButton("New Timeline")
         self.new_timeline_btn.setToolTip(
@@ -307,8 +404,8 @@ class SequenceWidget(QWidget):
             "This will clear all propagation results."
         )
         self.new_timeline_btn.setStyleSheet(
-            "QPushButton { background-color: #666; color: white; padding: 6px; }"
-            "QPushButton:hover { background-color: #888; }"
+            "QPushButton { background-color: #8B4513; color: white; padding: 6px; font-weight: bold; }"
+            "QPushButton:hover { background-color: #A0522D; }"
         )
         self.new_timeline_btn.clicked.connect(self.exit_timeline_requested.emit)
         self.new_timeline_btn.setVisible(False)  # Hidden until timeline is built
@@ -469,13 +566,18 @@ class SequenceWidget(QWidget):
         self._timeline_built = False
         self._start_frame_name = None
         self._end_frame_name = None
+        self._trim_left_name = None
+        self._trim_right_name = None
         self.reference_label.setText("None")
         self.flagged_label.setText("0")
         self.start_label.setText("Not set")
         self.end_label.setText("Not set")
+        self.trim_left_label.setText("Not set")
+        self.trim_right_label.setText("Not set")
         self._update_button_states()
         self._update_timeline_visibility()
         self._update_range_button_states()
+        self._update_trim_button_states()
 
     def _update_timeline_visibility(self) -> None:
         """Show/hide UI sections based on timeline state."""
@@ -486,6 +588,7 @@ class SequenceWidget(QWidget):
         self.ref_group.setVisible(self._timeline_built)
         self.prop_group.setVisible(self._timeline_built)
         self.review_group.setVisible(self._timeline_built)
+        self.trim_group.setVisible(self._timeline_built)
         self.new_timeline_btn.setVisible(self._timeline_built)
 
     def _update_range_button_states(self) -> None:
@@ -541,3 +644,53 @@ class SequenceWidget(QWidget):
         """
         self._timeline_built = built
         self._update_timeline_visibility()
+
+    # --- Trim helpers ---
+
+    def set_trim_left(self, frame_name: str) -> None:
+        """Set the left bound of the trim range.
+
+        Args:
+            frame_name: Display name for the left bound frame
+        """
+        self._trim_left_name = frame_name
+        self.trim_left_label.setText(frame_name)
+        self._update_trim_button_states()
+
+    def set_trim_right(self, frame_name: str) -> None:
+        """Set the right bound of the trim range.
+
+        Args:
+            frame_name: Display name for the right bound frame
+        """
+        self._trim_right_name = frame_name
+        self.trim_right_label.setText(frame_name)
+        self._update_trim_button_states()
+
+    def get_trim_range(self) -> tuple[str | None, str | None]:
+        """Get the current trim selection.
+
+        Returns:
+            Tuple of (left_name, right_name)
+        """
+        return (self._trim_left_name, self._trim_right_name)
+
+    def clear_trim(self) -> None:
+        """Clear the trim selection."""
+        self._trim_left_name = None
+        self._trim_right_name = None
+        self.trim_left_label.setText("Not set")
+        self.trim_right_label.setText("Not set")
+        self._update_trim_button_states()
+
+    def _on_clear_trim(self) -> None:
+        """Handle clear trim button click."""
+        self.clear_trim()
+        self.clear_trim_requested.emit()
+
+    def _update_trim_button_states(self) -> None:
+        """Update trim button enabled states."""
+        has_left = self._trim_left_name is not None
+        has_right = self._trim_right_name is not None
+        self.clear_trim_btn.setEnabled(has_left or has_right)
+        self.trim_range_btn.setEnabled(has_left and has_right)
