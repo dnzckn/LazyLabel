@@ -62,7 +62,7 @@ from .managers.propagation_manager import PropagationDirection
 from .modes import SequenceViewMode
 from .photo_viewer import PhotoViewer
 from .right_panel import RightPanel
-from .widgets import SequenceWidget, StatusBar, TimelineWidget
+from .widgets import SequenceWidget, StatusBar, TimelineWidget, ZoomableTimeline
 from .workers import (
     ImageDiscoveryWorker,
     PropagationWorker,
@@ -1167,7 +1167,10 @@ class MainWindow(QMainWindow):
     def _load_model(self):
         """Explicitly load the selected model into memory."""
         # If a model is already loaded and no different model is pending, do nothing
-        if self.model_manager.is_model_available() and not self.pending_custom_model_path:
+        if (
+            self.model_manager.is_model_available()
+            and not self.pending_custom_model_path
+        ):
             # Check if the loaded model matches what's selected
             selected_path = self.control_panel.model_widget.get_selected_model_path()
             selected_is_default = not selected_path
@@ -2991,9 +2994,10 @@ class MainWindow(QMainWindow):
         timeline_layout.setContentsMargins(0, 0, 0, 0)
         timeline_layout.setSpacing(5)
 
-        self.timeline_widget = TimelineWidget()
-        self.timeline_widget.frame_selected.connect(self._on_sequence_frame_selected)
-        timeline_layout.addWidget(self.timeline_widget, stretch=1)
+        self._zoomable_timeline = ZoomableTimeline()
+        self.timeline_widget = self._zoomable_timeline.timeline
+        self._zoomable_timeline.frame_selected.connect(self._on_sequence_frame_selected)
+        timeline_layout.addWidget(self._zoomable_timeline, stretch=1)
 
         self.save_all_timeline_btn = QPushButton("Save All")
         self.save_all_timeline_btn.setToolTip(
@@ -3135,7 +3139,10 @@ class MainWindow(QMainWindow):
             self._save_output_to_npz()
 
             # Invalidate preload cache entry so it reloads from the updated NPZ
-            if hasattr(self, "_sequence_mask_cache") and image_path in self._sequence_mask_cache:
+            if (
+                hasattr(self, "_sequence_mask_cache")
+                and image_path in self._sequence_mask_cache
+            ):
                 del self._sequence_mask_cache[image_path]
 
             if has_segments:
@@ -3538,9 +3545,7 @@ class MainWindow(QMainWindow):
             if not npz_path.exists():
                 continue
             dims = self._get_sequence_image_dimensions(image_path)
-            if self.sequence_view_mode.set_reference_frame(
-                idx, image_dimensions=dims
-            ):
+            if self.sequence_view_mode.set_reference_frame(idx, image_dimensions=dims):
                 self.timeline_widget.set_frame_status(idx, "reference")
                 count += 1
             else:
@@ -4543,9 +4548,7 @@ class MainWindow(QMainWindow):
         # Update widgets
         total = len(image_paths)
         self.timeline_widget.set_frame_count(total)
-        self.timeline_widget.set_frame_names(
-            [Path(p).stem for p in image_paths]
-        )
+        self.timeline_widget.set_frame_names([Path(p).stem for p in image_paths])
         if self.sequence_widget:
             self.sequence_widget.set_total_frames(total)
             self.sequence_widget.set_timeline_built(True)

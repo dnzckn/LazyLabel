@@ -11,7 +11,7 @@ from .model_selection_widget import ModelSelectionWidget
 from .sequence_widget import SequenceWidget, ShortcutDoubleSpinBox, ShortcutSpinBox
 from .settings_widget import SettingsWidget
 from .status_bar import StatusBar
-from .timeline_widget import TimelineWidget
+from .timeline_widget import TimelineWidget, ZoomableTimeline
 
 __all__ = [
     "AdjustmentsWidget",
@@ -28,4 +28,5 @@ __all__ = [
     "ShortcutSpinBox",
     "StatusBar",
     "TimelineWidget",
+    "ZoomableTimeline",
 ]
