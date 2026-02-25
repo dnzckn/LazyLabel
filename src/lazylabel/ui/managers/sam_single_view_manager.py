@@ -126,6 +126,7 @@ class SAMSingleViewManager:
         # Update control panel
         if hasattr(self.mw, "control_panel"):
             self.mw.control_panel.set_current_model(f"Current: {model_name}")
+            self.mw.control_panel.set_model_loaded_state(True)
 
         self.mw._show_success_notification(
             "AI model ready for prompting", duration=3000
@@ -149,6 +150,10 @@ class SAMSingleViewManager:
         if hasattr(self.mw, "status_bar"):
             self.mw.status_bar.show_message(f"AI model failed: {error_msg}", 5000)
 
+        # Update button states
+        if hasattr(self.mw, "control_panel"):
+            self.mw.control_panel.set_model_loaded_state(False)
+
         # Clean up worker
         if self.init_worker:
             self.init_worker.deleteLater()
@@ -166,6 +171,11 @@ class SAMSingleViewManager:
             return
 
         if not self.mw.current_image_path:
+            return
+
+        # Don't auto-load if user explicitly unloaded the model
+        if getattr(self.mw, "model_explicitly_unloaded", False):
+            self.sam_is_dirty = False
             return
 
         # Check if we need to load a different model

@@ -358,6 +358,9 @@ class SegmentTableManager:
             class_table.setItem(row, 0, alias_item)
             class_table.setItem(row, 1, id_item)
 
+        # Reset tracked row so the display always re-applies after a full rebuild
+        self.right_panel._prev_active_class_row = None
+
         # Update active class display BEFORE re-enabling signals
         active_class = self.segment_manager.get_active_class()
         self.right_panel.update_active_class_display(active_class)

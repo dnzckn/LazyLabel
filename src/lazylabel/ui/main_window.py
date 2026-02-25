@@ -90,6 +90,7 @@ class MainWindow(QMainWindow):
 
         # Lazy model loading state
         self.pending_custom_model_path = None  # Path to custom model for lazy loading
+        self.model_explicitly_unloaded = False  # True when user explicitly unloads
 
         # View mode - single, multi, or sequence
         self.view_mode = "single"
@@ -844,6 +845,8 @@ class MainWindow(QMainWindow):
         self.control_panel.browse_models_requested.connect(self._browse_models_folder)
         self.control_panel.refresh_models_requested.connect(self._refresh_models_list)
         self.control_panel.model_selected.connect(self._load_selected_model)
+        self.control_panel.load_model_requested.connect(self._load_model)
+        self.control_panel.unload_model_requested.connect(self._unload_model)
 
         # Adjustments
         self.control_panel.annotation_size_changed.connect(self._set_annotation_size)
@@ -1142,13 +1145,11 @@ class MainWindow(QMainWindow):
             self._show_warning_notification("No models folder selected.")
 
     def _load_selected_model(self, model_text):
-        """Set the selected model for lazy loading (don't load immediately)."""
+        """Handle model dropdown selection - just store the selection."""
         if not model_text or model_text == "Default (vit_h)":
-            # Clear any pending custom model and use default
             self.pending_custom_model_path = None
-            self.control_panel.set_current_model("Selected: Default SAM Model")
-            # Clear existing model to free memory until needed
-            self._reset_sam_state_for_model_switch()
+            if not self.model_manager.is_model_available():
+                self.control_panel.set_current_model("Selected: Default SAM Model")
             return
 
         model_path = self.control_panel.model_widget.get_selected_model_path()
@@ -1156,15 +1157,79 @@ class MainWindow(QMainWindow):
             self._show_error_notification("Selected model file not found.")
             return
 
-        # Store the model path for lazy loading BEFORE clearing state
         self.pending_custom_model_path = model_path
+        model_name = os.path.basename(model_path)
 
-        # Clear existing model to free memory and mark for lazy loading
+        # Only update label if no model is currently loaded
+        if not self.model_manager.is_model_available():
+            self.control_panel.set_current_model(f"Selected: {model_name}")
+
+    def _load_model(self):
+        """Explicitly load the selected model into memory."""
+        # If a model is already loaded and no different model is pending, do nothing
+        if self.model_manager.is_model_available() and not self.pending_custom_model_path:
+            # Check if the loaded model matches what's selected
+            selected_path = self.control_panel.model_widget.get_selected_model_path()
+            selected_is_default = not selected_path
+            current_is_default = not hasattr(
+                self.model_manager.sam_model, "custom_model_path"
+            ) or not getattr(self.model_manager.sam_model, "custom_model_path", None)
+            if selected_is_default == current_is_default:
+                self._show_notification("Model already loaded")
+                return
+            # Different model selected - store it as pending
+            if selected_path:
+                self.pending_custom_model_path = selected_path
+            else:
+                self.pending_custom_model_path = None
+
+        # Unload existing model first if one is loaded
+        if self.model_manager.is_model_available():
+            self._reset_sam_state_for_model_switch()
+
+        # Determine what to load
+        selected_path = self.control_panel.model_widget.get_selected_model_path()
+        if selected_path and os.path.exists(selected_path):
+            self.pending_custom_model_path = selected_path
+
+        # Clear unloaded flag since user is explicitly loading
+        self.model_explicitly_unloaded = False
+
+        # Trigger model initialization
+        self.sam_is_dirty = True
+        self.sam_single_view_manager.mark_dirty()
+        self.sam_single_view_manager.start_initialization()
+
+        model_name = (
+            os.path.basename(selected_path) if selected_path else "Default SAM Model"
+        )
+        self.control_panel.set_current_model(f"Loading: {model_name}")
+
+    def _unload_model(self):
+        """Unload the model from memory for faster navigation."""
+        if not self.model_manager.is_model_available():
+            self._show_notification("No model loaded")
+            return
+
         self._reset_sam_state_for_model_switch()
 
-        # Update UI to show which model is selected (but not loaded yet)
-        model_name = os.path.basename(model_path)
-        self.control_panel.set_current_model(f"Selected: {model_name}")
+        # Release the model from memory
+        if self.model_manager.sam_model is not None:
+            old_model = self.model_manager.sam_model
+            self.model_manager.sam_model = None
+            del old_model
+            try:
+                import torch
+
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+            except ImportError:
+                pass
+
+        self.model_explicitly_unloaded = True
+        self.control_panel.set_current_model("No model loaded")
+        self.control_panel.set_model_loaded_state(False)
+        self._show_success_notification("Model unloaded")
 
     # Adjustment methods
     def _set_annotation_size(self, value):
@@ -2442,8 +2507,28 @@ class MainWindow(QMainWindow):
             self.right_panel.update_active_class_display(None)
 
     def _toggle_recent_class(self):
-        """Toggle the most recent class used/toggled, or the last class in the list."""
-        class_id = self.segment_manager.get_class_to_toggle_with_hotkey()
+        """Toggle the most recent class used/toggled, or pick one automatically."""
+        # First try the last toggled/used class
+        class_id = self.segment_manager.get_last_toggled_class()
+        if class_id is not None:
+            self._handle_class_toggle(class_id)
+            return
+
+        # No recent class - pick one from the class list
+        if self.settings.pixel_priority_enabled:
+            # Use the visual table order, respecting ascending/descending
+            class_order = self.right_panel.get_class_order()
+            if class_order:
+                if self.settings.pixel_priority_ascending:
+                    class_id = class_order[0]  # First in table = highest priority
+                else:
+                    class_id = class_order[-1]  # Last in table = highest priority
+        else:
+            # No priority - use the lowest class ID (ascending)
+            unique_ids = self.segment_manager.get_unique_class_ids()
+            if unique_ids:
+                class_id = unique_ids[0]
+
         if class_id is not None:
             self._handle_class_toggle(class_id)
         else:
@@ -3049,13 +3134,13 @@ class MainWindow(QMainWindow):
             has_segments = bool(self.segment_manager.segments)
             self._save_output_to_npz()
 
-            # Update the mask cache with current segment data
-            # This ensures changes are preserved when navigating back
-            self._update_sequence_mask_cache(image_path)
+            # Invalidate preload cache entry so it reloads from the updated NPZ
+            if hasattr(self, "_sequence_mask_cache") and image_path in self._sequence_mask_cache:
+                del self._sequence_mask_cache[image_path]
 
             if has_segments:
                 logger.debug(f"Auto-saved segments for sequence frame {frame_idx}")
-                # Mark frame as saved (no longer just propagated)
+                # Mark frame as saved (clears propagated masks)
                 self.sequence_view_mode.mark_frame_saved(frame_idx)
             else:
                 logger.debug(f"Deleted NPZ for empty sequence frame {frame_idx}")
@@ -3063,44 +3148,6 @@ class MainWindow(QMainWindow):
             logger.error(f"Failed to auto-save sequence frame {frame_idx}: {e}")
         finally:
             self.current_image_path = original_path
-
-    def _update_sequence_mask_cache(self, image_path: str):
-        """Update the sequence mask cache with current segment data.
-
-        This ensures that when navigating between frames, any changes
-        made to masks are preserved in the cache.
-
-        Args:
-            image_path: Path to the image file
-        """
-        if not hasattr(self, "_sequence_mask_cache"):
-            self._sequence_mask_cache = {}
-
-        # Copy current segments to avoid reference issues
-        import copy
-
-        segments_copy = []
-        for segment in self.segment_manager.segments:
-            segment_copy = {
-                "mask": segment["mask"].copy()
-                if segment.get("mask") is not None
-                else None,
-                "class_id": segment.get("class_id", 0),
-                "type": segment.get("type", "Loaded"),
-                "vertices": segment.get("vertices"),
-            }
-            segments_copy.append(segment_copy)
-
-        class_aliases_copy = copy.deepcopy(self.segment_manager.class_aliases)
-
-        if segments_copy:
-            self._sequence_mask_cache[image_path] = {
-                "segments": segments_copy,
-                "class_aliases": class_aliases_copy,
-            }
-        elif image_path in self._sequence_mask_cache:
-            # Remove from cache if no segments
-            del self._sequence_mask_cache[image_path]
 
     def _load_sequence_frame(self, image_path: str, frame_idx: int):
         """Load an image into the sequence viewer."""
@@ -3147,14 +3194,19 @@ class MainWindow(QMainWindow):
             self.sam_is_dirty = True
 
     def _load_sequence_frame_segments(self, image_path: str):
-        """Load segments for the current sequence frame."""
+        """Load segments for the current sequence frame.
+
+        Priority order:
+        1. Propagated masks (fresh from SAM2, first visit after propagation)
+        2. Preload cache (from "Load to Memory" feature, reads from NPZ)
+        3. NPZ file on disk (normal load path)
+        """
         # Clear current segments
         self.segment_manager.clear()
         self.segment_display_manager.clear_all_caches()
 
-        # Check for propagated masks FIRST - they take precedence over cache/file
-        # BUT: Reference frames should NEVER load propagated masks - they keep their
-        # hand-labeled ground truth data
+        # Check for propagated masks first (fresh from propagation)
+        # Reference frames should NEVER load propagated masks
         if self.sequence_view_mode:
             frame_idx = self.sequence_view_mode.current_frame_idx
             is_reference = frame_idx in self.sequence_view_mode.reference_frame_indices
@@ -3164,36 +3216,28 @@ class MainWindow(QMainWindow):
                     frame_idx
                 )
                 if propagated_masks:
-                    # Clear any stale cache entry for this frame since we have fresh propagated data
-                    if (
-                        hasattr(self, "_sequence_mask_cache")
-                        and image_path in self._sequence_mask_cache
-                    ):
-                        del self._sequence_mask_cache[image_path]
-
                     self._load_propagated_masks_for_frame(frame_idx)
-                    # Merge propagated masks by class to consolidate same-class segments
                     self.segment_manager.merge_segments_by_class()
                     self._update_all_lists()
                     self._display_sequence_segments()
                     return
 
-        # No propagated masks - check cache
+        # Check preload cache (from "Load to Memory" button - already from NPZ)
         cached_mask_data = self._get_cached_mask_data(image_path)
         if cached_mask_data is not None:
-            # Use cached data - much faster than loading from disk
             self._apply_cached_mask_data(cached_mask_data)
-            # Merge segments by class to consolidate same-class segments
             self.segment_manager.merge_segments_by_class()
             self._update_all_lists()
-        else:
-            # Load from file if exists
-            try:
-                self.file_manager.load_class_aliases(image_path)
-                self.file_manager.load_existing_mask(image_path)
-                self._update_all_lists()
-            except Exception as e:
-                logger.error(f"Error loading segments for sequence frame: {e}")
+            self._display_sequence_segments()
+            return
+
+        # Load from NPZ file on disk
+        try:
+            self.file_manager.load_class_aliases(image_path)
+            self.file_manager.load_existing_mask(image_path)
+            self._update_all_lists()
+        except Exception as e:
+            logger.error(f"Error loading segments for sequence frame: {e}")
 
         # Display segments on sequence viewer
         self._display_sequence_segments()
@@ -3340,11 +3384,25 @@ class MainWindow(QMainWindow):
                     scene.removeItem(item)
         self.segment_items.clear()
 
+        # Compute Z-values based on pixel priority settings
+        # When priority is enabled, the winning class renders on top (highest Z)
+        priority_enabled = self.settings.pixel_priority_enabled
+        if priority_enabled:
+            unique_ids = self.segment_manager.get_unique_class_ids()
+            max_z = len(unique_ids) + 1
+            if self.settings.pixel_priority_ascending:
+                # Lower class ID wins → render on top (higher Z)
+                class_z = {cid: max_z - idx for idx, cid in enumerate(unique_ids)}
+            else:
+                # Higher class ID wins → render on top (higher Z)
+                class_z = {cid: idx + 1 for idx, cid in enumerate(unique_ids)}
+
         # Display segments from segment manager
         for i, segment in enumerate(self.segment_manager.segments):
             self._sequence_segment_items[i] = []
             class_id = segment.get("class_id")
             base_color = self.segment_display_manager.get_color_for_class(class_id)
+            z_value = class_z.get(class_id, i + 1) if priority_enabled else i + 1
 
             if segment.get("type") == "Polygon" and segment.get("vertices"):
                 qpoints = [QPointF(p[0], p[1]) for p in segment["vertices"]]
@@ -3358,6 +3416,7 @@ class MainWindow(QMainWindow):
                 poly_item.set_brushes(default_brush, hover_brush)
                 poly_item.set_segment_info(i, self)
                 poly_item.setPen(QPen(Qt.GlobalColor.transparent))
+                poly_item.setZValue(z_value)
                 scene.addItem(poly_item)
                 self._sequence_segment_items[i].append(poly_item)
             elif segment.get("mask") is not None:
@@ -3370,7 +3429,7 @@ class MainWindow(QMainWindow):
                 pixmap_item.set_pixmaps(default_pixmap, hover_pixmap)
                 pixmap_item.set_segment_info(i, self)
                 scene.addItem(pixmap_item)
-                pixmap_item.setZValue(i + 1)
+                pixmap_item.setZValue(z_value)
                 self._sequence_segment_items[i].append(pixmap_item)
 
     def _on_sequence_frame_status_changed(self, frame_idx: int, status: str):
@@ -4136,6 +4195,13 @@ class MainWindow(QMainWindow):
                 logger.error(f"Failed to save frame {frame_idx}: {e}")
             finally:
                 self.current_image_path = original_path
+
+        # Invalidate preload cache entries for saved frames so they reload from NPZ
+        if hasattr(self, "_sequence_mask_cache"):
+            for fidx in sorted(propagated_frames):
+                fpath = self.sequence_view_mode.get_image_path(fidx)
+                if fpath and fpath in self._sequence_mask_cache:
+                    del self._sequence_mask_cache[fpath]
 
         # Clear segment manager and reload current frame
         self.segment_manager.clear()

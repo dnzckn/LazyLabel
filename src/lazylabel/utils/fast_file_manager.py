@@ -9,6 +9,7 @@ from pathlib import Path
 
 from PyQt6.QtCore import (
     QAbstractTableModel,
+    QMimeData,
     QModelIndex,
     QSortFilterProxyModel,
     Qt,
@@ -17,6 +18,7 @@ from PyQt6.QtCore import (
 )
 from PyQt6.QtGui import QColor, QPixmap
 from PyQt6.QtWidgets import (
+    QApplication,
     QHBoxLayout,
     QHeaderView,
     QLabel,
@@ -295,6 +297,53 @@ class FastFileModel(QAbstractTableModel):
 
     def rowCount(self, parent=QModelIndex()):
         return len(self._files)
+
+    def flags(self, index):
+        default = super().flags(index)
+        if index.isValid():
+            return (
+                default | Qt.ItemFlag.ItemIsDragEnabled | Qt.ItemFlag.ItemIsDropEnabled
+            )
+        return default | Qt.ItemFlag.ItemIsDropEnabled
+
+    def mimeTypes(self):
+        return ["application/x-lazylabel-file-rows"]
+
+    def mimeData(self, indexes):
+        mime = QMimeData()
+        rows = sorted({idx.row() for idx in indexes})
+        mime.setData(
+            "application/x-lazylabel-file-rows",
+            ",".join(str(r) for r in rows).encode(),
+        )
+        return mime
+
+    def supportedDropActions(self):
+        return Qt.DropAction.MoveAction
+
+    def moveFileRows(self, source_rows, dest_row):
+        """Move rows from source positions to dest position."""
+        # Extract items in order (highest first to preserve indices)
+        items = []
+        for row in sorted(source_rows, reverse=True):
+            items.insert(0, self._files.pop(row))
+
+        # Adjust dest for removed rows above it
+        adjusted_dest = dest_row
+        for row in sorted(source_rows):
+            if row < dest_row:
+                adjusted_dest -= 1
+
+        # Insert at adjusted destination
+        for i, item in enumerate(items):
+            self._files.insert(adjusted_dest + i, item)
+
+        self._rebuild_path_index()
+        self.layoutChanged.emit()
+
+    def _rebuild_path_index(self):
+        """Rebuild the path-to-index mapping from current file list."""
+        self._path_to_index = {str(f.path): i for i, f in enumerate(self._files)}
 
     def columnCount(self, parent=QModelIndex()):
         return sum(self._visible_columns)  # Count visible columns
@@ -671,8 +720,45 @@ class FastFileModel(QAbstractTableModel):
 class FileSortProxyModel(QSortFilterProxyModel):
     """Custom proxy model for proper sorting of file data."""
 
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._custom_order = False
+        self._hidden_source_rows: set[int] = set()
+
+    def setCustomOrder(self, enabled: bool):
+        self._custom_order = enabled
+        self.invalidate()
+
+    def isCustomOrder(self) -> bool:
+        return self._custom_order
+
+    def hideSourceRows(self, rows: set[int]):
+        """Add source rows to the hidden set."""
+        self._hidden_source_rows |= rows
+        self.invalidateFilter()
+
+    def showAllRows(self):
+        """Clear all hidden rows."""
+        if self._hidden_source_rows:
+            self._hidden_source_rows.clear()
+            self.invalidateFilter()
+
+    def hasHiddenRows(self) -> bool:
+        return bool(self._hidden_source_rows)
+
+    def hiddenCount(self) -> int:
+        return len(self._hidden_source_rows)
+
+    def filterAcceptsRow(self, source_row, source_parent):
+        if source_row in self._hidden_source_rows:
+            return False
+        return super().filterAcceptsRow(source_row, source_parent)
+
     def lessThan(self, left: QModelIndex, right: QModelIndex) -> bool:
         """Custom sorting comparison."""
+        if self._custom_order:
+            return left.row() < right.row()
+
         # Get the file info objects
         left_info = self.sourceModel().getFileInfo(left.row())
         right_info = self.sourceModel().getFileInfo(right.row())
@@ -726,6 +812,33 @@ class FileSortProxyModel(QSortFilterProxyModel):
         return False
 
 
+class FileTableView(QTableView):
+    """Table view subclass with drag-drop row reordering and auto-scroll."""
+
+    rowsDropped = pyqtSignal(list, int)  # proxy_rows, dest_proxy_row
+    scroll_margin = 40
+
+    def dropEvent(self, event):
+        if event.source() == self:
+            drop_row = self.indexAt(event.position().toPoint()).row()
+            if drop_row < 0:
+                drop_row = self.model().rowCount()
+            selected_proxy_rows = sorted({idx.row() for idx in self.selectedIndexes()})
+            self.rowsDropped.emit(selected_proxy_rows, drop_row)
+            event.accept()
+        else:
+            super().dropEvent(event)
+
+    def dragMoveEvent(self, event):
+        pos = event.position().toPoint()
+        rect = self.viewport().rect()
+        if pos.y() < rect.top() + self.scroll_margin:
+            self.verticalScrollBar().setValue(self.verticalScrollBar().value() - 1)
+        elif pos.y() > rect.bottom() - self.scroll_margin:
+            self.verticalScrollBar().setValue(self.verticalScrollBar().value() + 1)
+        super().dragMoveEvent(event)
+
+
 class FastFileManager(QWidget):
     """Main file manager widget with improved performance"""
 
@@ -738,6 +851,7 @@ class FastFileManager(QWidget):
         super().__init__()
         self._current_directory = None
         self._current_sort_index = 0  # Default: Name (A-Z)
+        self._custom_order = False
         self._init_ui()
 
     def _init_ui(self):
@@ -750,12 +864,23 @@ class FastFileManager(QWidget):
         layout.addWidget(header)
 
         # File table view
-        self._table_view = QTableView()
+        self._table_view = FileTableView()
         self._table_view.setAlternatingRowColors(True)
         self._table_view.setSelectionBehavior(QTableView.SelectionBehavior.SelectRows)
-        self._table_view.setSelectionMode(QTableView.SelectionMode.SingleSelection)
+        self._table_view.setSelectionMode(QTableView.SelectionMode.ExtendedSelection)
         self._table_view.setSortingEnabled(False)  # We'll handle sorting manually
         self._table_view.setEditTriggers(QTableView.EditTrigger.NoEditTriggers)
+
+        # Drag-and-drop reordering
+        self._table_view.setDragEnabled(True)
+        self._table_view.setAcceptDrops(True)
+        self._table_view.setDropIndicatorShown(True)
+        self._table_view.setDragDropMode(QTableView.DragDropMode.InternalMove)
+        self._table_view.setDefaultDropAction(Qt.DropAction.MoveAction)
+
+        # Context menu
+        self._table_view.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self._table_view.customContextMenuRequested.connect(self._show_context_menu)
 
         # Set up model and proxy
         self._model = FastFileModel()
@@ -803,9 +928,9 @@ class FastFileManager(QWidget):
             }
         """)
 
-        # Connect selection
-        self._table_view.clicked.connect(self._on_item_clicked)
+        # Connect selection — double-click to load, single-click for selection only
         self._table_view.doubleClicked.connect(self._on_item_double_clicked)
+        self._table_view.rowsDropped.connect(self._on_rows_dropped)
 
         layout.addWidget(self._table_view)
 
@@ -932,10 +1057,7 @@ class FastFileManager(QWidget):
         self._column_dropdown.activated.connect(self._on_column_visibility_changed)
         layout.addWidget(self._column_dropdown)
 
-        # Refresh button
-        refresh_btn = QPushButton("Refresh")
-        refresh_btn.clicked.connect(self._refresh)
-        refresh_btn.setStyleSheet("""
+        btn_style = """
             QPushButton {
                 background-color: rgba(70, 70, 70, 0.6);
                 border: 1px solid rgba(80, 80, 80, 0.4);
@@ -949,8 +1071,28 @@ class FastFileManager(QWidget):
             QPushButton:pressed {
                 background-color: rgba(50, 50, 50, 0.8);
             }
-        """)
+        """
+
+        # Refresh button
+        refresh_btn = QPushButton("Refresh")
+        refresh_btn.clicked.connect(self._refresh)
+        refresh_btn.setStyleSheet(btn_style)
         layout.addWidget(refresh_btn)
+
+        # Hide selected button
+        self._hide_btn = QPushButton("Hide")
+        self._hide_btn.setToolTip("Hide selected files from the list")
+        self._hide_btn.clicked.connect(self._hide_selected)
+        self._hide_btn.setStyleSheet(btn_style)
+        layout.addWidget(self._hide_btn)
+
+        # Show All button (visible only when rows are hidden)
+        self._show_all_btn = QPushButton("Show All")
+        self._show_all_btn.setToolTip("Restore all hidden files")
+        self._show_all_btn.clicked.connect(self._show_all)
+        self._show_all_btn.setStyleSheet(btn_style)
+        self._show_all_btn.setVisible(False)
+        layout.addWidget(self._show_all_btn)
 
         layout.addStretch()
 
@@ -959,6 +1101,12 @@ class FastFileManager(QWidget):
     def setDirectory(self, directory: Path):
         """Set the directory to display"""
         self._current_directory = directory
+        # Reset hidden rows and custom order on new directory
+        self._proxy_model.showAllRows()
+        self._show_all_btn.setVisible(False)
+        if self._custom_order:
+            self._custom_order = False
+            self._proxy_model.setCustomOrder(False)
         self._model.setDirectory(directory)
         self._update_status(f"Loading: {directory.name}")
 
@@ -976,6 +1124,11 @@ class FastFileManager(QWidget):
 
     def _on_sort_changed(self, index: int):
         """Handle sort order change"""
+        # Reset custom order if active
+        if self._custom_order:
+            self._custom_order = False
+            self._proxy_model.setCustomOrder(False)
+
         # Map combo index to column and order
         column_map = {
             0: 0,
@@ -1298,14 +1451,6 @@ class FastFileManager(QWidget):
             return file_info.path
         return None
 
-    def _on_item_clicked(self, index: QModelIndex):
-        """Handle item click"""
-        # Map proxy index to source index
-        source_index = self._proxy_model.mapToSource(index)
-        file_info = self._model.getFileInfo(source_index.row())
-        if file_info:
-            self.fileSelected.emit(file_info.path)
-
     def _on_item_double_clicked(self, index: QModelIndex):
         """Handle item double click"""
         # Map proxy index to source index
@@ -1313,6 +1458,104 @@ class FastFileManager(QWidget):
         file_info = self._model.getFileInfo(source_index.row())
         if file_info:
             self.fileSelected.emit(file_info.path)
+
+    def _on_rows_dropped(self, proxy_rows, dest_proxy_row):
+        """Handle drag-drop row reordering."""
+        # Map proxy rows to source rows
+        source_rows = []
+        for pr in proxy_rows:
+            source_idx = self._proxy_model.mapToSource(self._proxy_model.index(pr, 0))
+            source_rows.append(source_idx.row())
+
+        # Map dest proxy row to source row
+        if dest_proxy_row < self._proxy_model.rowCount():
+            dest_source = self._proxy_model.mapToSource(
+                self._proxy_model.index(dest_proxy_row, 0)
+            ).row()
+        else:
+            dest_source = self._model.rowCount()
+
+        # Enter custom order mode
+        if not self._custom_order:
+            self._custom_order = True
+            self._proxy_model.setCustomOrder(True)
+            self._sort_combo.setText("Custom")
+            # Clear highlight to avoid stale indices
+            self._model.clearHighlightedRange()
+
+        self._model.moveFileRows(source_rows, dest_source)
+
+    def _show_context_menu(self, position):
+        """Show right-click context menu for copying filenames."""
+        selected_indexes = self._table_view.selectionModel().selectedRows()
+        if not selected_indexes:
+            return
+
+        filenames = []
+        filepaths = []
+        for idx in selected_indexes:
+            source_index = self._proxy_model.mapToSource(idx)
+            file_info = self._model.getFileInfo(source_index.row())
+            if file_info:
+                filenames.append(file_info.name)
+                filepaths.append(str(file_info.path))
+
+        if not filenames:
+            return
+
+        menu = QMenu(self)
+        n = len(filenames)
+        if n == 1:
+            copy_name_action = menu.addAction("Copy filename")
+            copy_path_action = menu.addAction("Copy path")
+        else:
+            copy_name_action = menu.addAction(f"Copy {n} filenames")
+            copy_path_action = menu.addAction(f"Copy {n} paths")
+
+        menu.addSeparator()
+        if n == 1:
+            hide_action = menu.addAction("Hide file")
+        else:
+            hide_action = menu.addAction(f"Hide {n} files")
+
+        result = menu.exec(self._table_view.viewport().mapToGlobal(position))
+        if result == copy_name_action:
+            clipboard = QApplication.clipboard()
+            if n == 1:
+                clipboard.setText(filenames[0])
+            else:
+                import json
+
+                clipboard.setText(json.dumps(filenames))
+        elif result == copy_path_action:
+            clipboard = QApplication.clipboard()
+            if n == 1:
+                clipboard.setText(filepaths[0])
+            else:
+                clipboard.setText("\n".join(filepaths))
+        elif result == hide_action:
+            self._hide_selected()
+
+    def _hide_selected(self):
+        """Hide selected rows from the file list."""
+        selected_indexes = self._table_view.selectionModel().selectedRows()
+        if not selected_indexes:
+            return
+
+        source_rows = set()
+        for idx in selected_indexes:
+            source_index = self._proxy_model.mapToSource(idx)
+            source_rows.add(source_index.row())
+
+        self._proxy_model.hideSourceRows(source_rows)
+        self._table_view.clearSelection()
+        self._show_all_btn.setVisible(True)
+        self._show_all_btn.setText(f"Show All ({self._proxy_model.hiddenCount()})")
+
+    def _show_all(self):
+        """Restore all hidden rows."""
+        self._proxy_model.showAllRows()
+        self._show_all_btn.setVisible(False)
 
     def _update_status(self, text: str):
         """Update status label"""

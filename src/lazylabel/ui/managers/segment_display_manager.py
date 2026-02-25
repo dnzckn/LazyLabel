@@ -313,11 +313,24 @@ class SegmentDisplayManager:
             mw.segment_items.clear()
             mw._clear_edit_handles()
 
+            # Compute Z-values based on pixel priority settings
+            priority_enabled = mw.settings.pixel_priority_enabled
+            if priority_enabled:
+                unique_ids = mw.segment_manager.get_unique_class_ids()
+                max_z = len(unique_ids) + 1
+                if mw.settings.pixel_priority_ascending:
+                    class_z = {cid: max_z - idx for idx, cid in enumerate(unique_ids)}
+                else:
+                    class_z = {cid: idx + 1 for idx, cid in enumerate(unique_ids)}
+
             # Display segments from segment manager
             for i, segment in enumerate(mw.segment_manager.segments):
                 mw.segment_items[i] = []
                 class_id = segment.get("class_id")
                 base_color = self.get_color_for_class(class_id)
+                z_value = (
+                    class_z.get(class_id, i + 1) if priority_enabled else i + 1
+                )
 
                 if segment.get("type") == "Polygon" and segment.get("vertices"):
                     qpoints = [QPointF(p[0], p[1]) for p in segment["vertices"]]
@@ -338,6 +351,7 @@ class SegmentDisplayManager:
                     poly_item.set_brushes(default_brush, hover_brush)
                     poly_item.set_segment_info(i, mw)
                     poly_item.setPen(QPen(Qt.GlobalColor.transparent))
+                    poly_item.setZValue(z_value)
                     scene.addItem(poly_item)
                     mw.segment_items[i].append(poly_item)
                 elif segment.get("mask") is not None:
@@ -348,7 +362,7 @@ class SegmentDisplayManager:
                     pixmap_item.set_pixmaps(default_pixmap, hover_pixmap)
                     pixmap_item.set_segment_info(i, mw)
                     scene.addItem(pixmap_item)
-                    pixmap_item.setZValue(i + 1)
+                    pixmap_item.setZValue(z_value)
                     mw.segment_items[i].append(pixmap_item)
         finally:
             # Re-enable updates and signals
@@ -380,6 +394,17 @@ class SegmentDisplayManager:
         class_id = segment.get("class_id")
         base_color = self.get_color_for_class(class_id)
 
+        # Compute Z-value based on pixel priority settings
+        z_value = segment_index + 1
+        if mw.settings.pixel_priority_enabled:
+            unique_ids = mw.segment_manager.get_unique_class_ids()
+            max_z = len(unique_ids) + 1
+            if mw.settings.pixel_priority_ascending:
+                class_z = {cid: max_z - idx for idx, cid in enumerate(unique_ids)}
+            else:
+                class_z = {cid: idx + 1 for idx, cid in enumerate(unique_ids)}
+            z_value = class_z.get(class_id, z_value)
+
         if segment.get("type") == "Polygon" and segment.get("vertices"):
             qpoints = [QPointF(p[0], p[1]) for p in segment["vertices"]]
             poly_item = HoverablePolygonItem(QPolygonF(qpoints))
@@ -392,6 +417,7 @@ class SegmentDisplayManager:
             poly_item.set_brushes(default_brush, hover_brush)
             poly_item.set_segment_info(segment_index, mw)
             poly_item.setPen(QPen(Qt.GlobalColor.transparent))
+            poly_item.setZValue(z_value)
             self.viewer.scene().addItem(poly_item)
             mw.segment_items[segment_index].append(poly_item)
         elif segment.get("mask") is not None:
@@ -402,7 +428,7 @@ class SegmentDisplayManager:
             pixmap_item.set_pixmaps(default_pixmap, hover_pixmap)
             pixmap_item.set_segment_info(segment_index, mw)
             self.viewer.scene().addItem(pixmap_item)
-            pixmap_item.setZValue(segment_index + 1)
+            pixmap_item.setZValue(z_value)
             mw.segment_items[segment_index].append(pixmap_item)
 
     def remove_segment_from_display_single_view(self, segment_index: int) -> None:
