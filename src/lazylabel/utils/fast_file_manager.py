@@ -344,6 +344,21 @@ class FastFileModel(QAbstractTableModel):
         self._rebuild_path_index()
         self.layoutChanged.emit()
 
+    def reorderRows(self, ordered_source_rows: list[int]) -> None:
+        """Reorder a subset of rows in-place.
+
+        The rows listed in *ordered_source_rows* are rearranged so they
+        appear in the given order, while all other rows keep their position.
+        """
+        if not ordered_source_rows:
+            return
+        self.layoutAboutToBeChanged.emit()
+        items = [self._files[r] for r in ordered_source_rows]
+        for new_pos, old_row in enumerate(sorted(ordered_source_rows)):
+            self._files[old_row] = items[new_pos]
+        self._rebuild_path_index()
+        self.layoutChanged.emit()
+
     def _rebuild_path_index(self):
         """Rebuild the path-to-index mapping from current file list."""
         self._path_to_index = {str(f.path): i for i, f in enumerate(self._files)}
@@ -903,6 +918,7 @@ class FastFileManager(QWidget):
         header = self._table_view.horizontalHeader()
         header.setSectionsMovable(True)  # Enable drag-and-drop reordering
         header.sectionMoved.connect(self._on_column_moved)
+        header.sectionClicked.connect(self._on_header_sort_clicked)
 
         # Initial header sizing (will be updated by _update_header_sizing)
         self._update_header_sizing()
@@ -1132,30 +1148,25 @@ class FastFileManager(QWidget):
             self._custom_order = False
             self._proxy_model.setCustomOrder(False)
 
-        # Map combo index to column and order
-        column_map = {
-            0: 0,
-            1: 0,
-            2: 2,
-            3: 2,
-            4: 1,
-            5: 1,
-        }  # Name, Name, Date, Date, Size, Size
-        order_map = {
-            0: Qt.SortOrder.AscendingOrder,
-            1: Qt.SortOrder.DescendingOrder,
-            2: Qt.SortOrder.AscendingOrder,
-            3: Qt.SortOrder.DescendingOrder,
-            4: Qt.SortOrder.AscendingOrder,
-            5: Qt.SortOrder.DescendingOrder,
-        }
-
-        column = column_map.get(index, 0)
-        order = order_map.get(index, Qt.SortOrder.AscendingOrder)
-
-        self._table_view.sortByColumn(column, order)
+        self._apply_sort_index(index)
         self._current_sort_index = index
         self.displaySettingsChanged.emit()
+
+    def _apply_sort_index(self, index: int):
+        """Apply a sort dropdown index to the table view."""
+        sort_configs = {
+            0: ("Name", Qt.SortOrder.AscendingOrder),
+            1: ("Name", Qt.SortOrder.DescendingOrder),
+            2: ("Modified", Qt.SortOrder.AscendingOrder),
+            3: ("Modified", Qt.SortOrder.DescendingOrder),
+            4: ("Size", Qt.SortOrder.AscendingOrder),
+            5: ("Size", Qt.SortOrder.DescendingOrder),
+        }
+        col_name, order = sort_configs.get(index, ("Name", Qt.SortOrder.AscendingOrder))
+        logical_idx = self._model._all_columns.index(col_name)
+        visible_col = self._model.getVisibleColumnIndex(logical_idx)
+        if visible_col >= 0:
+            self._table_view.sortByColumn(visible_col, order)
 
     def _refresh(self):
         """Refresh current directory"""
@@ -1206,6 +1217,41 @@ class FastFileManager(QWidget):
         # For now, just update the header sizing to maintain proper resize modes
         # The QHeaderView handles the visual reordering automatically
         self._update_header_sizing()
+
+    def _on_header_sort_clicked(self, logical_index):
+        """Clear custom order when user clicks a column header to sort."""
+        if self._custom_order:
+            self._custom_order = False
+            self._proxy_model.setCustomOrder(False)
+
+    def sortHighlightedByOrder(self, ordered_paths: list) -> None:
+        """Reorder highlighted rows to match the given path order."""
+        highlighted = self._model._highlighted_rows
+        if not highlighted:
+            return
+
+        ordered_source_rows = []
+        for path in ordered_paths:
+            row = self._model.getFileIndex(path)
+            if row >= 0 and row in highlighted:
+                ordered_source_rows.append(row)
+
+        if not ordered_source_rows:
+            return
+
+        # Enter custom order mode
+        self._custom_order = True
+        self._proxy_model.setCustomOrder(True)
+        self._sort_combo.setText("Timeline")
+
+        self._model.reorderRows(ordered_source_rows)
+
+    def resetHighlightedSort(self) -> None:
+        """Reset highlighted row order to default sort."""
+        if self._custom_order:
+            self._custom_order = False
+            self._proxy_model.setCustomOrder(False)
+            self._apply_sort_index(self._current_sort_index)
 
     def _on_highlight_changed(self, is_highlighted: bool):
         """Handle highlight state change - toggle alternating row colors."""
@@ -1489,6 +1535,21 @@ class FastFileManager(QWidget):
 
         self._model.moveFileRows(source_rows, dest_source)
 
+        # Re-select the moved rows at their new positions
+        adjusted_dest = dest_source - sum(1 for r in source_rows if r < dest_source)
+        sel = self._table_view.selectionModel()
+        sel.clearSelection()
+        for i in range(len(source_rows)):
+            new_source_row = adjusted_dest + i
+            proxy_idx = self._proxy_model.mapFromSource(
+                self._model.index(new_source_row, 0)
+            )
+            if proxy_idx.isValid():
+                sel.select(
+                    proxy_idx,
+                    sel.SelectionFlag.Select | sel.SelectionFlag.Rows,
+                )
+
     def _show_context_menu(self, position):
         """Show right-click context menu for copying filenames."""
         selected_indexes = self._table_view.selectionModel().selectedRows()
@@ -1720,19 +1781,8 @@ class FastFileManager(QWidget):
         sort_index = settings.get("sort_order", 0)
         self._current_sort_index = sort_index
 
-        # Apply sort by simulating the index selection
-        column_map = {0: 0, 1: 0, 2: 2, 3: 2, 4: 1, 5: 1}
-        order_map = {
-            0: Qt.SortOrder.AscendingOrder,
-            1: Qt.SortOrder.DescendingOrder,
-            2: Qt.SortOrder.AscendingOrder,
-            3: Qt.SortOrder.DescendingOrder,
-            4: Qt.SortOrder.AscendingOrder,
-            5: Qt.SortOrder.DescendingOrder,
-        }
-        column = column_map.get(sort_index, 0)
-        order = order_map.get(sort_index, Qt.SortOrder.AscendingOrder)
-        self._table_view.sortByColumn(column, order)
+        # Apply sort
+        self._apply_sort_index(sort_index)
 
         # Update UI
         self._update_header_sizing()
