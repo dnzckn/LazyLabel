@@ -69,8 +69,8 @@ class SequenceWidget(QWidget):
     )  # Request to add all frames with NPZ labels as reference
     clear_references_requested = pyqtSignal()  # Request to clear all references
     propagate_requested = pyqtSignal(
-        str, int, int, bool
-    )  # direction, start, end, skip_flagged
+        str, int, int, bool, bool
+    )  # direction, start, end, skip_flagged, skip_labeled
     cancel_propagation_requested = pyqtSignal()
     next_flagged_requested = pyqtSignal()
     prev_flagged_requested = pyqtSignal()
@@ -287,6 +287,14 @@ class SequenceWidget(QWidget):
         )
         options_layout.addWidget(self.skip_flagged_checkbox)
 
+        # Skip labeled checkbox
+        self.skip_labeled_checkbox = QCheckBox("Skip Labeled")
+        self.skip_labeled_checkbox.setChecked(False)
+        self.skip_labeled_checkbox.setToolTip(
+            "Don't overwrite frames that already have NPZ files"
+        )
+        options_layout.addWidget(self.skip_labeled_checkbox)
+
         # Confidence threshold
         options_layout.addWidget(QLabel("Min Conf:"))
         self.confidence_spin = ShortcutDoubleSpinBox()
@@ -435,7 +443,12 @@ class SequenceWidget(QWidget):
         self._update_timeline_visibility()
 
     def _request_propagate(self) -> None:
-        """Request propagation (bidirectional within specified range)."""
+        """Request propagation, or abort if already propagating."""
+        if self._is_propagating:
+            # Abort: emit cancel signal
+            self.cancel_propagation_requested.emit()
+            return
+
         # Immediate visual feedback that click was registered
         self.propagate_btn.setText("Starting...")
         self.propagate_btn.setStyleSheet(
@@ -446,15 +459,21 @@ class SequenceWidget(QWidget):
         start = self.range_start_spin.value() - 1  # Convert to 0-indexed
         end = self.range_end_spin.value() - 1
         skip_flagged = self.skip_flagged_checkbox.isChecked()
-        self.propagate_requested.emit("both", start, end, skip_flagged)
+        skip_labeled = self.skip_labeled_checkbox.isChecked()
+        self.propagate_requested.emit("both", start, end, skip_flagged, skip_labeled)
 
     def _update_button_states(self) -> None:
         """Update button enabled states based on current state."""
         has_references = len(self._reference_frames) > 0
         has_frames = self._total_frames > 0
-        can_propagate = has_references and has_frames and not self._is_propagating
 
-        self.propagate_btn.setEnabled(can_propagate)
+        if self._is_propagating:
+            # During propagation, keep button enabled for abort
+            self.propagate_btn.setEnabled(True)
+        else:
+            can_propagate = has_references and has_frames
+            self.propagate_btn.setEnabled(can_propagate)
+
         self.clear_references_btn.setEnabled(has_references)
 
         has_flagged = self._flagged_count > 0
@@ -536,12 +555,11 @@ class SequenceWidget(QWidget):
         pass
 
     def start_propagation(self) -> None:
-        """Enter propagation state (disable controls, show visual feedback)."""
+        """Enter propagation state — button becomes abort trigger."""
         self._is_propagating = True
-        # Change button to show propagation is in progress
-        self.propagate_btn.setText("Propagating...")
+        self.propagate_btn.setText("Abort")
         self.propagate_btn.setStyleSheet(
-            "QPushButton { background-color: #FF9800; color: black; font-weight: bold; padding: 8px; }"
+            "QPushButton { background-color: #F44336; color: white; font-weight: bold; padding: 8px; }"
         )
         self._update_button_states()
 
@@ -562,7 +580,7 @@ class SequenceWidget(QWidget):
             message: Status message to display on the button
         """
         if self._is_propagating:
-            self.propagate_btn.setText(message)
+            self.propagate_btn.setText(f"Abort · {message}")
             self.propagate_btn.repaint()  # Force immediate repaint
 
     def reset(self) -> None:

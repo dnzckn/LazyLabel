@@ -223,10 +223,10 @@ class TestReferenceAnnotationWorkerQt:
             obj_id=seg.obj_id,
         )
 
-    def test_emits_progress_per_segment(
+    def test_emits_progress_per_reference_frame(
         self, app, qtbot, mock_propagation_manager, sample_segments
     ):
-        """Test that progress is emitted for each segment."""
+        """Test that progress is emitted per reference frame (not per segment)."""
         progress_messages = []
 
         worker = ReferenceAnnotationWorker(
@@ -239,9 +239,9 @@ class TestReferenceAnnotationWorkerQt:
         with qtbot.waitSignal(worker.finished_annotations, timeout=5000):
             worker.start()
 
-        assert len(progress_messages) == 3
-        assert "Adding reference 1/3" in progress_messages
-        assert "Adding reference 3/3" in progress_messages
+        assert len(progress_messages) == 2
+        assert "Adding reference 1/2" in progress_messages
+        assert "Adding reference 2/2" in progress_messages
 
     def test_failed_annotation_not_counted(
         self, app, qtbot, mock_propagation_manager, sample_segments

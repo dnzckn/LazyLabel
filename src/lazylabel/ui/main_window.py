@@ -1200,8 +1200,8 @@ class MainWindow(QMainWindow):
 
         # Trigger model initialization
         self.sam_is_dirty = True
-        self.sam_single_view_manager.mark_dirty()
-        self.sam_single_view_manager.start_initialization()
+        self.sam_worker_manager.mark_dirty()
+        self.sam_worker_manager.start_single_view_initialization()
 
         model_name = (
             os.path.basename(selected_path) if selected_path else "Default SAM Model"
@@ -3588,7 +3588,12 @@ class MainWindow(QMainWindow):
         self._show_notification("Cleared all reference frames")
 
     def _on_propagate_requested(
-        self, direction: str, start: int, end: int, skip_flagged: bool = True
+        self,
+        direction: str,
+        start: int,
+        end: int,
+        skip_flagged: bool = True,
+        skip_labeled: bool = False,
     ):
         """Handle propagation request from sequence widget."""
         if self.sequence_view_mode is None:
@@ -3664,6 +3669,7 @@ class MainWindow(QMainWindow):
                 "start": start,
                 "end": end,
                 "skip_flagged": skip_flagged,
+                "skip_labeled": skip_labeled,
             }
 
             # Get reference dimensions for filtering mismatched images
@@ -3687,7 +3693,7 @@ class MainWindow(QMainWindow):
             return
 
         # Already initialized — proceed directly
-        self._start_propagation(direction, start, end, skip_flagged)
+        self._start_propagation(direction, start, end, skip_flagged, skip_labeled)
 
     def _on_sequence_init_progress(self, message: str):
         """Handle progress updates from sequence init worker."""
@@ -3732,6 +3738,7 @@ class MainWindow(QMainWindow):
                 params["start"],
                 params["end"],
                 params["skip_flagged"],
+                params.get("skip_labeled", False),
             )
 
     def _on_sequence_init_error(self, error_msg: str):
@@ -3743,9 +3750,31 @@ class MainWindow(QMainWindow):
             self.sequence_widget.end_propagation()
 
     def _start_propagation(
-        self, direction: str, start: int, end: int, skip_flagged: bool
+        self,
+        direction: str,
+        start: int,
+        end: int,
+        skip_flagged: bool,
+        skip_labeled: bool = False,
     ):
         """Collect reference data and start annotation worker."""
+        # Precompute the set of labeled frames to skip (have NPZ on disk)
+        self._skip_labeled_frames: set[int] = set()
+        if skip_labeled and self.sequence_view_mode:
+            from pathlib import Path
+
+            for i in range(self.sequence_view_mode.total_frames):
+                # Don't skip reference frames
+                if i in self.sequence_view_mode.reference_frame_indices:
+                    continue
+                img_path = self.sequence_view_mode.get_image_path(i)
+                if img_path and Path(img_path).with_suffix(".npz").exists():
+                    self._skip_labeled_frames.add(i)
+            if self._skip_labeled_frames:
+                logger.info(
+                    f"Skip-labeled: {len(self._skip_labeled_frames)} frames will keep existing labels"
+                )
+
         # Clear previous propagation results before starting new propagation
         # This ensures old masks don't persist when labels are changed
         self.sequence_view_mode.clear_propagation_results()
@@ -3820,6 +3849,7 @@ class MainWindow(QMainWindow):
             "start": start,
             "end": end,
             "skip_flagged": skip_flagged,
+            "skip_labeled": skip_labeled,
         }
 
         # Run annotation adding on background thread
@@ -3955,6 +3985,17 @@ class MainWindow(QMainWindow):
     def _on_propagation_frame_done(self, frame_idx: int, result):
         """Handle completion of propagation for a single frame."""
         from PyQt6.QtWidgets import QApplication
+
+        # Skip labeled frames — model still processes them for temporal
+        # continuity, but we don't store masks or change timeline status
+        skip_set = getattr(self, "_skip_labeled_frames", set())
+        if frame_idx in skip_set:
+            if self.timeline_widget:
+                self.timeline_widget.set_frame_status(
+                    frame_idx, "saved", immediate=True
+                )
+            QApplication.processEvents()
+            return
 
         # Update timeline to show this frame has been propagated (immediate for animation)
         if self.timeline_widget:

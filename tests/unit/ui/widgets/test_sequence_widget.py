@@ -222,12 +222,15 @@ class TestButtonStates:
         sequence_widget.add_reference_frame(50)
         assert sequence_widget.propagate_btn.isEnabled()
 
-    def test_propagation_button_disabled_during_propagation(self, sequence_widget):
-        """Test that propagation button is disabled during propagation."""
+    def test_propagation_button_enabled_during_propagation_for_abort(
+        self, sequence_widget
+    ):
+        """Test that propagation button stays enabled during propagation (abort)."""
         sequence_widget.set_total_frames(100)
         sequence_widget.add_reference_frame(50)
         sequence_widget.start_propagation()
-        assert not sequence_widget.propagate_btn.isEnabled()
+        assert sequence_widget.propagate_btn.isEnabled()
+        assert "Abort" in sequence_widget.propagate_btn.text()
 
     def test_clear_references_button_disabled_without_references(self, sequence_widget):
         """Test that clear references button is disabled without references."""
@@ -334,7 +337,7 @@ class TestSignals:
         with qtbot.waitSignal(sequence_widget.propagate_requested) as blocker:
             sequence_widget.propagate_btn.click()
         # Range should be 0 to 99 (0-indexed)
-        direction, start, end, skip_flagged = blocker.args
+        direction, start, end, skip_flagged, skip_labeled = blocker.args
         assert start == 0
         assert end == 99
 
@@ -346,7 +349,7 @@ class TestSignals:
         sequence_widget.range_end_spin.setValue(80)
         with qtbot.waitSignal(sequence_widget.propagate_requested) as blocker:
             sequence_widget.propagate_btn.click()
-        direction, start, end, skip_flagged = blocker.args
+        direction, start, end, skip_flagged, skip_labeled = blocker.args
         # Values are converted to 0-indexed
         assert start == 9
         assert end == 79
@@ -358,7 +361,7 @@ class TestSignals:
         sequence_widget.skip_flagged_checkbox.setChecked(True)
         with qtbot.waitSignal(sequence_widget.propagate_requested) as blocker:
             sequence_widget.propagate_btn.click()
-        direction, start, end, skip_flagged = blocker.args
+        direction, start, end, skip_flagged, skip_labeled = blocker.args
         assert skip_flagged is True
 
     def test_propagate_signal_skip_flagged_unchecked(self, sequence_widget, qtbot):
@@ -368,7 +371,7 @@ class TestSignals:
         sequence_widget.skip_flagged_checkbox.setChecked(False)
         with qtbot.waitSignal(sequence_widget.propagate_requested) as blocker:
             sequence_widget.propagate_btn.click()
-        direction, start, end, skip_flagged = blocker.args
+        direction, start, end, skip_flagged, skip_labeled = blocker.args
         assert skip_flagged is False
 
 

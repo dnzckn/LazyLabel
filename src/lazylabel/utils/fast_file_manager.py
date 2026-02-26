@@ -322,21 +322,24 @@ class FastFileModel(QAbstractTableModel):
         return Qt.DropAction.MoveAction
 
     def moveFileRows(self, source_rows, dest_row):
-        """Move rows from source positions to dest position."""
-        # Extract items in order (highest first to preserve indices)
-        items = []
-        for row in sorted(source_rows, reverse=True):
-            items.insert(0, self._files.pop(row))
+        """Move rows from source positions to dest position.
+
+        Uses slice-based operations instead of per-element pop/insert
+        to avoid O(n²) overhead on large file lists.
+        """
+        self.layoutAboutToBeChanged.emit()
+
+        source_set = set(source_rows)
+        # Partition into: items before dest, moved items, items after dest
+        # while preserving relative order within each group
+        moved = [self._files[r] for r in sorted(source_rows)]
 
         # Adjust dest for removed rows above it
-        adjusted_dest = dest_row
-        for row in sorted(source_rows):
-            if row < dest_row:
-                adjusted_dest -= 1
+        adjusted_dest = dest_row - sum(1 for r in source_rows if r < dest_row)
 
-        # Insert at adjusted destination
-        for i, item in enumerate(items):
-            self._files.insert(adjusted_dest + i, item)
+        # Build new list in one pass: keep non-moved items, splice moved items at dest
+        remaining = [f for i, f in enumerate(self._files) if i not in source_set]
+        self._files = remaining[:adjusted_dest] + moved + remaining[adjusted_dest:]
 
         self._rebuild_path_index()
         self.layoutChanged.emit()
@@ -1461,7 +1464,7 @@ class FastFileManager(QWidget):
 
     def _on_rows_dropped(self, proxy_rows, dest_proxy_row):
         """Handle drag-drop row reordering."""
-        # Map proxy rows to source rows
+        # Map proxy rows to source rows before any model changes
         source_rows = []
         for pr in proxy_rows:
             source_idx = self._proxy_model.mapToSource(self._proxy_model.index(pr, 0))
@@ -1475,10 +1478,11 @@ class FastFileManager(QWidget):
         else:
             dest_source = self._model.rowCount()
 
-        # Enter custom order mode
+        # Enter custom order mode (set flag without invalidating -
+        # moveFileRows will emit layoutChanged which refreshes the proxy)
         if not self._custom_order:
             self._custom_order = True
-            self._proxy_model.setCustomOrder(True)
+            self._proxy_model._custom_order = True
             self._sort_combo.setText("Custom")
             # Clear highlight to avoid stale indices
             self._model.clearHighlightedRange()

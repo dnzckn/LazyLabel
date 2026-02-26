@@ -250,10 +250,11 @@ class ReferenceAnnotationWorker(QThread):
                     return
                 self.propagation_manager.add_reference_frame(ref_idx)
 
-            # Add annotations
+            # Add annotations, tracking progress per reference frame
             total_count = 0
-            total_segments = len(self.segments)
-            for i, seg in enumerate(self.segments):
+            total_frames = len(self.reference_frames)
+            processed_frames: set[int] = set()
+            for seg in self.segments:
                 if self._should_stop:
                     return
 
@@ -267,7 +268,11 @@ class ReferenceAnnotationWorker(QThread):
                 if result_id > 0:
                     total_count += 1
 
-                self.progress.emit(f"Adding reference {i + 1}/{total_segments}")
+                if seg.frame_idx not in processed_frames:
+                    processed_frames.add(seg.frame_idx)
+                    self.progress.emit(
+                        f"Adding reference {len(processed_frames)}/{total_frames}"
+                    )
 
             self.finished_annotations.emit(total_count)
 
