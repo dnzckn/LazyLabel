@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.4] - 2026-02-20
+
+### Added
+
+- **"Add All Labeled" button**: Adds all frames with existing NPZ labels as reference frames in one click
+- **Trim Range feature**: Remove frames from the timeline by setting left/right bounds and trimming — timeline-only, files on disk are not affected
+- Trim section in sequence widget with Set Left/Right, Clear Trim, and Trim Range controls
+
+### Changed
+
+- Skipped frame color changed from bright yellow to brown in the timeline for better visual distinction
+- "New Timeline" button styled with brown color to signal destructive action
+- QGroupBox sections in sequence widget now have consistent border/title styling and tighter margins
+- Reference buttons row 2 now shows "+ All Labeled" alongside "Clear All"
+
 ## [1.6.3] - 2026-02-19
 
 ### Fixed

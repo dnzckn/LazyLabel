@@ -6,7 +6,14 @@ with color-coded frame statuses.
 
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QBrush, QColor, QMouseEvent, QPainter, QPen
-from PyQt6.QtWidgets import QSizePolicy, QWidget
+from PyQt6.QtWidgets import (
+    QHBoxLayout,
+    QPushButton,
+    QScrollArea,
+    QSizePolicy,
+    QToolTip,
+    QWidget,
+)
 
 
 class TimelineWidget(QWidget):
@@ -27,7 +34,7 @@ class TimelineWidget(QWidget):
         "pending": QColor(100, 100, 100),  # Gray for pending
         "flagged": QColor(244, 67, 54),  # Red for flagged/needs review
         "saved": QColor(0, 188, 212),  # Cyan for saved to disk
-        "skipped": QColor(255, 235, 59),  # Bright yellow for dimension mismatch
+        "skipped": QColor(139, 69, 19),  # Brown for dimension mismatch
         "current": QColor(33, 150, 243),  # Blue for current frame marker
     }
 
@@ -37,6 +44,8 @@ class TimelineWidget(QWidget):
         self.total_frames = 0
         self.current_frame = 0
         self.frame_statuses: dict[int, str] = {}  # idx -> status
+        self._frame_names: list[str] = []
+        self._confidence_scores: dict[int, float] = {}
 
         # UI settings
         self.setMinimumHeight(30)
@@ -52,8 +61,18 @@ class TimelineWidget(QWidget):
         """Set total number of frames in the sequence."""
         self.total_frames = max(0, count)
         self.frame_statuses.clear()
+        self._frame_names.clear()
+        self._confidence_scores.clear()
         self._invalidate_geometry()
         self.update()
+
+    def set_frame_names(self, names: list[str]) -> None:
+        """Set display names for each frame (e.g. filename stems)."""
+        self._frame_names = list(names)
+
+    def set_confidence_scores(self, scores: dict[int, float]) -> None:
+        """Set confidence scores for frames."""
+        self._confidence_scores = dict(scores)
 
     def set_current_frame(self, idx: int) -> None:
         """Update current frame indicator."""
@@ -258,14 +277,213 @@ class TimelineWidget(QWidget):
             self.set_current_frame(frame)
 
     def mouseMoveEvent(self, event: QMouseEvent) -> None:
-        """Handle mouse drag to scrub through frames."""
+        """Handle mouse drag to scrub through frames, or show tooltip on hover."""
         if event.buttons() & Qt.MouseButton.LeftButton and self.total_frames > 0:
             frame = self._x_to_frame(event.pos().x())
             if frame != self.current_frame:
                 self.frame_selected.emit(frame)
                 self.set_current_frame(frame)
+        elif self.total_frames > 0:
+            frame = self._x_to_frame(event.pos().x())
+            self._show_frame_tooltip(event, frame)
+
+    def _show_frame_tooltip(self, event: QMouseEvent, frame: int) -> None:
+        """Show tooltip with frame info at cursor position."""
+        lines = [f"Frame {frame + 1}/{self.total_frames}"]
+
+        if frame < len(self._frame_names):
+            lines.append(self._frame_names[frame])
+
+        status = self.frame_statuses.get(frame, "pending")
+        lines.append(f"Status: {status}")
+
+        if frame in self._confidence_scores:
+            lines.append(f"Confidence: {self._confidence_scores[frame]:.4f}")
+
+        QToolTip.showText(event.globalPosition().toPoint(), "\n".join(lines), self)
 
     def resizeEvent(self, event) -> None:
         """Handle resize - invalidate cached geometry."""
         self._invalidate_geometry()
         super().resizeEvent(event)
+
+
+class ZoomableTimeline(QWidget):
+    """Timeline wrapper with zoom and pan controls.
+
+    Layout: [<] [-] [  timeline  ] [+] [>]
+    Pan buttons and zoom-out only appear when zoomed in.
+    Scroll wheel pans horizontally when zoomed.
+    """
+
+    frame_selected = pyqtSignal(int)
+
+    _ZOOM_STEP = 1.5
+    _MIN_ZOOM = 1.0
+    _MAX_ZOOM = 30.0
+    _PAN_STEP_FRACTION = 0.25  # Pan 25% of viewport per click
+
+    _BTN_STYLE = """
+        QPushButton {
+            background-color: rgba(60, 60, 60, 0.8);
+            border: 1px solid rgba(80, 80, 80, 0.6);
+            border-radius: 3px;
+            color: #E0E0E0;
+            font-weight: bold;
+            font-size: 14px;
+        }
+        QPushButton:hover { background-color: rgba(80, 80, 80, 0.8); }
+        QPushButton:pressed { background-color: rgba(100, 100, 100, 0.8); }
+        QPushButton:disabled { color: rgba(100, 100, 100, 0.5); }
+    """
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._zoom = 1.0
+
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(2)
+
+        # Pan left (hidden at zoom 1.0)
+        self._pan_left_btn = QPushButton("\u25c0")  # left triangle
+        self._pan_left_btn.setFixedSize(18, 22)
+        self._pan_left_btn.setToolTip("Pan left")
+        self._pan_left_btn.setStyleSheet(self._BTN_STYLE)
+        self._pan_left_btn.clicked.connect(self._pan_left)
+        self._pan_left_btn.setVisible(False)
+        layout.addWidget(self._pan_left_btn)
+
+        # Scroll area (no scrollbar — panning via wheel/buttons)
+        self._scroll = QScrollArea()
+        self._scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self._scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self._scroll.setWidgetResizable(True)
+        self._scroll.setMinimumHeight(30)
+        self._scroll.setMaximumHeight(50)
+        self._scroll.setStyleSheet(
+            "QScrollArea { border: none; background: transparent; }"
+        )
+
+        self.timeline = TimelineWidget()
+        self.timeline.frame_selected.connect(self._on_frame_selected)
+        self._scroll.setWidget(self.timeline)
+        layout.addWidget(self._scroll, stretch=1)
+
+        # Pan right (hidden at zoom 1.0)
+        self._pan_right_btn = QPushButton("\u25b6")  # right triangle
+        self._pan_right_btn.setFixedSize(18, 22)
+        self._pan_right_btn.setToolTip("Pan right")
+        self._pan_right_btn.setStyleSheet(self._BTN_STYLE)
+        self._pan_right_btn.clicked.connect(self._pan_right)
+        self._pan_right_btn.setVisible(False)
+        layout.addWidget(self._pan_right_btn)
+
+        # Zoom out (hidden at zoom 1.0)
+        self._zoom_out_btn = QPushButton("\u2212")  # minus sign
+        self._zoom_out_btn.setFixedSize(22, 22)
+        self._zoom_out_btn.setToolTip("Zoom out timeline")
+        self._zoom_out_btn.setStyleSheet(self._BTN_STYLE)
+        self._zoom_out_btn.clicked.connect(self._zoom_out)
+        self._zoom_out_btn.setVisible(False)
+        layout.addWidget(self._zoom_out_btn)
+
+        # Zoom in (always visible)
+        self._zoom_in_btn = QPushButton("+")
+        self._zoom_in_btn.setFixedSize(22, 22)
+        self._zoom_in_btn.setToolTip("Zoom in timeline")
+        self._zoom_in_btn.setStyleSheet(self._BTN_STYLE)
+        self._zoom_in_btn.clicked.connect(self._zoom_in)
+        layout.addWidget(self._zoom_in_btn)
+
+        self.setMinimumHeight(30)
+        self.setMaximumHeight(50)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+
+        # Update pan button states when scroll position changes
+        self._scroll.horizontalScrollBar().valueChanged.connect(
+            self._update_pan_buttons
+        )
+
+        self._update_controls()
+
+    def _on_frame_selected(self, frame: int):
+        """Forward frame selection."""
+        self.frame_selected.emit(frame)
+
+    # -- Zoom --
+
+    def _zoom_in(self):
+        self._zoom = min(self._MAX_ZOOM, self._zoom * self._ZOOM_STEP)
+        self._apply_zoom()
+
+    def _zoom_out(self):
+        self._zoom = max(self._MIN_ZOOM, self._zoom / self._ZOOM_STEP)
+        if abs(self._zoom - 1.0) < 0.05:
+            self._zoom = 1.0
+        self._apply_zoom()
+
+    def _apply_zoom(self):
+        viewport_w = self._scroll.viewport().width()
+        if self._zoom <= 1.0:
+            self._scroll.setWidgetResizable(True)
+        else:
+            self._scroll.setWidgetResizable(False)
+            zoomed_w = int(viewport_w * self._zoom)
+            self.timeline.setFixedWidth(zoomed_w)
+
+        self.timeline._invalidate_geometry()
+        self.timeline.update()
+        self._update_controls()
+
+    # -- Pan --
+
+    def _pan_left(self):
+        sb = self._scroll.horizontalScrollBar()
+        step = int(self._scroll.viewport().width() * self._PAN_STEP_FRACTION)
+        sb.setValue(max(0, sb.value() - step))
+
+    def _pan_right(self):
+        sb = self._scroll.horizontalScrollBar()
+        step = int(self._scroll.viewport().width() * self._PAN_STEP_FRACTION)
+        sb.setValue(min(sb.maximum(), sb.value() + step))
+
+    def wheelEvent(self, event):
+        """Scroll wheel pans horizontally when zoomed in."""
+        if self._zoom > 1.0:
+            sb = self._scroll.horizontalScrollBar()
+            # angleDelta().y() is the standard wheel axis
+            delta = event.angleDelta().y()
+            step = int(self._scroll.viewport().width() * 0.1)
+            if delta > 0:
+                sb.setValue(max(0, sb.value() - step))
+            elif delta < 0:
+                sb.setValue(min(sb.maximum(), sb.value() + step))
+            event.accept()
+        else:
+            super().wheelEvent(event)
+
+    # -- Controls state --
+
+    def _update_controls(self):
+        zoomed = self._zoom > self._MIN_ZOOM
+        self._zoom_out_btn.setVisible(zoomed)
+        self._zoom_out_btn.setEnabled(zoomed)
+        self._pan_left_btn.setVisible(zoomed)
+        self._pan_right_btn.setVisible(zoomed)
+        self._zoom_in_btn.setEnabled(self._zoom < self._MAX_ZOOM)
+        self._update_pan_buttons()
+
+    def _update_pan_buttons(self):
+        """Gray out pan buttons when at the scroll limits."""
+        if self._zoom <= self._MIN_ZOOM:
+            return
+        sb = self._scroll.horizontalScrollBar()
+        self._pan_left_btn.setEnabled(sb.value() > sb.minimum())
+        self._pan_right_btn.setEnabled(sb.value() < sb.maximum())
+
+    def resizeEvent(self, event):
+        """Re-apply zoom when the wrapper is resized."""
+        super().resizeEvent(event)
+        if self._zoom > 1.0:
+            self._apply_zoom()

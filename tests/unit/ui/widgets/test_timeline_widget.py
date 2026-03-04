@@ -2,6 +2,7 @@
 
 import pytest
 from PyQt6.QtCore import QPoint, Qt
+from PyQt6.QtGui import QMouseEvent
 
 from lazylabel.ui.widgets.timeline_widget import TimelineWidget
 
@@ -320,6 +321,98 @@ class TestPaintEvent:
         timeline_widget.set_frame_status(30, "saved")
         timeline_widget.set_frame_status(40, "pending")
         timeline_widget.repaint()  # Should not crash
+
+
+class TestFrameNames:
+    """Tests for frame name storage."""
+
+    def test_set_frame_names(self, timeline_widget):
+        """Test that set_frame_names stores names."""
+        timeline_widget.set_frame_count(3)
+        timeline_widget.set_frame_names(["a", "b", "c"])
+        assert timeline_widget._frame_names == ["a", "b", "c"]
+
+    def test_set_frame_count_clears_names(self, timeline_widget):
+        """Test that set_frame_count clears stored frame names."""
+        timeline_widget.set_frame_names(["a", "b"])
+        timeline_widget.set_frame_count(5)
+        assert timeline_widget._frame_names == []
+
+    def test_set_frame_names_copies_list(self, timeline_widget):
+        """Test that set_frame_names stores a copy."""
+        names = ["x", "y"]
+        timeline_widget.set_frame_names(names)
+        names.append("z")
+        assert len(timeline_widget._frame_names) == 2
+
+
+class TestConfidenceScores:
+    """Tests for confidence score storage on timeline."""
+
+    def test_set_confidence_scores(self, timeline_widget):
+        """Test that set_confidence_scores stores scores."""
+        timeline_widget.set_frame_count(10)
+        timeline_widget.set_confidence_scores({0: 0.95, 5: 0.50})
+        assert timeline_widget._confidence_scores == {0: 0.95, 5: 0.50}
+
+    def test_set_frame_count_clears_scores(self, timeline_widget):
+        """Test that set_frame_count clears stored confidence scores."""
+        timeline_widget.set_confidence_scores({0: 0.9})
+        timeline_widget.set_frame_count(5)
+        assert timeline_widget._confidence_scores == {}
+
+    def test_set_confidence_scores_copies_dict(self, timeline_widget):
+        """Test that set_confidence_scores stores a copy."""
+        scores = {1: 0.8}
+        timeline_widget.set_confidence_scores(scores)
+        scores[2] = 0.5
+        assert 2 not in timeline_widget._confidence_scores
+
+
+class TestTooltip:
+    """Tests for tooltip generation."""
+
+    def test_show_frame_tooltip_basic(self, timeline_widget, qtbot):
+        """Test that _show_frame_tooltip does not crash with minimal data."""
+        from unittest.mock import MagicMock
+
+        timeline_widget.set_frame_count(10)
+        event = MagicMock()
+        event.globalPosition.return_value.toPoint.return_value = QPoint(0, 0)
+        timeline_widget._show_frame_tooltip(event, 0)
+
+    def test_show_frame_tooltip_with_name_and_score(self, timeline_widget, qtbot):
+        """Test tooltip includes name and score when available."""
+        from unittest.mock import MagicMock, patch
+
+        timeline_widget.set_frame_count(5)
+        timeline_widget.set_frame_names(["frame_001", "frame_002", "frame_003", "frame_004", "frame_005"])
+        timeline_widget.set_confidence_scores({2: 0.9876})
+        timeline_widget.set_frame_status(2, "propagated")
+
+        event = MagicMock()
+        event.globalPosition.return_value.toPoint.return_value = (0, 0)
+
+        with patch("lazylabel.ui.widgets.timeline_widget.QToolTip.showText") as mock_show:
+            timeline_widget._show_frame_tooltip(event, 2)
+            text = mock_show.call_args[0][1]
+            assert "frame_003" in text
+            assert "0.9876" in text
+            assert "propagated" in text
+
+    def test_mousemove_without_button_shows_tooltip(self, timeline_widget, qtbot):
+        """Test that mouse move without button press triggers tooltip path."""
+        from unittest.mock import MagicMock, patch
+
+        timeline_widget.set_frame_count(10)
+        timeline_widget.resize(500, 40)
+
+        with patch.object(timeline_widget, "_show_frame_tooltip") as mock_tooltip:
+            event = MagicMock(spec=QMouseEvent)
+            event.buttons.return_value = Qt.MouseButton(0)  # No buttons
+            event.pos.return_value = QPoint(250, 20)
+            timeline_widget.mouseMoveEvent(event)
+            mock_tooltip.assert_called_once()
 
 
 class TestEdgeCases:

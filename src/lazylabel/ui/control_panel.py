@@ -183,6 +183,8 @@ class ControlPanel(QWidget):
     browse_models_requested = pyqtSignal()
     refresh_models_requested = pyqtSignal()
     model_selected = pyqtSignal(str)
+    load_model_requested = pyqtSignal()
+    unload_model_requested = pyqtSignal()
     annotation_size_changed = pyqtSignal(int)
     pan_speed_changed = pyqtSignal(int)
     join_threshold_changed = pyqtSignal(int)
@@ -962,6 +964,8 @@ class ControlPanel(QWidget):
         self.model_widget.browse_requested.connect(self.browse_models_requested)
         self.model_widget.refresh_requested.connect(self.refresh_models_requested)
         self.model_widget.model_selected.connect(self.model_selected)
+        self.model_widget.load_requested.connect(self.load_model_requested)
+        self.model_widget.unload_requested.connect(self.unload_model_requested)
 
         # Settings widget signals
         self.settings_widget.settings_changed.connect(self.settings_changed)
@@ -1133,6 +1137,10 @@ class ControlPanel(QWidget):
     def set_current_model(self, model_name):
         """Set the current model display."""
         self.model_widget.set_current_model(model_name)
+
+    def set_model_loaded_state(self, loaded: bool):
+        """Update model load/unload button states."""
+        self.model_widget.set_model_loaded_state(loaded)
 
     def get_settings(self):
         """Get current settings from the settings widget."""

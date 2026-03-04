@@ -21,6 +21,7 @@ def mock_main_window():
     mw.settings = MagicMock()
     mw.settings.default_model_type = "vit_h"
     mw.pending_custom_model_path = None
+    mw.model_explicitly_unloaded = False
     mw.multi_view_image_paths = ["/path/to/image1.png", "/path/to/image2.png"]
     mw._show_notification = MagicMock()
     mw._show_success_notification = MagicMock()

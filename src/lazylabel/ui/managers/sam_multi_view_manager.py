@@ -201,6 +201,10 @@ class SAMMultiViewManager:
         if viewer_idx not in (0, 1):
             return False
 
+        # Don't auto-load if user explicitly unloaded the model
+        if getattr(self.mw, "model_explicitly_unloaded", False):
+            return False
+
         # Check if model is ready
         if not self.is_model_ready(viewer_idx):
             # Start initialization if not already done

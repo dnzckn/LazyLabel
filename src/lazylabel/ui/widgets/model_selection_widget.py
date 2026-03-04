@@ -131,6 +131,8 @@ class ModelSelectionWidget(QWidget):
     browse_requested = pyqtSignal()
     refresh_requested = pyqtSignal()
     model_selected = pyqtSignal(str)
+    load_requested = pyqtSignal()
+    unload_requested = pyqtSignal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -165,8 +167,27 @@ class ModelSelectionWidget(QWidget):
         self.model_combo.addItem("Default (vit_h)")
         layout.addWidget(self.model_combo)
 
+        # Load / Unload buttons
+        load_unload_layout = QHBoxLayout()
+        self.btn_load = QPushButton("Load")
+        self.btn_load.setToolTip("Load the selected model into memory")
+        self.btn_load.setMinimumHeight(28)
+        self.btn_load.setStyleSheet(self._get_load_button_style())
+
+        self.btn_unload = QPushButton("Unload")
+        self.btn_unload.setToolTip(
+            "Unload model from memory for faster navigation"
+        )
+        self.btn_unload.setMinimumHeight(28)
+        self.btn_unload.setEnabled(False)
+        self.btn_unload.setStyleSheet(self._get_unload_button_style())
+
+        load_unload_layout.addWidget(self.btn_load)
+        load_unload_layout.addWidget(self.btn_unload)
+        layout.addLayout(load_unload_layout)
+
         # Current model label
-        self.current_model_label = QLabel("Current: Default SAM Model")
+        self.current_model_label = QLabel("Current: No model loaded")
         self.current_model_label.setWordWrap(True)
         self.current_model_label.setStyleSheet("color: #90EE90; font-style: italic;")
         layout.addWidget(self.current_model_label)
@@ -180,6 +201,8 @@ class ModelSelectionWidget(QWidget):
         """Connect internal signals."""
         self.btn_browse.clicked.connect(self.browse_requested)
         self.btn_refresh.clicked.connect(self.refresh_requested)
+        self.btn_load.clicked.connect(self.load_requested)
+        self.btn_unload.clicked.connect(self.unload_requested)
         # Use activated signal which fires when user actually selects an item
         self.model_combo.activated.connect(self._on_model_activated)
 
@@ -213,6 +236,11 @@ class ModelSelectionWidget(QWidget):
         """Set the current model display."""
         self.current_model_label.setText(model_name)
 
+    def set_model_loaded_state(self, loaded: bool):
+        """Update button states based on whether a model is loaded."""
+        self.btn_load.setEnabled(not loaded)
+        self.btn_unload.setEnabled(loaded)
+
     def get_selected_model_path(self) -> str:
         """Get the path of the currently selected model."""
         current_index = self.model_combo.currentIndex()
@@ -245,5 +273,62 @@ class ModelSelectionWidget(QWidget):
             }
             QPushButton:pressed {
                 background-color: rgba(50, 80, 110, 0.9);
+            }
+            QPushButton:disabled {
+                background-color: rgba(40, 40, 40, 0.6);
+                border-color: rgba(60, 60, 60, 0.4);
+                color: #666666;
+            }
+        """
+
+    def _get_load_button_style(self):
+        """Get load button styling (green accent)."""
+        return """
+            QPushButton {
+                background-color: rgba(50, 120, 70, 0.8);
+                border: 1px solid rgba(70, 150, 90, 0.8);
+                border-radius: 6px;
+                color: #E0E0E0;
+                font-weight: bold;
+                font-size: 10px;
+                padding: 4px 8px;
+            }
+            QPushButton:hover {
+                background-color: rgba(70, 150, 90, 0.9);
+                border-color: rgba(90, 170, 110, 0.9);
+            }
+            QPushButton:pressed {
+                background-color: rgba(40, 100, 60, 0.9);
+            }
+            QPushButton:disabled {
+                background-color: rgba(40, 40, 40, 0.6);
+                border-color: rgba(60, 60, 60, 0.4);
+                color: #666666;
+            }
+        """
+
+    def _get_unload_button_style(self):
+        """Get unload button styling (red accent)."""
+        return """
+            QPushButton {
+                background-color: rgba(130, 60, 60, 0.8);
+                border: 1px solid rgba(160, 80, 80, 0.8);
+                border-radius: 6px;
+                color: #E0E0E0;
+                font-weight: bold;
+                font-size: 10px;
+                padding: 4px 8px;
+            }
+            QPushButton:hover {
+                background-color: rgba(160, 80, 80, 0.9);
+                border-color: rgba(180, 100, 100, 0.9);
+            }
+            QPushButton:pressed {
+                background-color: rgba(110, 50, 50, 0.9);
+            }
+            QPushButton:disabled {
+                background-color: rgba(40, 40, 40, 0.6);
+                border-color: rgba(60, 60, 60, 0.4);
+                color: #666666;
             }
         """

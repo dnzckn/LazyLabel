@@ -553,3 +553,124 @@ class TestConfidenceScore:
         sequence_view_mode.mark_frame_propagated(1, {2: mask}, confidence=0.7)
 
         assert sequence_view_mode.get_confidence_score(1) == 0.7
+
+
+class TestTrimFrames:
+    """Tests for trim_frames method."""
+
+    def test_trim_removes_frames(self, sequence_view_mode):
+        """Test that trim removes the specified frames."""
+        paths = [f"/{i}.png" for i in range(5)]
+        sequence_view_mode.set_image_paths(paths)
+
+        removed = sequence_view_mode.trim_frames({1, 3})
+
+        assert sequence_view_mode.total_frames == 3
+        assert removed == ["/1.png", "/3.png"]
+        assert sequence_view_mode.get_image_path(0) == "/0.png"
+        assert sequence_view_mode.get_image_path(1) == "/2.png"
+        assert sequence_view_mode.get_image_path(2) == "/4.png"
+
+    def test_trim_raises_on_all_frames(self, sequence_view_mode):
+        """Test that trimming all frames raises ValueError."""
+        sequence_view_mode.set_image_paths(["/a.png", "/b.png"])
+        with pytest.raises(ValueError, match="Cannot trim all frames"):
+            sequence_view_mode.trim_frames({0, 1})
+
+    def test_trim_remaps_frame_statuses(self, sequence_view_mode):
+        """Test that frame statuses are remapped after trim."""
+        sequence_view_mode.set_image_paths([f"/{i}.png" for i in range(5)])
+        sequence_view_mode.set_reference_frame(2, [])
+        mask = np.ones((10, 10), dtype=bool)
+        sequence_view_mode.mark_frame_propagated(4, {1: mask}, confidence=0.999)
+
+        sequence_view_mode.trim_frames({1, 3})
+
+        # Old idx 2 -> new idx 1 (reference)
+        assert sequence_view_mode.get_frame_status(1) == "reference"
+        # Old idx 4 -> new idx 2 (propagated)
+        assert sequence_view_mode.get_frame_status(2) == "propagated"
+
+    def test_trim_remaps_reference_annotations(self, sequence_view_mode):
+        """Test that reference annotations have correct frame_idx after trim."""
+        sequence_view_mode.set_image_paths([f"/{i}.png" for i in range(5)])
+        sequence_view_mode.set_reference_frame(3, [])
+
+        sequence_view_mode.trim_frames({0, 1})
+
+        # Old idx 3 -> new idx 1
+        assert 1 in sequence_view_mode._reference_annotations
+        assert sequence_view_mode.reference_frame_indices == [1]
+
+    def test_trim_remaps_propagated_masks(self, sequence_view_mode):
+        """Test that propagated masks are remapped after trim."""
+        sequence_view_mode.set_image_paths([f"/{i}.png" for i in range(5)])
+        mask = np.ones((10, 10), dtype=bool)
+        sequence_view_mode.mark_frame_propagated(3, {1: mask}, confidence=0.999)
+
+        sequence_view_mode.trim_frames({0})
+
+        # Old idx 3 -> new idx 2
+        assert sequence_view_mode.get_propagated_masks(2) is not None
+
+    def test_trim_remaps_confidence_scores(self, sequence_view_mode):
+        """Test that confidence scores are remapped after trim."""
+        sequence_view_mode.set_image_paths([f"/{i}.png" for i in range(5)])
+        mask = np.ones((10, 10), dtype=bool)
+        sequence_view_mode.mark_frame_propagated(3, {1: mask}, confidence=0.85)
+
+        sequence_view_mode.trim_frames({0})
+
+        assert sequence_view_mode.get_confidence_score(2) == 0.85
+
+    def test_trim_adjusts_current_frame_when_removed(self, sequence_view_mode):
+        """Test that current frame is adjusted when it's removed."""
+        sequence_view_mode.set_image_paths([f"/{i}.png" for i in range(5)])
+        sequence_view_mode.set_current_frame(2)
+
+        sequence_view_mode.trim_frames({2})
+
+        # Should go to nearest valid frame
+        assert 0 <= sequence_view_mode.current_frame_idx < 4
+
+    def test_trim_keeps_current_frame_when_not_removed(self, sequence_view_mode):
+        """Test that current frame is remapped when not removed."""
+        sequence_view_mode.set_image_paths([f"/{i}.png" for i in range(5)])
+        sequence_view_mode.set_current_frame(4)
+
+        sequence_view_mode.trim_frames({0, 1})
+
+        # Old idx 4 -> new idx 2
+        assert sequence_view_mode.current_frame_idx == 2
+
+    def test_trim_remaps_skipped_indices(self, sequence_view_mode):
+        """Test that skipped frame indices are remapped after trim."""
+        sequence_view_mode.set_image_paths([f"/{i}.png" for i in range(5)])
+        sequence_view_mode.mark_frames_skipped({3})
+
+        sequence_view_mode.trim_frames({0})
+
+        # Old idx 3 -> new idx 2
+        assert 2 in sequence_view_mode.skipped_frame_indices
+
+    def test_trim_clears_reference_dimensions_when_no_refs(self, sequence_view_mode):
+        """Test that reference dimensions are cleared when all refs are trimmed."""
+        sequence_view_mode.set_image_paths([f"/{i}.png" for i in range(5)])
+        sequence_view_mode.set_reference_frame(1, [], image_dimensions=(100, 200))
+
+        sequence_view_mode.trim_frames({1})
+
+        assert sequence_view_mode.reference_dimensions is None
+
+    def test_trim_preserves_reference_dimensions_when_refs_remain(
+        self, sequence_view_mode
+    ):
+        """Test that reference dimensions are kept when refs remain after trim."""
+        sequence_view_mode.set_image_paths([f"/{i}.png" for i in range(5)])
+        sequence_view_mode.set_reference_frame(0, [], image_dimensions=(100, 200))
+        sequence_view_mode.set_reference_frame(3, [], image_dimensions=(100, 200))
+
+        sequence_view_mode.trim_frames({0})
+
+        # Ref at old idx 3 (now idx 2) still exists
+        assert sequence_view_mode.reference_dimensions == (100, 200)
