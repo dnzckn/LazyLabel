@@ -45,6 +45,7 @@ hiddenimports = [
     'PyQt6.QtCore',
     'PyQt6.QtGui',
     'PyQt6.QtWidgets',
+    'PyQt6.QtSvg',
     'PyQt6.sip',
 
     # PyTorch
@@ -76,6 +77,7 @@ hiddenimports = [
     'tqdm',
     'huggingface_hub',
     'qdarktheme',
+    'darkdetect',
 
     # pkg_resources and setuptools dependencies
     'pkg_resources',
