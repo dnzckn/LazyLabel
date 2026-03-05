@@ -173,10 +173,9 @@ class SAMSingleViewManager:
         if not self.mw.current_image_path:
             return
 
-        # Don't auto-load if user explicitly unloaded the model
+        # If user explicitly unloaded, clear the flag and re-load on demand
         if getattr(self.mw, "model_explicitly_unloaded", False):
-            self.sam_is_dirty = False
-            return
+            self.mw.model_explicitly_unloaded = False
 
         # Check if we need to load a different model
         model_available = self.mw.model_manager.is_model_available()

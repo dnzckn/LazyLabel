@@ -2002,16 +2002,10 @@ class MainWindow(QMainWindow):
         # Clean up propagation workers
         self._cleanup_propagation_worker()
         if self._sequence_init_worker is not None:
-            if self._sequence_init_worker.isRunning():
-                self._sequence_init_worker.stop()
-                self._sequence_init_worker.wait(2000)
-            self._sequence_init_worker.deleteLater()
+            self._safe_stop_worker(self._sequence_init_worker)
             self._sequence_init_worker = None
         if self._reference_worker is not None:
-            if self._reference_worker.isRunning():
-                self._reference_worker.stop()
-                self._reference_worker.wait(2000)
-            self._reference_worker.deleteLater()
+            self._safe_stop_worker(self._reference_worker)
             self._reference_worker = None
 
         # Clean up video predictor
@@ -2762,6 +2756,10 @@ class MainWindow(QMainWindow):
 
     def _on_view_mode_changed(self, index):
         """Handle switching between view modes."""
+        # Leaving sequence mode — tear down the timeline
+        if self.view_mode == "sequence" and index != 2:
+            self._on_exit_sequence_timeline()
+
         if index == 0:
             # Single view mode
             self.view_mode = "single"
@@ -3008,6 +3006,7 @@ class MainWindow(QMainWindow):
         self._zoomable_timeline = ZoomableTimeline()
         self.timeline_widget = self._zoomable_timeline.timeline
         self._zoomable_timeline.frame_selected.connect(self._on_sequence_frame_selected)
+        self._zoomable_timeline.sort_toggled.connect(self._on_timeline_sort_toggled)
         timeline_layout.addWidget(self._zoomable_timeline, stretch=1)
 
         self.save_all_timeline_btn = QPushButton("Save All")
@@ -3125,6 +3124,27 @@ class MainWindow(QMainWindow):
             image_path = self.sequence_view_mode.get_image_path(frame_idx)
             if image_path:
                 self._load_sequence_frame(image_path, frame_idx)
+
+    def _on_timeline_sort_toggled(self, display_order: list) -> None:
+        """Handle timeline sort toggle — reorder file manager's highlighted rows."""
+        if not hasattr(self.right_panel, "file_manager"):
+            return
+        fm = self.right_panel.file_manager
+
+        if not display_order:
+            fm.resetHighlightedSort()
+            return
+
+        if not self.sequence_view_mode:
+            return
+
+        ordered_paths = []
+        for frame_idx in display_order:
+            img_path = self.sequence_view_mode.get_image_path(frame_idx)
+            if img_path:
+                ordered_paths.append(Path(img_path))
+
+        fm.sortHighlightedByOrder(ordered_paths)
 
     def _auto_save_sequence_frame(self, frame_idx: int):
         """Auto-save segments for a sequence frame (or delete NPZ if empty)."""
@@ -3510,19 +3530,32 @@ class MainWindow(QMainWindow):
             )
 
     def _on_add_all_before_reference(self):
-        """Add all frames before current position as references."""
+        """Add all frames before current position as references.
+
+        When the timeline is sorted, "before" means all frames to the
+        left of the current frame in display order.
+        """
         if self.sequence_view_mode is None:
             return
 
         current_idx = self.sequence_view_mode.current_frame_idx
-        if current_idx <= 0:
+
+        # Determine which frames are "before" current in display order
+        if self.timeline_widget and self.timeline_widget.is_sorted:
+            display_order = self.timeline_widget._display_order
+            reverse = self.timeline_widget._reverse_order
+            current_dp = reverse.get(current_idx, 0)
+            before_indices = [display_order[dp] for dp in range(current_dp)]
+        else:
+            before_indices = list(range(current_idx))
+
+        if not before_indices:
             self._show_notification("No frames before current position")
             return
 
-        # Add all frames from 0 to current_idx - 1
         count = 0
         skipped_count = 0
-        for idx in range(current_idx):
+        for idx in before_indices:
             image_path = self.sequence_view_mode.get_image_path(idx)
             dims = (
                 self._get_sequence_image_dimensions(image_path) if image_path else None
@@ -3599,7 +3632,12 @@ class MainWindow(QMainWindow):
         self._show_notification("Cleared all reference frames")
 
     def _on_propagate_requested(
-        self, direction: str, start: int, end: int, skip_flagged: bool = True
+        self,
+        direction: str,
+        start: int,
+        end: int,
+        skip_flagged: bool = True,
+        skip_labeled: bool = False,
     ):
         """Handle propagation request from sequence widget."""
         if self.sequence_view_mode is None:
@@ -3675,6 +3713,7 @@ class MainWindow(QMainWindow):
                 "start": start,
                 "end": end,
                 "skip_flagged": skip_flagged,
+                "skip_labeled": skip_labeled,
             }
 
             # Get reference dimensions for filtering mismatched images
@@ -3698,7 +3737,7 @@ class MainWindow(QMainWindow):
             return
 
         # Already initialized — proceed directly
-        self._start_propagation(direction, start, end, skip_flagged)
+        self._start_propagation(direction, start, end, skip_flagged, skip_labeled)
 
     def _on_sequence_init_progress(self, message: str):
         """Handle progress updates from sequence init worker."""
@@ -3707,7 +3746,9 @@ class MainWindow(QMainWindow):
 
     def _on_sequence_init_finished(self, success: bool):
         """Handle completion of background sequence initialization."""
-        self._sequence_init_worker = None
+        if self._sequence_init_worker is not None:
+            self._sequence_init_worker.deleteLater()
+            self._sequence_init_worker = None
 
         if not success:
             self._show_notification("Failed to initialize propagation")
@@ -3743,20 +3784,45 @@ class MainWindow(QMainWindow):
                 params["start"],
                 params["end"],
                 params["skip_flagged"],
+                params.get("skip_labeled", False),
             )
 
     def _on_sequence_init_error(self, error_msg: str):
         """Handle error from sequence init worker."""
-        self._sequence_init_worker = None
+        if self._sequence_init_worker is not None:
+            self._sequence_init_worker.deleteLater()
+            self._sequence_init_worker = None
         self._pending_propagation = None
         self._show_notification(f"Initialization error: {error_msg}")
         if self.sequence_widget:
             self.sequence_widget.end_propagation()
 
     def _start_propagation(
-        self, direction: str, start: int, end: int, skip_flagged: bool
+        self,
+        direction: str,
+        start: int,
+        end: int,
+        skip_flagged: bool,
+        skip_labeled: bool = False,
     ):
         """Collect reference data and start annotation worker."""
+        # Precompute the set of labeled frames to skip (have NPZ on disk)
+        self._skip_labeled_frames: set[int] = set()
+        if skip_labeled and self.sequence_view_mode:
+            from pathlib import Path
+
+            for i in range(self.sequence_view_mode.total_frames):
+                # Don't skip reference frames
+                if i in self.sequence_view_mode.reference_frame_indices:
+                    continue
+                img_path = self.sequence_view_mode.get_image_path(i)
+                if img_path and Path(img_path).with_suffix(".npz").exists():
+                    self._skip_labeled_frames.add(i)
+            if self._skip_labeled_frames:
+                logger.info(
+                    f"Skip-labeled: {len(self._skip_labeled_frames)} frames will keep existing labels"
+                )
+
         # Clear previous propagation results before starting new propagation
         # This ensures old masks don't persist when labels are changed
         self.sequence_view_mode.clear_propagation_results()
@@ -3831,6 +3897,7 @@ class MainWindow(QMainWindow):
             "start": start,
             "end": end,
             "skip_flagged": skip_flagged,
+            "skip_labeled": skip_labeled,
         }
 
         # Run annotation adding on background thread
@@ -3853,7 +3920,9 @@ class MainWindow(QMainWindow):
 
     def _on_reference_annotations_finished(self, total_count: int):
         """Handle completion of reference annotation worker, start propagation."""
-        self._reference_worker = None
+        if self._reference_worker is not None:
+            self._reference_worker.deleteLater()
+            self._reference_worker = None
 
         if total_count == 0:
             self._show_notification("No valid segments in reference frames")
@@ -3917,11 +3986,24 @@ class MainWindow(QMainWindow):
 
     def _on_reference_annotations_error(self, error_msg: str):
         """Handle error from reference annotation worker."""
-        self._reference_worker = None
+        if self._reference_worker is not None:
+            self._reference_worker.deleteLater()
+            self._reference_worker = None
         self._pending_propagation = None
         self._show_notification(f"Reference annotation error: {error_msg}")
         if self.sequence_widget:
             self.sequence_widget.end_propagation()
+
+    def _safe_stop_worker(self, worker):
+        """Stop a worker thread safely, avoiding 'destroyed while running' crash."""
+        if worker is None:
+            return
+        worker.stop()
+        if not worker.wait(2000):
+            # Thread didn't finish in time — let it clean up via deleteLater
+            worker.finished.connect(worker.deleteLater)
+        else:
+            worker.deleteLater()
 
     def _on_cancel_propagation(self):
         """Cancel ongoing propagation, annotation, or initialization."""
@@ -3930,15 +4012,13 @@ class MainWindow(QMainWindow):
             self._sequence_init_worker is not None
             and self._sequence_init_worker.isRunning()
         ):
-            self._sequence_init_worker.stop()
-            self._sequence_init_worker.wait(1000)
+            self._safe_stop_worker(self._sequence_init_worker)
             self._sequence_init_worker = None
             self._pending_propagation = None
 
         # Cancel reference annotation worker if it's running
         if self._reference_worker is not None and self._reference_worker.isRunning():
-            self._reference_worker.stop()
-            self._reference_worker.wait(1000)
+            self._safe_stop_worker(self._reference_worker)
             self._reference_worker = None
             self._pending_propagation = None
 
@@ -3947,8 +4027,7 @@ class MainWindow(QMainWindow):
             self._propagation_worker is not None
             and self._propagation_worker.isRunning()
         ):
-            self._propagation_worker.stop()
-            self._propagation_worker.wait(1000)
+            self._safe_stop_worker(self._propagation_worker)
             self._propagation_worker = None
 
         if self.sequence_widget:
@@ -3966,6 +4045,18 @@ class MainWindow(QMainWindow):
     def _on_propagation_frame_done(self, frame_idx: int, result):
         """Handle completion of propagation for a single frame."""
         from PyQt6.QtWidgets import QApplication
+
+        # Skip labeled frames — model still processes them for temporal
+        # continuity, but we don't store masks or change timeline status.
+        # Show as "skipped" (brown) so the user sees they were preserved.
+        skip_set = getattr(self, "_skip_labeled_frames", set())
+        if frame_idx in skip_set:
+            if self.timeline_widget:
+                self.timeline_widget.set_frame_status(
+                    frame_idx, "skipped", immediate=True
+                )
+            QApplication.processEvents()
+            return
 
         # Update timeline to show this frame has been propagated (immediate for animation)
         if self.timeline_widget:
@@ -4075,10 +4166,7 @@ class MainWindow(QMainWindow):
     def _cleanup_propagation_worker(self):
         """Safely clean up the propagation worker thread."""
         if self._propagation_worker is not None:
-            if self._propagation_worker.isRunning():
-                self._propagation_worker.stop()
-                self._propagation_worker.wait(2000)  # Wait up to 2 seconds
-            self._propagation_worker.deleteLater()
+            self._safe_stop_worker(self._propagation_worker)
             self._propagation_worker = None
 
     def _on_next_flagged_frame(self):
@@ -4612,6 +4700,8 @@ class MainWindow(QMainWindow):
         path = self.sequence_view_mode.get_image_path(idx)
         name = Path(path).name if path else str(idx + 1)
         self.sequence_widget.set_trim_left(name)
+        if self.timeline_widget:
+            self.timeline_widget.set_trim_left(idx)
 
     def _on_set_trim_right(self):
         """Store current frame as the right bound of the trim range."""
@@ -4622,6 +4712,8 @@ class MainWindow(QMainWindow):
         path = self.sequence_view_mode.get_image_path(idx)
         name = Path(path).name if path else str(idx + 1)
         self.sequence_widget.set_trim_right(name)
+        if self.timeline_widget:
+            self.timeline_widget.set_trim_right(idx)
 
     def _on_trim_range(self):
         """Remove all frames in [trim_left, trim_right] from the timeline."""
@@ -4631,9 +4723,19 @@ class MainWindow(QMainWindow):
             self._show_notification("Set both trim left and right bounds first")
             return
 
-        left = min(self._trim_left_idx, self._trim_right_idx)
-        right = max(self._trim_left_idx, self._trim_right_idx)
-        indices = set(range(left, right + 1))
+        # When timeline is sorted, trim the frames between the two bounds
+        # in display order (not real index order)
+        if self.timeline_widget and self.timeline_widget.is_sorted:
+            display_order = self.timeline_widget._display_order
+            reverse = self.timeline_widget._reverse_order
+            dp_left = reverse.get(self._trim_left_idx, 0)
+            dp_right = reverse.get(self._trim_right_idx, 0)
+            lo, hi = min(dp_left, dp_right), max(dp_left, dp_right)
+            indices = {display_order[dp] for dp in range(lo, hi + 1)}
+        else:
+            left = min(self._trim_left_idx, self._trim_right_idx)
+            right = max(self._trim_left_idx, self._trim_right_idx)
+            indices = set(range(left, right + 1))
 
         if len(indices) >= self.sequence_view_mode.total_frames:
             self._show_notification("Cannot remove all frames from the timeline")
@@ -4650,7 +4752,9 @@ class MainWindow(QMainWindow):
         if self.propagation_manager and self.propagation_manager.is_initialized:
             self.propagation_manager.cleanup()
 
-        # Rebuild UI
+        # Rebuild UI (reset sort since frame indices changed)
+        if hasattr(self, "_zoomable_timeline"):
+            self._zoomable_timeline.reset_sort()
         total = self.sequence_view_mode.total_frames
         self.timeline_widget.set_frame_count(total)
         self.timeline_widget.set_frame_names(
@@ -4673,10 +4777,13 @@ class MainWindow(QMainWindow):
         # Navigate to the new current frame
         self._on_sequence_frame_selected(self.sequence_view_mode.current_frame_idx)
 
-        # Clear trim selection
+        # Clear trim selection and markers
         self._trim_left_idx = None
         self._trim_right_idx = None
         self.sequence_widget.clear_trim()
+        if self.timeline_widget:
+            self.timeline_widget.set_trim_left(None)
+            self.timeline_widget.set_trim_right(None)
 
         self._show_notification(f"Trimmed {len(removed)} frames from timeline")
 
@@ -4684,6 +4791,9 @@ class MainWindow(QMainWindow):
         """Reset trim left/right state."""
         self._trim_left_idx = None
         self._trim_right_idx = None
+        if self.timeline_widget:
+            self.timeline_widget.set_trim_left(None)
+            self.timeline_widget.set_trim_right(None)
 
     def _enter_sequence_mode(self):
         """Enter sequence mode - shows setup UI for timeline range selection.

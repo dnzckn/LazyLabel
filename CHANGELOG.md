@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.8] - 2026-03-05
+
+### Added
+
+- Timeline sort button: groups done frames left, needs-work frames right
+- Skip-labeled checkbox: propagation preserves existing NPZ files
+- Abort button: Propagate button becomes red Abort during propagation with progress display
+- Frame separator lines on timeline when zoomed in (≥4px per frame)
+- Histogram grid lines and dynamic view range
+- Red trim markers on timeline for trim bounds
+- Virtual-scroll timeline replacing QScrollArea for better performance
+
+### Fixed
+
+- Timeline scrubbing: QScrollArea was eating mouse events, now forwarded via event filter
+- Reference annotation progress reports per-image instead of per-segment
+- File manager NPZ column sorting (wrong column_map indices)
+- QThread crashes: use `deleteLater()` in all worker finished handlers
+- Fix `AttributeError: 'MainWindow' has no attribute 'sam_single_view_manager'` when loading model
+
 ## [1.6.7] - 2026-03-05
 
 ### Fixed
@@ -510,6 +530,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Image centering on load
 - Multi-class reindexing via drag and drop
 
+[1.6.8]: https://github.com/dnzckn/LazyLabel/compare/v1.6.7...v1.6.8
 [1.6.7]: https://github.com/dnzckn/LazyLabel/compare/v1.6.6...v1.6.7
 [1.6.6]: https://github.com/dnzckn/LazyLabel/compare/v1.6.5...v1.6.6
 [1.6.5]: https://github.com/dnzckn/LazyLabel/compare/v1.6.4...v1.6.5
