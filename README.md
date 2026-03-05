@@ -91,16 +91,28 @@ dogs = mask[:, :, 3]
 
 ---
 
-## SAM 2.1 Setup
+## Model Setup
 
-SAM 1.0 models are downloaded automatically on first use. For SAM 2.1 (improved accuracy, required for Sequence mode):
+SAM 1.0 and SAM 2.1 models are downloaded automatically on first use.
+
+If the automatic download doesn't work, you can manually download and place the models:
+
+### SAM 1.0
+
+1. Download `sam_vit_h_4b8939.pth` from the [SAM repository](https://github.com/facebookresearch/segment-anything)
+2. Place in LazyLabel's models folder:
+   - Via pip: `~/.local/share/lazylabel/models/`
+   - From source: `src/lazylabel/models/`
+
+### SAM 2.1 (improved accuracy, required for Sequence mode)
 
 1. Install SAM 2: `pip install git+https://github.com/facebookresearch/sam2.git`
 2. Download a model (e.g., `sam2.1_hiera_large.pt`) from the [SAM 2 repository](https://github.com/facebookresearch/sam2)
 3. Place in LazyLabel's models folder:
    - Via pip: `~/.local/share/lazylabel/models/`
    - From source: `src/lazylabel/models/`
-4. Select the model from the dropdown in settings
+
+Select the model from the dropdown in settings.
 
 ---
 
