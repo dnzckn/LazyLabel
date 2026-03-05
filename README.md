@@ -93,9 +93,9 @@ dogs = mask[:, :, 3]
 
 ## Model Setup
 
-SAM 1.0 and SAM 2.1 models are downloaded automatically on first use.
+SAM 1.0 models are downloaded automatically on first use.
 
-If the automatic download doesn't work, you can manually download and place the models:
+If the automatic download doesn't work, you can manually download and place the model:
 
 ### SAM 1.0
 
