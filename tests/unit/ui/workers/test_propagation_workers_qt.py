@@ -80,6 +80,7 @@ class TestSequenceInitWorkerQt:
         )
         with qtbot.waitSignal(worker.finished_init, timeout=5000) as blocker:
             worker.start()
+        worker.wait()
 
         assert blocker.args == [True]
         mock_propagation_manager.init_sequence.assert_called_once()
@@ -96,6 +97,7 @@ class TestSequenceInitWorkerQt:
         )
         with qtbot.waitSignal(worker.finished_init, timeout=5000) as blocker:
             worker.start()
+        worker.wait()
 
         assert blocker.args == [False]
 
@@ -112,6 +114,7 @@ class TestSequenceInitWorkerQt:
         )
         with qtbot.waitSignal(worker.finished_init, timeout=5000):
             worker.start()
+        worker.wait()
 
         call_kwargs = mock_propagation_manager.init_sequence.call_args
         assert call_kwargs[1]["image_cache"] is cache
@@ -126,6 +129,7 @@ class TestSequenceInitWorkerQt:
         )
         with qtbot.waitSignal(worker.finished_init, timeout=5000):
             worker.start()
+        worker.wait()
 
         call_kwargs = mock_propagation_manager.init_sequence.call_args
         assert "progress_callback" in call_kwargs[1]
@@ -145,6 +149,7 @@ class TestSequenceInitWorkerQt:
 
         with qtbot.waitSignal(worker.finished_init, timeout=5000):
             worker.start()
+        worker.wait()
 
         # Should have at least the initial "Preparing images..." message
         assert len(progress_messages) >= 1
@@ -162,6 +167,7 @@ class TestSequenceInitWorkerQt:
         )
         with qtbot.waitSignal(worker.error, timeout=5000) as blocker:
             worker.start()
+        worker.wait()
 
         assert "Test error" in blocker.args[0]
 
@@ -183,6 +189,7 @@ class TestReferenceAnnotationWorkerQt:
         )
         with qtbot.waitSignal(worker.finished_annotations, timeout=5000) as blocker:
             worker.start()
+        worker.wait()
 
         assert blocker.args == [3]
 
@@ -197,6 +204,7 @@ class TestReferenceAnnotationWorkerQt:
         )
         with qtbot.waitSignal(worker.finished_annotations, timeout=5000):
             worker.start()
+        worker.wait()
 
         assert mock_propagation_manager.add_reference_frame.call_count == 2
         mock_propagation_manager.add_reference_frame.assert_any_call(0)
@@ -213,6 +221,7 @@ class TestReferenceAnnotationWorkerQt:
         )
         with qtbot.waitSignal(worker.finished_annotations, timeout=5000):
             worker.start()
+        worker.wait()
 
         seg = sample_segments[0]
         mock_propagation_manager.add_reference_annotation.assert_called_once_with(
@@ -238,6 +247,7 @@ class TestReferenceAnnotationWorkerQt:
 
         with qtbot.waitSignal(worker.finished_annotations, timeout=5000):
             worker.start()
+        worker.wait()
 
         assert len(progress_messages) == 3
         assert "Adding reference 1/3" in progress_messages
@@ -256,6 +266,7 @@ class TestReferenceAnnotationWorkerQt:
         )
         with qtbot.waitSignal(worker.finished_annotations, timeout=5000) as blocker:
             worker.start()
+        worker.wait()
 
         assert blocker.args == [2]
 
@@ -274,6 +285,7 @@ class TestReferenceAnnotationWorkerQt:
         )
         with qtbot.waitSignal(worker.error, timeout=5000) as blocker:
             worker.start()
+        worker.wait()
 
         assert "GPU error" in blocker.args[0]
 
@@ -286,5 +298,6 @@ class TestReferenceAnnotationWorkerQt:
         )
         with qtbot.waitSignal(worker.finished_annotations, timeout=5000) as blocker:
             worker.start()
+        worker.wait()
 
         assert blocker.args == [0]
