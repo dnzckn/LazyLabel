@@ -170,11 +170,11 @@ class SegmentDisplayManager:
         # Shift highlight pixmap cache (preserve LRU order with OrderedDict)
         new_highlight_cache = OrderedDict()
         for key, value in self._highlight_pixmap_cache.items():
-            segment_idx, color_rgb, alpha = key
+            segment_idx, viewer_idx, color_rgb, alpha = key
             if segment_idx == deleted_index:
                 continue
             elif segment_idx > deleted_index:
-                new_key = (segment_idx - 1, color_rgb, alpha)
+                new_key = (segment_idx - 1, viewer_idx, color_rgb, alpha)
                 new_highlight_cache[new_key] = value
             else:
                 new_highlight_cache[key] = value

@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.11] - 2026-03-05
+
+### Fixed
+
+- Fix `ValueError: too many values to unpack` when undoing segment deletion — highlight cache key was missing `viewer_idx` in `shift_cache_after_deletion`
+
 ## [1.6.10] - 2026-03-05
 
 ### Fixed
@@ -542,6 +548,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Image centering on load
 - Multi-class reindexing via drag and drop
 
+[1.6.11]: https://github.com/dnzckn/LazyLabel/compare/v1.6.10...v1.6.11
 [1.6.10]: https://github.com/dnzckn/LazyLabel/compare/v1.6.9...v1.6.10
 [1.6.9]: https://github.com/dnzckn/LazyLabel/compare/v1.6.8...v1.6.9
 [1.6.8]: https://github.com/dnzckn/LazyLabel/compare/v1.6.7...v1.6.8
