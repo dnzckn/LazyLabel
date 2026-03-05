@@ -155,6 +155,14 @@ coll = COLLECT(
     a.datas,
     strip=False,
     upx=True,
-    upx_exclude=[],
+    upx_exclude=[
+        # UPX compression corrupts Qt DLLs causing "specified procedure not found"
+        'Qt6*.dll',
+        'Qt*.dll',
+        'PyQt6*.dll',
+        'python*.dll',
+        'vcruntime*.dll',
+        'msvcp*.dll',
+    ],
     name='LazyLabel',
 )
