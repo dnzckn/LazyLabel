@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.14] - 2026-03-05
+
+### Fixed
+
+- Pin PyQt6 to `>=6.7.1,<6.10` — PyQt6 6.10.x has DLL incompatibilities with PyInstaller on Windows
+- Revert unnecessary spec changes (runtime hook, dynamic lib collection, UPX excludes) that were masking the PyQt6 version issue
+
 ## [1.6.13] - 2026-03-05
 
 ### Fixed
@@ -562,6 +569,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Image centering on load
 - Multi-class reindexing via drag and drop
 
+[1.6.14]: https://github.com/dnzckn/LazyLabel/compare/v1.6.13...v1.6.14
 [1.6.13]: https://github.com/dnzckn/LazyLabel/compare/v1.6.12...v1.6.13
 [1.6.12]: https://github.com/dnzckn/LazyLabel/compare/v1.6.11...v1.6.12
 [1.6.11]: https://github.com/dnzckn/LazyLabel/compare/v1.6.10...v1.6.11

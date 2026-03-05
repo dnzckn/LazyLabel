@@ -7,7 +7,7 @@ Creates a standalone Windows application with all dependencies bundled.
 import sys
 import os
 from pathlib import Path
-from PyInstaller.utils.hooks import collect_data_files, collect_dynamic_libs, collect_submodules
+from PyInstaller.utils.hooks import collect_data_files, collect_submodules
 
 # SPECPATH is provided by PyInstaller - it's the directory containing this spec file
 SCRIPT_DIR = Path(SPECPATH)
@@ -19,7 +19,6 @@ block_cipher = None
 sam_datas = collect_data_files('segment_anything')
 sam2_datas = collect_data_files('sam2', include_py_files=True)
 pyqt_datas = collect_data_files('PyQt6')
-pyqt_binaries = collect_dynamic_libs('PyQt6')
 qdarktheme_datas = collect_data_files('qdarktheme')
 
 # Collect model files (using absolute paths from project root)
@@ -46,7 +45,6 @@ hiddenimports = [
     'PyQt6.QtCore',
     'PyQt6.QtGui',
     'PyQt6.QtWidgets',
-    'PyQt6.QtSvg',
     'PyQt6.sip',
 
     # PyTorch
@@ -78,7 +76,6 @@ hiddenimports = [
     'tqdm',
     'huggingface_hub',
     'qdarktheme',
-    'darkdetect',
 
     # pkg_resources and setuptools dependencies
     'pkg_resources',
@@ -104,12 +101,12 @@ hiddenimports += collect_submodules('qdarktheme')
 a = Analysis(
     [str(ROOT_DIR / 'src/lazylabel/main.py')],
     pathex=[str(ROOT_DIR / 'src')],  # Add src to path for lazylabel package imports
-    binaries=pyqt_binaries,
+    binaries=[],
     datas=datas,
     hiddenimports=hiddenimports,
     hookspath=[],
     hooksconfig={},
-    runtime_hooks=[str(SCRIPT_DIR / 'qt_runtime_hook.py')],
+    runtime_hooks=[],
     excludes=[
         # Exclude unnecessary packages to reduce size
         'matplotlib',
@@ -155,14 +152,6 @@ coll = COLLECT(
     a.datas,
     strip=False,
     upx=True,
-    upx_exclude=[
-        # UPX compression corrupts Qt DLLs causing "specified procedure not found"
-        'Qt6*.dll',
-        'Qt*.dll',
-        'PyQt6*.dll',
-        'python*.dll',
-        'vcruntime*.dll',
-        'msvcp*.dll',
-    ],
+    upx_exclude=[],
     name='LazyLabel',
 )
