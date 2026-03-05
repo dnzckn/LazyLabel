@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.5] - 2026-03-03
+
+### Added
+
+- **Bounding box TXT loading fallback**: `load_existing_mask()` now falls back to loading bounding box TXT labels when no NPZ file exists
+- **`load_bb_txt()`** method in FileManager for parsing bounding box TXT label files
+- **Crop-aware FFT thresholding**: FFT now operates only on the crop region when a crop is active, keeping outside pixels unchanged — prevents metadata bars, scale bars, and timestamps from corrupting frequency domain analysis
+- **16-bit image support**: Image caching, channel thresholding, and FFT pipeline now preserve 16-bit depth via `cv2.IMREAD_UNCHANGED`, with proper uint16→uint8 conversion at display/SAM boundaries
+
+### Changed
+
+- Renamed `save_yolo_txt` → `save_bb_txt` and all related references for clarity
+- Channel threshold sliders now support 0–65536 range for 16-bit images
+- `cache_original_image()` uses `cv2.IMREAD_UNCHANGED` instead of QPixmap for robust format handling
+
+### Fixed
+
+- PyInstaller spec updated to use `qdarktheme` instead of `pyqtdarktheme` for theme data collection and hidden imports
+- `_version.py` updated to match current release version
+- README license badge switched to PyPI-sourced badge for reliability
+- Ruff formatting fixes across multiple files
+
 ## [1.6.4] - 2026-02-20
 
 ### Added
@@ -476,6 +498,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Image centering on load
 - Multi-class reindexing via drag and drop
 
+[1.6.5]: https://github.com/dnzckn/LazyLabel/compare/v1.6.4...v1.6.5
+[1.6.4]: https://github.com/dnzckn/LazyLabel/compare/v1.6.3...v1.6.4
 [1.6.3]: https://github.com/dnzckn/LazyLabel/compare/v1.6.2...v1.6.3
 [1.6.2]: https://github.com/dnzckn/LazyLabel/compare/v1.6.1...v1.6.2
 [1.6.1]: https://github.com/dnzckn/LazyLabel/compare/v1.6.0...v1.6.1

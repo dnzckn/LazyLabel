@@ -1,7 +1,7 @@
 # LazyLabel
 
 [![Python](https://img.shields.io/pypi/pyversions/lazylabel-gui)](https://pypi.org/project/lazylabel-gui/)
-[![License](https://img.shields.io/github/license/dnzckn/LazyLabel)](https://github.com/dnzckn/LazyLabel/blob/main/LICENSE)
+[![License](https://img.shields.io/pypi/l/lazylabel-gui)](https://github.com/dnzckn/LazyLabel/blob/main/LICENSE)
 
 <div align="center">
   <img src="https://raw.githubusercontent.com/dnzckn/LazyLabel/main/src/lazylabel/demo_pictures/logo2.png" alt="LazyLabel Logo" style="height:60px; vertical-align:middle;" />

@@ -175,9 +175,7 @@ class ModelSelectionWidget(QWidget):
         self.btn_load.setStyleSheet(self._get_load_button_style())
 
         self.btn_unload = QPushButton("Unload")
-        self.btn_unload.setToolTip(
-            "Unload model from memory for faster navigation"
-        )
+        self.btn_unload.setToolTip("Unload model from memory for faster navigation")
         self.btn_unload.setMinimumHeight(28)
         self.btn_unload.setEnabled(False)
         self.btn_unload.setStyleSheet(self._get_unload_button_style())

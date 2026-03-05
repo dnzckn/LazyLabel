@@ -293,6 +293,9 @@ class ImageAdjustmentManager:
             self._cached_original_image
         )
 
+        # Convert 16-bit to 8-bit for display
+        thresholded_image = self._ensure_uint8(thresholded_image)
+
         # Convert back to QPixmap efficiently
         qimage = self._numpy_to_qimage(thresholded_image)
         thresholded_pixmap = QPixmap.fromImage(qimage)
@@ -348,7 +351,10 @@ class ImageAdjustmentManager:
 
         # Apply FFT thresholding second if active
         if has_fft_threshold:
-            processed_image = fft_widget.apply_fft_thresholding(processed_image)
+            processed_image = self._apply_fft_with_crop(processed_image, fft_widget)
+
+        # Convert 16-bit to 8-bit for display
+        processed_image = self._ensure_uint8(processed_image)
 
         # Convert back to QPixmap efficiently
         qimage = self._numpy_to_qimage(processed_image)
@@ -393,28 +399,32 @@ class ImageAdjustmentManager:
     # ========== Multi-View Image Processing ==========
 
     def cache_original_image(self) -> None:
-        """Cache the original image as numpy array for fast processing."""
+        """Cache the original image as numpy array for fast processing.
+
+        Uses cv2.IMREAD_UNCHANGED to preserve 16-bit depth when present.
+        """
         mw = self.mw
 
         if not mw.current_image_path:
             self._cached_original_image = None
             return
 
-        # Load original image
-        pixmap = QPixmap(mw.current_image_path)
-        if pixmap.isNull():
+        import cv2
+
+        image = cv2.imread(mw.current_image_path, cv2.IMREAD_UNCHANGED)
+        if image is None:
             self._cached_original_image = None
             return
 
-        # Convert pixmap to numpy array
-        qimage = pixmap.toImage()
-        ptr = qimage.constBits()
-        ptr.setsize(qimage.bytesPerLine() * qimage.height())
-        image_np = np.array(ptr).reshape(qimage.height(), qimage.width(), 4)
-        # Convert from BGRA to RGB
-        self._cached_original_image = image_np[
-            :, :, [2, 1, 0]
-        ]  # BGR to RGB, ignore alpha
+        # Convert BGR(A) to RGB
+        if len(image.shape) == 3:
+            if image.shape[2] == 4:
+                image = cv2.cvtColor(image, cv2.COLOR_BGRA2RGB)
+            else:
+                image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        # Grayscale stays as-is (2D array)
+
+        self._cached_original_image = image
 
     def clear_cached_images(self) -> None:
         """Clear all cached images."""
@@ -435,11 +445,11 @@ class ImageAdjustmentManager:
             self.control_panel.update_channel_threshold_for_image(None)
             return
 
-        # Use cv2.imread for more robust loading instead of QPixmap conversion
+        # Use cv2.IMREAD_UNCHANGED to preserve 16-bit depth
         try:
             import cv2
 
-            image_array = cv2.imread(mw.current_image_path)
+            image_array = cv2.imread(mw.current_image_path, cv2.IMREAD_UNCHANGED)
             if image_array is None:
                 self.control_panel.update_channel_threshold_for_image(None)
                 return
@@ -484,6 +494,13 @@ class ImageAdjustmentManager:
 
         # Auto-collapse FFT threshold panel if image is not black and white
         self.control_panel.auto_collapse_fft_threshold_for_image(image_array)
+
+    @staticmethod
+    def _ensure_uint8(image_array: np.ndarray) -> np.ndarray:
+        """Convert to uint8 for display/SAM, scaling 16-bit down by /256."""
+        if image_array.dtype == np.uint16:
+            return (image_array / 256).astype(np.uint8)
+        return image_array
 
     def _numpy_to_qimage(self, image_array: np.ndarray) -> QImage:
         """Convert numpy array to QImage efficiently.
@@ -543,12 +560,25 @@ class ImageAdjustmentManager:
         # Apply FFT thresholding if active (after channel thresholding)
         fft_widget = self.control_panel.get_fft_threshold_widget()
         if fft_widget and fft_widget.is_active():
-            result_image = fft_widget.apply_fft_thresholding(result_image)
+            result_image = self._apply_fft_with_crop(result_image, fft_widget)
 
         # NOTE: Crop is NOT applied here - it's only a visual overlay and should only
         # affect saved masks. The crop visual overlay is handled separately.
 
+        # SAM expects uint8
+        result_image = self._ensure_uint8(result_image)
+
         return result_image
+
+    def _apply_fft_with_crop(self, image, fft_widget):
+        """Apply FFT restricted to crop region if active, else full image."""
+        crop = self.crop_manager.current_crop_coords
+        if crop is not None:
+            x1, y1, x2, y2 = crop
+            region = image[y1:y2, x1:x2].copy()
+            image[y1:y2, x1:x2] = fft_widget.apply_fft_thresholding(region)
+            return image
+        return fft_widget.apply_fft_thresholding(image)
 
     # ========== Legacy Compatibility ==========
 

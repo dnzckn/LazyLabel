@@ -92,12 +92,25 @@ class ConfidenceHistogramWidget(QWidget):
         # Y-axis labels
         painter.setPen(QPen(self.COLOR_TEXT))
         painter.setFont(painter.font())
-        painter.drawText(0, py + 10, self.MARGIN_LEFT - 4, 16, Qt.AlignmentFlag.AlignRight, str(self._max_count))
-        painter.drawText(0, py + ph - 8, self.MARGIN_LEFT - 4, 16, Qt.AlignmentFlag.AlignRight, "0")
+        painter.drawText(
+            0,
+            py + 10,
+            self.MARGIN_LEFT - 4,
+            16,
+            Qt.AlignmentFlag.AlignRight,
+            str(self._max_count),
+        )
+        painter.drawText(
+            0, py + ph - 8, self.MARGIN_LEFT - 4, 16, Qt.AlignmentFlag.AlignRight, "0"
+        )
 
         # X-axis labels
-        painter.drawText(px - 10, py + ph + 2, 30, 16, Qt.AlignmentFlag.AlignCenter, "0.0")
-        painter.drawText(px + pw - 15, py + ph + 2, 30, 16, Qt.AlignmentFlag.AlignCenter, "1.0")
+        painter.drawText(
+            px - 10, py + ph + 2, 30, 16, Qt.AlignmentFlag.AlignCenter, "0.0"
+        )
+        painter.drawText(
+            px + pw - 15, py + ph + 2, 30, 16, Qt.AlignmentFlag.AlignCenter, "1.0"
+        )
 
         # Threshold line
         tx = self._threshold_x()
@@ -113,18 +126,22 @@ class ConfidenceHistogramWidget(QWidget):
         from PyQt6.QtCore import QPoint
         from PyQt6.QtGui import QPolygon
 
-        top_tri = QPolygon([
-            QPoint(int(tx), py),
-            QPoint(int(tx) - tri_size, py - tri_size),
-            QPoint(int(tx) + tri_size, py - tri_size),
-        ])
+        top_tri = QPolygon(
+            [
+                QPoint(int(tx), py),
+                QPoint(int(tx) - tri_size, py - tri_size),
+                QPoint(int(tx) + tri_size, py - tri_size),
+            ]
+        )
         painter.drawPolygon(top_tri)
         # Bottom triangle
-        bot_tri = QPolygon([
-            QPoint(int(tx), py + ph),
-            QPoint(int(tx) - tri_size, py + ph + tri_size),
-            QPoint(int(tx) + tri_size, py + ph + tri_size),
-        ])
+        bot_tri = QPolygon(
+            [
+                QPoint(int(tx), py + ph),
+                QPoint(int(tx) - tri_size, py + ph + tri_size),
+                QPoint(int(tx) + tri_size, py + ph + tri_size),
+            ]
+        )
         painter.drawPolygon(bot_tri)
 
         # Count annotations
@@ -137,9 +154,7 @@ class ConfidenceHistogramWidget(QWidget):
         painter.setPen(QPen(self.COLOR_BELOW))
         painter.drawText(px + 4, py + 14, f"Below: {below} ({below_pct:.0f}%)")
         painter.setPen(QPen(self.COLOR_ABOVE))
-        painter.drawText(
-            px + pw - 140, py + 14, f"Above: {above} ({above_pct:.0f}%)"
-        )
+        painter.drawText(px + pw - 140, py + 14, f"Above: {above} ({above_pct:.0f}%)")
 
         # Threshold value label near line
         painter.setPen(QPen(self.COLOR_THRESHOLD))
@@ -179,9 +194,7 @@ class ConfidenceHistogramWidget(QWidget):
 class ConfidenceHistogramDialog(QDialog):
     """Dialog wrapping the histogram widget with Apply/Close buttons."""
 
-    def __init__(
-        self, scores: list[float], threshold: float, parent=None
-    ):
+    def __init__(self, scores: list[float], threshold: float, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Confidence Score Distribution")
         self.setMinimumSize(500, 350)

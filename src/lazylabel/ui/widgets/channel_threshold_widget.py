@@ -71,8 +71,9 @@ class MultiIndicatorSlider(QWidget):
         ratio = (x - slider_rect.left()) / slider_rect.width()
         ratio = max(0, min(1, ratio))  # Clamp to [0, 1]
         value = self.minimum + ratio * (self.maximum - self.minimum)
-        # Use integer values for channel thresholds (0-255) and intensity sliders, float for frequency sliders (0-10000)
-        if self.maximum <= 255 or self.maximum == 256:
+        # Use integer values for channel thresholds and intensity sliders,
+        # float only for frequency sliders (fractional range like 0-10000 Hz)
+        if self.maximum <= 256 or self.maximum == 65536:
             return int(value)
         else:
             return value
@@ -307,9 +308,10 @@ class ChannelSliderWidget(QWidget):
     dragStarted = pyqtSignal()  # Emitted when slider drag starts
     dragFinished = pyqtSignal()  # Emitted when slider drag finishes
 
-    def __init__(self, channel_name, parent=None):
+    def __init__(self, channel_name, maximum=256, parent=None):
         super().__init__(parent)
         self.channel_name = channel_name
+        self._slider_maximum = maximum
         self.setupUI()
 
     def setupUI(self):
@@ -325,7 +327,9 @@ class ChannelSliderWidget(QWidget):
         layout.addWidget(self.checkbox)
 
         # Slider
-        self.slider = MultiIndicatorSlider(self.channel_name, 0, 256, self)
+        self.slider = MultiIndicatorSlider(
+            self.channel_name, 0, self._slider_maximum, self
+        )
         self.slider.valueChanged.connect(self._on_slider_changed)
         self.slider.dragStarted.connect(self.dragStarted.emit)  # Forward drag signals
         self.slider.dragFinished.connect(self.dragFinished.emit)
@@ -373,6 +377,8 @@ class ChannelThresholdWidget(QWidget):
         self.current_image_channels = 0  # 0 = no image, 1 = grayscale, 3 = RGB
         self.sliders = {}  # Dictionary of channel name -> slider
         self.is_dragging = False  # Track if any slider is being dragged
+        self._slider_max = 256  # Slider range max (256 for uint8, 65536 for uint16)
+        self._output_max = 255  # Output value max (255 for uint8, 65535 for uint16)
 
         self.setupUI()
 
@@ -408,6 +414,14 @@ class ChannelThresholdWidget(QWidget):
             self.current_image_channels = 0
             return
 
+        # Set slider/output range based on dtype
+        if image_array.dtype == np.uint16:
+            self._slider_max = 65536
+            self._output_max = 65535
+        else:
+            self._slider_max = 256
+            self._output_max = 255
+
         # Determine number of channels
         if len(image_array.shape) == 2:
             # Grayscale
@@ -433,7 +447,9 @@ class ChannelThresholdWidget(QWidget):
 
         # Create new combined slider widgets
         for channel_name in channel_names:
-            slider_widget = ChannelSliderWidget(channel_name, self)
+            slider_widget = ChannelSliderWidget(
+                channel_name, maximum=self._slider_max, parent=self
+            )
             slider_widget.valueChanged.connect(self._on_slider_changed)
             slider_widget.dragStarted.connect(self._on_drag_started)
             slider_widget.dragFinished.connect(self._on_drag_finished)
@@ -498,8 +514,9 @@ class ChannelThresholdWidget(QWidget):
                         result[:, :, i], self.sliders[channel_name].get_indicators()
                     )
 
-        # Convert back to uint8
-        return np.clip(result, 0, 255).astype(np.uint8)
+        # Convert back to source dtype
+        out_dtype = np.uint16 if self._output_max > 255 else np.uint8
+        return np.clip(result, 0, self._output_max).astype(out_dtype)
 
     def _apply_channel_thresholding(self, channel_data, indicators):
         """Apply thresholding to a single channel."""
@@ -525,14 +542,14 @@ class ChannelThresholdWidget(QWidget):
             elif i == num_segments - 1:
                 # Last segment: last indicator to max
                 mask = channel_data >= sorted_indicators[-1]
-                segment_value = 255
+                segment_value = self._output_max
             else:
                 # Middle segments
                 mask = (channel_data >= sorted_indicators[i - 1]) & (
                     channel_data < sorted_indicators[i]
                 )
                 # Evenly distribute values between segments
-                segment_value = int((i / (num_segments - 1)) * 255)
+                segment_value = int((i / (num_segments - 1)) * self._output_max)
 
             result[mask] = segment_value
 

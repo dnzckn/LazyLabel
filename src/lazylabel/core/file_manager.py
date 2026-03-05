@@ -70,7 +70,7 @@ class FileManager:
         logger.debug(f"Successfully saved NPZ: {os.path.basename(npz_path)}")
         return npz_path
 
-    def save_yolo_txt(
+    def save_bb_txt(
         self,
         image_path: str,
         image_size: tuple[int, int],
@@ -80,7 +80,7 @@ class FileManager:
         pixel_priority_enabled: bool = False,
         pixel_priority_ascending: bool = True,
     ) -> str | None:
-        """Save segments as YOLO format TXT file."""
+        """Save segments as bounding box TXT file."""
         final_mask_tensor = self.segment_manager.create_final_mask_tensor(
             image_size, class_order, pixel_priority_enabled, pixel_priority_ascending
         )
@@ -91,7 +91,7 @@ class FileManager:
         output_path = os.path.splitext(image_path)[0] + ".txt"
         h, w = image_size
 
-        yolo_annotations = []
+        bb_annotations = []
         for channel in range(final_mask_tensor.shape[2]):
             single_channel_image = final_mask_tensor[:, :, channel]
             if not np.any(single_channel_image):
@@ -108,15 +108,15 @@ class FileManager:
                 center_y = (y + height / 2) / h
                 normalized_width = width / w
                 normalized_height = height / h
-                yolo_entry = f"{class_label} {center_x} {center_y} {normalized_width} {normalized_height}"
-                yolo_annotations.append(yolo_entry)
+                bb_entry = f"{class_label} {center_x} {center_y} {normalized_width} {normalized_height}"
+                bb_annotations.append(bb_entry)
 
-        if not yolo_annotations:
+        if not bb_annotations:
             return None
 
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
         with open(output_path, "w") as file:
-            for annotation in yolo_annotations:
+            for annotation in bb_annotations:
                 file.write(annotation + "\n")
 
         return output_path
@@ -145,8 +145,15 @@ class FileManager:
                 logger.error(f"Error loading class aliases from {json_path}: {e}")
                 self.segment_manager.class_aliases.clear()
 
-    def load_existing_mask(self, image_path: str) -> None:
-        """Load existing mask from NPZ file."""
+    def load_existing_mask(
+        self, image_path: str, image_size: tuple[int, int] | None = None
+    ) -> None:
+        """Load existing mask from NPZ file, falling back to bounding box TXT.
+
+        Args:
+            image_path: Path to the current image file.
+            image_size: (height, width) of the image, needed for TXT loading.
+        """
         npz_path = os.path.splitext(image_path)[0] + ".npz"
         if os.path.exists(npz_path):
             with np.load(npz_path) as data:
@@ -167,6 +174,86 @@ class FileManager:
                                     "class_id": i,
                                 }
                             )
+            return
+
+        # No NPZ found — try bounding box TXT fallback
+        if image_size is not None:
+            txt_path = os.path.splitext(image_path)[0] + ".txt"
+            if os.path.exists(txt_path):
+                self.load_bb_txt(txt_path, image_size)
+
+    def load_bb_txt(self, txt_path: str, image_size: tuple[int, int]) -> None:
+        """Load bounding box TXT labels and add them as segments.
+
+        Each line: ``class_label cx cy w h`` (normalized coordinates).
+
+        Args:
+            txt_path: Path to the .txt file.
+            image_size: (height, width) of the image.
+        """
+        h, w = image_size
+
+        # Build reverse alias lookup: label_string -> class_id
+        reverse_aliases: dict[str, int] = {
+            v: k for k, v in self.segment_manager.class_aliases.items()
+        }
+
+        with open(txt_path) as f:
+            for line in f:
+                parts = line.strip().split()
+                if len(parts) != 5:
+                    continue
+
+                label_str, cx_s, cy_s, bw_s, bh_s = parts
+                try:
+                    cx, cy, bw, bh = (
+                        float(cx_s),
+                        float(cy_s),
+                        float(bw_s),
+                        float(bh_s),
+                    )
+                except ValueError:
+                    continue
+
+                # Resolve class_id from the label string
+                if label_str in reverse_aliases:
+                    class_id = reverse_aliases[label_str]
+                else:
+                    try:
+                        class_id = int(label_str)
+                    except ValueError:
+                        # Assign a new class_id one above the current max
+                        existing = set(self.segment_manager.class_aliases.keys())
+                        class_id = max(existing, default=-1) + 1
+                        self.segment_manager.class_aliases[class_id] = label_str
+                        reverse_aliases[label_str] = class_id
+
+                # Denormalize to pixel coordinates
+                x1 = int(round((cx - bw / 2) * w))
+                y1 = int(round((cy - bh / 2) * h))
+                x2 = int(round((cx + bw / 2) * w))
+                y2 = int(round((cy + bh / 2) * h))
+
+                # Clamp to image bounds
+                x1, y1 = max(0, x1), max(0, y1)
+                x2, y2 = min(w, x2), min(h, y2)
+
+                if x2 <= x1 or y2 <= y1:
+                    continue
+
+                mask = np.zeros((h, w), dtype=bool)
+                mask[y1:y2, x1:x2] = True
+
+                self.segment_manager.add_segment(
+                    {
+                        "mask": mask,
+                        "type": "Loaded",
+                        "vertices": None,
+                        "class_id": class_id,
+                    }
+                )
+
+        logger.debug(f"Loaded bounding box labels from {txt_path}")
 
     def _apply_crop_to_mask(
         self, mask_tensor: np.ndarray, crop_coords: tuple[int, int, int, int]

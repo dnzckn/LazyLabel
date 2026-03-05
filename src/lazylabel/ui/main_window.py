@@ -877,6 +877,8 @@ class MainWindow(QMainWindow):
         self.control_panel.crop_applied.connect(
             self.crop_manager.apply_crop_coordinates
         )
+        self.crop_manager.crop_applied.connect(self._on_crop_changed_for_fft)
+        self.crop_manager.crop_cleared.connect(self._on_crop_changed_for_fft)
 
         # Channel threshold connections
         self.control_panel.channel_threshold_changed.connect(
@@ -2564,6 +2566,15 @@ class MainWindow(QMainWindow):
     def _handle_fft_threshold_changed(self):
         """Handle changes in FFT thresholding (delegates to ImageAdjustmentManager)."""
         self.image_adjustment_manager.handle_fft_threshold_changed()
+
+    def _on_crop_changed_for_fft(self, *args):
+        """Invalidate FFT cache and reprocess when crop changes."""
+        fft_widget = self.control_panel.get_fft_threshold_widget()
+        if fft_widget and fft_widget.is_active():
+            fft_widget.invalidate_fft_cache()
+            self.image_adjustment_manager.apply_image_processing_fast()
+            if self.settings.operate_on_view:
+                self._mark_sam_dirty()
 
     def _mark_sam_dirty(self):
         """Mark SAM model as needing update, but don't update immediately."""

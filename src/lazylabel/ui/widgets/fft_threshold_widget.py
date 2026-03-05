@@ -513,3 +513,9 @@ class FFTThresholdWidget(QWidget):
         self.intensity_slider.reset()  # Reset the intensity slider
         self.frequency_thresholds = []
         self.intensity_thresholds = []
+
+    def invalidate_fft_cache(self):
+        """Invalidate cached FFT data (e.g. when crop region changes)."""
+        self._cached_fft_shifted = None
+        self._cached_freq_distance = None
+        self._cached_image_shape = None

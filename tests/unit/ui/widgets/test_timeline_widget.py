@@ -386,14 +386,18 @@ class TestTooltip:
         from unittest.mock import MagicMock, patch
 
         timeline_widget.set_frame_count(5)
-        timeline_widget.set_frame_names(["frame_001", "frame_002", "frame_003", "frame_004", "frame_005"])
+        timeline_widget.set_frame_names(
+            ["frame_001", "frame_002", "frame_003", "frame_004", "frame_005"]
+        )
         timeline_widget.set_confidence_scores({2: 0.9876})
         timeline_widget.set_frame_status(2, "propagated")
 
         event = MagicMock()
         event.globalPosition.return_value.toPoint.return_value = (0, 0)
 
-        with patch("lazylabel.ui.widgets.timeline_widget.QToolTip.showText") as mock_show:
+        with patch(
+            "lazylabel.ui.widgets.timeline_widget.QToolTip.showText"
+        ) as mock_show:
             timeline_widget._show_frame_tooltip(event, 2)
             text = mock_show.call_args[0][1]
             assert "frame_003" in text

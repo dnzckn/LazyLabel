@@ -328,9 +328,7 @@ class SegmentDisplayManager:
                 mw.segment_items[i] = []
                 class_id = segment.get("class_id")
                 base_color = self.get_color_for_class(class_id)
-                z_value = (
-                    class_z.get(class_id, i + 1) if priority_enabled else i + 1
-                )
+                z_value = class_z.get(class_id, i + 1) if priority_enabled else i + 1
 
                 if segment.get("type") == "Polygon" and segment.get("vertices"):
                     qpoints = [QPointF(p[0], p[1]) for p in segment["vertices"]]

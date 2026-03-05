@@ -2,7 +2,7 @@
 
 This manager handles:
 - Saving segments to NPZ format
-- Saving segments to YOLO TXT format
+- Saving segments to bounding box TXT format
 - Multi-view output with per-viewer segment filtering
 - AI segment saving with fragment threshold filtering
 - File deletion for empty segment states
@@ -34,7 +34,7 @@ class SaveExportManager:
 
     This class consolidates all file output operations including:
     - NPZ file creation and saving
-    - YOLO TXT file creation and saving
+    - Bounding box TXT file creation and saving
     - Multi-view segment filtering and saving
     - AI segment saving with fragment filtering
     - File cleanup when segments are deleted
@@ -499,7 +499,7 @@ class SaveExportManager:
             class_labels = [str(cid) for cid in class_order]
 
         if class_order:
-            txt_path = self.file_manager.save_yolo_txt(
+            txt_path = self.file_manager.save_bb_txt(
                 image_path,
                 (h, w),
                 class_order,

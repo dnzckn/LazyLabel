@@ -476,7 +476,9 @@ class SequenceViewMode(QObject):
         if not keep:
             raise ValueError("Cannot trim all frames from the timeline")
 
-        removed_paths = [self._image_paths[i] for i in sorted(indices_to_remove) if i < total]
+        removed_paths = [
+            self._image_paths[i] for i in sorted(indices_to_remove) if i < total
+        ]
 
         # Build old-to-new index mapping
         old_to_new: dict[int, int] = {old: new for new, old in enumerate(keep)}
@@ -488,7 +490,9 @@ class SequenceViewMode(QObject):
         new_statuses: dict[int, FrameStatus] = {}
         for old_idx in keep:
             new_idx = old_to_new[old_idx]
-            new_statuses[new_idx] = self._frame_statuses.get(old_idx, FrameStatus.PENDING)
+            new_statuses[new_idx] = self._frame_statuses.get(
+                old_idx, FrameStatus.PENDING
+            )
         self._frame_statuses = new_statuses
 
         # Rebuild reference annotations (update frame_idx inside each annotation)
