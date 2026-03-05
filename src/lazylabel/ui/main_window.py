@@ -1202,8 +1202,8 @@ class MainWindow(QMainWindow):
 
         # Trigger model initialization
         self.sam_is_dirty = True
-        self.sam_single_view_manager.mark_dirty()
-        self.sam_single_view_manager.start_initialization()
+        self.sam_worker_manager.mark_dirty()
+        self.sam_worker_manager.start_single_view_initialization()
 
         model_name = (
             os.path.basename(selected_path) if selected_path else "Default SAM Model"
