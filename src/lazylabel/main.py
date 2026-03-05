@@ -2,7 +2,6 @@
 
 import sys
 
-import qdarktheme
 from PyQt6.QtWidgets import QApplication
 
 from lazylabel.ui.main_window import MainWindow
@@ -21,7 +20,13 @@ def main():
     app = QApplication(sys.argv)
 
     logger.info("Step 3/8: Applying dark theme...")
-    qdarktheme.setup_theme()
+    try:
+        import qdarktheme
+
+        qdarktheme.setup_theme()
+    except Exception as e:
+        logger.warning(f"Could not apply dark theme: {e}")
+        logger.info("Falling back to default Qt style")
 
     logger.info("Step 4/8: Setting up main window...")
     main_window = MainWindow()

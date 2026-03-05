@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.10] - 2026-03-05
+
+### Fixed
+
+- Graceful fallback when `qdarktheme` fails to load (e.g. DLL incompatibility with newer PyQt6 on Windows) — app launches with default Qt style instead of crashing
+
 ## [1.6.9] - 2026-03-05
 
 ### Fixed
@@ -536,6 +542,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Image centering on load
 - Multi-class reindexing via drag and drop
 
+[1.6.10]: https://github.com/dnzckn/LazyLabel/compare/v1.6.9...v1.6.10
 [1.6.9]: https://github.com/dnzckn/LazyLabel/compare/v1.6.8...v1.6.9
 [1.6.8]: https://github.com/dnzckn/LazyLabel/compare/v1.6.7...v1.6.8
 [1.6.7]: https://github.com/dnzckn/LazyLabel/compare/v1.6.6...v1.6.7
