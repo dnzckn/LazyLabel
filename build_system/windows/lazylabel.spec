@@ -7,7 +7,7 @@ Creates a standalone Windows application with all dependencies bundled.
 import sys
 import os
 from pathlib import Path
-from PyInstaller.utils.hooks import collect_data_files, collect_submodules
+from PyInstaller.utils.hooks import collect_data_files, collect_dynamic_libs, collect_submodules
 
 # SPECPATH is provided by PyInstaller - it's the directory containing this spec file
 SCRIPT_DIR = Path(SPECPATH)
@@ -19,6 +19,7 @@ block_cipher = None
 sam_datas = collect_data_files('segment_anything')
 sam2_datas = collect_data_files('sam2', include_py_files=True)
 pyqt_datas = collect_data_files('PyQt6')
+pyqt_binaries = collect_dynamic_libs('PyQt6')
 qdarktheme_datas = collect_data_files('qdarktheme')
 
 # Collect model files (using absolute paths from project root)
@@ -103,12 +104,12 @@ hiddenimports += collect_submodules('qdarktheme')
 a = Analysis(
     [str(ROOT_DIR / 'src/lazylabel/main.py')],
     pathex=[str(ROOT_DIR / 'src')],  # Add src to path for lazylabel package imports
-    binaries=[],
+    binaries=pyqt_binaries,
     datas=datas,
     hiddenimports=hiddenimports,
     hookspath=[],
     hooksconfig={},
-    runtime_hooks=[],
+    runtime_hooks=[str(SCRIPT_DIR / 'qt_runtime_hook.py')],
     excludes=[
         # Exclude unnecessary packages to reduce size
         'matplotlib',

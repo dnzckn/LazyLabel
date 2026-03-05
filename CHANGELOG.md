@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.12] - 2026-03-05
+
+### Fixed
+
+- PyInstaller: add Qt runtime hook to set `QT_PLUGIN_PATH` and DLL search path on Windows
+- PyInstaller: collect PyQt6 dynamic libraries (`collect_dynamic_libs`) to bundle all Qt DLLs
+- Fixes "specified procedure could not be found" DLL load error for QtWidgets on Windows
+
 ## [1.6.11] - 2026-03-05
 
 ### Fixed
@@ -548,6 +556,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Image centering on load
 - Multi-class reindexing via drag and drop
 
+[1.6.12]: https://github.com/dnzckn/LazyLabel/compare/v1.6.11...v1.6.12
 [1.6.11]: https://github.com/dnzckn/LazyLabel/compare/v1.6.10...v1.6.11
 [1.6.10]: https://github.com/dnzckn/LazyLabel/compare/v1.6.9...v1.6.10
 [1.6.9]: https://github.com/dnzckn/LazyLabel/compare/v1.6.8...v1.6.9
