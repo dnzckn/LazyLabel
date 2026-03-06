@@ -48,19 +48,17 @@ class SettingsWidget(QWidget):
         # Save TXT
         self.chk_save_txt = QCheckBox("Save .txt")
         self.chk_save_txt.setChecked(True)
-        self.chk_save_txt.setToolTip(
-            "Save bounding box annotations in YOLO TXT format."
-        )
+        self.chk_save_txt.setToolTip("Save bounding box annotations in TXT format.")
         layout.addWidget(self.chk_save_txt)
 
-        # YOLO with aliases
-        self.chk_yolo_use_alias = QCheckBox("Save YOLO with Class Aliases")
-        self.chk_yolo_use_alias.setToolTip(
-            "If checked, saves YOLO .txt files using class alias names instead of numeric IDs.\n"
-            "This is useful when a separate .yaml or .names file defines the classes."
+        # Bounding box with aliases
+        self.chk_bb_use_alias = QCheckBox("Save BBox with Class Aliases")
+        self.chk_bb_use_alias.setToolTip(
+            "If checked, saves .txt files using class alias names instead of numeric IDs.\n"
+            "This is useful when a separate config file defines the classes."
         )
-        self.chk_yolo_use_alias.setChecked(True)
-        layout.addWidget(self.chk_yolo_use_alias)
+        self.chk_bb_use_alias.setChecked(True)
+        layout.addWidget(self.chk_bb_use_alias)
 
         # Save class aliases
         self.chk_save_class_aliases = QCheckBox("Save Class Aliases (.json)")
@@ -156,7 +154,7 @@ class SettingsWidget(QWidget):
             self.chk_auto_save,
             self.chk_save_npz,
             self.chk_save_txt,
-            self.chk_yolo_use_alias,
+            self.chk_bb_use_alias,
             self.chk_save_class_aliases,
             self.chk_operate_on_view,
             self.chk_pixel_priority_enabled,
@@ -199,7 +197,7 @@ class SettingsWidget(QWidget):
             "auto_save": self.chk_auto_save.isChecked(),
             "save_npz": self.chk_save_npz.isChecked(),
             "save_txt": self.chk_save_txt.isChecked(),
-            "yolo_use_alias": self.chk_yolo_use_alias.isChecked(),
+            "bb_use_alias": self.chk_bb_use_alias.isChecked(),
             "save_class_aliases": self.chk_save_class_aliases.isChecked(),
             "operate_on_view": self.chk_operate_on_view.isChecked(),
             "pixel_priority_enabled": self.chk_pixel_priority_enabled.isChecked(),
@@ -214,7 +212,7 @@ class SettingsWidget(QWidget):
         self.chk_auto_save.setChecked(settings.get("auto_save", True))
         self.chk_save_npz.setChecked(settings.get("save_npz", True))
         self.chk_save_txt.setChecked(settings.get("save_txt", True))
-        self.chk_yolo_use_alias.setChecked(settings.get("yolo_use_alias", True))
+        self.chk_bb_use_alias.setChecked(settings.get("bb_use_alias", True))
         self.chk_save_class_aliases.setChecked(
             settings.get("save_class_aliases", False)
         )
@@ -239,7 +237,7 @@ class SettingsWidget(QWidget):
             "auto_save": True,
             "save_npz": True,
             "save_txt": True,
-            "yolo_use_alias": True,
+            "bb_use_alias": True,
             "save_class_aliases": False,
             "operate_on_view": False,
             "pixel_priority_enabled": False,

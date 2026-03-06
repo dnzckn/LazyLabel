@@ -42,7 +42,7 @@ class Settings:
     save_npz: bool = True
     save_txt: bool = True
     save_class_aliases: bool = False
-    yolo_use_alias: bool = True
+    bb_use_alias: bool = True
 
     # UI State
     annotation_size_multiplier: float = 1.0

@@ -191,7 +191,10 @@ class FileNavigationManager:
                     self.image_adjustment_manager.gamma,
                     self.image_adjustment_manager.saturation,
                 )
-                self.mw._update_sam_model_image()
+                if getattr(self.mw, "view_mode", "single") == "sequence":
+                    self.mw.sam_is_dirty = True
+                else:
+                    self.mw._update_sam_model_image()
                 self.file_manager.load_class_aliases(self.mw.current_image_path)
                 self.file_manager.load_existing_mask(
                     self.mw.current_image_path,
@@ -202,7 +205,10 @@ class FileNavigationManager:
                 self.viewer.setFocus()
 
         if self.model_manager.is_model_available():
-            self.mw._update_sam_model_image()
+            if getattr(self.mw, "view_mode", "single") == "sequence":
+                self.mw.sam_is_dirty = True
+            else:
+                self.mw._update_sam_model_image()
 
         # Update channel threshold widget for new image
         self.mw._update_channel_threshold_for_image(pixmap)
@@ -338,8 +344,11 @@ class FileNavigationManager:
         # Update file selection in the file manager
         self.right_panel.select_file(Path(path))
 
-        # CRITICAL: Update SAM model with new image
-        self.mw._update_sam_model_image()
+        # Update SAM model — defer in sequence mode for instant navigation
+        if getattr(self.mw, "view_mode", "single") == "sequence":
+            self.mw.sam_is_dirty = True
+        else:
+            self.mw._update_sam_model_image()
 
         # Update threshold widgets for new image (this was missing!)
         self.mw._update_channel_threshold_for_image(pixmap)

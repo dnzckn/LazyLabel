@@ -5,6 +5,7 @@ and operations for sequence mode, enabling mask propagation across
 image series using SAM 2's video predictor.
 """
 
+import threading
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import TYPE_CHECKING
@@ -62,6 +63,10 @@ class SequenceViewMode(QObject):
 
         self.main_window = main_window
 
+        # Thread safety — protects mutable state accessed from both the
+        # propagation worker thread and the main/UI thread.
+        self._lock = threading.Lock()
+
         # Sequence state
         self._image_paths: list[str] = []
         self._current_frame_idx: int = 0
@@ -69,6 +74,9 @@ class SequenceViewMode(QObject):
         self._frame_statuses: dict[int, FrameStatus] = {}
         self._propagated_masks: dict[int, dict[int, np.ndarray]] = {}
         self._confidence_scores: dict[int, float] = {}
+        self._obj_class_map: dict[
+            int, tuple[int, str]
+        ] = {}  # obj_id -> (class_id, class_name)
 
         # Dimension tracking for sequence consistency
         self._reference_dimensions: tuple[int, int] | None = None  # (height, width)
@@ -186,12 +194,14 @@ class SequenceViewMode(QObject):
 
         Returns one of: 'reference', 'propagated', 'pending', 'flagged'
         """
-        status = self._frame_statuses.get(idx, FrameStatus.PENDING)
-        return status.value
+        with self._lock:
+            status = self._frame_statuses.get(idx, FrameStatus.PENDING)
+            return status.value
 
     def get_all_frame_statuses(self) -> dict[int, str]:
         """Get status dict for all frames (for batch update of timeline)."""
-        return {idx: status.value for idx, status in self._frame_statuses.items()}
+        with self._lock:
+            return {idx: status.value for idx, status in self._frame_statuses.items()}
 
     def set_reference_frame(
         self,
@@ -283,89 +293,117 @@ class SequenceViewMode(QObject):
             masks: Dict mapping object_id to mask array (merged with existing)
             confidence: Confidence score (0-1) for this propagation
         """
-        # Merge masks with existing ones for this frame (multiple objects per frame)
-        if idx in self._propagated_masks:
-            self._propagated_masks[idx].update(masks)
-        else:
-            self._propagated_masks[idx] = masks.copy()
+        with self._lock:
+            # Merge masks with existing ones for this frame (multiple objects per frame)
+            if idx in self._propagated_masks:
+                self._propagated_masks[idx].update(masks)
+            else:
+                self._propagated_masks[idx] = masks.copy()
 
-        # Update confidence (use minimum if multiple objects)
-        if idx in self._confidence_scores:
-            self._confidence_scores[idx] = min(self._confidence_scores[idx], confidence)
-        else:
-            self._confidence_scores[idx] = confidence
+            # Update confidence (use minimum if multiple objects)
+            if idx in self._confidence_scores:
+                self._confidence_scores[idx] = min(
+                    self._confidence_scores[idx], confidence
+                )
+            else:
+                self._confidence_scores[idx] = confidence
 
-        if (
-            self._auto_flag_low_confidence
-            and self._confidence_scores[idx] < self._confidence_threshold
-        ):
-            self._frame_statuses[idx] = FrameStatus.FLAGGED
-            self.frame_status_changed.emit(idx, FrameStatus.FLAGGED.value)
-        else:
-            self._frame_statuses[idx] = FrameStatus.PROPAGATED
-            self.frame_status_changed.emit(idx, FrameStatus.PROPAGATED.value)
+            if (
+                self._auto_flag_low_confidence
+                and self._confidence_scores[idx] < self._confidence_threshold
+            ):
+                self._frame_statuses[idx] = FrameStatus.FLAGGED
+            else:
+                self._frame_statuses[idx] = FrameStatus.PROPAGATED
+
+            status = self._frame_statuses[idx]
+
+        self.frame_status_changed.emit(idx, status.value)
 
     def flag_frame(self, idx: int) -> None:
         """Manually flag a frame for review."""
-        if 0 <= idx < len(self._image_paths):
-            self._frame_statuses[idx] = FrameStatus.FLAGGED
-            self.frame_status_changed.emit(idx, FrameStatus.FLAGGED.value)
+        with self._lock:
+            if 0 <= idx < len(self._image_paths):
+                self._frame_statuses[idx] = FrameStatus.FLAGGED
+        self.frame_status_changed.emit(idx, FrameStatus.FLAGGED.value)
 
     def unflag_frame(self, idx: int) -> None:
         """Remove flag from a frame (mark as propagated if it has masks)."""
-        if idx in self._propagated_masks:
-            self._frame_statuses[idx] = FrameStatus.PROPAGATED
-            self.frame_status_changed.emit(idx, FrameStatus.PROPAGATED.value)
-        else:
-            self._frame_statuses[idx] = FrameStatus.PENDING
-            self.frame_status_changed.emit(idx, FrameStatus.PENDING.value)
+        with self._lock:
+            if idx in self._propagated_masks:
+                self._frame_statuses[idx] = FrameStatus.PROPAGATED
+                status = FrameStatus.PROPAGATED
+            else:
+                self._frame_statuses[idx] = FrameStatus.PENDING
+                status = FrameStatus.PENDING
+        self.frame_status_changed.emit(idx, status.value)
 
     def mark_frame_saved(self, idx: int) -> None:
         """Mark a frame as saved to disk."""
-        if 0 <= idx < len(self._image_paths):
-            self._frame_statuses[idx] = FrameStatus.SAVED
-            self.frame_status_changed.emit(idx, FrameStatus.SAVED.value)
-            # Clear propagated masks since they're now saved
-            if idx in self._propagated_masks:
-                del self._propagated_masks[idx]
+        with self._lock:
+            if 0 <= idx < len(self._image_paths):
+                self._frame_statuses[idx] = FrameStatus.SAVED
+                # Clear propagated masks since they're now saved
+                if idx in self._propagated_masks:
+                    del self._propagated_masks[idx]
+        self.frame_status_changed.emit(idx, FrameStatus.SAVED.value)
+
+    def register_obj_class(self, obj_id: int, class_id: int, class_name: str) -> None:
+        """Store the class mapping for a propagation object ID.
+
+        This survives propagation manager cleanup and trim operations.
+        """
+        with self._lock:
+            self._obj_class_map[obj_id] = (class_id, class_name)
+
+    def get_obj_class(self, obj_id: int) -> tuple[int, str] | None:
+        """Look up class info for a propagation object ID."""
+        with self._lock:
+            return self._obj_class_map.get(obj_id)
 
     def get_propagated_masks(self, idx: int) -> dict[int, np.ndarray] | None:
         """Get propagated masks for a frame."""
-        return self._propagated_masks.get(idx)
+        with self._lock:
+            return self._propagated_masks.get(idx)
 
     def clear_propagated_mask(self, idx: int) -> None:
         """Clear propagated masks for a specific frame.
 
         Used when skipping flagged frames to remove any partially stored masks.
         """
-        if idx in self._propagated_masks:
-            del self._propagated_masks[idx]
-        if idx in self._confidence_scores:
-            del self._confidence_scores[idx]
+        with self._lock:
+            if idx in self._propagated_masks:
+                del self._propagated_masks[idx]
+            if idx in self._confidence_scores:
+                del self._confidence_scores[idx]
 
     def get_all_confidence_scores(self) -> dict[int, float]:
         """Get confidence scores for all frames that have them."""
-        return dict(self._confidence_scores)
+        with self._lock:
+            return dict(self._confidence_scores)
 
     def get_confidence_score(self, idx: int) -> float:
         """Get confidence score for a propagated frame."""
-        return self._confidence_scores.get(idx, 0.0)
+        with self._lock:
+            return self._confidence_scores.get(idx, 0.0)
 
     def get_flagged_frames(self) -> list[int]:
         """Get list of frame indices flagged for review."""
-        return [
-            idx
-            for idx, status in self._frame_statuses.items()
-            if status == FrameStatus.FLAGGED
-        ]
+        with self._lock:
+            return [
+                idx
+                for idx, status in self._frame_statuses.items()
+                if status == FrameStatus.FLAGGED
+            ]
 
     def get_propagated_frames(self) -> list[int]:
         """Get list of frame indices that have been propagated."""
-        return [
-            idx
-            for idx, status in self._frame_statuses.items()
-            if status == FrameStatus.PROPAGATED
-        ]
+        with self._lock:
+            return [
+                idx
+                for idx, status in self._frame_statuses.items()
+                if status == FrameStatus.PROPAGATED
+            ]
 
     def next_flagged_frame(self) -> int | None:
         """Get next flagged frame after current position.
@@ -471,6 +509,11 @@ class SequenceViewMode(QObject):
         Raises:
             ValueError: If removing all frames.
         """
+        with self._lock:
+            return self._trim_frames_unlocked(indices_to_remove)
+
+    def _trim_frames_unlocked(self, indices_to_remove: set[int]) -> list[str]:
+        """Internal trim implementation (caller must hold self._lock)."""
         total = len(self._image_paths)
         keep = sorted(i for i in range(total) if i not in indices_to_remove)
         if not keep:
@@ -480,55 +523,73 @@ class SequenceViewMode(QObject):
             self._image_paths[i] for i in sorted(indices_to_remove) if i < total
         ]
 
-        # Build old-to-new index mapping
-        old_to_new: dict[int, int] = {old: new for new, old in enumerate(keep)}
+        # Snapshot all per-frame data keyed by image path so statuses
+        # stay tied to the frame identity, not the index.
+        path_status = {
+            self._image_paths[i]: self._frame_statuses.get(i, FrameStatus.PENDING)
+            for i in range(total)
+        }
+        path_confidence = {
+            self._image_paths[i]: self._confidence_scores[i]
+            for i in self._confidence_scores
+            if i < total
+        }
+        path_masks = {
+            self._image_paths[i]: self._propagated_masks[i]
+            for i in self._propagated_masks
+            if i < total
+        }
+        path_refs = {
+            self._image_paths[i]: self._reference_annotations[i]
+            for i in self._reference_annotations
+            if i < total
+        }
+        path_skipped = {
+            self._image_paths[i] for i in self._skipped_frame_indices if i < total
+        }
 
-        # Rebuild image paths
+        # Remember current frame's path before trimming
+        current_path = self._image_paths[self._current_frame_idx]
+
+        # Rebuild image paths (new indices are implicitly 0..len-1)
         self._image_paths = [self._image_paths[i] for i in keep]
 
-        # Rebuild frame statuses
-        new_statuses: dict[int, FrameStatus] = {}
-        for old_idx in keep:
-            new_idx = old_to_new[old_idx]
-            new_statuses[new_idx] = self._frame_statuses.get(
-                old_idx, FrameStatus.PENDING
-            )
-        self._frame_statuses = new_statuses
-
-        # Rebuild reference annotations (update frame_idx inside each annotation)
+        # Rebuild everything from path-keyed snapshots
+        self._frame_statuses = {
+            new_idx: path_status.get(path, FrameStatus.PENDING)
+            for new_idx, path in enumerate(self._image_paths)
+        }
+        self._confidence_scores = {
+            new_idx: path_confidence[path]
+            for new_idx, path in enumerate(self._image_paths)
+            if path in path_confidence
+        }
+        self._propagated_masks = {
+            new_idx: path_masks[path]
+            for new_idx, path in enumerate(self._image_paths)
+            if path in path_masks
+        }
         new_refs: dict[int, list[ReferenceAnnotation]] = {}
-        for old_idx, anns in self._reference_annotations.items():
-            if old_idx in old_to_new:
-                new_idx = old_to_new[old_idx]
+        for new_idx, path in enumerate(self._image_paths):
+            if path in path_refs:
+                anns = path_refs[path]
                 for ann in anns:
                     ann.frame_idx = new_idx
                 new_refs[new_idx] = anns
         self._reference_annotations = new_refs
 
-        # Rebuild propagated masks
-        new_masks: dict[int, dict[int, np.ndarray]] = {}
-        for old_idx, masks in self._propagated_masks.items():
-            if old_idx in old_to_new:
-                new_masks[old_to_new[old_idx]] = masks
-        self._propagated_masks = new_masks
-
-        # Rebuild confidence scores
-        new_scores: dict[int, float] = {}
-        for old_idx, score in self._confidence_scores.items():
-            if old_idx in old_to_new:
-                new_scores[old_to_new[old_idx]] = score
-        self._confidence_scores = new_scores
-
-        # Rebuild skipped frame indices
         self._skipped_frame_indices = {
-            old_to_new[i] for i in self._skipped_frame_indices if i in old_to_new
+            new_idx
+            for new_idx, path in enumerate(self._image_paths)
+            if path in path_skipped
         }
 
         # Adjust current frame index
-        if self._current_frame_idx in old_to_new:
-            self._current_frame_idx = old_to_new[self._current_frame_idx]
+        if current_path in self._image_paths:
+            self._current_frame_idx = self._image_paths.index(current_path)
         else:
-            # Current frame was removed — find nearest valid frame
+            # Current frame was removed — pick nearest kept frame
+            old_to_new = {old: new for new, old in enumerate(keep)}
             nearest = min(keep, key=lambda k: abs(k - self._current_frame_idx))
             self._current_frame_idx = old_to_new[nearest]
 
@@ -547,6 +608,7 @@ class SequenceViewMode(QObject):
             "frame_statuses": {k: v.value for k, v in self._frame_statuses.items()},
             "confidence_scores": self._confidence_scores,
             "confidence_threshold": self._confidence_threshold,
+            "obj_class_map": {str(k): list(v) for k, v in self._obj_class_map.items()},
         }
 
     def from_dict(self, data: dict) -> None:
@@ -564,4 +626,13 @@ class SequenceViewMode(QObject):
                 status = FrameStatus(status_str)
                 self._frame_statuses[idx] = status
             except (ValueError, KeyError):
+                pass
+
+        # Restore obj_id → class mapping
+        obj_map = data.get("obj_class_map", {})
+        for obj_id_str, class_info in obj_map.items():
+            try:
+                obj_id = int(obj_id_str)
+                self._obj_class_map[obj_id] = (class_info[0], class_info[1])
+            except (ValueError, IndexError, TypeError):
                 pass

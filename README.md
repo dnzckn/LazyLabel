@@ -74,11 +74,12 @@ cats = mask[:, :, 2]
 dogs = mask[:, :, 3]
 ```
 
-### Normalized polygon coordinates (`.txt`)
+### Bounding boxes (`.txt`)
 ```
-0 0.234 0.456 0.289 0.478 0.301 0.523 ...
-1 0.567 0.123 0.598 0.145 0.612 0.189 ...
+0 0.456 0.312 0.128 0.095
+1 0.623 0.478 0.204 0.167
 ```
+Each line: `class x_center y_center width height` — all values normalized to 0–1 relative to image dimensions
 
 ### Class Aliases (`.json`)
 ```json

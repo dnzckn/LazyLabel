@@ -283,15 +283,19 @@ class SequenceWidget(QWidget):
         self.skip_flagged_checkbox = QCheckBox("Skip Low Conf")
         self.skip_flagged_checkbox.setChecked(True)
         self.skip_flagged_checkbox.setToolTip(
-            "Skip low confidence frames (won't get masks)"
+            "Skip frames already flagged as low confidence.\n"
+            "They won't receive new masks but SAM2 still\n"
+            "tracks through them for temporal continuity."
         )
         options_layout.addWidget(self.skip_flagged_checkbox)
 
         # Skip labeled checkbox
         self.skip_labeled_checkbox = QCheckBox("Skip Labeled")
-        self.skip_labeled_checkbox.setChecked(False)
+        self.skip_labeled_checkbox.setChecked(True)
         self.skip_labeled_checkbox.setToolTip(
-            "Don't overwrite frames that already have NPZ files"
+            "Don't overwrite frames that already have saved\n"
+            "annotations (NPZ files). Useful when re-running\n"
+            "propagation after fixing flagged frames."
         )
         options_layout.addWidget(self.skip_labeled_checkbox)
 
@@ -302,7 +306,11 @@ class SequenceWidget(QWidget):
         self.confidence_spin.setSingleStep(0.05)
         self.confidence_spin.setValue(0.99)
         self.confidence_spin.setDecimals(4)
-        self.confidence_spin.setToolTip("Frames below this confidence will be flagged")
+        self.confidence_spin.setToolTip(
+            "Minimum confidence threshold (0-1).\n"
+            "Frames scoring below this are flagged red\n"
+            "for manual review. Default 0.99 is strict."
+        )
         self.confidence_spin.valueChanged.connect(
             self.confidence_threshold_changed.emit
         )

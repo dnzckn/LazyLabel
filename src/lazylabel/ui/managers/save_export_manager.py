@@ -491,7 +491,7 @@ class SaveExportManager:
         )
         class_order = self.segment_manager.get_unique_class_ids()
 
-        if settings.get("yolo_use_alias", True):
+        if settings.get("bb_use_alias", True):
             class_labels = [
                 self.segment_manager.get_class_alias(cid) for cid in class_order
             ]

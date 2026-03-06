@@ -121,7 +121,7 @@ src/lazylabel/
 
 ### FileManager
 - NPZ format export/import
-- YOLO format export
+- Bounding box TXT export
 - JSON class alias persistence
 
 ### UndoRedoManager

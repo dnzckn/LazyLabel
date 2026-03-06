@@ -35,7 +35,7 @@ def test_set_settings_sets_operate_on_view(settings_widget):
         "auto_save": True,
         "save_npz": True,
         "save_txt": True,
-        "yolo_use_alias": True,
+        "bb_use_alias": True,
         "save_class_aliases": False,
         "operate_on_view": True,
     }

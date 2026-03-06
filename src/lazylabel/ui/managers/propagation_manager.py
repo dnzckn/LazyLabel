@@ -675,13 +675,16 @@ class PropagationManager:
             # Check if this is a low confidence frame
             is_flagged = confidence < self.state.confidence_threshold
 
-            # Skip flagged frames entirely if requested (no mask created)
+            # Skip flagged frames if requested (no mask created), but still
+            # yield so the UI can show them as red immediately.
             if is_flagged and skip_flagged:
                 self.state.flagged_frames.add(timeline_idx)
                 logger.debug(
                     f"Skipping flagged frame {timeline_idx} "
                     f"(confidence={confidence:.2f})"
                 )
+                frame_count += 1
+                yield timeline_idx, total, None
                 continue
 
             # Get image path for this frame (SAM2 space index)

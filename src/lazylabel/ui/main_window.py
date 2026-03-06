@@ -60,6 +60,7 @@ from .managers import (
 )
 from .managers.propagation_manager import PropagationDirection
 from .modes import SequenceViewMode
+from .modes.sequence_view_mode import FrameStatus
 from .photo_viewer import PhotoViewer
 from .right_panel import RightPanel
 from .widgets import SequenceWidget, StatusBar, TimelineWidget, ZoomableTimeline
@@ -3007,6 +3008,7 @@ class MainWindow(QMainWindow):
         self.timeline_widget = self._zoomable_timeline.timeline
         self._zoomable_timeline.frame_selected.connect(self._on_sequence_frame_selected)
         self._zoomable_timeline.sort_toggled.connect(self._on_timeline_sort_toggled)
+        self._zoomable_timeline.clear_flags_requested.connect(self._on_clear_all_flags)
         timeline_layout.addWidget(self._zoomable_timeline, stretch=1)
 
         self.save_all_timeline_btn = QPushButton("Save All")
@@ -3115,15 +3117,22 @@ class MainWindow(QMainWindow):
         if self.sequence_view_mode is None:
             return
 
-        # Auto-save current frame's segments before navigating
-        current_idx = self.sequence_view_mode.current_frame_idx
-        if current_idx != frame_idx:
-            self._auto_save_sequence_frame(current_idx)
+        # Guard against re-entrant calls from fast scrubbing
+        if getattr(self, "_in_sequence_frame_select", False):
+            return
+        self._in_sequence_frame_select = True
+        try:
+            # Auto-save current frame's segments before navigating
+            current_idx = self.sequence_view_mode.current_frame_idx
+            if current_idx != frame_idx:
+                self._auto_save_sequence_frame(current_idx)
 
-        if self.sequence_view_mode.set_current_frame(frame_idx):
-            image_path = self.sequence_view_mode.get_image_path(frame_idx)
-            if image_path:
-                self._load_sequence_frame(image_path, frame_idx)
+            if self.sequence_view_mode.set_current_frame(frame_idx):
+                image_path = self.sequence_view_mode.get_image_path(frame_idx)
+                if image_path:
+                    self._load_sequence_frame(image_path, frame_idx)
+        finally:
+            self._in_sequence_frame_select = False
 
     def _on_timeline_sort_toggled(self, display_order: list) -> None:
         """Handle timeline sort toggle — reorder file manager's highlighted rows."""
@@ -3145,6 +3154,29 @@ class MainWindow(QMainWindow):
                 ordered_paths.append(Path(img_path))
 
         fm.sortHighlightedByOrder(ordered_paths)
+
+    def _on_clear_all_flags(self) -> None:
+        """Clear all status colors from the timeline (reset to pending)."""
+        if not self.sequence_view_mode:
+            return
+
+        # Reset all non-reference frame statuses to pending
+        for idx in range(self.sequence_view_mode.total_frames):
+            status = self.sequence_view_mode.get_frame_status(idx)
+            if status != "reference":
+                self.sequence_view_mode._frame_statuses[idx] = FrameStatus.PENDING
+
+        # Update timeline
+        if self.timeline_widget:
+            self.timeline_widget.set_batch_statuses(
+                self.sequence_view_mode.get_all_frame_statuses()
+            )
+
+        # Update flagged count
+        if self.sequence_widget:
+            self.sequence_widget.set_flagged_count(0)
+
+        self._show_notification("Cleared all timeline flags")
 
     def _auto_save_sequence_frame(self, frame_idx: int):
         """Auto-save segments for a sequence frame (or delete NPZ if empty)."""
@@ -3363,14 +3395,21 @@ class MainWindow(QMainWindow):
                 continue
             mask = mask.astype(bool)
 
-            # Get class info from the reference annotation
-            ref_ann = self.propagation_manager.get_reference_annotation_for_obj(obj_id)
+            # Get class info — try propagation manager first, then cached map
+            class_id = 0
+            class_name = "Class 0"
+            ref_ann = (
+                self.propagation_manager.get_reference_annotation_for_obj(obj_id)
+                if self.propagation_manager
+                else None
+            )
             if ref_ann:
                 class_id = ref_ann.class_id
                 class_name = ref_ann.class_name
-            else:
-                class_id = 0
-                class_name = "Class 0"
+            elif self.sequence_view_mode:
+                cached = self.sequence_view_mode.get_obj_class(obj_id)
+                if cached:
+                    class_id, class_name = cached
 
             # Ensure class alias exists
             if class_id not in self.segment_manager.class_aliases:
@@ -3751,7 +3790,10 @@ class MainWindow(QMainWindow):
             self._sequence_init_worker = None
 
         if not success:
-            self._show_notification("Failed to initialize propagation")
+            self._show_notification(
+                "Failed to initialize video predictor. "
+                "Ensure a SAM 2 model is selected and images are accessible."
+            )
             if self.sequence_widget:
                 self.sequence_widget.end_propagation()
             self._pending_propagation = None
@@ -3763,8 +3805,13 @@ class MainWindow(QMainWindow):
             if skipped:
                 self.sequence_view_mode.mark_frames_skipped(skipped)
                 skipped_count = len(skipped)
+                ref_dims = self.propagation_manager.state.reference_dimensions
+                dims_str = (
+                    f" (reference is {ref_dims[1]}x{ref_dims[0]})" if ref_dims else ""
+                )
                 self._show_notification(
-                    f"Skipped {skipped_count} frames (dimension mismatch)"
+                    f"{skipped_count} frames have different dimensions{dims_str} "
+                    f"and will be skipped during propagation"
                 )
 
         # Re-apply confidence threshold from UI after init_sequence
@@ -4058,67 +4105,100 @@ class MainWindow(QMainWindow):
             QApplication.processEvents()
             return
 
-        # Update timeline to show this frame has been propagated (immediate for animation)
-        if self.timeline_widget:
-            self.timeline_widget.set_frame_status(
-                frame_idx, "propagated", immediate=True
-            )
+        # When a new frame appears, finalize the previous frame's color.
+        # SAM2 yields all objects for a frame before moving to the next,
+        # so seeing a new frame_idx means the old one is complete.
+        prev_frame = getattr(self, "_propagation_prev_frame", None)
+        if prev_frame is not None and prev_frame != frame_idx:
+            self._finalize_propagation_frame_color(prev_frame)
+        self._propagation_prev_frame = frame_idx
+
+        # result=None means the frame was flagged and skipped (no mask created)
+        if result is None:
+            if self.sequence_view_mode:
+                self.sequence_view_mode.flag_frame(frame_idx)
+            # Flagged frames are final immediately (no more objects coming)
+            self._finalize_propagation_frame_color(frame_idx)
+            self._propagation_prev_frame = None
+            QApplication.processEvents()
+            return
 
         # Update sequence view mode state
         # Skip reference frames - they should keep their ground truth data
-        if self.sequence_view_mode and result is not None:
+        if self.sequence_view_mode:
             is_reference = frame_idx in self.sequence_view_mode.reference_frame_indices
             if is_reference:
-                # Don't store propagated masks for reference frames
                 return
 
-            # Convert PropagationResult to the format expected by mark_frame_propagated
-            # result has: obj_id, mask, confidence
+            # Store mask and update cumulative confidence
             masks = {result.obj_id: result.mask}
-            confidence = result.confidence
-            self.sequence_view_mode.mark_frame_propagated(frame_idx, masks, confidence)
+            self.sequence_view_mode.mark_frame_propagated(
+                frame_idx, masks, result.confidence
+            )
 
-            # If this frame has low confidence, mark it as flagged
-            if (
-                self.propagation_manager
-                and frame_idx in self.propagation_manager.flagged_frames
-            ):
-                self.sequence_view_mode.flag_frame(frame_idx)
-                if self.timeline_widget:
-                    self.timeline_widget.set_frame_status(
-                        frame_idx, "flagged", immediate=True
+            # Cache the obj_id → class mapping so it survives
+            # propagation manager cleanup (e.g. after trim)
+            if result.obj_id not in self.sequence_view_mode._obj_class_map:
+                ref_ann = self.propagation_manager.get_reference_annotation_for_obj(
+                    result.obj_id
+                )
+                if ref_ann:
+                    self.sequence_view_mode.register_obj_class(
+                        result.obj_id, ref_ann.class_id, ref_ann.class_name
                     )
 
         # Process events to keep UI responsive during propagation
         QApplication.processEvents()
 
+    def _finalize_propagation_frame_color(self, frame_idx: int) -> None:
+        """Set the final timeline color for a fully-processed frame."""
+        if not self.sequence_view_mode or not self.timeline_widget:
+            return
+
+        status = self.sequence_view_mode.get_frame_status(frame_idx)
+        if status == "flagged":
+            self.timeline_widget.set_frame_status(frame_idx, "flagged", immediate=True)
+        elif status in ("propagated", "pending"):
+            # Check cumulative confidence for the final verdict
+            conf = self.sequence_view_mode.get_confidence_score(frame_idx)
+            threshold = (
+                self.propagation_manager.state.confidence_threshold
+                if self.propagation_manager
+                else 0.99
+            )
+            if conf < threshold:
+                self.sequence_view_mode.flag_frame(frame_idx)
+                self.timeline_widget.set_frame_status(
+                    frame_idx, "flagged", immediate=True
+                )
+            else:
+                self.timeline_widget.set_frame_status(
+                    frame_idx, "propagated", immediate=True
+                )
+
     def _on_propagation_finished(self):
         """Handle propagation completion."""
+        # Finalize the last frame that was being processed
+        prev_frame = getattr(self, "_propagation_prev_frame", None)
+        if prev_frame is not None:
+            self._finalize_propagation_frame_color(prev_frame)
+            self._propagation_prev_frame = None
+
         if self.sequence_widget:
             self.sequence_widget.end_propagation()
 
-        # If skip_flagged was enabled, remove all masks for flagged frames
-        # This handles the case where a frame has multiple objects and some
-        # were stored before the low-confidence one was detected
+        # Clean up stored masks for flagged frames (no timeline changes —
+        # _on_propagation_frame_done already set the correct colors live).
         if (
             getattr(self, "_propagation_skip_flagged", True)
             and self.propagation_manager
             and self.sequence_view_mode
         ):
-            flagged_frames = list(self.propagation_manager.flagged_frames)
-            for frame_idx in flagged_frames:
-                # Remove from propagated_frames
+            for frame_idx in list(self.propagation_manager.flagged_frames):
                 self.propagation_manager.propagated_frames.discard(frame_idx)
-                # Remove stored results
                 if frame_idx in self.propagation_manager.state.frame_results:
                     del self.propagation_manager.state.frame_results[frame_idx]
-                # Remove from sequence view mode's propagated masks
                 self.sequence_view_mode.clear_propagated_mask(frame_idx)
-                # Update timeline to show as flagged (not propagated)
-                if self.timeline_widget:
-                    self.timeline_widget.set_frame_status(
-                        frame_idx, "flagged", immediate=True
-                    )
 
         # Update flagged and propagated counts
         if self.propagation_manager and self.sequence_widget:
@@ -4136,10 +4216,17 @@ class MainWindow(QMainWindow):
         # Get stats
         if self.propagation_manager:
             stats = self.propagation_manager.get_propagation_stats()
-            self._show_notification(
-                f"Propagation complete: {stats['num_propagated']} frames, "
-                f"{stats['num_flagged']} flagged. Scrub timeline or click 'Save All' to save."
-            )
+            if stats["num_propagated"] == 0 and stats["num_flagged"] > 0:
+                self._show_notification(
+                    f"Propagation complete but all {stats['num_flagged']} frames "
+                    f"were flagged (below confidence threshold). "
+                    f"Try lowering Min Conf or improving reference annotations."
+                )
+            else:
+                self._show_notification(
+                    f"Propagation complete: {stats['num_propagated']} frames, "
+                    f"{stats['num_flagged']} flagged. Scrub timeline or click 'Save All' to save."
+                )
         else:
             self._show_notification("Propagation complete")
 
@@ -4723,9 +4810,9 @@ class MainWindow(QMainWindow):
             self._show_notification("Set both trim left and right bounds first")
             return
 
-        # When timeline is sorted, trim the frames between the two bounds
-        # in display order (not real index order)
-        if self.timeline_widget and self.timeline_widget.is_sorted:
+        # Always use the timeline's current display order so trim matches
+        # whatever the user sees on screen (sorted or unsorted).
+        if self.timeline_widget and self.timeline_widget._display_order:
             display_order = self.timeline_widget._display_order
             reverse = self.timeline_widget._reverse_order
             dp_left = reverse.get(self._trim_left_idx, 0)
@@ -4752,7 +4839,13 @@ class MainWindow(QMainWindow):
         if self.propagation_manager and self.propagation_manager.is_initialized:
             self.propagation_manager.cleanup()
 
-        # Rebuild UI (reset sort since frame indices changed)
+        # Remember if sort was active so we can re-apply after rebuild
+        was_sorted = (
+            hasattr(self, "_zoomable_timeline")
+            and self._zoomable_timeline.timeline.is_sorted
+        )
+
+        # Reset sort temporarily so frame count rebuild works on clean state
         if hasattr(self, "_zoomable_timeline"):
             self._zoomable_timeline.reset_sort()
         total = self.sequence_view_mode.total_frames
@@ -4773,6 +4866,13 @@ class MainWindow(QMainWindow):
         self.sequence_widget.set_flagged_count(
             len(self.sequence_view_mode.get_flagged_frames())
         )
+        self.sequence_widget.set_propagated_count(
+            len(self.sequence_view_mode.get_propagated_frames())
+        )
+
+        # Re-apply sort if it was active before trim
+        if was_sorted and hasattr(self, "_zoomable_timeline"):
+            self._zoomable_timeline.sort_by_status()
 
         # Navigate to the new current frame
         self._on_sequence_frame_selected(self.sequence_view_mode.current_frame_idx)

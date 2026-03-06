@@ -478,6 +478,7 @@ class ZoomableTimeline(QWidget):
 
     frame_selected = pyqtSignal(int)
     sort_toggled = pyqtSignal(list)  # display_order (empty list = reset)
+    clear_flags_requested = pyqtSignal()
 
     _ZOOM_STEP = 1.5
     _MIN_ZOOM = 1.0
@@ -524,7 +525,7 @@ class ZoomableTimeline(QWidget):
         self._pan_left_btn.setToolTip("Pan left")
         self._pan_left_btn.setStyleSheet(self._BTN_STYLE)
         self._pan_left_btn.clicked.connect(self._pan_left)
-        self._pan_left_btn.setVisible(False)
+        self._pan_left_btn.setEnabled(False)
         ctrl.addWidget(self._pan_left_btn)
 
         self._zoom_out_btn = QPushButton("\u2212")
@@ -532,7 +533,7 @@ class ZoomableTimeline(QWidget):
         self._zoom_out_btn.setToolTip("Zoom out timeline")
         self._zoom_out_btn.setStyleSheet(self._BTN_STYLE)
         self._zoom_out_btn.clicked.connect(self._zoom_out)
-        self._zoom_out_btn.setVisible(False)
+        self._zoom_out_btn.setEnabled(False)
         ctrl.addWidget(self._zoom_out_btn)
 
         self._zoom_in_btn = QPushButton("+")
@@ -547,10 +548,17 @@ class ZoomableTimeline(QWidget):
         self._pan_right_btn.setToolTip("Pan right")
         self._pan_right_btn.setStyleSheet(self._BTN_STYLE)
         self._pan_right_btn.clicked.connect(self._pan_right)
-        self._pan_right_btn.setVisible(False)
+        self._pan_right_btn.setEnabled(False)
         ctrl.addWidget(self._pan_right_btn)
 
         ctrl.addStretch()
+
+        self._clear_flags_btn = QPushButton("Clear Flags")
+        self._clear_flags_btn.setFixedHeight(btn_h)
+        self._clear_flags_btn.setToolTip("Clear all status colors from the timeline")
+        self._clear_flags_btn.setStyleSheet(self._BTN_STYLE)
+        self._clear_flags_btn.clicked.connect(self.clear_flags_requested.emit)
+        ctrl.addWidget(self._clear_flags_btn)
 
         self._sort_btn = QPushButton("Sort")
         self._sort_btn.setFixedHeight(btn_h)
@@ -620,15 +628,15 @@ class ZoomableTimeline(QWidget):
 
     def _update_controls(self):
         zoomed = self._zoom > self._MIN_ZOOM
-        self._zoom_out_btn.setVisible(zoomed)
         self._zoom_out_btn.setEnabled(zoomed)
-        self._pan_left_btn.setVisible(zoomed)
-        self._pan_right_btn.setVisible(zoomed)
         self._zoom_in_btn.setEnabled(self._zoom < self._MAX_ZOOM)
         if zoomed:
             self._pan_left_btn.setEnabled(self.timeline._scroll_offset > 0)
             max_off = max(0, self.timeline.total_frames - self.timeline._visible_count)
             self._pan_right_btn.setEnabled(self.timeline._scroll_offset < max_off)
+        else:
+            self._pan_left_btn.setEnabled(False)
+            self._pan_right_btn.setEnabled(False)
 
     # -- Sort --
 

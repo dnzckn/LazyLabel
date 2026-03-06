@@ -5,6 +5,35 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.16] - 2026-03-06
+
+### Added
+
+- Comprehensive sequence mode tests: 29 trim/sort unit tests + 21 integration tests covering full workflow
+- Thread safety locks on SequenceViewMode state for safe concurrent access during propagation
+- Object class mapping (`_obj_class_map`) persists through trim and serialization — masks keep correct classes after trim
+- Clear Flags button on timeline to reset all status colors
+- Skip Labeled checkbox defaults to checked — propagation won't overwrite already-labeled frames
+
+### Fixed
+
+- Trim now always respects the current timeline display order (sorted or unsorted)
+- Propagation colors update accurately in real-time instead of correcting after completion
+- Fixed deferred frame coloring so multi-object frames don't flash green→red
+- Fixed masks losing class identity after trim (all becoming Class 0)
+- Fixed RecursionError on fast timeline scrubbing with re-entrancy guard
+- Fixed slow image loading from file navigator in sequence mode (deferred SAM embedding)
+- Fixed sort not persisting after trim
+- Zoom +/- buttons no longer shift position — disabled instead of hidden
+
+### Changed
+
+- Purged all YOLO references — terminology is now "bounding box" throughout
+- Renamed `yolo_use_alias` setting to `bb_use_alias`
+- Improved tooltips for Skip Low Conf, Skip Labeled, and Min Conf controls
+- Better error messages: propagation init failure, dimension mismatches, 0 frames propagated
+- README `.txt` format description corrected to bounding boxes with coordinate explanation
+
 ## [1.6.15] - 2026-03-05
 
 ### Fixed
@@ -93,7 +122,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Renamed `save_yolo_txt` → `save_bb_txt` and all related references for clarity
+- Renamed save functions to `save_bb_txt` for clarity
 - Channel threshold sliders now support 0–65536 range for 16-bit images
 - `cache_original_image()` uses `cv2.IMREAD_UNCHANGED` instead of QPixmap for robust format handling
 
@@ -497,7 +526,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- YOLO text file export with user-defined aliases
+- Bounding box text file export with user-defined aliases
 
 ### Fixed
 
@@ -521,7 +550,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- YOLO output format support
+- Bounding box output format support
 - TIFF image format support
 - Adjustable annotation sizes
 
