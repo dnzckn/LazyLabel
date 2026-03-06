@@ -10,7 +10,7 @@ from ..utils.logger import logger
 
 # SAM-2 specific imports - will fail gracefully if not available
 try:
-    from sam2.build_sam import build_sam2, build_sam2_video_predictor
+    from sam2.build_sam import build_sam2
     from sam2.sam2_image_predictor import SAM2ImagePredictor
 
     SAM2_VIDEO_AVAILABLE = True
@@ -40,6 +40,10 @@ class Sam2Model:
         self.predictor = None
         self.image = None
         self.is_loaded = False
+
+        # Derive a display name from the checkpoint filename
+        stem = Path(model_path).stem  # e.g. "sam2.1_hiera_large"
+        self.model_name = stem
 
         # Video predictor state (for sequence propagation)
         self.video_predictor = None
@@ -570,10 +574,44 @@ class Sam2Model:
     # Video Predictor Methods (for sequence/video propagation)
     # =========================================================================
 
+    def _get_config_name(self, model_filename: str) -> tuple[str, str]:
+        """Get the config subdirectory and config name for a model filename.
+
+        Returns:
+            Tuple of (config_subdir, config_name) e.g. ("sam2.1", "sam2.1_hiera_l")
+        """
+        if "2.1" in model_filename:
+            subdir = "sam2.1"
+            if "large" in model_filename or "hiera_l" in model_filename:
+                name = "sam2.1_hiera_l"
+            elif "base" in model_filename or "hiera_b" in model_filename:
+                name = "sam2.1_hiera_b+"
+            elif "small" in model_filename or "hiera_s" in model_filename:
+                name = "sam2.1_hiera_s"
+            elif "tiny" in model_filename or "hiera_t" in model_filename:
+                name = "sam2.1_hiera_t"
+            else:
+                name = "sam2.1_hiera_l"
+        else:
+            subdir = "sam2"
+            if "large" in model_filename or "hiera_l" in model_filename:
+                name = "sam2_hiera_l"
+            elif "base" in model_filename or "hiera_b" in model_filename:
+                name = "sam2_hiera_b+"
+            elif "small" in model_filename or "hiera_s" in model_filename:
+                name = "sam2_hiera_s"
+            elif "tiny" in model_filename or "hiera_t" in model_filename:
+                name = "sam2_hiera_t"
+            else:
+                name = "sam2_hiera_l"
+        return subdir, name
+
     def init_video_predictor(self) -> bool:
         """Initialize the video predictor for sequence propagation.
 
-        Uses the same model checkpoint as the image predictor.
+        Uses manual Hydra config directory initialization to ensure
+        compatibility with PyInstaller-bundled environments where
+        Hydra's config module resolution doesn't work.
 
         Returns:
             True if successful, False otherwise
@@ -589,66 +627,60 @@ class Sam2Model:
         try:
             logger.info("SAM2: Initializing video predictor...")
 
+            import sam2
+            from hydra import compose, initialize_config_dir
+            from hydra.core.global_hydra import GlobalHydra
+            from hydra.utils import instantiate
+            from omegaconf import OmegaConf
+            from sam2.sam2_video_predictor import SAM2VideoPredictor
+
             model_filename = Path(self.current_model_path).name.lower()
+            config_subdir, config_name = self._get_config_name(model_filename)
 
-            # Determine the config file path for build_sam2_video_predictor
-            # The function expects paths relative to the sam2 package configs dir
-            # Format: "configs/sam2.1/sam2.1_hiera_l.yaml" for SAM2.1
-            # Format: "configs/sam2/sam2_hiera_l.yaml" for SAM2.0
-            if "2.1" in model_filename:
-                # SAM2.1 model
-                if "large" in model_filename or "hiera_l" in model_filename:
-                    config_file = "configs/sam2.1/sam2.1_hiera_l.yaml"
-                elif "base" in model_filename or "hiera_b" in model_filename:
-                    config_file = "configs/sam2.1/sam2.1_hiera_b+.yaml"
-                elif "small" in model_filename or "hiera_s" in model_filename:
-                    config_file = "configs/sam2.1/sam2.1_hiera_s.yaml"
-                elif "tiny" in model_filename or "hiera_t" in model_filename:
-                    config_file = "configs/sam2.1/sam2.1_hiera_t.yaml"
-                else:
-                    # Default to large
-                    config_file = "configs/sam2.1/sam2.1_hiera_l.yaml"
-            else:
-                # SAM2.0 model
-                if "large" in model_filename or "hiera_l" in model_filename:
-                    config_file = "configs/sam2/sam2_hiera_l.yaml"
-                elif "base" in model_filename or "hiera_b" in model_filename:
-                    config_file = "configs/sam2/sam2_hiera_b+.yaml"
-                elif "small" in model_filename or "hiera_s" in model_filename:
-                    config_file = "configs/sam2/sam2_hiera_s.yaml"
-                elif "tiny" in model_filename or "hiera_t" in model_filename:
-                    config_file = "configs/sam2/sam2_hiera_t.yaml"
-                else:
-                    # Default to large
-                    config_file = "configs/sam2/sam2_hiera_l.yaml"
-
-            logger.info(f"SAM2: Using video predictor config: {config_file}")
-
-            # Ensure Hydra is properly initialized for sam2
-            # sam2.__init__ normally does this, but if image predictor cleared
-            # Hydra state, we need to re-initialize it
-            try:
-                from hydra import initialize_config_module
-                from hydra.core.global_hydra import GlobalHydra
-
-                if not GlobalHydra.instance().is_initialized():
-                    # Re-initialize with sam2 config module (same as sam2.__init__)
-                    initialize_config_module("sam2", version_base="1.2")
-                    logger.debug("SAM2: Re-initialized Hydra for video predictor")
-            except Exception as hydra_error:
-                logger.debug(f"SAM2: Hydra init note: {hydra_error}")
-
-            self.video_predictor = build_sam2_video_predictor(
-                config_file,
-                self.current_model_path,
-                device=self.device,
+            sam2_configs_dir = os.path.abspath(
+                os.path.join(os.path.dirname(sam2.__file__), "configs", config_subdir)
             )
+            logger.info(
+                f"SAM2: Using video predictor config: {config_name} "
+                f"from {sam2_configs_dir}"
+            )
+
+            # Video predictor Hydra overrides (same as build_sam2_video_predictor)
+            hydra_overrides = [
+                "++model._target_=sam2.sam2_video_predictor.SAM2VideoPredictor",
+                "++model.sam_mask_decoder_extra_args.dynamic_multimask_via_stability=true",
+                "++model.sam_mask_decoder_extra_args.dynamic_multimask_stability_delta=0.05",
+                "++model.sam_mask_decoder_extra_args.dynamic_multimask_stability_thresh=0.98",
+                "++model.binarize_mask_from_pts_for_mem_enc=true",
+                "++model.fill_hole_area=8",
+            ]
+
+            GlobalHydra.instance().clear()
+
+            with initialize_config_dir(config_dir=sam2_configs_dir, version_base=None):
+                cfg = compose(config_name=config_name, overrides=hydra_overrides)
+                OmegaConf.resolve(cfg)
+                model = instantiate(cfg.model, _recursive_=True)
+
+            # Load checkpoint
+            sd = torch.load(
+                self.current_model_path, map_location="cpu", weights_only=True
+            )["model"]
+            model.load_state_dict(sd)
+
+            model = model.to(self.device)
+            model.eval()
+
+            assert isinstance(model, SAM2VideoPredictor)
+            self.video_predictor = model
 
             logger.info("SAM2: Video predictor initialized successfully")
             return True
 
         except Exception as e:
-            logger.error(f"SAM2: Failed to initialize video predictor: {e}")
+            logger.error(
+                f"SAM2: Failed to initialize video predictor: {e}", exc_info=True
+            )
             self.video_predictor = None
             return False
 
@@ -775,7 +807,7 @@ class Sam2Model:
             return True
 
         except Exception as e:
-            logger.error(f"SAM2: Failed to initialize video state: {e}")
+            logger.error(f"SAM2: Failed to initialize video state: {e}", exc_info=True)
             self.video_inference_state = None
             self.is_video_initialized = False
             self._cleanup_temp_dir()

@@ -65,6 +65,7 @@ hiddenimports = [
     'sam2',
     'sam2.build_sam',
     'sam2.sam2_image_predictor',
+    'sam2.sam2_video_predictor',
     'hydra',
     'hydra.core',
     'hydra.core.global_hydra',

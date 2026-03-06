@@ -81,6 +81,7 @@ class SamModel:
         self.predictor = None
         self.image = None
         self.is_loaded = False
+        self.model_name = f"SAM {model_type}"
 
         try:
             if custom_model_path and os.path.exists(custom_model_path):
