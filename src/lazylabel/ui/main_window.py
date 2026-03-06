@@ -4131,6 +4131,10 @@ class MainWindow(QMainWindow):
             if is_reference:
                 return
 
+            # Skip empty masks (no positive pixels)
+            if result.mask is None or not result.mask.any():
+                return
+
             # Store mask and update cumulative confidence
             masks = {result.obj_id: result.mask}
             self.sequence_view_mode.mark_frame_propagated(

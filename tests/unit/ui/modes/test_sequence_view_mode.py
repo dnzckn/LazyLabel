@@ -43,10 +43,6 @@ class TestSequenceViewModeCreation:
         """Test initial confidence threshold."""
         assert sequence_view_mode._confidence_threshold == 0.99
 
-    def test_auto_flag_enabled_by_default(self, sequence_view_mode):
-        """Test that auto-flag is enabled by default."""
-        assert sequence_view_mode._auto_flag_low_confidence is True
-
 
 class TestSetImagePaths:
     """Tests for set_image_paths method."""
@@ -375,14 +371,6 @@ class TestConfidenceSettings:
 
         sequence_view_mode.set_confidence_threshold(1.5)
         assert sequence_view_mode._confidence_threshold == 1.0
-
-    def test_set_auto_flag_enabled(self, sequence_view_mode):
-        """Test enabling/disabling auto-flag."""
-        sequence_view_mode.set_auto_flag_enabled(False)
-        assert sequence_view_mode._auto_flag_low_confidence is False
-
-        sequence_view_mode.set_auto_flag_enabled(True)
-        assert sequence_view_mode._auto_flag_low_confidence is True
 
 
 class TestClearPropagationResults:

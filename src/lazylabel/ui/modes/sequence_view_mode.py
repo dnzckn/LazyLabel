@@ -84,7 +84,6 @@ class SequenceViewMode(QObject):
 
         # Configuration
         self._confidence_threshold: float = 0.99
-        self._auto_flag_low_confidence: bool = True
 
     @property
     def total_frames(self) -> int:
@@ -308,10 +307,7 @@ class SequenceViewMode(QObject):
             else:
                 self._confidence_scores[idx] = confidence
 
-            if (
-                self._auto_flag_low_confidence
-                and self._confidence_scores[idx] < self._confidence_threshold
-            ):
+            if self._confidence_scores[idx] < self._confidence_threshold:
                 self._frame_statuses[idx] = FrameStatus.FLAGGED
             else:
                 self._frame_statuses[idx] = FrameStatus.PROPAGATED
@@ -434,10 +430,6 @@ class SequenceViewMode(QObject):
     def set_confidence_threshold(self, threshold: float) -> None:
         """Set confidence threshold for auto-flagging."""
         self._confidence_threshold = max(0.0, min(1.0, threshold))
-
-    def set_auto_flag_enabled(self, enabled: bool) -> None:
-        """Enable/disable auto-flagging of low-confidence frames."""
-        self._auto_flag_low_confidence = enabled
 
     def get_reference_annotations(
         self, idx: int | None = None

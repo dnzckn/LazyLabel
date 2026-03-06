@@ -687,6 +687,14 @@ class PropagationManager:
                 yield timeline_idx, total, None
                 continue
 
+            # Skip empty masks (no positive pixels)
+            if mask is None or not mask.any():
+                logger.debug(
+                    f"PropagationManager: Skipping empty mask for frame {timeline_idx}, "
+                    f"obj_id={obj_id}"
+                )
+                continue
+
             # Get image path for this frame (SAM2 space index)
             image_path = ""
             if frame_idx < len(self.sam2_model.video_image_paths):
