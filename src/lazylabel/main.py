@@ -1,6 +1,14 @@
 """Main entry point for LazyLabel application."""
 
+import os
 import sys
+
+# PyInstaller with console=False sets sys.stdout/stderr to None,
+# which crashes libraries like tqdm that write to them.
+if sys.stdout is None:
+    sys.stdout = open(os.devnull, "w")  # noqa: SIM115
+if sys.stderr is None:
+    sys.stderr = open(os.devnull, "w")  # noqa: SIM115
 
 from PyQt6.QtWidgets import QApplication
 

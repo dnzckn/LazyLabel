@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.21] - 2026-03-06
+
+### Fixed
+
+- tqdm crash in PyInstaller .exe builds: redirect `sys.stdout`/`sys.stderr` to `os.devnull` when `None` (console=False)
+
 ## [1.6.20] - 2026-03-06
 
 ### Fixed
@@ -637,6 +643,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Image centering on load
 - Multi-class reindexing via drag and drop
 
+[1.6.21]: https://github.com/dnzckn/LazyLabel/compare/v1.6.20...v1.6.21
+[1.6.20]: https://github.com/dnzckn/LazyLabel/compare/v1.6.19...v1.6.20
+[1.6.19]: https://github.com/dnzckn/LazyLabel/compare/v1.6.18...v1.6.19
+[1.6.18]: https://github.com/dnzckn/LazyLabel/compare/v1.6.17...v1.6.18
 [1.6.17]: https://github.com/dnzckn/LazyLabel/compare/v1.6.16...v1.6.17
 [1.6.16]: https://github.com/dnzckn/LazyLabel/compare/v1.6.15...v1.6.16
 [1.6.15]: https://github.com/dnzckn/LazyLabel/compare/v1.6.14...v1.6.15
