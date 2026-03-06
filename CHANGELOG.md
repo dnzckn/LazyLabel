@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.20] - 2026-03-06
+
+### Fixed
+
+- Video predictor init validates config paths before Hydra init for clearer errors in .exe builds
+- Checkpoint loading uses `strict=False` matching the image predictor approach that works in .exe
+- Actual error messages now surface in UI notification instead of generic failure text
+- atexit handler ensures temp directories are cleaned up even on crash
+
 ## [1.6.19] - 2026-03-06
 
 ### Fixed

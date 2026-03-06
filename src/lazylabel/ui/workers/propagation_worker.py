@@ -181,8 +181,16 @@ class SequenceInitWorker(QThread):
                     f"SequenceInitWorker: Initialized with {frame_count} frames"
                 )
             else:
-                self.progress.emit("Failed to initialize")
-                logger.error("SequenceInitWorker: Failed to initialize")
+                last_error = getattr(
+                    self.propagation_manager.sam2_model, "last_error", ""
+                )
+                msg = (
+                    f"Failed to initialize: {last_error}"
+                    if last_error
+                    else "Failed to initialize"
+                )
+                self.progress.emit(msg)
+                logger.error(f"SequenceInitWorker: {msg}")
 
             self.finished_init.emit(success)
 

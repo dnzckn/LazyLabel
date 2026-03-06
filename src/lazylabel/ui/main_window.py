@@ -3791,10 +3791,16 @@ class MainWindow(QMainWindow):
             self._sequence_init_worker = None
 
         if not success:
-            self._show_notification(
-                "Failed to initialize video predictor. "
-                "Ensure a SAM 2 model is selected and images are accessible."
-            )
+            # Surface the actual error from SAM2 model if available
+            detail = ""
+            if self.propagation_manager and self.propagation_manager.sam2_model:
+                detail = getattr(self.propagation_manager.sam2_model, "last_error", "")
+            msg = "Failed to initialize video predictor."
+            if detail:
+                msg += f"\n{detail}"
+            else:
+                msg += "\nEnsure a SAM 2 model is selected and images are accessible."
+            self._show_notification(msg)
             if self.sequence_widget:
                 self.sequence_widget.end_propagation()
             self._pending_propagation = None

@@ -51,6 +51,13 @@ class Sam2Model:
         self.video_image_paths: list[str] = []
         self.is_video_initialized = False
         self._video_temp_dir: str | None = None  # Temp dir for non-JPEG images
+        self.last_error: str = ""
+
+        # Register cleanup on interpreter exit so temp dirs are removed
+        # even if the app crashes or is killed
+        import atexit
+
+        atexit.register(self._cleanup_temp_dir)
 
         # Auto-detect config if not provided
         if config_path is None:
@@ -637,9 +644,20 @@ class Sam2Model:
             model_filename = Path(self.current_model_path).name.lower()
             config_subdir, config_name = self._get_config_name(model_filename)
 
-            sam2_configs_dir = os.path.abspath(
-                os.path.join(os.path.dirname(sam2.__file__), "configs", config_subdir)
+            sam2_configs_dir = os.path.join(
+                os.path.dirname(sam2.__file__), "configs", config_subdir
             )
+
+            if not os.path.isdir(sam2_configs_dir):
+                raise FileNotFoundError(
+                    f"SAM2 config directory not found: {sam2_configs_dir}"
+                )
+
+            # Verify the specific config YAML exists
+            config_yaml = os.path.join(sam2_configs_dir, f"{config_name}.yaml")
+            if not os.path.isfile(config_yaml):
+                raise FileNotFoundError(f"SAM2 config file not found: {config_yaml}")
+
             logger.info(
                 f"SAM2: Using video predictor config: {config_name} "
                 f"from {sam2_configs_dir}"
@@ -662,11 +680,10 @@ class Sam2Model:
                 OmegaConf.resolve(cfg)
                 model = instantiate(cfg.model, _recursive_=True)
 
-            # Load checkpoint
-            sd = torch.load(
-                self.current_model_path, map_location="cpu", weights_only=True
-            )["model"]
-            model.load_state_dict(sd)
+            # Load checkpoint (use strict=False for robustness in bundled envs)
+            checkpoint = torch.load(self.current_model_path, map_location=self.device)
+            model_weights = checkpoint.get("model", checkpoint)
+            model.load_state_dict(model_weights, strict=False)
 
             model = model.to(self.device)
             model.eval()
@@ -681,6 +698,7 @@ class Sam2Model:
             logger.error(
                 f"SAM2: Failed to initialize video predictor: {e}", exc_info=True
             )
+            self.last_error = str(e)
             self.video_predictor = None
             return False
 
@@ -808,6 +826,7 @@ class Sam2Model:
 
         except Exception as e:
             logger.error(f"SAM2: Failed to initialize video state: {e}", exc_info=True)
+            self.last_error = str(e)
             self.video_inference_state = None
             self.is_video_initialized = False
             self._cleanup_temp_dir()
