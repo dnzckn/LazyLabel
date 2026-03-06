@@ -612,6 +612,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Image centering on load
 - Multi-class reindexing via drag and drop
 
+[1.6.17]: https://github.com/dnzckn/LazyLabel/compare/v1.6.16...v1.6.17
+[1.6.16]: https://github.com/dnzckn/LazyLabel/compare/v1.6.15...v1.6.16
 [1.6.15]: https://github.com/dnzckn/LazyLabel/compare/v1.6.14...v1.6.15
 [1.6.14]: https://github.com/dnzckn/LazyLabel/compare/v1.6.13...v1.6.14
 [1.6.13]: https://github.com/dnzckn/LazyLabel/compare/v1.6.12...v1.6.13
