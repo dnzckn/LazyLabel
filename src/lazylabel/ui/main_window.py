@@ -3110,6 +3110,7 @@ class MainWindow(QMainWindow):
         self.sequence_widget.set_trim_left_requested.connect(self._on_set_trim_left)
         self.sequence_widget.set_trim_right_requested.connect(self._on_set_trim_right)
         self.sequence_widget.trim_range_requested.connect(self._on_trim_range)
+        self.sequence_widget.keep_range_requested.connect(self._on_keep_range)
         self.sequence_widget.clear_trim_requested.connect(self._on_clear_trim)
 
     def _on_sequence_frame_selected(self, frame_idx: int):
@@ -4802,33 +4803,42 @@ class MainWindow(QMainWindow):
         if self.timeline_widget:
             self.timeline_widget.set_trim_right(idx)
 
-    def _on_trim_range(self):
-        """Remove all frames in [trim_left, trim_right] from the timeline."""
-        if self.sequence_view_mode is None:
-            return
-        if self._trim_left_idx is None or self._trim_right_idx is None:
-            self._show_notification("Set both trim left and right bounds first")
-            return
+    def _get_trim_range_indices(self) -> set[int] | None:
+        """Get the set of real frame indices between the trim markers.
 
-        # Always use the timeline's current display order so trim matches
-        # whatever the user sees on screen (sorted or unsorted).
+        Uses display order so it matches whatever the user sees on screen.
+        Returns None if markers aren't set.
+        """
+        if self._trim_left_idx is None or self._trim_right_idx is None:
+            return None
+
         if self.timeline_widget and self.timeline_widget._display_order:
             display_order = self.timeline_widget._display_order
             reverse = self.timeline_widget._reverse_order
             dp_left = reverse.get(self._trim_left_idx, 0)
             dp_right = reverse.get(self._trim_right_idx, 0)
             lo, hi = min(dp_left, dp_right), max(dp_left, dp_right)
-            indices = {display_order[dp] for dp in range(lo, hi + 1)}
+            return {display_order[dp] for dp in range(lo, hi + 1)}
         else:
             left = min(self._trim_left_idx, self._trim_right_idx)
             right = max(self._trim_left_idx, self._trim_right_idx)
-            indices = set(range(left, right + 1))
+            return set(range(left, right + 1))
 
+    def _on_trim_range(self):
+        """Remove all frames in [trim_left, trim_right] from the timeline."""
+        if self.sequence_view_mode is None:
+            return
+        indices = self._get_trim_range_indices()
+        if indices is None:
+            self._show_notification("Set both trim left and right bounds first")
+            return
         if len(indices) >= self.sequence_view_mode.total_frames:
             self._show_notification("Cannot remove all frames from the timeline")
             return
+        self._execute_trim(indices)
 
-        # Perform the trim
+    def _execute_trim(self, indices: set[int]) -> None:
+        """Shared trim execution for both Cut and Keep operations."""
         try:
             removed = self.sequence_view_mode.trim_frames(indices)
         except ValueError as e:
@@ -4885,7 +4895,42 @@ class MainWindow(QMainWindow):
             self.timeline_widget.set_trim_left(None)
             self.timeline_widget.set_trim_right(None)
 
-        self._show_notification(f"Trimmed {len(removed)} frames from timeline")
+        self._show_notification(f"Removed {len(removed)} frames from timeline")
+
+    def _on_keep_range(self):
+        """Keep only frames in [trim_left, trim_right], remove everything outside."""
+        if self.sequence_view_mode is None:
+            return
+        if self._trim_left_idx is None or self._trim_right_idx is None:
+            self._show_notification("Set both trim left and right bounds first")
+            return
+
+        # Compute the set of frames to KEEP (between the markers in display order)
+        if self.timeline_widget and self.timeline_widget._display_order:
+            display_order = self.timeline_widget._display_order
+            reverse = self.timeline_widget._reverse_order
+            dp_left = reverse.get(self._trim_left_idx, 0)
+            dp_right = reverse.get(self._trim_right_idx, 0)
+            lo, hi = min(dp_left, dp_right), max(dp_left, dp_right)
+            keep_indices = {display_order[dp] for dp in range(lo, hi + 1)}
+        else:
+            left = min(self._trim_left_idx, self._trim_right_idx)
+            right = max(self._trim_left_idx, self._trim_right_idx)
+            keep_indices = set(range(left, right + 1))
+
+        # Invert: remove everything NOT in keep_indices
+        all_indices = set(range(self.sequence_view_mode.total_frames))
+        indices_to_remove = all_indices - keep_indices
+
+        if not indices_to_remove:
+            self._show_notification("Nothing to remove — all frames are in the range")
+            return
+        if len(indices_to_remove) >= self.sequence_view_mode.total_frames:
+            self._show_notification("Cannot remove all frames from the timeline")
+            return
+
+        # Reuse the shared trim execution logic
+        self._execute_trim(indices_to_remove)
 
     def _on_clear_trim(self):
         """Reset trim left/right state."""

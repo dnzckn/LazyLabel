@@ -82,6 +82,7 @@ class SequenceWidget(QWidget):
     set_trim_left_requested = pyqtSignal()
     set_trim_right_requested = pyqtSignal()
     trim_range_requested = pyqtSignal()
+    keep_range_requested = pyqtSignal()
     clear_trim_requested = pyqtSignal()
 
     def __init__(self, parent=None):
@@ -405,7 +406,7 @@ class SequenceWidget(QWidget):
         self.clear_trim_btn.setEnabled(False)
         trim_action_layout.addWidget(self.clear_trim_btn)
 
-        self.trim_range_btn = QPushButton("Trim Range")
+        self.trim_range_btn = QPushButton("Cut")
         self.trim_range_btn.setToolTip(
             "Remove all frames within the selected range (inclusive)"
         )
@@ -416,6 +417,19 @@ class SequenceWidget(QWidget):
         self.trim_range_btn.clicked.connect(self.trim_range_requested.emit)
         self.trim_range_btn.setEnabled(False)
         trim_action_layout.addWidget(self.trim_range_btn)
+
+        self.keep_range_btn = QPushButton("Keep")
+        self.keep_range_btn.setToolTip(
+            "Keep only the frames within the selected range,\n"
+            "remove everything outside it"
+        )
+        self.keep_range_btn.setStyleSheet(
+            "QPushButton { background-color: #2E7D32; color: white; font-weight: bold; }"
+            "QPushButton:hover { background-color: #388E3C; }"
+        )
+        self.keep_range_btn.clicked.connect(self.keep_range_requested.emit)
+        self.keep_range_btn.setEnabled(False)
+        trim_action_layout.addWidget(self.keep_range_btn)
         trim_layout.addLayout(trim_action_layout)
 
         layout.addWidget(self.trim_group)
@@ -727,3 +741,4 @@ class SequenceWidget(QWidget):
         has_right = self._trim_right_name is not None
         self.clear_trim_btn.setEnabled(has_left or has_right)
         self.trim_range_btn.setEnabled(has_left and has_right)
+        self.keep_range_btn.setEnabled(has_left and has_right)

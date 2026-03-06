@@ -624,3 +624,150 @@ class TestObjClassMapSurvivesTrim:
         assert svm.total_frames == 2
         assert svm.get_obj_class(10) == (5, "tree")
         assert svm.get_obj_class(20) == (6, "sign")
+
+
+# ============================================================
+# Cut vs Keep: both trim operations
+# ============================================================
+
+
+class TestCutAndKeep:
+    """Cut removes the range, Keep removes everything outside the range."""
+
+    def test_cut_removes_range(self, svm):
+        """Cut indices 3-6 from 10 frames → 6 remain."""
+        svm.set_image_paths([f"/{i}.png" for i in range(10)])
+        mask = np.ones((10, 10), dtype=bool)
+        for i in range(10):
+            svm.mark_frame_propagated(i, {1: mask}, confidence=0.999)
+
+        cut_indices = set(range(3, 7))  # {3, 4, 5, 6}
+        svm.trim_frames(cut_indices)
+
+        assert svm.total_frames == 6
+        expected_paths = [f"/{i}.png" for i in [0, 1, 2, 7, 8, 9]]
+        for i in range(6):
+            assert svm.get_image_path(i) == expected_paths[i]
+            assert svm.get_frame_status(i) == "propagated"
+
+    def test_keep_removes_outside_range(self, svm):
+        """Keep indices 3-6 from 10 frames → 4 remain."""
+        svm.set_image_paths([f"/{i}.png" for i in range(10)])
+        mask = np.ones((10, 10), dtype=bool)
+        for i in range(10):
+            svm.mark_frame_propagated(i, {1: mask}, confidence=0.999)
+
+        keep_indices = set(range(3, 7))  # {3, 4, 5, 6}
+        all_indices = set(range(10))
+        remove_indices = all_indices - keep_indices
+        svm.trim_frames(remove_indices)
+
+        assert svm.total_frames == 4
+        expected_paths = [f"/{i}.png" for i in [3, 4, 5, 6]]
+        for i in range(4):
+            assert svm.get_image_path(i) == expected_paths[i]
+            assert svm.get_frame_status(i) == "propagated"
+
+    def test_cut_with_mixed_statuses(self, svm):
+        """Cut a range that spans green and red frames."""
+        _setup_9_frames(svm)  # [g g g g g r r r r]
+
+        # Cut indices 2-6 → keep [g g r r]
+        svm.trim_frames({2, 3, 4, 5, 6})
+
+        assert svm.total_frames == 4
+        assert svm.get_image_path(0) == "/0.png"
+        assert svm.get_image_path(1) == "/1.png"
+        assert svm.get_image_path(2) == "/7.png"
+        assert svm.get_image_path(3) == "/8.png"
+        assert svm.get_frame_status(0) == "propagated"
+        assert svm.get_frame_status(1) == "propagated"
+        assert svm.get_frame_status(2) == "flagged"
+        assert svm.get_frame_status(3) == "flagged"
+
+    def test_keep_with_mixed_statuses(self, svm):
+        """Keep a range that spans green and red frames."""
+        _setup_9_frames(svm)  # [g g g g g r r r r]
+
+        # Keep indices 2-6 → [g g g r r]
+        keep = set(range(2, 7))
+        remove = set(range(9)) - keep
+        svm.trim_frames(remove)
+
+        assert svm.total_frames == 5
+        assert svm.get_image_path(0) == "/2.png"
+        assert svm.get_image_path(4) == "/6.png"
+        assert svm.get_frame_status(0) == "propagated"
+        assert svm.get_frame_status(1) == "propagated"
+        assert svm.get_frame_status(2) == "propagated"
+        assert svm.get_frame_status(3) == "flagged"
+        assert svm.get_frame_status(4) == "flagged"
+
+    def test_keep_sorted_trims_outside_display_range(self, svm, qtbot):
+        """Keep on a sorted timeline removes frames outside display range."""
+        # [r g r g g r g r g] → sorted: [g g g g g r r r r]
+        svm.set_image_paths([f"/{i}.png" for i in range(9)])
+        mask = np.ones((10, 10), dtype=bool)
+        propagated = [1, 3, 4, 6, 8]
+        flagged = [0, 2, 5, 7]
+        for i in propagated:
+            svm.mark_frame_propagated(i, {1: mask}, confidence=0.999)
+        for i in flagged:
+            svm.flag_frame(i)
+
+        from lazylabel.ui.widgets.timeline_widget import TimelineWidget
+
+        tl = TimelineWidget()
+        qtbot.addWidget(tl)
+        tl.set_frame_count(9)
+        for i in propagated:
+            tl.set_frame_status(i, "propagated")
+        for i in flagged:
+            tl.set_frame_status(i, "flagged")
+        tl.sort_by_status()
+
+        # Sorted display: [g(1) g(3) g(4) g(6) g(8) r(0) r(2) r(5) r(7)]
+        # Keep display positions 0-4 (all greens)
+        keep_indices = {tl._display_order[dp] for dp in range(0, 5)}
+        assert keep_indices == set(propagated)
+
+        all_indices = set(range(9))
+        svm.trim_frames(all_indices - keep_indices)
+
+        assert svm.total_frames == 5
+        for i in range(5):
+            assert svm.get_frame_status(i) == "propagated"
+
+    def test_cut_and_keep_are_complements(self, svm):
+        """Cut and Keep on the same range should produce complementary results."""
+        from unittest.mock import MagicMock
+
+        # Setup two identical SVMs
+        svm.set_image_paths([f"/{i}.png" for i in range(8)])
+        mask = np.ones((10, 10), dtype=bool)
+        for i in range(8):
+            svm.mark_frame_propagated(i, {1: mask}, confidence=0.999)
+
+        mw2 = MagicMock()
+        mw2.segment_manager = MagicMock()
+        mw2.segment_manager.segments = []
+        svm2 = SequenceViewMode(mw2)
+        svm2.set_image_paths([f"/{i}.png" for i in range(8)])
+        for i in range(8):
+            svm2.mark_frame_propagated(i, {1: mask}, confidence=0.999)
+
+        range_indices = set(range(2, 6))  # {2, 3, 4, 5}
+        all_indices = set(range(8))
+
+        # Cut removes the range
+        svm.trim_frames(range_indices)
+        # Keep removes the complement
+        svm2.trim_frames(all_indices - range_indices)
+
+        # Together they should account for all original paths
+        cut_paths = {svm.get_image_path(i) for i in range(svm.total_frames)}
+        keep_paths = {svm2.get_image_path(i) for i in range(svm2.total_frames)}
+        all_paths = {f"/{i}.png" for i in range(8)}
+
+        assert cut_paths | keep_paths == all_paths
+        assert cut_paths & keep_paths == set()  # No overlap
