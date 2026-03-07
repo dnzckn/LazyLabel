@@ -912,12 +912,6 @@ class MainWindow(QMainWindow):
         self.control_panel.sequence_max_requested.connect(
             self._on_sequence_max_requested
         )
-        self.control_panel.sequence_load_memory_requested.connect(
-            self._on_sequence_load_memory_requested
-        )
-        self.control_panel.sequence_clear_cache_requested.connect(
-            self._on_sequence_clear_cache_requested
-        )
 
         # Right panel connections
         self.right_panel.open_folder_requested.connect(self._open_folder_dialog)
@@ -1047,6 +1041,10 @@ class MainWindow(QMainWindow):
                 "show_name": self.settings.file_manager_show_name,
                 "show_npz": self.settings.file_manager_show_npz,
                 "show_txt": self.settings.file_manager_show_txt,
+                "show_seg": self.settings.file_manager_show_seg,
+                "show_coco": self.settings.file_manager_show_coco,
+                "show_voc": self.settings.file_manager_show_voc,
+                "show_cml": self.settings.file_manager_show_cml,
                 "show_modified": self.settings.file_manager_show_modified,
                 "show_size": self.settings.file_manager_show_size,
                 "sort_order": self.settings.file_manager_sort_order,
@@ -1703,6 +1701,10 @@ class MainWindow(QMainWindow):
         self.settings.file_manager_show_name = settings["show_name"]
         self.settings.file_manager_show_npz = settings["show_npz"]
         self.settings.file_manager_show_txt = settings["show_txt"]
+        self.settings.file_manager_show_seg = settings.get("show_seg", False)
+        self.settings.file_manager_show_coco = settings.get("show_coco", False)
+        self.settings.file_manager_show_voc = settings.get("show_voc", False)
+        self.settings.file_manager_show_cml = settings.get("show_cml", False)
         self.settings.file_manager_show_modified = settings["show_modified"]
         self.settings.file_manager_show_size = settings["show_size"]
         self.settings.file_manager_sort_order = settings["sort_order"]
@@ -3304,7 +3306,6 @@ class MainWindow(QMainWindow):
 
         # Load from NPZ file on disk
         try:
-            self.file_manager.load_class_aliases(image_path)
             self.file_manager.load_existing_mask(image_path)
             self._update_all_lists()
         except Exception as e:
@@ -4439,119 +4440,6 @@ class MainWindow(QMainWindow):
                     self.control_panel.set_sequence_range(total)
                     self._show_notification(f"Range set to max: {total} frames")
 
-    def _on_sequence_load_memory_requested(self):
-        """Preload images within the current range into memory."""
-        if not self.current_image_path:
-            self._show_notification("Please load an image first")
-            return
-
-        # Initialize sequence memory caches if needed
-        if not hasattr(self, "_sequence_memory_cache"):
-            self._sequence_memory_cache: dict[str, np.ndarray] = {}
-        if not hasattr(self, "_sequence_mask_cache"):
-            self._sequence_mask_cache: dict[str, dict] = {}
-
-        # Use series paths from sequence_view_mode if a timeline is built,
-        # otherwise fall back to scanning the folder
-        if (
-            self.sequence_view_mode is not None
-            and self.sequence_view_mode.total_frames > 0
-        ):
-            image_paths = [
-                self.sequence_view_mode.get_image_path(i)
-                for i in range(self.sequence_view_mode.total_frames)
-            ]
-            image_paths = [p for p in image_paths if p is not None]
-        else:
-            current_path = Path(self.current_image_path)
-            image_paths = self._get_sequence_image_paths(current_path.parent)
-
-        if not image_paths:
-            self._show_notification("No images found")
-            return
-
-        # Get the range and mask setting
-        prop_range = self.control_panel.get_sequence_range()
-        include_masks = self.control_panel.should_include_masks()
-
-        # Find current image index and calculate range
-        current_path = Path(self.current_image_path)
-        try:
-            current_idx = image_paths.index(str(current_path))
-        except ValueError:
-            current_idx = 0
-
-        # Calculate range centered on current (or from start if no image loaded)
-        start_idx = max(0, current_idx)
-        end_idx = min(len(image_paths), start_idx + prop_range)
-
-        # Update max range in control panel
-        self.control_panel.set_sequence_range_max(len(image_paths))
-
-        # Start loading with visual feedback
-        self.control_panel.set_load_memory_button_loading(True)
-        loading_msg = f"Loading {end_idx - start_idx} images"
-        if include_masks:
-            loading_msg += " and masks"
-        self._show_notification(f"{loading_msg} to memory...")
-
-        # Load images (could be made async with QThread for large sequences)
-        loaded_count = 0
-        masks_loaded = 0
-        total_bytes = 0
-
-        for idx in range(start_idx, end_idx):
-            path = image_paths[idx]
-            if path not in self._sequence_memory_cache:
-                try:
-                    img = cv2.imread(path)
-                    if img is not None:
-                        # Convert BGR to RGB
-                        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-                        self._sequence_memory_cache[path] = img
-                        total_bytes += img.nbytes
-                        loaded_count += 1
-                except Exception as e:
-                    logger.error(f"Failed to load image {path}: {e}")
-            else:
-                loaded_count += 1
-
-            # Also load masks if requested
-            if include_masks and path not in self._sequence_mask_cache:
-                try:
-                    mask_data = self._load_mask_data_for_path(path)
-                    if mask_data is not None:
-                        self._sequence_mask_cache[path] = mask_data
-                        # Estimate mask memory usage
-                        for seg in mask_data.get("segments", []):
-                            if "mask" in seg and seg["mask"] is not None:
-                                total_bytes += seg["mask"].nbytes
-                        masks_loaded += 1
-                except Exception as e:
-                    logger.debug(f"No mask found for {path}: {e}")
-
-        # Update status - calculate total memory used
-        total_size_mb = sum(
-            img.nbytes for img in self._sequence_memory_cache.values()
-        ) / (1024 * 1024)
-
-        # Add mask cache size
-        for mask_data in self._sequence_mask_cache.values():
-            for seg in mask_data.get("segments", []):
-                if "mask" in seg and seg["mask"] is not None:
-                    total_size_mb += seg["mask"].nbytes / (1024 * 1024)
-
-        self.control_panel.set_load_memory_button_loading(False)
-        self.control_panel.update_sequence_memory_status(
-            loaded_count, end_idx - start_idx, total_size_mb
-        )
-
-        result_msg = f"Loaded {loaded_count} images"
-        if include_masks:
-            result_msg += f" + {masks_loaded} masks"
-        result_msg += f" ({total_size_mb:.1f} MB)"
-        self._show_notification(result_msg)
-
     def _load_mask_data_for_path(self, image_path: str) -> dict | None:
         """Load mask data from NPZ file for an image path.
 
@@ -4649,12 +4537,6 @@ class MainWindow(QMainWindow):
             self._sequence_memory_cache.clear()
         if hasattr(self, "_sequence_mask_cache"):
             self._sequence_mask_cache.clear()
-        self.control_panel.update_sequence_memory_status(0, 0)
-
-    def _on_sequence_clear_cache_requested(self):
-        """Handle clear cache button click."""
-        self.clear_sequence_memory_cache()
-        self._show_notification("Memory cache cleared")
 
     def _on_set_sequence_start(self):
         """Handle set start frame for sequence range."""
@@ -6700,7 +6582,6 @@ class MainWindow(QMainWindow):
                 try:
                     self.segment_manager.clear()
                     self.segment_display_manager.clear_all_caches()
-                    self.file_manager.load_class_aliases(self.current_image_path)
                     self.file_manager.load_existing_mask(self.current_image_path)
                     self._update_all_lists()
                 except Exception as e:

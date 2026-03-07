@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.0] - 2026-03-07
+
+### Added
+
+- Pluggable export framework with 6 annotation formats: NPZ, YOLO Detection, YOLO Segmentation, COCO JSON, Pascal VOC, and CreateML
+- All formats round-trip: export and load back with pixel-identical masks
+- Multi-select format dropdown in Settings replaces old save checkboxes
+- File manager columns for all 6 format types with checkmark indicators
+- COCO JSON supercategory support via dot notation in class aliases (e.g. `dog.animal`)
+- NPZ files now store class aliases and class order for lossless ID preservation
+- YOLO formats use standard integer class IDs
+
+### Changed
+
+- Settings: `export_formats` list replaces `save_npz`, `save_txt`, `bb_use_alias`, `save_class_aliases` booleans (auto-migrated)
+- Fallback load chain: NPZ > YOLO Seg > COCO JSON > Pascal VOC > CreateML > YOLO Det
+
+### Removed
+
+- Per-image `.json` class alias sidecar files (aliases now embedded in NPZ)
+- Sequence memory load UI (unused feature)
+
 ## [1.6.21] - 2026-03-06
 
 ### Fixed
@@ -40,8 +62,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Keep Range button (green) — keeps only frames between trim markers, removes everything outside
-- Cut button (brown, renamed from Trim Range) — removes frames between trim markers
+- Keep Range button (green) - keeps only frames between trim markers, removes everything outside
+- Cut button (brown, renamed from Trim Range) - removes frames between trim markers
 - 6 new unit tests for Cut and Keep operations including complement proof
 
 ## [1.6.16] - 2026-03-06
@@ -50,9 +72,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Comprehensive sequence mode tests: 29 trim/sort unit tests + 21 integration tests covering full workflow
 - Thread safety locks on SequenceViewMode state for safe concurrent access during propagation
-- Object class mapping (`_obj_class_map`) persists through trim and serialization — masks keep correct classes after trim
+- Object class mapping (`_obj_class_map`) persists through trim and serialization - masks keep correct classes after trim
 - Clear Flags button on timeline to reset all status colors
-- Skip Labeled checkbox defaults to checked — propagation won't overwrite already-labeled frames
+- Skip Labeled checkbox defaults to checked - propagation won't overwrite already-labeled frames
 
 ### Fixed
 
@@ -63,11 +85,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fixed RecursionError on fast timeline scrubbing with re-entrancy guard
 - Fixed slow image loading from file navigator in sequence mode (deferred SAM embedding)
 - Fixed sort not persisting after trim
-- Zoom +/- buttons no longer shift position — disabled instead of hidden
+- Zoom +/- buttons no longer shift position - disabled instead of hidden
 
 ### Changed
 
-- Purged all YOLO references — terminology is now "bounding box" throughout
+- Purged all YOLO references - terminology is now "bounding box" throughout
 - Renamed `yolo_use_alias` setting to `bb_use_alias`
 - Improved tooltips for Skip Low Conf, Skip Labeled, and Min Conf controls
 - Better error messages: propagation init failure, dimension mismatches, 0 frames propagated
@@ -77,20 +99,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- PyInstaller: add `hydra` and `omegaconf` hidden imports and data files — SAM2 requires these for its config system but PyInstaller doesn't detect them
+- PyInstaller: add `hydra` and `omegaconf` hidden imports and data files. SAM2 requires these for its config system but PyInstaller doesn't detect them
 
 ## [1.6.14] - 2026-03-05
 
 ### Fixed
 
-- Pin PyQt6 to `>=6.7.1,<6.10` — PyQt6 6.10.x has DLL incompatibilities with PyInstaller on Windows
+- Pin PyQt6 to `>=6.7.1,<6.10` - PyQt6 6.10.x has DLL incompatibilities with PyInstaller on Windows
 - Revert unnecessary spec changes (runtime hook, dynamic lib collection, UPX excludes) that were masking the PyQt6 version issue
 
 ## [1.6.13] - 2026-03-05
 
 ### Fixed
 
-- PyInstaller: exclude Qt/Python DLLs from UPX compression — UPX corrupts Qt DLLs causing "specified procedure could not be found" on Windows
+- PyInstaller: exclude Qt/Python DLLs from UPX compression. UPX corrupts Qt DLLs causing "specified procedure could not be found" on Windows
 
 ## [1.6.12] - 2026-03-05
 
@@ -104,13 +126,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- Fix `ValueError: too many values to unpack` when undoing segment deletion — highlight cache key was missing `viewer_idx` in `shift_cache_after_deletion`
+- Fix `ValueError: too many values to unpack` when undoing segment deletion - highlight cache key was missing `viewer_idx` in `shift_cache_after_deletion`
 
 ## [1.6.10] - 2026-03-05
 
 ### Fixed
 
-- Graceful fallback when `qdarktheme` fails to load (e.g. DLL incompatibility with newer PyQt6 on Windows) — app launches with default Qt style instead of crashing
+- Graceful fallback when `qdarktheme` fails to load (e.g. DLL incompatibility with newer PyQt6 on Windows). App launches with default Qt style instead of crashing
 
 ## [1.6.9] - 2026-03-05
 
@@ -142,7 +164,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- Fix `AttributeError: 'MainWindow' has no attribute 'sam_single_view_manager'` when loading model — use correct `sam_worker_manager` attribute
+- Fix `AttributeError: 'MainWindow' has no attribute 'sam_single_view_manager'` when loading model - use correct `sam_worker_manager` attribute
 
 ## [1.6.6] - 2026-03-04
 
@@ -156,7 +178,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Bounding box TXT loading fallback**: `load_existing_mask()` now falls back to loading bounding box TXT labels when no NPZ file exists
 - **`load_bb_txt()`** method in FileManager for parsing bounding box TXT label files
-- **Crop-aware FFT thresholding**: FFT now operates only on the crop region when a crop is active, keeping outside pixels unchanged — prevents metadata bars, scale bars, and timestamps from corrupting frequency domain analysis
+- **Crop-aware FFT thresholding**: FFT now operates only on the crop region when a crop is active, keeping outside pixels unchanged. Prevents metadata bars, scale bars, and timestamps from corrupting frequency domain analysis
 - **16-bit image support**: Image caching, channel thresholding, and FFT pipeline now preserve 16-bit depth via `cv2.IMREAD_UNCHANGED`, with proper uint16→uint8 conversion at display/SAM boundaries
 
 ### Changed
@@ -177,7 +199,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - **"Add All Labeled" button**: Adds all frames with existing NPZ labels as reference frames in one click
-- **Trim Range feature**: Remove frames from the timeline by setting left/right bounds and trimming — timeline-only, files on disk are not affected
+- **Trim Range feature**: Remove frames from the timeline by setting left/right bounds and trimming. Timeline-only, files on disk are not affected
 - Trim section in sequence widget with Set Left/Right, Clear Trim, and Trim Range controls
 
 ### Changed
@@ -192,7 +214,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - **Sequence Mode Dimension Mismatch**: Images with different dimensions in a sequence no longer produce stretched/incorrect masks during SAM2 propagation
-- Reference frames now enforce consistent dimensions — mismatches are rejected with a notification showing expected vs actual size
+- Reference frames now enforce consistent dimensions - mismatches are rejected with a notification showing expected vs actual size
 - Images with mismatched dimensions are automatically filtered out before loading into SAM2's video predictor
 - Skipped frames are colored yellow in the timeline so users can see why they were excluded
 - SAM2-to-timeline index mapping maintains correct frame indices after filtering
@@ -643,6 +665,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Image centering on load
 - Multi-class reindexing via drag and drop
 
+[1.7.0]: https://github.com/dnzckn/LazyLabel/compare/v1.6.21...v1.7.0
 [1.6.21]: https://github.com/dnzckn/LazyLabel/compare/v1.6.20...v1.6.21
 [1.6.20]: https://github.com/dnzckn/LazyLabel/compare/v1.6.19...v1.6.20
 [1.6.19]: https://github.com/dnzckn/LazyLabel/compare/v1.6.18...v1.6.19

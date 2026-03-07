@@ -727,6 +727,258 @@ class TestNpzTxtCrossValidation:
         np.testing.assert_array_equal(tensor_npz, tensor_txt)
 
 
+class TestLoadYoloSegTxt:
+    """Tests for loading YOLO segmentation TXT files."""
+
+    @pytest.fixture
+    def temp_dir(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            yield tmpdir
+
+    @pytest.fixture
+    def file_manager(self):
+        sm = SegmentManager()
+        return FileManager(sm)
+
+    def _write_txt(self, path, lines):
+        with open(path, "w") as f:
+            for line in lines:
+                f.write(line + "\n")
+
+    def test_single_polygon_loaded(self, temp_dir, file_manager):
+        """A single segmentation line loads as a polygon segment."""
+        txt = os.path.join(temp_dir, "img_seg.txt")
+        # Triangle in normalised coords
+        self._write_txt(txt, ["0 0.2 0.2 0.8 0.2 0.5 0.8"])
+        file_manager.load_yolo_seg_txt(txt, image_size=(100, 100))
+
+        segs = file_manager.segment_manager.segments
+        assert len(segs) == 1
+        assert segs[0].get("vertices") is not None
+        assert len(segs[0]["vertices"]) == 3
+
+    def test_multiple_polygons(self, temp_dir, file_manager):
+        """Multiple segmentation lines produce separate segments."""
+        txt = os.path.join(temp_dir, "img_seg.txt")
+        self._write_txt(
+            txt,
+            [
+                "0 0.1 0.1 0.3 0.1 0.2 0.3",
+                "1 0.6 0.6 0.9 0.6 0.75 0.9",
+            ],
+        )
+        file_manager.load_yolo_seg_txt(txt, image_size=(100, 100))
+        assert len(file_manager.segment_manager.segments) == 2
+
+    def test_malformed_lines_skipped(self, temp_dir, file_manager):
+        """Lines with too few coordinates or bad data are skipped."""
+        txt = os.path.join(temp_dir, "img_seg.txt")
+        self._write_txt(
+            txt,
+            [
+                "0 0.1 0.1",  # too few
+                "0 abc 0.1 0.3 0.1 0.2 0.3",  # non-numeric
+                "0 0.2 0.2 0.8 0.2 0.5 0.8",  # valid
+            ],
+        )
+        file_manager.load_yolo_seg_txt(txt, image_size=(100, 100))
+        assert len(file_manager.segment_manager.segments) == 1
+
+
+class TestLoadCocoJson:
+    """Tests for loading COCO JSON files."""
+
+    @pytest.fixture
+    def temp_dir(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            yield tmpdir
+
+    @pytest.fixture
+    def file_manager(self):
+        sm = SegmentManager()
+        return FileManager(sm)
+
+    def _write_coco(self, path, data):
+        import json
+
+        with open(path, "w") as f:
+            json.dump(data, f)
+
+    def test_polygon_annotations_loaded(self, temp_dir, file_manager):
+        """Polygon segmentation annotations are rasterised."""
+        coco_path = os.path.join(temp_dir, "img_coco.json")
+        self._write_coco(
+            coco_path,
+            {
+                "images": [
+                    {"id": 1, "file_name": "img.png", "width": 100, "height": 100}
+                ],
+                "annotations": [
+                    {
+                        "id": 1,
+                        "image_id": 1,
+                        "category_id": 0,
+                        "bbox": [20, 20, 20, 20],
+                        "area": 400,
+                        "segmentation": [[20, 20, 40, 20, 40, 40, 20, 40]],
+                        "iscrowd": 0,
+                    }
+                ],
+                "categories": [{"id": 0, "name": "car", "supercategory": "vehicle"}],
+            },
+        )
+        file_manager.load_coco_json(coco_path, image_size=(100, 100))
+        segs = file_manager.segment_manager.segments
+        assert len(segs) == 1
+        assert segs[0]["mask"][30, 30]
+        # Alias should have supercategory
+        assert file_manager.segment_manager.class_aliases[0] == "car.vehicle"
+
+    def test_bbox_only_fallback(self, temp_dir, file_manager):
+        """Annotations without segmentation fall back to bbox."""
+        coco_path = os.path.join(temp_dir, "img_coco.json")
+        self._write_coco(
+            coco_path,
+            {
+                "images": [
+                    {"id": 1, "file_name": "img.png", "width": 100, "height": 100}
+                ],
+                "annotations": [
+                    {
+                        "id": 1,
+                        "image_id": 1,
+                        "category_id": 0,
+                        "bbox": [10, 10, 30, 30],
+                        "area": 900,
+                        "iscrowd": 0,
+                    }
+                ],
+                "categories": [{"id": 0, "name": "box", "supercategory": "box"}],
+            },
+        )
+        file_manager.load_coco_json(coco_path, image_size=(100, 100))
+        segs = file_manager.segment_manager.segments
+        assert len(segs) == 1
+        assert segs[0]["mask"][20, 20]
+
+    def test_category_mapping(self, temp_dir, file_manager):
+        """Category IDs are preserved from the COCO file."""
+        coco_path = os.path.join(temp_dir, "img_coco.json")
+        self._write_coco(
+            coco_path,
+            {
+                "images": [
+                    {"id": 1, "file_name": "img.png", "width": 100, "height": 100}
+                ],
+                "annotations": [
+                    {
+                        "id": 1,
+                        "image_id": 1,
+                        "category_id": 5,
+                        "bbox": [10, 10, 20, 20],
+                        "area": 400,
+                        "segmentation": [[10, 10, 30, 10, 30, 30, 10, 30]],
+                        "iscrowd": 0,
+                    }
+                ],
+                "categories": [{"id": 5, "name": "bike", "supercategory": "bike"}],
+            },
+        )
+        file_manager.load_coco_json(coco_path, image_size=(100, 100))
+        assert file_manager.segment_manager.segments[0]["class_id"] == 5
+
+
+class TestFallbackChain:
+    """Tests for the load_existing_mask fallback chain."""
+
+    @pytest.fixture
+    def temp_dir(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            yield tmpdir
+
+    def _write_txt(self, path, lines):
+        with open(path, "w") as f:
+            for line in lines:
+                f.write(line + "\n")
+
+    def _write_coco(self, path, data):
+        import json
+
+        with open(path, "w") as f:
+            json.dump(data, f)
+
+    def test_seg_preferred_over_det(self, temp_dir):
+        """YOLO seg is preferred over YOLO det when both exist."""
+        base = os.path.join(temp_dir, "img")
+        img_path = base + ".png"
+
+        # Write both files
+        self._write_txt(base + ".txt", ["0 0.5 0.5 0.2 0.2"])
+        self._write_txt(base + "_seg.txt", ["0 0.2 0.2 0.8 0.2 0.5 0.8"])
+
+        fm = FileManager(SegmentManager())
+        fm.load_existing_mask(img_path, image_size=(100, 100))
+        segs = fm.segment_manager.segments
+        assert len(segs) == 1
+        # Seg loads produce vertices, det does not
+        assert segs[0].get("vertices") is not None
+
+    def test_coco_preferred_over_det(self, temp_dir):
+        """COCO JSON is preferred over YOLO det."""
+        base = os.path.join(temp_dir, "img")
+        img_path = base + ".png"
+
+        self._write_txt(base + ".txt", ["0 0.5 0.5 0.2 0.2"])
+        self._write_coco(
+            base + "_coco.json",
+            {
+                "images": [
+                    {"id": 1, "file_name": "img.png", "width": 100, "height": 100}
+                ],
+                "annotations": [
+                    {
+                        "id": 1,
+                        "image_id": 1,
+                        "category_id": 0,
+                        "bbox": [20, 20, 20, 20],
+                        "area": 400,
+                        "segmentation": [[20, 20, 40, 20, 40, 40, 20, 40]],
+                        "iscrowd": 0,
+                    }
+                ],
+                "categories": [{"id": 0, "name": "obj", "supercategory": "obj"}],
+            },
+        )
+
+        fm = FileManager(SegmentManager())
+        fm.load_existing_mask(img_path, image_size=(100, 100))
+        segs = fm.segment_manager.segments
+        assert len(segs) == 1
+        # COCO produces vertices from polygon
+        assert segs[0].get("vertices") is not None
+
+    def test_npz_preferred_over_all(self, temp_dir):
+        """NPZ is always preferred when it exists."""
+        base = os.path.join(temp_dir, "img")
+        img_path = base + ".png"
+
+        mask = np.zeros((100, 100, 1), dtype=np.uint8)
+        mask[10:20, 10:20, 0] = 1
+        np.savez_compressed(base + ".npz", mask=mask)
+
+        # Also create seg and det
+        self._write_txt(base + "_seg.txt", ["0 0.5 0.5 0.8 0.5 0.65 0.8"])
+        self._write_txt(base + ".txt", ["0 0.5 0.5 0.2 0.2"])
+
+        fm = FileManager(SegmentManager())
+        fm.load_existing_mask(img_path, image_size=(100, 100))
+        segs = fm.segment_manager.segments
+        assert len(segs) == 1
+        # NPZ region is at 10:20, seg/det are elsewhere
+        assert segs[0]["mask"][15, 15]
+        assert not segs[0]["mask"][50, 50]
+
+
 class TestSixteenBitTiff:
     """Verify that 16-bit TIFF files can be loaded and processed without errors.
 

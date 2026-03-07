@@ -181,7 +181,11 @@ class FileInfo:
     size: int = 0  # Lazy load for speed
     modified: float = 0.0  # Lazy load for speed
     has_npz: bool = False
-    has_txt: bool = False
+    has_txt: bool = False  # YOLO detection .txt
+    has_seg_txt: bool = False  # YOLO segmentation _seg.txt
+    has_coco_json: bool = False  # COCO _coco.json
+    has_xml: bool = False  # Pascal VOC .xml
+    has_createml_json: bool = False  # CreateML _createml.json
     thumbnail: QPixmap | None = None
 
 
@@ -208,6 +212,10 @@ class FileScanner(QThread):
             # Single pass to collect all file info
             npz_stems = set()
             txt_stems = set()
+            seg_stems = set()
+            coco_stems = set()
+            xml_stems = set()
+            createml_stems = set()
             image_entries = []
 
             with os.scandir(self.directory) as entries:
@@ -215,14 +223,24 @@ class FileScanner(QThread):
                     if self._stop_flag:
                         break
 
-                    # Check file extension
                     name = entry.name
                     ext = os.path.splitext(name)[1].lower()
+                    stem = os.path.splitext(name)[0]
 
                     if ext == ".npz":
-                        npz_stems.add(os.path.splitext(name)[0])
+                        npz_stems.add(stem)
                     elif ext == ".txt":
-                        txt_stems.add(os.path.splitext(name)[0])
+                        if stem.endswith("_seg"):
+                            seg_stems.add(stem[:-4])
+                        else:
+                            txt_stems.add(stem)
+                    elif ext == ".json":
+                        if stem.endswith("_coco"):
+                            coco_stems.add(stem[:-5])
+                        elif stem.endswith("_createml"):
+                            createml_stems.add(stem[:-9])
+                    elif ext == ".xml":
+                        xml_stems.add(stem)
                     elif ext in IMAGE_EXTENSIONS:
                         image_entries.append((entry.path, name))
 
@@ -241,6 +259,10 @@ class FileScanner(QThread):
                     name=name,
                     has_npz=stem in npz_stems,
                     has_txt=stem in txt_stems,
+                    has_seg_txt=stem in seg_stems,
+                    has_coco_json=stem in coco_stems,
+                    has_xml=stem in xml_stems,
+                    has_createml_json=stem in createml_stems,
                 )
 
                 batch.append(file_info)
@@ -282,10 +304,30 @@ class FastFileModel(QAbstractTableModel):
         self._path_to_index: dict[str, int] = {}  # For O(1) lookups
         self._scanner: FileScanner | None = None
 
-        # Column management - New order: Name, NPZ, TXT, Modified, Size
-        self._all_columns = ["Name", "NPZ", "TXT", "Modified", "Size"]
-        self._column_map = {0: 0, 1: 1, 2: 2, 3: 3, 4: 4}  # logical to physical mapping
-        self._visible_columns = [True, True, True, True, True]  # Default all visible
+        # Column management
+        self._all_columns = [
+            "Name",
+            "NPZ",
+            "TXT",
+            "SEG",
+            "COCO",
+            "VOC",
+            "CML",
+            "Modified",
+            "Size",
+        ]
+        # Default: show Name, NPZ, TXT, Modified, Size; new format columns hidden
+        self._visible_columns = [
+            True,
+            True,
+            True,
+            False,
+            False,
+            False,
+            False,
+            True,
+            True,
+        ]
 
         # Sequence range highlighting
         self._highlighted_rows: set[int] = set()
@@ -435,13 +477,20 @@ class FastFileModel(QAbstractTableModel):
 
         column_name = self._all_columns[logical_col]
 
+        _STATUS_COLUMNS = {
+            "NPZ": "has_npz",
+            "TXT": "has_txt",
+            "SEG": "has_seg_txt",
+            "COCO": "has_coco_json",
+            "VOC": "has_xml",
+            "CML": "has_createml_json",
+        }
+
         if role == Qt.ItemDataRole.DisplayRole:
             if column_name == "Name":
                 return file_info.name
-            elif column_name == "NPZ":
-                return "✓" if file_info.has_npz else ""
-            elif column_name == "TXT":
-                return "✓" if file_info.has_txt else ""
+            elif column_name in _STATUS_COLUMNS:
+                return "✓" if getattr(file_info, _STATUS_COLUMNS[column_name]) else ""
             elif column_name == "Modified":
                 # Lazy load modified time only when displayed
                 if file_info.modified == 0.0:
@@ -467,10 +516,14 @@ class FastFileModel(QAbstractTableModel):
         elif role == Qt.ItemDataRole.UserRole:
             # Return the FileInfo object for custom access
             return file_info
-        elif role == Qt.ItemDataRole.TextAlignmentRole and column_name in [
+        elif role == Qt.ItemDataRole.TextAlignmentRole and column_name in (
             "NPZ",
             "TXT",
-        ]:  # Center checkmarks
+            "SEG",
+            "COCO",
+            "VOC",
+            "CML",
+        ):
             return Qt.AlignmentFlag.AlignCenter
         elif role == Qt.ItemDataRole.BackgroundRole:
             row = index.row()
@@ -544,11 +597,30 @@ class FastFileModel(QAbstractTableModel):
         pass  # Scan completion is handled by the UI status update
 
     def getFileCounts(self):
-        """Get counts of total files, NPZ files, and TXT files"""
+        """Get counts of total files and per-format annotation files."""
         total_files = len(self._files)
-        npz_count = sum(1 for file_info in self._files if file_info.has_npz)
-        txt_count = sum(1 for file_info in self._files if file_info.has_txt)
-        return total_files, npz_count, txt_count
+        counts = {
+            "npz": 0,
+            "txt": 0,
+            "seg": 0,
+            "coco": 0,
+            "xml": 0,
+            "createml": 0,
+        }
+        for fi in self._files:
+            if fi.has_npz:
+                counts["npz"] += 1
+            if fi.has_txt:
+                counts["txt"] += 1
+            if fi.has_seg_txt:
+                counts["seg"] += 1
+            if fi.has_coco_json:
+                counts["coco"] += 1
+            if fi.has_xml:
+                counts["xml"] += 1
+            if fi.has_createml_json:
+                counts["createml"] += 1
+        return total_files, counts
 
     def getFileInfo(self, index: int) -> FileInfo | None:
         """Get file info at index"""
@@ -557,30 +629,12 @@ class FastFileModel(QAbstractTableModel):
         return None
 
     def updateNpzStatus(self, image_path: Path):
-        """Update NPZ status for a specific image file"""
-        image_path_str = str(image_path)
-        npz_path = image_path.with_suffix(".npz")
-        has_npz = npz_path.exists()
-
-        # Find and update the file info
-        for i, file_info in enumerate(self._files):
-            if str(file_info.path) == image_path_str:
-                old_has_npz = file_info.has_npz
-                file_info.has_npz = has_npz
-
-                # Only emit dataChanged if status actually changed
-                if old_has_npz != has_npz:
-                    index = self.index(i, 3)  # NPZ column
-                    self.dataChanged.emit(index, index)
-                break
+        """Update NPZ status for a specific image file. Delegates to updateFileStatus."""
+        self.updateFileStatus(image_path)
 
     def updateFileStatus(self, image_path: Path):
-        """Update both NPZ and TXT status for a specific image file"""
+        """Update annotation file status for all export formats."""
         image_path_str = str(image_path)
-        npz_path = image_path.with_suffix(".npz")
-        txt_path = image_path.with_suffix(".txt")
-        has_npz = npz_path.exists()
-        has_txt = txt_path.exists()
 
         # O(1) lookup using path-to-index mapping
         if image_path_str not in self._path_to_index:
@@ -588,22 +642,30 @@ class FastFileModel(QAbstractTableModel):
 
         i = self._path_to_index[image_path_str]
         file_info = self._files[i]
+        stem = image_path.stem
+        parent = image_path.parent
 
-        # Update status and emit changes only if needed
-        old_has_npz = file_info.has_npz
-        old_has_txt = file_info.has_txt
-        file_info.has_npz = has_npz
-        file_info.has_txt = has_txt
+        # Check all format outputs
+        new_status = {
+            "has_npz": image_path.with_suffix(".npz").exists(),
+            "has_txt": image_path.with_suffix(".txt").exists(),
+            "has_seg_txt": (parent / f"{stem}_seg.txt").exists(),
+            "has_coco_json": (parent / f"{stem}_coco.json").exists(),
+            "has_xml": image_path.with_suffix(".xml").exists(),
+            "has_createml_json": (parent / f"{stem}_createml.json").exists(),
+        }
 
-        # Emit dataChanged for NPZ column if status changed
-        if old_has_npz != has_npz:
-            index = self.index(i, 3)  # NPZ column
-            self.dataChanged.emit(index, index)
+        # Update and check if anything changed
+        changed = False
+        for attr, val in new_status.items():
+            if getattr(file_info, attr) != val:
+                setattr(file_info, attr, val)
+                changed = True
 
-        # Emit dataChanged for TXT column if status changed
-        if old_has_txt != has_txt:
-            index = self.index(i, 4)  # TXT column
-            self.dataChanged.emit(index, index)
+        if changed:
+            left = self.index(i, 0)
+            right = self.index(i, self.columnCount() - 1)
+            self.dataChanged.emit(left, right)
 
     def getFileIndex(self, path: Path) -> int:
         """Get index of file by path"""
@@ -614,7 +676,7 @@ class FastFileModel(QAbstractTableModel):
         if not image_paths:
             return
 
-        changed_indices = []
+        changed_rows = []
 
         for image_path in image_paths:
             image_path_str = str(image_path)
@@ -625,29 +687,32 @@ class FastFileModel(QAbstractTableModel):
 
             i = self._path_to_index[image_path_str]
             file_info = self._files[i]
+            stem = image_path.stem
+            parent = image_path.parent
 
-            # Check file existence
-            npz_path = image_path.with_suffix(".npz")
-            txt_path = image_path.with_suffix(".txt")
-            has_npz = npz_path.exists()
-            has_txt = txt_path.exists()
+            new_status = {
+                "has_npz": image_path.with_suffix(".npz").exists(),
+                "has_txt": image_path.with_suffix(".txt").exists(),
+                "has_seg_txt": (parent / f"{stem}_seg.txt").exists(),
+                "has_coco_json": (parent / f"{stem}_coco.json").exists(),
+                "has_xml": image_path.with_suffix(".xml").exists(),
+                "has_createml_json": (parent / f"{stem}_createml.json").exists(),
+            }
 
-            # Update status and track changes
-            old_has_npz = file_info.has_npz
-            old_has_txt = file_info.has_txt
-            file_info.has_npz = has_npz
-            file_info.has_txt = has_txt
+            changed = False
+            for attr, val in new_status.items():
+                if getattr(file_info, attr) != val:
+                    setattr(file_info, attr, val)
+                    changed = True
 
-            # Track changed indices for batch emission
-            if old_has_npz != has_npz:
-                changed_indices.append((i, 3))  # NPZ column
-            if old_has_txt != has_txt:
-                changed_indices.append((i, 4))  # TXT column
+            if changed:
+                changed_rows.append(i)
 
-        # Batch emit dataChanged signals
-        for i, col in changed_indices:
-            index = self.index(i, col)
-            self.dataChanged.emit(index, index)
+        # Batch emit dataChanged signals — full row for each changed file
+        for i in changed_rows:
+            left = self.index(i, 0)
+            right = self.index(i, self.columnCount() - 1)
+            self.dataChanged.emit(left, right)
 
     def setHighlightedRange(self, start_idx: int, end_idx: int) -> None:
         """Set the highlighted range for sequence selection.
@@ -826,6 +891,14 @@ class FileSortProxyModel(QSortFilterProxyModel):
             return left_info.has_npz < right_info.has_npz
         elif column_name == "TXT":
             return left_info.has_txt < right_info.has_txt
+        elif column_name == "SEG":
+            return left_info.has_seg_txt < right_info.has_seg_txt
+        elif column_name == "COCO":
+            return left_info.has_coco_json < right_info.has_coco_json
+        elif column_name == "VOC":
+            return left_info.has_xml < right_info.has_xml
+        elif column_name == "CML":
+            return left_info.has_createml_json < right_info.has_createml_json
 
         return False
 
@@ -1071,8 +1144,12 @@ class FastFileManager(QWidget):
         self._column_dropdown.addCheckableItem("Name", True, 0)
         self._column_dropdown.addCheckableItem("NPZ", True, 1)
         self._column_dropdown.addCheckableItem("TXT", True, 2)
-        self._column_dropdown.addCheckableItem("Modified", True, 3)
-        self._column_dropdown.addCheckableItem("Size", True, 4)
+        self._column_dropdown.addCheckableItem("SEG", False, 3)
+        self._column_dropdown.addCheckableItem("COCO", False, 4)
+        self._column_dropdown.addCheckableItem("VOC", False, 5)
+        self._column_dropdown.addCheckableItem("CML", False, 6)
+        self._column_dropdown.addCheckableItem("Modified", True, 7)
+        self._column_dropdown.addCheckableItem("Size", True, 8)
         self._column_dropdown.activated.connect(self._on_column_visibility_changed)
         layout.addWidget(self._column_dropdown)
 
@@ -1202,7 +1279,14 @@ class FastFileManager(QWidget):
                 # Set appropriate default sizes
                 if column_name == "Name":
                     header.resizeSection(i, 200)  # Default name column width
-                elif column_name in ["NPZ", "TXT"]:
+                elif column_name in (
+                    "NPZ",
+                    "TXT",
+                    "SEG",
+                    "COCO",
+                    "VOC",
+                    "CML",
+                ):
                     header.resizeSection(i, 50)  # Compact for checkmarks
                 elif column_name == "Modified":
                     header.resizeSection(i, 120)  # Date needs more space
@@ -1628,21 +1712,22 @@ class FastFileManager(QWidget):
 
     def _update_detailed_status(self, directory_name: str):
         """Update status label with detailed file counts"""
-        total_files, npz_count, txt_count = self._model.getFileCounts()
+        total_files, counts = self._model.getFileCounts()
 
         if total_files == 0:
             status_text = f"No files in {directory_name}"
         else:
-            # Build the status message parts
-            parts = []
-            parts.append(f"{total_files} image{'s' if total_files != 1 else ''}")
-
-            if npz_count > 0:
-                parts.append(f"{npz_count} npz")
-
-            if txt_count > 0:
-                parts.append(f"{txt_count} txt")
-
+            parts = [f"{total_files} image{'s' if total_files != 1 else ''}"]
+            for key, label in (
+                ("npz", "npz"),
+                ("txt", "txt"),
+                ("seg", "seg"),
+                ("coco", "coco"),
+                ("xml", "xml"),
+                ("createml", "cml"),
+            ):
+                if counts[key] > 0:
+                    parts.append(f"{counts[key]} {label}")
             status_text = f"{', '.join(parts)} in {directory_name}"
 
         self._status_label.setText(status_text)
@@ -1754,8 +1839,12 @@ class FastFileManager(QWidget):
             "show_name": self._column_dropdown.isItemChecked(0),
             "show_npz": self._column_dropdown.isItemChecked(1),
             "show_txt": self._column_dropdown.isItemChecked(2),
-            "show_modified": self._column_dropdown.isItemChecked(3),
-            "show_size": self._column_dropdown.isItemChecked(4),
+            "show_seg": self._column_dropdown.isItemChecked(3),
+            "show_coco": self._column_dropdown.isItemChecked(4),
+            "show_voc": self._column_dropdown.isItemChecked(5),
+            "show_cml": self._column_dropdown.isItemChecked(6),
+            "show_modified": self._column_dropdown.isItemChecked(7),
+            "show_size": self._column_dropdown.isItemChecked(8),
             "sort_order": self._current_sort_index,
         }
 
@@ -1765,15 +1854,21 @@ class FastFileManager(QWidget):
         self._column_dropdown.blockSignals(True)
         self._sort_combo.blockSignals(True)
 
-        # Set column visibility
+        # Set column visibility (with backward-compatible defaults)
         self._column_dropdown.setItemChecked(0, settings.get("show_name", True))
         self._column_dropdown.setItemChecked(1, settings.get("show_npz", True))
         self._column_dropdown.setItemChecked(2, settings.get("show_txt", True))
-        self._column_dropdown.setItemChecked(3, settings.get("show_modified", True))
-        self._column_dropdown.setItemChecked(4, settings.get("show_size", True))
+        self._column_dropdown.setItemChecked(3, settings.get("show_seg", False))
+        self._column_dropdown.setItemChecked(4, settings.get("show_coco", False))
+        self._column_dropdown.setItemChecked(5, settings.get("show_voc", False))
+        self._column_dropdown.setItemChecked(6, settings.get("show_cml", False))
+        # Migrate old indices: "show_modified" was index 3, "show_size" was index 4
+        self._column_dropdown.setItemChecked(7, settings.get("show_modified", True))
+        self._column_dropdown.setItemChecked(8, settings.get("show_size", True))
 
         # Apply to model
-        for i in range(5):
+        num_columns = len(self._model._all_columns)
+        for i in range(num_columns):
             is_checked = self._column_dropdown.isItemChecked(i)
             self._model.setColumnVisible(i, is_checked)
 

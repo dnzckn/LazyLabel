@@ -1,16 +1,22 @@
 """Settings widget for save options."""
 
+import contextlib
+
 from PyQt6.QtCore import pyqtSignal
 from PyQt6.QtWidgets import (
     QButtonGroup,
     QCheckBox,
     QGroupBox,
     QHBoxLayout,
+    QLabel,
     QPushButton,
     QRadioButton,
     QVBoxLayout,
     QWidget,
 )
+
+from ...core.exporters import DEFAULT_EXPORT_FORMATS, ExportFormat
+from .export_format_widget import ExportFormatWidget
 
 
 class SettingsWidget(QWidget):
@@ -37,36 +43,18 @@ class SettingsWidget(QWidget):
         self.chk_auto_save.setChecked(True)
         layout.addWidget(self.chk_auto_save)
 
-        # Save NPZ
-        self.chk_save_npz = QCheckBox("Save .npz")
-        self.chk_save_npz.setChecked(True)
-        self.chk_save_npz.setToolTip(
-            "Save the final mask as a compressed NumPy NPZ file."
+        # Export formats dropdown
+        export_layout = QHBoxLayout()
+        export_label = QLabel("Export Formats:")
+        export_label.setStyleSheet("font-size: 11px; color: #E0E0E0;")
+        self.export_format_widget = ExportFormatWidget()
+        self.export_format_widget.setToolTip(
+            "Select which annotation formats to save.\n"
+            "At least one format must be selected."
         )
-        layout.addWidget(self.chk_save_npz)
-
-        # Save TXT
-        self.chk_save_txt = QCheckBox("Save .txt")
-        self.chk_save_txt.setChecked(True)
-        self.chk_save_txt.setToolTip("Save bounding box annotations in TXT format.")
-        layout.addWidget(self.chk_save_txt)
-
-        # Bounding box with aliases
-        self.chk_bb_use_alias = QCheckBox("Save BBox with Class Aliases")
-        self.chk_bb_use_alias.setToolTip(
-            "If checked, saves .txt files using class alias names instead of numeric IDs.\n"
-            "This is useful when a separate config file defines the classes."
-        )
-        self.chk_bb_use_alias.setChecked(True)
-        layout.addWidget(self.chk_bb_use_alias)
-
-        # Save class aliases
-        self.chk_save_class_aliases = QCheckBox("Save Class Aliases (.json)")
-        self.chk_save_class_aliases.setToolTip(
-            "Save class aliases to a companion JSON file."
-        )
-        self.chk_save_class_aliases.setChecked(False)
-        layout.addWidget(self.chk_save_class_aliases)
+        export_layout.addWidget(export_label)
+        export_layout.addWidget(self.export_format_widget, 1)
+        layout.addLayout(export_layout)
 
         # Operate on View
         self.chk_operate_on_view = QCheckBox("Operate On View")
@@ -146,20 +134,16 @@ class SettingsWidget(QWidget):
 
     def _connect_signals(self):
         """Connect internal signals."""
-        self.chk_save_npz.stateChanged.connect(self._handle_save_checkbox_change)
-        self.chk_save_txt.stateChanged.connect(self._handle_save_checkbox_change)
-
-        # Connect all checkboxes to settings changed signal
+        # Connect checkboxes to settings changed signal
         for checkbox in [
             self.chk_auto_save,
-            self.chk_save_npz,
-            self.chk_save_txt,
-            self.chk_bb_use_alias,
-            self.chk_save_class_aliases,
             self.chk_operate_on_view,
             self.chk_pixel_priority_enabled,
         ]:
             checkbox.stateChanged.connect(self.settings_changed)
+
+        # Connect export format widget
+        self.export_format_widget.formats_changed.connect(self.settings_changed)
 
         # Connect pixel priority checkbox to enable/disable radio buttons
         self.chk_pixel_priority_enabled.stateChanged.connect(
@@ -173,18 +157,6 @@ class SettingsWidget(QWidget):
         # Connect reset button
         self.btn_reset_to_default.clicked.connect(self._handle_reset_to_default)
 
-    def _handle_save_checkbox_change(self):
-        """Ensure at least one save format is selected."""
-        is_npz_checked = self.chk_save_npz.isChecked()
-        is_txt_checked = self.chk_save_txt.isChecked()
-
-        if not is_npz_checked and not is_txt_checked:
-            sender = self.sender()
-            if sender == self.chk_save_npz:
-                self.chk_save_txt.setChecked(True)
-            else:
-                self.chk_save_npz.setChecked(True)
-
     def _on_pixel_priority_enabled_changed(self, state):
         """Enable/disable pixel priority direction radio buttons."""
         enabled = state != 0
@@ -195,10 +167,7 @@ class SettingsWidget(QWidget):
         """Get current settings as dictionary."""
         return {
             "auto_save": self.chk_auto_save.isChecked(),
-            "save_npz": self.chk_save_npz.isChecked(),
-            "save_txt": self.chk_save_txt.isChecked(),
-            "bb_use_alias": self.chk_bb_use_alias.isChecked(),
-            "save_class_aliases": self.chk_save_class_aliases.isChecked(),
+            "export_formats": self.export_format_widget.get_selected_formats(),
             "operate_on_view": self.chk_operate_on_view.isChecked(),
             "pixel_priority_enabled": self.chk_pixel_priority_enabled.isChecked(),
             "pixel_priority_ascending": self.radio_priority_ascending.isChecked(),
@@ -206,17 +175,30 @@ class SettingsWidget(QWidget):
 
     def set_settings(self, settings):
         """Set settings from dictionary."""
-        # Block signals during programmatic setting to avoid triggering settings_changed
         self.blockSignals(True)
 
         self.chk_auto_save.setChecked(settings.get("auto_save", True))
-        self.chk_save_npz.setChecked(settings.get("save_npz", True))
-        self.chk_save_txt.setChecked(settings.get("save_txt", True))
-        self.chk_bb_use_alias.setChecked(settings.get("bb_use_alias", True))
-        self.chk_save_class_aliases.setChecked(
-            settings.get("save_class_aliases", False)
-        )
         self.chk_operate_on_view.setChecked(settings.get("operate_on_view", False))
+
+        # Export formats — accept set[ExportFormat] or list[str]
+        raw = settings.get("export_formats")
+        if raw is not None:
+            if (
+                isinstance(raw, set)
+                and raw
+                and isinstance(next(iter(raw)), ExportFormat)
+            ):
+                self.export_format_widget.set_selected_formats(raw)
+            elif isinstance(raw, list | set):
+                fmts = set()
+                for v in raw:
+                    with contextlib.suppress(ValueError):
+                        fmts.add(ExportFormat(v) if isinstance(v, str) else v)
+                self.export_format_widget.set_selected_formats(
+                    fmts or DEFAULT_EXPORT_FORMATS
+                )
+        else:
+            self.export_format_widget.set_selected_formats(DEFAULT_EXPORT_FORMATS)
 
         # Pixel priority
         enabled = settings.get("pixel_priority_enabled", False)
@@ -228,17 +210,13 @@ class SettingsWidget(QWidget):
         else:
             self.radio_priority_descending.setChecked(True)
 
-        # Restore signals
         self.blockSignals(False)
 
     def _handle_reset_to_default(self):
         """Reset all settings to their default values."""
         default_settings = {
             "auto_save": True,
-            "save_npz": True,
-            "save_txt": True,
-            "bb_use_alias": True,
-            "save_class_aliases": False,
+            "export_formats": DEFAULT_EXPORT_FORMATS,
             "operate_on_view": False,
             "pixel_priority_enabled": False,
             "pixel_priority_ascending": True,

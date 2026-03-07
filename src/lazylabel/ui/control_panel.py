@@ -2,7 +2,6 @@
 
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtWidgets import (
-    QCheckBox,
     QFrame,
     QHBoxLayout,
     QLabel,
@@ -218,8 +217,6 @@ class ControlPanel(QWidget):
     # Sequence settings signals
     sequence_range_changed = pyqtSignal(int)  # Emits propagation range
     sequence_max_requested = pyqtSignal()  # Request to set range to max (folder size)
-    sequence_load_memory_requested = pyqtSignal()  # Request to preload images to memory
-    sequence_clear_cache_requested = pyqtSignal()  # Request to clear memory cache
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -772,85 +769,6 @@ class ControlPanel(QWidget):
 
         sequence_layout.addLayout(range_row)
 
-        # Include masks checkbox
-        self.chk_include_masks = QCheckBox("Include masks (NPZ files)")
-        self.chk_include_masks.setToolTip(
-            "Also preload mask data from NPZ files.\n"
-            "This uses more memory but makes editing faster."
-        )
-        self.chk_include_masks.setChecked(False)
-        sequence_layout.addWidget(self.chk_include_masks)
-
-        # Load to Memory button
-        self.btn_load_to_memory = QPushButton("Load Range to Memory")
-        self.btn_load_to_memory.setToolTip(
-            "Preload images within the range into memory.\n"
-            "This makes scrubbing fast and speeds up AI propagation."
-        )
-        self.btn_load_to_memory.setStyleSheet(
-            """
-            QPushButton {
-                background-color: rgba(60, 100, 80, 0.8);
-                border: 1px solid rgba(80, 120, 100, 0.8);
-                border-radius: 6px;
-                color: #E0E0E0;
-                font-weight: bold;
-                font-size: 11px;
-                padding: 8px 12px;
-                min-height: 24px;
-            }
-            QPushButton:hover {
-                background-color: rgba(80, 120, 100, 0.9);
-                border-color: rgba(100, 140, 120, 0.9);
-            }
-            QPushButton:pressed {
-                background-color: rgba(40, 80, 60, 0.9);
-            }
-            QPushButton:disabled {
-                background-color: rgba(60, 60, 60, 0.5);
-                border-color: rgba(80, 80, 80, 0.4);
-                color: #888;
-            }
-        """
-        )
-        sequence_layout.addWidget(self.btn_load_to_memory)
-
-        # Memory status row with clear button
-        memory_row = QHBoxLayout()
-        memory_row.setSpacing(6)
-
-        self.sequence_memory_label = QLabel("Memory: Not loaded")
-        self.sequence_memory_label.setStyleSheet(
-            "color: #888; font-size: 9px; font-style: italic;"
-        )
-        memory_row.addWidget(self.sequence_memory_label, 1)
-
-        self.btn_clear_cache = QPushButton("Clear")
-        self.btn_clear_cache.setToolTip("Clear preloaded images from memory")
-        self.btn_clear_cache.setFixedWidth(50)
-        self.btn_clear_cache.setStyleSheet(
-            """
-            QPushButton {
-                background-color: rgba(100, 60, 60, 0.8);
-                border: 1px solid rgba(120, 80, 80, 0.6);
-                border-radius: 4px;
-                color: #E0E0E0;
-                font-size: 9px;
-                padding: 2px 6px;
-            }
-            QPushButton:hover {
-                background-color: rgba(120, 80, 80, 0.9);
-                border-color: rgba(140, 100, 100, 0.8);
-            }
-            QPushButton:pressed {
-                background-color: rgba(80, 40, 40, 0.9);
-            }
-        """
-        )
-        memory_row.addWidget(self.btn_clear_cache)
-
-        sequence_layout.addLayout(memory_row)
-
         self.sequence_collapsible = SimpleCollapsible(
             "Sequence Settings", sequence_widget
         )
@@ -1034,8 +952,6 @@ class ControlPanel(QWidget):
         # Sequence settings signals
         self.sequence_range_spin.valueChanged.connect(self.sequence_range_changed)
         self.btn_sequence_max.clicked.connect(self.sequence_max_requested)
-        self.btn_load_to_memory.clicked.connect(self.sequence_load_memory_requested)
-        self.btn_clear_cache.clicked.connect(self.sequence_clear_cache_requested)
 
     def _on_sam_mode_clicked(self):
         """Handle AI mode button click."""
@@ -1325,7 +1241,6 @@ class ControlPanel(QWidget):
         # Disable all interactive elements
         self.sequence_range_spin.setEnabled(enabled)
         self.btn_sequence_max.setEnabled(enabled)
-        self.btn_load_to_memory.setEnabled(enabled)
 
         # Gray out the collapsible header when disabled
         if enabled:
@@ -1362,10 +1277,6 @@ class ControlPanel(QWidget):
         """Get the current propagation range value."""
         return self.sequence_range_spin.value()
 
-    def should_include_masks(self) -> bool:
-        """Check if masks should be included when loading to memory."""
-        return self.chk_include_masks.isChecked()
-
     def set_sequence_range(self, value: int) -> None:
         """Set the propagation range value."""
         self.sequence_range_spin.blockSignals(True)
@@ -1375,38 +1286,3 @@ class ControlPanel(QWidget):
     def set_sequence_range_max(self, max_value: int) -> None:
         """Set the maximum allowed range (e.g., folder size)."""
         self.sequence_range_spin.setMaximum(max_value)
-
-    def update_sequence_memory_status(
-        self, loaded: int, total: int, size_mb: float = 0
-    ) -> None:
-        """Update the memory status label.
-
-        Args:
-            loaded: Number of images loaded in memory
-            total: Total images in range
-            size_mb: Approximate memory size in MB
-        """
-        if loaded == 0:
-            self.sequence_memory_label.setText("Memory: Not loaded")
-            self.sequence_memory_label.setStyleSheet(
-                "color: #888; font-size: 9px; font-style: italic;"
-            )
-        else:
-            if size_mb > 0:
-                self.sequence_memory_label.setText(
-                    f"Memory: {loaded}/{total} images ({size_mb:.1f} MB)"
-                )
-            else:
-                self.sequence_memory_label.setText(f"Memory: {loaded}/{total} images")
-            self.sequence_memory_label.setStyleSheet(
-                "color: #4CAF50; font-size: 9px; font-style: italic;"
-            )
-
-    def set_load_memory_button_loading(self, is_loading: bool) -> None:
-        """Set the load to memory button to loading state."""
-        if is_loading:
-            self.btn_load_to_memory.setText("Loading...")
-            self.btn_load_to_memory.setEnabled(False)
-        else:
-            self.btn_load_to_memory.setText("Load Range to Memory")
-            self.btn_load_to_memory.setEnabled(True)

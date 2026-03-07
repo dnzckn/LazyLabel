@@ -5,6 +5,7 @@ from .annotation_settings_widget import AnnotationSettingsWidget
 from .border_crop_widget import BorderCropWidget
 from .channel_threshold_widget import ChannelThresholdWidget
 from .confidence_histogram_dialog import ConfidenceHistogramDialog
+from .export_format_widget import ExportFormatWidget
 from .fft_threshold_widget import FFTThresholdWidget
 from .fragment_threshold_widget import FragmentThresholdWidget
 from .model_selection_widget import ModelSelectionWidget
@@ -19,6 +20,7 @@ __all__ = [
     "BorderCropWidget",
     "ChannelThresholdWidget",
     "ConfidenceHistogramDialog",
+    "ExportFormatWidget",
     "FFTThresholdWidget",
     "FragmentThresholdWidget",
     "ModelSelectionWidget",

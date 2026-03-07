@@ -61,11 +61,21 @@ This manual provides detailed instructions for using LazyLabel's image segmentat
 
 ### Control Panel Tabs
 
-- **Tools** - Core segmentation modes and basic operations
-- **Adjustments** - Image enhancement controls (brightness, contrast, gamma)
-- **Filtering** - Advanced thresholding and preprocessing options
-- **Cropping** - Border crop and region selection tools
-- **Settings** - Application preferences and model selection
+The control panel uses two tabs, each containing collapsible sections:
+
+**AI Tab:**
+- **AI Model Selection** - SAM model loading and configuration
+- **AI Fragment Filter** - Minimum segment area filtering
+- **AI to Polygon Conversion** - Auto-convert AI masks to editable polygons
+- **Sequence Settings** - Propagation range for sequence mode
+- **Application Settings** - Auto-save, export formats, Operate On View, pixel priority
+
+**Tools Tab:**
+- **Border Crop** - Define regions of interest within images
+- **Channel Threshold** - Color channel-based preprocessing
+- **FFT Threshold** - Frequency-domain filtering
+- **Annotation Settings** - Point/line size, pan speed, join threshold
+- **Image Adjustments** - Brightness, contrast, gamma, saturation
 
 ---
 
@@ -75,7 +85,7 @@ This manual provides detailed instructions for using LazyLabel's image segmentat
 
 **Primary mode for AI-assisted segmentation using Meta's Segment Anything Model.**
 
-**Activation:** Press `1` or click "Point Mode" button
+**Activation:** Press `1` or click "AI" button
 
 **Usage:**
 - **Left Click** - Add positive points (include in segment)
@@ -83,6 +93,7 @@ This manual provides detailed instructions for using LazyLabel's image segmentat
 - **Space** - Save current segment
 - **Shift+Space** - Erase: remove the AI mask shape from all overlapping segments
 - **C** - Clear all points
+- **P** - Toggle auto-convert: when enabled, saved AI segments are automatically converted to editable polygons
 - **Escape** - Cancel current operation
 
 **Best Practices:**
@@ -90,12 +101,13 @@ This manual provides detailed instructions for using LazyLabel's image segmentat
 - Add negative points to exclude unwanted regions
 - Use multiple positive points for complex shapes
 - Combine with manual editing for precise boundaries
+- Enable auto-convert (`P`) when you need to edit AI segment vertices after creation
 
 ### 2. Polygon Drawing Mode
 
 **Manual polygon creation for precise boundary control.**
 
-**Activation:** Press `2` or click "Polygon Mode" button
+**Activation:** Press `2` or click "Poly" button
 
 **Usage:**
 - **Left Click** - Place polygon vertices
@@ -113,7 +125,7 @@ This manual provides detailed instructions for using LazyLabel's image segmentat
 
 **Rectangle-based segmentation for object detection tasks.**
 
-**Activation:** Press `3` or click "Bounding Box" button
+**Activation:** Press `3` or click "Box" button
 
 **Usage:**
 - **Click and Drag** - Draw bounding rectangle
@@ -138,7 +150,7 @@ This manual provides detailed instructions for using LazyLabel's image segmentat
 
 **Navigate large images efficiently.**
 
-**Activation:** Press `Q` or click "Pan Mode" button
+**Activation:** Press `Q` (keyboard only, no toolbar button)
 
 **Usage:**
 - **Click and Drag** - Pan image view
@@ -160,15 +172,19 @@ Default mode for processing individual images sequentially.
 
 ### Multi-View Mode
 
-Advanced mode for simultaneous processing of multiple images.
+Advanced mode for simultaneous processing of multiple images in a grid layout.
 
 **Activation:** Select multi-view option in settings
 
+**Grid Modes:**
+- **2 Views (1x2)** - Two images side by side
+- **4 Views (2x2)** - Four images in a grid
+
 **Features:**
 - **Synchronized Operations** - Apply tools across multiple images
-- **Batch Processing** - Efficient handling of image sequences
 - **Linked Navigation** - Coordinated movement between views
-- **Independent Editing** - Individual control when needed
+- **Independent Editing** - Unlink individual panels for independent control
+- **Per-Panel Headers** - Each panel shows the loaded filename and an unlink button
 
 ### File Operations
 
@@ -243,6 +259,7 @@ Advanced mode for simultaneous processing of multiple images.
 - **Fragment Size Control** - Minimum segment area
 - **Connectivity Analysis** - Region grouping options
 - **Noise Reduction** - Small artifact removal
+- **Quick Toggle** - Press `Z` to toggle the AI fragment filter between 0 and its last non-zero value
 
 ---
 
@@ -267,10 +284,12 @@ Visual representation of all frames in the sequence.
 - **Frame Cells** - Click to navigate to any frame
 - **Status Colors**:
   - Gray - Pending (not yet processed)
-  - Green - Reference frame (manually annotated)
-  - Blue - Propagated (mask from SAM 2)
+  - Gold/Yellow - Reference frame (manually annotated)
+  - Green - Propagated (mask from SAM 2)
   - Red - Flagged (low confidence, needs review)
-- **Current Frame** - Highlighted with yellow border
+  - Cyan - Saved (exported to disk)
+  - Brown - Skipped (dimension mismatch)
+- **Current Frame** - Blue triangle marker above the timeline
 - **Scroll Support** - Navigate long sequences
 
 #### Sequence Controls Panel
@@ -278,6 +297,7 @@ Visual representation of all frames in the sequence.
 **Reference Frames Section:**
 - **+ Add Current** - Mark current frame as reference (keyboard: `F`)
 - **+ All Before** - Add all frames before current position as references
+- **+ All Labeled** - Add all frames with existing NPZ labels as reference frames
 - **Clear All** - Remove all reference frame designations
 
 **Propagation Section:**
@@ -357,7 +377,7 @@ Visual representation of all frames in the sequence.
 
 ### Sequence Settings
 
-Access via Settings tab in control panel:
+Access via the Sequence Settings section in the AI tab:
 
 **Load to Memory:**
 - Preload sequence images for faster navigation
@@ -656,6 +676,9 @@ LazyLabel uses three distinct segment types with different capabilities:
 | Undo | `Ctrl+Z` | - | Reverse last action |
 | Redo | `Ctrl+Y` | `Ctrl+Shift+Z` | Restore undone action |
 | Cancel/Escape | `Escape` | - | Cancel current operation |
+| Toggle Auto-Convert | `P` | - | Toggle auto-convert AI segments to editable polygons |
+| Toggle Recent Class | `X` | - | Switch between the two most recent classes |
+| Toggle AI Filter | `Z` | - | Toggle AI fragment filter between 0 and last value |
 
 ### Segment Operations
 
@@ -731,10 +754,18 @@ LazyLabel uses three distinct segment types with different capabilities:
 - **Operate On View** - Control whether SAM processes adjusted or original images
 
 **Critical Setting: Operate On View**
-- **Location:** Settings tab in control panel
+- **Location:** Application Settings section in AI tab
 - **Default:** Disabled (SAM uses original images)
 - **When to Enable:** When using FFT filtering, channel thresholding, or advanced preprocessing
 - **Impact:** Allows SAM to benefit from advanced filtering and preprocessing operations
+
+**Pixel Priority Setting:**
+- **Location:** Application Settings section in AI tab
+- **Default:** Disabled
+- **Purpose:** Controls pixel ownership when multiple classes overlap in the exported mask
+- **Ascending Mode:** Lower class indices take priority over higher ones
+- **Descending Mode:** Higher class indices take priority over lower ones
+- **When to Use:** Enable when your annotations have overlapping segments from different classes and you need deterministic pixel assignment in the output
 
 **Performance Settings:**
 - **Memory Management** - Optimize for available resources

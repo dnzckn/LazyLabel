@@ -3,7 +3,7 @@ Windows Build Script for LazyLabel
 Automates the creation of a standalone Windows executable and installer.
 
 Requirements:
-    - Python 3.12+
+    - Python 3.10+
     - PyInstaller
     - NSIS (for installer creation)
 

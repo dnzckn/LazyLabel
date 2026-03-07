@@ -40,14 +40,14 @@ lazylabel-gui
 ## Core Features
 
 ### Annotation Tools
-- **AI (SAM)**: Single-click segmentation with point-based refinement (SAM 1.0 & 2.1, GPU/CPU)
+- **AI (SAM)**: Single-click segmentation with point-based refinement (SAM 1.0 & 2.1, GPU/CPU). Use negative points to subtract regions from the prediction.
 - **Polygon**: Vertex-level drawing and editing for precise boundaries
-- **Box**: Bounding box annotations for object detection
-- **Subtract**: Remove regions from existing masks
+- **Box**: Bounding box annotations for object detection. Hold Shift on release to erase with the box instead of adding.
+- **Select**: Click to select existing masks for editing, reclassing, or deletion. Hold Shift+Space to erase the overlap of a drawn segment from the selected mask.
 
 ### Annotation Modes
 - **Single View**: Fine-tune individual masks with maximum precision
-- **Multi View**: Annotate up to 4 images simultaneously—ideal for objects in similar positions with slight variations
+- **Multi View**: Annotate up to 2 images simultaneously, ideal for objects in similar positions with slight variations
 - **Sequence**: Propagate a refined mask across thousands of frames using SAM 2's video predictor
 
 ### Image Processing
@@ -60,7 +60,9 @@ lazylabel-gui
 
 ## Export Formats
 
-### One-hot encoded tensors (`.npz`)
+Select one or more formats from Settings. All formats can be loaded back into LazyLabel.
+
+### NPZ - One-hot encoded mask tensors (`.npz`)
 ```python
 import numpy as np
 
@@ -74,21 +76,17 @@ cats = mask[:, :, 2]
 dogs = mask[:, :, 3]
 ```
 
-### Bounding boxes (`.txt`)
-```
-0 0.456 0.312 0.128 0.095
-1 0.623 0.478 0.204 0.167
-```
-Each line: `class x_center y_center width height` — all values normalized to 0–1 relative to image dimensions
+### Standard Formats
 
-### Class Aliases (`.json`)
-```json
-{
-  "0": "background",
-  "1": "person",
-  "2": "vehicle"
-}
-```
+| Format | Output File | Description |
+|--------|------------|-------------|
+| YOLO Detection | `image.txt` | Bounding boxes: `class_id cx cy w h` (normalized) |
+| YOLO Segmentation | `image_seg.txt` | Polygon vertices: `class_id x1 y1 x2 y2 ...` (normalized) |
+| COCO JSON | `image_coco.json` | Per-image COCO format with polygon segmentation, bounding boxes, and area |
+| Pascal VOC | `image.xml` | XML bounding box annotations |
+| CreateML | `image_createml.json` | Apple CreateML JSON with center-based bounding boxes |
+
+**COCO supercategories:** Set a class alias to `name.supercategory` (e.g. `dog.animal`) to populate the supercategory field in COCO JSON output.
 
 ---
 
@@ -100,11 +98,11 @@ If the automatic download doesn't work, you can manually download and place the 
 
 ### SAM 1.0
 
-SAM 1.0 only requires the model weights file — no additional package installation needed.
+SAM 1.0 only requires the model weights file, no additional package installation needed.
 
 1. Download `sam_vit_h_4b8939.pth` from the [SAM repository](https://github.com/facebookresearch/segment-anything)
 2. Place in LazyLabel's models folder:
-   - Via pip: `~/.local/share/lazylabel/models/`
+   - Via pip: `<site-packages>/lazylabel/models/` (run `python -c "import lazylabel; print(lazylabel.__path__[0])"` to find it)
    - From source: `src/lazylabel/models/`
 
 ### SAM 2.1 (improved accuracy, required for Sequence mode)
@@ -114,7 +112,7 @@ SAM 2.1 requires both the `sam2` package installed and the model weights file, s
 1. Install SAM 2: `pip install git+https://github.com/facebookresearch/sam2.git`
 2. Download a model (e.g., `sam2.1_hiera_large.pt`) from the [SAM 2 repository](https://github.com/facebookresearch/sam2)
 3. Place in LazyLabel's models folder:
-   - Via pip: `~/.local/share/lazylabel/models/`
+   - Via pip: `<site-packages>/lazylabel/models/` (run `python -c "import lazylabel; print(lazylabel.__path__[0])"` to find it)
    - From source: `src/lazylabel/models/`
 
 Select the model from the dropdown in settings.

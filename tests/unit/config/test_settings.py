@@ -90,3 +90,68 @@ class TestSettings:
 
         # Other settings should remain default
         assert settings.left_panel_width == 250
+
+    def test_default_export_formats(self):
+        """Test that default export formats are NPZ and YOLO_DETECTION."""
+        settings = Settings()
+        assert settings.export_formats == ["NPZ", "YOLO_DETECTION"]
+
+    def test_legacy_migration_both_enabled(self):
+        """Test migration from save_npz/save_txt booleans to export_formats."""
+        import json
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            settings_file = Path(temp_dir) / "settings.json"
+            legacy = {
+                "save_npz": True,
+                "save_txt": True,
+                "bb_use_alias": True,
+                "save_class_aliases": False,
+                "auto_save": True,
+            }
+            with open(settings_file, "w") as f:
+                json.dump(legacy, f)
+
+            loaded = Settings.load_from_file(str(settings_file))
+            assert "NPZ" in loaded.export_formats
+            assert "YOLO_DETECTION" in loaded.export_formats
+            assert loaded.auto_save is True
+
+    def test_legacy_migration_only_npz(self):
+        """Test migration when only save_npz is True."""
+        import json
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            settings_file = Path(temp_dir) / "settings.json"
+            legacy = {"save_npz": True, "save_txt": False}
+            with open(settings_file, "w") as f:
+                json.dump(legacy, f)
+
+            loaded = Settings.load_from_file(str(settings_file))
+            assert loaded.export_formats == ["NPZ"]
+
+    def test_legacy_migration_neither_enabled(self):
+        """Test migration when both save_npz and save_txt are False defaults to NPZ."""
+        import json
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            settings_file = Path(temp_dir) / "settings.json"
+            legacy = {"save_npz": False, "save_txt": False}
+            with open(settings_file, "w") as f:
+                json.dump(legacy, f)
+
+            loaded = Settings.load_from_file(str(settings_file))
+            # Should default to NPZ when nothing selected
+            assert loaded.export_formats == ["NPZ"]
+
+    def test_new_format_roundtrip(self):
+        """Test save/load with the new export_formats field."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            settings_file = Path(temp_dir) / "settings.json"
+
+            settings = Settings()
+            settings.export_formats = ["NPZ", "COCO_JSON", "PASCAL_VOC"]
+            settings.save_to_file(str(settings_file))
+
+            loaded = Settings.load_from_file(str(settings_file))
+            assert loaded.export_formats == ["NPZ", "COCO_JSON", "PASCAL_VOC"]

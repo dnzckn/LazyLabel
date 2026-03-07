@@ -195,7 +195,6 @@ class FileNavigationManager:
                     self.mw.sam_is_dirty = True
                 else:
                     self.mw._update_sam_model_image()
-                self.file_manager.load_class_aliases(self.mw.current_image_path)
                 self.file_manager.load_existing_mask(
                     self.mw.current_image_path,
                     image_size=(pixmap.height(), pixmap.width()),
@@ -327,8 +326,7 @@ class FileNavigationManager:
             self.image_adjustment_manager.saturation,
         )
 
-        # Load existing segments and class aliases
-        self.file_manager.load_class_aliases(path)
+        # Load existing segments
         self.file_manager.load_existing_mask(
             path, image_size=(pixmap.height(), pixmap.width())
         )

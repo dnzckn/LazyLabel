@@ -66,8 +66,6 @@ class FileManagerProtocol(Protocol):
 
     def load_existing_mask(self, image_path: str) -> None: ...
 
-    def load_class_aliases(self, image_path: str) -> None: ...
-
 
 @runtime_checkable
 class ModelManagerProtocol(Protocol):

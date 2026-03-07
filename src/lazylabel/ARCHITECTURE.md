@@ -10,7 +10,7 @@ Modular MVVM architecture with PyQt6 signal-based communication between componen
 src/lazylabel/
 ├── config/                  # Configuration and Settings
 │   ├── settings.py             # Persistent application settings
-│   ├── hotkeys.py              # Customizable keyboard shortcuts (27+)
+│   ├── hotkeys.py              # Customizable keyboard shortcuts (30+)
 │   └── paths.py                # Path management utilities
 │
 ├── core/                    # Business Logic Layer
@@ -19,7 +19,15 @@ src/lazylabel/
 │   ├── model_manager.py        # SAM model lifecycle management
 │   ├── file_manager.py         # File I/O operations
 │   ├── undo_redo_manager.py    # Undo/redo state management
-│   └── protocols.py            # Protocol definitions for type hints
+│   ├── protocols.py            # Protocol definitions for type hints
+│   └── exporters/              # Pluggable export format framework
+│       ├── __init__.py            # ExportFormat enum, Exporter protocol, registry
+│       ├── npz.py                 # NPZ exporter
+│       ├── yolo_detection.py      # YOLO detection exporter
+│       ├── yolo_segmentation.py   # YOLO segmentation exporter
+│       ├── coco.py                # COCO JSON exporter
+│       ├── pascal_voc.py          # Pascal VOC exporter
+│       └── createml.py            # CreateML exporter
 │
 ├── models/                  # AI Model Integration
 │   ├── sam_model.py            # SAM 1.0 model wrapper
@@ -32,15 +40,13 @@ src/lazylabel/
 │   ├── photo_viewer.py         # Image display with adjustments
 │   │
 │   ├── handlers/               # Mouse Event Handlers
-│   │   ├── single_view_mouse_handler.py
-│   │   └── multi_view_mouse_handler.py
+│   │   └── single_view_mouse_handler.py
 │   │
 │   ├── managers/               # Specialized UI Managers (25+)
 │   │   ├── mode_manager.py
 │   │   ├── drawing_state_manager.py
-│   │   ├── multi_view_state_manager.py
+│   │   ├── multi_view_coordinator.py
 │   │   ├── segment_display_manager.py
-│   │   ├── multi_view_display_manager.py
 │   │   ├── sam_worker_manager.py
 │   │   ├── sam_single_view_manager.py
 │   │   ├── sam_multi_view_manager.py
@@ -49,13 +55,13 @@ src/lazylabel/
 │   ├── modes/                  # Mode Handler Implementations
 │   │   ├── base_mode.py            # Abstract base handler
 │   │   ├── single_view_mode.py     # Single-view operations
-│   │   ├── multi_view_mode.py      # Multi-view operations
 │   │   └── sequence_view_mode.py   # Sequence mode state management
 │   │
 │   ├── widgets/                # Reusable UI Components
 │   │   ├── status_bar.py
 │   │   ├── settings_widget.py
 │   │   ├── adjustments_widget.py
+│   │   ├── export_format_widget.py # Multi-select export format dropdown
 │   │   ├── sequence_widget.py      # Sequence mode controls
 │   │   ├── timeline_widget.py      # Frame navigation timeline
 │   │   └── ... (threshold widgets, model selection)
@@ -70,8 +76,7 @@ src/lazylabel/
 │       └── save_worker.py
 │
 ├── viewmodels/              # MVVM ViewModels
-│   ├── single_view_viewmodel.py    # Single-view state and signals
-│   └── multi_view_viewmodel.py     # Multi-view state and signals
+│   └── single_view_viewmodel.py    # Single-view state and signals
 │
 ├── utils/                   # Utilities
 │   ├── utils.py                # Helper functions
@@ -129,6 +134,57 @@ src/lazylabel/
 - Point additions, vertex moves, segment operations
 - Limited history depth for memory management
 
+### HotkeyManager
+Manages customizable keyboard shortcuts with JSON persistence.
+
+**Features:**
+- 30+ configurable hotkey actions across categories (Navigation, Modes, Actions, Segments, Classes, View, Movement, Mouse)
+- Primary and optional secondary key bindings per action
+- Mouse-related actions are read-only (cannot be reassigned)
+- Persistent storage in `hotkeys.json` within the config directory
+- Conflict detection via `is_key_in_use()`
+- Reset-to-defaults support
+- QKeySequence conversion utilities
+
+---
+
+## Export Framework
+
+Pluggable export system in `core/exporters/` supporting multiple annotation output formats.
+
+### ExportFormat Enum
+Defines the six supported export formats:
+- `NPZ` - NumPy compressed archive with masks and metadata
+- `YOLO_DETECTION` - YOLO bounding box detection format
+- `YOLO_SEGMENTATION` - YOLO polygon segmentation format
+- `COCO_JSON` - COCO-style JSON annotations
+- `PASCAL_VOC` - Pascal VOC XML format
+- `CREATEML` - Apple CreateML JSON format
+
+### ExportContext
+Dataclass bundling all data an exporter needs to write output:
+- `image_path`, `image_size` (height, width)
+- `class_order`, `class_labels`, `class_aliases`
+- `mask_tensor` - (H, W, C) uint8 array
+- `crop_coords` - optional crop region
+- `segments` - list of segment dicts
+
+### Exporter Protocol
+Every exporter implements three methods:
+- `export(ctx) -> str | None` - Write the output file, return path or None if skipped
+- `get_output_path(image_path) -> str` - Return the output path for a given image
+- `delete_output(image_path) -> bool` - Delete the output if it exists
+
+### Registry Pattern
+Exporters self-register at import time via `_register(fmt, exporter, extensions)`. The `EXPORTERS` dict maps `ExportFormat` to its `Exporter` instance. Submodules (npz, yolo_detection, yolo_segmentation, coco, pascal_voc, createml) are imported at the bottom of `__init__.py` to trigger registration.
+
+### export_all / delete_all_outputs
+- `export_all(formats, ctx)` - Runs all enabled exporters and returns a list of paths written
+- `delete_all_outputs(image_path)` - Deletes all known format outputs for a given image
+
+### ExportFormatWidget
+A `QToolButton` dropdown in `ui/widgets/export_format_widget.py` that presents a checklist of all formats. Users can toggle formats on/off, with at least one required. Emits `formats_changed` when the selection changes. Default selection: NPZ and YOLO Detection.
+
 ---
 
 ## ViewModel Layer
@@ -146,20 +202,7 @@ Owns single-view state and emits signals for reactive updates.
 - `mode_changed(old_mode, new_mode)`
 - `loading_started()`, `loading_finished()`
 
-### MultiViewViewModel
-Owns multi-view state for all viewers.
-
-**State:**
-- Images per viewer
-- Linked status per viewer
-- SAM models per viewer (with dirty, updating, ready flags)
-- Number of active viewers
-
-**Signals:**
-- `image_changed(viewer_index, path)`
-- `linked_changed(viewer_index, is_linked)`
-- `model_ready(viewer_index)`, `all_models_ready()`
-- `segment_added(viewer_index, segment_index)`
+Multi-view state is not managed by a separate ViewModel. Instead, `MultiViewCoordinator` (in `ui/managers/`) handles per-viewer state such as link status, active viewer tracking, point storage, and preview masks directly.
 
 ---
 
@@ -174,10 +217,13 @@ Owns multi-view state for all viewers.
 - AI mode state (click positions, preview masks)
 - Edit mode state (vertex dragging)
 
-**MultiViewStateManager**
-- Per-viewer segment storage
-- Per-viewer points and drawing state
-- Resizable for dynamic viewer counts
+**MultiViewCoordinator**
+- Link state between viewers (linked/unlinked)
+- Active viewer tracking
+- Per-viewer point storage (positive/negative SAM points)
+- Per-viewer preview masks and graphics items
+- Coordinated operations (clicks, saves) when linked
+- Signals: `link_state_changed`, `active_viewer_changed`
 
 **ModeManager**
 - Mode switching (AI, polygon, bbox, selection, pan, edit)
@@ -190,11 +236,7 @@ Owns multi-view state for all viewers.
 - LRU cache for segment pixmaps (500 items)
 - Color caching for class IDs
 - Highlight pixmap caching (200 items)
-
-**MultiViewDisplayManager**
-- Displays segments across multiple viewers
-- Manages selected segment highlights
-- Displays edit handles for polygon editing
+- Handles segment display for both single-view and multi-view modes
 
 **CoordinateTransformer**
 - Display to SAM coordinate transformation
@@ -228,11 +270,6 @@ Owns multi-view state for all viewers.
 **FileNavigationManager**
 - File browser operations
 - Directory scanning
-
-**MultiViewCoordinator**
-- Batch navigation across viewers
-- Previous/next image in directory
-- Multi-view operation coordination
 
 **ViewportManager**
 - Zoom and pan operations
@@ -278,23 +315,16 @@ Owns multi-view state for all viewers.
 ## Handler Architecture
 
 ### SingleViewMouseHandler
-Routes mouse events in single-view mode.
+Routes mouse events across all view modes, including single-view, multi-view, and sequence mode. In multi-view mode, it delegates release events to the appropriate viewer via MainWindow.
 
 **Responsibilities:**
 - Point-based SAM interactions (left click positive, right click negative)
 - Polygon drawing (click to add points)
 - Bounding box creation (drag to create)
-- Edit mode vertex dragging
+- AI mode with click-vs-drag detection for point or box input
+- Edit mode vertex and polygon dragging
 - Crop mode operations
-
-### MultiViewMouseHandler
-Routes mouse events in multi-view mode with linking support.
-
-**Responsibilities:**
-- Per-viewer event handling
-- Coordinate mirroring to linked viewers
-- AI operations with synchronization
-- Polygon and bbox creation with cancellation
+- Multi-view release delegation to per-viewer handlers
 
 ---
 
@@ -318,14 +348,7 @@ Implements single-view mode operations.
 - Polygon closure detection
 - Segment rendering with hover effects
 
-### MultiViewModeHandler
-Implements multi-view mode with viewer coordination.
-
-**Operations:**
-- Lazy SAM model initialization
-- Click-vs-drag detection for rect input
-- Mirroring to linked viewers
-- Segment pairing logic across views
+Multi-view coordination is handled by `MultiViewCoordinator` (in `ui/managers/`) rather than a separate mode handler. `SingleViewMouseHandler` delegates multi-view release events to per-viewer handlers on MainWindow.
 
 ---
 

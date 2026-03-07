@@ -43,7 +43,6 @@ This guide explains how to create a standalone Windows executable and installer 
 cd C:\
 git clone https://github.com/dnzckn/LazyLabel.git
 cd LazyLabel
-git checkout feature/containerize
 ```
 
 ### Step 2: Create Virtual Environment
@@ -122,7 +121,7 @@ You'll have two options:
 - Zip the folder
 - Users unzip and run LazyLabel.exe
 
-**Option 2: Distribute the installer** (installer/LazyLabel-1.3.11-Setup.exe)
+**Option 2: Distribute the installer** (installer/LazyLabel-\<version\>-Setup.exe)
 - Users double-click to install
 - More professional
 - Creates shortcuts automatically
@@ -144,7 +143,7 @@ dist/
         └── (CUDA DLLs, etc.)
 
 installer/
-└── LazyLabel-1.3.11-Setup.exe    (Windows installer ~8-9 GB)
+└── LazyLabel-<version>-Setup.exe (Windows installer ~8-9 GB)
 ```
 
 ## Troubleshooting

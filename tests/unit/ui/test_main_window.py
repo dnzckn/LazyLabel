@@ -106,7 +106,6 @@ def test_auto_save_on_image_navigation_when_enabled(main_window, qtbot):
     main_window._reset_state = MagicMock()
     main_window._update_sam_model_image = MagicMock()
     main_window._update_all_lists = MagicMock()
-    main_window.file_manager.load_class_aliases = MagicMock()
     main_window.file_manager.load_existing_mask = MagicMock()
     main_window.viewer.set_photo = MagicMock()
     main_window.viewer.set_image_adjustments = MagicMock()

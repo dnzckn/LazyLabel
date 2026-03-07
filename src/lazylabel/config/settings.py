@@ -2,7 +2,11 @@
 
 import json
 import os
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
+
+
+def _default_export_formats() -> list[str]:
+    return ["NPZ", "YOLO_DETECTION"]
 
 
 @dataclass
@@ -39,10 +43,7 @@ class Settings:
 
     # Save Settings
     auto_save: bool = True
-    save_npz: bool = True
-    save_txt: bool = True
-    save_class_aliases: bool = False
-    bb_use_alias: bool = True
+    export_formats: list[str] = field(default_factory=_default_export_formats)
 
     # UI State
     annotation_size_multiplier: float = 1.0
@@ -58,6 +59,10 @@ class Settings:
     file_manager_show_name: bool = True
     file_manager_show_npz: bool = True
     file_manager_show_txt: bool = True
+    file_manager_show_seg: bool = False
+    file_manager_show_coco: bool = False
+    file_manager_show_voc: bool = False
+    file_manager_show_cml: bool = False
     file_manager_show_modified: bool = True
     file_manager_show_size: bool = True
     file_manager_sort_order: int = 0  # 0=Name(A-Z), 1=Name(Z-A), 2=Date(Oldest), etc.
@@ -77,14 +82,46 @@ class Settings:
         try:
             with open(filepath) as f:
                 data = json.load(f)
+
+            # Migrate legacy save booleans -> export_formats list
+            data = cls._migrate_legacy_save_settings(data)
+
             return cls(**data)
         except (json.JSONDecodeError, TypeError):
             return cls()
+
+    @staticmethod
+    def _migrate_legacy_save_settings(data: dict) -> dict:
+        """Convert old save_npz/save_txt/bb_use_alias/save_class_aliases to export_formats."""
+        legacy_keys = {"save_npz", "save_txt", "bb_use_alias", "save_class_aliases"}
+        if not legacy_keys.intersection(data):
+            return data
+
+        formats: list[str] = []
+        if data.pop("save_npz", True):
+            formats.append("NPZ")
+        if data.pop("save_txt", True):
+            formats.append("YOLO_DETECTION")
+
+        # Remove remaining legacy keys that have no direct equivalent
+        data.pop("bb_use_alias", None)
+        data.pop("save_class_aliases", None)
+
+        data["export_formats"] = formats if formats else ["NPZ"]
+        return data
 
     def update(self, **kwargs) -> None:
         """Update settings with new values."""
         for key, value in kwargs.items():
             if hasattr(self, key):
+                # Ensure export_formats is always stored as list[str] for JSON serialization
+                if key == "export_formats" and isinstance(value, set):
+                    from lazylabel.core.exporters import ExportFormat
+
+                    value = sorted(
+                        f.value if isinstance(f, ExportFormat) else str(f)
+                        for f in value
+                    )
                 setattr(self, key, value)
 
 

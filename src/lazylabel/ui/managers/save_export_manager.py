@@ -1,8 +1,7 @@
 """Save and export manager for handling file output operations.
 
 This manager handles:
-- Saving segments to NPZ format
-- Saving segments to bounding box TXT format
+- Saving segments via the pluggable exporter framework
 - Multi-view output with per-viewer segment filtering
 - AI segment saving with fragment threshold filtering
 - File deletion for empty segment states
@@ -19,6 +18,12 @@ import numpy as np
 from PyQt6.QtGui import QPixmap
 from PyQt6.QtWidgets import QApplication
 
+from ...core.exporters import (
+    ExportContext,
+    ExportFormat,
+    delete_all_outputs,
+    export_all,
+)
 from ...utils.logger import logger
 
 if TYPE_CHECKING:
@@ -89,7 +94,7 @@ class SaveExportManager:
             self.save_single_view_output()
 
     def save_single_view_output(self) -> None:
-        """Save output to NPZ and TXT files for single-view mode.
+        """Save output via the exporter framework for single-view mode.
 
         Handles file creation, deletion for empty states, and UI updates.
         """
@@ -108,18 +113,18 @@ class SaveExportManager:
             logger.debug(f"Starting save process for: {self.mw.current_image_path}")
             logger.debug(f"Number of segments: {len(self.segment_manager.segments)}")
 
-            if settings.get("save_npz", True):
-                self._save_npz_file(self.mw.current_image_path, settings)
+            ctx = self._build_export_context(self.mw.current_image_path, settings)
+            formats = settings.get("export_formats", set())
+            if not isinstance(formats, set):
+                formats = {ExportFormat(f) for f in formats}
 
-            # Save TXT file if enabled
-            if settings.get("save_txt", True):
-                self._save_txt_file(self.mw.current_image_path, settings)
+            written = export_all(formats, ctx)
 
-            # Save class aliases if enabled
-            if settings.get("save_class_aliases", False):
-                self._save_class_aliases(self.mw.current_image_path)
+            if written:
+                names = ", ".join(os.path.basename(p) for p in written)
+                self.mw._show_success_notification(f"Saved: {names}")
 
-            # Update FastFileManager to show NPZ/TXT checkmarks
+            # Update FastFileManager to show checkmarks
             self._update_file_status(self.mw.current_image_path)
 
         except Exception as e:
@@ -385,6 +390,41 @@ class SaveExportManager:
 
         return viewer_segments
 
+    def _build_export_context(self, image_path: str, settings: dict) -> ExportContext:
+        """Build an ExportContext for the current single-view state."""
+        h, w = (
+            self.viewer._pixmap_item.pixmap().height(),
+            self.viewer._pixmap_item.pixmap().width(),
+        )
+        class_order = self.segment_manager.get_unique_class_ids()
+        class_labels = [
+            self.segment_manager.get_class_alias(cid) for cid in class_order
+        ]
+
+        mask_tensor = self.segment_manager.create_final_mask_tensor(
+            (h, w),
+            class_order,
+            settings.get("pixel_priority_enabled", False),
+            settings.get("pixel_priority_ascending", True),
+        )
+
+        # Apply crop if active
+        crop_coords = self.crop_manager.current_crop_coords
+        if crop_coords:
+            mask_tensor = self.file_manager._apply_crop_to_mask(
+                mask_tensor, crop_coords
+            )
+
+        return ExportContext(
+            image_path=image_path,
+            image_size=(h, w),
+            class_order=class_order,
+            class_labels=class_labels,
+            class_aliases=dict(self.segment_manager.class_aliases),
+            mask_tensor=mask_tensor,
+            crop_coords=crop_coords,
+        )
+
     def _save_viewer_output(
         self, viewer_index: int, image_path: str, saved_files: list[str]
     ) -> bool:
@@ -406,192 +446,92 @@ class SaveExportManager:
             if not pixmap.isNull():
                 h, w = pixmap.height(), pixmap.width()
             else:
-                # Fallback to loading image directly
                 temp_pixmap = QPixmap(image_path)
                 h, w = temp_pixmap.height(), temp_pixmap.width()
         else:
             return False
 
         settings = self.control_panel.get_settings()
+        formats = settings.get("export_formats", set())
+        if not isinstance(formats, set):
+            formats = {ExportFormat(f) for f in formats}
 
-        # Save NPZ if enabled and we have segments
-        if settings.get("save_npz", True) and viewer_segments:
-            self._save_multi_view_npz(
-                viewer_index, image_path, viewer_segments, h, w, settings, saved_files
+        if viewer_segments:
+            # Build a temporary segment manager to compute the mask tensor
+            from ...core.segment_manager import SegmentManager
+
+            temp_sm = SegmentManager()
+            temp_sm.class_aliases = dict(self.segment_manager.class_aliases)
+            for seg in viewer_segments:
+                temp_sm.add_segment(seg)
+
+            class_order = temp_sm.get_unique_class_ids()
+            class_labels = [temp_sm.get_class_alias(cid) for cid in class_order]
+
+            mask_tensor = temp_sm.create_final_mask_tensor(
+                (h, w),
+                class_order,
+                settings.get("pixel_priority_enabled", False),
+                settings.get("pixel_priority_ascending", True),
             )
 
-        # Save TXT if enabled and we have segments
-        if settings.get("save_txt", True) and viewer_segments:
-            self._save_multi_view_txt(
-                viewer_index, image_path, viewer_segments, h, w, settings, saved_files
+            ctx = ExportContext(
+                image_path=image_path,
+                image_size=(h, w),
+                class_order=class_order,
+                class_labels=class_labels,
+                class_aliases=dict(self.segment_manager.class_aliases),
+                mask_tensor=mask_tensor,
             )
 
-        # Save class aliases if enabled and we have segments
-        if settings.get("save_class_aliases", False) and viewer_segments:
-            self._save_multi_view_aliases(
-                viewer_index, image_path, viewer_segments, saved_files
-            )
-
-        # If no segments for this viewer, delete associated files
-        if not viewer_segments:
+            written = export_all(formats, ctx)
+            saved_files.extend(written)
+        else:
             self._delete_multi_view_files(image_path, saved_files)
 
         return bool(viewer_segments)
 
-    def _save_npz_file(self, image_path: str, settings: dict) -> str | None:
-        """Save NPZ file for single-view mode.
-
-        Args:
-            image_path: Path to the image
-            settings: Settings dictionary
-
-        Returns:
-            Path to saved NPZ file or None
-        """
-        h, w = (
-            self.viewer._pixmap_item.pixmap().height(),
-            self.viewer._pixmap_item.pixmap().width(),
-        )
-        class_order = self.segment_manager.get_unique_class_ids()
-        logger.debug(f"Class order for saving: {class_order}")
-
-        if class_order:
-            logger.debug(
-                f"Attempting to save NPZ to: {os.path.splitext(image_path)[0]}.npz"
-            )
-            npz_path = self.file_manager.save_npz(
-                image_path,
-                (h, w),
-                class_order,
-                self.crop_manager.current_crop_coords,
-                settings.get("pixel_priority_enabled", False),
-                settings.get("pixel_priority_ascending", True),
-            )
-            logger.debug(f"NPZ save completed: {npz_path}")
-            self.mw._show_success_notification(f"Saved: {os.path.basename(npz_path)}")
-            return npz_path
-        else:
-            logger.warning("No classes defined for saving")
-            self.mw._show_warning_notification("No classes defined for saving.")
-            return None
-
-    def _save_txt_file(self, image_path: str, settings: dict) -> str | None:
-        """Save TXT file for single-view mode.
-
-        Args:
-            image_path: Path to the image
-            settings: Settings dictionary
-
-        Returns:
-            Path to saved TXT file or None
-        """
-        h, w = (
-            self.viewer._pixmap_item.pixmap().height(),
-            self.viewer._pixmap_item.pixmap().width(),
-        )
-        class_order = self.segment_manager.get_unique_class_ids()
-
-        if settings.get("bb_use_alias", True):
-            class_labels = [
-                self.segment_manager.get_class_alias(cid) for cid in class_order
-            ]
-        else:
-            class_labels = [str(cid) for cid in class_order]
-
-        if class_order:
-            txt_path = self.file_manager.save_bb_txt(
-                image_path,
-                (h, w),
-                class_order,
-                class_labels,
-                self.crop_manager.current_crop_coords,
-                settings.get("pixel_priority_enabled", False),
-                settings.get("pixel_priority_ascending", True),
-            )
-            if txt_path:
-                logger.debug(f"TXT save completed: {txt_path}")
-                self.mw._show_success_notification(
-                    f"Saved: {os.path.basename(txt_path)}"
-                )
-            return txt_path
-        return None
-
-    def _save_class_aliases(self, image_path: str) -> str | None:
-        """Save class aliases file.
-
-        Args:
-            image_path: Path to the image
-
-        Returns:
-            Path to saved aliases file or None
-        """
-        aliases_path = self.file_manager.save_class_aliases(image_path)
-        if aliases_path:
-            logger.debug(f"Class aliases saved: {aliases_path}")
-            self.mw._show_success_notification(
-                f"Saved: {os.path.basename(aliases_path)}"
-            )
-        return aliases_path
-
     def _delete_associated_files(self, image_path: str) -> None:
-        """Delete associated NPZ/TXT/JSON files when no segments exist.
+        """Delete all known format outputs when no segments exist.
 
         Args:
             image_path: Path to the image
         """
-        base, _ = os.path.splitext(image_path)
-        deleted_files = []
-
-        for ext in [".npz", ".txt", ".json"]:
-            file_path = base + ext
-            if os.path.exists(file_path):
-                try:
-                    os.remove(file_path)
-                    deleted_files.append(file_path)
-                    # Update FastFileManager after file deletion
-                    if hasattr(self.mw, "right_panel") and hasattr(
-                        self.mw.right_panel, "file_manager"
-                    ):
-                        self.mw.right_panel.file_manager.updateFileStatus(
-                            Path(image_path)
-                        )
-                except Exception as e:
-                    self.mw._show_error_notification(f"Error deleting {file_path}: {e}")
+        deleted_files = delete_all_outputs(image_path)
 
         if deleted_files:
+            if hasattr(self.mw, "right_panel") and hasattr(
+                self.mw.right_panel, "file_manager"
+            ):
+                self.mw.right_panel.file_manager.updateFileStatus(Path(image_path))
             self.mw._show_notification(
                 f"Deleted: {', '.join(os.path.basename(f) for f in deleted_files)}"
             )
-            # Update UI immediately when files are deleted
             self.mw._update_all_lists()
-            # Force immediate GUI update
             QApplication.processEvents()
         else:
             self.mw._show_warning_notification("No segments to save.")
 
-    def _delete_multi_view_files(
-        self, image_path: str, saved_files: dict[str, str]
-    ) -> None:
-        """Delete associated NPZ/TXT/JSON files for a multi-view viewer when no segments exist.
+    def _delete_multi_view_files(self, image_path: str, saved_files: list[str]) -> None:
+        """Delete all known format outputs for a multi-view viewer when no segments exist.
 
         Args:
             image_path: Path to the image
-            saved_files: Dictionary tracking which files have been saved
+            saved_files: List tracking which files have been saved
         """
-        base, _ = os.path.splitext(image_path)
-        deleted_files = []
+        deleted_files = delete_all_outputs(image_path)
 
-        for ext in [".npz", ".txt", ".json"]:
-            file_path = base + ext
-            if os.path.exists(file_path):
-                try:
-                    os.remove(file_path)
-                    deleted_files.append(file_path)
-                except Exception as e:
-                    logger.error(f"Error deleting {file_path}: {e}")
+        # Also delete class aliases JSON
+        base = os.path.splitext(image_path)[0]
+        json_path = base + ".json"
+        if os.path.exists(json_path):
+            try:
+                os.remove(json_path)
+                deleted_files.append(json_path)
+            except Exception as e:
+                logger.error(f"Error deleting {json_path}: {e}")
 
         if deleted_files:
-            # Update file manager to reflect the change
             self._update_file_status(image_path)
             logger.debug(
                 f"Deleted multi-view files: {', '.join(os.path.basename(f) for f in deleted_files)}"
