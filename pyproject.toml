@@ -10,11 +10,10 @@ authors = [
 ]
 description = "An image segmentation GUI for generating ML ready mask tensors and annotations."
 readme = "README.md"
-license = { file="LICENSE" }
+license = "MIT"
 requires-python = ">=3.10"
 classifiers = [
     "Programming Language :: Python :: 3",
-    "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
     "Topic :: Scientific/Engineering :: Image Processing",
     "Environment :: X11 Applications :: Qt",
