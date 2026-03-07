@@ -627,7 +627,7 @@ class MainWindow(QMainWindow):
         self.image_adjustment_manager = ImageAdjustmentManager(self)
 
         version = self._get_version()
-        self.setWindowTitle(f"LazyLabel by DNC (version {version})")
+        self.setWindowTitle(f"LazyLabel by Deniz N. Cakan (version {version})")
         self.setGeometry(
             50, 50, self.settings.window_width, self.settings.window_height
         )
