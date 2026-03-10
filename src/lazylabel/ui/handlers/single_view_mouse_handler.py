@@ -75,7 +75,7 @@ class SingleViewMouseHandler:
 
         # Allow vertex handles to process their own mouse events
         if is_handle_click:
-            self.mw._original_mouse_press(event)
+            self.mw._get_original_mouse_press()(event)
             return
 
         if self.mode == "edit" and event.button() == Qt.MouseButton.LeftButton:
@@ -96,7 +96,7 @@ class SingleViewMouseHandler:
                 return
 
         # Call the original scene handler
-        self.mw._original_mouse_press(event)
+        self.mw._get_original_mouse_press()(event)
 
         if self.mw.is_dragging_polygon:
             return
@@ -183,7 +183,7 @@ class SingleViewMouseHandler:
             event.accept()
             return
 
-        self.mw._original_mouse_move(event)
+        self.mw._get_original_mouse_move()(event)
 
         # Handle bbox mode drag
         if self.mode == "bbox" and self.mw.rubber_band_rect and self.mw.drag_start_pos:
@@ -269,7 +269,7 @@ class SingleViewMouseHandler:
         ):
             return
 
-        self.mw._original_mouse_release(event)
+        self.mw._get_original_mouse_release()(event)
 
     def _handle_edit_drag_release(self, event: QGraphicsSceneMouseEvent) -> None:
         """Handle polygon drag release in edit mode."""

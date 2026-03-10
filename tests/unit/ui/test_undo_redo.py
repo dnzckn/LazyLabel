@@ -253,6 +253,168 @@ class TestUndoRedo:
         undo_redo.redo()
         mock_main_window._show_notification.assert_called_once_with("Nothing to redo.")
 
+    # --- Bug fix: undo beyond empty state (out-of-bounds segment) ---
+
+    def test_undo_add_segment_out_of_bounds(self, mock_main_window):
+        """Test that undoing add_segment with out-of-bounds index is handled gracefully.
+
+        Regression test: undoing past the last segment used to corrupt state by
+        leaving an invalid action in redo_history, which caused phantom classes.
+        """
+        undo_redo = mock_main_window.undo_redo_manager
+        # Segment index 5 but no segments exist
+        undo_redo.action_history = [{"type": "add_segment", "segment_index": 5}]
+        undo_redo.redo_history = []
+        mock_main_window.segment_manager.segments = []
+
+        undo_redo.undo()
+
+        # Redo history should be cleaned up (invalid action removed)
+        assert len(undo_redo.redo_history) == 0
+        assert len(undo_redo.action_history) == 0
+        mock_main_window._show_warning_notification.assert_called_once_with(
+            "Cannot undo: Segment no longer exists"
+        )
+
+    def test_undo_add_segment_none_index(self, mock_main_window):
+        """Test that undoing add_segment with None segment_index is handled gracefully."""
+        undo_redo = mock_main_window.undo_redo_manager
+        undo_redo.action_history = [{"type": "add_segment"}]  # Missing segment_index
+        undo_redo.redo_history = []
+        mock_main_window.segment_manager.segments = []
+
+        undo_redo.undo()
+
+        assert len(undo_redo.redo_history) == 0
+        assert len(undo_redo.action_history) == 0
+        mock_main_window._show_warning_notification.assert_called_once_with(
+            "Cannot undo: Missing segment index"
+        )
+
+    def test_undo_move_polygon_out_of_bounds(self, mock_main_window):
+        """Test that undoing move_polygon with out-of-bounds segment is handled gracefully."""
+        undo_redo = mock_main_window.undo_redo_manager
+        undo_redo.action_history = [
+            {
+                "type": "move_polygon",
+                "initial_vertices": {5: [[10, 10], [20, 20]]},
+                "final_vertices": {5: [[15, 15], [25, 25]]},
+            }
+        ]
+        undo_redo.redo_history = []
+        mock_main_window.segment_manager.segments = []  # No segments
+
+        undo_redo.undo()
+
+        assert len(undo_redo.redo_history) == 0
+        assert len(undo_redo.action_history) == 0
+        mock_main_window._show_warning_notification.assert_called_once_with(
+            "Cannot undo: Segment no longer exists"
+        )
+
+    def test_undo_move_polygon_missing_data(self, mock_main_window):
+        """Test that undoing move_polygon with missing initial_vertices is handled."""
+        undo_redo = mock_main_window.undo_redo_manager
+        undo_redo.action_history = [
+            {"type": "move_polygon"}  # Missing initial_vertices
+        ]
+        undo_redo.redo_history = []
+
+        undo_redo.undo()
+
+        assert len(undo_redo.redo_history) == 0
+        assert len(undo_redo.action_history) == 0
+        mock_main_window._show_warning_notification.assert_called_once_with(
+            "Cannot undo: Missing polygon data"
+        )
+
+    def test_undo_does_not_corrupt_redo_on_failure(self, mock_main_window):
+        """Test that a failed undo doesn't leave corrupted actions in redo history.
+
+        Regression test: the undo() method pushes to redo_history before executing
+        the handler. If the handler fails, the corrupted action must be removed
+        from redo_history to prevent phantom state on subsequent redo calls.
+        """
+        undo_redo = mock_main_window.undo_redo_manager
+        # Two valid actions followed by one that will fail
+        undo_redo.action_history = [
+            {"type": "add_segment", "segment_index": 0},
+            {"type": "add_segment", "segment_index": 99},  # Will fail
+        ]
+        undo_redo.redo_history = []
+        mock_main_window.segment_manager.segments = [
+            {"type": "Polygon", "vertices": []}
+        ]
+
+        # Undo the invalid one (index 99, popped last)
+        undo_redo.undo()
+
+        # Invalid action cleaned from redo
+        assert len(undo_redo.redo_history) == 0
+        # Valid action still in history
+        assert len(undo_redo.action_history) == 1
+        assert undo_redo.action_history[0]["segment_index"] == 0
+
+    # --- Bug fix: vertex dragging in sequence mode (mouse handler routing) ---
+
+    def test_get_original_mouse_press_single_mode(self, mock_main_window):
+        """Test that _get_original_mouse_press returns single-view handler in single mode."""
+        mock_main_window.view_mode = "single"
+        single_handler = MagicMock(name="single_press")
+        mock_main_window._original_mouse_press = single_handler
+
+        result = mock_main_window._get_original_mouse_press()
+        assert result is single_handler
+
+    def test_get_original_mouse_press_sequence_mode(self, mock_main_window):
+        """Test that _get_original_mouse_press returns sequence handler in sequence mode.
+
+        Regression test: vertex dragging was broken in sequence mode because
+        the mouse handler always used the single-view original handler,
+        which pointed to the wrong scene.
+        """
+        mock_main_window.view_mode = "sequence"
+        single_handler = MagicMock(name="single_press")
+        seq_handler = MagicMock(name="seq_press")
+        mock_main_window._original_mouse_press = single_handler
+        mock_main_window._seq_original_mouse_press = seq_handler
+
+        result = mock_main_window._get_original_mouse_press()
+        assert result is seq_handler
+        assert result is not single_handler
+
+    def test_get_original_mouse_move_sequence_mode(self, mock_main_window):
+        """Test that _get_original_mouse_move returns sequence handler in sequence mode."""
+        mock_main_window.view_mode = "sequence"
+        single_handler = MagicMock(name="single_move")
+        seq_handler = MagicMock(name="seq_move")
+        mock_main_window._original_mouse_move = single_handler
+        mock_main_window._seq_original_mouse_move = seq_handler
+
+        result = mock_main_window._get_original_mouse_move()
+        assert result is seq_handler
+
+    def test_get_original_mouse_release_sequence_mode(self, mock_main_window):
+        """Test that _get_original_mouse_release returns sequence handler in sequence mode."""
+        mock_main_window.view_mode = "sequence"
+        single_handler = MagicMock(name="single_release")
+        seq_handler = MagicMock(name="seq_release")
+        mock_main_window._original_mouse_release = single_handler
+        mock_main_window._seq_original_mouse_release = seq_handler
+
+        result = mock_main_window._get_original_mouse_release()
+        assert result is seq_handler
+
+    def test_get_original_mouse_press_sequence_mode_fallback(self, mock_main_window):
+        """Test fallback to single handler when sequence handler doesn't exist."""
+        mock_main_window.view_mode = "sequence"
+        single_handler = MagicMock(name="single_press")
+        mock_main_window._original_mouse_press = single_handler
+        # Don't set _seq_original_mouse_press — simulates sequence viewer not yet set up
+
+        result = mock_main_window._get_original_mouse_press()
+        assert result is single_handler
+
     def test_reset_state_clears_histories(self, mock_main_window):
         """Test that reset_state clears both action and redo histories."""
         # Setup

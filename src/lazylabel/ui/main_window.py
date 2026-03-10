@@ -1088,6 +1088,26 @@ class MainWindow(QMainWindow):
         self.sequence_viewer.scene().mouseMoveEvent = self._scene_mouse_move
         self.sequence_viewer.scene().mouseReleaseEvent = self._scene_mouse_release
 
+    def _get_original_mouse_press(self):
+        """Get the original mouse press handler for the currently active viewer."""
+        if self.view_mode == "sequence" and hasattr(self, "_seq_original_mouse_press"):
+            return self._seq_original_mouse_press
+        return self._original_mouse_press
+
+    def _get_original_mouse_move(self):
+        """Get the original mouse move handler for the currently active viewer."""
+        if self.view_mode == "sequence" and hasattr(self, "_seq_original_mouse_move"):
+            return self._seq_original_mouse_move
+        return self._original_mouse_move
+
+    def _get_original_mouse_release(self):
+        """Get the original mouse release handler for the currently active viewer."""
+        if self.view_mode == "sequence" and hasattr(
+            self, "_seq_original_mouse_release"
+        ):
+            return self._seq_original_mouse_release
+        return self._original_mouse_release
+
     # Mode management methods
     def set_sam_mode(self):
         """Set mode to AI (combines SAM points and bounding box)."""

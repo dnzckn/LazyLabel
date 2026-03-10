@@ -135,13 +135,16 @@ class UndoRedoManager(QObject):
         viewer_mode = action.get("viewer_mode", "single")
         viewer_index = action.get("viewer_index")
 
+        if segment_index is None:
+            mw._show_warning_notification("Cannot undo: Missing segment index")
+            self.redo_history.pop()
+            return
+
         if viewer_mode == "multi" and viewer_index is not None:
             # Multi-view mode
             if hasattr(mw, "multi_view_segment_managers"):
                 segment_manager = mw.multi_view_segment_managers[viewer_index]
-                if segment_index is not None and 0 <= segment_index < len(
-                    segment_manager.segments
-                ):
+                if 0 <= segment_index < len(segment_manager.segments):
                     action["segment_data"] = segment_manager.segments[
                         segment_index
                     ].copy()
@@ -149,11 +152,14 @@ class UndoRedoManager(QObject):
                     mw._update_multi_view_segment_table(viewer_index)
                     mw._display_multi_view_segments(viewer_index)
                     mw._show_notification("Undid: Add Segment")
+                else:
+                    mw._show_warning_notification(
+                        "Cannot undo: Segment no longer exists"
+                    )
+                    self.redo_history.pop()
         else:
             # Single-view mode
-            if segment_index is not None and 0 <= segment_index < len(
-                mw.segment_manager.segments
-            ):
+            if 0 <= segment_index < len(mw.segment_manager.segments):
                 # Store the segment data for redo
                 action["segment_data"] = mw.segment_manager.segments[
                     segment_index
@@ -166,6 +172,9 @@ class UndoRedoManager(QObject):
                 # Use incremental update with cache shifting for performance
                 mw._update_lists_incremental(removed_indices=[segment_index])
                 mw._show_notification("Undid: Add Segment")
+            else:
+                mw._show_warning_notification("Cannot undo: Segment no longer exists")
+                self.redo_history.pop()
 
     def _undo_add_point(self, action: dict) -> None:
         """Undo adding a point."""
@@ -275,7 +284,16 @@ class UndoRedoManager(QObject):
         mw = self.main_window
         initial_vertices = action.get("initial_vertices")
 
+        if not initial_vertices:
+            mw._show_warning_notification("Cannot undo: Missing polygon data")
+            self.redo_history.pop()
+            return
+
         for i, vertices in initial_vertices.items():
+            if i >= len(mw.segment_manager.segments):
+                mw._show_warning_notification("Cannot undo: Segment no longer exists")
+                self.redo_history.pop()
+                return
             mw.segment_manager.segments[i]["vertices"] = [
                 [p[0], p[1]] for p in vertices
             ]
