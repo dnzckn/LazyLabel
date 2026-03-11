@@ -78,6 +78,12 @@ class SequenceWidget(QWidget):
     confidence_threshold_changed = pyqtSignal(float)  # threshold value 0.0-1.0
     show_histogram_requested = pyqtSignal()
 
+    # Signals - Smart Select
+    find_references_requested = pyqtSignal()
+    next_suggested_requested = pyqtSignal()
+    prev_suggested_requested = pyqtSignal()
+    clear_suggested_requested = pyqtSignal()
+
     # Signals - Trim
     set_trim_left_requested = pyqtSignal()
     set_trim_right_requested = pyqtSignal()
@@ -93,6 +99,8 @@ class SequenceWidget(QWidget):
         self._flagged_count = 0
         self._propagated_count = 0
         self._is_propagating = False
+        self._is_finding_references = False
+        self._suggested_count = 0
         self._timeline_built = False
         self._start_frame_name: str | None = None
         self._end_frame_name: str | None = None
@@ -241,6 +249,29 @@ class SequenceWidget(QWidget):
 
         ref_layout.addLayout(ref_btn_layout2)
 
+        # Smart Select row
+        smart_select_layout = QHBoxLayout()
+        self.find_references_btn = QPushButton("Find Archetypes")
+        self.find_references_btn.setToolTip(
+            "Embed all frames with MobileNetV3, cluster with HDBSCAN,\n"
+            "and highlight the most representative frames to label"
+        )
+        self.find_references_btn.setStyleSheet(
+            "QPushButton { background-color: #9C27B0; color: white;"
+            " font-weight: bold; }"
+            "QPushButton:hover { background-color: #AB47BC; }"
+        )
+        self.find_references_btn.clicked.connect(self._on_find_references)
+        smart_select_layout.addWidget(self.find_references_btn)
+
+        self.clear_suggested_btn = QPushButton("Clear Suggested")
+        self.clear_suggested_btn.setToolTip("Clear AI-suggested reference highlights")
+        self.clear_suggested_btn.clicked.connect(self.clear_suggested_requested.emit)
+        self.clear_suggested_btn.setEnabled(False)
+        smart_select_layout.addWidget(self.clear_suggested_btn)
+
+        ref_layout.addLayout(smart_select_layout)
+
         layout.addWidget(self.ref_group)
 
         # Propagation Section (hidden until timeline is built)
@@ -333,6 +364,30 @@ class SequenceWidget(QWidget):
         review_layout = QVBoxLayout(self.review_group)
         review_layout.setContentsMargins(6, 8, 6, 6)
         review_layout.setSpacing(4)
+
+        # Suggested reference navigation
+        suggested_info_layout = QHBoxLayout()
+        suggested_info_layout.addWidget(QLabel("Suggested refs:"))
+        self.suggested_label = QLabel("0")
+        self.suggested_label.setStyleSheet("font-weight: bold; color: #9C27B0;")
+        suggested_info_layout.addWidget(self.suggested_label)
+        suggested_info_layout.addStretch()
+        review_layout.addLayout(suggested_info_layout)
+
+        suggested_nav_layout = QHBoxLayout()
+        self.prev_suggested_btn = QPushButton("\u2190 Prev Suggested")
+        self.prev_suggested_btn.setToolTip("Go to previous suggested reference frame")
+        self.prev_suggested_btn.clicked.connect(self.prev_suggested_requested.emit)
+        self.prev_suggested_btn.setEnabled(False)
+        suggested_nav_layout.addWidget(self.prev_suggested_btn)
+
+        self.next_suggested_btn = QPushButton("Next Suggested \u2192")
+        self.next_suggested_btn.setToolTip("Go to next suggested reference frame")
+        self.next_suggested_btn.clicked.connect(self.next_suggested_requested.emit)
+        self.next_suggested_btn.setEnabled(False)
+        suggested_nav_layout.addWidget(self.next_suggested_btn)
+
+        review_layout.addLayout(suggested_nav_layout)
 
         # Flagged count
         flagged_layout = QHBoxLayout()
@@ -463,6 +518,43 @@ class SequenceWidget(QWidget):
         # Initial state - hide propagation controls until timeline is built
         self._update_button_states()
         self._update_timeline_visibility()
+
+    def _on_find_references(self) -> None:
+        """Handle Find References button click — start or abort."""
+        if self._is_finding_references:
+            # Already running — treat as abort (handled by main_window)
+            self.find_references_requested.emit()
+            return
+        self.find_references_requested.emit()
+
+    def start_finding_references(self) -> None:
+        """Enter finding-references state — button becomes abort trigger."""
+        self._is_finding_references = True
+        self.find_references_btn.setText("Abort")
+        self.find_references_btn.setStyleSheet(
+            "QPushButton { background-color: #F44336; color: white;"
+            " font-weight: bold; }"
+        )
+        self.find_references_btn.repaint()
+
+    def end_finding_references(self) -> None:
+        """Exit finding-references state — restore button."""
+        self._is_finding_references = False
+        self.find_references_btn.setText("Find Archetypes")
+        self.find_references_btn.setStyleSheet(
+            "QPushButton { background-color: #9C27B0; color: white;"
+            " font-weight: bold; }"
+            "QPushButton:hover { background-color: #AB47BC; }"
+        )
+
+    def set_suggested_count(self, count: int) -> None:
+        """Update suggested reference count and button states."""
+        self._suggested_count = count
+        self.suggested_label.setText(str(count))
+        has_suggested = count > 0
+        self.prev_suggested_btn.setEnabled(has_suggested)
+        self.next_suggested_btn.setEnabled(has_suggested)
+        self.clear_suggested_btn.setEnabled(has_suggested)
 
     def _request_propagate(self) -> None:
         """Request propagation, or abort if already propagating."""
@@ -610,6 +702,8 @@ class SequenceWidget(QWidget):
         self._reference_frames.clear()
         self._flagged_count = 0
         self._is_propagating = False
+        self._is_finding_references = False
+        self._suggested_count = 0
         self._timeline_built = False
         self._start_frame_name = None
         self._end_frame_name = None
@@ -617,10 +711,13 @@ class SequenceWidget(QWidget):
         self._trim_right_name = None
         self.reference_label.setText("None")
         self.flagged_label.setText("0")
+        self.suggested_label.setText("0")
         self.start_label.setText("Not set")
         self.end_label.setText("Not set")
         self.trim_left_label.setText("Not set")
         self.trim_right_label.setText("Not set")
+        self.end_finding_references()
+        self.set_suggested_count(0)
         self._update_button_states()
         self._update_timeline_visibility()
         self._update_range_button_states()

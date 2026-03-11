@@ -21,6 +21,7 @@ from .widgets import (
     FFTThresholdWidget,
     FragmentThresholdWidget,
     ModelSelectionWidget,
+    RescaleWidget,
     SettingsWidget,
     ShortcutSpinBox,
 )
@@ -208,6 +209,11 @@ class ControlPanel(QWidget):
     channel_threshold_changed = pyqtSignal()
     channel_threshold_drag_started = pyqtSignal()
     channel_threshold_drag_finished = pyqtSignal()
+    # Rescale signals
+    rescale_changed = pyqtSignal()
+    rescale_drag_started = pyqtSignal()
+    rescale_drag_finished = pyqtSignal()
+    rescale_histogram_requested = pyqtSignal()
     # FFT threshold signals
     fft_threshold_changed = pyqtSignal()
     # AI segment auto-conversion signals
@@ -235,6 +241,7 @@ class ControlPanel(QWidget):
         self.model_widget = ModelSelectionWidget()
         self.crop_widget = BorderCropWidget()
         self.channel_threshold_widget = ChannelThresholdWidget()
+        self.rescale_widget = RescaleWidget()
         self.fft_threshold_widget = FFTThresholdWidget()
         self.settings_widget = SettingsWidget()
         self.annotation_settings_widget = AnnotationSettingsWidget()
@@ -833,6 +840,11 @@ class ControlPanel(QWidget):
         crop_collapsible = SimpleCollapsible("Border Crop", self.crop_widget)
         layout.addWidget(crop_collapsible)
 
+        # Rescale - collapsible (default collapsed, only for grayscale)
+        self.rescale_collapsible = SimpleCollapsible("Rescale", self.rescale_widget)
+        self.rescale_collapsible.set_collapsed(True)
+        layout.addWidget(self.rescale_collapsible)
+
         # Channel Threshold - collapsible
         self.channel_threshold_collapsible = SimpleCollapsible(
             "Channel Threshold", self.channel_threshold_widget
@@ -934,6 +946,12 @@ class ControlPanel(QWidget):
         self.channel_threshold_widget.dragFinished.connect(
             self.channel_threshold_drag_finished
         )
+
+        # Rescale signals
+        self.rescale_widget.rescaleChanged.connect(self.rescale_changed)
+        self.rescale_widget.dragStarted.connect(self.rescale_drag_started)
+        self.rescale_widget.dragFinished.connect(self.rescale_drag_finished)
+        self.rescale_widget.histogramRequested.connect(self.rescale_histogram_requested)
 
         # FFT threshold signals
         self.fft_threshold_widget.fft_threshold_changed.connect(
@@ -1149,6 +1167,19 @@ class ControlPanel(QWidget):
     def get_channel_threshold_widget(self):
         """Get the channel threshold widget."""
         return self.channel_threshold_widget
+
+    # Rescale delegate methods
+    def update_rescale_for_image(self, image_array, crop_coords=None):
+        """Update rescale widget for new image."""
+        self.rescale_widget.update_for_image(image_array, crop_coords)
+        # Auto-expand for grayscale, collapse for RGB
+        if hasattr(self, "rescale_collapsible"):
+            is_gray = image_array is not None and len(image_array.shape) == 2
+            self.rescale_collapsible.set_collapsed(not is_gray)
+
+    def get_rescale_widget(self):
+        """Get the rescale widget."""
+        return self.rescale_widget
 
     # FFT threshold delegate methods
     def update_fft_threshold_for_image(self, image_array):

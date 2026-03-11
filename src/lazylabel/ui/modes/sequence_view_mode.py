@@ -26,6 +26,7 @@ class FrameStatus(Enum):
     FLAGGED = "flagged"  # Low confidence, needs review
     SAVED = "saved"  # Saved to disk (NPZ)
     SKIPPED = "skipped"  # Skipped due to dimension mismatch
+    SUGGESTED = "suggested"  # AI-suggested reference frame
 
 
 @dataclass
@@ -82,6 +83,9 @@ class SequenceViewMode(QObject):
         self._reference_dimensions: tuple[int, int] | None = None  # (height, width)
         self._skipped_frame_indices: set[int] = set()
 
+        # Suggested reference frames (from Find Archetypes)
+        self._suggested_frames: list[int] = []
+
         # Configuration
         self._confidence_threshold: float = 0.99
 
@@ -128,6 +132,7 @@ class SequenceViewMode(QObject):
         self._frame_statuses.clear()
         self._propagated_masks.clear()
         self._confidence_scores.clear()
+        self._suggested_frames = []
         self._reference_dimensions = None
         self._skipped_frame_indices = set()
 
@@ -427,6 +432,61 @@ class SequenceViewMode(QObject):
         # Wrap around
         return flagged[0] if flagged else None
 
+    # --- Suggested reference frames ---
+
+    def set_suggested_frames(self, indices: list[int]) -> None:
+        """Set AI-suggested reference frames.
+
+        Only marks frames as SUGGESTED if their current status is PENDING.
+        Does not overwrite REFERENCE, PROPAGATED, SAVED, etc.
+
+        Args:
+            indices: Sorted list of suggested frame indices (0-indexed)
+        """
+        self._suggested_frames = sorted(indices)
+        with self._lock:
+            for idx in self._suggested_frames:
+                if self._frame_statuses.get(idx) == FrameStatus.PENDING:
+                    self._frame_statuses[idx] = FrameStatus.SUGGESTED
+                    self.frame_status_changed.emit(idx, FrameStatus.SUGGESTED.value)
+
+    def clear_suggested_frames(self) -> None:
+        """Clear all suggested reference frame highlights."""
+        with self._lock:
+            for idx in self._suggested_frames:
+                if self._frame_statuses.get(idx) == FrameStatus.SUGGESTED:
+                    self._frame_statuses[idx] = FrameStatus.PENDING
+                    self.frame_status_changed.emit(idx, FrameStatus.PENDING.value)
+        self._suggested_frames = []
+
+    def get_suggested_frames(self) -> list[int]:
+        """Get list of suggested reference frame indices."""
+        return list(self._suggested_frames)
+
+    def next_suggested_frame(self) -> int | None:
+        """Get next suggested frame after current position.
+
+        Returns:
+            Frame index or None if no more suggested frames
+        """
+        for idx in self._suggested_frames:
+            if idx > self._current_frame_idx:
+                return idx
+        # Wrap around
+        return self._suggested_frames[0] if self._suggested_frames else None
+
+    def prev_suggested_frame(self) -> int | None:
+        """Get previous suggested frame before current position.
+
+        Returns:
+            Frame index or None if no suggested frames
+        """
+        for idx in reversed(self._suggested_frames):
+            if idx < self._current_frame_idx:
+                return idx
+        # Wrap around
+        return self._suggested_frames[-1] if self._suggested_frames else None
+
     def set_confidence_threshold(self, threshold: float) -> None:
         """Set confidence threshold for auto-flagging."""
         self._confidence_threshold = max(0.0, min(1.0, threshold))
@@ -539,6 +599,9 @@ class SequenceViewMode(QObject):
         path_skipped = {
             self._image_paths[i] for i in self._skipped_frame_indices if i < total
         }
+        path_suggested = {
+            self._image_paths[i] for i in self._suggested_frames if i < total
+        }
 
         # Remember current frame's path before trimming
         current_path = self._image_paths[self._current_frame_idx]
@@ -575,6 +638,11 @@ class SequenceViewMode(QObject):
             for new_idx, path in enumerate(self._image_paths)
             if path in path_skipped
         }
+        self._suggested_frames = sorted(
+            new_idx
+            for new_idx, path in enumerate(self._image_paths)
+            if path in path_suggested
+        )
 
         # Adjust current frame index
         if current_path in self._image_paths:

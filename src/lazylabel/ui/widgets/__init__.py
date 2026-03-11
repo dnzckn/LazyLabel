@@ -9,6 +9,8 @@ from .export_format_widget import ExportFormatWidget
 from .fft_threshold_widget import FFTThresholdWidget
 from .fragment_threshold_widget import FragmentThresholdWidget
 from .model_selection_widget import ModelSelectionWidget
+from .rescale_histogram_dialog import RescaleHistogramDialog
+from .rescale_widget import RescaleWidget
 from .sequence_widget import SequenceWidget, ShortcutDoubleSpinBox, ShortcutSpinBox
 from .settings_widget import SettingsWidget
 from .status_bar import StatusBar
@@ -24,6 +26,8 @@ __all__ = [
     "FFTThresholdWidget",
     "FragmentThresholdWidget",
     "ModelSelectionWidget",
+    "RescaleHistogramDialog",
+    "RescaleWidget",
     "SequenceWidget",
     "SettingsWidget",
     "ShortcutDoubleSpinBox",

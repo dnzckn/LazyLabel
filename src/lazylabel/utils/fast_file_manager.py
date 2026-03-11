@@ -308,11 +308,11 @@ class FastFileModel(QAbstractTableModel):
         self._all_columns = [
             "Name",
             "NPZ",
-            "TXT",
-            "SEG",
+            "YOLO Det",
+            "YOLO Seg",
             "COCO",
             "VOC",
-            "CML",
+            "CreateML",
             "Modified",
             "Size",
         ]
@@ -479,11 +479,11 @@ class FastFileModel(QAbstractTableModel):
 
         _STATUS_COLUMNS = {
             "NPZ": "has_npz",
-            "TXT": "has_txt",
-            "SEG": "has_seg_txt",
+            "YOLO Det": "has_txt",
+            "YOLO Seg": "has_seg_txt",
             "COCO": "has_coco_json",
             "VOC": "has_xml",
-            "CML": "has_createml_json",
+            "CreateML": "has_createml_json",
         }
 
         if role == Qt.ItemDataRole.DisplayRole:
@@ -518,11 +518,11 @@ class FastFileModel(QAbstractTableModel):
             return file_info
         elif role == Qt.ItemDataRole.TextAlignmentRole and column_name in (
             "NPZ",
-            "TXT",
-            "SEG",
+            "YOLO Det",
+            "YOLO Seg",
             "COCO",
             "VOC",
-            "CML",
+            "CreateML",
         ):
             return Qt.AlignmentFlag.AlignCenter
         elif role == Qt.ItemDataRole.BackgroundRole:
@@ -889,15 +889,15 @@ class FileSortProxyModel(QSortFilterProxyModel):
             return left_info.modified < right_info.modified
         elif column_name == "NPZ":
             return left_info.has_npz < right_info.has_npz
-        elif column_name == "TXT":
+        elif column_name == "YOLO Det":
             return left_info.has_txt < right_info.has_txt
-        elif column_name == "SEG":
+        elif column_name == "YOLO Seg":
             return left_info.has_seg_txt < right_info.has_seg_txt
         elif column_name == "COCO":
             return left_info.has_coco_json < right_info.has_coco_json
         elif column_name == "VOC":
             return left_info.has_xml < right_info.has_xml
-        elif column_name == "CML":
+        elif column_name == "CreateML":
             return left_info.has_createml_json < right_info.has_createml_json
 
         return False
@@ -928,6 +928,91 @@ class FileTableView(QTableView):
         elif pos.y() > rect.bottom() - self.scroll_margin:
             self.verticalScrollBar().setValue(self.verticalScrollBar().value() + 1)
         super().dragMoveEvent(event)
+
+
+class FooterModel(QAbstractTableModel):
+    """Single-row model displaying aggregate image/annotation counts."""
+
+    _ATTR_MAP = {
+        "NPZ": "has_npz",
+        "YOLO Det": "has_txt",
+        "YOLO Seg": "has_seg_txt",
+        "COCO": "has_coco_json",
+        "VOC": "has_xml",
+        "CreateML": "has_createml_json",
+    }
+
+    def __init__(self, source_model: FastFileModel):
+        super().__init__()
+        self._source = source_model
+        self._dir_name = ""
+        self._total = 0
+        self._counts: dict[str, int] = {}
+        self._status_override: str | None = "No folder selected"
+
+    def rowCount(self, parent=QModelIndex()):
+        return 1
+
+    def columnCount(self, parent=QModelIndex()):
+        return self._source.columnCount()
+
+    def data(self, index, role=Qt.ItemDataRole.DisplayRole):
+        if not index.isValid():
+            return None
+
+        logical_col = self._source.getLogicalColumnIndex(index.column())
+        if logical_col == -1:
+            return None
+        column_name = self._source._all_columns[logical_col]
+
+        if role == Qt.ItemDataRole.DisplayRole:
+            if column_name == "Name":
+                if self._status_override is not None:
+                    return self._status_override
+                if self._total == 0:
+                    return f"No images in {self._dir_name}"
+                s = "s" if self._total != 1 else ""
+                return f"{self._total} image{s} in {self._dir_name}"
+            if column_name in self._ATTR_MAP and self._status_override is None:
+                count = self._counts.get(column_name, 0)
+                return str(count) if count > 0 else ""
+            return ""
+
+        if role == Qt.ItemDataRole.TextAlignmentRole:
+            if column_name == "Name":
+                return Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
+            return Qt.AlignmentFlag.AlignCenter
+
+        return None
+
+    def refresh(self):
+        """Recalculate counts from source model data."""
+        self._total = len(self._source._files)
+        self._counts.clear()
+        for col_name, attr in self._ATTR_MAP.items():
+            self._counts[col_name] = sum(
+                1 for f in self._source._files if getattr(f, attr)
+            )
+        self._status_override = None
+        top_left = self.index(0, 0)
+        bottom_right = self.index(0, self.columnCount() - 1)
+        self.dataChanged.emit(top_left, bottom_right)
+
+    def setDirectoryName(self, name: str):
+        """Set the directory name for the summary text."""
+        self._dir_name = name
+
+    def setStatus(self, text: str):
+        """Set a transient status message (overrides counts display)."""
+        self._status_override = text
+        top_left = self.index(0, 0)
+        bottom_right = self.index(0, self.columnCount() - 1)
+        self.dataChanged.emit(top_left, bottom_right)
+
+    def resetColumns(self):
+        """Reset column structure to match source model."""
+        self.beginResetModel()
+        self.endResetModel()
 
 
 class FastFileManager(QWidget):
@@ -961,6 +1046,10 @@ class FastFileManager(QWidget):
         self._table_view.setSelectionMode(QTableView.SelectionMode.ExtendedSelection)
         self._table_view.setSortingEnabled(False)  # We'll handle sorting manually
         self._table_view.setEditTriggers(QTableView.EditTrigger.NoEditTriggers)
+        self._table_view.verticalHeader().hide()
+        self._table_view.setVerticalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAlwaysOn
+        )
 
         # Drag-and-drop reordering
         self._table_view.setDragEnabled(True)
@@ -1026,12 +1115,56 @@ class FastFileManager(QWidget):
 
         layout.addWidget(self._table_view)
 
-        # Status bar
-        self._status_label = QLabel("No folder selected")
-        self._status_label.setStyleSheet(
-            "padding: 5px; background: rgba(60, 60, 60, 0.3); color: #E0E0E0;"
+        # Footer summary row
+        self._footer_model = FooterModel(self._model)
+        self._model.modelReset.connect(self._footer_model.resetColumns)
+
+        self._footer_view = QTableView()
+        self._footer_view.setModel(self._footer_model)
+        self._footer_view.horizontalHeader().hide()
+        self._footer_view.verticalHeader().hide()
+        self._footer_view.setVerticalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAlwaysOff
         )
-        layout.addWidget(self._status_label)
+        self._footer_view.setHorizontalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+        )
+        self._footer_view.setSelectionMode(QTableView.SelectionMode.NoSelection)
+        self._footer_view.setEditTriggers(QTableView.EditTrigger.NoEditTriggers)
+        self._footer_view.setFixedHeight(26)
+
+        footer_header = self._footer_view.horizontalHeader()
+        footer_header.setStretchLastSection(False)
+        footer_header.setSectionsMovable(False)
+
+        self._footer_view.setStyleSheet("""
+            QTableView {
+                background-color: rgba(60, 60, 60, 0.3);
+                border: none;
+                border-top: 1px solid rgba(80, 80, 80, 0.4);
+                gridline-color: rgba(255, 255, 255, 0.1);
+                color: #B0B0B0;
+            }
+            QTableView::item {
+                padding: 2px;
+            }
+        """)
+        layout.addWidget(self._footer_view)
+
+        # Sync footer columns with main table
+        main_header = self._table_view.horizontalHeader()
+        main_header.sectionResized.connect(
+            lambda idx, _old, new: footer_header.resizeSection(idx, new)
+        )
+        main_header.sectionMoved.connect(
+            lambda _logical, old_vis, new_vis: footer_header.moveSection(
+                old_vis, new_vis
+            )
+        )
+        self._table_view.horizontalScrollBar().valueChanged.connect(
+            self._footer_view.horizontalScrollBar().setValue
+        )
+        self._sync_footer_widths()
 
     def _create_header(self) -> QWidget:
         """Create header with controls"""
@@ -1055,99 +1188,19 @@ class FastFileManager(QWidget):
         """)
         layout.addWidget(self._search_box)
 
-        # Sort dropdown
-        sort_label = QLabel("Sort:")
-        sort_label.setStyleSheet("color: #E0E0E0;")
-        layout.addWidget(sort_label)
-
-        # Create custom sort dropdown
-        class SortDropdown(QToolButton):
-            activated = pyqtSignal(int)
-
-            def __init__(self, parent=None):
-                super().__init__(parent)
-                self.setText("Name (A-Z)")
-                self.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
-                self.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextOnly)
-
-                self.menu = QMenu(self)
-                self.setMenu(self.menu)
-                self.items = []
-
-                # Same style as CustomDropdown
-                self.setStyleSheet("""
-                    QToolButton {
-                        background-color: rgba(40, 40, 40, 0.8);
-                        border: 1px solid rgba(80, 80, 80, 0.6);
-                        border-radius: 6px;
-                        color: #E0E0E0;
-                        font-size: 10px;
-                        padding: 5px 8px;
-                        text-align: left;
-                        min-width: 70px;
-                        max-width: 70px;
-                    }
-                    QToolButton:hover {
-                        background-color: rgba(60, 60, 60, 0.8);
-                        border-color: rgba(90, 120, 150, 0.8);
-                    }
-                    QToolButton:pressed {
-                        background-color: rgba(70, 100, 130, 0.8);
-                    }
-                    QToolButton::menu-indicator {
-                        subcontrol-origin: padding;
-                        subcontrol-position: top right;
-                        width: 16px;
-                        border-left: 1px solid rgba(80, 80, 80, 0.6);
-                    }
-                    QMenu {
-                        background-color: rgba(50, 50, 50, 0.9);
-                        border: 1px solid rgba(80, 80, 80, 0.4);
-                        color: #E0E0E0;
-                    }
-                    QMenu::item {
-                        padding: 4px 8px;
-                    }
-                    QMenu::item:selected {
-                        background-color: rgba(100, 100, 200, 0.5);
-                    }
-                """)
-
-            def addItem(self, text, data=None):
-                action = self.menu.addAction(text)
-                action.setData(data)
-                self.items.append((text, data))
-                action.triggered.connect(
-                    lambda checked, idx=len(self.items) - 1: self._on_item_selected(idx)
-                )
-                if len(self.items) == 1:
-                    self.setText(text)
-
-            def _on_item_selected(self, index):
-                if 0 <= index < len(self.items):
-                    text, data = self.items[index]
-                    self.setText(text)
-                    self.activated.emit(index)
-
-        self._sort_combo = SortDropdown()
-        self._sort_combo.addItem("Name (A-Z)", 0)
-        self._sort_combo.addItem("Name (Z-A)", 1)
-        self._sort_combo.addItem("Date (Oldest)", 2)
-        self._sort_combo.addItem("Date (Newest)", 3)
-        self._sort_combo.addItem("Size (Smallest)", 4)
-        self._sort_combo.addItem("Size (Largest)", 5)
-        self._sort_combo.activated.connect(self._on_sort_changed)
-        layout.addWidget(self._sort_combo)
+        # Hidden sort state tracker (sorting is done via column header clicks)
+        self._sort_combo = QLabel()
+        self._sort_combo.setVisible(False)
 
         # Column visibility dropdown
         self._column_dropdown = CustomDropdown()
         self._column_dropdown.addCheckableItem("Name", True, 0)
         self._column_dropdown.addCheckableItem("NPZ", True, 1)
-        self._column_dropdown.addCheckableItem("TXT", True, 2)
-        self._column_dropdown.addCheckableItem("SEG", False, 3)
+        self._column_dropdown.addCheckableItem("YOLO Det", True, 2)
+        self._column_dropdown.addCheckableItem("YOLO Seg", False, 3)
         self._column_dropdown.addCheckableItem("COCO", False, 4)
         self._column_dropdown.addCheckableItem("VOC", False, 5)
-        self._column_dropdown.addCheckableItem("CML", False, 6)
+        self._column_dropdown.addCheckableItem("CreateML", False, 6)
         self._column_dropdown.addCheckableItem("Modified", True, 7)
         self._column_dropdown.addCheckableItem("Size", True, 8)
         self._column_dropdown.activated.connect(self._on_column_visibility_changed)
@@ -1257,6 +1310,7 @@ class FastFileManager(QWidget):
 
         # Update header sizing for visible columns
         self._update_header_sizing()
+        self._sync_footer_widths()
         self.displaySettingsChanged.emit()
 
     def _update_header_sizing(self):
@@ -1281,11 +1335,11 @@ class FastFileManager(QWidget):
                     header.resizeSection(i, 200)  # Default name column width
                 elif column_name in (
                     "NPZ",
-                    "TXT",
-                    "SEG",
+                    "YOLO Det",
+                    "YOLO Seg",
                     "COCO",
                     "VOC",
-                    "CML",
+                    "CreateML",
                 ):
                     header.resizeSection(i, 50)  # Compact for checkmarks
                 elif column_name == "Modified":
@@ -1707,30 +1761,20 @@ class FastFileManager(QWidget):
         self._show_all_btn.setVisible(False)
 
     def _update_status(self, text: str):
-        """Update status label"""
-        self._status_label.setText(text)
+        """Update footer with a transient status message."""
+        self._footer_model.setStatus(text)
 
     def _update_detailed_status(self, directory_name: str):
-        """Update status label with detailed file counts"""
-        total_files, counts = self._model.getFileCounts()
+        """Update footer with directory name and recalculated counts."""
+        self._footer_model.setDirectoryName(directory_name)
+        self._footer_model.refresh()
 
-        if total_files == 0:
-            status_text = f"No files in {directory_name}"
-        else:
-            parts = [f"{total_files} image{'s' if total_files != 1 else ''}"]
-            for key, label in (
-                ("npz", "npz"),
-                ("txt", "txt"),
-                ("seg", "seg"),
-                ("coco", "coco"),
-                ("xml", "xml"),
-                ("createml", "cml"),
-            ):
-                if counts[key] > 0:
-                    parts.append(f"{counts[key]} {label}")
-            status_text = f"{', '.join(parts)} in {directory_name}"
-
-        self._status_label.setText(status_text)
+    def _sync_footer_widths(self):
+        """Sync footer column widths with main table."""
+        main_header = self._table_view.horizontalHeader()
+        footer_header = self._footer_view.horizontalHeader()
+        for i in range(main_header.count()):
+            footer_header.resizeSection(i, main_header.sectionSize(i))
 
     def selectFile(self, path: Path):
         """Select a specific file in the view"""

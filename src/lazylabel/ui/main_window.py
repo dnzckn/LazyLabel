@@ -108,6 +108,7 @@ class MainWindow(QMainWindow):
         self._propagation_worker: PropagationWorker | None = None
         self._sequence_init_worker: SequenceInitWorker | None = None
         self._reference_worker: ReferenceAnnotationWorker | None = None
+        self._reference_finder_worker = None  # ReferenceFinderWorker (lazy import)
 
         # Sequence range selection state
         self._sequence_start_path: str | None = None
@@ -197,6 +198,8 @@ class MainWindow(QMainWindow):
         self.any_channel_threshold_dragging = (
             False  # Track if channel threshold slider is being dragged
         )
+        self.any_rescale_dragging = False
+        self.pending_rescale_update = False
         # SAM state moved to SAMWorkerManager (initialized in _setup_ui)
 
         # Throttling timer for smooth slider updates during dragging
@@ -892,6 +895,14 @@ class MainWindow(QMainWindow):
             self._on_channel_threshold_drag_finished
         )
 
+        # Rescale connections
+        self.control_panel.rescale_changed.connect(self._handle_rescale_changed)
+        self.control_panel.rescale_drag_started.connect(self._on_rescale_drag_started)
+        self.control_panel.rescale_drag_finished.connect(self._on_rescale_drag_finished)
+        self.control_panel.rescale_histogram_requested.connect(
+            self._on_rescale_histogram_requested
+        )
+
         # FFT threshold connections
         try:
             self.control_panel.fft_threshold_changed.connect(
@@ -1312,6 +1323,10 @@ class MainWindow(QMainWindow):
         if self.pending_channel_threshold_update:
             self.pending_channel_threshold_update = False
             self._apply_channel_threshold_now()
+
+        if self.pending_rescale_update:
+            self.pending_rescale_update = False
+            self._apply_rescale_now()
 
     def _apply_image_adjustments_to_all_viewers(self):
         """Apply current image adjustments to all active viewers."""
@@ -2030,6 +2045,9 @@ class MainWindow(QMainWindow):
         if self._reference_worker is not None:
             self._safe_stop_worker(self._reference_worker)
             self._reference_worker = None
+        if self._reference_finder_worker is not None:
+            self._safe_stop_worker(self._reference_finder_worker)
+            self._reference_finder_worker = None
 
         # Clean up video predictor
         if self.propagation_manager is not None:
@@ -2580,15 +2598,97 @@ class MainWindow(QMainWindow):
         """Apply channel threshold changes immediately (delegates to ImageAdjustmentManager)."""
         self.image_adjustment_manager.apply_channel_threshold_now()
 
+    # Rescale handlers
+
+    def _on_rescale_drag_started(self):
+        """Handle rescale drag start."""
+        self.any_rescale_dragging = True
+
+    def _on_rescale_drag_finished(self):
+        """Handle rescale drag finish."""
+        self.any_rescale_dragging = False
+        if self.pending_rescale_update:
+            self.slider_throttle_timer.stop()
+            self.pending_rescale_update = False
+        self._apply_rescale_now()
+
+    def _handle_rescale_changed(self):
+        """Handle rescale value changes."""
+        self.image_adjustment_manager.handle_rescale_changed()
+
+    def _apply_rescale_now(self):
+        """Apply rescale changes immediately."""
+        self.image_adjustment_manager.apply_rescale_now()
+
+    def _on_rescale_histogram_requested(self):
+        """Open the rescale histogram dialog."""
+        rescale_widget = self.control_panel.get_rescale_widget()
+        image_region = rescale_widget.get_image_for_histogram()
+        if image_region is None or len(image_region.shape) != 2:
+            self._show_notification("No grayscale image loaded for histogram")
+            return
+
+        from .widgets.rescale_histogram_dialog import RescaleHistogramDialog
+
+        data_max = 65535 if image_region.dtype == np.uint16 else 255
+        dialog = RescaleHistogramDialog(
+            image_region,
+            data_min=0,
+            data_max=data_max,
+            current_min=rescale_widget.slider.min_val,
+            current_max=rescale_widget.slider.max_val,
+            parent=self,
+        )
+        dialog.applied.connect(rescale_widget.set_values_from_histogram)
+        dialog.lut_applied.connect(lambda lut, name: self._apply_rescale_lut(lut, name))
+        dialog.exec()
+
+    def _apply_rescale_lut(self, lut_or_image, preset_name):
+        """Apply a LUT or pre-transformed image from histogram presets."""
+        rescale_widget = self.control_panel.get_rescale_widget()
+
+        if preset_name.startswith("CLAHE"):
+            # CLAHE is spatially adaptive — store the dialog's result directly.
+            # The dialog computed it on the crop region (if crop active),
+            # and _apply_lut assigns it to the correct region.
+            rescale_widget._clahe_image = lut_or_image
+
+            out_max = rescale_widget._output_max
+            out_dtype = np.uint16 if out_max > 255 else np.uint8
+            identity = np.arange(out_max + 1, dtype=out_dtype)
+            rescale_widget.set_lut(identity, preset_name)
+        else:
+            rescale_widget._clahe_image = None
+            rescale_widget.set_lut(lut_or_image, preset_name)
+
     def _handle_fft_threshold_changed(self):
         """Handle changes in FFT thresholding (delegates to ImageAdjustmentManager)."""
         self.image_adjustment_manager.handle_fft_threshold_changed()
 
     def _on_crop_changed_for_fft(self, *args):
-        """Invalidate FFT cache and reprocess when crop changes."""
+        """Invalidate caches and reprocess when crop changes."""
+        # Update rescale widget crop region
+        rescale_widget = self.control_panel.get_rescale_widget()
+        rescale_widget.set_crop_coords(self.crop_manager.current_crop_coords)
+
+        # CLAHE result is sized to the region it was computed on,
+        # so it becomes invalid when crop changes — clear it.
+        if rescale_widget._clahe_image is not None:
+            rescale_widget._clahe_image = None
+            rescale_widget._lut = None
+            rescale_widget._preset_name = None
+            rescale_widget.info_label.setText(
+                f"Range: 0\u2013{rescale_widget._slider_max}  |  Drag handles to rescale"
+            )
+
         fft_widget = self.control_panel.get_fft_threshold_widget()
-        if fft_widget and fft_widget.is_active():
+        has_fft = fft_widget and fft_widget.is_active()
+        has_rescale = rescale_widget and rescale_widget.has_active_rescaling()
+
+        if has_fft:
             fft_widget.invalidate_fft_cache()
+
+        if has_fft or has_rescale:
             self.image_adjustment_manager.apply_image_processing_fast()
             if self.settings.operate_on_view:
                 self._mark_sam_dirty()
@@ -3128,6 +3228,20 @@ class MainWindow(QMainWindow):
             self._on_show_confidence_histogram
         )
 
+        # Smart Select signals
+        self.sequence_widget.find_references_requested.connect(
+            self._on_find_references_requested
+        )
+        self.sequence_widget.next_suggested_requested.connect(
+            self._on_next_suggested_frame
+        )
+        self.sequence_widget.prev_suggested_requested.connect(
+            self._on_prev_suggested_frame
+        )
+        self.sequence_widget.clear_suggested_requested.connect(
+            self._on_clear_suggested_frames
+        )
+
         # Trim signals
         self.sequence_widget.set_trim_left_requested.connect(self._on_set_trim_left)
         self.sequence_widget.set_trim_right_requested.connect(self._on_set_trim_right)
@@ -3278,6 +3392,14 @@ class MainWindow(QMainWindow):
             # Update sequence widget
             if self.sequence_widget:
                 self.sequence_widget.set_current_frame(frame_idx)
+
+            # Clear segment selection/highlight from previous frame
+            self.right_panel.segment_table.clearSelection()
+            if hasattr(self, "highlight_items"):
+                for item in self.highlight_items:
+                    if item.scene():
+                        item.scene().removeItem(item)
+                self.highlight_items = []
 
             # Load existing segments for this frame
             self._load_sequence_frame_segments(image_path)
@@ -4663,6 +4785,15 @@ class MainWindow(QMainWindow):
 
     def _on_exit_sequence_timeline(self):
         """Handle exit timeline request - reset to setup UI for new range selection."""
+        # Stop any running reference finder
+        if (
+            self._reference_finder_worker is not None
+            and self._reference_finder_worker.isRunning()
+        ):
+            self._reference_finder_worker.stop()
+            self._reference_finder_worker.wait(3000)
+            self._reference_finder_worker = None
+
         # Clear propagation state
         if self.propagation_manager:
             self.propagation_manager.cleanup()
@@ -4690,6 +4821,139 @@ class MainWindow(QMainWindow):
         self.timeline_widget.clear_statuses()
 
         self._show_notification("Timeline cleared. Set new start/end frames.")
+
+    # --- Smart Select handlers ---
+
+    def _on_find_references_requested(self):
+        """Launch or abort AI-based reference frame suggestion."""
+        # If already running, abort
+        if (
+            self._reference_finder_worker is not None
+            and self._reference_finder_worker.isRunning()
+        ):
+            self._reference_finder_worker.stop()
+            self._reference_finder_worker.wait(3000)
+            self._reference_finder_worker = None
+            if self.sequence_widget:
+                self.sequence_widget.end_finding_references()
+            self._show_notification("Reference analysis cancelled")
+            return
+
+        if self.sequence_view_mode is None or not self._sequence_timeline_built:
+            self._show_notification("Build a timeline first")
+            return
+
+        image_paths = list(self.sequence_view_mode._image_paths)
+        if len(image_paths) < 5:
+            self._show_notification("Need at least 5 frames to find archetypes")
+            return
+
+        # Clear previous suggestions
+        self._on_clear_suggested_frames()
+
+        # Update UI
+        if self.sequence_widget:
+            self.sequence_widget.start_finding_references()
+
+        # Launch worker
+        from .workers.reference_finder_worker import ReferenceFinderWorker
+
+        self._reference_finder_worker = ReferenceFinderWorker(image_paths, parent=self)
+        self._reference_finder_worker.progress.connect(
+            self._on_find_references_progress
+        )
+        self._reference_finder_worker.finished_analysis.connect(
+            self._on_find_references_done
+        )
+        self._reference_finder_worker.error.connect(self._on_find_references_error)
+        self._reference_finder_worker.finished.connect(
+            self._reference_finder_worker.deleteLater
+        )
+        self._reference_finder_worker.start()
+
+    def _on_find_references_progress(self, message: str):
+        """Handle progress from reference finder worker."""
+        if self.sequence_widget:
+            self.sequence_widget.find_references_btn.setText(f"Abort · {message}")
+            self.sequence_widget.find_references_btn.repaint()
+
+    def _on_find_references_done(self, suggested_indices: list):
+        """Handle completed reference analysis."""
+        self._reference_finder_worker = None
+
+        if self.sequence_widget:
+            self.sequence_widget.end_finding_references()
+
+        if not suggested_indices:
+            self._show_notification("No diverse reference frames found")
+            return
+
+        # Apply suggestions to sequence view mode
+        self.sequence_view_mode.set_suggested_frames(suggested_indices)
+
+        # Update timeline colors
+        if self.timeline_widget:
+            for idx in suggested_indices:
+                status = self.sequence_view_mode.get_frame_status(idx)
+                self.timeline_widget.set_frame_status(idx, status)
+
+        # Update widget
+        if self.sequence_widget:
+            self.sequence_widget.set_suggested_count(len(suggested_indices))
+
+        n_images = self.sequence_view_mode.total_frames
+        expected = max(5, min(50, int(n_images * 0.02)))
+        if len(suggested_indices) < expected:
+            self._show_notification(
+                f"Only {len(suggested_indices)} reference frames identified "
+                f"(expected ~{expected})"
+            )
+        else:
+            self._show_notification(
+                f"Found {len(suggested_indices)} suggested reference frames"
+            )
+
+    def _on_find_references_error(self, message: str):
+        """Handle error from reference finder worker."""
+        self._reference_finder_worker = None
+
+        if self.sequence_widget:
+            self.sequence_widget.end_finding_references()
+
+        self._show_notification(f"Reference analysis failed: {message}")
+
+    def _on_next_suggested_frame(self):
+        """Navigate to next suggested reference frame."""
+        if self.sequence_view_mode is None:
+            return
+        next_frame = self.sequence_view_mode.next_suggested_frame()
+        if next_frame is not None:
+            self._on_sequence_frame_selected(next_frame)
+        else:
+            self._show_notification("No suggested frames")
+
+    def _on_prev_suggested_frame(self):
+        """Navigate to previous suggested reference frame."""
+        if self.sequence_view_mode is None:
+            return
+        prev_frame = self.sequence_view_mode.prev_suggested_frame()
+        if prev_frame is not None:
+            self._on_sequence_frame_selected(prev_frame)
+        else:
+            self._show_notification("No suggested frames")
+
+    def _on_clear_suggested_frames(self):
+        """Clear all suggested reference frame highlights."""
+        if self.sequence_view_mode:
+            suggested = self.sequence_view_mode.get_suggested_frames()
+            self.sequence_view_mode.clear_suggested_frames()
+            # Revert timeline colors
+            if self.timeline_widget:
+                for idx in suggested:
+                    status = self.sequence_view_mode.get_frame_status(idx)
+                    self.timeline_widget.set_frame_status(idx, status)
+        if self.sequence_widget:
+            self.sequence_widget.set_suggested_count(0)
 
     # --- Trim handlers ---
 

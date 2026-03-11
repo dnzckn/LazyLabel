@@ -227,6 +227,47 @@ class ImageAdjustmentManager:
         if self.settings.operate_on_view:
             mw._mark_sam_dirty()
 
+    def handle_rescale_changed(self) -> None:
+        """Handle changes in rescale — same throttling pattern as channel threshold."""
+        mw = self.mw
+
+        if self.settings.operate_on_view and mw.any_rescale_dragging:
+            return
+
+        if mw.any_rescale_dragging:
+            mw.pending_rescale_update = True
+            if not mw.slider_throttle_timer.isActive():
+                mw.slider_throttle_timer.start(mw.slider_throttle_interval)
+        else:
+            self.apply_rescale_now()
+
+    def apply_rescale_now(self) -> None:
+        """Apply rescale changes immediately."""
+        mw = self.mw
+
+        if mw.view_mode == "multi":
+            if hasattr(mw, "multi_view_images") and any(mw.multi_view_images):
+                self.apply_multi_view_image_processing_fast()
+                if self.settings.operate_on_view:
+                    changed_indices = [
+                        i
+                        for i in range(len(mw.multi_view_images))
+                        if mw.multi_view_images[i]
+                        and i < len(mw.multi_view_models)
+                        and mw.multi_view_models[i] is not None
+                    ]
+                    if changed_indices:
+                        mw._fast_update_multi_view_images(changed_indices)
+            return
+
+        if not mw.current_image_path:
+            return
+
+        self.apply_image_processing_fast()
+
+        if self.settings.operate_on_view:
+            mw._mark_sam_dirty()
+
     def handle_fft_threshold_changed(self) -> None:
         """Handle changes in FFT thresholding."""
         mw = self.mw
@@ -320,18 +361,20 @@ class ImageAdjustmentManager:
         if not mw.current_image_path:
             return
 
-        # Get both widgets
+        # Get all processing widgets
         threshold_widget = self.control_panel.get_channel_threshold_widget()
+        rescale_widget = self.control_panel.get_rescale_widget()
         fft_widget = self.control_panel.get_fft_threshold_widget()
 
         # Check if any processing is active
         has_channel_threshold = (
             threshold_widget and threshold_widget.has_active_thresholding()
         )
+        has_rescale = rescale_widget and rescale_widget.has_active_rescaling()
         has_fft_threshold = fft_widget and fft_widget.is_active()
 
         # If no active processing, reload original image
-        if not has_channel_threshold and not has_fft_threshold:
+        if not has_channel_threshold and not has_rescale and not has_fft_threshold:
             self.reload_original_image_without_sam()
             return
 
@@ -345,11 +388,18 @@ class ImageAdjustmentManager:
         # Start with cached original image
         processed_image = self._cached_original_image.copy()
 
-        # Apply channel thresholding first if active
-        if has_channel_threshold:
-            processed_image = threshold_widget.apply_thresholding(processed_image)
+        # Apply rescaling first (normalize range before thresholding)
+        if has_rescale:
+            crop = self.crop_manager.current_crop_coords
+            processed_image = rescale_widget.apply_rescaling(processed_image, crop)
 
-        # Apply FFT thresholding second if active
+        # Apply channel thresholding second (crop-aware)
+        if has_channel_threshold:
+            processed_image = self._apply_threshold_with_crop(
+                processed_image, threshold_widget
+            )
+
+        # Apply FFT thresholding third if active (crop-aware)
         if has_fft_threshold:
             processed_image = self._apply_fft_with_crop(processed_image, fft_widget)
 
@@ -489,6 +539,10 @@ class ImageAdjustmentManager:
         # Update the channel threshold widget
         self.control_panel.update_channel_threshold_for_image(image_array)
 
+        # Update the rescale widget (with crop region if active)
+        crop_coords = self.crop_manager.current_crop_coords
+        self.control_panel.update_rescale_for_image(image_array, crop_coords)
+
         # Update the FFT threshold widget
         self.control_panel.update_fft_threshold_for_image(image_array)
 
@@ -552,12 +606,20 @@ class ImageAdjustmentManager:
         # Start with cached original
         result_image = self._cached_original_image.copy()
 
-        # Apply channel thresholding if active
+        # Apply rescaling first (normalize range before thresholding)
+        rescale_widget = self.control_panel.get_rescale_widget()
+        if rescale_widget and rescale_widget.has_active_rescaling():
+            crop = self.crop_manager.current_crop_coords
+            result_image = rescale_widget.apply_rescaling(result_image, crop)
+
+        # Apply channel thresholding second (crop-aware)
         threshold_widget = self.control_panel.get_channel_threshold_widget()
         if threshold_widget and threshold_widget.has_active_thresholding():
-            result_image = threshold_widget.apply_thresholding(result_image)
+            result_image = self._apply_threshold_with_crop(
+                result_image, threshold_widget
+            )
 
-        # Apply FFT thresholding if active (after channel thresholding)
+        # Apply FFT thresholding third (crop-aware)
         fft_widget = self.control_panel.get_fft_threshold_widget()
         if fft_widget and fft_widget.is_active():
             result_image = self._apply_fft_with_crop(result_image, fft_widget)
@@ -569,6 +631,16 @@ class ImageAdjustmentManager:
         result_image = self._ensure_uint8(result_image)
 
         return result_image
+
+    def _apply_threshold_with_crop(self, image, threshold_widget):
+        """Apply channel thresholding restricted to crop region if active, else full image."""
+        crop = self.crop_manager.current_crop_coords
+        if crop is not None:
+            x1, y1, x2, y2 = crop
+            region = image[y1:y2, x1:x2].copy()
+            image[y1:y2, x1:x2] = threshold_widget.apply_thresholding(region)
+            return image
+        return threshold_widget.apply_thresholding(image)
 
     def _apply_fft_with_crop(self, image, fft_widget):
         """Apply FFT restricted to crop region if active, else full image."""

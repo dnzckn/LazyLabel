@@ -468,7 +468,9 @@ class PropagationManager:
     def clear_reference_annotations(self) -> None:
         """Clear all reference annotations."""
         self.state.reference_annotations.clear()
-        if self.sam2_model is not None:
+        if self.sam2_model is not None and hasattr(
+            self.sam2_model, "reset_video_state"
+        ):
             self.sam2_model.reset_video_state()
         logger.info("PropagationManager: Cleared reference annotations")
 

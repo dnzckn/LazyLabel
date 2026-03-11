@@ -35,6 +35,7 @@ class TimelineWidget(QWidget):
         "flagged": QColor(244, 67, 54),  # Red for flagged/needs review
         "saved": QColor(0, 188, 212),  # Cyan for saved to disk
         "skipped": QColor(139, 69, 19),  # Brown for dimension mismatch
+        "suggested": QColor(156, 39, 176),  # Purple for AI-suggested reference
         "current": QColor(33, 150, 243),  # Blue for current frame marker
     }
 
@@ -43,9 +44,10 @@ class TimelineWidget(QWidget):
         "reference": 0,
         "saved": 1,
         "propagated": 2,
-        "pending": 3,
-        "flagged": 4,
-        "skipped": 5,
+        "suggested": 3,
+        "pending": 4,
+        "flagged": 5,
+        "skipped": 6,
     }
 
     def __init__(self, parent=None):

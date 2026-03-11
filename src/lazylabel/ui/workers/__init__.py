@@ -10,6 +10,7 @@ from .propagation_worker import (
     ReferenceSegmentData,
     SequenceInitWorker,
 )
+from .reference_finder_worker import ReferenceFinderWorker
 from .sam_update_worker import SAMUpdateWorker
 from .save_worker import SaveWorker
 from .single_view_sam_init_worker import SingleViewSAMInitWorker
@@ -21,6 +22,7 @@ __all__ = [
     "PropagationSaveWorker",
     "PropagationWorker",
     "ReferenceAnnotationWorker",
+    "ReferenceFinderWorker",
     "ReferenceSegmentData",
     "SAMUpdateWorker",
     "SaveWorker",

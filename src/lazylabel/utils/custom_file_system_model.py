@@ -3,6 +3,23 @@ from pathlib import Path
 from PyQt6.QtCore import QDir, QModelIndex, Qt
 from PyQt6.QtGui import QBrush, QColor, QFileSystemModel
 
+# Each entry: (suffix appended to image stem, column header label)
+# Order determines column order (columns 1..N after "File Name").
+_FORMAT_COLUMNS: list[tuple[str, str]] = [
+    (".npz", "NPZ"),
+    (".txt", "YOLO Det"),
+    ("_seg.txt", "YOLO Seg"),
+    ("_coco.json", "COCO"),
+    (".xml", "VOC"),
+    ("_createml.json", "CreateML"),
+]
+
+# Sorted longest-first so compound suffixes match before simple ones
+# (e.g. "_seg.txt" before ".txt").
+_SUFFIXES_BY_LENGTH: list[tuple[str, str]] = sorted(
+    _FORMAT_COLUMNS, key=lambda x: len(x[0]), reverse=True
+)
+
 
 class CustomFileSystemModel(QFileSystemModel):
     def __init__(self, parent=None):
@@ -12,17 +29,19 @@ class CustomFileSystemModel(QFileSystemModel):
         self.setNameFilters(["*.png", "*.jpg", "*.jpeg", "*.tiff", "*.tif"])
         self.highlighted_path = None
 
-        self.npz_files = set()
-        self.txt_files = set()
+        # Per-format sets of image basenames that have that annotation file
+        self._format_files: dict[str, set[str]] = {
+            suffix: set() for suffix, _ in _FORMAT_COLUMNS
+        }
 
     def setRootPath(self, path: str) -> QModelIndex:
         self._scan_directory(path)
         return super().setRootPath(path)
 
     def _scan_directory(self, path: str):
-        """Scans the directory once and caches the basenames of .npz and .txt files."""
-        self.npz_files.clear()
-        self.txt_files.clear()
+        """Scan directory and cache which annotation files exist per format."""
+        for s in self._format_files.values():
+            s.clear()
         if not path:
             return
 
@@ -32,48 +51,53 @@ class CustomFileSystemModel(QFileSystemModel):
 
         try:
             for file_path in directory.iterdir():
-                if file_path.suffix == ".npz":
-                    self.npz_files.add(file_path.stem)
-                elif file_path.suffix == ".txt":
-                    self.txt_files.add(file_path.stem)
+                name = file_path.name
+                for suffix, _ in _SUFFIXES_BY_LENGTH:
+                    if name.endswith(suffix):
+                        # Derive the image basename by stripping the suffix
+                        image_base = name[: -len(suffix)]
+                        if image_base:  # guard against empty stem
+                            self._format_files[suffix].add(image_base)
+                        break
         except OSError:
             pass
 
     def update_cache_for_path(self, saved_file_path: str):
-        """Incrementally updates the cache and the view for a newly saved or deleted file."""
+        """Incrementally update cache for a newly saved or deleted annotation file."""
         if not saved_file_path:
             return
 
         p = Path(saved_file_path)
-        base_name = p.stem
+        name = p.name
 
-        if p.suffix == ".npz":
-            if p.exists():
-                self.npz_files.add(base_name)
-            else:
-                self.npz_files.discard(base_name)
-        elif p.suffix == ".txt":
-            if p.exists():
-                self.txt_files.add(base_name)
-            else:
-                self.txt_files.discard(base_name)
-        else:
+        matched_suffix = None
+        image_base = None
+        for suffix, _ in _SUFFIXES_BY_LENGTH:
+            if name.endswith(suffix):
+                image_base = name[: -len(suffix)]
+                if image_base:
+                    matched_suffix = suffix
+                    break
+
+        if matched_suffix is None:
             return
 
-        # Find the model index for the corresponding image file to refresh its row
-        # This assumes the image file is in the same directory (the root path)
+        if p.exists():
+            self._format_files[matched_suffix].add(image_base)
+        else:
+            self._format_files[matched_suffix].discard(image_base)
+
+        # Refresh the corresponding image row in the view
         root_path = Path(self.rootPath())
-        for image_ext in self.nameFilters():  # e.g., '*.png', '*.jpg'
-            # Construct full path to the potential image file
-            image_file = root_path / (base_name + image_ext.replace("*", ""))
+        for image_ext in self.nameFilters():
+            image_file = root_path / (image_base + image_ext.replace("*", ""))
             index = self.index(str(image_file))
 
             if index.isValid() and index.row() != -1:
-                # Found the corresponding image file, emit signal to refresh its checkmarks
-                index_col1 = self.index(index.row(), 1, index.parent())
-                index_col2 = self.index(index.row(), 2, index.parent())
+                first_col = self.index(index.row(), 1, index.parent())
+                last_col = self.index(index.row(), len(_FORMAT_COLUMNS), index.parent())
                 self.dataChanged.emit(
-                    index_col1, index_col2, [Qt.ItemDataRole.CheckStateRole]
+                    first_col, last_col, [Qt.ItemDataRole.CheckStateRole]
                 )
                 break
 
@@ -82,7 +106,7 @@ class CustomFileSystemModel(QFileSystemModel):
         self.layoutChanged.emit()
 
     def columnCount(self, parent: QModelIndex = QModelIndex()) -> int:
-        return 3
+        return 1 + len(_FORMAT_COLUMNS)
 
     def headerData(
         self,
@@ -96,10 +120,9 @@ class CustomFileSystemModel(QFileSystemModel):
         ):
             if section == 0:
                 return "File Name"
-            if section == 1:
-                return ".npz"
-            if section == 2:
-                return ".txt"
+            fmt_idx = section - 1
+            if 0 <= fmt_idx < len(_FORMAT_COLUMNS):
+                return _FORMAT_COLUMNS[fmt_idx][1]
         return super().headerData(section, orientation, role)
 
     def data(self, index: QModelIndex, role: int = Qt.ItemDataRole.DisplayRole):
@@ -118,16 +141,26 @@ class CustomFileSystemModel(QFileSystemModel):
             fileName = self.fileName(index.siblingAtColumn(0))
             base_name = Path(fileName).stem
 
-            if index.column() == 1:
-                exists = base_name in self.npz_files
-            elif index.column() == 2:
-                exists = base_name in self.txt_files
-            else:
-                return None
-
-            return Qt.CheckState.Checked if exists else Qt.CheckState.Unchecked
+            fmt_idx = index.column() - 1
+            if 0 <= fmt_idx < len(_FORMAT_COLUMNS):
+                suffix = _FORMAT_COLUMNS[fmt_idx][0]
+                exists = base_name in self._format_files[suffix]
+                return Qt.CheckState.Checked if exists else Qt.CheckState.Unchecked
+            return None
 
         if index.column() > 0 and role == Qt.ItemDataRole.DisplayRole:
             return ""
 
         return super().data(index, role)
+
+    # --- Backward-compatible accessors ---
+
+    @property
+    def npz_files(self) -> set[str]:
+        """Image basenames that have .npz annotation files."""
+        return self._format_files[".npz"]
+
+    @property
+    def txt_files(self) -> set[str]:
+        """Image basenames that have .txt (YOLO Detection) annotation files."""
+        return self._format_files[".txt"]
