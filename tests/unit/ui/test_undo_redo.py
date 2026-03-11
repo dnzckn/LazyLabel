@@ -415,6 +415,38 @@ class TestUndoRedo:
         result = mock_main_window._get_original_mouse_press()
         assert result is single_handler
 
+    # --- Bug fix: undo history not cleared on sequence frame switch ---
+
+    def test_sequence_frame_switch_clears_undo_history(self, mock_main_window):
+        """Test that switching frames in sequence mode clears undo/redo history.
+
+        Regression test: undo history was not frame-scoped in sequence mode.
+        Actions from a previous frame could undo/redo into the current frame,
+        re-adding old segments with different class_ids (phantom classes).
+        """
+        undo_redo = mock_main_window.undo_redo_manager
+        # Simulate having actions from a previous frame
+        undo_redo.action_history = [
+            {"type": "add_segment", "segment_index": 0},
+            {"type": "add_segment", "segment_index": 1},
+        ]
+        undo_redo.redo_history = [
+            {"type": "add_segment", "segment_index": 2, "segment_data": {}},
+        ]
+
+        # Mock the dependencies that _load_sequence_frame_segments needs
+        mock_main_window.segment_display_manager = MagicMock()
+        mock_main_window.sequence_view_mode = None  # Skip propagation check
+        mock_main_window.file_manager = MagicMock()
+        mock_main_window._display_sequence_segments = MagicMock()
+
+        # Call the method that loads a new frame
+        mock_main_window._load_sequence_frame_segments("/fake/path/image.png")
+
+        # Both histories must be empty after frame switch
+        assert len(undo_redo.action_history) == 0
+        assert len(undo_redo.redo_history) == 0
+
     def test_reset_state_clears_histories(self, mock_main_window):
         """Test that reset_state clears both action and redo histories."""
         # Setup

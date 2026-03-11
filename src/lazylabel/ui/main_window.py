@@ -3294,9 +3294,11 @@ class MainWindow(QMainWindow):
         2. Preload cache (from "Load to Memory" feature, reads from NPZ)
         3. NPZ file on disk (normal load path)
         """
-        # Clear current segments
+        # Clear current segments and undo history (history is frame-scoped)
         self.segment_manager.clear()
         self.segment_display_manager.clear_all_caches()
+        if self.undo_redo_manager is not None:
+            self.undo_redo_manager.clear_history()
 
         # Check for propagated masks first (fresh from propagation)
         # Reference frames should NEVER load propagated masks
