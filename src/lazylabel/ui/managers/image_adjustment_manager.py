@@ -472,7 +472,10 @@ class ImageAdjustmentManager:
                 image = cv2.cvtColor(image, cv2.COLOR_BGRA2RGB)
             else:
                 image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-        # Grayscale stays as-is (2D array)
+
+        # Detect 3-channel grayscale (e.g. JPEG) and collapse to 2D
+        if self._is_grayscale_3ch(image):
+            image = image[:, :, 0]
 
         self._cached_original_image = image
 
@@ -508,13 +511,8 @@ class ImageAdjustmentManager:
             if len(image_array.shape) == 3 and image_array.shape[2] == 3:
                 image_array = cv2.cvtColor(image_array, cv2.COLOR_BGR2RGB)
 
-            # Check if image is grayscale (all channels are the same)
-            if (
-                len(image_array.shape) == 3
-                and np.array_equal(image_array[:, :, 0], image_array[:, :, 1])
-                and np.array_equal(image_array[:, :, 1], image_array[:, :, 2])
-            ):
-                # Convert to single channel grayscale
+            # Check if image is grayscale (channels nearly identical)
+            if self._is_grayscale_3ch(image_array):
                 image_array = image_array[:, :, 0]
 
         except Exception:
@@ -526,14 +524,10 @@ class ImageAdjustmentManager:
             # Convert from BGRA to RGB, ignore alpha
             image_rgb = image_np[:, :, [2, 1, 0]]
 
-            # Check if image is grayscale (all channels are the same)
-            if np.array_equal(
-                image_rgb[:, :, 0], image_rgb[:, :, 1]
-            ) and np.array_equal(image_rgb[:, :, 1], image_rgb[:, :, 2]):
-                # Convert to single channel grayscale
+            # Check if image is grayscale (channels nearly identical)
+            if self._is_grayscale_3ch(image_rgb):
                 image_array = image_rgb[:, :, 0]
             else:
-                # Keep as RGB
                 image_array = image_rgb
 
         # Update the channel threshold widget
@@ -548,6 +542,22 @@ class ImageAdjustmentManager:
 
         # Auto-collapse FFT threshold panel if image is not black and white
         self.control_panel.auto_collapse_fft_threshold_for_image(image_array)
+
+    @staticmethod
+    def _is_grayscale_3ch(image_array: np.ndarray) -> bool:
+        """Check if a 3-channel image is effectively grayscale.
+
+        Uses a small tolerance to handle JPEG compression artifacts that
+        introduce slight differences between channels.
+        """
+        if len(image_array.shape) != 3 or image_array.shape[2] < 3:
+            return False
+        # Max per-pixel difference between adjacent channels
+        diffs = np.abs(np.diff(image_array[:, :, :3].astype(np.int16), axis=2))
+        max_diff = int(diffs.max())
+        # Threshold: 3 for 8-bit, scaled for 16-bit
+        threshold = 3 if image_array.dtype != np.uint16 else 768
+        return max_diff <= threshold
 
     @staticmethod
     def _ensure_uint8(image_array: np.ndarray) -> np.ndarray:

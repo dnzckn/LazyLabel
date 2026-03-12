@@ -14,14 +14,14 @@ from PyQt6.QtCore import QThread, pyqtSignal
 from ...config.paths import Paths
 from ...utils.logger import logger
 
-_MOBILENET_FILENAME = "mobilenetv3_small_100.pth"
+_MOBILENET_FILENAME = "mobilenetv3_small_tv.pth"
 
 
 class ReferenceFinderWorker(QThread):
     """Worker that identifies diverse representative frames in a sequence.
 
-    Uses MobileNetV3 small (via timm) for embedding, HDBSCAN for clustering,
-    and medoid selection for representative frame identification.
+    Uses MobileNetV3 small (via torchvision) for embedding, HDBSCAN for
+    clustering, and medoid selection for representative frame identification.
 
     Signals:
         progress: Status message for UI feedback
@@ -54,10 +54,11 @@ class ReferenceFinderWorker(QThread):
                 self.error.emit(str(e))
 
     def _run_analysis(self) -> None:
-        import timm
-        import timm.data
         import torch
+        import torch.nn as nn
         from sklearn.cluster import HDBSCAN
+        from torchvision import transforms
+        from torchvision.models import MobileNet_V3_Small_Weights, mobilenet_v3_small
 
         if self._should_stop:
             return
@@ -71,9 +72,7 @@ class ReferenceFinderWorker(QThread):
         if local_path.exists():
             self.progress.emit("Loading MobileNetV3 model...")
             try:
-                model = timm.create_model(
-                    "mobilenetv3_small_100", pretrained=False, num_classes=0
-                )
+                model = mobilenet_v3_small(weights=None)
                 state_dict = torch.load(
                     local_path, map_location="cpu", weights_only=True
                 )
@@ -88,29 +87,39 @@ class ReferenceFinderWorker(QThread):
         if not local_path.exists():
             self.progress.emit("Downloading MobileNetV3 model (one-time)...")
             try:
-                model = timm.create_model(
-                    "mobilenetv3_small_100", pretrained=True, num_classes=0
+                model = mobilenet_v3_small(
+                    weights=MobileNet_V3_Small_Weights.IMAGENET1K_V1
                 )
             except Exception as e:
                 self.error.emit(
                     f"Failed to download MobileNetV3 model: {e}\n\n"
-                    "Model source: https://huggingface.co/timm/"
-                    "mobilenetv3_small_100.lamb_in1k\n\n"
                     "To install manually, run on a machine with internet:\n"
-                    '  python -c "import timm, torch; m = timm.create_model('
-                    "'mobilenetv3_small_100', pretrained=True, num_classes=0);"
-                    f" torch.save(m.state_dict(), 'mobilenetv3_small_100.pth')\"\n"
-                    f"Then copy mobilenetv3_small_100.pth to:\n  {models_dir}"
+                    '  python -c "import torch; from torchvision.models import '
+                    "mobilenet_v3_small, MobileNet_V3_Small_Weights; "
+                    "m = mobilenet_v3_small("
+                    "weights=MobileNet_V3_Small_Weights.IMAGENET1K_V1); "
+                    f"torch.save(m.state_dict(), '{_MOBILENET_FILENAME}')\"\n"
+                    f"Then copy {_MOBILENET_FILENAME} to:\n  {models_dir}"
                 )
                 return
             models_dir.mkdir(parents=True, exist_ok=True)
             torch.save(model.state_dict(), local_path)
             logger.info(f"ReferenceFinderWorker: Cached MobileNetV3 to {local_path}")
 
+        # Remove classifier head to get feature embeddings (576-dim)
+        model.classifier = nn.Identity()
         model.eval()
 
-        data_config = timm.data.resolve_model_data_config(model)
-        transform = timm.data.create_transform(**data_config, is_training=False)
+        transform = transforms.Compose(
+            [
+                transforms.Resize(256),
+                transforms.CenterCrop(224),
+                transforms.ToTensor(),
+                transforms.Normalize(
+                    mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]
+                ),
+            ]
+        )
 
         if self._should_stop:
             return

@@ -54,6 +54,11 @@ hiddenimports = [
     'torch.cuda',
     'torchvision',
     'torchvision.transforms',
+    'torchvision.models',
+
+    # scikit-learn (used by Find Archetypes HDBSCAN clustering)
+    'sklearn',
+    'sklearn.cluster',
 
     # SAM models
     'segment_anything',
@@ -95,8 +100,12 @@ hiddenimports = [
 # Add all PyQt6 submodules
 hiddenimports += collect_submodules('PyQt6')
 
-# Add all torch submodules
+# Add all torch and torchvision submodules
 hiddenimports += collect_submodules('torch')
+hiddenimports += collect_submodules('torchvision')
+
+# Add scikit-learn submodules (HDBSCAN for Find Archetypes)
+hiddenimports += collect_submodules('sklearn')
 
 # Add SAM2 submodules
 hiddenimports += collect_submodules('sam2')

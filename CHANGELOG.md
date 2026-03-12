@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.4] - 2026-03-11
+
+### Fixed
+
+- Rescale slider enabled but had no effect on 3-channel grayscale JPEGs: `cache_original_image` now detects and collapses grayscale 3-channel images to 2D
+- Grayscale detection used strict `np.array_equal` which failed on JPEGs with compression artifacts; replaced with tolerance-based comparison
+- Resetting histogram after switching images displayed the previous image due to stale cached data in `ImageAdjustmentManager`
+
+### Changed
+
+- Find Archetypes MobileNetV3 model now loaded via `torchvision` instead of `timm`, removing the `timm` dependency
+- PyInstaller spec updated with `torchvision.models` and `sklearn` hidden imports for Windows executable support
+
+### Dependencies
+
+- Removed `timm>=1.0.0` (replaced by built-in `torchvision.models`)
+
 ## [1.7.3] - 2026-03-10
 
 ### Added
@@ -720,6 +737,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Image centering on load
 - Multi-class reindexing via drag and drop
 
+[1.7.4]: https://github.com/dnzckn/LazyLabel/compare/v1.7.3...v1.7.4
 [1.7.3]: https://github.com/dnzckn/LazyLabel/compare/v1.7.2...v1.7.3
 [1.7.2]: https://github.com/dnzckn/LazyLabel/compare/v1.7.1...v1.7.2
 [1.7.1]: https://github.com/dnzckn/LazyLabel/compare/v1.7.0...v1.7.1

@@ -119,15 +119,15 @@ Select the model from the dropdown in settings.
 
 ### MobileNetV3 (used by Find Archetypes in Sequence mode)
 
-The MobileNetV3 model (~4MB) is downloaded automatically on first use from [timm/mobilenetv3_small_100](https://huggingface.co/timm/mobilenetv3_small_100.lamb_in1k) and cached locally for offline use.
+The MobileNetV3 model (~4MB) is downloaded automatically on first use from [torchvision](https://pytorch.org/vision/stable/models/mobilenetv3.html) and cached locally for offline use.
 
 If the automatic download doesn't work:
 
 1. On a machine with internet, generate the weights file:
    ```bash
-   python -c "import timm, torch; m = timm.create_model('mobilenetv3_small_100', pretrained=True, num_classes=0); torch.save(m.state_dict(), 'mobilenetv3_small_100.pth')"
+   python -c "import torch; from torchvision.models import mobilenet_v3_small, MobileNet_V3_Small_Weights; m = mobilenet_v3_small(weights=MobileNet_V3_Small_Weights.IMAGENET1K_V1); torch.save(m.state_dict(), 'mobilenetv3_small_tv.pth')"
    ```
-2. Copy `mobilenetv3_small_100.pth` to LazyLabel's models folder:
+2. Copy `mobilenetv3_small_tv.pth` to LazyLabel's models folder:
    - Via pip: `<site-packages>/lazylabel/models/`
    - From source: `src/lazylabel/models/`
 

@@ -2092,6 +2092,8 @@ class MainWindow(QMainWindow):
 
         # Clear cached image data to prevent using previous image
         self._cached_original_image = None
+        if self.image_adjustment_manager is not None:
+            self.image_adjustment_manager.clear_cached_images()
 
         # Note: SAM embedding cache is intentionally NOT cleared here
         # The cache persists across image navigations for performance
