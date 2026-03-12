@@ -22,6 +22,7 @@ class ReferenceFinderWorker(QThread):
 
     Uses MobileNetV3 small (via torchvision) for embedding, HDBSCAN for
     clustering, and medoid selection for representative frame identification.
+    Automatically uses GPU when available.
 
     Signals:
         progress: Status message for UI feedback
@@ -33,7 +34,8 @@ class ReferenceFinderWorker(QThread):
     finished_analysis = pyqtSignal(list)
     error = pyqtSignal(str)
 
-    _BATCH_SIZE = 32
+    _BATCH_SIZE_CPU = 32
+    _BATCH_SIZE_GPU = 128
 
     def __init__(self, image_paths: list[str], parent=None):
         super().__init__(parent)
@@ -65,12 +67,19 @@ class ReferenceFinderWorker(QThread):
 
         n_images = len(self.image_paths)
 
+        # --- Select device ---
+        use_cuda = torch.cuda.is_available()
+        device = torch.device("cuda" if use_cuda else "cpu")
+        batch_size = self._BATCH_SIZE_GPU if use_cuda else self._BATCH_SIZE_CPU
+        device_name = torch.cuda.get_device_name(0) if use_cuda else "CPU"
+        logger.info(f"ReferenceFinderWorker: Using {device_name}")
+
         # --- Load model (cached locally for offline use) ---
         models_dir = Paths().models_dir
         local_path = models_dir / _MOBILENET_FILENAME
 
         if local_path.exists():
-            self.progress.emit("Loading MobileNetV3 model...")
+            self.progress.emit(f"Loading MobileNetV3 model ({device_name})...")
             try:
                 model = mobilenet_v3_small(weights=None)
                 state_dict = torch.load(
@@ -108,6 +117,7 @@ class ReferenceFinderWorker(QThread):
 
         # Remove classifier head to get feature embeddings (576-dim)
         model.classifier = nn.Identity()
+        model.to(device)
         model.eval()
 
         transform = transforms.Compose(
@@ -130,11 +140,11 @@ class ReferenceFinderWorker(QThread):
         embeddings = []
         valid_indices = []  # Track which frames produced valid embeddings
 
-        for i in range(0, n_images, self._BATCH_SIZE):
+        for i in range(0, n_images, batch_size):
             if self._should_stop:
                 return
 
-            batch_end = min(i + self._BATCH_SIZE, n_images)
+            batch_end = min(i + batch_size, n_images)
             self.progress.emit(f"Embedding frames {i + 1}-{batch_end}/{n_images}")
 
             batch_tensors = []
@@ -157,9 +167,9 @@ class ReferenceFinderWorker(QThread):
             if not batch_tensors:
                 continue
 
-            batch = torch.stack(batch_tensors)
+            batch = torch.stack(batch_tensors).to(device)
             with torch.no_grad():
-                features = model(batch).numpy()
+                features = model(batch).cpu().numpy()
 
             # L2-normalize
             norms = np.linalg.norm(features, axis=1, keepdims=True)

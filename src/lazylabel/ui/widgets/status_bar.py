@@ -38,6 +38,14 @@ class StatusBar(QStatusBar):
         self.permanent_label.setFont(font)
         self.addPermanentWidget(self.permanent_label)
 
+        # Device indicator (far right)
+        self.device_label = QLabel()
+        font = QFont()
+        font.setPointSize(8)
+        self.device_label.setFont(font)
+        self.addPermanentWidget(self.device_label)
+        self._update_device_indicator()
+
         # Default state
         self.set_ready_message()
 
@@ -107,3 +115,25 @@ class StatusBar(QStatusBar):
     def clear_message(self):
         """Immediately clear any message."""
         self.set_ready_message()
+
+    def _update_device_indicator(self):
+        """Detect GPU availability and update the device label."""
+        try:
+            import torch
+
+            if torch.cuda.is_available():
+                name = torch.cuda.get_device_name(0)
+                self.device_label.setText(f"GPU: {name}")
+                self.device_label.setStyleSheet(
+                    "color: #51cf66; padding: 2px 8px; font-size: 8pt;"
+                )
+            else:
+                self.device_label.setText("CPU Only")
+                self.device_label.setStyleSheet(
+                    "color: #888; padding: 2px 8px; font-size: 8pt;"
+                )
+        except ImportError:
+            self.device_label.setText("CPU Only")
+            self.device_label.setStyleSheet(
+                "color: #888; padding: 2px 8px; font-size: 8pt;"
+            )

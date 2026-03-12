@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.5] - 2026-03-11
+
+### Added
+
+- GPU acceleration for Find Archetypes: MobileNetV3 embedding automatically uses CUDA when available (batch size 128 vs 32 on CPU)
+- Persistent device indicator in bottom-right status bar showing "GPU: \<name\>" (green) or "CPU Only" (gray)
+
 ## [1.7.4] - 2026-03-11
 
 ### Fixed
@@ -737,6 +744,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Image centering on load
 - Multi-class reindexing via drag and drop
 
+[1.7.5]: https://github.com/dnzckn/LazyLabel/compare/v1.7.4...v1.7.5
 [1.7.4]: https://github.com/dnzckn/LazyLabel/compare/v1.7.3...v1.7.4
 [1.7.3]: https://github.com/dnzckn/LazyLabel/compare/v1.7.2...v1.7.3
 [1.7.2]: https://github.com/dnzckn/LazyLabel/compare/v1.7.1...v1.7.2
