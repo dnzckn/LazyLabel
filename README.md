@@ -13,7 +13,7 @@
 LazyLabel combines Meta's Segment Anything Model (SAM) with comprehensive manual annotation tools to accelerate the creation of pixel-perfect segmentation masks for computer vision applications.
 
 <div align="center">
-  <img src="https://raw.githubusercontent.com/dnzckn/LazyLabel/main/src/lazylabel/demo_pictures/gui.PNG" alt="LazyLabel Screenshot" width="800"/>
+  <img src="https://raw.githubusercontent.com/dnzckn/LazyLabel/main/src/lazylabel/media/demo_UI.png" alt="LazyLabel Screenshot" width="800"/>
 </div>
 
 ---
@@ -40,15 +40,54 @@ lazylabel-gui
 ## Core Features
 
 ### Annotation Tools
-- **AI (SAM)**: Single-click segmentation with point-based refinement (SAM 1.0 & 2.1, GPU/CPU). Use negative points to subtract regions from the prediction.
-- **Polygon**: Vertex-level drawing and editing for precise boundaries
-- **Box**: Bounding box annotations for object detection. Hold Shift on release to erase with the box instead of adding.
+
+<table>
+<tr>
+<th>Tool</th>
+<th>Create</th>
+<th>Erase</th>
+</tr>
+<tr>
+<td><strong>AI (SAM)</strong><br>Point-based segmentation<br>SAM 1.0 & 2.1, GPU/CPU</td>
+<td><img src="https://raw.githubusercontent.com/dnzckn/LazyLabel/main/src/lazylabel/media/AI_add.gif" width="280"/></td>
+<td><img src="https://raw.githubusercontent.com/dnzckn/LazyLabel/main/src/lazylabel/media/AI_remove.gif" width="280"/></td>
+</tr>
+<tr>
+<td><strong>Box</strong><br>Bounding box annotations<br>Hold Shift to erase</td>
+<td><img src="https://raw.githubusercontent.com/dnzckn/LazyLabel/main/src/lazylabel/media/box_add.gif" width="280"/></td>
+<td><img src="https://raw.githubusercontent.com/dnzckn/LazyLabel/main/src/lazylabel/media/box_remove.gif" width="280"/></td>
+</tr>
+<tr>
+<td><strong>Polygon</strong><br>Vertex-level precision<br>Click to place vertices</td>
+<td><img src="https://raw.githubusercontent.com/dnzckn/LazyLabel/main/src/lazylabel/media/poly_add.gif" width="280"/></td>
+<td><img src="https://raw.githubusercontent.com/dnzckn/LazyLabel/main/src/lazylabel/media/poly_remove.gif" width="280"/></td>
+</tr>
+</table>
+
+### Editing Tools
+
+<table>
+<tr>
+<th>Move Polygon</th>
+<th>Move Vertex</th>
+</tr>
+<tr>
+<td><img src="https://raw.githubusercontent.com/dnzckn/LazyLabel/main/src/lazylabel/media/move_polygon.gif" width="350"/></td>
+<td><img src="https://raw.githubusercontent.com/dnzckn/LazyLabel/main/src/lazylabel/media/move_vertex.gif" width="350"/></td>
+</tr>
+</table>
+
 - **Select**: Click to select existing masks for editing, reclassing, or deletion. Hold Shift+Space to erase the overlap of a drawn segment from the selected mask.
 
 ### Annotation Modes
 - **Single View**: Fine-tune individual masks with maximum precision
 - **Multi View**: Annotate up to 2 images simultaneously, ideal for objects in similar positions with slight variations
 - **Sequence**: Propagate a refined mask across thousands of frames using SAM 2's video predictor
+
+<div align="center">
+  <img src="https://raw.githubusercontent.com/dnzckn/LazyLabel/main/src/lazylabel/media/sequence_demo.gif" width="800"/>
+  <br><em>Sequence Mode: Find Archetypes + Propagation</em>
+</div>
 
 ### Image Processing
 - **FFT filtering**: Remove noise and enhance edges
