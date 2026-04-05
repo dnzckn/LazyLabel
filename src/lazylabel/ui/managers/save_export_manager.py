@@ -392,10 +392,10 @@ class SaveExportManager:
 
     def _build_export_context(self, image_path: str, settings: dict) -> ExportContext:
         """Build an ExportContext for the current single-view state."""
-        h, w = (
-            self.viewer._pixmap_item.pixmap().height(),
-            self.viewer._pixmap_item.pixmap().width(),
-        )
+        pixmap = self.viewer._pixmap_item.pixmap()
+        h, w = pixmap.height(), pixmap.width()
+        if h == 0 or w == 0:
+            raise ValueError("No image loaded (pixmap is empty)")
         class_order = self.segment_manager.get_unique_class_ids()
         class_labels = [
             self.segment_manager.get_class_alias(cid) for cid in class_order

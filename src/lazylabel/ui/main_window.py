@@ -1008,6 +1008,9 @@ class MainWindow(QMainWindow):
             "prev_flagged_frame": self._on_prev_flagged_frame,
             "next_reference_frame": self._on_next_reference_frame,
             "prev_reference_frame": self._on_prev_reference_frame,
+            "next_suggested_frame": self._on_next_suggested_frame,
+            "prev_suggested_frame": self._on_prev_suggested_frame,
+            "find_archetypes": self._on_find_references_requested,
             "propagate": self._on_propagate_shortcut,
         }
 
@@ -1058,6 +1061,7 @@ class MainWindow(QMainWindow):
             {
                 "show_name": self.settings.file_manager_show_name,
                 "show_npz": self.settings.file_manager_show_npz,
+                "show_cm": self.settings.file_manager_show_cm,
                 "show_txt": self.settings.file_manager_show_txt,
                 "show_seg": self.settings.file_manager_show_seg,
                 "show_coco": self.settings.file_manager_show_coco,
@@ -1742,6 +1746,7 @@ class MainWindow(QMainWindow):
         settings = self.right_panel.file_manager.getDisplaySettings()
         self.settings.file_manager_show_name = settings["show_name"]
         self.settings.file_manager_show_npz = settings["show_npz"]
+        self.settings.file_manager_show_cm = settings.get("show_cm", False)
         self.settings.file_manager_show_txt = settings["show_txt"]
         self.settings.file_manager_show_seg = settings.get("show_seg", False)
         self.settings.file_manager_show_coco = settings.get("show_coco", False)

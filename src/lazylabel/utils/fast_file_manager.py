@@ -181,6 +181,7 @@ class FileInfo:
     size: int = 0  # Lazy load for speed
     modified: float = 0.0  # Lazy load for speed
     has_npz: bool = False
+    has_cm_npz: bool = False  # NPZ Class Map _CM.npz
     has_txt: bool = False  # YOLO detection .txt
     has_seg_txt: bool = False  # YOLO segmentation _seg.txt
     has_coco_json: bool = False  # COCO _coco.json
@@ -211,6 +212,7 @@ class FileScanner(QThread):
             # Use os.scandir() - MUCH faster than Path.iterdir()
             # Single pass to collect all file info
             npz_stems = set()
+            cm_npz_stems = set()
             txt_stems = set()
             seg_stems = set()
             coco_stems = set()
@@ -228,7 +230,10 @@ class FileScanner(QThread):
                     stem = os.path.splitext(name)[0]
 
                     if ext == ".npz":
-                        npz_stems.add(stem)
+                        if stem.endswith("_CM"):
+                            cm_npz_stems.add(stem[:-3])
+                        else:
+                            npz_stems.add(stem)
                     elif ext == ".txt":
                         if stem.endswith("_seg"):
                             seg_stems.add(stem[:-4])
@@ -258,6 +263,7 @@ class FileScanner(QThread):
                     path=Path(path),
                     name=name,
                     has_npz=stem in npz_stems,
+                    has_cm_npz=stem in cm_npz_stems,
                     has_txt=stem in txt_stems,
                     has_seg_txt=stem in seg_stems,
                     has_coco_json=stem in coco_stems,
@@ -307,7 +313,8 @@ class FastFileModel(QAbstractTableModel):
         # Column management
         self._all_columns = [
             "Name",
-            "NPZ",
+            "NPZ OHE",
+            "NPZ CM",
             "YOLO Det",
             "YOLO Seg",
             "COCO",
@@ -316,10 +323,11 @@ class FastFileModel(QAbstractTableModel):
             "Modified",
             "Size",
         ]
-        # Default: show Name, NPZ, TXT, Modified, Size; new format columns hidden
+        # Default: show Name, NPZ OHE, YOLO Det, Modified, Size
         self._visible_columns = [
             True,
             True,
+            False,
             True,
             False,
             False,
@@ -478,7 +486,8 @@ class FastFileModel(QAbstractTableModel):
         column_name = self._all_columns[logical_col]
 
         _STATUS_COLUMNS = {
-            "NPZ": "has_npz",
+            "NPZ OHE": "has_npz",
+            "NPZ CM": "has_cm_npz",
             "YOLO Det": "has_txt",
             "YOLO Seg": "has_seg_txt",
             "COCO": "has_coco_json",
@@ -517,7 +526,8 @@ class FastFileModel(QAbstractTableModel):
             # Return the FileInfo object for custom access
             return file_info
         elif role == Qt.ItemDataRole.TextAlignmentRole and column_name in (
-            "NPZ",
+            "NPZ OHE",
+            "NPZ CM",
             "YOLO Det",
             "YOLO Seg",
             "COCO",
@@ -601,6 +611,7 @@ class FastFileModel(QAbstractTableModel):
         total_files = len(self._files)
         counts = {
             "npz": 0,
+            "cm_npz": 0,
             "txt": 0,
             "seg": 0,
             "coco": 0,
@@ -610,6 +621,8 @@ class FastFileModel(QAbstractTableModel):
         for fi in self._files:
             if fi.has_npz:
                 counts["npz"] += 1
+            if fi.has_cm_npz:
+                counts["cm_npz"] += 1
             if fi.has_txt:
                 counts["txt"] += 1
             if fi.has_seg_txt:
@@ -648,6 +661,7 @@ class FastFileModel(QAbstractTableModel):
         # Check all format outputs
         new_status = {
             "has_npz": image_path.with_suffix(".npz").exists(),
+            "has_cm_npz": (parent / f"{stem}_CM.npz").exists(),
             "has_txt": image_path.with_suffix(".txt").exists(),
             "has_seg_txt": (parent / f"{stem}_seg.txt").exists(),
             "has_coco_json": (parent / f"{stem}_coco.json").exists(),
@@ -887,8 +901,10 @@ class FileSortProxyModel(QSortFilterProxyModel):
                 except OSError:
                     right_info.modified = -1
             return left_info.modified < right_info.modified
-        elif column_name == "NPZ":
+        elif column_name == "NPZ OHE":
             return left_info.has_npz < right_info.has_npz
+        elif column_name == "NPZ CM":
+            return left_info.has_cm_npz < right_info.has_cm_npz
         elif column_name == "YOLO Det":
             return left_info.has_txt < right_info.has_txt
         elif column_name == "YOLO Seg":
@@ -934,7 +950,8 @@ class FooterModel(QAbstractTableModel):
     """Single-row model displaying aggregate image/annotation counts."""
 
     _ATTR_MAP = {
-        "NPZ": "has_npz",
+        "NPZ OHE": "has_npz",
+        "NPZ CM": "has_cm_npz",
         "YOLO Det": "has_txt",
         "YOLO Seg": "has_seg_txt",
         "COCO": "has_coco_json",
@@ -1195,14 +1212,15 @@ class FastFileManager(QWidget):
         # Column visibility dropdown
         self._column_dropdown = CustomDropdown()
         self._column_dropdown.addCheckableItem("Name", True, 0)
-        self._column_dropdown.addCheckableItem("NPZ", True, 1)
-        self._column_dropdown.addCheckableItem("YOLO Det", True, 2)
-        self._column_dropdown.addCheckableItem("YOLO Seg", False, 3)
-        self._column_dropdown.addCheckableItem("COCO", False, 4)
-        self._column_dropdown.addCheckableItem("VOC", False, 5)
-        self._column_dropdown.addCheckableItem("CreateML", False, 6)
-        self._column_dropdown.addCheckableItem("Modified", True, 7)
-        self._column_dropdown.addCheckableItem("Size", True, 8)
+        self._column_dropdown.addCheckableItem("NPZ OHE", True, 1)
+        self._column_dropdown.addCheckableItem("NPZ CM", False, 2)
+        self._column_dropdown.addCheckableItem("YOLO Det", True, 3)
+        self._column_dropdown.addCheckableItem("YOLO Seg", False, 4)
+        self._column_dropdown.addCheckableItem("COCO", False, 5)
+        self._column_dropdown.addCheckableItem("VOC", False, 6)
+        self._column_dropdown.addCheckableItem("CreateML", False, 7)
+        self._column_dropdown.addCheckableItem("Modified", True, 8)
+        self._column_dropdown.addCheckableItem("Size", True, 9)
         self._column_dropdown.activated.connect(self._on_column_visibility_changed)
         layout.addWidget(self._column_dropdown)
 
@@ -1334,14 +1352,15 @@ class FastFileManager(QWidget):
                 if column_name == "Name":
                     header.resizeSection(i, 200)  # Default name column width
                 elif column_name in (
-                    "NPZ",
+                    "NPZ OHE",
+                    "NPZ CM",
                     "YOLO Det",
                     "YOLO Seg",
                     "COCO",
                     "VOC",
                     "CreateML",
                 ):
-                    header.resizeSection(i, 50)  # Compact for checkmarks
+                    header.resizeSection(i, 80)  # Fit header text
                 elif column_name == "Modified":
                     header.resizeSection(i, 120)  # Date needs more space
                 elif column_name == "Size":
@@ -1882,13 +1901,14 @@ class FastFileManager(QWidget):
         return {
             "show_name": self._column_dropdown.isItemChecked(0),
             "show_npz": self._column_dropdown.isItemChecked(1),
-            "show_txt": self._column_dropdown.isItemChecked(2),
-            "show_seg": self._column_dropdown.isItemChecked(3),
-            "show_coco": self._column_dropdown.isItemChecked(4),
-            "show_voc": self._column_dropdown.isItemChecked(5),
-            "show_cml": self._column_dropdown.isItemChecked(6),
-            "show_modified": self._column_dropdown.isItemChecked(7),
-            "show_size": self._column_dropdown.isItemChecked(8),
+            "show_cm": self._column_dropdown.isItemChecked(2),
+            "show_txt": self._column_dropdown.isItemChecked(3),
+            "show_seg": self._column_dropdown.isItemChecked(4),
+            "show_coco": self._column_dropdown.isItemChecked(5),
+            "show_voc": self._column_dropdown.isItemChecked(6),
+            "show_cml": self._column_dropdown.isItemChecked(7),
+            "show_modified": self._column_dropdown.isItemChecked(8),
+            "show_size": self._column_dropdown.isItemChecked(9),
             "sort_order": self._current_sort_index,
         }
 
@@ -1901,14 +1921,14 @@ class FastFileManager(QWidget):
         # Set column visibility (with backward-compatible defaults)
         self._column_dropdown.setItemChecked(0, settings.get("show_name", True))
         self._column_dropdown.setItemChecked(1, settings.get("show_npz", True))
-        self._column_dropdown.setItemChecked(2, settings.get("show_txt", True))
-        self._column_dropdown.setItemChecked(3, settings.get("show_seg", False))
-        self._column_dropdown.setItemChecked(4, settings.get("show_coco", False))
-        self._column_dropdown.setItemChecked(5, settings.get("show_voc", False))
-        self._column_dropdown.setItemChecked(6, settings.get("show_cml", False))
-        # Migrate old indices: "show_modified" was index 3, "show_size" was index 4
-        self._column_dropdown.setItemChecked(7, settings.get("show_modified", True))
-        self._column_dropdown.setItemChecked(8, settings.get("show_size", True))
+        self._column_dropdown.setItemChecked(2, settings.get("show_cm", False))
+        self._column_dropdown.setItemChecked(3, settings.get("show_txt", True))
+        self._column_dropdown.setItemChecked(4, settings.get("show_seg", False))
+        self._column_dropdown.setItemChecked(5, settings.get("show_coco", False))
+        self._column_dropdown.setItemChecked(6, settings.get("show_voc", False))
+        self._column_dropdown.setItemChecked(7, settings.get("show_cml", False))
+        self._column_dropdown.setItemChecked(8, settings.get("show_modified", True))
+        self._column_dropdown.setItemChecked(9, settings.get("show_size", True))
 
         # Apply to model
         num_columns = len(self._model._all_columns)

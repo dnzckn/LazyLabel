@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.8] - 2026-04-05
+
+### Added
+
+- **Archetype navigation hotkeys**: H (next), Shift+H (previous), Ctrl+H (find archetypes) in Sequence mode
+- NPZ CM column in file manager dropdown with full persistence support
+- Styled console logging with color-coded level tags matching the startup banner palette
+
+### Fixed
+
+- File manager NPZ column renamed to "NPZ OHE" to distinguish from NPZ Class Map
+- File manager annotation column widths increased to fit header text
+- Save crash when pixmap is empty (0x0) — now shows a clear error instead of broadcast shape failure
+
 ## [1.7.7] - 2026-04-05
 
 ### Added
@@ -773,6 +787,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Image centering on load
 - Multi-class reindexing via drag and drop
 
+[1.7.8]: https://github.com/dnzckn/LazyLabel/compare/v1.7.7...v1.7.8
 [1.7.7]: https://github.com/dnzckn/LazyLabel/compare/v1.7.6...v1.7.7
 [1.7.6]: https://github.com/dnzckn/LazyLabel/compare/v1.7.5...v1.7.6
 [1.7.5]: https://github.com/dnzckn/LazyLabel/compare/v1.7.4...v1.7.5

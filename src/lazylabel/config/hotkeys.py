@@ -143,6 +143,24 @@ class HotkeyManager:
                 category="Sequence",
             ),
             HotkeyAction(
+                "next_suggested_frame",
+                "Next Archetype Frame",
+                "H",
+                category="Sequence",
+            ),
+            HotkeyAction(
+                "prev_suggested_frame",
+                "Previous Archetype Frame",
+                "Shift+H",
+                category="Sequence",
+            ),
+            HotkeyAction(
+                "find_archetypes",
+                "Find Archetypes",
+                "Ctrl+H",
+                category="Sequence",
+            ),
+            HotkeyAction(
                 "propagate",
                 "Start Propagation",
                 "Ctrl+P",

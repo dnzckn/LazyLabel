@@ -63,7 +63,7 @@ _TIPS = [
     "Tip: Press N / Shift+N to jump between flagged frames, B / Shift+B between reference frames.",
     "Tip: 'Find Archetypes' identifies diverse frames via clustering — label them, then add as references.",
     "Tip: Streaming mode kicks in for 250+ frame sequences to keep memory bounded.",
-    "Tip: Use Border Crop to constrain annotations to a region of interest.",
+    "Tip: Use Border Crop to constrain annotations/filters to a region of interest.",
     "Tip: FFT Threshold helps filter noise in the frequency domain.",
     "Tip: CLAHE in the Rescale widget enhances local contrast adaptively.",
     "Tip: Adjust gamma to reveal detail in dark or overexposed images.",
