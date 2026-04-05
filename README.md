@@ -4,7 +4,7 @@
 [![License](https://img.shields.io/pypi/l/lazylabel-gui)](https://github.com/dnzckn/LazyLabel/blob/main/LICENSE)
 
 <div align="center">
-  <img src="https://raw.githubusercontent.com/dnzckn/LazyLabel/main/src/lazylabel/demo_pictures/logo_green.png" alt="LazyLabel Cursive" style="height:60px; vertical-align:middle;" />
+  <img src="https://raw.githubusercontent.com/dnzckn/LazyLabel/main/src/lazylabel/demo_pictures/logo_green.png" alt="LazyLabel Cursive" style="height:180px; vertical-align:middle;" />
 </div>
 
 **AI-Assisted Image Segmentation for Machine Learning Dataset Preparation**
