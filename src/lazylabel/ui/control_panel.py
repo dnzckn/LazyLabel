@@ -23,7 +23,6 @@ from .widgets import (
     ModelSelectionWidget,
     RescaleWidget,
     SettingsWidget,
-    ShortcutSpinBox,
 )
 
 
@@ -220,9 +219,6 @@ class ControlPanel(QWidget):
     auto_polygon_toggled = pyqtSignal(bool)  # Emits new toggle state
     polygon_resolution_changed = pyqtSignal(float)  # Emits epsilon factor
     auto_polygon_reset = pyqtSignal()  # Emits when reset to defaults
-    # Sequence settings signals
-    sequence_range_changed = pyqtSignal(int)  # Emits propagation range
-    sequence_max_requested = pyqtSignal()  # Request to set range to max (folder size)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -701,89 +697,6 @@ class ControlPanel(QWidget):
         )
         layout.addWidget(convert_collapsible)
 
-        # Sequence Settings - collapsible
-        sequence_widget = QWidget()
-        sequence_layout = QVBoxLayout(sequence_widget)
-        sequence_layout.setContentsMargins(0, 0, 0, 0)
-        sequence_layout.setSpacing(6)
-
-        # Propagation Range row
-        range_row = QHBoxLayout()
-        range_row.setSpacing(6)
-
-        range_label = QLabel("Propagation Range:")
-        range_label.setStyleSheet("color: #B0B0B0; font-size: 10px;")
-        range_row.addWidget(range_label)
-
-        self.sequence_range_spin = ShortcutSpinBox()
-        self.sequence_range_spin.setRange(1, 10000)
-        self.sequence_range_spin.setValue(50)
-        self.sequence_range_spin.setToolTip(
-            "Number of frames to propagate from the reference frame.\n"
-            "If you label frame 0 with range 50, frames 0-49 will be auto-labeled."
-        )
-        self.sequence_range_spin.setStyleSheet(
-            """
-            QSpinBox {
-                background-color: rgba(50, 50, 50, 0.8);
-                border: 1px solid rgba(80, 80, 80, 0.6);
-                border-radius: 4px;
-                color: #E0E0E0;
-                padding: 4px;
-                min-width: 60px;
-            }
-            QSpinBox:hover {
-                border-color: rgba(100, 100, 100, 0.8);
-            }
-            QSpinBox::up-button, QSpinBox::down-button {
-                background: rgba(70, 70, 70, 0.8);
-                border: none;
-                width: 16px;
-            }
-            QSpinBox::up-button:hover, QSpinBox::down-button:hover {
-                background: rgba(90, 90, 90, 0.9);
-            }
-        """
-        )
-        range_row.addWidget(self.sequence_range_spin)
-
-        self.btn_sequence_max = QPushButton("Max")
-        self.btn_sequence_max.setToolTip(
-            "Set range to include all images in the folder"
-        )
-        self.btn_sequence_max.setFixedWidth(50)
-        self.btn_sequence_max.setStyleSheet(
-            """
-            QPushButton {
-                background-color: rgba(80, 80, 80, 0.8);
-                border: 1px solid rgba(100, 100, 100, 0.6);
-                border-radius: 4px;
-                color: #E0E0E0;
-                font-size: 10px;
-                padding: 4px 8px;
-            }
-            QPushButton:hover {
-                background-color: rgba(100, 100, 100, 0.9);
-                border-color: rgba(120, 120, 120, 0.8);
-            }
-            QPushButton:pressed {
-                background-color: rgba(60, 60, 60, 0.9);
-            }
-        """
-        )
-        range_row.addWidget(self.btn_sequence_max)
-        range_row.addStretch()
-
-        sequence_layout.addLayout(range_row)
-
-        self.sequence_collapsible = SimpleCollapsible(
-            "Sequence Settings", sequence_widget
-        )
-        # Store the inner widget for enabling/disabling
-        self.sequence_settings_widget = sequence_widget
-        layout.addWidget(self.sequence_collapsible)
-        # Always enabled - memory preload is useful in ALL modes
-
         # Application Settings - collapsible
         settings_collapsible = SimpleCollapsible(
             "Application Settings", self.settings_widget
@@ -966,10 +879,6 @@ class ControlPanel(QWidget):
         self.btn_reset_auto_polygon.clicked.connect(
             self._reset_auto_polygon_to_defaults
         )
-
-        # Sequence settings signals
-        self.sequence_range_spin.valueChanged.connect(self.sequence_range_changed)
-        self.btn_sequence_max.clicked.connect(self.sequence_max_requested)
 
     def _on_sam_mode_clicked(self):
         """Handle AI mode button click."""
@@ -1262,58 +1171,3 @@ class ControlPanel(QWidget):
         self.auto_polygon_toggled.emit(False)
         self.polygon_resolution_changed.emit(self.get_polygon_epsilon())
         self.auto_polygon_reset.emit()
-
-    # =========================================================================
-    # Sequence Settings Methods
-    # =========================================================================
-
-    def _set_sequence_settings_enabled(self, enabled: bool) -> None:
-        """Internal method to enable/disable sequence settings visually."""
-        # Disable all interactive elements
-        self.sequence_range_spin.setEnabled(enabled)
-        self.btn_sequence_max.setEnabled(enabled)
-
-        # Gray out the collapsible header when disabled
-        if enabled:
-            self.sequence_collapsible.setStyleSheet("")
-            self.sequence_settings_widget.setStyleSheet("")
-        else:
-            self.sequence_collapsible.setStyleSheet("color: #666;")
-            self.sequence_settings_widget.setStyleSheet(
-                "QWidget { color: #666; } "
-                "QLabel { color: #555; } "
-                "QPushButton { background-color: rgba(50, 50, 50, 0.5); color: #555; } "
-                "QSpinBox { background-color: rgba(40, 40, 40, 0.5); color: #555; }"
-            )
-
-    def set_sequence_mode_active(self, active: bool) -> None:
-        """Enable/disable sequence settings based on whether sequence mode is active.
-
-        Call this when switching view modes.
-
-        Args:
-            active: True if entering sequence mode, False otherwise
-        """
-        self._set_sequence_settings_enabled(active)
-        # Auto-expand when entering sequence mode, collapse when leaving
-        if (
-            active
-            and self.sequence_collapsible.is_collapsed
-            or not active
-            and not self.sequence_collapsible.is_collapsed
-        ):
-            self.sequence_collapsible.toggle_collapse()
-
-    def get_sequence_range(self) -> int:
-        """Get the current propagation range value."""
-        return self.sequence_range_spin.value()
-
-    def set_sequence_range(self, value: int) -> None:
-        """Set the propagation range value."""
-        self.sequence_range_spin.blockSignals(True)
-        self.sequence_range_spin.setValue(value)
-        self.sequence_range_spin.blockSignals(False)
-
-    def set_sequence_range_max(self, max_value: int) -> None:
-        """Set the maximum allowed range (e.g., folder size)."""
-        self.sequence_range_spin.setMaximum(max_value)

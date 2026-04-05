@@ -1,3 +1,4 @@
+import gc
 import os
 from collections.abc import Callable
 from pathlib import Path
@@ -1043,6 +1044,25 @@ class Sam2Model:
                 logger.debug("SAM2: Video state reset")
             except Exception as e:
                 logger.error(f"SAM2: Failed to reset video state: {e}")
+
+    def cleanup_video_state(self) -> None:
+        """Reset video state without destroying the predictor model.
+
+        This frees the frame tensor and inference state memory while
+        keeping the video predictor model loaded (avoiding expensive
+        Hydra re-initialization). Used between chunks in streaming
+        propagation.
+        """
+        if self.video_predictor is not None and self.video_inference_state is not None:
+            self.video_predictor.reset_state(self.video_inference_state)
+        if self.video_inference_state is not None:
+            self.video_inference_state = None
+        self.video_image_paths = []
+        self.is_video_initialized = False
+        self._cleanup_temp_dir()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+        gc.collect()
 
     def cleanup_video_predictor(self) -> None:
         """Clean up video predictor to free GPU memory."""

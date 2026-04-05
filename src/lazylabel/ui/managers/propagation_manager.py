@@ -3,7 +3,7 @@
 This manager handles:
 - Video state initialization for image sequences
 - Reference frame annotation management
-- Forward/backward propagation execution
+- Forward/backward propagation execution (full-context or streaming/chunked)
 - Confidence scoring and frame flagging
 - Progress tracking for UI updates
 """
@@ -67,6 +67,15 @@ class ReferenceAnnotation:
 
 
 @dataclass
+class ChunkConfig:
+    """Configuration for chunked (streaming) propagation."""
+
+    chunk_size: int = 250  # frames per chunk (~3 GB frame tensor)
+    overlap: int = 5  # overlap between chunks for temporal continuity
+    streaming: bool = True  # False = full context (current behavior)
+
+
+@dataclass
 class PropagationState:
     """State of the propagation process."""
 
@@ -90,12 +99,21 @@ class PropagationState:
     skipped_frame_indices: set[int] = field(default_factory=set)
     reference_dimensions: tuple[int, int] | None = None
 
+    # Deferred init: filtered image paths and cache for per-chunk loading
+    all_image_paths: list[str] = field(default_factory=list)
+    chunk_config: ChunkConfig = field(default_factory=ChunkConfig)
+    image_cache: dict[str, np.ndarray] | None = None
+
 
 class PropagationManager:
     """Manages SAM 2 video predictor for sequence mask propagation.
 
     This class provides a high-level facade for SAM 2 video propagation,
     handling state management, reference annotations, and result tracking.
+
+    Supports two propagation modes:
+    - Full Context: loads all frames into SAM2 at once (best quality, <=250 frames)
+    - Streaming: chunked propagation with rolling context window (bounded memory)
     """
 
     def __init__(self, main_window: MainWindow):
@@ -167,20 +185,19 @@ class PropagationManager:
         image_cache: dict[str, np.ndarray] | None = None,
         progress_callback: Callable[[int, int, str], None] | None = None,
     ) -> bool:
-        """Initialize the video predictor with an image sequence.
+        """Initialize metadata for an image sequence (deferred SAM2 init).
 
-        Images with dimensions that don't match reference_dimensions are
-        automatically filtered out. A mapping between SAM2 frame indices
-        and timeline frame indices is stored in self.state.
+        Performs dimension filtering and builds index mappings, but does NOT
+        load frames into SAM2's video predictor. The actual SAM2 initialization
+        is deferred to propagation time, enabling both full-context and
+        streaming (chunked) propagation modes.
 
         Args:
-            image_paths: List of image file paths for the sequence. Only
-                these images are loaded into the video predictor.
+            image_paths: List of image file paths for the sequence.
             reference_dimensions: Optional (height, width) tuple. If provided,
                 images with different dimensions are skipped.
             image_cache: Optional dict mapping image paths to numpy arrays.
-                If provided, cached images will be used instead of reading
-                from disk, which saves I/O when images are preloaded.
+                Stored for later use during per-chunk SAM2 initialization.
             progress_callback: Optional callback(current, total, message)
                 for reporting per-image progress to the UI.
 
@@ -244,43 +261,39 @@ class PropagationManager:
                     f"with mismatched dimensions, {len(filtered_paths)} remaining"
                 )
         else:
-            # No filtering - mapping built after init succeeds
+            # No filtering — build 1:1 mapping directly
             filtered_paths = list(image_paths)
+            for i in range(len(filtered_paths)):
+                sam2_to_timeline[i] = i
+                timeline_to_sam2[i] = i
 
         if not filtered_paths:
             logger.error("PropagationManager: No images match reference dimensions")
             return False
 
-        # Initialize video state with only the matching images
-        if not self.sam2_model.init_video_state(
-            filtered_paths,
-            image_cache=image_cache,
-            progress_callback=progress_callback,
-        ):
-            logger.error("PropagationManager: Failed to initialize video state")
-            return False
+        # Determine chunk config (auto-detect streaming mode)
+        chunk_config = ChunkConfig(
+            streaming=len(filtered_paths) > ChunkConfig.chunk_size,
+        )
 
-        # For no-filtering case, build 1:1 mapping using actual frame count from SAM2
-        if reference_dimensions is None:
-            actual_count = self.sam2_model.video_frame_count
-            for i in range(actual_count):
-                sam2_to_timeline[i] = i
-                timeline_to_sam2[i] = i
-
-        # Reset propagation state with index mapping
+        # Reset propagation state with index mapping (SAM2 NOT initialized yet)
         self.state = PropagationState(
             is_initialized=True,
-            total_frames=self.sam2_model.video_frame_count,
+            total_frames=len(filtered_paths),
             confidence_threshold=0.99,
             sam2_to_timeline=sam2_to_timeline,
             timeline_to_sam2=timeline_to_sam2,
             skipped_frame_indices=skipped,
             reference_dimensions=reference_dimensions,
+            all_image_paths=filtered_paths,
+            chunk_config=chunk_config,
+            image_cache=image_cache,
         )
 
         logger.info(
             f"PropagationManager: Initialized with {self.state.total_frames} frames"
             f" ({len(skipped)} skipped)"
+            f", mode={'streaming' if chunk_config.streaming else 'full-context'}"
         )
         return True
 
@@ -364,7 +377,10 @@ class PropagationManager:
         class_name: str,
         obj_id: int | None = None,
     ) -> int:
-        """Add a reference annotation for propagation.
+        """Add a reference annotation for propagation (store-only).
+
+        Annotations are stored in state and registered with SAM2 at
+        propagation time. This allows deferred SAM2 initialization.
 
         Args:
             frame_idx: Timeline frame index where the annotation is located.
@@ -404,19 +420,10 @@ class PropagationManager:
         )
         self.state.reference_annotations.append(annotation)
 
-        # Add mask to SAM 2 video predictor using SAM2 index
-        if self.sam2_model is not None:
-            result = self.sam2_model.add_video_mask(
-                frame_idx=sam2_idx,
-                obj_id=obj_id,
-                mask=mask,
-            )
-            if result is not None:
-                logger.info(
-                    f"PropagationManager: Added reference annotation obj_id={obj_id}, "
-                    f"frame={frame_idx} (SAM2: {sam2_idx}), "
-                    f"class={class_name}, confidence={result[1]:.2f}"
-                )
+        logger.info(
+            f"PropagationManager: Stored reference annotation obj_id={obj_id}, "
+            f"frame={frame_idx} (SAM2: {sam2_idx}), class={class_name}"
+        )
 
         return obj_id
 
@@ -437,7 +444,7 @@ class PropagationManager:
         self.state.reference_annotations.clear()
         self.clear_propagation_results()
 
-        # Reset video state to clear old prompts
+        # Reset video state to clear old prompts (no-op if not initialized)
         if self.sam2_model is not None:
             self.sam2_model.reset_video_state()
 
@@ -537,7 +544,9 @@ class PropagationManager:
     ):
         """Propagate masks through the sequence.
 
-        This is a generator that yields progress updates and results.
+        Dispatches to full-context or streaming (chunked) mode based on
+        the chunk config determined during init_sequence(). Both modes
+        yield the same (timeline_idx, total, result) tuples.
 
         Args:
             direction: Direction to propagate (forward/backward/bidirectional)
@@ -562,8 +571,7 @@ class PropagationManager:
 
         self._cancel_requested = False
 
-        # Determine range based on direction
-        # Reference indices are stored in SAM2 space
+        # Determine range based on direction (SAM2 space)
         ref_indices = self.state.reference_frame_indices
         min_ref = min(ref_indices) if ref_indices else 0
         max_ref = max(ref_indices) if ref_indices else 0
@@ -580,6 +588,51 @@ class PropagationManager:
             else None
         )
 
+        # Determine propagation mode
+        use_streaming = (
+            self.state.chunk_config.streaming
+            and self.state.total_frames > self.state.chunk_config.chunk_size
+        )
+
+        if use_streaming:
+            yield from self._propagate_streaming(
+                direction, sam2_start, sam2_end, min_ref, max_ref, skip_flagged
+            )
+        else:
+            yield from self._propagate_full_context(
+                direction, sam2_start, sam2_end, min_ref, max_ref, skip_flagged
+            )
+
+    # ========== Full-Context Propagation ==========
+
+    def _propagate_full_context(
+        self,
+        direction: PropagationDirection,
+        sam2_start: int | None,
+        sam2_end: int | None,
+        min_ref: int,
+        max_ref: int,
+        skip_flagged: bool,
+    ):
+        """Full-context propagation: load all frames into SAM2 at once."""
+        # Initialize SAM2 with all frames if not already initialized
+        if not self.sam2_model.is_video_initialized:
+            logger.info(
+                f"PropagationManager: Initializing SAM2 with "
+                f"{len(self.state.all_image_paths)} frames (full-context)"
+            )
+            if not self.sam2_model.init_video_state(
+                self.state.all_image_paths,
+                image_cache=self.state.image_cache,
+            ):
+                logger.error("PropagationManager: Failed to initialize video state")
+                return
+
+        # Register reference annotations with SAM2
+        for ann in self.state.reference_annotations:
+            self.sam2_model.add_video_mask(ann.frame_idx, ann.obj_id, ann.mask)
+
+        # Dispatch by direction using existing _propagate_range
         if direction == PropagationDirection.FORWARD:
             start = sam2_start if sam2_start is not None else min_ref
             end = sam2_end if sam2_end is not None else self.state.total_frames - 1
@@ -595,7 +648,6 @@ class PropagationManager:
             )
 
         elif direction == PropagationDirection.BIDIRECTIONAL:
-            # Propagate forward from min reference to end
             end = sam2_end if sam2_end is not None else self.state.total_frames - 1
             yield from self._propagate_range(
                 min_ref, end, reverse=False, skip_flagged=skip_flagged
@@ -604,7 +656,6 @@ class PropagationManager:
             if self._cancel_requested:
                 return
 
-            # Then propagate backward from min reference to start
             start = sam2_start if sam2_start is not None else 0
             if min_ref > start:
                 yield from self._propagate_range(
@@ -614,7 +665,7 @@ class PropagationManager:
     def _propagate_range(
         self, start_idx: int, end_idx: int, reverse: bool, skip_flagged: bool = True
     ):
-        """Propagate through a range of frames.
+        """Propagate through a range of frames (full-context mode).
 
         All indices in this method are in SAM2 space internally.
         Yielded frame indices are translated to timeline space.
@@ -628,9 +679,10 @@ class PropagationManager:
         Yields:
             Tuple of (timeline_frame_idx, total_to_process, results_for_frame)
         """
-        total = start_idx - end_idx if reverse else end_idx - start_idx
+        total = self.state.total_frames
 
-        if total <= 0:
+        range_size = start_idx - end_idx if reverse else end_idx - start_idx
+        if range_size <= 0:
             return
 
         frame_count = 0
@@ -731,6 +783,291 @@ class PropagationManager:
             # Yield progress with timeline index
             yield timeline_idx, total, result
 
+    # ========== Streaming (Chunked) Propagation ==========
+
+    def _propagate_streaming(
+        self,
+        direction: PropagationDirection,
+        sam2_start: int | None,
+        sam2_end: int | None,
+        min_ref: int,
+        max_ref: int,
+        skip_flagged: bool,
+    ):
+        """Streaming propagation: process frames in overlapping chunks."""
+        # Clean up any existing SAM2 state before chunked propagation
+        if self.sam2_model.is_video_initialized:
+            self.sam2_model.cleanup_video_state()
+
+        if direction == PropagationDirection.FORWARD:
+            start = sam2_start if sam2_start is not None else min_ref
+            end = sam2_end if sam2_end is not None else self.state.total_frames - 1
+            yield from self._propagate_chunked(
+                start, end, reverse=False, skip_flagged=skip_flagged
+            )
+
+        elif direction == PropagationDirection.BACKWARD:
+            start = sam2_start if sam2_start is not None else 0
+            end = sam2_end if sam2_end is not None else max_ref
+            yield from self._propagate_chunked(
+                end, start, reverse=True, skip_flagged=skip_flagged
+            )
+
+        elif direction == PropagationDirection.BIDIRECTIONAL:
+            # Forward from min reference to end
+            end = sam2_end if sam2_end is not None else self.state.total_frames - 1
+            yield from self._propagate_chunked(
+                min_ref, end, reverse=False, skip_flagged=skip_flagged
+            )
+
+            if self._cancel_requested:
+                return
+
+            # Backward from min reference to start
+            start = sam2_start if sam2_start is not None else 0
+            if min_ref > start:
+                yield from self._propagate_chunked(
+                    min_ref, start, reverse=True, skip_flagged=skip_flagged
+                )
+
+    def _propagate_chunked(
+        self,
+        start_idx: int,
+        end_idx: int,
+        reverse: bool,
+        skip_flagged: bool,
+    ):
+        """Propagate through a range using chunked streaming.
+
+        For forward: start_idx <= end_idx, propagate from start_idx to end_idx.
+        For backward: start_idx >= end_idx, propagate from start_idx to end_idx.
+
+        Args:
+            start_idx: Starting SAM2 frame index (reference end)
+            end_idx: Ending SAM2 frame index (far end)
+            reverse: If True, propagate backward
+            skip_flagged: If True, don't store results for low confidence frames
+
+        Yields:
+            Tuple of (timeline_frame_idx, total_to_process, results_for_frame)
+        """
+        chunk_size = self.state.chunk_config.chunk_size
+        overlap = self.state.chunk_config.overlap
+        total = self.state.total_frames
+
+        range_size = abs(start_idx - end_idx)
+        if range_size <= 0:
+            return
+
+        chunk_num = 0
+
+        if not reverse:
+            # Forward: chunks advance left to right
+            chunk_start = start_idx
+            while chunk_start <= end_idx:
+                if self._cancel_requested:
+                    return
+
+                chunk_end = min(chunk_start + chunk_size - 1, end_idx)
+                chunk_num += 1
+
+                yield from self._process_chunk(
+                    chunk_start,
+                    chunk_end,
+                    reverse=False,
+                    skip_flagged=skip_flagged,
+                    total=total,
+                    chunk_num=chunk_num,
+                )
+
+                if chunk_end >= end_idx:
+                    break
+
+                chunk_start = chunk_end + 1 - overlap
+        else:
+            # Backward: chunks advance right to left
+            chunk_end_pos = start_idx
+            while chunk_end_pos >= end_idx:
+                if self._cancel_requested:
+                    return
+
+                chunk_start_pos = max(chunk_end_pos - chunk_size + 1, end_idx)
+                chunk_num += 1
+
+                yield from self._process_chunk(
+                    chunk_start_pos,
+                    chunk_end_pos,
+                    reverse=True,
+                    skip_flagged=skip_flagged,
+                    total=total,
+                    chunk_num=chunk_num,
+                )
+
+                if chunk_start_pos <= end_idx:
+                    break
+
+                chunk_end_pos = chunk_start_pos - 1 + overlap
+
+    def _process_chunk(
+        self,
+        chunk_start: int,
+        chunk_end: int,
+        reverse: bool,
+        skip_flagged: bool,
+        total: int,
+        chunk_num: int,
+    ):
+        """Process a single chunk: prepend refs, init SAM2, propagate, cleanup.
+
+        Every chunk gets the actual reference images prepended to its image
+        list. This ensures SAM2 sees real image+mask pairs (not masks pinned
+        to unrelated images). References that already fall within the chunk
+        are kept in-place rather than duplicated.
+
+        Args:
+            chunk_start: Global SAM2 index of first frame in chunk
+            chunk_end: Global SAM2 index of last frame in chunk
+            reverse: If True, propagate backward
+            skip_flagged: If True, skip low confidence frames
+            total: Total frames in the full range (for progress reporting)
+            chunk_num: Chunk number (for logging)
+
+        Yields:
+            Tuple of (timeline_frame_idx, total_to_process, results_for_frame)
+        """
+        chunk_paths = self.state.all_image_paths[chunk_start : chunk_end + 1]
+        chunk_data_len = len(chunk_paths)
+
+        # Collect reference images that are NOT already in this chunk's range.
+        # These get prepended so SAM2 sees real image+mask pairs.
+        external_ref_indices = sorted(
+            idx
+            for idx in self.state.reference_frame_indices
+            if not (chunk_start <= idx <= chunk_end)
+        )
+        # Deduplicate paths (same image could have multiple annotations)
+        external_ref_paths = []
+        seen_paths: set[str] = set()
+        for idx in external_ref_indices:
+            path = self.state.all_image_paths[idx]
+            if path not in seen_paths:
+                seen_paths.add(path)
+                external_ref_paths.append(path)
+
+        # Build mapping: external ref SAM2 index → chunk-local index
+        # Prepended refs occupy indices [0 .. n_prepended-1]
+        # Chunk data occupies indices [n_prepended .. n_prepended + chunk_data_len - 1]
+        n_prepended = len(external_ref_paths)
+        ext_ref_to_local: dict[int, int] = {}
+        for _local_pos, global_idx in enumerate(external_ref_indices):
+            path = self.state.all_image_paths[global_idx]
+            # Find position in deduplicated list
+            ext_ref_to_local[global_idx] = external_ref_paths.index(path)
+
+        full_paths = external_ref_paths + chunk_paths
+
+        logger.info(
+            f"PropagationManager: Chunk {chunk_num} "
+            f"({'backward' if reverse else 'forward'}): "
+            f"frames {chunk_start}-{chunk_end} ({chunk_data_len} frames"
+            f"{f', +{n_prepended} ref images' if n_prepended else ''})"
+        )
+
+        # Init SAM2 with prepended refs + chunk images
+        if not self.sam2_model.init_video_state(
+            full_paths,
+            image_cache=self.state.image_cache,
+        ):
+            logger.error(
+                f"PropagationManager: Failed to init chunk {chunk_start}-{chunk_end}"
+            )
+            return
+
+        try:
+            # Add reference annotations.
+            # In-chunk refs use their real position (offset by n_prepended).
+            # External refs use their prepended position (real image+mask pair).
+            for ann in self.state.reference_annotations:
+                if chunk_start <= ann.frame_idx <= chunk_end:
+                    local_idx = (ann.frame_idx - chunk_start) + n_prepended
+                    self.sam2_model.add_video_mask(local_idx, ann.obj_id, ann.mask)
+                elif ann.frame_idx in ext_ref_to_local:
+                    local_idx = ext_ref_to_local[ann.frame_idx]
+                    self.sam2_model.add_video_mask(local_idx, ann.obj_id, ann.mask)
+
+            # Propagate through chunk
+            for (
+                frame_idx,
+                obj_id,
+                mask,
+                confidence,
+            ) in self.sam2_model.propagate_in_video(reverse=reverse):
+                if self._cancel_requested:
+                    logger.info("PropagationManager: Propagation cancelled mid-chunk")
+                    return
+
+                # Skip prepended reference frames — they're not real chunk data
+                if frame_idx < n_prepended:
+                    continue
+
+                # Map chunk-local index back to global SAM2 index
+                global_sam2_idx = (frame_idx - n_prepended) + chunk_start
+
+                # Skip reference frames (in-chunk refs)
+                if global_sam2_idx in self.state.reference_frame_indices:
+                    continue
+
+                # Translate to timeline
+                timeline_idx = self.state.sam2_to_timeline.get(
+                    global_sam2_idx, global_sam2_idx
+                )
+
+                # Skip frames already processed by a previous chunk (overlap)
+                if timeline_idx in self.state.propagated_frames:
+                    continue
+
+                # Check confidence
+                is_flagged = confidence < self.state.confidence_threshold
+
+                if is_flagged and skip_flagged:
+                    self.state.flagged_frames.add(timeline_idx)
+                    yield timeline_idx, total, None
+                    continue
+
+                # Skip empty masks
+                if mask is None or not mask.any():
+                    continue
+
+                # Get image path from stored paths
+                image_path = (
+                    self.state.all_image_paths[global_sam2_idx]
+                    if global_sam2_idx < len(self.state.all_image_paths)
+                    else ""
+                )
+
+                # Create and store result
+                result = PropagationResult(
+                    frame_idx=timeline_idx,
+                    obj_id=obj_id,
+                    mask=mask,
+                    confidence=confidence,
+                    image_path=image_path,
+                )
+
+                if timeline_idx not in self.state.frame_results:
+                    self.state.frame_results[timeline_idx] = []
+                self.state.frame_results[timeline_idx].append(result)
+
+                self.state.propagated_frames.add(timeline_idx)
+                if is_flagged:
+                    self.state.flagged_frames.add(timeline_idx)
+
+                yield timeline_idx, total, result
+
+        finally:
+            # Always cleanup SAM2 state between chunks
+            self.sam2_model.cleanup_video_state()
+
     # ========== Result Access ==========
 
     def get_frame_status(self, frame_idx: int) -> FrameStatus:
@@ -785,11 +1122,13 @@ class PropagationManager:
         """Get the image path for a frame index.
 
         Args:
-            frame_idx: Frame index
+            frame_idx: Frame index (SAM2 space)
 
         Returns:
             Image path or None
         """
+        if frame_idx < len(self.state.all_image_paths):
+            return self.state.all_image_paths[frame_idx]
         if self.sam2_model is not None and frame_idx < len(
             self.sam2_model.video_image_paths
         ):
@@ -805,14 +1144,17 @@ class PropagationManager:
         Returns:
             Frame index or None
         """
-        if self.sam2_model is None:
-            return None
-
-        # Normalize path for comparison
+        # Check stored paths first
         target = Path(image_path).resolve()
-        for idx, path in enumerate(self.sam2_model.video_image_paths):
+        for idx, path in enumerate(self.state.all_image_paths):
             if Path(path).resolve() == target:
                 return idx
+
+        # Fallback to SAM2 model paths
+        if self.sam2_model is not None:
+            for idx, path in enumerate(self.sam2_model.video_image_paths):
+                if Path(path).resolve() == target:
+                    return idx
         return None
 
     def get_next_flagged_frame(self, current_idx: int) -> int | None:

@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.6] - 2026-04-05
+
+### Added
+
+- **Streaming propagation**: Process large image sequences (1,000–10,000+ frames) in chunks of 250 with bounded memory (~3–4 GB), each chunk prepended with all human-labeled reference frames
+- Streaming checkbox in Propagation controls (auto-enabled for sequences over 250 frames)
+- `cleanup_video_state()` on SAM2 model to free inter-chunk memory without expensive Hydra re-initialization
+- Per-chunk progress reporting with overall sequence progress tracking
+
+### Changed
+
+- `PropagationManager` refactored to support both single-pass and streaming modes
+- Removed legacy Propagation Range spinner and Max button from control panel (replaced by streaming controls in sequence widget)
+
 ## [1.7.5] - 2026-03-11
 
 ### Added
@@ -744,6 +758,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Image centering on load
 - Multi-class reindexing via drag and drop
 
+[1.7.6]: https://github.com/dnzckn/LazyLabel/compare/v1.7.5...v1.7.6
 [1.7.5]: https://github.com/dnzckn/LazyLabel/compare/v1.7.4...v1.7.5
 [1.7.4]: https://github.com/dnzckn/LazyLabel/compare/v1.7.3...v1.7.4
 [1.7.3]: https://github.com/dnzckn/LazyLabel/compare/v1.7.2...v1.7.3

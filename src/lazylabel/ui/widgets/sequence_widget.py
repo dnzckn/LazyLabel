@@ -12,6 +12,7 @@ from PyQt6.QtWidgets import (
     QGroupBox,
     QHBoxLayout,
     QLabel,
+    QMessageBox,
     QPushButton,
     QSpinBox,
     QVBoxLayout,
@@ -331,6 +332,19 @@ class SequenceWidget(QWidget):
         )
         options_layout.addWidget(self.skip_labeled_checkbox)
 
+        # Streaming mode checkbox
+        self.streaming_checkbox = QCheckBox("Streaming")
+        self.streaming_checkbox.setChecked(True)
+        self.streaming_checkbox.setToolTip(
+            "Process video in chunks of 250 frames with\n"
+            "rolling context window. Bounds memory to ~3-4 GB\n"
+            "regardless of sequence length.\n\n"
+            "Disable for full-context mode (loads all frames\n"
+            "at once — better quality but high memory usage)."
+        )
+        self.streaming_checkbox.stateChanged.connect(self._on_streaming_toggled)
+        options_layout.addWidget(self.streaming_checkbox)
+
         # Confidence threshold
         options_layout.addWidget(QLabel("Min Conf:"))
         self.confidence_spin = ShortcutDoubleSpinBox()
@@ -555,6 +569,25 @@ class SequenceWidget(QWidget):
         self.prev_suggested_btn.setEnabled(has_suggested)
         self.next_suggested_btn.setEnabled(has_suggested)
         self.clear_suggested_btn.setEnabled(has_suggested)
+
+    def _on_streaming_toggled(self, state: int) -> None:
+        """Warn user when disabling streaming for large sequences."""
+        if state == 0 and self._total_frames > 250:
+            mem_gb = self._total_frames * 12.6 / 1024
+            reply = QMessageBox.warning(
+                self,
+                "High Memory Usage",
+                f"Full-context mode will load all {self._total_frames} frames "
+                f"into memory at once (~{mem_gb:.0f} GB).\n\n"
+                f"This will likely cause an out-of-memory crash for "
+                f"large sequences.\n\nDisable streaming anyway?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No,
+            )
+            if reply == QMessageBox.StandardButton.No:
+                self.streaming_checkbox.blockSignals(True)
+                self.streaming_checkbox.setChecked(True)
+                self.streaming_checkbox.blockSignals(False)
 
     def _request_propagate(self) -> None:
         """Request propagation, or abort if already propagating."""

@@ -89,6 +89,10 @@ lazylabel-gui
   <br><em>Sequence Mode: Find Archetypes + Propagation</em>
 </div>
 
+#### Streaming Mode
+
+For large image sets (1,000–10,000+ images), streaming mode processes the sequence in chunks of 250 frames with bounded memory (~3–4 GB) regardless of total size. Every chunk receives the full set of human-labeled reference images prepended to its batch, so SAM2 always has the complete object vocabulary available. Enable or disable via the **Streaming** checkbox in the Propagation controls (on by default for sequences over 250 frames).
+
 ### Image Processing
 - **FFT filtering**: Remove noise and enhance edges
 - **Channel thresholding**: Isolate objects by color

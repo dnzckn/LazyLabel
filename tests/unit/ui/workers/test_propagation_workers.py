@@ -96,7 +96,7 @@ class TestReferenceSegmentData:
 
 
 class TestInitSequenceAPI:
-    """Tests for the updated init_sequence API (image_paths + progress_callback)."""
+    """Tests for the deferred init_sequence API."""
 
     def test_init_sequence_accepts_image_paths_list(self):
         """Test that init_sequence accepts a list of paths."""
@@ -112,28 +112,13 @@ class TestInitSequenceAPI:
         result = pm.init_sequence(paths)
 
         assert result is True
-        mw.model_manager.sam_model.init_video_state.assert_called_once()
-        call_args = mw.model_manager.sam_model.init_video_state.call_args
-        assert call_args[0][0] == paths
+        # init_video_state is NOT called during init_sequence (deferred)
+        mw.model_manager.sam_model.init_video_state.assert_not_called()
+        # Paths should be stored for deferred loading
+        assert pm.state.all_image_paths == paths
 
-    def test_init_sequence_passes_progress_callback(self):
-        """Test that progress_callback is forwarded to init_video_state."""
-        from lazylabel.ui.managers.propagation_manager import PropagationManager
-
-        mw = MagicMock()
-        mw.model_manager.sam_model = MagicMock()
-        mw.model_manager.sam_model.init_video_state = MagicMock(return_value=True)
-        mw.model_manager.sam_model.video_frame_count = 3
-
-        pm = PropagationManager(mw)
-        callback = MagicMock()
-        pm.init_sequence(["/a.png", "/b.png"], progress_callback=callback)
-
-        call_kwargs = mw.model_manager.sam_model.init_video_state.call_args[1]
-        assert call_kwargs["progress_callback"] is callback
-
-    def test_init_sequence_passes_image_cache(self):
-        """Test that image_cache is forwarded to init_video_state."""
+    def test_init_sequence_stores_image_cache(self):
+        """Test that image_cache is stored for deferred use."""
         from lazylabel.ui.managers.propagation_manager import PropagationManager
 
         mw = MagicMock()
@@ -145,8 +130,8 @@ class TestInitSequenceAPI:
         cache = {"/a.png": np.zeros((10, 10, 3))}
         pm.init_sequence(["/a.png"], image_cache=cache)
 
-        call_kwargs = mw.model_manager.sam_model.init_video_state.call_args[1]
-        assert call_kwargs["image_cache"] is cache
+        # Cache should be stored in state for use during propagation
+        assert pm.state.image_cache is cache
 
     def test_init_sequence_no_image_dir_in_state(self):
         """Test that PropagationState no longer stores image_dir."""
@@ -162,6 +147,20 @@ class TestInitSequenceAPI:
 
         # image_dir field should be None (default) since we no longer set it
         assert pm.state.image_dir is None
+
+    def test_init_sequence_total_frames_matches_path_count(self):
+        """Test that total_frames equals number of filtered paths."""
+        from lazylabel.ui.managers.propagation_manager import PropagationManager
+
+        mw = MagicMock()
+        mw.model_manager.sam_model = MagicMock()
+        mw.model_manager.sam_model.init_video_state = MagicMock(return_value=True)
+
+        pm = PropagationManager(mw)
+        paths = [f"/img/{i}.png" for i in range(7)]
+        pm.init_sequence(paths)
+
+        assert pm.total_frames == 7
 
 
 # ========== Worker lifecycle tests (no Qt event loop needed) ==========

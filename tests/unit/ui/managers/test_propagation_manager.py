@@ -6,6 +6,7 @@ import numpy as np
 import pytest
 
 from lazylabel.ui.managers.propagation_manager import (
+    ChunkConfig,
     FrameStatus,
     PropagationDirection,
     PropagationManager,
@@ -46,9 +47,11 @@ def mock_sam2_model(image_paths):
     model.init_video_state = MagicMock(return_value=True)
     model.video_frame_count = 10
     model.video_image_paths = image_paths
+    model.is_video_initialized = False
     model.add_video_mask = MagicMock(return_value=(np.ones((100, 100)), 0.95))
     model.reset_video_state = MagicMock()
     model.cleanup_video_predictor = MagicMock()
+    model.cleanup_video_state = MagicMock()
     return model
 
 
@@ -95,41 +98,81 @@ class TestInitSequence:
         assert result is False
 
     def test_init_sequence_success(
-        self, propagation_manager, mock_main_window, mock_sam2_model
+        self, propagation_manager, mock_main_window, mock_sam2_model, image_paths
     ):
-        """Test successful sequence initialization."""
+        """Test successful sequence initialization (metadata only, no SAM2 init)."""
         mock_main_window.model_manager.sam_model = mock_sam2_model
 
-        result = propagation_manager.init_sequence(["/some/path"])
+        result = propagation_manager.init_sequence(image_paths)
 
         assert result is True
         assert propagation_manager.is_initialized is True
-        assert propagation_manager.total_frames == 10
+        # total_frames is now len(image_paths) since we don't call init_video_state
+        assert propagation_manager.total_frames == len(image_paths)
+        # SAM2 init_video_state should NOT be called during init_sequence
+        mock_sam2_model.init_video_state.assert_not_called()
+
+    def test_init_sequence_stores_image_paths(
+        self, propagation_manager, mock_main_window, mock_sam2_model, image_paths
+    ):
+        """Test that init_sequence stores filtered image paths for deferred loading."""
+        mock_main_window.model_manager.sam_model = mock_sam2_model
+
+        propagation_manager.init_sequence(image_paths)
+
+        assert propagation_manager.state.all_image_paths == image_paths
+
+    def test_init_sequence_stores_image_cache(
+        self, propagation_manager, mock_main_window, mock_sam2_model, image_paths
+    ):
+        """Test that init_sequence stores image cache for deferred loading."""
+        mock_main_window.model_manager.sam_model = mock_sam2_model
+        cache = {"/path/0.png": np.zeros((10, 10, 3))}
+
+        propagation_manager.init_sequence(image_paths, image_cache=cache)
+
+        assert propagation_manager.state.image_cache is cache
 
     def test_init_sequence_resets_state(
-        self, propagation_manager, mock_main_window, mock_sam2_model
+        self, propagation_manager, mock_main_window, mock_sam2_model, image_paths
     ):
         """Test that init_sequence resets previous state."""
         mock_main_window.model_manager.sam_model = mock_sam2_model
 
         # First initialization
-        propagation_manager.init_sequence(["/path1/0.png"])
+        propagation_manager.init_sequence(image_paths)
         propagation_manager.state.propagated_frames.add(5)
 
         # Second initialization should reset
-        propagation_manager.init_sequence(["/path2/0.png"])
+        propagation_manager.init_sequence(image_paths)
         assert len(propagation_manager.state.propagated_frames) == 0
+
+    def test_init_sequence_auto_detects_streaming(
+        self, propagation_manager, mock_main_window, mock_sam2_model
+    ):
+        """Test that streaming mode is auto-detected based on frame count."""
+        mock_main_window.model_manager.sam_model = mock_sam2_model
+
+        # Small sequence: full-context
+        small_paths = [f"/path/{i}.png" for i in range(50)]
+        propagation_manager.init_sequence(small_paths)
+        assert propagation_manager.state.chunk_config.streaming is False
+
+        # Large sequence: streaming
+        large_paths = [f"/path/{i}.png" for i in range(500)]
+        propagation_manager.init_sequence(large_paths)
+        assert propagation_manager.state.chunk_config.streaming is True
 
 
 class TestCleanup:
     """Tests for cleanup method."""
 
     def test_cleanup_resets_state(
-        self, propagation_manager, mock_main_window, mock_sam2_model
+        self, propagation_manager, mock_main_window, mock_sam2_model, image_paths
     ):
         """Test that cleanup resets all state."""
         mock_main_window.model_manager.sam_model = mock_sam2_model
-        propagation_manager.init_sequence(["/path/0.png"])
+        propagation_manager.init_sequence(image_paths)
 
         propagation_manager.cleanup()
 
@@ -137,11 +180,11 @@ class TestCleanup:
         assert propagation_manager.state.total_frames == 0
 
     def test_cleanup_calls_model_cleanup(
-        self, propagation_manager, mock_main_window, mock_sam2_model
+        self, propagation_manager, mock_main_window, mock_sam2_model, image_paths
     ):
         """Test that cleanup calls model's cleanup method."""
         mock_main_window.model_manager.sam_model = mock_sam2_model
-        propagation_manager.init_sequence(["/path/0.png"])
+        propagation_manager.init_sequence(image_paths)
 
         propagation_manager.cleanup()
 
@@ -157,11 +200,11 @@ class TestReferenceFrames:
         assert result is False
 
     def test_add_reference_frame_success(
-        self, propagation_manager, mock_main_window, mock_sam2_model
+        self, propagation_manager, mock_main_window, mock_sam2_model, image_paths
     ):
         """Test successful reference frame addition."""
         mock_main_window.model_manager.sam_model = mock_sam2_model
-        propagation_manager.init_sequence(["/path/0.png"])
+        propagation_manager.init_sequence(image_paths)
 
         result = propagation_manager.add_reference_frame(5)
 
@@ -169,21 +212,21 @@ class TestReferenceFrames:
         assert 5 in propagation_manager.reference_frame_indices
 
     def test_add_reference_frame_invalid_index_fails(
-        self, propagation_manager, mock_main_window, mock_sam2_model
+        self, propagation_manager, mock_main_window, mock_sam2_model, image_paths
     ):
         """Test that invalid index fails."""
         mock_main_window.model_manager.sam_model = mock_sam2_model
-        propagation_manager.init_sequence(["/path/0.png"])
+        propagation_manager.init_sequence(image_paths)
 
         assert propagation_manager.add_reference_frame(-1) is False
         assert propagation_manager.add_reference_frame(100) is False
 
     def test_add_multiple_reference_frames(
-        self, propagation_manager, mock_main_window, mock_sam2_model
+        self, propagation_manager, mock_main_window, mock_sam2_model, image_paths
     ):
         """Test adding multiple reference frames."""
         mock_main_window.model_manager.sam_model = mock_sam2_model
-        propagation_manager.init_sequence(["/path/0.png"])
+        propagation_manager.init_sequence(image_paths)
 
         propagation_manager.add_reference_frame(3)
         propagation_manager.add_reference_frame(5)
@@ -192,11 +235,11 @@ class TestReferenceFrames:
         assert propagation_manager.reference_frame_indices == {3, 5, 7}
 
     def test_add_reference_frames_bulk(
-        self, propagation_manager, mock_main_window, mock_sam2_model
+        self, propagation_manager, mock_main_window, mock_sam2_model, image_paths
     ):
         """Test bulk adding reference frames."""
         mock_main_window.model_manager.sam_model = mock_sam2_model
-        propagation_manager.init_sequence(["/path/0.png"])
+        propagation_manager.init_sequence(image_paths)
 
         count = propagation_manager.add_reference_frames([0, 1, 2, 3, 4])
 
@@ -204,11 +247,11 @@ class TestReferenceFrames:
         assert propagation_manager.reference_frame_indices == {0, 1, 2, 3, 4}
 
     def test_clear_reference_frames(
-        self, propagation_manager, mock_main_window, mock_sam2_model
+        self, propagation_manager, mock_main_window, mock_sam2_model, image_paths
     ):
         """Test clearing all reference frames."""
         mock_main_window.model_manager.sam_model = mock_sam2_model
-        propagation_manager.init_sequence(["/path/0.png"])
+        propagation_manager.init_sequence(image_paths)
         propagation_manager.add_reference_frame(3)
         propagation_manager.add_reference_frame(5)
 
@@ -227,11 +270,11 @@ class TestAddReferenceAnnotation:
         assert result == -1
 
     def test_add_reference_annotation_success(
-        self, propagation_manager, mock_main_window, mock_sam2_model
+        self, propagation_manager, mock_main_window, mock_sam2_model, image_paths
     ):
-        """Test successful annotation addition."""
+        """Test successful annotation addition (store-only, no SAM2 call)."""
         mock_main_window.model_manager.sam_model = mock_sam2_model
-        propagation_manager.init_sequence(["/path/0.png"])
+        propagation_manager.init_sequence(image_paths)
         propagation_manager.add_reference_frame(0)
 
         mask = np.ones((100, 100), dtype=bool)
@@ -239,13 +282,15 @@ class TestAddReferenceAnnotation:
 
         assert obj_id > 0
         assert len(propagation_manager.state.reference_annotations) == 1
+        # SAM2 add_video_mask should NOT be called (deferred to propagation)
+        mock_sam2_model.add_video_mask.assert_not_called()
 
     def test_add_reference_annotation_auto_assigns_obj_id(
-        self, propagation_manager, mock_main_window, mock_sam2_model
+        self, propagation_manager, mock_main_window, mock_sam2_model, image_paths
     ):
         """Test that object IDs are auto-assigned sequentially."""
         mock_main_window.model_manager.sam_model = mock_sam2_model
-        propagation_manager.init_sequence(["/path/0.png"])
+        propagation_manager.init_sequence(image_paths)
         propagation_manager.add_reference_frame(0)
 
         mask = np.ones((100, 100), dtype=bool)
@@ -255,11 +300,11 @@ class TestAddReferenceAnnotation:
         assert obj_id2 == obj_id1 + 1
 
     def test_add_reference_annotation_with_explicit_obj_id(
-        self, propagation_manager, mock_main_window, mock_sam2_model
+        self, propagation_manager, mock_main_window, mock_sam2_model, image_paths
     ):
         """Test adding annotation with explicit object ID."""
         mock_main_window.model_manager.sam_model = mock_sam2_model
-        propagation_manager.init_sequence(["/path/0.png"])
+        propagation_manager.init_sequence(image_paths)
         propagation_manager.add_reference_frame(0)
 
         mask = np.ones((100, 100), dtype=bool)
@@ -270,11 +315,11 @@ class TestAddReferenceAnnotation:
         assert obj_id == 42
 
     def test_add_reference_annotation_on_different_frames(
-        self, propagation_manager, mock_main_window, mock_sam2_model
+        self, propagation_manager, mock_main_window, mock_sam2_model, image_paths
     ):
         """Test adding annotations on different reference frames."""
         mock_main_window.model_manager.sam_model = mock_sam2_model
-        propagation_manager.init_sequence(["/path/0.png"])
+        propagation_manager.init_sequence(image_paths)
         propagation_manager.add_reference_frame(0)
         propagation_manager.add_reference_frame(5)
 
@@ -296,11 +341,11 @@ class TestAddReferenceAnnotationsFromSegments:
         assert count == 0
 
     def test_add_from_segments_success(
-        self, propagation_manager, mock_main_window, mock_sam2_model
+        self, propagation_manager, mock_main_window, mock_sam2_model, image_paths
     ):
         """Test successful addition from segments."""
         mock_main_window.model_manager.sam_model = mock_sam2_model
-        propagation_manager.init_sequence(["/path/0.png"])
+        propagation_manager.init_sequence(image_paths)
         propagation_manager.add_reference_frame(0)
 
         # Set up mock segments
@@ -315,11 +360,11 @@ class TestAddReferenceAnnotationsFromSegments:
         assert len(propagation_manager.state.reference_annotations) == 2
 
     def test_add_from_segments_clears_existing_for_frame(
-        self, propagation_manager, mock_main_window, mock_sam2_model
+        self, propagation_manager, mock_main_window, mock_sam2_model, image_paths
     ):
         """Test that adding from segments clears existing annotations for that frame."""
         mock_main_window.model_manager.sam_model = mock_sam2_model
-        propagation_manager.init_sequence(["/path/0.png"])
+        propagation_manager.init_sequence(image_paths)
         propagation_manager.add_reference_frame(0)
 
         # Add initial annotation
@@ -337,11 +382,11 @@ class TestAddReferenceAnnotationsFromSegments:
         assert len(propagation_manager.state.reference_annotations) == 1
 
     def test_add_from_segments_skips_empty_masks(
-        self, propagation_manager, mock_main_window, mock_sam2_model
+        self, propagation_manager, mock_main_window, mock_sam2_model, image_paths
     ):
         """Test that empty masks are skipped."""
         mock_main_window.model_manager.sam_model = mock_sam2_model
-        propagation_manager.init_sequence(["/path/0.png"])
+        propagation_manager.init_sequence(image_paths)
         propagation_manager.add_reference_frame(0)
 
         mock_main_window.segment_manager.segments = [
@@ -359,11 +404,11 @@ class TestClearReferenceAnnotations:
     """Tests for clear_reference_annotations method."""
 
     def test_clear_reference_annotations(
-        self, propagation_manager, mock_main_window, mock_sam2_model
+        self, propagation_manager, mock_main_window, mock_sam2_model, image_paths
     ):
         """Test clearing all reference annotations."""
         mock_main_window.model_manager.sam_model = mock_sam2_model
-        propagation_manager.init_sequence(["/path/0.png"])
+        propagation_manager.init_sequence(image_paths)
         propagation_manager.add_reference_frame(0)
 
         mask = np.ones((100, 100), dtype=bool)
@@ -405,21 +450,21 @@ class TestGetFrameStatus:
     """Tests for get_frame_status method."""
 
     def test_get_frame_status_reference(
-        self, propagation_manager, mock_main_window, mock_sam2_model
+        self, propagation_manager, mock_main_window, mock_sam2_model, image_paths
     ):
         """Test getting status for reference frame."""
         mock_main_window.model_manager.sam_model = mock_sam2_model
-        propagation_manager.init_sequence(["/path/0.png"])
+        propagation_manager.init_sequence(image_paths)
         propagation_manager.add_reference_frame(3)
 
         assert propagation_manager.get_frame_status(3) == FrameStatus.REFERENCE
 
     def test_get_frame_status_multiple_references(
-        self, propagation_manager, mock_main_window, mock_sam2_model
+        self, propagation_manager, mock_main_window, mock_sam2_model, image_paths
     ):
         """Test getting status for multiple reference frames."""
         mock_main_window.model_manager.sam_model = mock_sam2_model
-        propagation_manager.init_sequence(["/path/0.png"])
+        propagation_manager.init_sequence(image_paths)
         propagation_manager.add_reference_frame(3)
         propagation_manager.add_reference_frame(7)
 
@@ -474,11 +519,11 @@ class TestGetReferenceAnnotationForObj:
     """Tests for get_reference_annotation_for_obj method."""
 
     def test_get_reference_annotation_found(
-        self, propagation_manager, mock_main_window, mock_sam2_model
+        self, propagation_manager, mock_main_window, mock_sam2_model, image_paths
     ):
         """Test getting reference annotation by object ID."""
         mock_main_window.model_manager.sam_model = mock_sam2_model
-        propagation_manager.init_sequence(["/path/0.png"])
+        propagation_manager.init_sequence(image_paths)
         propagation_manager.add_reference_frame(0)
 
         mask = np.ones((100, 100), dtype=bool)
@@ -587,11 +632,11 @@ class TestGetPropagationStats:
     """Tests for get_propagation_stats method."""
 
     def test_get_propagation_stats(
-        self, propagation_manager, mock_main_window, mock_sam2_model
+        self, propagation_manager, mock_main_window, mock_sam2_model, image_paths
     ):
         """Test getting propagation statistics."""
         mock_main_window.model_manager.sam_model = mock_sam2_model
-        propagation_manager.init_sequence(["/path/0.png"])
+        propagation_manager.init_sequence(image_paths)
         propagation_manager.add_reference_frame(5)
 
         mask = np.ones((100, 100), dtype=bool)
@@ -608,11 +653,11 @@ class TestGetPropagationStats:
         assert stats["num_flagged"] == 1
 
     def test_get_propagation_stats_multiple_references(
-        self, propagation_manager, mock_main_window, mock_sam2_model
+        self, propagation_manager, mock_main_window, mock_sam2_model, image_paths
     ):
         """Test getting stats with multiple reference frames."""
         mock_main_window.model_manager.sam_model = mock_sam2_model
-        propagation_manager.init_sequence(["/path/0.png"])
+        propagation_manager.init_sequence(image_paths)
         propagation_manager.add_reference_frame(0)
         propagation_manager.add_reference_frame(5)
         propagation_manager.add_reference_frame(9)
@@ -620,6 +665,24 @@ class TestGetPropagationStats:
         stats = propagation_manager.get_propagation_stats()
 
         assert set(stats["reference_frames"]) == {0, 5, 9}
+
+
+class TestChunkConfig:
+    """Tests for ChunkConfig dataclass."""
+
+    def test_chunk_config_defaults(self):
+        """Test ChunkConfig default values."""
+        config = ChunkConfig()
+        assert config.chunk_size == 250
+        assert config.overlap == 5
+        assert config.streaming is True
+
+    def test_chunk_config_custom(self):
+        """Test ChunkConfig with custom values."""
+        config = ChunkConfig(chunk_size=100, overlap=10, streaming=False)
+        assert config.chunk_size == 100
+        assert config.overlap == 10
+        assert config.streaming is False
 
 
 class TestDataClasses:
@@ -664,6 +727,15 @@ class TestDataClasses:
         assert state.total_frames == 0
         assert state.confidence_threshold == 0.99
         assert len(state.reference_annotations) == 0
+        assert len(state.all_image_paths) == 0
+        assert state.image_cache is None
+
+    def test_propagation_state_with_chunk_config(self):
+        """Test PropagationState with chunk config."""
+        config = ChunkConfig(chunk_size=100, streaming=False)
+        state = PropagationState(chunk_config=config)
+        assert state.chunk_config.chunk_size == 100
+        assert state.chunk_config.streaming is False
 
 
 class TestEnums:

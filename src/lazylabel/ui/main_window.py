@@ -919,11 +919,6 @@ class MainWindow(QMainWindow):
         )
         self.control_panel.auto_polygon_reset.connect(self._on_auto_polygon_reset)
 
-        # Sequence settings
-        self.control_panel.sequence_max_requested.connect(
-            self._on_sequence_max_requested
-        )
-
         # Right panel connections
         self.right_panel.open_folder_requested.connect(self._open_folder_dialog)
         self.right_panel.image_selected.connect(self._load_selected_image)
@@ -4007,6 +4002,12 @@ class MainWindow(QMainWindow):
         skip_labeled: bool = False,
     ):
         """Collect reference data and start annotation worker."""
+        # Apply streaming mode from UI toggle
+        if self.sequence_widget and self.propagation_manager:
+            self.propagation_manager.state.chunk_config.streaming = (
+                self.sequence_widget.streaming_checkbox.isChecked()
+            )
+
         # Precompute the set of labeled frames to skip (have NPZ on disk)
         self._skip_labeled_frames: set[int] = set()
         if skip_labeled and self.sequence_view_mode:
@@ -4565,26 +4566,6 @@ class MainWindow(QMainWindow):
             self.sequence_widget.set_propagated_count(remaining)
 
         self._show_notification(f"Saved {saved} frames to NPZ")
-
-    def _on_sequence_max_requested(self):
-        """Set sequence range to maximum (full folder)."""
-        if self.sequence_view_mode is None:
-            return
-
-        total = self.sequence_view_mode.total_frames
-        if total > 0:
-            self.control_panel.set_sequence_range(total)
-            self._show_notification(f"Range set to max: {total} frames")
-        else:
-            # No sequence loaded yet, try to get from current folder
-            if self.current_image_path:
-                current_path = Path(self.current_image_path)
-                image_paths = self._get_sequence_image_paths(current_path.parent)
-                total = len(image_paths)
-                if total > 0:
-                    self.control_panel.set_sequence_range_max(total)
-                    self.control_panel.set_sequence_range(total)
-                    self._show_notification(f"Range set to max: {total} frames")
 
     def _load_mask_data_for_path(self, image_path: str) -> dict | None:
         """Load mask data from NPZ file for an image path.
