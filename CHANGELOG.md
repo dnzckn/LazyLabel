@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.7] - 2026-04-05
+
+### Added
+
+- **NPZ Class Map export format**: Single-channel class map (H×W) where each pixel stores its class index, saved as `_CM.npz` files alongside existing one-hot encoded NPZ exports
+- **Animated startup banner**: ASCII art logo with progress bar, author credit, version display, and random tips of the day shown during application launch
+- **Sequence mode hotkeys**: Configurable keyboard shortcuts for Add Reference Frame (G), Next/Prev Flagged Frame (N/Shift+N), Next/Prev Reference Frame (B/Shift+B), and Propagate (Ctrl+P)
+- Export format tooltips visible on hover in the format dropdown menu
+- NPZ CM column in file manager to show which images have class map exports
+
+### Changed
+
+- Startup console output suppressed during animated banner (stdout, stderr, and logger streams redirected)
+- PropagationManager cleanup message downgraded from INFO to DEBUG
+
 ## [1.7.6] - 2026-04-05
 
 ### Added
@@ -758,6 +773,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Image centering on load
 - Multi-class reindexing via drag and drop
 
+[1.7.7]: https://github.com/dnzckn/LazyLabel/compare/v1.7.6...v1.7.7
 [1.7.6]: https://github.com/dnzckn/LazyLabel/compare/v1.7.5...v1.7.6
 [1.7.5]: https://github.com/dnzckn/LazyLabel/compare/v1.7.4...v1.7.5
 [1.7.4]: https://github.com/dnzckn/LazyLabel/compare/v1.7.3...v1.7.4

@@ -133,10 +133,10 @@ class TestRegistry:
             assert fmt in EXPORTERS, f"{fmt} not registered"
 
     def test_all_formats_are_loadable(self):
-        """Every ExportFormat must have a loader — if this fails, a new format
-        was added without a corresponding loader in LOADABLE_FORMATS."""
-        assert set(ExportFormat) == LOADABLE_FORMATS, (
-            f"Formats without loaders: {set(ExportFormat) - LOADABLE_FORMATS}"
+        """Every ExportFormat except write-only formats must have a loader."""
+        write_only = {ExportFormat.NPZ_CLASS_MAP}
+        assert set(ExportFormat) - write_only == LOADABLE_FORMATS, (
+            f"Formats without loaders: {set(ExportFormat) - write_only - LOADABLE_FORMATS}"
         )
 
 
@@ -183,6 +183,92 @@ class TestNpzExporter:
         export_all({ExportFormat.NPZ}, ctx)
         loaded = _load_via_format(ctx.image_path, ctx.image_size, ExportFormat.NPZ)
         np.testing.assert_array_equal(loaded, ctx.mask_tensor)
+
+
+# ---------------------------------------------------------------------------
+# NPZ Class Map exporter — smoke + content verification
+# ---------------------------------------------------------------------------
+
+
+class TestNpzClassMapExporter:
+    @pytest.fixture
+    def tmpdir(self):
+        with tempfile.TemporaryDirectory() as d:
+            yield d
+
+    def test_creates_cm_npz_file(self, tmpdir):
+        ctx = _make_ctx(tmpdir)
+        paths = export_all({ExportFormat.NPZ_CLASS_MAP}, ctx)
+        assert len(paths) == 1
+        assert paths[0].endswith("_CM.npz")
+        assert os.path.exists(paths[0])
+
+    def test_cm_content(self, tmpdir):
+        ctx = _make_ctx(
+            tmpdir,
+            class_order=[5],
+            class_labels=["cat"],
+            class_aliases={5: "cat"},
+        )
+        export_all({ExportFormat.NPZ_CLASS_MAP}, ctx)
+        cm_path = os.path.splitext(ctx.image_path)[0] + "_CM.npz"
+        with np.load(cm_path, allow_pickle=True) as data:
+            assert "class_map" in data
+            class_map = data["class_map"]
+            assert class_map.shape == (100, 100)
+            # Active region should have class ID 5
+            assert np.all(class_map[20:40, 20:40] == 5)
+            # Background should be 0
+            assert class_map[0, 0] == 0
+
+    def test_empty_tensor_skipped(self, tmpdir):
+        empty = np.zeros((10, 10, 1), dtype=np.uint8)
+        ctx = _make_ctx(tmpdir, mask_tensor=empty)
+        paths = export_all({ExportFormat.NPZ_CLASS_MAP}, ctx)
+        assert len(paths) == 0
+
+    def test_delete_output(self, tmpdir):
+        ctx = _make_ctx(tmpdir)
+        export_all({ExportFormat.NPZ_CLASS_MAP}, ctx)
+        deleted = delete_all_outputs(ctx.image_path)
+        assert any(p.endswith("_CM.npz") for p in deleted)
+
+    def test_background_pixels_are_zero(self, tmpdir):
+        h, w = 50, 50
+        mask = np.zeros((h, w, 1), dtype=np.uint8)
+        mask[10:20, 10:20, 0] = 1
+        ctx = _make_ctx(tmpdir, image_size=(h, w), mask_tensor=mask)
+        export_all({ExportFormat.NPZ_CLASS_MAP}, ctx)
+        cm_path = os.path.splitext(ctx.image_path)[0] + "_CM.npz"
+        with np.load(cm_path, allow_pickle=True) as data:
+            class_map = data["class_map"]
+            # Everything outside the active region is 0
+            bg_mask = np.ones((h, w), dtype=bool)
+            bg_mask[10:20, 10:20] = False
+            assert np.all(class_map[bg_mask] == 0)
+
+    def test_overlap_lowest_channel_wins(self, tmpdir):
+        """When multiple channels overlap, the lowest channel index wins."""
+        h, w = 50, 50
+        mask = np.zeros((h, w, 2), dtype=np.uint8)
+        mask[10:30, 10:30, 0] = 1  # class 3
+        mask[15:35, 15:35, 1] = 1  # class 7
+        ctx = _make_ctx(
+            tmpdir,
+            image_size=(h, w),
+            class_order=[3, 7],
+            class_labels=["a", "b"],
+            class_aliases={3: "a", 7: "b"},
+            mask_tensor=mask,
+        )
+        export_all({ExportFormat.NPZ_CLASS_MAP}, ctx)
+        cm_path = os.path.splitext(ctx.image_path)[0] + "_CM.npz"
+        with np.load(cm_path, allow_pickle=True) as data:
+            class_map = data["class_map"]
+            # Overlap region [15:30, 15:30] should be class 3 (lowest channel)
+            assert np.all(class_map[15:30, 15:30] == 3)
+            # Class 7 only region
+            assert np.all(class_map[30:35, 15:35] == 7)
 
 
 # ---------------------------------------------------------------------------
@@ -471,13 +557,13 @@ class TestMultiFormatExport:
     def test_all_formats_at_once(self, tmpdir):
         ctx = _make_ctx(tmpdir, class_labels=["obj"], class_aliases={0: "obj"})
         paths = export_all(set(ExportFormat), ctx)
-        assert len(paths) == 6
+        assert len(paths) == 7
 
     def test_delete_all_outputs(self, tmpdir):
         ctx = _make_ctx(tmpdir, class_labels=["obj"], class_aliases={0: "obj"})
         export_all(set(ExportFormat), ctx)
         deleted = delete_all_outputs(ctx.image_path)
-        assert len(deleted) == 6
+        assert len(deleted) == 7
         for p in deleted:
             assert not os.path.exists(p)
 
@@ -494,7 +580,7 @@ class TestMultiFormatExport:
             mask_tensor=mask,
         )
         paths = export_all(set(ExportFormat), ctx)
-        assert len(paths) == 6
+        assert len(paths) == 7
 
         coco_path = os.path.splitext(ctx.image_path)[0] + "_coco.json"
         with open(coco_path) as f:

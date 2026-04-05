@@ -219,7 +219,7 @@ class SequenceWidget(QWidget):
         ref_btn_layout = QHBoxLayout()
         self.add_reference_btn = QPushButton("+ Add Current")
         self.add_reference_btn.setToolTip(
-            "Add current frame as reference for propagation (F)"
+            "Add current frame as reference for propagation (G)"
         )
         self.add_reference_btn.clicked.connect(self.add_reference_requested.emit)
         ref_btn_layout.addWidget(self.add_reference_btn)

@@ -13,6 +13,7 @@ class ExportFormat(Enum):
     """Supported export formats."""
 
     NPZ = "NPZ"
+    NPZ_CLASS_MAP = "NPZ_CLASS_MAP"
     YOLO_DETECTION = "YOLO_DETECTION"
     YOLO_SEGMENTATION = "YOLO_SEGMENTATION"
     COCO_JSON = "COCO_JSON"
@@ -22,11 +23,36 @@ class ExportFormat(Enum):
 
 EXPORT_FORMAT_LABELS: dict[ExportFormat, str] = {
     ExportFormat.NPZ: "NPZ",
+    ExportFormat.NPZ_CLASS_MAP: "NPZ Class Map",
     ExportFormat.YOLO_DETECTION: "YOLO Detection",
     ExportFormat.YOLO_SEGMENTATION: "YOLO Segmentation",
     ExportFormat.COCO_JSON: "COCO JSON",
     ExportFormat.PASCAL_VOC: "Pascal VOC",
     ExportFormat.CREATEML: "CreateML",
+}
+
+EXPORT_FORMAT_TOOLTIPS: dict[ExportFormat, str] = {
+    ExportFormat.NPZ: (
+        "One-hot encoded mask tensor (H\u00d7W\u00d7C). "
+        "One binary channel per class. Supports overlapping classes."
+    ),
+    ExportFormat.NPZ_CLASS_MAP: (
+        "Single-channel class map (H\u00d7W). Each pixel stores its class index. "
+        "Overlaps default to lowest class index; use Pixel Priority to control."
+    ),
+    ExportFormat.YOLO_DETECTION: (
+        "YOLO bounding box format. One .txt file per image with normalized coordinates."
+    ),
+    ExportFormat.YOLO_SEGMENTATION: (
+        "YOLO polygon segmentation format. Normalized polygon vertices per object."
+    ),
+    ExportFormat.COCO_JSON: (
+        "COCO-style JSON with polygon segmentation, bounding boxes, and categories."
+    ),
+    ExportFormat.PASCAL_VOC: ("Pascal VOC XML format with bounding box annotations."),
+    ExportFormat.CREATEML: (
+        "Apple CreateML JSON format with bounding box annotations."
+    ),
 }
 
 DEFAULT_EXPORT_FORMATS: set[ExportFormat] = {
@@ -109,6 +135,7 @@ def get_all_output_extensions() -> set[str]:
 from . import coco as coco  # noqa: E402
 from . import createml as createml  # noqa: E402
 from . import npz as npz  # noqa: E402
+from . import npz_class_map as npz_class_map  # noqa: E402
 from . import pascal_voc as pascal_voc  # noqa: E402
 from . import yolo_detection as yolo_detection  # noqa: E402
 from . import yolo_segmentation as yolo_segmentation  # noqa: E402

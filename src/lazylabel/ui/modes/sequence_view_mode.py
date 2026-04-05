@@ -432,6 +432,32 @@ class SequenceViewMode(QObject):
         # Wrap around
         return flagged[0] if flagged else None
 
+    def next_reference_frame(self) -> int | None:
+        """Get next reference frame after current position.
+
+        Returns:
+            Frame index or None if no more reference frames
+        """
+        refs = sorted(self.reference_frame_indices)
+        for idx in refs:
+            if idx > self._current_frame_idx:
+                return idx
+        # Wrap around
+        return refs[0] if refs else None
+
+    def prev_reference_frame(self) -> int | None:
+        """Get previous reference frame before current position.
+
+        Returns:
+            Frame index or None if no reference frames
+        """
+        refs = sorted(self.reference_frame_indices, reverse=True)
+        for idx in refs:
+            if idx < self._current_frame_idx:
+                return idx
+        # Wrap around
+        return refs[0] if refs else None
+
     # --- Suggested reference frames ---
 
     def set_suggested_frames(self, indices: list[int]) -> None:

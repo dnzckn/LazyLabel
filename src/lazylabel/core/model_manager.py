@@ -36,12 +36,12 @@ class ModelManager:
             SamModel instance if successful, None if failed
         """
         try:
-            logger.info(f"Step 4/8: Loading {model_type.upper()} model...")
+            logger.info(f"Loading {model_type.upper()} model...")
             self.sam_model = SamModel(model_type=model_type)
             self.current_models_folder = str(self.paths.models_dir)
             return self.sam_model
         except Exception as e:
-            logger.error(f"Step 4/8: Failed to initialize default model: {e}")
+            logger.error(f"Failed to initialize default model: {e}")
             self.sam_model = None
             return None
 

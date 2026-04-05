@@ -295,7 +295,7 @@ Visual representation of all frames in the sequence.
 #### Sequence Controls Panel
 
 **Reference Frames Section:**
-- **+ Add Current** - Mark current frame as reference (keyboard: `F`)
+- **+ Add Current** - Mark current frame as reference (keyboard: `G`)
 - **+ All Before** - Add all frames before current position as references
 - **+ All Labeled** - Add all frames with existing NPZ labels as reference frames
 - **Clear All** - Remove all reference frame designations
@@ -316,7 +316,7 @@ Visual representation of all frames in the sequence.
 #### Step 1: Annotate Reference Frames
 1. Navigate to a representative frame
 2. Use AI Point Mode or Polygon Mode to create segments
-3. Press `F` or click "Add Current" to mark as reference
+3. Press `G` or click "Add Current" to mark as reference
 4. Repeat for additional reference frames if needed
 
 #### Step 2: Configure Propagation
@@ -711,10 +711,12 @@ LazyLabel uses three distinct segment types with different capabilities:
 
 | Action | Primary Key | Description |
 |--------|-------------|-------------|
-| Add Reference | `F` | Mark current frame as reference |
+| Add Reference | `G` | Mark current frame as reference |
 | Start Propagation | `Ctrl+P` | Propagate masks from references |
 | Next Flagged | `N` | Navigate to next flagged frame |
 | Previous Flagged | `Shift+N` | Navigate to previous flagged frame |
+| Next Reference | `B` | Navigate to next reference frame |
+| Previous Reference | `Shift+B` | Navigate to previous reference frame |
 
 ### Shortcut Customization
 

@@ -8,6 +8,7 @@ from PyQt6.QtWidgets import QMenu, QToolButton
 from ...core.exporters import (
     DEFAULT_EXPORT_FORMATS,
     EXPORT_FORMAT_LABELS,
+    EXPORT_FORMAT_TOOLTIPS,
     ExportFormat,
 )
 
@@ -24,12 +25,14 @@ class ExportFormatWidget(QToolButton):
     def __init__(self, parent=None):
         super().__init__(parent)
         self._menu = QMenu(self)
+        self._menu.setToolTipsVisible(True)
         self._actions: dict[ExportFormat, object] = {}
 
         for fmt in ExportFormat:
             action = self._menu.addAction(EXPORT_FORMAT_LABELS[fmt])
             action.setCheckable(True)
             action.setChecked(fmt in DEFAULT_EXPORT_FORMATS)
+            action.setToolTip(EXPORT_FORMAT_TOOLTIPS.get(fmt, ""))
             action.toggled.connect(self._on_action_toggled)
             self._actions[fmt] = action
 
@@ -85,6 +88,7 @@ class ExportFormatWidget(QToolButton):
 
     _ABBREVIATIONS: dict[ExportFormat, str] = {
         ExportFormat.NPZ: "NPZ",
+        ExportFormat.NPZ_CLASS_MAP: "NPZ CM",
         ExportFormat.YOLO_DETECTION: "YOLO Det",
         ExportFormat.YOLO_SEGMENTATION: "YOLO Seg",
         ExportFormat.COCO_JSON: "COCO",

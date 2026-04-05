@@ -15,7 +15,7 @@ def download_model(url, download_path):
     """Downloads file with a progress bar."""
 
     try:
-        logger.info("Step 5/8: Connecting to download server...")
+        logger.info("Connecting to download server...")
         response = requests.get(url, stream=True, timeout=30)
         response.raise_for_status()
         total_size_in_bytes = int(response.headers.get("content-length", 0))
@@ -31,30 +31,24 @@ def download_model(url, download_path):
         if total_size_in_bytes != 0 and progress_bar.n != total_size_in_bytes:
             raise RuntimeError("Download incomplete - file size mismatch")
 
-        logger.info("Step 5/8: Model download completed successfully.")
+        logger.info("Model download completed successfully.")
 
     except requests.exceptions.ConnectionError as e:
         raise RuntimeError(
-            "Step 5/8: Network connection failed: Check your internet connection"
+            "Network connection failed: Check your internet connection"
         ) from e
     except requests.exceptions.Timeout as e:
-        raise RuntimeError(
-            "Step 5/8: Download timeout: Server took too long to respond"
-        ) from e
+        raise RuntimeError("Download timeout: Server took too long to respond") from e
     except requests.exceptions.HTTPError as e:
         raise RuntimeError(
-            f"Step 5/8: HTTP error {e.response.status_code}: Server rejected request"
+            f"HTTP error {e.response.status_code}: Server rejected request"
         ) from e
     except requests.exceptions.RequestException as e:
-        raise RuntimeError(f"Step 5/8: Network error during download: {e}") from e
+        raise RuntimeError(f"Network error during download: {e}") from e
     except PermissionError as e:
-        raise RuntimeError(
-            f"Step 5/8: Permission denied: Cannot write to {download_path}"
-        ) from e
+        raise RuntimeError(f"Permission denied: Cannot write to {download_path}") from e
     except OSError as e:
-        raise RuntimeError(
-            f"Step 5/8: Disk error: {e} (check available disk space)"
-        ) from e
+        raise RuntimeError(f"Disk error: {e} (check available disk space)") from e
     except Exception as e:
         # Clean up partial download
         if os.path.exists(download_path):
@@ -62,7 +56,7 @@ def download_model(url, download_path):
 
             with contextlib.suppress(OSError):
                 os.remove(download_path)
-        raise RuntimeError(f"Step 5/8: Download failed: {e}") from e
+        raise RuntimeError(f"Download failed: {e}") from e
 
 
 class SamModel:
@@ -73,7 +67,7 @@ class SamModel:
         custom_model_path=None,
     ):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        logger.info(f"Step 5/8: Detected device: {str(self.device).upper()}")
+        logger.info(f"Detected device: {str(self.device).upper()}")
 
         self.current_model_type = model_type
         self.current_model_path = custom_model_path
@@ -87,7 +81,7 @@ class SamModel:
             if custom_model_path and os.path.exists(custom_model_path):
                 # Use custom model path
                 model_path = custom_model_path
-                logger.info(f"Step 5/8: Loading custom SAM model from {model_path}...")
+                logger.info(f"Loading custom SAM model from {model_path}...")
             else:
                 # Use default model with download if needed - store in models folder
                 model_url = (
@@ -118,7 +112,7 @@ class SamModel:
                         model_path
                     ):
                         logger.info(
-                            "Step 5/8: Moving existing model from cache to models folder..."
+                            "Moving existing model from cache to models folder..."
                         )
                         import shutil
 
@@ -127,23 +121,21 @@ class SamModel:
                         # Download the model if it doesn't exist
                         download_model(model_url, model_path)
 
-                logger.info(f"Step 5/8: Loading default SAM model from {model_path}...")
+                logger.info(f"Loading default SAM model from {model_path}...")
 
-            logger.info(
-                f"Step 5/8: Initializing {model_type.upper()} model architecture..."
-            )
+            logger.info(f"Initializing {model_type.upper()} model architecture...")
             self.model = sam_model_registry[model_type](checkpoint=model_path).to(
                 self.device
             )
 
-            logger.info("Step 5/8: Setting up predictor...")
+            logger.info("Setting up predictor...")
             self.predictor = SamPredictor(self.model)
             self.is_loaded = True
-            logger.info("Step 5/8: SAM model loaded successfully.")
+            logger.info("SAM model loaded successfully.")
 
         except Exception as e:
-            logger.error(f"Step 4/8: Failed to load SAM model: {e}")
-            logger.warning("Step 4/8: SAM point functionality will be disabled.")
+            logger.error(f"Failed to load SAM model: {e}")
+            logger.warning("SAM point functionality will be disabled.")
             self.is_loaded = False
 
     def load_custom_model(self, model_path, model_type="vit_h"):

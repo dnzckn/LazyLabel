@@ -130,6 +130,10 @@ class TestHotkeyManager:
             action_name = manager.is_key_in_use("F")
             assert action_name is None
 
+            # Check sequence hotkey
+            action_name = manager.is_key_in_use("G")
+            assert action_name == "add_reference_frame"
+
             # Check a key that is in use but exclude the action
             action_name = manager.is_key_in_use("1", exclude_action="sam_mode")
             assert action_name is None

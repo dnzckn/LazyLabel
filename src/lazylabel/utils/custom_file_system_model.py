@@ -7,6 +7,7 @@ from PyQt6.QtGui import QBrush, QColor, QFileSystemModel
 # Order determines column order (columns 1..N after "File Name").
 _FORMAT_COLUMNS: list[tuple[str, str]] = [
     (".npz", "NPZ"),
+    ("_CM.npz", "NPZ CM"),
     (".txt", "YOLO Det"),
     ("_seg.txt", "YOLO Seg"),
     ("_coco.json", "COCO"),

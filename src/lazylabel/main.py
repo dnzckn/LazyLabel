@@ -10,41 +10,44 @@ if sys.stdout is None:
 if sys.stderr is None:
     sys.stderr = open(os.devnull, "w")  # noqa: SIM115
 
-from PyQt6.QtWidgets import QApplication
-
-from lazylabel.ui.main_window import MainWindow
 from lazylabel.utils.logger import logger
+from lazylabel.utils.startup import startup_display
 
 
 def main():
     """Main application entry point."""
 
-    logger.info("=" * 50)
-    logger.info("Step 1/8: LazyLabel - AI-Assisted Image Labeling")
-    logger.info("=" * 50)
-    logger.info("")
+    startup_display.show_banner()
 
-    logger.info("Step 2/8: Initializing application...")
+    logger.info("LazyLabel - AI-Assisted Image Labeling")
+
+    startup_display.update_step(2, "Initializing application")
+    logger.info("Initializing application...")
+    from PyQt6.QtWidgets import QApplication
+
     app = QApplication(sys.argv)
 
-    logger.info("Step 3/8: Applying dark theme...")
+    startup_display.update_step(3, "Applying dark theme")
+    logger.info("Applying dark theme...")
     try:
         import qdarktheme
 
         qdarktheme.setup_theme()
     except Exception as e:
         logger.warning(f"Could not apply dark theme: {e}")
-        logger.info("Falling back to default Qt style")
 
-    logger.info("Step 4/8: Setting up main window...")
+    startup_display.update_step(4, "Setting up main window")
+    logger.info("Setting up main window...")
+    from lazylabel.ui.main_window import MainWindow
+
     main_window = MainWindow()
 
-    logger.info("Step 7/8: Showing main window...")
+    startup_display.update_step(7, "Showing main window")
+    logger.info("Showing main window...")
     main_window.show()
 
-    logger.info("")
-    logger.info("Step 8/8: LazyLabel is ready! Happy labeling!")
-    logger.info("=" * 50)
+    logger.info("LazyLabel is ready!")
+    startup_display.finish()
 
     sys.exit(app.exec())
 

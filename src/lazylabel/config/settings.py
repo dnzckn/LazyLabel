@@ -62,6 +62,7 @@ class Settings:
     file_manager_show_seg: bool = False
     file_manager_show_coco: bool = False
     file_manager_show_voc: bool = False
+    file_manager_show_cm: bool = False
     file_manager_show_cml: bool = False
     file_manager_show_modified: bool = True
     file_manager_show_size: bool = True

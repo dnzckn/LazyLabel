@@ -111,6 +111,43 @@ class HotkeyManager:
             HotkeyAction("pan_down", "Pan Down", "S", category="Movement"),
             HotkeyAction("pan_left", "Pan Left", "A", category="Movement"),
             HotkeyAction("pan_right", "Pan Right", "D", category="Movement"),
+            # Sequence
+            HotkeyAction(
+                "add_reference_frame",
+                "Add Current Frame as Reference",
+                "G",
+                category="Sequence",
+            ),
+            HotkeyAction(
+                "next_flagged_frame",
+                "Next Flagged Frame",
+                "N",
+                category="Sequence",
+            ),
+            HotkeyAction(
+                "prev_flagged_frame",
+                "Previous Flagged Frame",
+                "Shift+N",
+                category="Sequence",
+            ),
+            HotkeyAction(
+                "next_reference_frame",
+                "Next Reference Frame",
+                "B",
+                category="Sequence",
+            ),
+            HotkeyAction(
+                "prev_reference_frame",
+                "Previous Reference Frame",
+                "Shift+B",
+                category="Sequence",
+            ),
+            HotkeyAction(
+                "propagate",
+                "Start Propagation",
+                "Ctrl+P",
+                category="Sequence",
+            ),
             # Mouse-related (cannot be reassigned)
             HotkeyAction(
                 "left_click",

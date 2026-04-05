@@ -306,7 +306,7 @@ class PropagationManager:
 
         self.state = PropagationState()
         self._cancel_requested = False
-        logger.info("PropagationManager: Cleaned up")
+        logger.debug("PropagationManager: Cleaned up")
 
     # ========== Reference Frame Management ==========
 

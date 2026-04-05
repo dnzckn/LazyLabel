@@ -226,7 +226,11 @@ class MainWindow(QMainWindow):
         self.sam_preload_scheduler: SAMPreloadScheduler | None = None
 
         self._setup_ui()
-        logger.info("Step 5/8: Discovering available models...")
+
+        from lazylabel.utils.startup import startup_display
+
+        startup_display.update_step(5, "Discovering available models")
+        logger.info("Discovering available models...")
         self._setup_model_manager()  # Just setup manager, don't load model
         self._setup_connections()
         self._fix_fft_connection()  # Workaround for FFT signal connection issue
@@ -773,13 +777,14 @@ class MainWindow(QMainWindow):
         models = self.model_manager.get_available_models(str(self.paths.models_dir))
         self.control_panel.populate_models(models)
 
+        from lazylabel.utils.startup import startup_display
+
         if models:
-            if len(models) == 1:
-                logger.info("Step 6/8: Found 1 model in models directory")
-            else:
-                logger.info(f"Step 6/8: Found {len(models)} models in models directory")
+            startup_display.update_step(6, f"Found {len(models)} model(s)")
+            logger.info(f"Found {len(models)} model(s) in models directory")
         else:
-            logger.info("Step 6/8: No models found in models directory")
+            startup_display.update_step(6, "No models found")
+            logger.info("No models found in models directory")
 
     def _enable_sam_functionality(self, enabled: bool):
         """Enable or disable SAM point functionality."""
@@ -997,6 +1002,13 @@ class MainWindow(QMainWindow):
             "pan_left": lambda: self._handle_pan_key("left"),
             "pan_right": lambda: self._handle_pan_key("right"),
             "toggle_ai_filter": self._toggle_ai_filter,
+            # Sequence
+            "add_reference_frame": self._on_add_sequence_reference,
+            "next_flagged_frame": self._on_next_flagged_frame,
+            "prev_flagged_frame": self._on_prev_flagged_frame,
+            "next_reference_frame": self._on_next_reference_frame,
+            "prev_reference_frame": self._on_prev_reference_frame,
+            "propagate": self._on_propagate_shortcut,
         }
 
         # Create shortcuts for each action
@@ -4436,6 +4448,35 @@ class MainWindow(QMainWindow):
             self._on_sequence_frame_selected(prev_frame)
         else:
             self._show_notification("No more flagged frames")
+
+    def _on_next_reference_frame(self):
+        """Navigate to next reference frame."""
+        if self.sequence_view_mode is None:
+            return
+
+        next_frame = self.sequence_view_mode.next_reference_frame()
+        if next_frame is not None:
+            self._on_sequence_frame_selected(next_frame)
+        else:
+            self._show_notification("No reference frames")
+
+    def _on_prev_reference_frame(self):
+        """Navigate to previous reference frame."""
+        if self.sequence_view_mode is None:
+            return
+
+        prev_frame = self.sequence_view_mode.prev_reference_frame()
+        if prev_frame is not None:
+            self._on_sequence_frame_selected(prev_frame)
+        else:
+            self._show_notification("No reference frames")
+
+    def _on_propagate_shortcut(self):
+        """Handle propagate keyboard shortcut — triggers with default widget settings."""
+        if self.sequence_view_mode is None:
+            return
+        if hasattr(self, "sequence_widget") and self.sequence_widget is not None:
+            self.sequence_widget.propagate_btn.click()
 
     def _on_confidence_threshold_changed(self, threshold: float):
         """Handle confidence threshold change from UI."""
