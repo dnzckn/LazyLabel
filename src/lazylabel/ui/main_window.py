@@ -4190,6 +4190,7 @@ class MainWindow(QMainWindow):
 
         # Connect worker signals
         self._propagation_worker.progress.connect(self._on_propagation_progress)
+        self._propagation_worker.status.connect(self._on_propagation_status)
         self._propagation_worker.frame_done.connect(self._on_propagation_frame_done)
         self._propagation_worker.finished_propagation.connect(
             self._on_propagation_finished
@@ -4253,6 +4254,11 @@ class MainWindow(QMainWindow):
             self.sequence_widget.end_propagation()
 
         self._show_notification("Propagation cancelled")
+
+    def _on_propagation_status(self, message: str):
+        """Handle phase-level status from propagation worker."""
+        if self.sequence_widget:
+            self.sequence_widget.set_propagation_status(message)
 
     def _on_propagation_progress(self, current: int, total: int):
         """Handle propagation progress update."""

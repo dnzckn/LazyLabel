@@ -541,6 +541,7 @@ class PropagationManager:
         range_start: int | None = None,
         range_end: int | None = None,
         skip_flagged: bool = True,
+        status_callback: Callable[[str], None] | None = None,
     ):
         """Propagate masks through the sequence.
 
@@ -553,6 +554,8 @@ class PropagationManager:
             range_start: Optional start frame (default: 0 or reference)
             range_end: Optional end frame (default: last frame)
             skip_flagged: If True, don't store results for low confidence frames
+            status_callback: Optional callback for phase-level status messages
+                (e.g. "Loading frames into model...", "Registering references...")
 
         Yields:
             Tuple of (current_frame, total_frames, results_for_frame)
@@ -596,11 +599,23 @@ class PropagationManager:
 
         if use_streaming:
             yield from self._propagate_streaming(
-                direction, sam2_start, sam2_end, min_ref, max_ref, skip_flagged
+                direction,
+                sam2_start,
+                sam2_end,
+                min_ref,
+                max_ref,
+                skip_flagged,
+                status_callback=status_callback,
             )
         else:
             yield from self._propagate_full_context(
-                direction, sam2_start, sam2_end, min_ref, max_ref, skip_flagged
+                direction,
+                sam2_start,
+                sam2_end,
+                min_ref,
+                max_ref,
+                skip_flagged,
+                status_callback=status_callback,
             )
 
     # ========== Full-Context Propagation ==========
@@ -613,14 +628,18 @@ class PropagationManager:
         min_ref: int,
         max_ref: int,
         skip_flagged: bool,
+        status_callback: Callable[[str], None] | None = None,
     ):
         """Full-context propagation: load all frames into SAM2 at once."""
         # Initialize SAM2 with all frames if not already initialized
         if not self.sam2_model.is_video_initialized:
+            n_frames = len(self.state.all_image_paths)
             logger.info(
                 f"PropagationManager: Initializing SAM2 with "
-                f"{len(self.state.all_image_paths)} frames (full-context)"
+                f"{n_frames} frames (full-context)"
             )
+            if status_callback:
+                status_callback(f"Loading {n_frames} frames into model...")
             if not self.sam2_model.init_video_state(
                 self.state.all_image_paths,
                 image_cache=self.state.image_cache,
@@ -629,6 +648,9 @@ class PropagationManager:
                 return
 
         # Register reference annotations with SAM2
+        n_ref_frames = len(self.state.reference_frame_indices)
+        if status_callback:
+            status_callback(f"Registering {n_ref_frames} reference frames...")
         for ann in self.state.reference_annotations:
             self.sam2_model.add_video_mask(ann.frame_idx, ann.obj_id, ann.mask)
 
@@ -793,6 +815,7 @@ class PropagationManager:
         min_ref: int,
         max_ref: int,
         skip_flagged: bool,
+        status_callback: Callable[[str], None] | None = None,
     ):
         """Streaming propagation: process frames in overlapping chunks."""
         # Clean up any existing SAM2 state before chunked propagation
@@ -803,21 +826,33 @@ class PropagationManager:
             start = sam2_start if sam2_start is not None else min_ref
             end = sam2_end if sam2_end is not None else self.state.total_frames - 1
             yield from self._propagate_chunked(
-                start, end, reverse=False, skip_flagged=skip_flagged
+                start,
+                end,
+                reverse=False,
+                skip_flagged=skip_flagged,
+                status_callback=status_callback,
             )
 
         elif direction == PropagationDirection.BACKWARD:
             start = sam2_start if sam2_start is not None else 0
             end = sam2_end if sam2_end is not None else max_ref
             yield from self._propagate_chunked(
-                end, start, reverse=True, skip_flagged=skip_flagged
+                end,
+                start,
+                reverse=True,
+                skip_flagged=skip_flagged,
+                status_callback=status_callback,
             )
 
         elif direction == PropagationDirection.BIDIRECTIONAL:
             # Forward from min reference to end
             end = sam2_end if sam2_end is not None else self.state.total_frames - 1
             yield from self._propagate_chunked(
-                min_ref, end, reverse=False, skip_flagged=skip_flagged
+                min_ref,
+                end,
+                reverse=False,
+                skip_flagged=skip_flagged,
+                status_callback=status_callback,
             )
 
             if self._cancel_requested:
@@ -827,7 +862,11 @@ class PropagationManager:
             start = sam2_start if sam2_start is not None else 0
             if min_ref > start:
                 yield from self._propagate_chunked(
-                    min_ref, start, reverse=True, skip_flagged=skip_flagged
+                    min_ref,
+                    start,
+                    reverse=True,
+                    skip_flagged=skip_flagged,
+                    status_callback=status_callback,
                 )
 
     def _propagate_chunked(
@@ -836,6 +875,7 @@ class PropagationManager:
         end_idx: int,
         reverse: bool,
         skip_flagged: bool,
+        status_callback: Callable[[str], None] | None = None,
     ):
         """Propagate through a range using chunked streaming.
 
@@ -847,6 +887,7 @@ class PropagationManager:
             end_idx: Ending SAM2 frame index (far end)
             reverse: If True, propagate backward
             skip_flagged: If True, don't store results for low confidence frames
+            status_callback: Optional callback for phase-level status messages
 
         Yields:
             Tuple of (timeline_frame_idx, total_to_process, results_for_frame)
@@ -878,6 +919,7 @@ class PropagationManager:
                     skip_flagged=skip_flagged,
                     total=total,
                     chunk_num=chunk_num,
+                    status_callback=status_callback,
                 )
 
                 if chunk_end >= end_idx:
@@ -901,6 +943,7 @@ class PropagationManager:
                     skip_flagged=skip_flagged,
                     total=total,
                     chunk_num=chunk_num,
+                    status_callback=status_callback,
                 )
 
                 if chunk_start_pos <= end_idx:
@@ -916,6 +959,7 @@ class PropagationManager:
         skip_flagged: bool,
         total: int,
         chunk_num: int,
+        status_callback: Callable[[str], None] | None = None,
     ):
         """Process a single chunk: prepend refs, init SAM2, propagate, cleanup.
 
@@ -931,6 +975,7 @@ class PropagationManager:
             skip_flagged: If True, skip low confidence frames
             total: Total frames in the full range (for progress reporting)
             chunk_num: Chunk number (for logging)
+            status_callback: Optional callback for phase-level status messages
 
         Yields:
             Tuple of (timeline_frame_idx, total_to_process, results_for_frame)
@@ -974,6 +1019,8 @@ class PropagationManager:
         )
 
         # Init SAM2 with prepended refs + chunk images
+        if status_callback:
+            status_callback(f"Loading chunk {chunk_num} ({chunk_data_len} frames)...")
         if not self.sam2_model.init_video_state(
             full_paths,
             image_cache=self.state.image_cache,
@@ -987,6 +1034,8 @@ class PropagationManager:
             # Add reference annotations.
             # In-chunk refs use their real position (offset by n_prepended).
             # External refs use their prepended position (real image+mask pair).
+            if status_callback:
+                status_callback(f"Registering references for chunk {chunk_num}...")
             for ann in self.state.reference_annotations:
                 if chunk_start <= ann.frame_idx <= chunk_end:
                     local_idx = (ann.frame_idx - chunk_start) + n_prepended

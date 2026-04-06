@@ -24,6 +24,7 @@ class PropagationWorker(QThread):
 
     # Signals
     progress = pyqtSignal(int, int)  # current_frame, total_frames
+    status = pyqtSignal(str)  # phase-level status message
     frame_done = pyqtSignal(int, object)  # frame_idx, PropagationResult
     finished_propagation = pyqtSignal()
     error = pyqtSignal(str)
@@ -80,6 +81,7 @@ class PropagationWorker(QThread):
                 range_start=self.range_start,
                 range_end=self.range_end,
                 skip_flagged=self.skip_flagged,
+                status_callback=self.status.emit,
             ):
                 if self._should_stop:
                     logger.info("PropagationWorker: Stopped by request")
