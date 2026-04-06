@@ -4402,17 +4402,6 @@ class MainWindow(QMainWindow):
         if not self.sequence_view_mode or not self.timeline_widget:
             return
 
-        # All objects must pass — if any single object was below threshold
-        # (tracked per-object in propagation_manager.flagged_frames), flag
-        # the entire frame.
-        if (
-            self.propagation_manager
-            and frame_idx in self.propagation_manager.state.flagged_frames
-        ):
-            self.sequence_view_mode.flag_frame(frame_idx)
-            self.timeline_widget.set_frame_status(frame_idx, "flagged", immediate=True)
-            return
-
         status = self.sequence_view_mode.get_frame_status(frame_idx)
         if status == "flagged":
             self.timeline_widget.set_frame_status(frame_idx, "flagged", immediate=True)
