@@ -251,4 +251,3 @@ class AdjustmentsWidget(QWidget):
         self.set_contrast(0)
         self.set_gamma(100)  # 1.0
         self.set_saturation(100)  # 1.0
-

@@ -54,7 +54,9 @@ QLabel#notificationLabel {
 }
 """
 
-_DARK_QSS = _SHARED_QSS + """
+_DARK_QSS = (
+    _SHARED_QSS
+    + """
 /* Mode buttons - checked state (dark) */
 QPushButton#modeButton:checked {
     background-color: rgba(92, 143, 191, 0.9);
@@ -105,8 +107,11 @@ QWidget#collapsibleHeader:hover {
     background-color: rgba(255, 255, 255, 0.08);
 }
 """
+)
 
-_LIGHT_QSS = _SHARED_QSS + """
+_LIGHT_QSS = (
+    _SHARED_QSS
+    + """
 /* Mode buttons - checked state (light) */
 QPushButton#modeButton:checked {
     background-color: rgba(46, 109, 164, 0.9);
@@ -157,3 +162,4 @@ QWidget#collapsibleHeader:hover {
     background-color: rgba(0, 0, 0, 0.08);
 }
 """
+)

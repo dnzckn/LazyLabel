@@ -198,4 +198,3 @@ class BorderCropWidget(QWidget):
         """Re-enable thresholding controls when exiting multi-view mode."""
         # This method is called when exiting multi-view mode
         pass
-

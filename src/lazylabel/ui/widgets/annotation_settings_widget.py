@@ -198,4 +198,3 @@ class AnnotationSettingsWidget(QWidget):
         self.set_annotation_size(10)  # Default value (1.0)
         self.set_pan_speed(10)  # Default value (1.0)
         self.set_join_threshold(2)  # Default value
-

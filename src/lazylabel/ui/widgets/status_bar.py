@@ -72,7 +72,7 @@ class ThemeToggle(QWidget):
         icon_font = QFont()
         icon_font.setPointSize(8)
         p.setFont(icon_font)
-        symbol = "\u263E" if self._checked else "\u2600"
+        symbol = "\u263e" if self._checked else "\u2600"
         p.drawText(center_x - 5, center_y + 4, symbol)
 
         p.end()

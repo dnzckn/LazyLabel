@@ -227,4 +227,3 @@ class ModelSelectionWidget(QWidget):
         self.model_combo.setCurrentIndex(0)
         self.model_combo.blockSignals(False)
         self.set_current_model("Current: Default SAM Model")
-

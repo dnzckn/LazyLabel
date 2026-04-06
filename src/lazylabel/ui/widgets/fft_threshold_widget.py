@@ -277,9 +277,7 @@ class FFTThresholdWidget(QWidget):
         if image_array is None:
             self.current_image_channels = 0
             self.status_label.setText("Load a single channel (grayscale) image")
-            self.status_label.setStyleSheet(
-                "font-size: 9px; font-style: italic;"
-            )
+            self.status_label.setStyleSheet("font-size: 9px; font-style: italic;")
             return
 
         # Determine if image is grayscale (single channel or 3-channel with identical values)
