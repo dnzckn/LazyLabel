@@ -5,9 +5,8 @@
 
 LazyLabel combines Meta's Segment Anything Model (SAM) with comprehensive manual annotation tools to accelerate the creation of pixel-perfect segmentation masks for computer vision applications.
 
-<div align="center">
-  <img src="https://raw.githubusercontent.com/dnzckn/LazyLabel/main/src/lazylabel/media/demo_UI.png" alt="LazyLabel Screenshot" width="800"/>
-</div>
+<img src="https://raw.githubusercontent.com/dnzckn/LazyLabel/main/src/lazylabel/media/demo_UI.png" alt="LazyLabel Screenshot" width="800"/>
+
 
 ---
 
