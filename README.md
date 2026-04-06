@@ -9,7 +9,7 @@ LazyLabel combines Meta's Segment Anything Model (SAM) with comprehensive manual
 
 ---
 
-## Quick Start
+## Get Started
 
 ```bash
 pip install lazylabel-gui
