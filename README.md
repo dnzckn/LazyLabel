@@ -3,7 +3,7 @@
 [![Python](https://img.shields.io/pypi/pyversions/lazylabel-gui)](https://pypi.org/project/lazylabel-gui/)
 [![License](https://img.shields.io/pypi/l/lazylabel-gui)](https://github.com/dnzckn/LazyLabel/blob/main/LICENSE)
 
-LazyLabel combines Meta's Segment Anything Model (SAM) with comprehensive manual annotation tools to accelerate the creation of pixel-perfect segmentation masks for computer vision applications.
+LazyLabel combines Meta's Segment Anything Model (SAM) with comprehensive manual annotation tools to accelerate the creation of pixel-perfect labels for computer vision applications.
 
 <img src="https://raw.githubusercontent.com/dnzckn/LazyLabel/main/src/lazylabel/media/sequence_demo.gif"/>
 
