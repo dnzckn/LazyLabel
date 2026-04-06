@@ -752,7 +752,7 @@ class PropagationManager:
             is_flagged = confidence < self.state.confidence_threshold
 
             # Skip flagged frames if requested (no mask created), but still
-            # yield so the UI can show them as red immediately.
+            # yield so the UI can track the low confidence for display.
             if is_flagged and skip_flagged:
                 self.state.flagged_frames.add(timeline_idx)
                 logger.debug(
@@ -760,7 +760,7 @@ class PropagationManager:
                     f"(confidence={confidence:.2f})"
                 )
                 frame_count += 1
-                yield timeline_idx, total, None
+                yield timeline_idx, total, confidence
                 continue
 
             # Skip empty masks (no positive pixels)
@@ -1085,7 +1085,7 @@ class PropagationManager:
 
                 if is_flagged and skip_flagged:
                     self.state.flagged_frames.add(timeline_idx)
-                    yield timeline_idx, total, None
+                    yield timeline_idx, total, confidence
                     continue
 
                 # Skip empty masks
