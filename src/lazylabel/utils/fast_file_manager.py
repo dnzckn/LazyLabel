@@ -55,44 +55,7 @@ class CustomDropdown(QToolButton):
         # Store items for access
         self.items = []
 
-        # Style to match app theme (dark theme with consistent colors)
-        self.setStyleSheet("""
-            QToolButton {
-                background-color: rgba(40, 40, 40, 0.8);
-                border: 1px solid rgba(80, 80, 80, 0.6);
-                border-radius: 6px;
-                color: #E0E0E0;
-                font-size: 10px;
-                padding: 5px 8px;
-                text-align: left;
-                min-width: 30px;
-                max-width: 30px;
-            }
-            QToolButton:hover {
-                background-color: rgba(60, 60, 60, 0.8);
-                border-color: rgba(90, 120, 150, 0.8);
-            }
-            QToolButton:pressed {
-                background-color: rgba(70, 100, 130, 0.8);
-            }
-            QToolButton::menu-indicator {
-                subcontrol-origin: padding;
-                subcontrol-position: top right;
-                width: 16px;
-                border-left: 1px solid rgba(80, 80, 80, 0.6);
-            }
-            QMenu {
-                background-color: rgba(50, 50, 50, 0.9);
-                border: 1px solid rgba(80, 80, 80, 0.4);
-                color: #E0E0E0;
-            }
-            QMenu::item {
-                padding: 4px 8px;
-            }
-            QMenu::item:selected {
-                background-color: rgba(100, 100, 200, 0.5);
-            }
-        """)
+        self.setFixedWidth(30)
 
     def addCheckableItem(self, text, checked=True, data=None):
         """Add a checkable item to the dropdown."""
@@ -1108,18 +1071,14 @@ class FastFileManager(QWidget):
                 background-color: transparent;
                 alternate-background-color: rgba(255, 255, 255, 0.03);
                 gridline-color: rgba(255, 255, 255, 0.1);
-                color: #E0E0E0;
             }
             QTableView::item {
                 padding: 2px;
-                color: #E0E0E0;
             }
             QTableView::item:selected {
                 background-color: rgba(100, 100, 200, 0.5);
             }
             QHeaderView::section {
-                background-color: rgba(60, 60, 60, 0.5);
-                color: #E0E0E0;
                 padding: 4px;
                 border: 1px solid rgba(80, 80, 80, 0.4);
                 font-weight: bold;
@@ -1156,11 +1115,9 @@ class FastFileManager(QWidget):
 
         self._footer_view.setStyleSheet("""
             QTableView {
-                background-color: rgba(60, 60, 60, 0.3);
                 border: none;
                 border-top: 1px solid rgba(80, 80, 80, 0.4);
                 gridline-color: rgba(255, 255, 255, 0.1);
-                color: #B0B0B0;
             }
             QTableView::item {
                 padding: 2px;
@@ -1186,7 +1143,7 @@ class FastFileManager(QWidget):
     def _create_header(self) -> QWidget:
         """Create header with controls"""
         header = QWidget()
-        header.setStyleSheet("background: rgba(60, 60, 60, 0.3); padding: 5px;")
+        header.setContentsMargins(5, 5, 5, 5)
         layout = QHBoxLayout(header)
         layout.setContentsMargins(5, 5, 5, 5)
 
@@ -1196,9 +1153,7 @@ class FastFileManager(QWidget):
         self._search_box.textChanged.connect(self._on_search_changed)
         self._search_box.setStyleSheet("""
             QLineEdit {
-                background-color: rgba(50, 50, 50, 0.5);
                 border: 1px solid rgba(80, 80, 80, 0.4);
-                color: #E0E0E0;
                 padding: 4px;
                 border-radius: 3px;
             }
@@ -1226,17 +1181,9 @@ class FastFileManager(QWidget):
 
         btn_style = """
             QPushButton {
-                background-color: rgba(70, 70, 70, 0.6);
                 border: 1px solid rgba(80, 80, 80, 0.4);
-                color: #E0E0E0;
                 padding: 4px 8px;
                 border-radius: 3px;
-            }
-            QPushButton:hover {
-                background-color: rgba(90, 90, 90, 0.8);
-            }
-            QPushButton:pressed {
-                background-color: rgba(50, 50, 50, 0.8);
             }
         """
 

@@ -27,14 +27,19 @@ def main():
 
     app = QApplication(sys.argv)
 
-    startup_display.update_step(3, "Applying dark theme")
-    logger.info("Applying dark theme...")
+    startup_display.update_step(3, "Applying theme")
+    logger.info("Applying theme...")
     try:
-        import qdarktheme
+        from lazylabel.config.paths import AppPaths
+        from lazylabel.config.settings import Settings
+        from lazylabel.ui.theme import apply_theme
 
-        qdarktheme.setup_theme()
+        paths = AppPaths()
+        settings = Settings.load_from_file(str(paths.settings_file))
+        theme = "dark" if settings.dark_mode else "light"
+        apply_theme(theme)
     except Exception as e:
-        logger.warning(f"Could not apply dark theme: {e}")
+        logger.warning(f"Could not apply theme: {e}")
 
     startup_display.update_step(4, "Setting up main window")
     logger.info("Setting up main window...")

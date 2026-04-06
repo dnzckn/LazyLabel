@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.14] - 2026-04-05
+
+### Added
+
+- **Dark/light mode toggle**: Slider switch in the bottom-left status bar to switch between dark and light themes, with preference persisted across sessions
+- **Centralized theme system**: New `theme.py` module using `qdarktheme`'s `additional_qss` to layer custom styling on top of the base theme, eliminating widget-level stylesheet conflicts
+
+### Changed
+
+- Replaced all hardcoded dark-mode widget stylesheets with theme-aware object-name-targeted QSS (`modeButton`, `accentButton`, `positiveButton`, `secondaryButton`, `professionalCard`, `collapsibleHeader`)
+- Removed duplicated `_get_button_style()` methods from 4 widget files in favor of centralized theme rules
+- All UI elements now properly adapt to both dark and light themes
+
 ## [1.7.13] - 2026-04-05
 
 ### Fixed
@@ -894,6 +907,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [1.0.2]: https://github.com/dnzckn/LazyLabel/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/dnzckn/LazyLabel/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/dnzckn/LazyLabel/releases/tag/v1.0.0
+[1.7.14]: https://github.com/dnzckn/LazyLabel/compare/v1.7.13...v1.7.14
 [1.7.13]: https://github.com/dnzckn/LazyLabel/compare/v1.7.12...v1.7.13
 [1.7.12]: https://github.com/dnzckn/LazyLabel/compare/v1.7.11...v1.7.12
 [1.7.11]: https://github.com/dnzckn/LazyLabel/compare/v1.7.10...v1.7.11

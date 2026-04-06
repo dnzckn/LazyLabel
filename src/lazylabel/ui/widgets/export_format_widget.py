@@ -40,31 +40,8 @@ class ExportFormatWidget(QToolButton):
         self.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
         self._update_text()
 
-        self.setStyleSheet(
-            """
-            QToolButton {
-                background-color: rgba(60, 60, 60, 0.9);
-                border: 1px solid rgba(100, 100, 100, 0.6);
-                border-radius: 4px;
-                color: #E0E0E0;
-                font-size: 11px;
-                padding: 4px 8px;
-                min-height: 20px;
-                min-width: 80px;
-                max-width: 140px;
-                text-align: left;
-            }
-            QToolButton:hover {
-                background-color: rgba(80, 80, 80, 0.9);
-            }
-            QToolButton::menu-indicator {
-                subcontrol-position: right center;
-                subcontrol-origin: padding;
-                width: 12px;
-                height: 12px;
-            }
-            """
-        )
+        self.setMinimumWidth(80)
+        self.setMaximumWidth(140)
 
     # ------------------------------------------------------------------
     # Public API

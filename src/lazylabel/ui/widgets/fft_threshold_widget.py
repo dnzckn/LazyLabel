@@ -173,9 +173,7 @@ class FFTThresholdWidget(QWidget):
 
         # Status label
         self.status_label = QLabel("Load a single channel (grayscale) image")
-        self.status_label.setStyleSheet(
-            "color: #888; font-size: 9px; font-style: italic;"
-        )
+        self.status_label.setStyleSheet("font-size: 9px; font-style: italic;")
         layout.addWidget(self.status_label)
 
         # Frequency threshold slider (percentage-based)
@@ -210,7 +208,7 @@ class FFTThresholdWidget(QWidget):
 
         # Compact instructions
         instructions = QLabel("Freq: low→dark, high→bright | Intensity: quantization")
-        instructions.setStyleSheet("color: #888; font-size: 8px; margin-top: 2px;")
+        instructions.setStyleSheet("font-size: 8px; margin-top: 2px;")
         instructions.setWordWrap(True)
         layout.addWidget(instructions)
 
@@ -280,7 +278,7 @@ class FFTThresholdWidget(QWidget):
             self.current_image_channels = 0
             self.status_label.setText("Load a single channel (grayscale) image")
             self.status_label.setStyleSheet(
-                "color: #888; font-size: 9px; font-style: italic;"
+                "font-size: 9px; font-style: italic;"
             )
             return
 

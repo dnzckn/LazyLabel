@@ -102,7 +102,7 @@ class AnnotationSettingsWidget(QWidget):
             "Reset annotation size, pan speed, and join threshold to defaults."
         )
         self.btn_reset.setMinimumHeight(28)
-        self.btn_reset.setStyleSheet(self._get_button_style())
+        self.btn_reset.setObjectName("secondaryButton")
         main_layout.addWidget(self.btn_reset)
 
     def _connect_signals(self):
@@ -199,23 +199,3 @@ class AnnotationSettingsWidget(QWidget):
         self.set_pan_speed(10)  # Default value (1.0)
         self.set_join_threshold(2)  # Default value
 
-    def _get_button_style(self):
-        """Get consistent button styling."""
-        return """
-            QPushButton {
-                background-color: rgba(70, 100, 130, 0.8);
-                border: 1px solid rgba(90, 120, 150, 0.8);
-                border-radius: 6px;
-                color: #E0E0E0;
-                font-weight: bold;
-                font-size: 10px;
-                padding: 4px 8px;
-            }
-            QPushButton:hover {
-                background-color: rgba(90, 120, 150, 0.9);
-                border-color: rgba(110, 140, 170, 0.9);
-            }
-            QPushButton:pressed {
-                background-color: rgba(50, 80, 110, 0.9);
-            }
-        """

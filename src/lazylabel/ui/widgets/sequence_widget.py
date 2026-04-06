@@ -141,7 +141,7 @@ class SequenceWidget(QWidget):
             "4. Click 'Set End'\n"
             "5. Click 'Build Timeline'"
         )
-        instructions.setStyleSheet("color: #AAAAAA; font-size: 11px;")
+        instructions.setStyleSheet("font-size: 11px;")
         instructions.setWordWrap(True)
         setup_layout.addWidget(instructions)
 

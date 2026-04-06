@@ -106,7 +106,7 @@ class AdjustmentsWidget(QWidget):
             "Reset brightness, contrast, gamma, and saturation to defaults."
         )
         self.btn_reset.setMinimumHeight(28)
-        self.btn_reset.setStyleSheet(self._get_button_style())
+        self.btn_reset.setObjectName("secondaryButton")
         main_layout.addWidget(self.btn_reset)
 
     def _connect_signals(self):
@@ -252,23 +252,3 @@ class AdjustmentsWidget(QWidget):
         self.set_gamma(100)  # 1.0
         self.set_saturation(100)  # 1.0
 
-    def _get_button_style(self):
-        """Get consistent button styling."""
-        return """
-            QPushButton {
-                background-color: rgba(70, 100, 130, 0.8);
-                border: 1px solid rgba(90, 120, 150, 0.8);
-                border-radius: 6px;
-                color: #E0E0E0;
-                font-weight: bold;
-                font-size: 10px;
-                padding: 4px 8px;
-            }
-            QPushButton:hover {
-                background-color: rgba(90, 120, 150, 0.9);
-                border-color: rgba(110, 140, 170, 0.9);
-            }
-            QPushButton:pressed {
-                background-color: rgba(50, 80, 110, 0.9);
-            }
-        """

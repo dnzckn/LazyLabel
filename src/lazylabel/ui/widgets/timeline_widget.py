@@ -492,7 +492,6 @@ class ZoomableTimeline(QWidget):
             background-color: rgba(60, 60, 60, 0.8);
             border: 1px solid rgba(80, 80, 80, 0.6);
             border-radius: 2px;
-            color: #E0E0E0;
             font-weight: bold;
             font-size: 11px;
             padding: 0px 3px;

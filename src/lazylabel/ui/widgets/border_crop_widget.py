@@ -61,20 +61,20 @@ class BorderCropWidget(QWidget):
         self.btn_draw.setToolTip("Draw crop rectangle")
         self.btn_draw.setFixedWidth(30)
         self.btn_draw.setFixedHeight(28)
-        self.btn_draw.setStyleSheet(self._get_button_style())
+        self.btn_draw.setObjectName("secondaryButton")
 
         # Clear button
         self.btn_clear = QPushButton("✕")
         self.btn_clear.setToolTip("Clear crop")
         self.btn_clear.setFixedWidth(30)
         self.btn_clear.setFixedHeight(28)
-        self.btn_clear.setStyleSheet(self._get_button_style())
+        self.btn_clear.setObjectName("secondaryButton")
 
         # Apply button
         self.btn_apply = QPushButton("Apply")
         self.btn_apply.setToolTip("Apply crop from coordinates")
         self.btn_apply.setMinimumHeight(28)
-        self.btn_apply.setStyleSheet(self._get_button_style())
+        self.btn_apply.setObjectName("secondaryButton")
 
         button_layout.addWidget(self.btn_draw)
         button_layout.addWidget(self.btn_clear)
@@ -84,7 +84,7 @@ class BorderCropWidget(QWidget):
 
         # Status label
         self.status_label = QLabel("")
-        self.status_label.setStyleSheet("color: #888; font-size: 10px;")
+        self.status_label.setStyleSheet("font-size: 10px;")
         self.status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(self.status_label)
 
@@ -199,23 +199,3 @@ class BorderCropWidget(QWidget):
         # This method is called when exiting multi-view mode
         pass
 
-    def _get_button_style(self):
-        """Get consistent button styling."""
-        return """
-            QPushButton {
-                background-color: rgba(70, 100, 130, 0.8);
-                border: 1px solid rgba(90, 120, 150, 0.8);
-                border-radius: 6px;
-                color: #E0E0E0;
-                font-weight: bold;
-                font-size: 10px;
-                padding: 4px 8px;
-            }
-            QPushButton:hover {
-                background-color: rgba(90, 120, 150, 0.9);
-                border-color: rgba(110, 140, 170, 0.9);
-            }
-            QPushButton:pressed {
-                background-color: rgba(50, 80, 110, 0.9);
-            }
-        """

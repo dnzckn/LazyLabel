@@ -58,7 +58,7 @@ class FragmentThresholdWidget(QWidget):
 
         # Description label
         desc_label = QLabel("Filters small AI segments relative to the largest segment")
-        desc_label.setStyleSheet("color: #888; font-size: 9px; font-style: italic;")
+        desc_label.setStyleSheet("font-size: 9px; font-style: italic;")
         desc_label.setWordWrap(True)
         layout.addWidget(desc_label)
 

@@ -695,7 +695,8 @@ class MainWindow(QMainWindow):
         main_layout.addWidget(self.main_splitter)
 
         # Status bar
-        self.status_bar = StatusBar()
+        self.status_bar = StatusBar(dark_mode=self.settings.dark_mode)
+        self.status_bar.theme_toggled.connect(self._on_theme_toggled)
         self.setStatusBar(self.status_bar)
 
         # Initialize notification manager (after status_bar is created)
@@ -2094,6 +2095,38 @@ class MainWindow(QMainWindow):
         """Save settings to file immediately."""
         self.settings.save_to_file(str(self.paths.settings_file))
 
+    def showEvent(self, event):
+        """Re-apply theme on first show to match runtime toggle rendering."""
+        super().showEvent(event)
+        if not getattr(self, "_theme_fixed", False):
+            self._theme_fixed = True
+            from PyQt6.QtCore import QTimer
+
+            dark = self.settings.dark_mode
+            opposite = "light" if dark else "dark"
+            target = "dark" if dark else "light"
+
+            def _step1():
+                from lazylabel.ui.theme import apply_theme
+
+                apply_theme(opposite)
+                QTimer.singleShot(0, _step2)
+
+            def _step2():
+                from lazylabel.ui.theme import apply_theme
+
+                apply_theme(target)
+
+            QTimer.singleShot(0, _step1)
+
+    def _on_theme_toggled(self, dark_mode: bool):
+        """Switch between dark and light theme."""
+        from lazylabel.ui.theme import apply_theme
+
+        apply_theme("dark" if dark_mode else "light")
+        self.settings.dark_mode = dark_mode
+        self._save_settings()
+
     def _reset_state(self):
         """Reset application state."""
         self.clear_all_points()
@@ -3140,9 +3173,7 @@ class MainWindow(QMainWindow):
 
         # Header label
         self.sequence_info_label = QLabel("Sequence Mode: No sequence loaded")
-        self.sequence_info_label.setStyleSheet(
-            "font-weight: bold; padding: 4px; background-color: #2d2d2d;"
-        )
+        self.sequence_info_label.setStyleSheet("font-weight: bold; padding: 4px;")
         sequence_layout.addWidget(self.sequence_info_label)
 
         # Sequence viewer - reuse the same viewer architecture as single view
@@ -3170,9 +3201,7 @@ class MainWindow(QMainWindow):
         )
         self.save_all_timeline_btn.setMinimumWidth(80)
         self.save_all_timeline_btn.setMaximumWidth(100)
-        self.save_all_timeline_btn.setStyleSheet(
-            "QPushButton { background-color: #4CAF50; color: black; font-weight: bold; }"
-        )
+        self.save_all_timeline_btn.setObjectName("positiveButton")
         self.save_all_timeline_btn.clicked.connect(self._on_save_all_propagated)
         timeline_layout.addWidget(self.save_all_timeline_btn)
 

@@ -31,32 +31,7 @@ class CustomDropdown(QToolButton):
         # Store items for access
         self.items = []
 
-        # Style to match app theme (dark theme with consistent colors)
-        self.setStyleSheet("""
-            QToolButton {
-                background-color: rgba(40, 40, 40, 0.8);
-                border: 1px solid rgba(80, 80, 80, 0.6);
-                border-radius: 6px;
-                color: #E0E0E0;
-                font-size: 10px;
-                padding: 5px 8px;
-                text-align: left;
-                min-width: 150px;
-            }
-            QToolButton:hover {
-                background-color: rgba(60, 60, 60, 0.8);
-                border-color: rgba(90, 120, 150, 0.8);
-            }
-            QToolButton:pressed {
-                background-color: rgba(70, 100, 130, 0.8);
-            }
-            QToolButton::menu-indicator {
-                subcontrol-origin: padding;
-                subcontrol-position: top right;
-                width: 16px;
-                border-left: 1px solid rgba(80, 80, 80, 0.6);
-            }
-        """)
+        self.setMinimumWidth(150)
 
     def addItem(self, text, data=None):
         """Add an item to the dropdown."""
@@ -149,12 +124,12 @@ class ModelSelectionWidget(QWidget):
         self.btn_browse = QPushButton("Browse Models")
         self.btn_browse.setToolTip("Browse for a folder containing .pth model files")
         self.btn_browse.setMinimumHeight(28)
-        self.btn_browse.setStyleSheet(self._get_button_style())
+        self.btn_browse.setObjectName("secondaryButton")
 
         self.btn_refresh = QPushButton("Refresh")
         self.btn_refresh.setToolTip("Refresh the list of available models")
         self.btn_refresh.setMinimumHeight(28)
-        self.btn_refresh.setStyleSheet(self._get_button_style())
+        self.btn_refresh.setObjectName("secondaryButton")
 
         button_layout.addWidget(self.btn_browse)
         button_layout.addWidget(self.btn_refresh)
@@ -172,13 +147,13 @@ class ModelSelectionWidget(QWidget):
         self.btn_load = QPushButton("Load")
         self.btn_load.setToolTip("Load the selected model into memory")
         self.btn_load.setMinimumHeight(28)
-        self.btn_load.setStyleSheet(self._get_load_button_style())
+        self.btn_load.setObjectName("positiveButton")
 
         self.btn_unload = QPushButton("Unload")
         self.btn_unload.setToolTip("Unload model from memory for faster navigation")
         self.btn_unload.setMinimumHeight(28)
         self.btn_unload.setEnabled(False)
-        self.btn_unload.setStyleSheet(self._get_unload_button_style())
+        self.btn_unload.setObjectName("negativeButton")
 
         load_unload_layout.addWidget(self.btn_load)
         load_unload_layout.addWidget(self.btn_unload)
@@ -253,80 +228,3 @@ class ModelSelectionWidget(QWidget):
         self.model_combo.blockSignals(False)
         self.set_current_model("Current: Default SAM Model")
 
-    def _get_button_style(self):
-        """Get consistent button styling."""
-        return """
-            QPushButton {
-                background-color: rgba(70, 100, 130, 0.8);
-                border: 1px solid rgba(90, 120, 150, 0.8);
-                border-radius: 6px;
-                color: #E0E0E0;
-                font-weight: bold;
-                font-size: 10px;
-                padding: 4px 8px;
-            }
-            QPushButton:hover {
-                background-color: rgba(90, 120, 150, 0.9);
-                border-color: rgba(110, 140, 170, 0.9);
-            }
-            QPushButton:pressed {
-                background-color: rgba(50, 80, 110, 0.9);
-            }
-            QPushButton:disabled {
-                background-color: rgba(40, 40, 40, 0.6);
-                border-color: rgba(60, 60, 60, 0.4);
-                color: #666666;
-            }
-        """
-
-    def _get_load_button_style(self):
-        """Get load button styling (green accent)."""
-        return """
-            QPushButton {
-                background-color: rgba(50, 120, 70, 0.8);
-                border: 1px solid rgba(70, 150, 90, 0.8);
-                border-radius: 6px;
-                color: #E0E0E0;
-                font-weight: bold;
-                font-size: 10px;
-                padding: 4px 8px;
-            }
-            QPushButton:hover {
-                background-color: rgba(70, 150, 90, 0.9);
-                border-color: rgba(90, 170, 110, 0.9);
-            }
-            QPushButton:pressed {
-                background-color: rgba(40, 100, 60, 0.9);
-            }
-            QPushButton:disabled {
-                background-color: rgba(40, 40, 40, 0.6);
-                border-color: rgba(60, 60, 60, 0.4);
-                color: #666666;
-            }
-        """
-
-    def _get_unload_button_style(self):
-        """Get unload button styling (red accent)."""
-        return """
-            QPushButton {
-                background-color: rgba(130, 60, 60, 0.8);
-                border: 1px solid rgba(160, 80, 80, 0.8);
-                border-radius: 6px;
-                color: #E0E0E0;
-                font-weight: bold;
-                font-size: 10px;
-                padding: 4px 8px;
-            }
-            QPushButton:hover {
-                background-color: rgba(160, 80, 80, 0.9);
-                border-color: rgba(180, 100, 100, 0.9);
-            }
-            QPushButton:pressed {
-                background-color: rgba(110, 50, 50, 0.9);
-            }
-            QPushButton:disabled {
-                background-color: rgba(40, 40, 40, 0.6);
-                border-color: rgba(60, 60, 60, 0.4);
-                color: #666666;
-            }
-        """

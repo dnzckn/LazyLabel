@@ -355,7 +355,7 @@ class RescaleHistogramDialog(QDialog):
             f"Pixels: {pixels:,}  |  "
             f"Image range: {int(image_array.min())}–{int(image_array.max())}"
         )
-        self.stats_label.setStyleSheet("color: #AAA; font-size: 10px;")
+        self.stats_label.setStyleSheet("font-size: 10px;")
 
         info_layout.addWidget(self.min_label)
         info_layout.addStretch()

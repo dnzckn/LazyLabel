@@ -172,7 +172,7 @@ class HotkeyDialog(QDialog):
             "Mouse-related actions cannot be modified."
         )
         instructions.setWordWrap(True)
-        instructions.setStyleSheet("color: #666; margin: 10px;")
+        instructions.setStyleSheet("margin: 10px;")
         layout.addWidget(instructions)
 
         # Tab widget for categories
@@ -247,7 +247,7 @@ class HotkeyDialog(QDialog):
             primary_edit.setText(action.primary_key or "")
             primary_edit.setEnabled(not action.mouse_related)
             if action.mouse_related:
-                primary_edit.setStyleSheet("background-color: #f0f0f0; color: #666;")
+                primary_edit.setEnabled(False)
                 primary_edit.setToolTip("Mouse-related actions cannot be modified")
             else:
                 primary_edit.key_captured.connect(
@@ -261,7 +261,7 @@ class HotkeyDialog(QDialog):
             secondary_edit.setText(action.secondary_key or "")
             secondary_edit.setEnabled(not action.mouse_related)
             if action.mouse_related:
-                secondary_edit.setStyleSheet("background-color: #f0f0f0; color: #666;")
+                secondary_edit.setEnabled(False)
                 secondary_edit.setToolTip("Mouse-related actions cannot be modified")
             else:
                 secondary_edit.key_captured.connect(

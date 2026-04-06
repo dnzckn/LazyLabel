@@ -401,7 +401,7 @@ class ChannelThresholdWidget(QWidget):
         instructions = QLabel(
             "✓ Check to enable\n• Double-click to add threshold\n• Right-click to remove"
         )
-        instructions.setStyleSheet("color: #888; font-size: 9px;")
+        instructions.setStyleSheet("font-size: 9px;")
         instructions.setWordWrap(True)
         layout.addWidget(instructions)
 

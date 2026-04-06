@@ -1,6 +1,7 @@
 """Left control panel with mode controls and settings."""
 
 from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtGui import QFont
 from PyQt6.QtWidgets import (
     QFrame,
     QHBoxLayout,
@@ -46,42 +47,18 @@ class SimpleCollapsible(QWidget):
         self.toggle_button = QPushButton("▼")
         self.toggle_button.setMaximumWidth(16)
         self.toggle_button.setMaximumHeight(16)
-        self.toggle_button.setStyleSheet(
-            """
-            QPushButton {
-                border: 1px solid rgba(120, 120, 120, 0.5);
-                background: rgba(70, 70, 70, 0.6);
-                color: #E0E0E0;
-                font-size: 11px;
-                font-weight: bold;
-                border-radius: 2px;
-            }
-            QPushButton:hover {
-                background: rgba(90, 90, 90, 0.8);
-                border: 1px solid rgba(140, 140, 140, 0.8);
-                color: #FFF;
-            }
-            QPushButton:pressed {
-                background: rgba(50, 50, 50, 0.8);
-                border: 1px solid rgba(100, 100, 100, 0.6);
-            }
-        """
-        )
+        self.toggle_button.setFlat(True)
+        font = QFont()
+        font.setPointSize(9)
+        font.setBold(True)
+        self.toggle_button.setFont(font)
         self.toggle_button.clicked.connect(self.toggle_collapse)
 
         title_label = QLabel(title)
-        title_label.setStyleSheet(
-            """
-            QLabel {
-                color: #E0E0E0;
-                font-weight: bold;
-                font-size: 12px;
-                background: transparent;
-                border: none;
-                padding: 2px;
-            }
-        """
-        )
+        title_font = QFont()
+        title_font.setPointSize(10)
+        title_font.setBold(True)
+        title_label.setFont(title_font)
 
         header_layout.addWidget(self.toggle_button)
         header_layout.addWidget(title_label)
@@ -89,15 +66,7 @@ class SimpleCollapsible(QWidget):
 
         self.header_widget = QWidget()
         self.header_widget.setLayout(header_layout)
-        self.header_widget.setStyleSheet(
-            """
-            QWidget {
-                background-color: rgba(60, 60, 60, 0.3);
-                border-radius: 3px;
-                border: 1px solid rgba(80, 80, 80, 0.4);
-            }
-        """
-        )
+        self.header_widget.setObjectName("collapsibleHeader")
         self.header_widget.setFixedHeight(20)
 
         layout.addWidget(self.header_widget)
@@ -125,17 +94,8 @@ class ProfessionalCard(QFrame):
 
     def __init__(self, title: str = "", parent=None):
         super().__init__(parent)
-        self.setFrameStyle(QFrame.Shape.Box)
-        self.setStyleSheet(
-            """
-            QFrame {
-                background-color: rgba(40, 40, 40, 0.8);
-                border: 1px solid rgba(80, 80, 80, 0.6);
-                border-radius: 8px;
-                margin: 2px;
-            }
-        """
-        )
+        self.setFrameStyle(QFrame.Shape.NoFrame)
+        self.setObjectName("professionalCard")
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(8, 8, 8, 8)
@@ -143,19 +103,10 @@ class ProfessionalCard(QFrame):
 
         if title:
             title_label = QLabel(title)
-            title_label.setStyleSheet(
-                """
-                QLabel {
-                    color: #E0E0E0;
-                    font-weight: bold;
-                    font-size: 11px;
-                    border: none;
-                    background: transparent;
-                    padding: 0px;
-                    margin-bottom: 4px;
-                }
-            """
-            )
+            font = QFont()
+            font.setPointSize(9)
+            font.setBold(True)
+            title_label.setFont(font)
             layout.addWidget(title_label)
 
         self.content_layout = layout
@@ -253,22 +204,6 @@ class ControlPanel(QWidget):
         self.btn_popout.setToolTip("Pop out panel to separate window")
         self.btn_popout.setMaximumWidth(30)
         self.btn_popout.setMaximumHeight(25)
-        self.btn_popout.setStyleSheet(
-            """
-            QPushButton {
-                background-color: rgba(60, 60, 60, 0.8);
-                border: 1px solid rgba(80, 80, 80, 0.6);
-                border-radius: 4px;
-                color: #E0E0E0;
-            }
-            QPushButton:hover {
-                background-color: rgba(80, 80, 80, 0.9);
-            }
-            QPushButton:pressed {
-                background-color: rgba(40, 40, 40, 0.9);
-            }
-        """
-        )
         header_layout.addWidget(self.btn_popout)
         layout.addLayout(header_layout)
 
@@ -278,47 +213,14 @@ class ControlPanel(QWidget):
 
         # Tabbed Interface for Everything Else
         settings_label = QLabel("Settings")
-        settings_label.setStyleSheet(
-            "color: #C0C0C0; font-weight: bold; font-size: 12px; padding: 2px 0px;"
-        )
+        settings_font = QFont()
+        settings_font.setPointSize(10)
+        settings_font.setBold(True)
+        settings_label.setFont(settings_font)
         settings_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(settings_label)
 
         self.tab_widget = QTabWidget()
-        self.tab_widget.setStyleSheet(
-            """
-            QTabWidget::pane {
-                border: 1px solid rgba(80, 80, 80, 0.6);
-                border-radius: 6px;
-                background-color: rgba(35, 35, 35, 0.9);
-                margin-top: 2px;
-            }
-            QTabWidget::tab-bar {
-                alignment: center;
-            }
-            QTabBar::tab {
-                background-color: rgba(50, 50, 50, 0.8);
-                border: 1px solid rgba(70, 70, 70, 0.6);
-                border-bottom: none;
-                border-radius: 4px 4px 0 0;
-                padding: 4px 8px;
-                margin-right: 1px;
-                color: #B0B0B0;
-                font-size: 11px;
-                min-width: 50px;
-                max-width: 100px;
-            }
-            QTabBar::tab:selected {
-                background-color: rgba(70, 70, 70, 0.9);
-                color: #E0E0E0;
-                font-weight: bold;
-            }
-            QTabBar::tab:hover:!selected {
-                background-color: rgba(60, 60, 60, 0.8);
-                color: #D0D0D0;
-            }
-        """
-        )
 
         # AI & Settings Tab
         ai_tab = self._create_ai_tab()
@@ -332,18 +234,7 @@ class ControlPanel(QWidget):
 
         # Status label at bottom
         self.notification_label = QLabel("")
-        self.notification_label.setStyleSheet(
-            """
-            QLabel {
-                color: #FFA500;
-                font-style: italic;
-                font-size: 10px;
-                background: transparent;
-                border: none;
-                padding: 4px;
-            }
-        """
-        )
+        self.notification_label.setObjectName("notificationLabel")
         self.notification_label.setWordWrap(True)
         layout.addWidget(self.notification_label)
 
@@ -371,19 +262,7 @@ class ControlPanel(QWidget):
                 "AI not installed. Run: pip install lazylabel-gui[include-ai]"
             )
             self.btn_sam_mode.setChecked(False)
-            self.btn_sam_mode.setStyleSheet(
-                """
-                QPushButton {
-                    background-color: rgba(50, 50, 50, 0.6);
-                    border: 1px solid rgba(70, 70, 70, 0.5);
-                    border-radius: 6px;
-                    color: rgba(120, 120, 120, 0.6);
-                    font-weight: bold;
-                    font-size: 11px;
-                    padding: 4px 8px;
-                }
-            """
-            )
+            pass
 
         self.btn_polygon_mode = self._create_mode_button(
             "Poly", "2", "Switch to Polygon Drawing Mode"
@@ -441,37 +320,12 @@ class ControlPanel(QWidget):
         button = QPushButton(f"{text} ({key})")
         button.setToolTip(f"{tooltip} ({key})")
         button.setFixedHeight(28)
-        button.setFixedWidth(90)  # Wider for better text fitting
-        button.setStyleSheet(
-            """
-            QPushButton {
-                background-color: rgba(60, 90, 120, 0.8);
-                border: 1px solid rgba(80, 110, 140, 0.8);
-                border-radius: 6px;
-                color: #E0E0E0;
-                font-weight: bold;
-                font-size: 11px;
-                padding: 4px 8px;
-            }
-            QPushButton:hover {
-                background-color: rgba(80, 110, 140, 0.9);
-                border-color: rgba(100, 130, 160, 0.9);
-            }
-            QPushButton:pressed {
-                background-color: rgba(40, 70, 100, 0.9);
-            }
-            QPushButton:checked {
-                background-color: rgba(120, 170, 220, 1.0);
-                border: 2px solid rgba(150, 200, 250, 1.0);
-                color: #FFFFFF;
-                font-weight: bold;
-            }
-            QPushButton:checked:hover {
-                background-color: rgba(140, 190, 240, 1.0);
-                border: 2px solid rgba(170, 220, 255, 1.0);
-            }
-        """
-        )
+        button.setFixedWidth(90)
+        font = QFont()
+        font.setPointSize(9)
+        font.setBold(True)
+        button.setFont(font)
+        button.setObjectName("modeButton")
         return button
 
     def _create_utility_button(self, text, key, tooltip):
@@ -486,80 +340,21 @@ class ControlPanel(QWidget):
         button = QPushButton(button_text)
         button.setToolTip(tooltip_text)
         button.setFixedHeight(28)
-        button.setFixedWidth(90)  # Wider for better text fitting
-        button.setStyleSheet(
-            """
-            QPushButton {
-                background-color: rgba(70, 100, 130, 0.8);
-                border: 1px solid rgba(90, 120, 150, 0.8);
-                border-radius: 6px;
-                color: #E0E0E0;
-                font-weight: bold;
-                font-size: 11px;
-                padding: 4px 8px;
-            }
-            QPushButton:hover {
-                background-color: rgba(90, 120, 150, 0.9);
-                border-color: rgba(110, 140, 170, 0.9);
-            }
-            QPushButton:pressed {
-                background-color: rgba(50, 80, 110, 0.9);
-            }
-            QPushButton:checked {
-                background-color: rgba(120, 170, 220, 1.0);
-                border: 2px solid rgba(150, 200, 250, 1.0);
-                color: #FFFFFF;
-                font-weight: bold;
-            }
-            QPushButton:checked:hover {
-                background-color: rgba(140, 190, 240, 1.0);
-                border: 2px solid rgba(170, 220, 255, 1.0);
-            }
-        """
-        )
+        button.setFixedWidth(90)
+        font = QFont()
+        font.setPointSize(9)
+        font.setBold(True)
+        button.setFont(font)
+        button.setObjectName("modeButton")
         return button
 
     def _get_mode_sized_button_style(self):
         """Get styling for utility buttons that matches mode button size."""
-        return """
-            QPushButton {
-                background-color: rgba(80, 80, 80, 0.8);
-                border: 1px solid rgba(100, 100, 100, 0.6);
-                border-radius: 6px;
-                color: #E0E0E0;
-                font-weight: bold;
-                font-size: 11px;
-                padding: 4px 8px;
-                min-height: 22px;
-            }
-            QPushButton:hover {
-                background-color: rgba(100, 100, 100, 0.9);
-                border-color: rgba(120, 120, 120, 0.8);
-            }
-            QPushButton:pressed {
-                background-color: rgba(60, 60, 60, 0.9);
-            }
-        """
+        return ""
 
     def _get_utility_button_style(self):
         """Get styling for utility buttons."""
-        return """
-            QPushButton {
-                background-color: rgba(80, 80, 80, 0.8);
-                border: 1px solid rgba(100, 100, 100, 0.6);
-                border-radius: 5px;
-                color: #E0E0E0;
-                font-size: 11px;
-                padding: 4px 8px;
-                min-height: 22px;
-            }
-            QPushButton:hover {
-                background-color: rgba(100, 100, 100, 0.9);
-            }
-            QPushButton:pressed {
-                background-color: rgba(60, 60, 60, 0.9);
-            }
-        """
+        return ""
 
     def _create_ai_tab(self):
         """Create the AI & Settings tab."""
@@ -570,27 +365,7 @@ class ControlPanel(QWidget):
         scroll.setWidgetResizable(True)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
-        scroll.setStyleSheet(
-            """
-            QScrollArea {
-                border: none;
-                background: transparent;
-            }
-            QScrollBar:vertical {
-                background-color: rgba(60, 60, 60, 0.5);
-                width: 8px;
-                border-radius: 4px;
-            }
-            QScrollBar::handle:vertical {
-                background-color: rgba(120, 120, 120, 0.7);
-                border-radius: 4px;
-                min-height: 20px;
-            }
-            QScrollBar::handle:vertical:hover {
-                background-color: rgba(140, 140, 140, 0.8);
-            }
-        """
-        )
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
 
         scroll_content = QWidget()
         layout = QVBoxLayout(scroll_content)
@@ -626,37 +401,15 @@ class ControlPanel(QWidget):
                 "When enabled, AI segments are automatically converted to polygons\n"
                 "when you accept them (Spacebar). Toggle with P key."
             )
-            self.btn_auto_polygon.setStyleSheet(
-                """
-                QPushButton {
-                    background-color: rgba(80, 80, 80, 0.8);
-                    border: 1px solid rgba(100, 100, 100, 0.8);
-                    border-radius: 6px;
-                    color: #E0E0E0;
-                    font-weight: bold;
-                    font-size: 11px;
-                    padding: 6px 12px;
-                    min-height: 24px;
-                }
-                QPushButton:hover {
-                    background-color: rgba(100, 100, 100, 0.9);
-                    border-color: rgba(120, 120, 120, 0.9);
-                }
-                QPushButton:checked {
-                    background-color: rgba(100, 80, 140, 0.9);
-                    border: 2px solid rgba(140, 120, 180, 1.0);
-                    color: #FFFFFF;
-                }
-                QPushButton:checked:hover {
-                    background-color: rgba(120, 100, 160, 0.95);
-                }
-            """
-            )
+            btn_font = QFont()
+            btn_font.setPointSize(9)
+            btn_font.setBold(True)
+            self.btn_auto_polygon.setFont(btn_font)
+            self.btn_auto_polygon.setObjectName("accentButton")
             convert_layout.addWidget(self.btn_auto_polygon)
 
             # Resolution slider for polygon approximation
             resolution_label = QLabel("Polygon Resolution:")
-            resolution_label.setStyleSheet("color: #B0B0B0; font-size: 10px;")
             convert_layout.addWidget(resolution_label)
 
             slider_layout = QHBoxLayout()
@@ -664,7 +417,6 @@ class ControlPanel(QWidget):
 
             # Label for "Simple"
             simple_label = QLabel("Simple")
-            simple_label.setStyleSheet("color: #888; font-size: 9px;")
             slider_layout.addWidget(simple_label)
 
             # Slider: range 1-100, maps to epsilon 0.005 (simple) to 0.0001 (detailed)
@@ -677,29 +429,11 @@ class ControlPanel(QWidget):
                 "Adjust how closely the polygon follows the AI mask.\n"
                 "Simple = fewer points, Detailed = more points."
             )
-            self.polygon_resolution_slider.setStyleSheet(
-                """
-                QSlider::groove:horizontal {
-                    background: rgba(60, 60, 60, 0.8);
-                    height: 6px;
-                    border-radius: 3px;
-                }
-                QSlider::handle:horizontal {
-                    background: rgba(120, 100, 160, 0.9);
-                    width: 14px;
-                    margin: -4px 0;
-                    border-radius: 7px;
-                }
-                QSlider::handle:horizontal:hover {
-                    background: rgba(140, 120, 180, 1.0);
-                }
-            """
-            )
+            pass
             slider_layout.addWidget(self.polygon_resolution_slider, 1)
 
             # Label for "Detailed"
             detailed_label = QLabel("Detailed")
-            detailed_label.setStyleSheet("color: #888; font-size: 9px;")
             slider_layout.addWidget(detailed_label)
 
             convert_layout.addLayout(slider_layout)
@@ -709,22 +443,7 @@ class ControlPanel(QWidget):
             self.btn_reset_auto_polygon.setToolTip(
                 "Reset auto-polygon settings to defaults"
             )
-            self.btn_reset_auto_polygon.setStyleSheet(
-                """
-                QPushButton {
-                    background-color: rgba(60, 60, 60, 0.6);
-                    border: 1px solid rgba(80, 80, 80, 0.6);
-                    border-radius: 4px;
-                    color: #999;
-                    font-size: 9px;
-                    padding: 3px 8px;
-                }
-                QPushButton:hover {
-                    background-color: rgba(80, 80, 80, 0.7);
-                    color: #ccc;
-                }
-            """
-            )
+            pass
             convert_layout.addWidget(self.btn_reset_auto_polygon)
 
             convert_collapsible = SimpleCollapsible(
@@ -761,27 +480,7 @@ class ControlPanel(QWidget):
         scroll.setWidgetResizable(True)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
-        scroll.setStyleSheet(
-            """
-            QScrollArea {
-                border: none;
-                background: transparent;
-            }
-            QScrollBar:vertical {
-                background-color: rgba(60, 60, 60, 0.5);
-                width: 8px;
-                border-radius: 4px;
-            }
-            QScrollBar::handle:vertical {
-                background-color: rgba(120, 120, 120, 0.7);
-                border-radius: 4px;
-                min-height: 20px;
-            }
-            QScrollBar::handle:vertical:hover {
-                background-color: rgba(140, 140, 140, 0.8);
-            }
-        """
-        )
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
 
         scroll_content = QWidget()
         layout = QVBoxLayout(scroll_content)

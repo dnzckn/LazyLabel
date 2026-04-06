@@ -46,7 +46,7 @@ class SettingsWidget(QWidget):
         # Export formats dropdown
         export_layout = QHBoxLayout()
         export_label = QLabel("Export Formats:")
-        export_label.setStyleSheet("font-size: 11px; color: #E0E0E0;")
+        export_label.setStyleSheet("font-size: 11px;")
         self.export_format_widget = ExportFormatWidget()
         self.export_format_widget.setToolTip(
             "Select which annotation formats to save.\n"
@@ -106,25 +106,7 @@ class SettingsWidget(QWidget):
         self.btn_reset_to_default.setToolTip(
             "Reset all settings in this tab to their default values"
         )
-        self.btn_reset_to_default.setStyleSheet(
-            """
-            QPushButton {
-                background-color: rgba(80, 80, 80, 0.8);
-                border: 1px solid rgba(100, 100, 100, 0.6);
-                border-radius: 5px;
-                color: #E0E0E0;
-                font-size: 11px;
-                padding: 6px 12px;
-                min-height: 22px;
-            }
-            QPushButton:hover {
-                background-color: rgba(100, 100, 100, 0.9);
-            }
-            QPushButton:pressed {
-                background-color: rgba(60, 60, 60, 0.9);
-            }
-        """
-        )
+        pass
         layout.addWidget(self.btn_reset_to_default)
 
         # Main layout

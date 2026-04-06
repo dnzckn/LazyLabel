@@ -1,23 +1,109 @@
 """Status bar widget for displaying active messages."""
 
-from PyQt6.QtCore import Qt, QTimer
-from PyQt6.QtGui import QFont
-from PyQt6.QtWidgets import QLabel, QStatusBar
+from PyQt6.QtCore import Qt, QTimer, pyqtSignal
+from PyQt6.QtGui import QColor, QFont, QPainter
+from PyQt6.QtWidgets import QHBoxLayout, QLabel, QStatusBar, QWidget
+
+
+class ThemeToggle(QWidget):
+    """A small slider toggle switch for dark/light mode."""
+
+    toggled = pyqtSignal(bool)
+
+    def __init__(self, parent=None, checked=True):
+        super().__init__(parent)
+        self._checked = checked
+        self._animation_pos = 1.0 if checked else 0.0
+        self._timer = QTimer(self)
+        self._timer.setInterval(16)
+        self._timer.timeout.connect(self._animate)
+        self.setFixedSize(36, 20)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+
+    @property
+    def checked(self):
+        return self._checked
+
+    @checked.setter
+    def checked(self, value):
+        if self._checked != value:
+            self._checked = value
+            self._timer.start()
+
+    def mousePressEvent(self, event):
+        self._checked = not self._checked
+        self._timer.start()
+        self.toggled.emit(self._checked)
+
+    def _animate(self):
+        target = 1.0 if self._checked else 0.0
+        diff = target - self._animation_pos
+        if abs(diff) < 0.05:
+            self._animation_pos = target
+            self._timer.stop()
+        else:
+            self._animation_pos += diff * 0.3
+        self.update()
+
+    def paintEvent(self, event):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+        w, h = self.width(), self.height()
+        radius = h / 2
+
+        # Track
+        track_color = QColor("#555") if self._checked else QColor("#ccc")
+        p.setBrush(track_color)
+        p.setPen(Qt.PenStyle.NoPen)
+        p.drawRoundedRect(0, 0, w, h, radius, radius)
+
+        # Knob
+        knob_r = h - 4
+        knob_x = 2 + self._animation_pos * (w - knob_r - 4)
+        knob_color = QColor("#1a1a2e") if self._checked else QColor("#ffd43b")
+        p.setBrush(knob_color)
+        p.drawEllipse(int(knob_x), 2, knob_r, knob_r)
+
+        # Icon on knob
+        p.setPen(QColor("#ffd43b") if self._checked else QColor("#666"))
+        center_x = int(knob_x + knob_r / 2)
+        center_y = int(2 + knob_r / 2)
+        icon_font = QFont()
+        icon_font.setPointSize(8)
+        p.setFont(icon_font)
+        symbol = "\u263E" if self._checked else "\u2600"
+        p.drawText(center_x - 5, center_y + 4, symbol)
+
+        p.end()
 
 
 class StatusBar(QStatusBar):
     """Custom status bar for displaying messages and app status."""
 
-    def __init__(self, parent=None):
+    theme_toggled = pyqtSignal(bool)
+
+    def __init__(self, parent=None, dark_mode=True):
         super().__init__(parent)
         self._message_timer = QTimer()
         self._message_timer.timeout.connect(self._clear_temporary_message)
+        self._dark_mode = dark_mode
         self._setup_ui()
 
     def _setup_ui(self):
         """Setup the status bar UI."""
         # Set a reasonable height for the status bar
         self.setFixedHeight(25)
+
+        # Theme toggle (far left)
+        theme_container = QWidget()
+        theme_layout = QHBoxLayout(theme_container)
+        theme_layout.setContentsMargins(4, 0, 4, 0)
+        theme_layout.setSpacing(4)
+        self.theme_toggle = ThemeToggle(checked=self._dark_mode)
+        self.theme_toggle.toggled.connect(self.theme_toggled.emit)
+        theme_layout.addWidget(self.theme_toggle)
+        self.addWidget(theme_container)
 
         # Main message label (centered)
         self.message_label = QLabel()
@@ -32,7 +118,7 @@ class StatusBar(QStatusBar):
 
         # Permanent status label (right side)
         self.permanent_label = QLabel()
-        self.permanent_label.setStyleSheet("color: #888; padding: 2px 5px;")
+        self.permanent_label.setStyleSheet("padding: 2px 5px;")
         font = QFont()
         font.setPointSize(9)
         self.permanent_label.setFont(font)
@@ -104,7 +190,7 @@ class StatusBar(QStatusBar):
     def set_ready_message(self):
         """Set the default ready message."""
         self.message_label.setText("")  # Blank instead of "Ready"
-        self.message_label.setStyleSheet("color: #888; padding: 2px 5px;")
+        self.message_label.setStyleSheet("padding: 2px 5px;")
         self._message_timer.stop()
 
     def _clear_temporary_message(self):

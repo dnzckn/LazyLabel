@@ -51,6 +51,9 @@ class Settings:
     # Streaming Settings
     stream_window_size: int = 250
 
+    # Theme Settings
+    dark_mode: bool = True
+
     # Multi-view Settings
     multi_view_grid_mode: str = "2_view"  # "2_view" or "4_view"
 

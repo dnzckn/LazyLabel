@@ -213,7 +213,7 @@ class RescaleWidget(QWidget):
             "QPushButton { background-color: #5C6BC0; color: white;"
             " font-size: 9px; font-weight: bold; border-radius: 3px; }"
             "QPushButton:hover { background-color: #7986CB; }"
-            "QPushButton:disabled { background-color: #555; color: #888; }"
+            "QPushButton:disabled { color: #888; }"
         )
         self.hist_btn.clicked.connect(self.histogramRequested.emit)
         self.hist_btn.setEnabled(False)
@@ -239,7 +239,7 @@ class RescaleWidget(QWidget):
 
         # Info label
         self.info_label = QLabel("Load a grayscale image to enable")
-        self.info_label.setStyleSheet("color: #888; font-size: 9px;")
+        self.info_label.setStyleSheet("font-size: 9px;")
         layout.addWidget(self.info_label)
 
     def update_for_image(self, image_array, crop_coords=None):
