@@ -4345,13 +4345,11 @@ class MainWindow(QMainWindow):
             self._finalize_propagation_frame_color(prev_frame)
         self._propagation_prev_frame = frame_idx
 
-        # result=None means the frame was flagged and skipped (no mask created)
+        # result=None means one object was below the confidence threshold.
+        # Don't flag or finalize here — _finalize_propagation_frame_color
+        # will check propagation_manager.flagged_frames to catch frames
+        # where any object failed (all objects must pass).
         if result is None:
-            if self.sequence_view_mode:
-                self.sequence_view_mode.flag_frame(frame_idx)
-            # Flagged frames are final immediately (no more objects coming)
-            self._finalize_propagation_frame_color(frame_idx)
-            self._propagation_prev_frame = None
             QApplication.processEvents()
             return
 
@@ -4391,6 +4389,17 @@ class MainWindow(QMainWindow):
         if not self.sequence_view_mode or not self.timeline_widget:
             return
 
+        # All objects must pass — if any single object was below threshold
+        # (tracked per-object in propagation_manager.flagged_frames), flag
+        # the entire frame.
+        if (
+            self.propagation_manager
+            and frame_idx in self.propagation_manager.state.flagged_frames
+        ):
+            self.sequence_view_mode.flag_frame(frame_idx)
+            self.timeline_widget.set_frame_status(frame_idx, "flagged", immediate=True)
+            return
+
         status = self.sequence_view_mode.get_frame_status(frame_idx)
         if status == "flagged":
             self.timeline_widget.set_frame_status(frame_idx, "flagged", immediate=True)
@@ -4423,23 +4432,25 @@ class MainWindow(QMainWindow):
         if self.sequence_widget:
             self.sequence_widget.end_propagation()
 
-        # Clean up stored masks for flagged frames (no timeline changes —
-        # _on_propagation_frame_done already set the correct colors live).
+        # Clean up stored masks for frames that are truly flagged (cumulative
+        # confidence below threshold).  Use sequence_view_mode's per-frame
+        # status — not propagation_manager.flagged_frames which is per-object
+        # and would discard frames where only one object was low-confidence.
         if (
             getattr(self, "_propagation_skip_flagged", True)
             and self.propagation_manager
             and self.sequence_view_mode
         ):
-            for frame_idx in list(self.propagation_manager.flagged_frames):
+            for frame_idx in self.sequence_view_mode.get_flagged_frames():
                 self.propagation_manager.propagated_frames.discard(frame_idx)
                 if frame_idx in self.propagation_manager.state.frame_results:
                     del self.propagation_manager.state.frame_results[frame_idx]
                 self.sequence_view_mode.clear_propagated_mask(frame_idx)
 
         # Update flagged and propagated counts
-        if self.propagation_manager and self.sequence_widget:
-            flagged_count = len(self.propagation_manager.flagged_frames)
-            propagated_count = len(self.propagation_manager.propagated_frames)
+        if self.sequence_view_mode and self.sequence_widget:
+            flagged_count = len(self.sequence_view_mode.get_flagged_frames())
+            propagated_count = len(self.sequence_view_mode.get_propagated_frames())
             self.sequence_widget.set_flagged_count(flagged_count)
             self.sequence_widget.set_propagated_count(propagated_count)
 
