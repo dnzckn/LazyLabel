@@ -567,6 +567,8 @@ class SequenceWidget(QWidget):
         """Exit finding-references state — restore button."""
         self._is_finding_references = False
         self.find_references_btn.setText("Find Archetypes")
+        if not AI_AVAILABLE:
+            return
         self.find_references_btn.setStyleSheet(
             "QPushButton { background-color: #9C27B0; color: white;"
             " font-weight: bold; }"
@@ -773,10 +775,10 @@ class SequenceWidget(QWidget):
         # Setup section visible when timeline not built
         self.setup_group.setVisible(not self._timeline_built)
 
-        # Propagation sections visible only when timeline is built
-        self.ref_group.setVisible(self._timeline_built)
-        self.prop_group.setVisible(self._timeline_built)
-        self.review_group.setVisible(self._timeline_built)
+        # Propagation sections visible only when timeline is built AND AI available
+        self.ref_group.setVisible(self._timeline_built and AI_AVAILABLE)
+        self.prop_group.setVisible(self._timeline_built and AI_AVAILABLE)
+        self.review_group.setVisible(self._timeline_built and AI_AVAILABLE)
         self.trim_group.setVisible(self._timeline_built)
         self.new_timeline_btn.setVisible(self._timeline_built)
 

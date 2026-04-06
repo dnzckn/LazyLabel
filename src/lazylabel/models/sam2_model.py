@@ -45,6 +45,7 @@ class Sam2Model:
             self.image = None
             self.video_predictor = None
             self.video_inference_state = None
+            self._video_temp_dir = None
             return
 
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")

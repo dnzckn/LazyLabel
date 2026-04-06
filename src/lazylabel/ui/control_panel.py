@@ -277,6 +277,13 @@ class ControlPanel(QWidget):
         layout.addWidget(mode_card)
 
         # Tabbed Interface for Everything Else
+        settings_label = QLabel("Settings")
+        settings_label.setStyleSheet(
+            "color: #C0C0C0; font-weight: bold; font-size: 12px; padding: 2px 0px;"
+        )
+        settings_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(settings_label)
+
         self.tab_widget = QTabWidget()
         self.tab_widget.setStyleSheet(
             """
@@ -315,11 +322,11 @@ class ControlPanel(QWidget):
 
         # AI & Settings Tab
         ai_tab = self._create_ai_tab()
-        self.tab_widget.addTab(ai_tab, "🤖 AI")
+        self.tab_widget.addTab(ai_tab, "Global")
 
         # Processing & Adjustments Tab
         processing_tab = self._create_processing_tab()
-        self.tab_widget.addTab(processing_tab, "🛠️ Tools")
+        self.tab_widget.addTab(processing_tab, "Image")
 
         layout.addWidget(self.tab_widget, 1)
 
@@ -364,6 +371,19 @@ class ControlPanel(QWidget):
                 "AI not installed. Run: pip install lazylabel-gui[include-ai]"
             )
             self.btn_sam_mode.setChecked(False)
+            self.btn_sam_mode.setStyleSheet(
+                """
+                QPushButton {
+                    background-color: rgba(50, 50, 50, 0.6);
+                    border: 1px solid rgba(70, 70, 70, 0.5);
+                    border-radius: 6px;
+                    color: rgba(120, 120, 120, 0.6);
+                    font-weight: bold;
+                    font-size: 11px;
+                    padding: 4px 8px;
+                }
+            """
+            )
 
         self.btn_polygon_mode = self._create_mode_button(
             "Poly", "2", "Switch to Polygon Drawing Mode"
@@ -592,124 +612,129 @@ class ControlPanel(QWidget):
             fragment_collapsible.hide()
 
         # AI Segment Auto-Conversion - toggle to auto-convert AI segments to polygons
-        convert_widget = QWidget()
-        convert_layout = QVBoxLayout(convert_widget)
-        convert_layout.setContentsMargins(0, 0, 0, 0)
-        convert_layout.setSpacing(6)
+        if AI_AVAILABLE:
+            convert_widget = QWidget()
+            convert_layout = QVBoxLayout(convert_widget)
+            convert_layout.setContentsMargins(0, 0, 0, 0)
+            convert_layout.setSpacing(6)
 
-        # Toggle button for auto-conversion
-        self.btn_auto_polygon = QPushButton("Auto-Convert: OFF")
-        self.btn_auto_polygon.setCheckable(True)
-        self.btn_auto_polygon.setChecked(False)
-        self.btn_auto_polygon.setToolTip(
-            "When enabled, AI segments are automatically converted to polygons\n"
-            "when you accept them (Spacebar). Toggle with P key."
-        )
-        self.btn_auto_polygon.setStyleSheet(
+            # Toggle button for auto-conversion
+            self.btn_auto_polygon = QPushButton("Auto-Convert: OFF")
+            self.btn_auto_polygon.setCheckable(True)
+            self.btn_auto_polygon.setChecked(False)
+            self.btn_auto_polygon.setToolTip(
+                "When enabled, AI segments are automatically converted to polygons\n"
+                "when you accept them (Spacebar). Toggle with P key."
+            )
+            self.btn_auto_polygon.setStyleSheet(
+                """
+                QPushButton {
+                    background-color: rgba(80, 80, 80, 0.8);
+                    border: 1px solid rgba(100, 100, 100, 0.8);
+                    border-radius: 6px;
+                    color: #E0E0E0;
+                    font-weight: bold;
+                    font-size: 11px;
+                    padding: 6px 12px;
+                    min-height: 24px;
+                }
+                QPushButton:hover {
+                    background-color: rgba(100, 100, 100, 0.9);
+                    border-color: rgba(120, 120, 120, 0.9);
+                }
+                QPushButton:checked {
+                    background-color: rgba(100, 80, 140, 0.9);
+                    border: 2px solid rgba(140, 120, 180, 1.0);
+                    color: #FFFFFF;
+                }
+                QPushButton:checked:hover {
+                    background-color: rgba(120, 100, 160, 0.95);
+                }
             """
-            QPushButton {
-                background-color: rgba(80, 80, 80, 0.8);
-                border: 1px solid rgba(100, 100, 100, 0.8);
-                border-radius: 6px;
-                color: #E0E0E0;
-                font-weight: bold;
-                font-size: 11px;
-                padding: 6px 12px;
-                min-height: 24px;
-            }
-            QPushButton:hover {
-                background-color: rgba(100, 100, 100, 0.9);
-                border-color: rgba(120, 120, 120, 0.9);
-            }
-            QPushButton:checked {
-                background-color: rgba(100, 80, 140, 0.9);
-                border: 2px solid rgba(140, 120, 180, 1.0);
-                color: #FFFFFF;
-            }
-            QPushButton:checked:hover {
-                background-color: rgba(120, 100, 160, 0.95);
-            }
-        """
-        )
-        convert_layout.addWidget(self.btn_auto_polygon)
+            )
+            convert_layout.addWidget(self.btn_auto_polygon)
 
-        # Resolution slider for polygon approximation
-        resolution_label = QLabel("Polygon Resolution:")
-        resolution_label.setStyleSheet("color: #B0B0B0; font-size: 10px;")
-        convert_layout.addWidget(resolution_label)
+            # Resolution slider for polygon approximation
+            resolution_label = QLabel("Polygon Resolution:")
+            resolution_label.setStyleSheet("color: #B0B0B0; font-size: 10px;")
+            convert_layout.addWidget(resolution_label)
 
-        slider_layout = QHBoxLayout()
-        slider_layout.setSpacing(4)
+            slider_layout = QHBoxLayout()
+            slider_layout.setSpacing(4)
 
-        # Label for "Simple"
-        simple_label = QLabel("Simple")
-        simple_label.setStyleSheet("color: #888; font-size: 9px;")
-        slider_layout.addWidget(simple_label)
+            # Label for "Simple"
+            simple_label = QLabel("Simple")
+            simple_label.setStyleSheet("color: #888; font-size: 9px;")
+            slider_layout.addWidget(simple_label)
 
-        # Slider: range 1-100, maps to epsilon 0.005 (simple) to 0.0001 (detailed)
-        self.polygon_resolution_slider = QSlider(Qt.Orientation.Horizontal)
-        self.polygon_resolution_slider.setRange(1, 100)
-        self.polygon_resolution_slider.setValue(
-            80
-        )  # Default: 0.001 epsilon (good balance)
-        self.polygon_resolution_slider.setToolTip(
-            "Adjust how closely the polygon follows the AI mask.\n"
-            "Simple = fewer points, Detailed = more points."
-        )
-        self.polygon_resolution_slider.setStyleSheet(
+            # Slider: range 1-100, maps to epsilon 0.005 (simple) to 0.0001 (detailed)
+            self.polygon_resolution_slider = QSlider(Qt.Orientation.Horizontal)
+            self.polygon_resolution_slider.setRange(1, 100)
+            self.polygon_resolution_slider.setValue(
+                80
+            )  # Default: 0.001 epsilon (good balance)
+            self.polygon_resolution_slider.setToolTip(
+                "Adjust how closely the polygon follows the AI mask.\n"
+                "Simple = fewer points, Detailed = more points."
+            )
+            self.polygon_resolution_slider.setStyleSheet(
+                """
+                QSlider::groove:horizontal {
+                    background: rgba(60, 60, 60, 0.8);
+                    height: 6px;
+                    border-radius: 3px;
+                }
+                QSlider::handle:horizontal {
+                    background: rgba(120, 100, 160, 0.9);
+                    width: 14px;
+                    margin: -4px 0;
+                    border-radius: 7px;
+                }
+                QSlider::handle:horizontal:hover {
+                    background: rgba(140, 120, 180, 1.0);
+                }
             """
-            QSlider::groove:horizontal {
-                background: rgba(60, 60, 60, 0.8);
-                height: 6px;
-                border-radius: 3px;
-            }
-            QSlider::handle:horizontal {
-                background: rgba(120, 100, 160, 0.9);
-                width: 14px;
-                margin: -4px 0;
-                border-radius: 7px;
-            }
-            QSlider::handle:horizontal:hover {
-                background: rgba(140, 120, 180, 1.0);
-            }
-        """
-        )
-        slider_layout.addWidget(self.polygon_resolution_slider, 1)
+            )
+            slider_layout.addWidget(self.polygon_resolution_slider, 1)
 
-        # Label for "Detailed"
-        detailed_label = QLabel("Detailed")
-        detailed_label.setStyleSheet("color: #888; font-size: 9px;")
-        slider_layout.addWidget(detailed_label)
+            # Label for "Detailed"
+            detailed_label = QLabel("Detailed")
+            detailed_label.setStyleSheet("color: #888; font-size: 9px;")
+            slider_layout.addWidget(detailed_label)
 
-        convert_layout.addLayout(slider_layout)
+            convert_layout.addLayout(slider_layout)
 
-        # Reset button for this section
-        self.btn_reset_auto_polygon = QPushButton("Reset to Default")
-        self.btn_reset_auto_polygon.setToolTip(
-            "Reset auto-polygon settings to defaults"
-        )
-        self.btn_reset_auto_polygon.setStyleSheet(
+            # Reset button for this section
+            self.btn_reset_auto_polygon = QPushButton("Reset to Default")
+            self.btn_reset_auto_polygon.setToolTip(
+                "Reset auto-polygon settings to defaults"
+            )
+            self.btn_reset_auto_polygon.setStyleSheet(
+                """
+                QPushButton {
+                    background-color: rgba(60, 60, 60, 0.6);
+                    border: 1px solid rgba(80, 80, 80, 0.6);
+                    border-radius: 4px;
+                    color: #999;
+                    font-size: 9px;
+                    padding: 3px 8px;
+                }
+                QPushButton:hover {
+                    background-color: rgba(80, 80, 80, 0.7);
+                    color: #ccc;
+                }
             """
-            QPushButton {
-                background-color: rgba(60, 60, 60, 0.6);
-                border: 1px solid rgba(80, 80, 80, 0.6);
-                border-radius: 4px;
-                color: #999;
-                font-size: 9px;
-                padding: 3px 8px;
-            }
-            QPushButton:hover {
-                background-color: rgba(80, 80, 80, 0.7);
-                color: #ccc;
-            }
-        """
-        )
-        convert_layout.addWidget(self.btn_reset_auto_polygon)
+            )
+            convert_layout.addWidget(self.btn_reset_auto_polygon)
 
-        convert_collapsible = SimpleCollapsible(
-            "AI → Polygon Conversion", convert_widget
-        )
-        layout.addWidget(convert_collapsible)
+            convert_collapsible = SimpleCollapsible(
+                "AI → Polygon Conversion", convert_widget
+            )
+            layout.addWidget(convert_collapsible)
+        else:
+            self.btn_auto_polygon = None
+            self.polygon_resolution_slider = None
+            self.btn_reset_auto_polygon = None
 
         # Application Settings - collapsible
         settings_collapsible = SimpleCollapsible(
@@ -886,13 +911,14 @@ class ControlPanel(QWidget):
         )
 
         # AI segment auto-conversion signals
-        self.btn_auto_polygon.toggled.connect(self._on_auto_polygon_toggled)
-        self.polygon_resolution_slider.valueChanged.connect(
-            self._on_polygon_resolution_changed
-        )
-        self.btn_reset_auto_polygon.clicked.connect(
-            self._reset_auto_polygon_to_defaults
-        )
+        if self.btn_auto_polygon is not None:
+            self.btn_auto_polygon.toggled.connect(self._on_auto_polygon_toggled)
+            self.polygon_resolution_slider.valueChanged.connect(
+                self._on_polygon_resolution_changed
+            )
+            self.btn_reset_auto_polygon.clicked.connect(
+                self._reset_auto_polygon_to_defaults
+            )
 
     def _on_sam_mode_clicked(self):
         """Handle AI mode button click."""
@@ -1158,6 +1184,8 @@ class ControlPanel(QWidget):
 
     def set_auto_polygon_enabled(self, enabled: bool):
         """Set the auto-polygon toggle state programmatically."""
+        if self.btn_auto_polygon is None:
+            return
         self.btn_auto_polygon.blockSignals(True)
         self.btn_auto_polygon.setChecked(enabled)
         self.btn_auto_polygon.setText(f"Auto-Convert: {'ON' if enabled else 'OFF'}")
@@ -1165,19 +1193,27 @@ class ControlPanel(QWidget):
 
     def is_auto_polygon_enabled(self) -> bool:
         """Check if auto-polygon conversion is enabled."""
+        if self.btn_auto_polygon is None:
+            return False
         return self.btn_auto_polygon.isChecked()
 
     def get_polygon_epsilon(self) -> float:
         """Get the current polygon epsilon factor from slider."""
+        if self.polygon_resolution_slider is None:
+            return 0.005 * (0.02 ** (80 / 100.0))
         value = self.polygon_resolution_slider.value()
         return 0.005 * (0.02 ** (value / 100.0))
 
     def toggle_auto_polygon(self):
         """Toggle the auto-polygon feature."""
+        if self.btn_auto_polygon is None:
+            return
         self.btn_auto_polygon.setChecked(not self.btn_auto_polygon.isChecked())
 
     def _reset_auto_polygon_to_defaults(self):
         """Reset auto-polygon settings to default values."""
+        if self.btn_auto_polygon is None:
+            return
         # Default values: OFF, resolution slider at 80
         self.set_auto_polygon_enabled(False)
         self.polygon_resolution_slider.setValue(80)

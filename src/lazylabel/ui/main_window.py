@@ -1057,9 +1057,10 @@ class MainWindow(QMainWindow):
         self.control_panel.set_fragment_threshold(self.settings.fragment_threshold)
         # Restore auto-polygon settings
         self.control_panel.set_auto_polygon_enabled(self.settings.auto_polygon_enabled)
-        self.control_panel.polygon_resolution_slider.setValue(
-            self.settings.polygon_resolution
-        )
+        if self.control_panel.polygon_resolution_slider is not None:
+            self.control_panel.polygon_resolution_slider.setValue(
+                self.settings.polygon_resolution
+            )
         self.auto_polygon_enabled = self.settings.auto_polygon_enabled
         self.polygon_epsilon_factor = self.control_panel.get_polygon_epsilon()
         # Restore file manager display settings
@@ -1737,9 +1738,10 @@ class MainWindow(QMainWindow):
     def _on_polygon_resolution_changed(self, epsilon: float):
         """Handle polygon resolution slider change."""
         self.polygon_epsilon_factor = epsilon
-        self.settings.polygon_resolution = (
-            self.control_panel.polygon_resolution_slider.value()
-        )
+        if self.control_panel.polygon_resolution_slider is not None:
+            self.settings.polygon_resolution = (
+                self.control_panel.polygon_resolution_slider.value()
+            )
         self._save_settings()
 
     def _toggle_auto_polygon(self):

@@ -463,6 +463,13 @@ class TestSAMMultiViewManagerStateManagement:
         sam_manager.mark_viewer_dirty(2)
         assert sam_manager._sam_is_dirty == [False, False]
 
+    @staticmethod
+    def _mock_torch(cuda_available=False):
+        """Create a mock torch module and patch it into sys.modules."""
+        mock_torch = MagicMock()
+        mock_torch.cuda.is_available.return_value = cuda_available
+        return patch.dict("sys.modules", {"torch": mock_torch}), mock_torch
+
     def test_cleanup_clears_models(self, sam_manager, mock_sam_model):
         """Test cleanup clears SAM models."""
         # Set models individually to avoid reference issues
@@ -470,7 +477,8 @@ class TestSAMMultiViewManagerStateManagement:
         sam_manager._sam_models[1] = MagicMock()
         sam_manager._sam_models[1].is_loaded = True
 
-        with patch("torch.cuda.is_available", return_value=False):
+        patcher, _ = self._mock_torch(cuda_available=False)
+        with patcher:
             sam_manager.cleanup()
 
         assert sam_manager._sam_models == [None, None]
@@ -482,7 +490,8 @@ class TestSAMMultiViewManagerStateManagement:
         sam_manager._models_initializing = True
         sam_manager._init_failed = True
 
-        with patch("torch.cuda.is_available", return_value=False):
+        patcher, _ = self._mock_torch(cuda_available=False)
+        with patcher:
             sam_manager.cleanup()
 
         assert sam_manager._sam_is_dirty == [True, True]
@@ -492,20 +501,19 @@ class TestSAMMultiViewManagerStateManagement:
 
     def test_cleanup_calls_cuda_empty_cache_if_available(self, sam_manager):
         """Test cleanup calls cuda.empty_cache if CUDA available."""
-        with (
-            patch("torch.cuda.is_available", return_value=True),
-            patch("torch.cuda.empty_cache") as mock_empty_cache,
-        ):
+        patcher, mock_torch = self._mock_torch(cuda_available=True)
+        with patcher:
             sam_manager.cleanup()
-            mock_empty_cache.assert_called_once()
+            mock_torch.cuda.empty_cache.assert_called_once()
 
     def test_cleanup_stops_init_worker(self, sam_manager):
         """Test cleanup stops any running init worker."""
         mock_worker = MagicMock()
         sam_manager._init_worker = mock_worker
 
+        patcher, _ = self._mock_torch(cuda_available=False)
         with (
-            patch("torch.cuda.is_available", return_value=False),
+            patcher,
             patch(
                 "lazylabel.ui.managers.sam_multi_view_manager.stop_worker"
             ) as mock_stop,

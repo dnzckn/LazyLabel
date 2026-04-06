@@ -9,7 +9,11 @@ from lazylabel.models.sam_model import SamModel
 @pytest.fixture
 def sam_model():
     """Fixture for SamModel."""
+    mock_torch = MagicMock()
+    mock_torch.device.return_value = MagicMock()
+    mock_torch.cuda.is_available.return_value = False
     with (
+        patch("lazylabel.models.sam_model.torch", mock_torch),
         patch("lazylabel.models.sam_model.sam_model_registry") as mock_registry,
         patch("lazylabel.models.sam_model.SamPredictor") as mock_predictor,
         patch("lazylabel.models.sam_model.download_model") as mock_download,
