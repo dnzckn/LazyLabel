@@ -5,8 +5,7 @@
 
 LazyLabel combines Meta's Segment Anything Model (SAM) with comprehensive manual annotation tools to accelerate the creation of pixel-perfect segmentation masks for computer vision applications.
 
-<img src="https://raw.githubusercontent.com/dnzckn/LazyLabel/main/src/lazylabel/media/demo_UI.png"/>
-
+<img src="https://raw.githubusercontent.com/dnzckn/LazyLabel/main/src/lazylabel/media/sequence_demo.gif"/>
 
 ---
 
@@ -75,11 +74,6 @@ lazylabel-gui
 - **Single View**: Fine-tune individual masks with maximum precision
 - **Multi View**: Annotate up to 2 images simultaneously, ideal for objects in similar positions with slight variations
 - **Sequence**: Propagate a refined mask across thousands of frames using SAM 2's video predictor
-
-<div align="center">
-  <img src="https://raw.githubusercontent.com/dnzckn/LazyLabel/main/src/lazylabel/media/sequence_demo.gif" width="800"/>
-  <br><em>Sequence Mode: Find Archetypes + Propagation</em>
-</div>
 
 #### Streaming Mode
 
