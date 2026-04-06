@@ -48,6 +48,9 @@ class Settings:
     # UI State
     annotation_size_multiplier: float = 1.0
 
+    # Streaming Settings
+    stream_window_size: int = 250
+
     # Multi-view Settings
     multi_view_grid_mode: str = "2_view"  # "2_view" or "4_view"
 

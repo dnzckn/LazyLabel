@@ -2076,6 +2076,12 @@ class MainWindow(QMainWindow):
         if self.propagation_manager is not None:
             self.propagation_manager.cleanup()
 
+        # Capture sequence widget settings before saving
+        if self.sequence_widget is not None:
+            self.settings.stream_window_size = (
+                self.sequence_widget.stream_window_spin.value()
+            )
+
         # Save settings
         logger.debug(
             f"Saving settings: pixel_priority_enabled={self.settings.pixel_priority_enabled}, "
@@ -3174,6 +3180,9 @@ class MainWindow(QMainWindow):
 
         # Sequence controls widget (below timeline) - in scroll area for visibility
         self.sequence_widget = SequenceWidget()
+        self.sequence_widget.stream_window_spin.setValue(
+            self.settings.stream_window_size
+        )
         from PyQt6.QtWidgets import QScrollArea
 
         sequence_scroll = QScrollArea()
@@ -4037,6 +4046,9 @@ class MainWindow(QMainWindow):
         if self.sequence_widget and self.propagation_manager:
             self.propagation_manager.state.chunk_config.streaming = (
                 self.sequence_widget.streaming_checkbox.isChecked()
+            )
+            self.propagation_manager.state.chunk_config.chunk_size = (
+                self.sequence_widget.stream_window_spin.value()
             )
 
         # Precompute the set of labeled frames to skip (have NPZ on disk)

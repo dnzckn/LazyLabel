@@ -348,14 +348,28 @@ class SequenceWidget(QWidget):
         self.streaming_checkbox = QCheckBox("Streaming")
         self.streaming_checkbox.setChecked(True)
         self.streaming_checkbox.setToolTip(
-            "Process video in chunks of 250 frames with\n"
-            "rolling context window. Bounds memory to ~3-4 GB\n"
+            "Process video in chunks (set size with Window)\n"
+            "using a rolling context window. Bounds memory\n"
             "regardless of sequence length.\n\n"
             "Disable for full-context mode (loads all frames\n"
             "at once — better quality but high memory usage)."
         )
         self.streaming_checkbox.stateChanged.connect(self._on_streaming_toggled)
         options_layout.addWidget(self.streaming_checkbox)
+
+        # Streaming window size
+        options_layout.addWidget(QLabel("Window:"))
+        self.stream_window_spin = ShortcutSpinBox()
+        self.stream_window_spin.setRange(50, 1000)
+        self.stream_window_spin.setSingleStep(50)
+        self.stream_window_spin.setValue(250)
+        self.stream_window_spin.setToolTip(
+            "Number of frames per streaming chunk.\n"
+            "Lower values use less memory but may\n"
+            "reduce temporal consistency.\n\n"
+            "Default: 250 (~3 GB per chunk)"
+        )
+        options_layout.addWidget(self.stream_window_spin)
 
         # Confidence threshold
         options_layout.addWidget(QLabel("Min Conf:"))
@@ -586,7 +600,7 @@ class SequenceWidget(QWidget):
 
     def _on_streaming_toggled(self, state: int) -> None:
         """Warn user when disabling streaming for large sequences."""
-        if state == 0 and self._total_frames > 250:
+        if state == 0 and self._total_frames > self.stream_window_spin.value():
             mem_gb = self._total_frames * 12.6 / 1024
             reply = QMessageBox.warning(
                 self,
