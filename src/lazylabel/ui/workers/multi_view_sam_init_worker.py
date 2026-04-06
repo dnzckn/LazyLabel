@@ -4,6 +4,7 @@ import os
 
 from PyQt6.QtCore import QThread, pyqtSignal
 
+from ...ai_availability import AI_AVAILABLE, INSTALL_HINT
 from ...utils.logger import logger
 
 
@@ -84,6 +85,10 @@ class MultiViewSAMInitWorker(QThread):
         """Initialize SAM models for all viewers in background thread."""
         try:
             if self._should_stop:
+                return
+
+            if not AI_AVAILABLE:
+                self.error.emit(INSTALL_HINT)
                 return
 
             # Import the required model classes

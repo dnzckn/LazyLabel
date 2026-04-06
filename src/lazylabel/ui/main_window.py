@@ -26,6 +26,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from ..ai_availability import AI_AVAILABLE, INSTALL_HINT
 from ..config import HotkeyManager, Paths, Settings
 from ..core import FileManager, ModelManager, SegmentManager, UndoRedoManager
 from ..utils import CustomFileSystemModel, mask_to_pixmap
@@ -770,14 +771,19 @@ class MainWindow(QMainWindow):
 
     def _setup_model_manager(self):
         """Setup the model manager without loading any models."""
+        from lazylabel.utils.startup import startup_display
+
+        if not AI_AVAILABLE:
+            startup_display.update_step(6, "AI not installed")
+            logger.info(INSTALL_HINT)
+            return
+
         # Setup model change callback
         self.model_manager.on_model_changed = self.control_panel.set_current_model
 
         # Initialize models list
         models = self.model_manager.get_available_models(str(self.paths.models_dir))
         self.control_panel.populate_models(models)
-
-        from lazylabel.utils.startup import startup_display
 
         if models:
             startup_display.update_step(6, f"Found {len(models)} model(s)")
@@ -1209,6 +1215,9 @@ class MainWindow(QMainWindow):
 
     def _load_model(self):
         """Explicitly load the selected model into memory."""
+        if not AI_AVAILABLE:
+            self._show_notification(INSTALL_HINT)
+            return
         # If a model is already loaded and no different model is pending, do nothing
         if (
             self.model_manager.is_model_available()
@@ -3839,6 +3848,9 @@ class MainWindow(QMainWindow):
         skip_labeled: bool = False,
     ):
         """Handle propagation request from sequence widget."""
+        if not AI_AVAILABLE:
+            self._show_notification(INSTALL_HINT)
+            return
         if self.sequence_view_mode is None:
             self._show_notification("Please enter sequence mode first")
             return
@@ -4484,6 +4496,9 @@ class MainWindow(QMainWindow):
 
     def _on_propagate_shortcut(self):
         """Handle propagate keyboard shortcut — triggers with default widget settings."""
+        if not AI_AVAILABLE:
+            self._show_notification(INSTALL_HINT)
+            return
         if self.sequence_view_mode is None:
             return
         if hasattr(self, "sequence_widget") and self.sequence_widget is not None:
@@ -4861,6 +4876,9 @@ class MainWindow(QMainWindow):
 
     def _on_find_references_requested(self):
         """Launch or abort AI-based reference frame suggestion."""
+        if not AI_AVAILABLE:
+            self._show_notification(INSTALL_HINT)
+            return
         # If already running, abort
         if (
             self._reference_finder_worker is not None

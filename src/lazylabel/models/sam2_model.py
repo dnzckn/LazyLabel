@@ -5,9 +5,13 @@ from pathlib import Path
 
 import cv2
 import numpy as np
-import torch
 
 from ..utils.logger import logger
+
+try:
+    import torch
+except ImportError:
+    torch = None
 
 # SAM-2 specific imports - will fail gracefully if not available
 try:
@@ -15,12 +19,10 @@ try:
     from sam2.sam2_image_predictor import SAM2ImagePredictor
 
     SAM2_VIDEO_AVAILABLE = True
-except ImportError as e:
-    logger.error(f"SAM-2 dependencies not found: {e}")
-    logger.info(
-        "Install SAM-2 with: pip install git+https://github.com/facebookresearch/sam2.git"
-    )
-    raise ImportError("SAM-2 dependencies required for Sam2Model") from e
+except ImportError:
+    build_sam2 = None
+    SAM2ImagePredictor = None
+    SAM2_VIDEO_AVAILABLE = False
 
 
 class Sam2Model:
@@ -33,6 +35,18 @@ class Sam2Model:
             model_path: Path to the SAM2 model checkpoint (.pt file)
             config_path: Path to the config file (optional, will auto-detect if None)
         """
+        if torch is None or not SAM2_VIDEO_AVAILABLE:
+            logger.warning(
+                "AI/SAM2 dependencies not installed. SAM2 model unavailable."
+            )
+            self.is_loaded = False
+            self.model = None
+            self.predictor = None
+            self.image = None
+            self.video_predictor = None
+            self.video_inference_state = None
+            return
+
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         logger.info(f"SAM2: Detected device: {str(self.device).upper()}")
 

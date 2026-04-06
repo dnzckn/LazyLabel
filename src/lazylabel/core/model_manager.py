@@ -3,19 +3,26 @@
 import os
 from collections.abc import Callable
 
+from ..ai_availability import AI_AVAILABLE
 from ..config import Paths
-from ..models.sam_model import SamModel
 from ..utils.logger import logger
 
-# Optional SAM-2 support
-try:
-    from ..models.sam2_model import Sam2Model
+# Optional SAM model support
+if AI_AVAILABLE:
+    from ..models.sam_model import SamModel
 
-    SAM2_AVAILABLE = True
-except ImportError:
-    logger.info(
-        "SAM-2 not available. Install with: pip install git+https://github.com/facebookresearch/sam2.git"
-    )
+    try:
+        from ..models.sam2_model import Sam2Model
+
+        SAM2_AVAILABLE = True
+    except ImportError:
+        logger.info(
+            "SAM-2 not available. Install with: pip install git+https://github.com/facebookresearch/sam2.git"
+        )
+        Sam2Model = None
+        SAM2_AVAILABLE = False
+else:
+    SamModel = None
     Sam2Model = None
     SAM2_AVAILABLE = False
 
@@ -29,12 +36,15 @@ class ModelManager:
         self.current_models_folder: str | None = None
         self.on_model_changed: Callable[[str], None] | None = None
 
-    def initialize_default_model(self, model_type: str = "vit_h") -> SamModel | None:
+    def initialize_default_model(self, model_type: str = "vit_h"):
         """Initialize the default SAM model.
 
         Returns:
             SamModel instance if successful, None if failed
         """
+        if SamModel is None:
+            logger.info("AI dependencies not installed. Skipping model initialization.")
+            return None
         try:
             logger.info(f"Loading {model_type.upper()} model...")
             self.sam_model = SamModel(model_type=model_type)
@@ -99,6 +109,9 @@ class ModelManager:
         Returns:
             True if successful, False otherwise
         """
+        if not AI_AVAILABLE:
+            logger.warning("AI dependencies not installed. Cannot load model.")
+            return False
         if not os.path.exists(model_path):
             return False
 
@@ -110,9 +123,12 @@ class ModelManager:
                 old_model = self.sam_model
                 self.sam_model = None  # Set to None first to maintain attribute
                 del old_model
-                import torch
+                try:
+                    import torch
 
-                torch.cuda.empty_cache() if torch.cuda.is_available() else None
+                    torch.cuda.empty_cache() if torch.cuda.is_available() else None
+                except ImportError:
+                    pass
 
             # Create appropriate model instance
             if self._is_sam2_model(model_path):

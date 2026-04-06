@@ -347,8 +347,6 @@ class SAMMultiViewManager:
 
     def cleanup(self) -> None:
         """Clean up resources and unload models."""
-        import torch
-
         # Stop any running worker
         self._cleanup_init_worker()
 
@@ -357,8 +355,13 @@ class SAMMultiViewManager:
             if self._sam_models[i] is not None:
                 self._sam_models[i] = None
 
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
+        try:
+            import torch
+
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+        except ImportError:
+            pass
 
         # Reset state
         self._sam_is_dirty = [True, True]

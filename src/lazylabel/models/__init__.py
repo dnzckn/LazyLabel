@@ -1,5 +1,8 @@
 """Model-related modules."""
 
-from .sam_model import SamModel
+try:
+    from .sam_model import SamModel
+except Exception:
+    SamModel = None
 
 __all__ = ["SamModel"]

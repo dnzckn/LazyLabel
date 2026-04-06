@@ -11,6 +11,7 @@ from pathlib import Path
 import numpy as np
 from PyQt6.QtCore import QThread, pyqtSignal
 
+from ...ai_availability import AI_AVAILABLE, INSTALL_HINT
 from ...config.paths import Paths
 from ...utils.logger import logger
 
@@ -48,6 +49,9 @@ class ReferenceFinderWorker(QThread):
 
     def run(self) -> None:
         """Run embedding, clustering, and medoid selection."""
+        if not AI_AVAILABLE:
+            self.error.emit(INSTALL_HINT)
+            return
         try:
             self._run_analysis()
         except Exception as e:

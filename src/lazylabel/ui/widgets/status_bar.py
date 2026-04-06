@@ -133,7 +133,7 @@ class StatusBar(QStatusBar):
                     "color: #888; padding: 2px 8px; font-size: 8pt;"
                 )
         except ImportError:
-            self.device_label.setText("CPU Only")
+            self.device_label.setText("No AI")
             self.device_label.setStyleSheet(
-                "color: #888; padding: 2px 8px; font-size: 8pt;"
+                "color: #ffa500; padding: 2px 8px; font-size: 8pt;"
             )

@@ -19,6 +19,8 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from ...ai_availability import AI_AVAILABLE
+
 
 class ShortcutSpinBox(QSpinBox):
     """SpinBox that ignores WASD keys to allow global shortcuts to work."""
@@ -263,6 +265,11 @@ class SequenceWidget(QWidget):
             "QPushButton:hover { background-color: #AB47BC; }"
         )
         self.find_references_btn.clicked.connect(self._on_find_references)
+        if not AI_AVAILABLE:
+            self.find_references_btn.setEnabled(False)
+            self.find_references_btn.setToolTip(
+                "Requires AI packages: pip install lazylabel-gui[include-ai]"
+            )
         smart_select_layout.addWidget(self.find_references_btn)
 
         self.clear_suggested_btn = QPushButton("Clear Suggested")
@@ -291,6 +298,11 @@ class SequenceWidget(QWidget):
             "QPushButton { background-color: #4CAF50; color: black; font-weight: bold; padding: 8px; }"
         )
         self.propagate_btn.clicked.connect(self._request_propagate)
+        if not AI_AVAILABLE:
+            self.propagate_btn.setEnabled(False)
+            self.propagate_btn.setToolTip(
+                "Requires AI packages: pip install lazylabel-gui[include-ai]"
+            )
         prop_layout.addWidget(self.propagate_btn)
 
         # Range, skip flagged, and confidence all on one row

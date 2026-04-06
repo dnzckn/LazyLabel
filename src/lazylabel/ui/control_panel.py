@@ -13,6 +13,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from ..ai_availability import AI_AVAILABLE
 from .widgets import (
     AdjustmentsWidget,
     AnnotationSettingsWidget,
@@ -355,12 +356,21 @@ class ControlPanel(QWidget):
             "AI", "1", "Switch to AI Mode for AI segmentation"
         )
         self.btn_sam_mode.setCheckable(True)
-        self.btn_sam_mode.setChecked(True)  # Default mode
+        if AI_AVAILABLE:
+            self.btn_sam_mode.setChecked(True)  # Default mode
+        else:
+            self.btn_sam_mode.setEnabled(False)
+            self.btn_sam_mode.setToolTip(
+                "AI not installed. Run: pip install lazylabel-gui[include-ai]"
+            )
+            self.btn_sam_mode.setChecked(False)
 
         self.btn_polygon_mode = self._create_mode_button(
             "Poly", "2", "Switch to Polygon Drawing Mode"
         )
         self.btn_polygon_mode.setCheckable(True)
+        if not AI_AVAILABLE:
+            self.btn_polygon_mode.setChecked(True)
 
         row1_layout.addWidget(self.btn_sam_mode)
         row1_layout.addWidget(self.btn_polygon_mode)
@@ -567,15 +577,19 @@ class ControlPanel(QWidget):
         layout.setContentsMargins(6, 6, 6, 6)
         layout.setSpacing(8)
 
-        # AI Model Selection - collapsible
+        # AI Model Selection - collapsible (hidden when AI not installed)
         model_collapsible = SimpleCollapsible("AI Model Selection", self.model_widget)
         layout.addWidget(model_collapsible)
+        if not AI_AVAILABLE:
+            model_collapsible.hide()
 
-        # AI Fragment Filter - collapsible
+        # AI Fragment Filter - collapsible (hidden when AI not installed)
         fragment_collapsible = SimpleCollapsible(
             "AI Fragment Filter", self.fragment_widget
         )
         layout.addWidget(fragment_collapsible)
+        if not AI_AVAILABLE:
+            fragment_collapsible.hide()
 
         # AI Segment Auto-Conversion - toggle to auto-convert AI segments to polygons
         convert_widget = QWidget()

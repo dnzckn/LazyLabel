@@ -11,6 +11,13 @@ LazyLabel combines Meta's Segment Anything Model (SAM) with comprehensive manual
 
 ## Get Started
 
+**Full install (with AI segmentation):**
+```bash
+pip install lazylabel-gui[include-ai]
+lazylabel-gui
+```
+
+**Core install (manual annotation only, no PyTorch required):**
 ```bash
 pip install lazylabel-gui
 lazylabel-gui
@@ -20,11 +27,12 @@ lazylabel-gui
 ```bash
 git clone https://github.com/dnzckn/LazyLabel.git
 cd LazyLabel
-pip install -e .
+pip install -e ".[include-ai]"   # full install
+# or: pip install -e .           # core only
 lazylabel-gui
 ```
 
-**Requirements:** Python 3.10+, 8GB RAM, ~2.5GB disk space (for model weights)
+**Requirements:** Python 3.10+, 8GB RAM. Full install needs ~2.5GB additional disk space for model weights.
 
 ---
 

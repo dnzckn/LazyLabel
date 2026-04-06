@@ -4,11 +4,17 @@ import sys
 import cv2
 import numpy as np
 import requests
-import torch
-from segment_anything import SamPredictor, sam_model_registry
 from tqdm import tqdm
 
 from ..utils.logger import logger
+
+try:
+    import torch
+    from segment_anything import SamPredictor, sam_model_registry
+except ImportError:
+    torch = None
+    SamPredictor = None
+    sam_model_registry = None
 
 
 def download_model(url, download_path):
@@ -66,6 +72,14 @@ class SamModel:
         model_filename="sam_vit_h_4b8939.pth",
         custom_model_path=None,
     ):
+        if torch is None or sam_model_registry is None:
+            logger.warning("AI dependencies not installed. SAM model unavailable.")
+            self.is_loaded = False
+            self.model = None
+            self.predictor = None
+            self.image = None
+            return
+
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         logger.info(f"Detected device: {str(self.device).upper()}")
 
@@ -140,6 +154,9 @@ class SamModel:
 
     def load_custom_model(self, model_path, model_type="vit_h"):
         """Load a custom model from the specified path."""
+        if torch is None or sam_model_registry is None:
+            logger.warning("AI dependencies not installed. Cannot load model.")
+            return False
         if not os.path.exists(model_path):
             logger.warning(f"Model file not found: {model_path}")
             return False
