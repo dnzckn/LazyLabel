@@ -1044,6 +1044,11 @@ class PropagationManager:
                     local_idx = ext_ref_to_local[ann.frame_idx]
                     self.sam2_model.add_video_mask(local_idx, ann.obj_id, ann.mask)
 
+            # Snapshot frames already processed by previous chunks so the
+            # overlap check doesn't discard later objects within the same
+            # frame (SAM2 yields results per-object, not per-frame).
+            previously_done = frozenset(self.state.propagated_frames)
+
             # Propagate through chunk
             for (
                 frame_idx,
@@ -1072,7 +1077,7 @@ class PropagationManager:
                 )
 
                 # Skip frames already processed by a previous chunk (overlap)
-                if timeline_idx in self.state.propagated_frames:
+                if timeline_idx in previously_done:
                     continue
 
                 # Check confidence

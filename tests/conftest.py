@@ -6,6 +6,10 @@ from pathlib import Path
 
 import pytest
 
+# Force offscreen rendering for Qt tests to avoid display-dependent hangs
+# (CI already sets QT_QPA_PLATFORM=offscreen; this ensures local/pre-commit parity)
+os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+
 # Add the src directory to the path so we can import the package
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 

@@ -4125,7 +4125,7 @@ class MainWindow(QMainWindow):
         # then offload the SAM2 annotation calls to a background thread
         reference_frames: list[int] = []
         segments: list[ReferenceSegmentData] = []
-        class_to_obj_id: dict[int, int] = {}
+        next_obj_id = 1
 
         for ref_idx in self.sequence_view_mode.reference_frame_indices:
             ref_image_path = self.sequence_view_mode.get_image_path(ref_idx)
@@ -4145,9 +4145,8 @@ class MainWindow(QMainWindow):
                     class_name = self.segment_manager.class_aliases.get(
                         class_id, f"Class {class_id}"
                     )
-                    if class_id not in class_to_obj_id:
-                        class_to_obj_id[class_id] = class_id + 1
-                    obj_id = class_to_obj_id[class_id]
+                    obj_id = next_obj_id
+                    next_obj_id += 1
 
                     segments.append(
                         ReferenceSegmentData(
