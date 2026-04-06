@@ -85,6 +85,7 @@ def mw_handler(svm, prop_mgr, timeline):
     handler._propagation_worker = None
     handler._propagation_prev_frame = None
     handler._skip_labeled_frames = set()
+    handler._frames_with_skipped_objects = set()
 
     # Bind real methods
     handler._finalize_propagation_frame_color = (
@@ -219,25 +220,23 @@ class TestFrameDoneToFinalization:
 
         assert timeline.frame_statuses.get(1) == "propagated"
 
-    def test_good_then_float_stays_green(self, mw_handler, svm, timeline):
-        """Good object then float (failed) — failed object ignored, frame green."""
+    def test_good_then_float_flags_frame(self, mw_handler, svm, timeline):
+        """Good object then float (failed) → frame flagged (incomplete)."""
         mask = _make_mask()
         r1 = FakePropagationResult(1, obj_id=1, mask=mask, confidence=0.995)
 
         mw_handler._on_propagation_frame_done(1, r1)
-        # Float result = failed object, silently ignored
+        # Float result = failed object → frame is incomplete
         mw_handler._on_propagation_frame_done(1, 0.985)
 
         # Frame 2 triggers finalization of frame 1
         r3 = FakePropagationResult(2, obj_id=1, mask=mask, confidence=0.997)
         mw_handler._on_propagation_frame_done(2, r3)
 
-        # Min only reflects passing objects (0.995)
-        assert timeline.frame_statuses.get(1) == "propagated"
-        assert svm.get_confidence_score(1) == 0.995
+        assert timeline.frame_statuses.get(1) == "flagged"
 
-    def test_float_then_good_stays_green(self, mw_handler, svm, timeline):
-        """Float (failed) then good object — failed object ignored, frame green."""
+    def test_float_then_good_flags_frame(self, mw_handler, svm, timeline):
+        """Float (failed) then good object → frame flagged (incomplete)."""
         mask = _make_mask()
 
         mw_handler._on_propagation_frame_done(1, 0.985)
@@ -248,9 +247,7 @@ class TestFrameDoneToFinalization:
         r3 = FakePropagationResult(2, obj_id=1, mask=mask, confidence=0.997)
         mw_handler._on_propagation_frame_done(2, r3)
 
-        # Min only reflects passing objects (0.995)
-        assert timeline.frame_statuses.get(1) == "propagated"
-        assert svm.get_confidence_score(1) == 0.995
+        assert timeline.frame_statuses.get(1) == "flagged"
 
     def test_all_floats_flags_frame(self, mw_handler, svm, timeline):
         """All objects below threshold (all floats) → frame flagged."""
@@ -266,7 +263,7 @@ class TestFrameDoneToFinalization:
         assert timeline.frame_statuses.get(1) == "flagged"
 
     def test_multiple_frames_correct_colors(self, mw_handler, svm, timeline):
-        """Multiple frames: good → green, mixed → green (failed ignored), good → green."""
+        """Multiple frames: good → green, mixed → red (incomplete), good → green."""
         mask = _make_mask()
 
         # Frame 1: both pass
@@ -277,7 +274,7 @@ class TestFrameDoneToFinalization:
             1, FakePropagationResult(1, 2, mask, 0.993)
         )
 
-        # Frame 2: one good, one float (failed ignored)
+        # Frame 2: one good, one float (incomplete → flagged)
         mw_handler._on_propagation_frame_done(
             2, FakePropagationResult(2, 1, mask, 0.997)
         )
@@ -297,7 +294,7 @@ class TestFrameDoneToFinalization:
         )
 
         assert timeline.frame_statuses.get(1) == "propagated"
-        assert timeline.frame_statuses.get(2) == "propagated"  # failed obj ignored
+        assert timeline.frame_statuses.get(2) == "flagged"  # incomplete
         assert timeline.frame_statuses.get(3) == "propagated"
 
     def test_single_object_per_frame_green(self, mw_handler, svm, timeline):

@@ -4088,6 +4088,9 @@ class MainWindow(QMainWindow):
                 self.sequence_widget.stream_window_spin.value()
             )
 
+        # Track frames where any object was skipped (below threshold)
+        self._frames_with_skipped_objects: set[int] = set()
+
         # Precompute the set of labeled frames to skip (have NPZ on disk)
         self._skip_labeled_frames: set[int] = set()
         if skip_labeled and self.sequence_view_mode:
@@ -4354,10 +4357,13 @@ class MainWindow(QMainWindow):
         self._propagation_prev_frame = frame_idx
 
         # A float result means one object was below the confidence threshold
-        # (no mask created).  Don't record it — only passing objects should
-        # contribute to the per-frame min confidence.  Skipped objects simply
-        # won't have masks; the frame stays green if all other objects pass.
+        # (no mask created).  Track that this frame has an incomplete set of
+        # objects so finalization can flag it — a frame must have ALL objects
+        # to be considered propagated.
         if isinstance(result, int | float):
+            if not hasattr(self, "_frames_with_skipped_objects"):
+                self._frames_with_skipped_objects = set()
+            self._frames_with_skipped_objects.add(frame_idx)
             QApplication.processEvents()
             return
 
@@ -4395,6 +4401,14 @@ class MainWindow(QMainWindow):
     def _finalize_propagation_frame_color(self, frame_idx: int) -> None:
         """Set the final timeline color for a fully-processed frame."""
         if not self.sequence_view_mode or not self.timeline_widget:
+            return
+
+        # If any object was skipped (below threshold), the frame is incomplete
+        # and must be flagged — all reference objects must be present.
+        skipped = getattr(self, "_frames_with_skipped_objects", set())
+        if frame_idx in skipped:
+            self.sequence_view_mode.flag_frame(frame_idx)
+            self.timeline_widget.set_frame_status(frame_idx, "flagged", immediate=True)
             return
 
         status = self.sequence_view_mode.get_frame_status(frame_idx)
