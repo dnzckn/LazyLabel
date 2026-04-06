@@ -4354,15 +4354,10 @@ class MainWindow(QMainWindow):
         self._propagation_prev_frame = frame_idx
 
         # A float result means one object was below the confidence threshold
-        # (no mask created).  Record its confidence so the per-frame min
-        # reflects the actual worst object, not just the passing ones.
-        # Don't flag or finalize — _finalize_propagation_frame_color checks
-        # propagation_manager.flagged_frames for the all-must-pass rule.
+        # (no mask created).  Don't record it — only passing objects should
+        # contribute to the per-frame min confidence.  Skipped objects simply
+        # won't have masks; the frame stays green if all other objects pass.
         if isinstance(result, int | float):
-            if self.sequence_view_mode:
-                self.sequence_view_mode.mark_frame_propagated(
-                    frame_idx, {}, float(result)
-                )
             QApplication.processEvents()
             return
 
