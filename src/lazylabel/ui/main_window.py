@@ -5196,6 +5196,9 @@ class MainWindow(QMainWindow):
         if self.sequence_view_mode is None:
             return
 
+        # Always ensure the right panel shows single-view segment manager
+        self._swap_right_panel_to_single_view()
+
         # Check if timeline was already built (user switching back to sequence tab)
         if self._sequence_timeline_built:
             # Just restore the sequence view

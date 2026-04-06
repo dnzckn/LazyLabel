@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.13] - 2026-04-05
+
+### Fixed
+
+- Sequence mode right panel now always shows single-view segment manager regardless of which mode was previously active (multi-view panel no longer leaks into sequence mode)
+
 ## [1.7.12] - 2026-04-05
 
 ### Added
@@ -888,6 +894,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [1.0.2]: https://github.com/dnzckn/LazyLabel/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/dnzckn/LazyLabel/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/dnzckn/LazyLabel/releases/tag/v1.0.0
+[1.7.13]: https://github.com/dnzckn/LazyLabel/compare/v1.7.12...v1.7.13
 [1.7.12]: https://github.com/dnzckn/LazyLabel/compare/v1.7.11...v1.7.12
 [1.7.11]: https://github.com/dnzckn/LazyLabel/compare/v1.7.10...v1.7.11
 [1.7.10]: https://github.com/dnzckn/LazyLabel/compare/v1.7.9...v1.7.10
