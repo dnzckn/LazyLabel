@@ -78,22 +78,29 @@ class MultiIndicatorSlider(QWidget):
         else:
             return value
 
+    def _is_dark(self) -> bool:
+        """Check if the current theme is dark based on palette."""
+        return self.palette().window().color().lightness() < 128
+
     def paintEvent(self, event):
         """Paint the slider."""
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        dark = self._is_dark()
 
         # Draw channel label
         font = QFont()
         font.setPointSize(9)
         painter.setFont(font)
-        painter.setPen(QPen(QColor(255, 255, 255)))
+        painter.setPen(QPen(QColor(255, 255, 255) if dark else QColor(30, 30, 30)))
         painter.drawText(5, 15, f"{self.channel_name}")
 
         # Draw slider track
         slider_rect = self.get_slider_rect()
-        painter.setPen(QPen(QColor(100, 100, 100), 2))
-        painter.setBrush(QBrush(QColor(50, 50, 50)))
+        painter.setPen(
+            QPen(QColor(100, 100, 100) if dark else QColor(180, 180, 180), 2)
+        )
+        painter.setBrush(QBrush(QColor(50, 50, 50) if dark else QColor(230, 230, 230)))
         painter.drawRoundedRect(slider_rect, 5, 5)
 
         # Draw value segments
@@ -159,8 +166,12 @@ class MultiIndicatorSlider(QWidget):
                 painter.setBrush(QBrush(QColor(255, 255, 100)))
                 painter.setPen(QPen(QColor(200, 200, 50), 2))
             else:
-                painter.setBrush(QBrush(QColor(255, 255, 255)))
-                painter.setPen(QPen(QColor(150, 150, 150), 1))
+                if dark:
+                    painter.setBrush(QBrush(QColor(255, 255, 255)))
+                    painter.setPen(QPen(QColor(150, 150, 150), 1))
+                else:
+                    painter.setBrush(QBrush(QColor(255, 255, 255)))
+                    painter.setPen(QPen(QColor(120, 120, 120), 1))
 
             painter.drawRoundedRect(handle_rect, 3, 3)
 
@@ -176,7 +187,8 @@ class MultiIndicatorSlider(QWidget):
         if not label_positions:
             return
 
-        painter.setPen(QPen(QColor(255, 255, 255)))
+        dark = self._is_dark()
+        painter.setPen(QPen(QColor(255, 255, 255) if dark else QColor(30, 30, 30)))
 
         # Sort by x position
         sorted_labels = sorted(label_positions, key=lambda item: item[0])

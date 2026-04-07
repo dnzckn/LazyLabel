@@ -112,12 +112,18 @@ class SequenceWidget(QWidget):
 
         self._setup_ui()
 
-    # Shared QGroupBox styling
-    _GROUP_STYLE = (
+    # Shared QGroupBox styling per theme
+    _GROUP_STYLE_DARK = (
         "QGroupBox { border: 1px solid #555; border-radius: 4px;"
         " margin-top: 8px; padding-top: 4px; }"
         "QGroupBox::title { subcontrol-origin: margin;"
         " left: 8px; padding: 0 4px; color: #CCC; }"
+    )
+    _GROUP_STYLE_LIGHT = (
+        "QGroupBox { border: 1px solid #bbb; border-radius: 4px;"
+        " margin-top: 8px; padding-top: 4px; }"
+        "QGroupBox::title { subcontrol-origin: margin;"
+        " left: 8px; padding: 0 4px; color: #444; }"
     )
 
     def _setup_ui(self) -> None:
@@ -128,7 +134,7 @@ class SequenceWidget(QWidget):
 
         # Timeline Setup Section (shown before timeline is built)
         self.setup_group = QGroupBox("Timeline Setup")
-        self.setup_group.setStyleSheet(self._GROUP_STYLE)
+        self.setup_group.setStyleSheet(self._GROUP_STYLE_DARK)
         setup_layout = QVBoxLayout(self.setup_group)
         setup_layout.setContentsMargins(6, 8, 6, 6)
         setup_layout.setSpacing(4)
@@ -203,7 +209,7 @@ class SequenceWidget(QWidget):
 
         # Reference Frame Section (hidden until timeline is built)
         self.ref_group = QGroupBox("Reference Frames")
-        self.ref_group.setStyleSheet(self._GROUP_STYLE)
+        self.ref_group.setStyleSheet(self._GROUP_STYLE_DARK)
         ref_layout = QVBoxLayout(self.ref_group)
         ref_layout.setContentsMargins(6, 8, 6, 6)
         ref_layout.setSpacing(4)
@@ -284,7 +290,7 @@ class SequenceWidget(QWidget):
 
         # Propagation Section (hidden until timeline is built)
         self.prop_group = QGroupBox("Propagation")
-        self.prop_group.setStyleSheet(self._GROUP_STYLE)
+        self.prop_group.setStyleSheet(self._GROUP_STYLE_DARK)
         prop_layout = QVBoxLayout(self.prop_group)
         prop_layout.setContentsMargins(6, 8, 6, 6)
         prop_layout.setSpacing(4)
@@ -400,7 +406,7 @@ class SequenceWidget(QWidget):
 
         # Review Section (hidden until timeline is built)
         self.review_group = QGroupBox("Review")
-        self.review_group.setStyleSheet(self._GROUP_STYLE)
+        self.review_group.setStyleSheet(self._GROUP_STYLE_DARK)
         review_layout = QVBoxLayout(self.review_group)
         review_layout.setContentsMargins(6, 8, 6, 6)
         review_layout.setSpacing(4)
@@ -458,7 +464,7 @@ class SequenceWidget(QWidget):
 
         # Trim Section (hidden until timeline is built)
         self.trim_group = QGroupBox("Trim")
-        self.trim_group.setStyleSheet(self._GROUP_STYLE)
+        self.trim_group.setStyleSheet(self._GROUP_STYLE_DARK)
         trim_layout = QVBoxLayout(self.trim_group)
         trim_layout.setContentsMargins(6, 8, 6, 6)
         trim_layout.setSpacing(4)
@@ -783,6 +789,35 @@ class SequenceWidget(QWidget):
         self._update_timeline_visibility()
         self._update_range_button_states()
         self._update_trim_button_states()
+
+    def update_theme(self, dark: bool) -> None:
+        """Reapply styles for the current theme."""
+        group_style = self._GROUP_STYLE_DARK if dark else self._GROUP_STYLE_LIGHT
+        for group in (
+            self.setup_group,
+            self.ref_group,
+            self.prop_group,
+            self.review_group,
+            self.trim_group,
+        ):
+            group.setStyleSheet(group_style)
+
+        # Labels that need high contrast
+        ref_color = "#FFC107" if dark else "#B8860B"  # gold → dark goldenrod
+        self.reference_label.setStyleSheet(f"font-weight: bold; color: {ref_color};")
+        suggested_color = "#9C27B0" if dark else "#7B1FA2"
+        self.suggested_label.setStyleSheet(
+            f"font-weight: bold; color: {suggested_color};"
+        )
+        flagged_color = "#F44336" if dark else "#C62828"
+        self.flagged_label.setStyleSheet(f"font-weight: bold; color: {flagged_color};")
+        start_color = "#4CAF50" if dark else "#2E7D32"
+        self.start_label.setStyleSheet(f"font-weight: bold; color: {start_color};")
+        end_color = "#F44336" if dark else "#C62828"
+        self.end_label.setStyleSheet(f"font-weight: bold; color: {end_color};")
+        trim_color = "#8B4513" if dark else "#5D2F0E"
+        self.trim_left_label.setStyleSheet(f"font-weight: bold; color: {trim_color};")
+        self.trim_right_label.setStyleSheet(f"font-weight: bold; color: {trim_color};")
 
     def _update_timeline_visibility(self) -> None:
         """Show/hide UI sections based on timeline state."""

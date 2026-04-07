@@ -83,6 +83,17 @@ class StatusBar(QStatusBar):
 
     theme_toggled = pyqtSignal(bool)
 
+    # Message colors per theme: (dark, light)
+    _COLORS = {
+        "message": ("#ffa500", "#c47600"),
+        "error": ("#ff6b6b", "#c62828"),
+        "success": ("#51cf66", "#2e7d32"),
+        "warning": ("#ffd43b", "#b8860b"),
+        "gpu": ("#51cf66", "#2e7d32"),
+        "cpu": ("#888", "#666"),
+        "no_ai": ("#ffa500", "#c47600"),
+    }
+
     def __init__(self, parent=None, dark_mode=True):
         super().__init__(parent)
         self._message_timer = QTimer()
@@ -135,10 +146,22 @@ class StatusBar(QStatusBar):
         # Default state
         self.set_ready_message()
 
+    def _color(self, key: str) -> str:
+        """Get theme-appropriate color for a message type."""
+        dark, light = self._COLORS[key]
+        return dark if self._dark_mode else light
+
+    def update_theme(self, dark: bool) -> None:
+        """Update colors when theme changes."""
+        self._dark_mode = dark
+        self._update_device_indicator()
+
     def show_message(self, message: str, duration: int = 5000):
         """Show a temporary message for specified duration."""
         self.message_label.setText(message)
-        self.message_label.setStyleSheet("color: #ffa500; padding: 2px 5px;")
+        self.message_label.setStyleSheet(
+            f"color: {self._color('message')}; padding: 2px 5px;"
+        )
 
         # Stop any existing timer
         self._message_timer.stop()
@@ -150,7 +173,9 @@ class StatusBar(QStatusBar):
     def show_error_message(self, message: str, duration: int = 8000):
         """Show an error message with red color."""
         self.message_label.setText(f"Error: {message}")
-        self.message_label.setStyleSheet("color: #ff6b6b; padding: 2px 5px;")
+        self.message_label.setStyleSheet(
+            f"color: {self._color('error')}; padding: 2px 5px;"
+        )
 
         # Stop any existing timer
         self._message_timer.stop()
@@ -162,7 +187,9 @@ class StatusBar(QStatusBar):
     def show_success_message(self, message: str, duration: int = 3000):
         """Show a success message with green color."""
         self.message_label.setText(message)
-        self.message_label.setStyleSheet("color: #51cf66; padding: 2px 5px;")
+        self.message_label.setStyleSheet(
+            f"color: {self._color('success')}; padding: 2px 5px;"
+        )
 
         # Stop any existing timer
         self._message_timer.stop()
@@ -174,7 +201,9 @@ class StatusBar(QStatusBar):
     def show_warning_message(self, message: str, duration: int = 5000):
         """Show a warning message with yellow color."""
         self.message_label.setText(f"Warning: {message}")
-        self.message_label.setStyleSheet("color: #ffd43b; padding: 2px 5px;")
+        self.message_label.setStyleSheet(
+            f"color: {self._color('warning')}; padding: 2px 5px;"
+        )
 
         # Stop any existing timer
         self._message_timer.stop()
@@ -211,15 +240,15 @@ class StatusBar(QStatusBar):
                 name = torch.cuda.get_device_name(0)
                 self.device_label.setText(f"GPU: {name}")
                 self.device_label.setStyleSheet(
-                    "color: #51cf66; padding: 2px 8px; font-size: 8pt;"
+                    f"color: {self._color('gpu')}; padding: 2px 8px; font-size: 8pt;"
                 )
             else:
                 self.device_label.setText("CPU Only")
                 self.device_label.setStyleSheet(
-                    "color: #888; padding: 2px 8px; font-size: 8pt;"
+                    f"color: {self._color('cpu')}; padding: 2px 8px; font-size: 8pt;"
                 )
         except ImportError:
             self.device_label.setText("No AI")
             self.device_label.setStyleSheet(
-                "color: #ffa500; padding: 2px 8px; font-size: 8pt;"
+                f"color: {self._color('no_ai')}; padding: 2px 8px; font-size: 8pt;"
             )

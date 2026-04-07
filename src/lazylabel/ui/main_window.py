@@ -2116,6 +2116,7 @@ class MainWindow(QMainWindow):
                 from lazylabel.ui.theme import apply_theme
 
                 apply_theme(target)
+                self._propagate_theme(dark)
 
             QTimer.singleShot(0, _step1)
 
@@ -2126,6 +2127,15 @@ class MainWindow(QMainWindow):
         apply_theme("dark" if dark_mode else "light")
         self.settings.dark_mode = dark_mode
         self._save_settings()
+        self._propagate_theme(dark_mode)
+
+    def _propagate_theme(self, dark_mode: bool) -> None:
+        """Update child widgets that use hardcoded colors."""
+        self.status_bar.update_theme(dark_mode)
+        if hasattr(self, "_zoomable_timeline"):
+            self._zoomable_timeline.update_theme(dark_mode)
+        if self.sequence_widget is not None:
+            self.sequence_widget.update_theme(dark_mode)
 
     def _reset_state(self):
         """Reset application state."""

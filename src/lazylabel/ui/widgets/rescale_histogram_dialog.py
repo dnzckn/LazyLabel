@@ -346,9 +346,9 @@ class RescaleHistogramDialog(QDialog):
         # Info row
         info_layout = QHBoxLayout()
         self.min_label = QLabel(f"Min: {current_min}")
-        self.min_label.setStyleSheet("color: #32C832; font-weight: bold;")
+        self.min_label.setStyleSheet("color: #228B22; font-weight: bold;")
         self.max_label = QLabel(f"Max: {current_max}")
-        self.max_label.setStyleSheet("color: #C83232; font-weight: bold;")
+        self.max_label.setStyleSheet("color: #B22222; font-weight: bold;")
 
         pixels = image_array.size
         self.stats_label = QLabel(
@@ -447,7 +447,7 @@ class RescaleHistogramDialog(QDialog):
 
         # Preset status
         self.preset_label = QLabel("")
-        self.preset_label.setStyleSheet("color: #FFB74D; font-size: 10px;")
+        self.preset_label.setStyleSheet("color: #E65100; font-size: 10px;")
         presets_layout.addWidget(self.preset_label)
 
         layout.addWidget(presets_group)

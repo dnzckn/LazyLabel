@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.22] - 2026-04-07
+
+### Fixed
+
+- Light mode visibility — many widgets had hardcoded dark colors that were unreadable on light backgrounds
+- Timeline widget bar background, frame separators, empty state text, and pending frame color now adapt to theme
+- Timeline zoom/pan/sort/clear-flags buttons reapply styles on theme switch
+- Sequence widget group box borders, titles, and all status labels (reference, suggested, flagged, start/end, trim) use theme-appropriate colors
+- Status bar message colors (info/error/success/warning) and device indicator now legible in both themes
+- Channel threshold slider text, track, and handle border adapt via palette detection
+- Rescale slider text, track, and handle border adapt via palette detection
+- Histogram dialog min/max/preset labels switched to colors readable in both themes
+- Theme changes now propagate through new `_propagate_theme()` hook in main_window
+
 ## [1.7.21] - 2026-04-06
 
 ### Fixed
@@ -957,6 +971,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [1.0.2]: https://github.com/dnzckn/LazyLabel/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/dnzckn/LazyLabel/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/dnzckn/LazyLabel/releases/tag/v1.0.0
+[1.7.22]: https://github.com/dnzckn/LazyLabel/compare/v1.7.21...v1.7.22
 [1.7.21]: https://github.com/dnzckn/LazyLabel/compare/v1.7.20...v1.7.21
 [1.7.20]: https://github.com/dnzckn/LazyLabel/compare/v1.7.19...v1.7.20
 [1.7.19]: https://github.com/dnzckn/LazyLabel/compare/v1.7.18...v1.7.19

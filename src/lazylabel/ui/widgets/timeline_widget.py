@@ -263,6 +263,10 @@ class TimelineWidget(QWidget):
         display_pos = max(0, min(self.total_frames - 1, display_pos))
         return self._display_order[display_pos] if self._display_order else 0
 
+    def _is_dark(self) -> bool:
+        """Check if the current theme is dark based on palette."""
+        return self.palette().window().color().lightness() < 128
+
     def paintEvent(self, event) -> None:
         """Draw timeline with color-coded frame statuses."""
         painter = QPainter(self)
@@ -270,9 +274,11 @@ class TimelineWidget(QWidget):
 
         self._calculate_geometry()
 
+        dark = self._is_dark()
+
         if self._bar_rect is None or self.total_frames == 0:
             # Draw empty state
-            painter.setPen(QPen(QColor(80, 80, 80)))
+            painter.setPen(QPen(QColor(80, 80, 80) if dark else QColor(170, 170, 170)))
             painter.drawText(
                 self.rect(), Qt.AlignmentFlag.AlignCenter, "No sequence loaded"
             )
@@ -282,31 +288,37 @@ class TimelineWidget(QWidget):
 
         # Draw background bar
         painter.setPen(Qt.PenStyle.NoPen)
-        painter.setBrush(QBrush(QColor(50, 50, 50)))
+        painter.setBrush(QBrush(QColor(50, 50, 50) if dark else QColor(215, 215, 220)))
         painter.drawRoundedRect(margin, top, width, height, 3, 3)
 
         # Draw frame statuses (only the visible range)
         if self._visible_count <= width:
-            self._draw_individual_frames(painter, margin, top, height)
+            self._draw_individual_frames(painter, margin, top, height, dark)
         else:
-            self._draw_block_frames(painter, margin, top, width, height)
+            self._draw_block_frames(painter, margin, top, width, height, dark)
 
         # Draw trim markers and current frame indicator
         self._draw_trim_markers(painter, top, height)
         self._draw_current_frame_marker(painter, top, height)
 
     def _draw_individual_frames(
-        self, painter: QPainter, margin: int, top: int, height: int
+        self, painter: QPainter, margin: int, top: int, height: int, dark: bool
     ) -> None:
         """Draw individual frame indicators (only the visible range)."""
         frame_width = max(1, self._frame_width)
-        separator_pen = QPen(QColor(30, 30, 30, 160), 1)
+        separator_pen = QPen(
+            QColor(30, 30, 30, 160) if dark else QColor(255, 255, 255, 140), 1
+        )
+        pending_color = self.COLORS["pending"] if dark else QColor(185, 185, 190)
         end = min(self._scroll_offset + self._visible_count, self.total_frames)
 
         for display_pos in range(self._scroll_offset, end):
             real_idx = self._display_order[display_pos]
             status = self.frame_statuses.get(real_idx, "pending")
-            color = self.COLORS.get(status, self.COLORS["pending"])
+            if status == "pending":
+                color = pending_color
+            else:
+                color = self.COLORS.get(status, pending_color)
 
             visible_pos = display_pos - self._scroll_offset
             x = margin + visible_pos * self._frame_width
@@ -323,10 +335,17 @@ class TimelineWidget(QWidget):
                 painter.drawLine(x, top + 1, x, top + height - 1)
 
     def _draw_block_frames(
-        self, painter: QPainter, margin: int, top: int, width: int, height: int
+        self,
+        painter: QPainter,
+        margin: int,
+        top: int,
+        width: int,
+        height: int,
+        dark: bool,
     ) -> None:
         """Draw frames in blocks for large sequences (optimization)."""
         ppf = width / self._visible_count
+        pending_color = self.COLORS["pending"] if dark else QColor(185, 185, 190)
         end = min(self._scroll_offset + self._visible_count, self.total_frames)
 
         # Group consecutive visible frames by status for efficiency
@@ -342,7 +361,10 @@ class TimelineWidget(QWidget):
 
             if status != current_status:
                 if current_status is not None:
-                    color = self.COLORS.get(current_status, self.COLORS["pending"])
+                    if current_status == "pending":
+                        color = pending_color
+                    else:
+                        color = self.COLORS.get(current_status, pending_color)
                     painter.setBrush(QBrush(color))
                     x1 = margin + (block_start - self._scroll_offset) * ppf
                     x2 = margin + (display_pos - self._scroll_offset) * ppf
@@ -487,7 +509,7 @@ class ZoomableTimeline(QWidget):
     _MAX_ZOOM = 30.0
     _PAN_STEP_FRACTION = 0.25  # Pan 25% of visible frames per click
 
-    _BTN_STYLE = """
+    _BTN_STYLE_DARK = """
         QPushButton {
             background-color: rgba(60, 60, 60, 0.8);
             border: 1px solid rgba(80, 80, 80, 0.6);
@@ -499,6 +521,20 @@ class ZoomableTimeline(QWidget):
         QPushButton:hover { background-color: rgba(80, 80, 80, 0.8); }
         QPushButton:pressed { background-color: rgba(100, 100, 100, 0.8); }
         QPushButton:disabled { color: rgba(100, 100, 100, 0.5); }
+    """
+    _BTN_STYLE_LIGHT = """
+        QPushButton {
+            background-color: rgba(0, 0, 0, 0.06);
+            border: 1px solid rgba(0, 0, 0, 0.15);
+            border-radius: 2px;
+            font-weight: bold;
+            font-size: 11px;
+            padding: 0px 3px;
+            color: #333;
+        }
+        QPushButton:hover { background-color: rgba(0, 0, 0, 0.10); }
+        QPushButton:pressed { background-color: rgba(0, 0, 0, 0.15); }
+        QPushButton:disabled { color: rgba(0, 0, 0, 0.3); }
     """
 
     def __init__(self, parent=None):
@@ -520,11 +556,12 @@ class ZoomableTimeline(QWidget):
         ctrl.setSpacing(2)
 
         btn_h = 18
+        btn_style = self._BTN_STYLE_DARK
 
         self._pan_left_btn = QPushButton("\u25c0")
         self._pan_left_btn.setFixedHeight(btn_h)
         self._pan_left_btn.setToolTip("Pan left")
-        self._pan_left_btn.setStyleSheet(self._BTN_STYLE)
+        self._pan_left_btn.setStyleSheet(btn_style)
         self._pan_left_btn.clicked.connect(self._pan_left)
         self._pan_left_btn.setEnabled(False)
         ctrl.addWidget(self._pan_left_btn)
@@ -532,7 +569,7 @@ class ZoomableTimeline(QWidget):
         self._zoom_out_btn = QPushButton("\u2212")
         self._zoom_out_btn.setFixedHeight(btn_h)
         self._zoom_out_btn.setToolTip("Zoom out timeline")
-        self._zoom_out_btn.setStyleSheet(self._BTN_STYLE)
+        self._zoom_out_btn.setStyleSheet(btn_style)
         self._zoom_out_btn.clicked.connect(self._zoom_out)
         self._zoom_out_btn.setEnabled(False)
         ctrl.addWidget(self._zoom_out_btn)
@@ -540,14 +577,14 @@ class ZoomableTimeline(QWidget):
         self._zoom_in_btn = QPushButton("+")
         self._zoom_in_btn.setFixedHeight(btn_h)
         self._zoom_in_btn.setToolTip("Zoom in timeline")
-        self._zoom_in_btn.setStyleSheet(self._BTN_STYLE)
+        self._zoom_in_btn.setStyleSheet(btn_style)
         self._zoom_in_btn.clicked.connect(self._zoom_in)
         ctrl.addWidget(self._zoom_in_btn)
 
         self._pan_right_btn = QPushButton("\u25b6")
         self._pan_right_btn.setFixedHeight(btn_h)
         self._pan_right_btn.setToolTip("Pan right")
-        self._pan_right_btn.setStyleSheet(self._BTN_STYLE)
+        self._pan_right_btn.setStyleSheet(btn_style)
         self._pan_right_btn.clicked.connect(self._pan_right)
         self._pan_right_btn.setEnabled(False)
         ctrl.addWidget(self._pan_right_btn)
@@ -557,7 +594,7 @@ class ZoomableTimeline(QWidget):
         self._clear_flags_btn = QPushButton("Clear Flags")
         self._clear_flags_btn.setFixedHeight(btn_h)
         self._clear_flags_btn.setToolTip("Clear all status colors from the timeline")
-        self._clear_flags_btn.setStyleSheet(self._BTN_STYLE)
+        self._clear_flags_btn.setStyleSheet(btn_style)
         self._clear_flags_btn.clicked.connect(self.clear_flags_requested.emit)
         ctrl.addWidget(self._clear_flags_btn)
 
@@ -565,7 +602,7 @@ class ZoomableTimeline(QWidget):
         self._sort_btn.setFixedHeight(btn_h)
         self._sort_btn.setToolTip("Sort timeline by status (done \u2192 needs work)")
         self._sort_btn.setCheckable(True)
-        self._sort_btn.setStyleSheet(self._BTN_STYLE)
+        self._sort_btn.setStyleSheet(btn_style)
         self._sort_btn.clicked.connect(self._toggle_sort)
         ctrl.addWidget(self._sort_btn)
 
@@ -576,6 +613,20 @@ class ZoomableTimeline(QWidget):
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
 
         self._update_controls()
+
+    def update_theme(self, dark: bool) -> None:
+        """Reapply button styles for the current theme."""
+        style = self._BTN_STYLE_DARK if dark else self._BTN_STYLE_LIGHT
+        for btn in (
+            self._pan_left_btn,
+            self._zoom_out_btn,
+            self._zoom_in_btn,
+            self._pan_right_btn,
+            self._clear_flags_btn,
+            self._sort_btn,
+        ):
+            btn.setStyleSheet(style)
+        self.timeline.update()
 
     def _on_frame_selected(self, frame: int):
         self.frame_selected.emit(frame)

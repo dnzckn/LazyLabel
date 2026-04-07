@@ -88,14 +88,19 @@ class RescaleSlider(QWidget):
         track = self._get_track_rect()
         return QRect(x - 6, track.top() - 3, 12, track.height() + 6)
 
+    def _is_dark(self) -> bool:
+        """Check if the current theme is dark based on palette."""
+        return self.palette().window().color().lightness() < 128
+
     def paintEvent(self, event):
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        dark = self._is_dark()
         track = self._get_track_rect()
 
         # Track background
-        p.setPen(QPen(QColor(100, 100, 100), 2))
-        p.setBrush(QColor(50, 50, 50))
+        p.setPen(QPen(QColor(100, 100, 100) if dark else QColor(180, 180, 180), 2))
+        p.setBrush(QColor(50, 50, 50) if dark else QColor(230, 230, 230))
         p.drawRoundedRect(track, 5, 5)
 
         # Active range highlight
@@ -115,14 +120,16 @@ class RescaleSlider(QWidget):
                 p.setPen(QPen(QColor(200, 200, 50), 2))
             else:
                 p.setBrush(QColor(255, 255, 255))
-                p.setPen(QPen(QColor(150, 150, 150), 1))
+                p.setPen(
+                    QPen(QColor(150, 150, 150) if dark else QColor(120, 120, 120), 1)
+                )
             p.drawRoundedRect(hr, 3, 3)
 
         # Labels
         font = QFont()
         font.setPointSize(8)
         p.setFont(font)
-        p.setPen(QColor(255, 255, 255))
+        p.setPen(QColor(255, 255, 255) if dark else QColor(30, 30, 30))
         p.drawText(
             self._val_to_x(self._min_val) - 15, track.bottom() + 14, str(self._min_val)
         )
