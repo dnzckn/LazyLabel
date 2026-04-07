@@ -4369,11 +4369,20 @@ class MainWindow(QMainWindow):
         # A float result means one object was below the confidence threshold
         # (no mask created).  Track that this frame has an incomplete set of
         # objects so finalization can flag it — a frame must have ALL objects
-        # to be considered propagated.
+        # to be considered propagated.  Also record the failed confidence so
+        # the tooltip shows the worst object, not just passing ones.
         if isinstance(result, int | float):
             if not hasattr(self, "_frames_with_skipped_objects"):
                 self._frames_with_skipped_objects = set()
             self._frames_with_skipped_objects.add(frame_idx)
+            if self.sequence_view_mode:
+                is_reference = (
+                    frame_idx in self.sequence_view_mode.reference_frame_indices
+                )
+                if not is_reference:
+                    self.sequence_view_mode.record_skipped_object(
+                        frame_idx, float(result)
+                    )
             QApplication.processEvents()
             return
 

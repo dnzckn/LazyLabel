@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.23] - 2026-04-07
+
+### Fixed
+
+- Flagged frames displaying misleading high confidence scores — when a reference has multiple objects and one fails (below threshold) while others pass, the frame is correctly flagged red but the tooltip was showing only the passing object's high confidence. Now the failed object's confidence poisons the per-frame min so the displayed score matches the red flag
+- New `record_skipped_object()` method on `SequenceViewMode` that updates per-frame min confidence without touching masks
+
+### Added
+
+- 2 regression tests for mixed pass/fail object frames verifying the lowest confidence is recorded
+
 ## [1.7.22] - 2026-04-07
 
 ### Fixed
@@ -971,6 +982,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [1.0.2]: https://github.com/dnzckn/LazyLabel/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/dnzckn/LazyLabel/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/dnzckn/LazyLabel/releases/tag/v1.0.0
+[1.7.23]: https://github.com/dnzckn/LazyLabel/compare/v1.7.22...v1.7.23
 [1.7.22]: https://github.com/dnzckn/LazyLabel/compare/v1.7.21...v1.7.22
 [1.7.21]: https://github.com/dnzckn/LazyLabel/compare/v1.7.20...v1.7.21
 [1.7.20]: https://github.com/dnzckn/LazyLabel/compare/v1.7.19...v1.7.20

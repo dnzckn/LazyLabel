@@ -321,6 +321,29 @@ class SequenceViewMode(QObject):
 
         self.frame_status_changed.emit(idx, status.value)
 
+    def record_skipped_object(self, idx: int, confidence: float) -> None:
+        """Record a failed object's confidence without creating a mask.
+
+        Poisons the per-frame min confidence so the tooltip reflects the
+        worst object (including failed ones), and forces the frame into
+        FLAGGED status since the failed object is below threshold.
+
+        Args:
+            idx: Frame index
+            confidence: Failed object's confidence score
+        """
+        with self._lock:
+            if idx in self._confidence_scores:
+                self._confidence_scores[idx] = min(
+                    self._confidence_scores[idx], confidence
+                )
+            else:
+                self._confidence_scores[idx] = confidence
+            self._frame_statuses[idx] = FrameStatus.FLAGGED
+            status = self._frame_statuses[idx]
+
+        self.frame_status_changed.emit(idx, status.value)
+
     def flag_frame(self, idx: int) -> None:
         """Manually flag a frame for review."""
         with self._lock:

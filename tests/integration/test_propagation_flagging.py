@@ -311,6 +311,45 @@ class TestFrameDoneToFinalization:
 
         assert timeline.frame_statuses.get(1) == "propagated"
 
+    def test_flagged_frame_records_failed_confidence(self, mw_handler, svm, timeline):
+        """Mixed pass/fail frame: tooltip confidence reflects worst object."""
+        mask = _make_mask()
+
+        # Object 1 passes at 0.995
+        mw_handler._on_propagation_frame_done(
+            1, FakePropagationResult(1, 1, mask, 0.995)
+        )
+        # Object 2 fails at 0.850
+        mw_handler._on_propagation_frame_done(1, 0.850)
+
+        # Frame 2 finalizes frame 1
+        mw_handler._on_propagation_frame_done(
+            2, FakePropagationResult(2, 1, mask, 0.997)
+        )
+
+        # Frame should be flagged AND show the failed (worst) confidence
+        assert timeline.frame_statuses.get(1) == "flagged"
+        assert svm.get_confidence_score(1) == 0.850
+
+    def test_float_then_good_records_failed_confidence(self, mw_handler, svm, timeline):
+        """Failed object first then passing: confidence is the failed value."""
+        mask = _make_mask()
+
+        # Object 1 fails at 0.800
+        mw_handler._on_propagation_frame_done(1, 0.800)
+        # Object 2 passes at 0.995
+        mw_handler._on_propagation_frame_done(
+            1, FakePropagationResult(1, 2, mask, 0.995)
+        )
+
+        # Finalize
+        mw_handler._on_propagation_frame_done(
+            2, FakePropagationResult(2, 1, mask, 0.997)
+        )
+
+        assert timeline.frame_statuses.get(1) == "flagged"
+        assert svm.get_confidence_score(1) == 0.800
+
     def test_skip_labeled_frames_stay_skipped(self, mw_handler, timeline):
         """Skip-labeled frames show as skipped regardless of result."""
         mw_handler._skip_labeled_frames = {1}
