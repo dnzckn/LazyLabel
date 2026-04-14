@@ -73,7 +73,7 @@ class SequenceWidget(QWidget):
     clear_references_requested = pyqtSignal()  # Request to clear all references
     propagate_requested = pyqtSignal(
         str, int, int, bool, bool
-    )  # direction, start, end, skip_flagged, skip_labeled
+    )  # direction, start, end, keep_flagged, skip_labeled
     cancel_propagation_requested = pyqtSignal()
     next_flagged_requested = pyqtSignal()
     prev_flagged_requested = pyqtSignal()
@@ -330,15 +330,18 @@ class SequenceWidget(QWidget):
         self.range_end_spin.setToolTip("End frame (1-indexed)")
         options_layout.addWidget(self.range_end_spin)
 
-        # Skip flagged checkbox
-        self.skip_flagged_checkbox = QCheckBox("Skip Low Conf")
-        self.skip_flagged_checkbox.setChecked(True)
-        self.skip_flagged_checkbox.setToolTip(
-            "Skip frames already flagged as low confidence.\n"
-            "They won't receive new masks but SAM2 still\n"
-            "tracks through them for temporal continuity."
+        # Keep flagged masks checkbox
+        self.keep_flagged_checkbox = QCheckBox("Keep Flagged Masks")
+        self.keep_flagged_checkbox.setChecked(False)
+        self.keep_flagged_checkbox.setToolTip(
+            "When unchecked (default), masks are discarded for any\n"
+            "frame where an object fails to propagate above the\n"
+            "confidence threshold. The frame is flagged red and no\n"
+            "masks are stored for it.\n\n"
+            "Check to keep partial masks on flagged frames so you\n"
+            "can navigate to them and review/edit manually."
         )
-        options_layout.addWidget(self.skip_flagged_checkbox)
+        options_layout.addWidget(self.keep_flagged_checkbox)
 
         # Skip labeled checkbox
         self.skip_labeled_checkbox = QCheckBox("Skip Labeled")
@@ -639,9 +642,9 @@ class SequenceWidget(QWidget):
 
         start = self.range_start_spin.value() - 1  # Convert to 0-indexed
         end = self.range_end_spin.value() - 1
-        skip_flagged = self.skip_flagged_checkbox.isChecked()
+        keep_flagged = self.keep_flagged_checkbox.isChecked()
         skip_labeled = self.skip_labeled_checkbox.isChecked()
-        self.propagate_requested.emit("both", start, end, skip_flagged, skip_labeled)
+        self.propagate_requested.emit("both", start, end, keep_flagged, skip_labeled)
 
     def _update_button_states(self) -> None:
         """Update button enabled states based on current state."""

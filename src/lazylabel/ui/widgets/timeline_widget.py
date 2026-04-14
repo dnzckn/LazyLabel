@@ -165,6 +165,10 @@ class TimelineWidget(QWidget):
         """Set confidence scores for frames."""
         self._confidence_scores = dict(scores)
 
+    def set_frame_confidence(self, idx: int, score: float) -> None:
+        """Update confidence score for a single frame (live updates)."""
+        self._confidence_scores[idx] = score
+
     def set_current_frame(self, idx: int) -> None:
         """Update current frame indicator."""
         if 0 <= idx < self.total_frames:

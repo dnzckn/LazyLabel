@@ -3902,7 +3902,7 @@ class MainWindow(QMainWindow):
         direction: str,
         start: int,
         end: int,
-        skip_flagged: bool = True,
+        keep_flagged: bool = False,
         skip_labeled: bool = False,
     ):
         """Handle propagation request from sequence widget."""
@@ -3981,7 +3981,7 @@ class MainWindow(QMainWindow):
                 "direction": direction,
                 "start": start,
                 "end": end,
-                "skip_flagged": skip_flagged,
+                "keep_flagged": keep_flagged,
                 "skip_labeled": skip_labeled,
             }
 
@@ -4006,7 +4006,7 @@ class MainWindow(QMainWindow):
             return
 
         # Already initialized — proceed directly
-        self._start_propagation(direction, start, end, skip_flagged, skip_labeled)
+        self._start_propagation(direction, start, end, keep_flagged, skip_labeled)
 
     def _on_sequence_init_progress(self, message: str):
         """Handle progress updates from sequence init worker."""
@@ -4085,7 +4085,7 @@ class MainWindow(QMainWindow):
         direction: str,
         start: int,
         end: int,
-        skip_flagged: bool,
+        keep_flagged: bool,
         skip_labeled: bool = False,
     ):
         """Collect reference data and start annotation worker."""
@@ -4098,8 +4098,11 @@ class MainWindow(QMainWindow):
                 self.sequence_widget.stream_window_spin.value()
             )
 
-        # Track frames where any object was skipped (below threshold)
-        self._frames_with_skipped_objects: set[int] = set()
+        # Per-frame buffer: accumulate object results before committing.
+        # Lets us decide whether to keep partial masks based on keep_flagged.
+        # {frame_idx: {"passed_masks": {obj_id: mask}, "confidences": [..],
+        #              "any_failed": bool}}
+        self._frame_buffer: dict[int, dict] = {}
 
         # Precompute the set of labeled frames to skip (have NPZ on disk)
         self._skip_labeled_frames: set[int] = set()
@@ -4190,7 +4193,7 @@ class MainWindow(QMainWindow):
             "direction": direction,
             "start": start,
             "end": end,
-            "skip_flagged": skip_flagged,
+            "keep_flagged": keep_flagged,
             "skip_labeled": skip_labeled,
         }
 
@@ -4233,7 +4236,7 @@ class MainWindow(QMainWindow):
         direction = params["direction"]
         start = params["start"]
         end = params["end"]
-        skip_flagged = params["skip_flagged"]
+        keep_flagged = params["keep_flagged"]
 
         # Map direction string to enum
         direction_map = {
@@ -4243,8 +4246,8 @@ class MainWindow(QMainWindow):
         }
         prop_direction = direction_map.get(direction, PropagationDirection.FORWARD)
 
-        # Store skip_flagged for use in _on_propagation_finished
-        self._propagation_skip_flagged = skip_flagged
+        # Store keep_flagged for use in buffering and finalization
+        self._propagation_keep_flagged = keep_flagged
 
         # Compare range against timeline total (not SAM2 total which may differ
         # when frames are skipped due to dimension mismatch)
@@ -4254,13 +4257,15 @@ class MainWindow(QMainWindow):
             else self.propagation_manager.total_frames
         )
 
-        # Start propagation worker
+        # Start propagation worker.  When keep_flagged is False we want SAM2
+        # to skip mask generation for failed objects entirely (efficiency);
+        # when True we want masks for every object so the user can review them.
         self._propagation_worker = PropagationWorker(
             propagation_manager=self.propagation_manager,
             direction=prop_direction,
             range_start=start if start != 0 else None,
             range_end=end if end != timeline_total - 1 else None,
-            skip_flagged=skip_flagged,
+            skip_flagged=not keep_flagged,
         )
 
         # Connect worker signals
@@ -4343,7 +4348,7 @@ class MainWindow(QMainWindow):
             self.sequence_widget.set_propagation_status(f"Frame {current}/{total}")
 
     def _on_propagation_frame_done(self, frame_idx: int, result):
-        """Handle completion of propagation for a single frame."""
+        """Buffer object results for a frame. Commit happens on frame transition."""
         from PyQt6.QtWidgets import QApplication
 
         # Skip labeled frames — model still processes them for temporal
@@ -4358,83 +4363,115 @@ class MainWindow(QMainWindow):
             QApplication.processEvents()
             return
 
-        # When a new frame appears, finalize the previous frame's color.
-        # SAM2 yields all objects for a frame before moving to the next,
-        # so seeing a new frame_idx means the old one is complete.
-        prev_frame = getattr(self, "_propagation_prev_frame", None)
-        if prev_frame is not None and prev_frame != frame_idx:
-            self._finalize_propagation_frame_color(prev_frame)
-        self._propagation_prev_frame = frame_idx
-
-        # A float result means one object was below the confidence threshold
-        # (no mask created).  Track that this frame has an incomplete set of
-        # objects so finalization can flag it — a frame must have ALL objects
-        # to be considered propagated.  Also record the failed confidence so
-        # the tooltip shows the worst object, not just passing ones.
-        if isinstance(result, int | float):
-            if not hasattr(self, "_frames_with_skipped_objects"):
-                self._frames_with_skipped_objects = set()
-            self._frames_with_skipped_objects.add(frame_idx)
-            if self.sequence_view_mode:
-                is_reference = (
-                    frame_idx in self.sequence_view_mode.reference_frame_indices
-                )
-                if not is_reference:
-                    self.sequence_view_mode.record_skipped_object(
-                        frame_idx, float(result)
-                    )
+        # Skip reference frames - they keep their ground truth data
+        if (
+            self.sequence_view_mode
+            and frame_idx in self.sequence_view_mode.reference_frame_indices
+        ):
             QApplication.processEvents()
             return
 
-        # Update sequence view mode state
-        # Skip reference frames - they should keep their ground truth data
-        if self.sequence_view_mode:
-            is_reference = frame_idx in self.sequence_view_mode.reference_frame_indices
-            if is_reference:
-                return
+        # When a new frame appears, commit the previous frame's buffer.
+        # SAM2 yields all objects for a frame before moving to the next.
+        prev_frame = getattr(self, "_propagation_prev_frame", None)
+        if prev_frame is not None and prev_frame != frame_idx:
+            self._commit_frame_buffer(prev_frame)
+        self._propagation_prev_frame = frame_idx
 
-            # Skip empty masks (no positive pixels)
-            if result.mask is None or not result.mask.any():
-                return
+        # Ensure buffer exists
+        if not hasattr(self, "_frame_buffer"):
+            self._frame_buffer = {}
+        buf = self._frame_buffer.setdefault(
+            frame_idx,
+            {"passed_masks": {}, "confidences": [], "any_failed": False},
+        )
 
-            # Store mask and update cumulative confidence
-            masks = {result.obj_id: result.mask}
-            self.sequence_view_mode.mark_frame_propagated(
-                frame_idx, masks, result.confidence
+        threshold = (
+            self.propagation_manager.state.confidence_threshold
+            if self.propagation_manager
+            else 0.99
+        )
+
+        # Float result = failed object (below threshold, no mask created)
+        if isinstance(result, int | float):
+            buf["confidences"].append(float(result))
+            buf["any_failed"] = True
+            QApplication.processEvents()
+            return
+
+        # PropagationResult: passing object with mask (or low-conf w/ mask
+        # when keep_flagged=True and propagation manager didn't skip it)
+        if result.mask is None or not result.mask.any():
+            QApplication.processEvents()
+            return
+
+        buf["passed_masks"][result.obj_id] = result.mask
+        buf["confidences"].append(result.confidence)
+        if result.confidence < threshold:
+            buf["any_failed"] = True
+
+        # Cache obj_id → class mapping (survives propagation manager cleanup)
+        if (
+            self.sequence_view_mode
+            and result.obj_id not in self.sequence_view_mode._obj_class_map
+        ):
+            ref_ann = self.propagation_manager.get_reference_annotation_for_obj(
+                result.obj_id
             )
-
-            # Cache the obj_id → class mapping so it survives
-            # propagation manager cleanup (e.g. after trim)
-            if result.obj_id not in self.sequence_view_mode._obj_class_map:
-                ref_ann = self.propagation_manager.get_reference_annotation_for_obj(
-                    result.obj_id
+            if ref_ann:
+                self.sequence_view_mode.register_obj_class(
+                    result.obj_id, ref_ann.class_id, ref_ann.class_name
                 )
-                if ref_ann:
-                    self.sequence_view_mode.register_obj_class(
-                        result.obj_id, ref_ann.class_id, ref_ann.class_name
-                    )
 
-        # Process events to keep UI responsive during propagation
         QApplication.processEvents()
 
+    def _commit_frame_buffer(self, frame_idx: int) -> None:
+        """Commit buffered object results for a frame to sequence_view_mode.
+
+        If any object failed (below threshold):
+          - keep_flagged=True: store passing masks, record min confidence,
+            frame auto-flagged by the sub-threshold min
+          - keep_flagged=False (default): discard masks entirely, record only
+            the min confidence, flag the frame
+
+        Then push the final status and confidence to the timeline widget.
+        """
+        if not hasattr(self, "_frame_buffer") or not self.sequence_view_mode:
+            return
+        buf = self._frame_buffer.pop(frame_idx, None)
+        if buf is None or not buf["confidences"]:
+            return
+
+        min_conf = min(buf["confidences"])
+        passed_masks = buf["passed_masks"]
+        any_failed = buf["any_failed"]
+        keep_flagged = getattr(self, "_propagation_keep_flagged", False)
+
+        if any_failed and not keep_flagged:
+            # Discard all masks for this frame, only record confidence + flag
+            self.sequence_view_mode.record_skipped_object(frame_idx, min_conf)
+        elif passed_masks:
+            # Either all passed, or any_failed but user wants to keep masks
+            self.sequence_view_mode.mark_frame_propagated(
+                frame_idx, passed_masks, min_conf
+            )
+        else:
+            # No masks and no passing → just record confidence and flag
+            self.sequence_view_mode.record_skipped_object(frame_idx, min_conf)
+
+        # Push final state to timeline widget immediately (live updates)
+        self._finalize_propagation_frame_color(frame_idx)
+        if self.timeline_widget:
+            self.timeline_widget.set_frame_confidence(frame_idx, min_conf)
+
     def _finalize_propagation_frame_color(self, frame_idx: int) -> None:
-        """Set the final timeline color for a fully-processed frame."""
+        """Push the current status for a frame to the timeline widget."""
         if not self.sequence_view_mode or not self.timeline_widget:
             return
 
-        # If any object was skipped (below threshold), the frame is incomplete
-        # and must be flagged — all reference objects must be present.
-        skipped = getattr(self, "_frames_with_skipped_objects", set())
-        if frame_idx in skipped:
-            self.sequence_view_mode.flag_frame(frame_idx)
-            self.timeline_widget.set_frame_status(frame_idx, "flagged", immediate=True)
-            return
-
         status = self.sequence_view_mode.get_frame_status(frame_idx)
-        if status == "flagged":
-            self.timeline_widget.set_frame_status(frame_idx, "flagged", immediate=True)
-        elif status in ("propagated", "pending"):
-            # Check cumulative confidence for the final verdict
+        if status in ("propagated", "pending"):
+            # Re-check confidence as a safety net
             conf = self.sequence_view_mode.get_confidence_score(frame_idx)
             threshold = (
                 self.propagation_manager.state.confidence_threshold
@@ -4443,39 +4480,20 @@ class MainWindow(QMainWindow):
             )
             if conf < threshold:
                 self.sequence_view_mode.flag_frame(frame_idx)
-                self.timeline_widget.set_frame_status(
-                    frame_idx, "flagged", immediate=True
-                )
-            else:
-                self.timeline_widget.set_frame_status(
-                    frame_idx, "propagated", immediate=True
-                )
+                status = "flagged"
+
+        self.timeline_widget.set_frame_status(frame_idx, status, immediate=True)
 
     def _on_propagation_finished(self):
         """Handle propagation completion."""
-        # Finalize the last frame that was being processed
+        # Commit the last frame's buffer (no following frame to trigger it)
         prev_frame = getattr(self, "_propagation_prev_frame", None)
         if prev_frame is not None:
-            self._finalize_propagation_frame_color(prev_frame)
+            self._commit_frame_buffer(prev_frame)
             self._propagation_prev_frame = None
 
         if self.sequence_widget:
             self.sequence_widget.end_propagation()
-
-        # Clean up stored masks for frames that are truly flagged (cumulative
-        # confidence below threshold).  Use sequence_view_mode's per-frame
-        # status — not propagation_manager.flagged_frames which is per-object
-        # and would discard frames where only one object was low-confidence.
-        if (
-            getattr(self, "_propagation_skip_flagged", True)
-            and self.propagation_manager
-            and self.sequence_view_mode
-        ):
-            for frame_idx in self.sequence_view_mode.get_flagged_frames():
-                self.propagation_manager.propagated_frames.discard(frame_idx)
-                if frame_idx in self.propagation_manager.state.frame_results:
-                    del self.propagation_manager.state.frame_results[frame_idx]
-                self.sequence_view_mode.clear_propagated_mask(frame_idx)
 
         # Update flagged and propagated counts
         if self.sequence_view_mode and self.sequence_widget:
@@ -4484,7 +4502,8 @@ class MainWindow(QMainWindow):
             self.sequence_widget.set_flagged_count(flagged_count)
             self.sequence_widget.set_propagated_count(propagated_count)
 
-        # Update timeline confidence scores
+        # Sync all confidence scores to timeline widget as a safety net
+        # (live updates during buffer commits should already have them)
         if self.sequence_view_mode and self.timeline_widget:
             scores = self.sequence_view_mode.get_all_confidence_scores()
             if scores:

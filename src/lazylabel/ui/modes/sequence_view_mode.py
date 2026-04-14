@@ -393,13 +393,13 @@ class SequenceViewMode(QObject):
     def clear_propagated_mask(self, idx: int) -> None:
         """Clear propagated masks for a specific frame.
 
-        Used when skipping flagged frames to remove any partially stored masks.
+        Only removes masks — confidence scores are retained so the user can
+        still see how the frame scored (and potentially lower the threshold
+        to un-flag it later).
         """
         with self._lock:
             if idx in self._propagated_masks:
                 del self._propagated_masks[idx]
-            if idx in self._confidence_scores:
-                del self._confidence_scores[idx]
 
     def get_all_confidence_scores(self) -> dict[int, float]:
         """Get confidence scores for all frames that have them."""

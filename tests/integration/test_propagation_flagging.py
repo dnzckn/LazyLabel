@@ -60,11 +60,16 @@ def timeline():
     """Create a mock timeline widget."""
     tl = MagicMock()
     tl.frame_statuses = {}
+    tl.confidence_scores = {}
 
     def set_status(idx, status, immediate=False):
         tl.frame_statuses[idx] = status
 
+    def set_frame_confidence(idx, score):
+        tl.confidence_scores[idx] = score
+
     tl.set_frame_status = MagicMock(side_effect=set_status)
+    tl.set_frame_confidence = MagicMock(side_effect=set_frame_confidence)
     return tl
 
 
@@ -85,7 +90,8 @@ def mw_handler(svm, prop_mgr, timeline):
     handler._propagation_worker = None
     handler._propagation_prev_frame = None
     handler._skip_labeled_frames = set()
-    handler._frames_with_skipped_objects = set()
+    handler._frame_buffer = {}
+    handler._propagation_keep_flagged = False
 
     # Bind real methods
     handler._finalize_propagation_frame_color = (
@@ -94,6 +100,7 @@ def mw_handler(svm, prop_mgr, timeline):
     handler._on_propagation_frame_done = MainWindow._on_propagation_frame_done.__get__(
         handler
     )
+    handler._commit_frame_buffer = MainWindow._commit_frame_buffer.__get__(handler)
     return handler
 
 
@@ -349,6 +356,86 @@ class TestFrameDoneToFinalization:
 
         assert timeline.frame_statuses.get(1) == "flagged"
         assert svm.get_confidence_score(1) == 0.800
+
+    def test_flagged_frame_no_masks_when_keep_flagged_false(
+        self, mw_handler, svm, timeline
+    ):
+        """Default (keep_flagged=False): mixed pass/fail frame stores no masks."""
+        mw_handler._propagation_keep_flagged = False
+        mask = _make_mask()
+
+        # Object 1 passes, object 2 fails
+        mw_handler._on_propagation_frame_done(
+            1, FakePropagationResult(1, 1, mask, 0.995)
+        )
+        mw_handler._on_propagation_frame_done(1, 0.850)
+
+        # Trigger commit via frame 2
+        mw_handler._on_propagation_frame_done(
+            2, FakePropagationResult(2, 1, mask, 0.997)
+        )
+
+        assert timeline.frame_statuses.get(1) == "flagged"
+        assert svm.get_confidence_score(1) == 0.850
+        # No masks stored for the flagged frame
+        assert svm.get_propagated_masks(1) is None
+
+    def test_flagged_frame_keeps_masks_when_keep_flagged_true(
+        self, mw_handler, svm, timeline
+    ):
+        """keep_flagged=True: mixed pass/fail frame keeps the passing mask."""
+        mw_handler._propagation_keep_flagged = True
+        mask = _make_mask()
+
+        mw_handler._on_propagation_frame_done(
+            1, FakePropagationResult(1, 1, mask, 0.995)
+        )
+        mw_handler._on_propagation_frame_done(1, 0.850)
+
+        # Trigger commit
+        mw_handler._on_propagation_frame_done(
+            2, FakePropagationResult(2, 1, mask, 0.997)
+        )
+
+        assert timeline.frame_statuses.get(1) == "flagged"
+        assert svm.get_confidence_score(1) == 0.850
+        # Passing mask is preserved
+        masks = svm.get_propagated_masks(1)
+        assert masks is not None
+        assert 1 in masks  # obj_id 1 mask was kept
+
+    def test_live_confidence_update_during_propagation(self, mw_handler, timeline):
+        """Timeline receives confidence scores live as each frame commits."""
+        mw_handler._propagation_keep_flagged = False
+        mask = _make_mask()
+
+        # Frame 1: passing object, then move to frame 2 to trigger commit
+        mw_handler._on_propagation_frame_done(
+            1, FakePropagationResult(1, 1, mask, 0.995)
+        )
+        mw_handler._on_propagation_frame_done(
+            2, FakePropagationResult(2, 1, mask, 0.997)
+        )
+
+        # Frame 1's confidence should be pushed to timeline live
+        assert timeline.confidence_scores.get(1) == 0.995
+
+    def test_live_confidence_update_for_flagged_frame(self, mw_handler, timeline):
+        """Flagged frames also get live confidence updates (the worst score)."""
+        mw_handler._propagation_keep_flagged = False
+        mask = _make_mask()
+
+        mw_handler._on_propagation_frame_done(
+            1, FakePropagationResult(1, 1, mask, 0.995)
+        )
+        mw_handler._on_propagation_frame_done(1, 0.750)
+        mw_handler._on_propagation_frame_done(
+            2, FakePropagationResult(2, 1, mask, 0.997)
+        )
+
+        # Flagged frame's tooltip should show the worst (failing) confidence
+        assert timeline.frame_statuses.get(1) == "flagged"
+        assert timeline.confidence_scores.get(1) == 0.750
 
     def test_skip_labeled_frames_stay_skipped(self, mw_handler, timeline):
         """Skip-labeled frames show as skipped regardless of result."""

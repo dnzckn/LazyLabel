@@ -50,10 +50,10 @@ class TestSequenceWidgetCreation:
         assert sequence_widget.range_start_spin is not None
         assert sequence_widget.range_end_spin is not None
 
-    def test_skip_flagged_checkbox_exists(self, sequence_widget):
-        """Test that skip flagged checkbox exists and is checked by default."""
-        assert sequence_widget.skip_flagged_checkbox is not None
-        assert sequence_widget.skip_flagged_checkbox.isChecked()
+    def test_keep_flagged_checkbox_exists(self, sequence_widget):
+        """Test that keep flagged masks checkbox exists and is unchecked by default."""
+        assert sequence_widget.keep_flagged_checkbox is not None
+        assert not sequence_widget.keep_flagged_checkbox.isChecked()
 
 
 class TestSetTotalFrames:
@@ -354,25 +354,25 @@ class TestSignals:
         assert start == 9
         assert end == 79
 
-    def test_propagate_signal_includes_skip_flagged(self, sequence_widget, qtbot):
-        """Test that propagate signal includes skip_flagged parameter."""
+    def test_propagate_signal_keep_flagged_checked(self, sequence_widget, qtbot):
+        """Propagate signal should pass True when keep_flagged is checked."""
         sequence_widget.set_total_frames(100)
         sequence_widget.add_reference_frame(50)
-        sequence_widget.skip_flagged_checkbox.setChecked(True)
+        sequence_widget.keep_flagged_checkbox.setChecked(True)
         with qtbot.waitSignal(sequence_widget.propagate_requested) as blocker:
             sequence_widget.propagate_btn.click()
-        direction, start, end, skip_flagged, skip_labeled = blocker.args
-        assert skip_flagged is True
+        direction, start, end, keep_flagged, skip_labeled = blocker.args
+        assert keep_flagged is True
 
-    def test_propagate_signal_skip_flagged_unchecked(self, sequence_widget, qtbot):
-        """Test that propagate signal passes False when skip_flagged is unchecked."""
+    def test_propagate_signal_keep_flagged_unchecked(self, sequence_widget, qtbot):
+        """Propagate signal should pass False when keep_flagged is unchecked."""
         sequence_widget.set_total_frames(100)
         sequence_widget.add_reference_frame(50)
-        sequence_widget.skip_flagged_checkbox.setChecked(False)
+        sequence_widget.keep_flagged_checkbox.setChecked(False)
         with qtbot.waitSignal(sequence_widget.propagate_requested) as blocker:
             sequence_widget.propagate_btn.click()
-        direction, start, end, skip_flagged, skip_labeled = blocker.args
-        assert skip_flagged is False
+        direction, start, end, keep_flagged, skip_labeled = blocker.args
+        assert keep_flagged is False
 
 
 class TestAddAllLabeledButton:

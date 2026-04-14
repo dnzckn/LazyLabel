@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.24] - 2026-04-14
+
+### Changed
+
+- Replaced `skip_flagged` parameter with `keep_flagged` — inverted semantics for clearer intent ("Keep Flagged Masks" checkbox, unchecked by default)
+- Propagation frame results now buffered per-frame before committing — enables atomic keep-or-discard decision when any object fails
+- When `keep_flagged=False` (default), flagged frames have all masks discarded; when `keep_flagged=True`, passing masks are retained for manual review
+- `clear_propagated_mask()` now retains confidence scores so users can see how a frame scored even after masks are cleared
+- Live confidence updates pushed to timeline as each frame commits instead of batch at the end
+- Removed post-propagation cleanup that deleted masks for flagged frames (now handled at commit time)
+
+### Added
+
+- `set_frame_confidence()` on `TimelineWidget` for per-frame live confidence updates
+- 5 new integration tests covering keep_flagged behavior and live confidence updates
+
 ## [1.7.23] - 2026-04-07
 
 ### Fixed
@@ -982,6 +998,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [1.0.2]: https://github.com/dnzckn/LazyLabel/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/dnzckn/LazyLabel/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/dnzckn/LazyLabel/releases/tag/v1.0.0
+[1.7.24]: https://github.com/dnzckn/LazyLabel/compare/v1.7.23...v1.7.24
 [1.7.23]: https://github.com/dnzckn/LazyLabel/compare/v1.7.22...v1.7.23
 [1.7.22]: https://github.com/dnzckn/LazyLabel/compare/v1.7.21...v1.7.22
 [1.7.21]: https://github.com/dnzckn/LazyLabel/compare/v1.7.20...v1.7.21
