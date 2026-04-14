@@ -4,13 +4,13 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "lazylabel-gui"
-version = "1.7.24"
+version = "2.0.0"
 authors = [
   { name="Deniz N. Cakan", email="deniz.n.cakan@gmail.com" },
 ]
 description = "An image segmentation GUI for generating ML ready mask tensors and annotations."
 readme = "README.md"
-license = "MIT"
+license = "Apache-2.0"
 requires-python = ">=3.10"
 classifiers = [
     "Programming Language :: Python :: 3",
