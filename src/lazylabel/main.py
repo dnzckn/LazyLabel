@@ -10,6 +10,16 @@ if sys.stdout is None:
 if sys.stderr is None:
     sys.stderr = open(os.devnull, "w")  # noqa: SIM115
 
+# Under WSL, Qt's default Wayland plugin frequently hangs on QApplication()
+# because WSLg's Wayland socket is unreliable. Force xcb (X11), which works
+# via XWayland. Skip if the user has explicitly chosen a platform.
+if (
+    sys.platform == "linux"
+    and "QT_QPA_PLATFORM" not in os.environ
+    and os.environ.get("WSL_DISTRO_NAME")
+):
+    os.environ["QT_QPA_PLATFORM"] = "xcb"
+
 from lazylabel.utils.logger import logger
 from lazylabel.utils.startup import startup_display
 
@@ -30,11 +40,11 @@ def main():
     startup_display.update_step(3, "Applying theme")
     logger.info("Applying theme...")
     try:
-        from lazylabel.config.paths import AppPaths
+        from lazylabel.config.paths import Paths
         from lazylabel.config.settings import Settings
         from lazylabel.ui.theme import apply_theme
 
-        paths = AppPaths()
+        paths = Paths()
         settings = Settings.load_from_file(str(paths.settings_file))
         theme = "dark" if settings.dark_mode else "light"
         apply_theme(theme)

@@ -4066,7 +4066,7 @@ class MainWindow(QMainWindow):
                 params["direction"],
                 params["start"],
                 params["end"],
-                params["skip_flagged"],
+                params["keep_flagged"],
                 params.get("skip_labeled", False),
             )
 

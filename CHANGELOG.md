@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.1] - 2026-04-25
+
+### Fixed
+
+- `KeyError: 'skip_flagged'` after sequence init when continuing a pending propagation — leftover dict-key reference from the rename to `keep_flagged`
+- Propagation modes disagreed on absent objects: frames where SAM2 emitted empty masks for some objects (because they weren't visible in that frame) showed 0 confidence and got flagged with `keep_flagged=OFF`, but passed cleanly with `keep_flagged=ON`. Empty masks (confidence=0) are now silently dropped in both modes since they signal "object not in this frame," not a tracking failure. Sub-threshold but non-empty masks still flag the frame in both modes (uncertain tracking)
+- WSL launch hang — Qt's default Wayland plugin frequently stalls on `QApplication()` under WSLg; `main.py` now forces `xcb` (X11 via XWayland) when running under WSL unless the user has set `QT_QPA_PLATFORM`
+- `AppPaths` import in `main.py` corrected to `Paths` (the actual class name in `lazylabel.config.paths`)
+
+### Added
+
+- 8 unit tests in `TestPropagateRangeEmptyMaskHandling` covering empty-mask drop semantics, sub-threshold yield types, mixed-object frames, and skip_flagged-mode parity for absent objects
+
 ## [2.0.0] - 2026-04-14
 
 ### Changed
@@ -1005,6 +1018,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [1.0.2]: https://github.com/dnzckn/LazyLabel/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/dnzckn/LazyLabel/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/dnzckn/LazyLabel/releases/tag/v1.0.0
+[2.0.1]: https://github.com/dnzckn/LazyLabel/compare/v2.0.0...v2.0.1
 [2.0.0]: https://github.com/dnzckn/LazyLabel/compare/v1.7.24...v2.0.0
 [1.7.24]: https://github.com/dnzckn/LazyLabel/compare/v1.7.23...v1.7.24
 [1.7.23]: https://github.com/dnzckn/LazyLabel/compare/v1.7.22...v1.7.23

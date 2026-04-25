@@ -748,6 +748,18 @@ class PropagationManager:
                 )
                 continue
 
+            # Skip empty masks (no positive pixels): object not visible in
+            # this frame. Drop silently in both skip_flagged paths — empty
+            # masks always have confidence=0, which would otherwise poison
+            # the frame's min_conf and falsely flag frames where some
+            # reference objects simply aren't in scene.
+            if mask is None or not mask.any():
+                logger.debug(
+                    f"PropagationManager: Skipping empty mask for frame {timeline_idx}, "
+                    f"obj_id={obj_id}"
+                )
+                continue
+
             # Check if this is a low confidence frame
             is_flagged = confidence < self.state.confidence_threshold
 
@@ -761,14 +773,6 @@ class PropagationManager:
                 )
                 frame_count += 1
                 yield timeline_idx, total, confidence
-                continue
-
-            # Skip empty masks (no positive pixels)
-            if mask is None or not mask.any():
-                logger.debug(
-                    f"PropagationManager: Skipping empty mask for frame {timeline_idx}, "
-                    f"obj_id={obj_id}"
-                )
                 continue
 
             # Get image path for this frame (SAM2 space index)
@@ -1080,16 +1084,20 @@ class PropagationManager:
                 if timeline_idx in previously_done:
                     continue
 
+                # Skip empty masks: object not visible in this frame. Drop
+                # silently in both skip_flagged paths — empty masks always
+                # have confidence=0, which would otherwise poison the
+                # frame's min_conf and falsely flag frames where some
+                # reference objects simply aren't in scene.
+                if mask is None or not mask.any():
+                    continue
+
                 # Check confidence
                 is_flagged = confidence < self.state.confidence_threshold
 
                 if is_flagged and skip_flagged:
                     self.state.flagged_frames.add(timeline_idx)
                     yield timeline_idx, total, confidence
-                    continue
-
-                # Skip empty masks
-                if mask is None or not mask.any():
                     continue
 
                 # Get image path from stored paths

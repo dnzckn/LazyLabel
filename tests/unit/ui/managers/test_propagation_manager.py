@@ -753,3 +753,261 @@ class TestEnums:
         assert FrameStatus.REFERENCE.value == "reference"
         assert FrameStatus.PROPAGATED.value == "propagated"
         assert FrameStatus.FLAGGED.value == "flagged"
+
+
+class TestPropagateRangeEmptyMaskHandling:
+    """Tests for empty-mask handling in _propagate_range.
+
+    SAM2 yields empty masks (confidence=0) for any object not visible in
+    the current frame — that's normal, not a tracking failure. Empty masks
+    must be silently dropped in BOTH skip_flagged paths so they don't
+    poison the per-frame min confidence and falsely flag frames where
+    some reference objects simply aren't in scene.
+
+    Sub-threshold but non-empty masks are a different signal (uncertain
+    tracking) and DO get reported to flag the frame in both modes.
+    """
+
+    @staticmethod
+    def _setup_manager(
+        propagation_manager,
+        mock_main_window,
+        mock_sam2_model,
+        sam2_yields,
+        threshold=0.9,
+    ):
+        """Wire a propagation_manager to a mocked SAM2 model that yields
+        a fixed sequence of (frame_idx, obj_id, mask, confidence) tuples.
+        """
+        mock_main_window.model_manager.sam_model = mock_sam2_model
+        mock_sam2_model.propagate_in_video = MagicMock(return_value=iter(sam2_yields))
+        mock_sam2_model.video_image_paths = [f"/img/{i}.png" for i in range(10)]
+        propagation_manager.state.total_frames = 10
+        propagation_manager.state.confidence_threshold = threshold
+        propagation_manager.state.sam2_to_timeline = {i: i for i in range(10)}
+        propagation_manager.state.reference_frame_indices = set()
+        propagation_manager.state.flagged_frames = set()
+        propagation_manager.state.frame_results = {}
+        propagation_manager.state.propagated_frames = set()
+
+    @staticmethod
+    def _full_mask():
+        return np.ones((4, 4), dtype=np.uint8)
+
+    @staticmethod
+    def _empty_mask():
+        return np.zeros((4, 4), dtype=np.uint8)
+
+    def test_empty_mask_dropped_when_skip_flagged_true(
+        self, propagation_manager, mock_main_window, mock_sam2_model
+    ):
+        """Empty mask (object absent) must NOT yield 0.0 in skip_flagged=True
+        mode — that would poison the frame's min_conf to 0 even though the
+        frame's other objects passed cleanly.
+        """
+        self._setup_manager(
+            propagation_manager,
+            mock_main_window,
+            mock_sam2_model,
+            [(1, 1, self._empty_mask(), 0.0)],
+        )
+
+        results = list(
+            propagation_manager._propagate_range(
+                start_idx=0, end_idx=2, reverse=False, skip_flagged=True
+            )
+        )
+
+        assert results == [], "empty masks must be silently dropped, not yielded as 0.0"
+
+    def test_empty_mask_dropped_when_skip_flagged_false(
+        self, propagation_manager, mock_main_window, mock_sam2_model
+    ):
+        """Empty mask must also be dropped silently in skip_flagged=False mode.
+        Same SAM2 output should produce the same yields in both modes for
+        absent objects.
+        """
+        self._setup_manager(
+            propagation_manager,
+            mock_main_window,
+            mock_sam2_model,
+            [(1, 1, self._empty_mask(), 0.0)],
+        )
+
+        results = list(
+            propagation_manager._propagate_range(
+                start_idx=0, end_idx=2, reverse=False, skip_flagged=False
+            )
+        )
+
+        assert results == []
+
+    def test_subthreshold_nonempty_yields_float_when_skip_flagged_true(
+        self, propagation_manager, mock_main_window, mock_sam2_model
+    ):
+        """Sub-threshold but non-empty mask = uncertain tracking. In
+        skip_flagged=True mode it yields the float confidence so the buffer
+        flags the frame without keeping the mask.
+        """
+        self._setup_manager(
+            propagation_manager,
+            mock_main_window,
+            mock_sam2_model,
+            [(1, 1, self._full_mask(), 0.5)],
+            threshold=0.9,
+        )
+
+        results = list(
+            propagation_manager._propagate_range(
+                start_idx=0, end_idx=2, reverse=False, skip_flagged=True
+            )
+        )
+
+        assert len(results) == 1
+        timeline_idx, _total, payload = results[0]
+        assert timeline_idx == 1
+        assert isinstance(payload, float)
+        assert payload == pytest.approx(0.5)
+
+    def test_subthreshold_nonempty_yields_result_when_skip_flagged_false(
+        self, propagation_manager, mock_main_window, mock_sam2_model
+    ):
+        """In skip_flagged=False mode the same uncertain mask yields a
+        full PropagationResult so the user can review it. The buffer still
+        flags the frame because confidence < threshold.
+        """
+        self._setup_manager(
+            propagation_manager,
+            mock_main_window,
+            mock_sam2_model,
+            [(1, 1, self._full_mask(), 0.5)],
+            threshold=0.9,
+        )
+
+        results = list(
+            propagation_manager._propagate_range(
+                start_idx=0, end_idx=2, reverse=False, skip_flagged=False
+            )
+        )
+
+        assert len(results) == 1
+        timeline_idx, _total, payload = results[0]
+        assert timeline_idx == 1
+        assert isinstance(payload, PropagationResult)
+        assert payload.confidence == pytest.approx(0.5)
+        assert payload.mask is not None and payload.mask.any()
+
+    def test_high_confidence_yields_result_in_both_modes(
+        self, propagation_manager, mock_main_window, mock_sam2_model
+    ):
+        """High-confidence non-empty masks always yield as PropagationResult."""
+        for skip_flagged in (True, False):
+            self._setup_manager(
+                propagation_manager,
+                mock_main_window,
+                mock_sam2_model,
+                [(1, 1, self._full_mask(), 0.99)],
+                threshold=0.9,
+            )
+            results = list(
+                propagation_manager._propagate_range(
+                    start_idx=0, end_idx=2, reverse=False, skip_flagged=skip_flagged
+                )
+            )
+            assert len(results) == 1
+            _, _, payload = results[0]
+            assert isinstance(payload, PropagationResult), (
+                f"skip_flagged={skip_flagged} should yield PropagationResult"
+            )
+            assert payload.confidence == pytest.approx(0.99)
+
+    def test_mixed_objects_empty_mask_does_not_poison_passing_objects(
+        self, propagation_manager, mock_main_window, mock_sam2_model
+    ):
+        """When a frame has a passing object AND an absent (empty-mask) object,
+        only the passing object is yielded. The absent object must NOT inject
+        a 0.0 confidence — that was the original bug where keep_flagged=OFF
+        showed 0 confidence on frames that genuinely passed.
+        """
+        self._setup_manager(
+            propagation_manager,
+            mock_main_window,
+            mock_sam2_model,
+            [
+                (1, 1, self._full_mask(), 0.99),  # obj 1: visible, passes
+                (1, 2, self._empty_mask(), 0.0),  # obj 2: not in this frame
+            ],
+            threshold=0.9,
+        )
+
+        results = list(
+            propagation_manager._propagate_range(
+                start_idx=0, end_idx=2, reverse=False, skip_flagged=True
+            )
+        )
+
+        assert len(results) == 1, "empty-mask object must not produce a yield"
+        _, _, payload = results[0]
+        assert isinstance(payload, PropagationResult)
+        assert payload.obj_id == 1
+        assert payload.confidence == pytest.approx(0.99)
+
+    def test_skip_flagged_modes_agree_for_absent_objects(
+        self, propagation_manager, mock_main_window, mock_sam2_model
+    ):
+        """Regression guard: for the same SAM2 output containing a passing
+        object plus an absent (empty-mask) object, both skip_flagged modes
+        must yield the same single passing PropagationResult. Previously
+        skip_flagged=True yielded an extra 0.0, making the same frame look
+        like a failure under keep_flagged=OFF but a success under keep_flagged=ON.
+        """
+        sam2_yields = [
+            (1, 1, self._full_mask(), 0.99),
+            (1, 2, self._empty_mask(), 0.0),
+        ]
+
+        self._setup_manager(
+            propagation_manager, mock_main_window, mock_sam2_model, list(sam2_yields)
+        )
+        skip_true = list(
+            propagation_manager._propagate_range(
+                start_idx=0, end_idx=2, reverse=False, skip_flagged=True
+            )
+        )
+
+        self._setup_manager(
+            propagation_manager, mock_main_window, mock_sam2_model, list(sam2_yields)
+        )
+        skip_false = list(
+            propagation_manager._propagate_range(
+                start_idx=0, end_idx=2, reverse=False, skip_flagged=False
+            )
+        )
+
+        assert len(skip_true) == len(skip_false) == 1
+        true_payload = skip_true[0][2]
+        false_payload = skip_false[0][2]
+        assert isinstance(true_payload, PropagationResult)
+        assert isinstance(false_payload, PropagationResult)
+        assert true_payload.confidence == false_payload.confidence
+
+    def test_empty_mask_does_not_add_to_flagged_frames(
+        self, propagation_manager, mock_main_window, mock_sam2_model
+    ):
+        """Empty-mask drops should not pollute state.flagged_frames either —
+        absent objects aren't a flagging signal in either mode.
+        """
+        self._setup_manager(
+            propagation_manager,
+            mock_main_window,
+            mock_sam2_model,
+            [(1, 1, self._empty_mask(), 0.0)],
+        )
+
+        list(
+            propagation_manager._propagate_range(
+                start_idx=0, end_idx=2, reverse=False, skip_flagged=True
+            )
+        )
+
+        assert 1 not in propagation_manager.state.flagged_frames
