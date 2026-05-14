@@ -16,6 +16,10 @@ from typing import TYPE_CHECKING
 from PyQt6.QtCore import QPointF
 from PyQt6.QtWidgets import QGraphicsEllipseItem, QGraphicsRectItem
 
+# QGraphicsEllipseItem is used at runtime by the circle rubber-band setter below;
+# the alias makes the typing intent explicit.
+_RubberBandCircle = QGraphicsEllipseItem
+
 if TYPE_CHECKING:
     from PyQt6.QtWidgets import QGraphicsItem, QGraphicsPixmapItem, QGraphicsScene
 
@@ -45,6 +49,9 @@ class DrawingStateManager:
         # Bounding box state
         self._rubber_band_rect: QGraphicsRectItem | None = None
         self._drag_start_pos: QPointF | None = None
+
+        # Circle state
+        self._rubber_band_circle: _RubberBandCircle | None = None
 
         # AI mode state
         self._ai_click_start_pos: QPointF | None = None
@@ -182,6 +189,24 @@ class DrawingStateManager:
         self._rubber_band_rect = None
         self._drag_start_pos = None
 
+    # ========== Circle Properties ==========
+
+    @property
+    def rubber_band_circle(self):
+        """Get the circle rubber-band item."""
+        return self._rubber_band_circle
+
+    @rubber_band_circle.setter
+    def rubber_band_circle(self, value) -> None:
+        """Set the circle rubber-band item."""
+        self._rubber_band_circle = value
+
+    def clear_circle(self, scene: QGraphicsScene | None = None) -> None:
+        """Clear circle drawing state."""
+        if scene and self._rubber_band_circle and self._rubber_band_circle.scene():
+            scene.removeItem(self._rubber_band_circle)
+        self._rubber_band_circle = None
+
     # ========== AI Mode Properties ==========
 
     @property
@@ -301,6 +326,7 @@ class DrawingStateManager:
         self.clear_points(scene)
         self.clear_polygon(scene)
         self.clear_bbox(scene)
+        self.clear_circle(scene)
         self.clear_ai_state(scene)
         self.clear_preview(scene)
         self.end_polygon_drag()

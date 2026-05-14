@@ -72,6 +72,8 @@ class UndoRedoManager(QObject):
             self._undo_move_polygon(last_action)
         elif action_type == "move_vertex":
             self._undo_move_vertex(last_action)
+        elif action_type == "move_circle":
+            self._undo_move_circle(last_action)
         elif action_type == "multi_view_polygon_point":
             self._undo_multi_view_polygon_point(last_action)
         elif action_type == "erase_segments":
@@ -111,6 +113,8 @@ class UndoRedoManager(QObject):
             self._redo_move_polygon(last_action)
         elif action_type == "move_vertex":
             self._redo_move_vertex(last_action)
+        elif action_type == "move_circle":
+            self._redo_move_circle(last_action)
         elif action_type == "multi_view_polygon_point":
             self._redo_multi_view_polygon_point(last_action)
         elif action_type == "erase_segments":
@@ -503,6 +507,67 @@ class UndoRedoManager(QObject):
             mw._highlight_selected_segments()
 
         mw._show_notification("Redid: Move Vertex")
+
+    def _undo_move_circle(self, action: dict) -> None:
+        """Undo a circle move/resize action."""
+        self._apply_move_circle(action, redo=False)
+
+    def _redo_move_circle(self, action: dict) -> None:
+        """Redo a circle move/resize action."""
+        self._apply_move_circle(action, redo=True)
+
+    def _apply_move_circle(self, action: dict, redo: bool) -> None:
+        mw = self.main_window
+        segment_index = action.get("segment_index")
+        viewer_mode = action.get("viewer_mode", "single")
+        viewer_index = action.get("viewer_index")
+
+        if segment_index is None:
+            mw._show_warning_notification("Cannot undo/redo: Missing circle data")
+            (self.action_history if redo else self.redo_history).pop()
+            return
+
+        center_key = "new_center" if redo else "old_center"
+        radius_key = "new_radius_pt" if redo else "old_radius_pt"
+        center = action.get(center_key)
+        radius_pt = action.get(radius_key)
+        if center is None or radius_pt is None:
+            mw._show_warning_notification("Cannot undo/redo: Missing circle data")
+            (self.action_history if redo else self.redo_history).pop()
+            return
+
+        if viewer_mode == "multi" and viewer_index is not None:
+            seg_mgr = mw.multi_view_segment_managers[viewer_index]
+            if segment_index >= len(seg_mgr.segments):
+                mw._show_warning_notification(
+                    "Cannot undo/redo: Segment no longer exists"
+                )
+                (self.action_history if redo else self.redo_history).pop()
+                return
+            seg = seg_mgr.segments[segment_index]
+            if "views" in seg and viewer_index in seg["views"]:
+                seg["views"][viewer_index]["vertices"] = [list(center), list(radius_pt)]
+            else:
+                seg["vertices"] = [list(center), list(radius_pt)]
+            mw._update_multi_view_polygon_item(viewer_index, segment_index)
+            mw._display_multi_view_edit_handles()
+            mw._highlight_multi_view_selected_segments()
+        else:
+            if segment_index >= len(mw.segment_manager.segments):
+                mw._show_warning_notification(
+                    "Cannot undo/redo: Segment no longer exists"
+                )
+                (self.action_history if redo else self.redo_history).pop()
+                return
+            mw.segment_manager.segments[segment_index]["vertices"] = [
+                list(center),
+                list(radius_pt),
+            ]
+            mw._update_polygon_item(segment_index)
+            mw._display_edit_handles()
+            mw._highlight_selected_segments()
+
+        mw._show_notification("Redid: Move Circle" if redo else "Undid: Move Circle")
 
     # --- Erase/Delete Segments ---
 

@@ -36,6 +36,10 @@ class ModeManager:
         """Set bounding box drawing mode."""
         self.set_mode("bbox")
 
+    def set_circle_mode(self) -> None:
+        """Set circle drawing mode."""
+        self.set_mode("circle")
+
     def toggle_selection_mode(self) -> None:
         """Toggle selection mode."""
         self.toggle_mode("selection")
@@ -52,9 +56,10 @@ class ModeManager:
         """Handle edit mode request with validation."""
         mw = self.main_window
 
+        editable_types = ("Polygon", "Circle")
         if mw.view_mode == "multi":
             # Multi-view: check multi-view segment managers and tables
-            has_selected_polygon = False
+            has_editable = False
             for viewer_idx in range(len(mw.multi_view_segment_managers)):
                 segment_manager = mw.multi_view_segment_managers[viewer_idx]
                 table = mw.multi_view_segment_tables[viewer_idx]
@@ -68,39 +73,39 @@ class ModeManager:
                             seg_idx = int(item.text())
                             if seg_idx < len(segment_manager.segments):
                                 seg = segment_manager.segments[seg_idx]
-                                if seg.get("type") == "Polygon":
-                                    has_selected_polygon = True
+                                if seg.get("type") in editable_types:
+                                    has_editable = True
                                     break
                         except ValueError:
                             continue
-                if has_selected_polygon:
+                if has_editable:
                     break
 
-            if not has_selected_polygon:
-                mw._show_error_notification("No polygons selected!")
+            if not has_editable:
+                mw._show_error_notification("No editable shapes selected!")
                 return
         else:
             # Single-view: check main segment manager
-            polygon_segments = [
+            editable_segments = [
                 seg
                 for seg in mw.segment_manager.segments
-                if seg.get("type") == "Polygon"
+                if seg.get("type") in editable_types
             ]
 
-            if not polygon_segments:
-                mw._show_error_notification("No polygons selected!")
+            if not editable_segments:
+                mw._show_error_notification("No editable shapes selected!")
                 return
 
-            # Check if any polygons are actually selected
+            # Check if any are actually selected
             selected_indices = mw.right_panel.get_selected_segment_indices()
-            selected_polygons = [
+            selected_editable = [
                 i
                 for i in selected_indices
-                if mw.segment_manager.segments[i].get("type") == "Polygon"
+                if mw.segment_manager.segments[i].get("type") in editable_types
             ]
 
-            if not selected_polygons:
-                mw._show_error_notification("No polygons selected!")
+            if not selected_editable:
+                mw._show_error_notification("No editable shapes selected!")
                 return
 
         # Enter edit mode if validation passes
@@ -128,6 +133,7 @@ class ModeManager:
             "ai": Qt.CursorShape.CrossCursor,
             "polygon": Qt.CursorShape.CrossCursor,
             "bbox": Qt.CursorShape.CrossCursor,
+            "circle": Qt.CursorShape.CrossCursor,
             "selection": Qt.CursorShape.ArrowCursor,
             "edit": Qt.CursorShape.SizeAllCursor,
             "pan": Qt.CursorShape.OpenHandCursor,

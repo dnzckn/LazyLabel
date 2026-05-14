@@ -41,9 +41,9 @@ class SegmentManager:
         # Track the class used for this segment as the most recently used
         self.last_toggled_class_id = segment_data["class_id"]
 
-        # Convert QPointF to list for storage if it's a polygon and contains QPointF objects
+        # Convert QPointF to list for storage if vertices contain QPointF objects
         if (
-            segment_data.get("type") == "Polygon"
+            segment_data.get("type") in ("Polygon", "Circle")
             and segment_data.get("vertices")
             and segment_data["vertices"]
             and isinstance(segment_data["vertices"][0], QPointF)
@@ -143,10 +143,12 @@ class SegmentManager:
             merged_mask = np.zeros(image_size, dtype=bool)
 
             for seg in segments_for_class:
-                if seg.get("type") == "Polygon" and seg.get("vertices"):
-                    # Rasterize polygon to mask
+                seg_type = seg.get("type")
+                if seg_type == "Polygon" and seg.get("vertices"):
                     qpoints = [QPointF(p[0], p[1]) for p in seg["vertices"]]
                     mask = self.rasterize_polygon(qpoints, image_size)
+                elif seg_type == "Circle" and seg.get("vertices"):
+                    mask = self.rasterize_circle(seg["vertices"], image_size)
                 else:
                     mask = seg.get("mask")
 
@@ -182,6 +184,31 @@ class SegmentManager:
         cv2.fillPoly(mask, [points_np], 1)
         return mask.astype(bool)
 
+    def rasterize_circle(
+        self, vertices: list, image_size: tuple[int, int]
+    ) -> np.ndarray | None:
+        """Convert circle [center, radius_point] vertices to binary mask."""
+        if not vertices or len(vertices) < 2:
+            return None
+
+        cx, cy = self._vertex_xy(vertices[0])
+        rx, ry = self._vertex_xy(vertices[1])
+        radius = int(round(((rx - cx) ** 2 + (ry - cy) ** 2) ** 0.5))
+        if radius <= 0:
+            return None
+
+        h, w = image_size
+        mask = np.zeros((h, w), dtype=np.uint8)
+        cv2.circle(mask, (int(round(cx)), int(round(cy))), radius, 1, thickness=-1)
+        return mask.astype(bool)
+
+    @staticmethod
+    def _vertex_xy(v) -> tuple[float, float]:
+        """Extract (x, y) from a QPointF or [x, y] list/tuple."""
+        if isinstance(v, QPointF):
+            return v.x(), v.y()
+        return float(v[0]), float(v[1])
+
     def create_final_mask_tensor(
         self,
         image_size: tuple[int, int],
@@ -202,10 +229,12 @@ class SegmentManager:
 
             new_channel_idx = id_map[class_id]
 
-            if seg.get("type") == "Polygon":
-                # Convert stored list of lists back to QPointF objects for rasterization
+            seg_type = seg.get("type")
+            if seg_type == "Polygon":
                 qpoints = [QPointF(p[0], p[1]) for p in seg["vertices"]]
                 mask = self.rasterize_polygon(qpoints, image_size)
+            elif seg_type == "Circle":
+                mask = self.rasterize_circle(seg["vertices"], image_size)
             else:
                 mask = seg.get("mask")
 
@@ -636,19 +665,23 @@ class SegmentManager:
                 return None  # This segment doesn't exist in this viewer
 
             view_data = segment["views"][viewer_index]
-            if segment.get("type") == "Polygon" and "vertices" in view_data:
-                # Convert stored list of lists back to QPointF objects for rasterization
+            seg_type = segment.get("type")
+            if seg_type == "Polygon" and "vertices" in view_data:
                 qpoints = [QPointF(p[0], p[1]) for p in view_data["vertices"]]
                 return self.rasterize_polygon(qpoints, image_size)
+            elif seg_type == "Circle" and "vertices" in view_data:
+                return self.rasterize_circle(view_data["vertices"], image_size)
             elif "mask" in view_data and view_data["mask"] is not None:
                 return view_data["mask"]
             return None
 
         # Handle legacy single-view format
-        if segment.get("type") == "Polygon" and "vertices" in segment:
-            # Convert stored list of lists back to QPointF objects for rasterization
+        seg_type = segment.get("type")
+        if seg_type == "Polygon" and "vertices" in segment:
             qpoints = [QPointF(p[0], p[1]) for p in segment["vertices"]]
             return self.rasterize_polygon(qpoints, image_size)
+        elif seg_type == "Circle" and "vertices" in segment:
+            return self.rasterize_circle(segment["vertices"], image_size)
         elif "mask" in segment and segment["mask"] is not None:
             return segment["mask"]
         return None

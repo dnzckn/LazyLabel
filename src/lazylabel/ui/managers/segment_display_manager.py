@@ -294,6 +294,7 @@ class SegmentDisplayManager:
         from PyQt6.QtCore import QPointF
         from PyQt6.QtGui import QPolygonF
 
+        from ..hoverable_ellipse_item import HoverableEllipseItem
         from ..hoverable_pixelmap_item import HoverablePixmapItem
         from ..hoverable_polygon_item import HoverablePolygonItem
 
@@ -352,6 +353,30 @@ class SegmentDisplayManager:
                     poly_item.setZValue(z_value)
                     scene.addItem(poly_item)
                     mw.segment_items[i].append(poly_item)
+                elif segment.get("type") == "Circle" and segment.get("vertices"):
+                    rect = HoverableEllipseItem.bounding_rect_from_vertices(
+                        segment["vertices"]
+                    )
+                    ellipse_item = HoverableEllipseItem(rect)
+                    default_brush = QBrush(
+                        QColor(
+                            base_color.red(), base_color.green(), base_color.blue(), 70
+                        )
+                    )
+                    hover_brush = QBrush(
+                        QColor(
+                            base_color.red(),
+                            base_color.green(),
+                            base_color.blue(),
+                            170,
+                        )
+                    )
+                    ellipse_item.set_brushes(default_brush, hover_brush)
+                    ellipse_item.set_segment_info(i, mw)
+                    ellipse_item.setPen(QPen(Qt.GlobalColor.transparent))
+                    ellipse_item.setZValue(z_value)
+                    scene.addItem(ellipse_item)
+                    mw.segment_items[i].append(ellipse_item)
                 elif segment.get("mask") is not None:
                     default_pixmap, hover_pixmap = self.get_cached_pixmaps(
                         i, segment["mask"], base_color.getRgb()[:3]
@@ -379,6 +404,7 @@ class SegmentDisplayManager:
         from PyQt6.QtCore import QPointF
         from PyQt6.QtGui import QPolygonF
 
+        from ..hoverable_ellipse_item import HoverableEllipseItem
         from ..hoverable_pixelmap_item import HoverablePixmapItem
         from ..hoverable_polygon_item import HoverablePolygonItem
 
@@ -418,6 +444,21 @@ class SegmentDisplayManager:
             poly_item.setZValue(z_value)
             self.viewer.scene().addItem(poly_item)
             mw.segment_items[segment_index].append(poly_item)
+        elif segment.get("type") == "Circle" and segment.get("vertices"):
+            rect = HoverableEllipseItem.bounding_rect_from_vertices(segment["vertices"])
+            ellipse_item = HoverableEllipseItem(rect)
+            default_brush = QBrush(
+                QColor(base_color.red(), base_color.green(), base_color.blue(), 70)
+            )
+            hover_brush = QBrush(
+                QColor(base_color.red(), base_color.green(), base_color.blue(), 170)
+            )
+            ellipse_item.set_brushes(default_brush, hover_brush)
+            ellipse_item.set_segment_info(segment_index, mw)
+            ellipse_item.setPen(QPen(Qt.GlobalColor.transparent))
+            ellipse_item.setZValue(z_value)
+            self.viewer.scene().addItem(ellipse_item)
+            mw.segment_items[segment_index].append(ellipse_item)
         elif segment.get("mask") is not None:
             default_pixmap, hover_pixmap = self.get_cached_pixmaps(
                 segment_index, segment["mask"], base_color.getRgb()[:3]
@@ -454,6 +495,9 @@ class SegmentDisplayManager:
         """
         from PyQt6.QtCore import QPointF
         from PyQt6.QtGui import QPolygonF
+        from PyQt6.QtWidgets import QGraphicsEllipseItem
+
+        from ..hoverable_ellipse_item import HoverableEllipseItem
 
         mw = self.main_window
 
@@ -478,6 +522,14 @@ class SegmentDisplayManager:
                 poly_item.setZValue(999)
                 self.viewer.scene().addItem(poly_item)
                 mw.highlight_items.append(poly_item)
+            elif seg.get("type") == "Circle" and seg.get("vertices"):
+                rect = HoverableEllipseItem.bounding_rect_from_vertices(seg["vertices"])
+                ellipse_item = QGraphicsEllipseItem(rect)
+                ellipse_item.setBrush(highlight_brush)
+                ellipse_item.setPen(QPen(Qt.GlobalColor.transparent))
+                ellipse_item.setZValue(999)
+                self.viewer.scene().addItem(ellipse_item)
+                mw.highlight_items.append(ellipse_item)
             elif seg.get("mask") is not None:
                 # For non-polygon types, use cached highlight pixmaps
                 # Skip in edit mode as we use hover effect instead

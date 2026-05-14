@@ -252,6 +252,12 @@ class KeyboardEventManager:
             self.viewer.scene().removeItem(self.mw.rubber_band_line)
             self.mw.rubber_band_line = None
 
+        # Clear circle rubber band
+        if hasattr(self.mw, "rubber_band_circle") and self.mw.rubber_band_circle:
+            if self.mw.rubber_band_circle.scene():
+                self.viewer.scene().removeItem(self.mw.rubber_band_circle)
+            self.mw.rubber_band_circle = None
+
         # Clear positive/negative points
         self.mw.positive_points.clear()
         self.mw.negative_points.clear()
@@ -307,3 +313,15 @@ class KeyboardEventManager:
                 ):
                     self.mw.multi_view_viewers[viewer_idx].scene().removeItem(line)
                 self.mw.multi_view_rubber_band_lines[viewer_idx] = None
+
+        # Clear in-progress circle drag in multi-view
+        if (
+            hasattr(self.mw, "_multi_view_circle_item")
+            and self.mw._multi_view_circle_item
+        ):
+            item = self.mw._multi_view_circle_item
+            if item.scene():
+                item.scene().removeItem(item)
+            self.mw._multi_view_circle_item = None
+        if hasattr(self.mw, "_multi_view_circle_start"):
+            del self.mw._multi_view_circle_start

@@ -127,6 +127,7 @@ class ControlPanel(QWidget):
     sam_mode_requested = pyqtSignal()
     polygon_mode_requested = pyqtSignal()
     bbox_mode_requested = pyqtSignal()
+    circle_mode_requested = pyqtSignal()
     selection_mode_requested = pyqtSignal()
     edit_mode_requested = pyqtSignal()
     clear_points_requested = pyqtSignal()
@@ -246,7 +247,7 @@ class ControlPanel(QWidget):
         buttons_layout = QVBoxLayout()
         buttons_layout.setSpacing(4)
 
-        # First row: AI and Polygon
+        # First row: AI, Polygon, Box
         row1_layout = QHBoxLayout()
         row1_layout.setSpacing(4)
 
@@ -271,45 +272,53 @@ class ControlPanel(QWidget):
         if not AI_AVAILABLE:
             self.btn_polygon_mode.setChecked(True)
 
-        row1_layout.addWidget(self.btn_sam_mode)
-        row1_layout.addWidget(self.btn_polygon_mode)
-        buttons_layout.addLayout(row1_layout)
-
-        # Second row: BBox and Selection
-        row2_layout = QHBoxLayout()
-        row2_layout.setSpacing(4)
-
         self.btn_bbox_mode = self._create_mode_button(
             "Box", "3", "Switch to Bounding Box Drawing Mode"
         )
         self.btn_bbox_mode.setCheckable(True)
+
+        row1_layout.addWidget(self.btn_sam_mode)
+        row1_layout.addWidget(self.btn_polygon_mode)
+        row1_layout.addWidget(self.btn_bbox_mode)
+        buttons_layout.addLayout(row1_layout)
+
+        # Second row: Circle, Select, Edit
+        row2_layout = QHBoxLayout()
+        row2_layout.setSpacing(4)
+
+        self.btn_circle_mode = self._create_mode_button(
+            "Circle", "4", "Switch to Circle Drawing Mode"
+        )
+        self.btn_circle_mode.setCheckable(True)
 
         self.btn_selection_mode = self._create_mode_button(
             "Select", "E", "Toggle segment selection"
         )
         self.btn_selection_mode.setCheckable(True)
 
-        row2_layout.addWidget(self.btn_bbox_mode)
+        self.btn_edit_mode = self._create_utility_button(
+            "Edit", "R", "Edit segments and polygons"
+        )
+        self.btn_edit_mode.setCheckable(True)
+
+        row2_layout.addWidget(self.btn_circle_mode)
         row2_layout.addWidget(self.btn_selection_mode)
+        row2_layout.addWidget(self.btn_edit_mode)
         buttons_layout.addLayout(row2_layout)
 
         mode_card.addLayout(buttons_layout)
 
-        # Bottom utility row: Edit and Hotkeys
+        # Bottom utility row: Hotkeys (alone)
         utility_layout = QHBoxLayout()
         utility_layout.setSpacing(4)
-
-        self.btn_edit_mode = self._create_utility_button(
-            "Edit", "R", "Edit segments and polygons"
-        )
-        self.btn_edit_mode.setCheckable(True)  # Make edit button checkable
 
         self.btn_hotkeys = self._create_utility_button(
             "⌨️ Hotkeys", "", "Configure keyboard shortcuts"
         )
 
-        utility_layout.addWidget(self.btn_edit_mode)
+        utility_layout.addStretch()
         utility_layout.addWidget(self.btn_hotkeys)
+        utility_layout.addStretch()
 
         mode_card.addLayout(utility_layout)
 
@@ -536,6 +545,7 @@ class ControlPanel(QWidget):
         self.btn_sam_mode.clicked.connect(self._on_sam_mode_clicked)
         self.btn_polygon_mode.clicked.connect(self._on_polygon_mode_clicked)
         self.btn_bbox_mode.clicked.connect(self._on_bbox_mode_clicked)
+        self.btn_circle_mode.clicked.connect(self._on_circle_mode_clicked)
         self.btn_selection_mode.clicked.connect(self._on_selection_mode_clicked)
         self.btn_edit_mode.clicked.connect(self._on_edit_mode_clicked)
         self.btn_hotkeys.clicked.connect(self.hotkeys_requested)
@@ -634,6 +644,11 @@ class ControlPanel(QWidget):
         self._set_active_mode_button(self.btn_bbox_mode)
         self.bbox_mode_requested.emit()
 
+    def _on_circle_mode_clicked(self):
+        """Handle circle mode button click."""
+        self._set_active_mode_button(self.btn_circle_mode)
+        self.circle_mode_requested.emit()
+
     def _on_selection_mode_clicked(self):
         """Handle selection mode button click."""
         self._set_active_mode_button(self.btn_selection_mode)
@@ -650,6 +665,7 @@ class ControlPanel(QWidget):
             self.btn_sam_mode,
             self.btn_polygon_mode,
             self.btn_bbox_mode,
+            self.btn_circle_mode,
             self.btn_selection_mode,
         ]
 
@@ -688,6 +704,7 @@ class ControlPanel(QWidget):
             "ai": self.btn_sam_mode,  # AI mode uses the same button as SAM mode
             "polygon": self.btn_polygon_mode,
             "bbox": self.btn_bbox_mode,
+            "circle": self.btn_circle_mode,
             "selection": self.btn_selection_mode,
             "edit": self.btn_edit_mode,
         }

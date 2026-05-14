@@ -364,6 +364,16 @@ class MainWindow(QMainWindow):
         self.drawing_state.rubber_band_rect = value
 
     @property
+    def rubber_band_circle(self):
+        """Get circle rubber-band (delegates to DrawingStateManager)."""
+        return self.drawing_state.rubber_band_circle
+
+    @rubber_band_circle.setter
+    def rubber_band_circle(self, value) -> None:
+        """Set circle rubber-band (delegates to DrawingStateManager)."""
+        self.drawing_state.rubber_band_circle = value
+
+    @property
     def preview_mask_item(self):
         """Get preview mask item (delegates to DrawingStateManager)."""
         return self.drawing_state.preview_mask_item
@@ -848,6 +858,7 @@ class MainWindow(QMainWindow):
         self.control_panel.sam_mode_requested.connect(self.set_sam_mode)
         self.control_panel.polygon_mode_requested.connect(self.set_polygon_mode)
         self.control_panel.bbox_mode_requested.connect(self.set_bbox_mode)
+        self.control_panel.circle_mode_requested.connect(self.set_circle_mode)
         self.control_panel.selection_mode_requested.connect(self.toggle_selection_mode)
         self.control_panel.edit_mode_requested.connect(self._handle_edit_mode_request)
         self.control_panel.clear_points_requested.connect(self.clear_all_points)
@@ -984,6 +995,7 @@ class MainWindow(QMainWindow):
             "sam_mode": self.set_sam_mode,
             "polygon_mode": self.set_polygon_mode,
             "bbox_mode": self.set_bbox_mode,
+            "circle_mode": self.set_circle_mode,
             "selection_mode": self.toggle_selection_mode,
             "pan_mode": self.toggle_pan_mode,
             "edit_mode": self._handle_edit_mode_request,
@@ -1150,6 +1162,10 @@ class MainWindow(QMainWindow):
     def set_bbox_mode(self):
         """Set bounding box drawing mode."""
         self.mode_manager.set_bbox_mode()
+
+    def set_circle_mode(self):
+        """Set circle drawing mode."""
+        self.mode_manager.set_circle_mode()
 
     def toggle_selection_mode(self):
         """Toggle selection mode."""
@@ -2325,6 +2341,12 @@ class MainWindow(QMainWindow):
                 mask = np.zeros((h, w), dtype=np.uint8)
                 cv2.fillPoly(mask, [points_np], 1)
                 mask = mask.astype(bool)
+            elif seg.get("type") == "Circle" and seg.get("vertices"):
+                if self.viewer._pixmap_item.pixmap().isNull():
+                    continue
+                h = self.viewer._pixmap_item.pixmap().height()
+                w = self.viewer._pixmap_item.pixmap().width()
+                mask = self.segment_manager.rasterize_circle(seg["vertices"], (h, w))
             else:
                 mask = seg.get("mask")
             if (
@@ -2378,6 +2400,12 @@ class MainWindow(QMainWindow):
                 mask = np.zeros((h, w), dtype=np.uint8)
                 cv2.fillPoly(mask, [points_np], 1)
                 mask = mask.astype(bool)
+            elif seg.get("type") == "Circle" and seg.get("vertices"):
+                if viewer._pixmap_item.pixmap().isNull():
+                    continue
+                h = viewer._pixmap_item.pixmap().height()
+                w = viewer._pixmap_item.pixmap().width()
+                mask = segment_manager.rasterize_circle(seg["vertices"], (h, w))
             else:
                 mask = seg.get("mask")
 
@@ -2470,11 +2498,12 @@ class MainWindow(QMainWindow):
                 if seg_idx >= len(segment_manager.segments):
                     continue
                 seg = segment_manager.segments[seg_idx]
-                if seg.get("type") != "Polygon" or not seg.get("vertices"):
+                seg_type = seg.get("type")
+                if seg_type not in ("Polygon", "Circle") or not seg.get("vertices"):
                     continue
 
                 vertices = seg["vertices"]
-                if len(vertices) > max_editable_vertices:
+                if seg_type == "Polygon" and len(vertices) > max_editable_vertices:
                     self._show_warning_notification(
                         f"Polygon has {len(vertices)} vertices (max {max_editable_vertices})"
                     )
@@ -2551,7 +2580,14 @@ class MainWindow(QMainWindow):
             return
 
         seg = segment_manager.segments[segment_index]
-        if seg.get("type") != "Polygon":
+        seg_type = seg.get("type")
+        if seg_type not in ("Polygon", "Circle"):
+            return
+
+        if seg_type == "Circle":
+            self._update_multi_view_circle_vertex(
+                seg, viewer_index, segment_index, vertex_index, new_pos, record_undo
+            )
             return
 
         old_pos = seg["vertices"][vertex_index]
@@ -2574,8 +2610,73 @@ class MainWindow(QMainWindow):
         # Update the polygon item visual (only for this viewer, not synced)
         self._update_multi_view_polygon_item(viewer_index, segment_index)
 
+    def _update_multi_view_circle_vertex(
+        self,
+        seg: dict,
+        viewer_index: int,
+        segment_index: int,
+        vertex_index: int,
+        new_pos,
+        record_undo: bool,
+    ) -> None:
+        """Update Circle segment vertex in multi-view; mirrors single-view logic."""
+        vertices = seg.get("vertices") or []
+        if len(vertices) < 2:
+            return
+
+        center = list(vertices[0])
+        radius_pt = list(vertices[1])
+        old_center = [center[0], center[1]]
+        old_radius_pt = [radius_pt[0], radius_pt[1]]
+
+        if vertex_index == 0:
+            dx = new_pos.x() - center[0]
+            dy = new_pos.y() - center[1]
+            new_center = [new_pos.x(), new_pos.y()]
+            new_radius_pt = [radius_pt[0] + dx, radius_pt[1] + dy]
+        elif vertex_index == 1:
+            new_center = center
+            new_radius_pt = [new_pos.x(), new_pos.y()]
+        else:
+            return
+
+        if record_undo:
+            self.undo_redo_manager.record_action(
+                {
+                    "type": "move_circle",
+                    "viewer_mode": "multi",
+                    "viewer_index": viewer_index,
+                    "segment_index": segment_index,
+                    "old_center": old_center,
+                    "old_radius_pt": old_radius_pt,
+                    "new_center": new_center,
+                    "new_radius_pt": new_radius_pt,
+                }
+            )
+
+        seg["vertices"] = [new_center, new_radius_pt]
+
+        if vertex_index == 0:
+            from PyQt6.QtWidgets import QGraphicsItem
+
+            flag = QGraphicsItem.GraphicsItemFlag.ItemSendsGeometryChanges
+            # Sync the radius handle position without re-entering this method
+            for h in self.multi_view_edit_handles.get(viewer_index, []):
+                if (
+                    getattr(h, "segment_index", None) == segment_index
+                    and getattr(h, "vertex_index", None) == 1
+                ):
+                    h.setFlag(flag, False)
+                    try:
+                        h.setPos(QPointF(new_radius_pt[0], new_radius_pt[1]))
+                    finally:
+                        h.setFlag(flag, True)
+                    break
+
+        self._update_multi_view_polygon_item(viewer_index, segment_index)
+
     def _update_multi_view_polygon_item(self, viewer_idx: int, segment_index: int):
-        """Update the visual polygon item for a segment in multi-view.
+        """Update the visual polygon or circle item for a segment in multi-view.
 
         Args:
             viewer_idx: Index of the viewer (0 or 1)
@@ -2584,6 +2685,7 @@ class MainWindow(QMainWindow):
         from PyQt6.QtCore import QPointF
         from PyQt6.QtGui import QPolygonF
 
+        from .hoverable_ellipse_item import HoverableEllipseItem
         from .hoverable_polygon_item import HoverablePolygonItem
 
         if not hasattr(self, "multi_view_segment_items"):
@@ -2599,10 +2701,15 @@ class MainWindow(QMainWindow):
         if not seg.get("vertices"):
             return
 
+        seg_type = seg.get("type")
         for item in items:
-            if isinstance(item, HoverablePolygonItem):
+            if seg_type == "Polygon" and isinstance(item, HoverablePolygonItem):
                 qpoints = [QPointF(p[0], p[1]) for p in seg["vertices"]]
                 item.setPolygon(QPolygonF(qpoints))
+                return
+            if seg_type == "Circle" and isinstance(item, HoverableEllipseItem):
+                rect = HoverableEllipseItem.bounding_rect_from_vertices(seg["vertices"])
+                item.setRect(rect)
                 return
 
     def _handle_class_toggle(self, class_id):
@@ -3715,6 +3822,25 @@ class MainWindow(QMainWindow):
                 poly_item.setZValue(z_value)
                 scene.addItem(poly_item)
                 self._sequence_segment_items[i].append(poly_item)
+            elif segment.get("type") == "Circle" and segment.get("vertices"):
+                from .hoverable_ellipse_item import HoverableEllipseItem
+
+                rect = HoverableEllipseItem.bounding_rect_from_vertices(
+                    segment["vertices"]
+                )
+                ellipse_item = HoverableEllipseItem(rect)
+                default_brush = QBrush(
+                    QColor(base_color.red(), base_color.green(), base_color.blue(), 70)
+                )
+                hover_brush = QBrush(
+                    QColor(base_color.red(), base_color.green(), base_color.blue(), 170)
+                )
+                ellipse_item.set_brushes(default_brush, hover_brush)
+                ellipse_item.set_segment_info(i, self)
+                ellipse_item.setPen(QPen(Qt.GlobalColor.transparent))
+                ellipse_item.setZValue(z_value)
+                scene.addItem(ellipse_item)
+                self._sequence_segment_items[i].append(ellipse_item)
             elif segment.get("mask") is not None:
                 default_pixmap, hover_pixmap = (
                     self.segment_display_manager.get_cached_pixmaps(
@@ -5400,6 +5526,25 @@ class MainWindow(QMainWindow):
                     y1, y2 = min(start_y, scene_pos.y()), max(start_y, scene_pos.y())
                     self._multi_view_bbox_rect.setRect(x1, y1, x2 - x1, y2 - y1)
                 return True
+
+        # Handle circle drag preview
+        if self.mode == "circle" and hasattr(self, "_multi_view_circle_start"):
+            start_viewer, start_x, start_y = self._multi_view_circle_start
+            if start_viewer == viewer_idx:
+                if (
+                    hasattr(self, "_multi_view_circle_item")
+                    and self._multi_view_circle_item
+                ):
+                    radius = (
+                        (scene_pos.x() - start_x) ** 2 + (scene_pos.y() - start_y) ** 2
+                    ) ** 0.5
+                    self._multi_view_circle_item.setRect(
+                        start_x - radius,
+                        start_y - radius,
+                        2 * radius,
+                        2 * radius,
+                    )
+                return True
         return False
 
     def _handle_multi_view_mouse_press(self, viewer_idx, viewer, event):
@@ -5433,6 +5578,9 @@ class MainWindow(QMainWindow):
             return True
         elif self.mode == "bbox":
             self._handle_multi_view_bbox_press(viewer_idx, viewer, scene_pos)
+            return True
+        elif self.mode == "circle":
+            self._handle_multi_view_circle_press(viewer_idx, viewer, scene_pos)
             return True
         elif self.mode == "selection":
             self._handle_multi_view_segment_selection_click(viewer_idx, scene_pos)
@@ -5478,6 +5626,11 @@ class MainWindow(QMainWindow):
         # Handle bbox mode release
         if self.mode == "bbox" and hasattr(self, "_multi_view_bbox_start"):
             self._handle_multi_view_bbox_release(viewer_idx, viewer, scene_pos)
+            return True
+
+        # Handle circle mode release
+        if self.mode == "circle" and hasattr(self, "_multi_view_circle_start"):
+            self._handle_multi_view_circle_release(viewer_idx, viewer, scene_pos)
             return True
         return False
 
@@ -5694,6 +5847,9 @@ class MainWindow(QMainWindow):
                         polygon_vertices, image_size
                     )
                     if removed_indices:
+                        # Index shifts + new mask segments invalidate any
+                        # cached pixmaps; force regen on next display.
+                        self.segment_display_manager.invalidate_cache()
                         self._show_notification(
                             f"Erased {len(removed_indices)} segment(s) from viewer {target_idx + 1}"
                         )
@@ -5711,6 +5867,100 @@ class MainWindow(QMainWindow):
             # Update display
             self._display_multi_view_segments(target_idx)
             self._update_multi_view_segment_table(target_idx)
+            # Refresh highlights so stale selection overlays from now-erased
+            # segments don't linger on the canvas.
+            self._highlight_multi_view_selected_segments(target_idx)
+
+    def _handle_multi_view_circle_press(self, viewer_idx: int, viewer, pos):
+        """Handle circle press in multi-view mode."""
+        from PyQt6.QtGui import QColor, QPen
+        from PyQt6.QtWidgets import QGraphicsEllipseItem
+
+        self._multi_view_circle_start = (viewer_idx, pos.x(), pos.y())
+
+        ellipse_item = QGraphicsEllipseItem(pos.x(), pos.y(), 0, 0)
+        ellipse_item.setPen(QPen(QColor(255, 255, 0), 2))
+        ellipse_item.setZValue(1000)
+        viewer.scene().addItem(ellipse_item)
+        self._multi_view_circle_item = ellipse_item
+
+    def _handle_multi_view_circle_release(self, viewer_idx: int, viewer, pos):
+        """Handle circle release in multi-view mode.
+
+        Creates a Circle segment (NOT AI prediction). With Shift, erases.
+        """
+        from PyQt6.QtWidgets import QApplication
+
+        if not hasattr(self, "_multi_view_circle_start"):
+            return
+
+        start_viewer, start_x, start_y = self._multi_view_circle_start
+
+        if hasattr(self, "_multi_view_circle_item") and self._multi_view_circle_item:
+            if self._multi_view_circle_item.scene():
+                viewer.scene().removeItem(self._multi_view_circle_item)
+            self._multi_view_circle_item = None
+
+        del self._multi_view_circle_start
+
+        radius = ((pos.x() - start_x) ** 2 + (pos.y() - start_y) ** 2) ** 0.5
+        if radius < 2.0:
+            return
+
+        modifiers = QApplication.keyboardModifiers()
+        shift_pressed = bool(modifiers & Qt.KeyboardModifier.ShiftModifier)
+
+        # In linked mode, mirror to both viewers
+        target_viewers = [viewer_idx]
+        if self.multi_view_coordinator and self.multi_view_coordinator.is_linked:
+            target_viewers = [0, 1]
+
+        for target_idx in target_viewers:
+            if target_idx >= len(self.multi_view_segment_managers):
+                continue
+
+            segment_manager = self.multi_view_segment_managers[target_idx]
+            target_viewer = self.multi_view_viewers[target_idx]
+
+            if shift_pressed:
+                pixmap = target_viewer._pixmap_item.pixmap()
+                if not pixmap.isNull():
+                    image_size = (pixmap.height(), pixmap.width())
+                    circle_vertices = [
+                        [start_x, start_y],
+                        [start_x + radius, start_y],
+                    ]
+                    erase_mask = segment_manager.rasterize_circle(
+                        circle_vertices, image_size
+                    )
+                    if erase_mask is not None:
+                        removed_indices, _ = segment_manager.erase_segments_with_mask(
+                            erase_mask, image_size
+                        )
+                        if removed_indices:
+                            # Index shifts + new mask segments invalidate any
+                            # cached pixmaps for this viewer; force regen.
+                            self.segment_display_manager.invalidate_cache()
+                            self._show_notification(
+                                f"Erased {len(removed_indices)} segment(s) "
+                                f"from viewer {target_idx + 1}"
+                            )
+            else:
+                new_segment = {
+                    "vertices": [
+                        [start_x, start_y],
+                        [start_x + radius, start_y],
+                    ],
+                    "type": "Circle",
+                    "mask": None,
+                }
+                segment_manager.add_segment(new_segment)
+
+            self._display_multi_view_segments(target_idx)
+            self._update_multi_view_segment_table(target_idx)
+            # Refresh highlights so stale selection overlays from now-erased
+            # segments don't linger on the canvas.
+            self._highlight_multi_view_selected_segments(target_idx)
 
     def _toggle_multi_view_link(self, viewer_idx: int | None = None):
         """Toggle the link state between viewers.
@@ -6079,6 +6329,18 @@ class MainWindow(QMainWindow):
                 poly_item.setZValue(999)
                 viewer.scene().addItem(poly_item)
                 self.multi_view_highlight_items[viewer_idx].append(poly_item)
+            elif seg.get("type") == "Circle" and seg.get("vertices"):
+                from PyQt6.QtWidgets import QGraphicsEllipseItem
+
+                from .hoverable_ellipse_item import HoverableEllipseItem
+
+                rect = HoverableEllipseItem.bounding_rect_from_vertices(seg["vertices"])
+                ellipse_item = QGraphicsEllipseItem(rect)
+                ellipse_item.setBrush(QBrush(highlight_color))
+                ellipse_item.setPen(QPen(Qt.GlobalColor.transparent))
+                ellipse_item.setZValue(999)
+                viewer.scene().addItem(ellipse_item)
+                self.multi_view_highlight_items[viewer_idx].append(ellipse_item)
             elif seg.get("mask") is not None:
                 # For mask-based (AI) segments, create yellow pixmap overlay
                 mask = seg["mask"]
@@ -6842,6 +7104,7 @@ class MainWindow(QMainWindow):
         from PyQt6.QtCore import QPointF
         from PyQt6.QtGui import QBrush, QColor, QPen, QPolygonF
 
+        from .hoverable_ellipse_item import HoverableEllipseItem
         from .hoverable_pixelmap_item import HoverablePixmapItem
         from .hoverable_polygon_item import HoverablePolygonItem
 
@@ -6852,19 +7115,26 @@ class MainWindow(QMainWindow):
         segment_manager = self.multi_view_segment_managers[viewer_idx]
         scene = viewer.scene()
 
-        # Clear existing segment items (keep main pixmap)
+        # Initialize segment_items storage for this viewer if needed
+        if not hasattr(self, "multi_view_segment_items"):
+            self.multi_view_segment_items = {0: {}, 1: {}}
+
+        # First: remove items we've tracked for this viewer (most reliable)
+        for items in self.multi_view_segment_items.get(viewer_idx, {}).values():
+            for item in items:
+                if item.scene():
+                    item.scene().removeItem(item)
+
+        # Second: sweep the scene for any orphans that escaped tracking
         items_to_remove = []
         for item in scene.items():
             if hasattr(item, "segment_index") or isinstance(
-                item, HoverablePixmapItem | HoverablePolygonItem
+                item, HoverablePixmapItem | HoverablePolygonItem | HoverableEllipseItem
             ):
                 items_to_remove.append(item)
         for item in items_to_remove:
             scene.removeItem(item)
 
-        # Initialize segment_items storage for this viewer if needed
-        if not hasattr(self, "multi_view_segment_items"):
-            self.multi_view_segment_items = {0: {}, 1: {}}
         self.multi_view_segment_items[viewer_idx] = {}
 
         # Display each segment
@@ -6891,6 +7161,24 @@ class MainWindow(QMainWindow):
                 poly_item.setZValue(seg_idx + 1)
                 scene.addItem(poly_item)
                 self.multi_view_segment_items[viewer_idx][seg_idx].append(poly_item)
+
+            elif segment.get("type") == "Circle" and segment.get("vertices"):
+                rect = HoverableEllipseItem.bounding_rect_from_vertices(
+                    segment["vertices"]
+                )
+                ellipse_item = HoverableEllipseItem(rect)
+                default_brush = QBrush(
+                    QColor(base_color.red(), base_color.green(), base_color.blue(), 70)
+                )
+                hover_brush = QBrush(
+                    QColor(base_color.red(), base_color.green(), base_color.blue(), 170)
+                )
+                ellipse_item.set_brushes(default_brush, hover_brush)
+                ellipse_item.set_segment_info(seg_idx, self)
+                ellipse_item.setPen(QPen(Qt.GlobalColor.transparent))
+                ellipse_item.setZValue(seg_idx + 1)
+                scene.addItem(ellipse_item)
+                self.multi_view_segment_items[viewer_idx][seg_idx].append(ellipse_item)
 
             elif segment.get("mask") is not None:
                 # Mask-based segments (AI): use cached pixmap overlays
@@ -7108,6 +7396,13 @@ class MainWindow(QMainWindow):
                 qpoints = [QPointF(p[0], p[1]) for p in vertices]
                 polygon = QPolygonF(qpoints)
                 return polygon.containsPoint(QPointF(x, y), Qt.FillRule.OddEvenFill)
+        elif segment.get("type") == "Circle":
+            vertices = segment.get("vertices")
+            if vertices and len(vertices) >= 2:
+                cx, cy = float(vertices[0][0]), float(vertices[0][1])
+                rx, ry = float(vertices[1][0]), float(vertices[1][1])
+                radius_sq = (rx - cx) ** 2 + (ry - cy) ** 2
+                return (x - cx) ** 2 + (y - cy) ** 2 <= radius_sq
 
         return False
 

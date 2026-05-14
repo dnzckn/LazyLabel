@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.2] - 2026-05-14
+
+### Added
+
+- Circle drawing tool — click-and-drag from center to define radius, mirrors the Box tool's UX (hotkey `4`, Shift+release to erase). Circles are stored as 2-vertex `Circle` segments (`[center, radius_point]`) and do NOT convert to polygons
+- Circle editing in polygon edit mode (`R`): dragging the center handle translates the whole circle; dragging the 3-o'clock radius handle resizes it
+- `move_circle` undo/redo action and `SegmentManager.rasterize_circle()` helper; circles export through the standard rasterized mask tensor (NPZ/COCO/YOLO unaffected)
+- `HoverableEllipseItem` for circle rendering with multi-view hover mirroring
+
+### Fixed
+
+- Multi-view erase (both bbox and circle) sometimes left stale segments visible — pixmap cache wasn't invalidated after erase reshuffled segment indices, and selection-highlight overlays weren't cleared when the underlying segment was removed
+- License badge in README pointed at PyPI metadata, which still reads MIT for the published 1.x release; replaced with a static Apache-2.0 badge
+
+### Changed
+
+- Mode-button layout reorganized to 3×2 grid (AI/Poly/Box on row 1, Circle/Select/Edit on row 2) with Hotkeys on its own row, to accommodate the new Circle button
+
 ## [2.0.1] - 2026-04-25
 
 ### Fixed
@@ -1018,6 +1036,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [1.0.2]: https://github.com/dnzckn/LazyLabel/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/dnzckn/LazyLabel/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/dnzckn/LazyLabel/releases/tag/v1.0.0
+[2.0.2]: https://github.com/dnzckn/LazyLabel/compare/v2.0.1...v2.0.2
 [2.0.1]: https://github.com/dnzckn/LazyLabel/compare/v2.0.0...v2.0.1
 [2.0.0]: https://github.com/dnzckn/LazyLabel/compare/v1.7.24...v2.0.0
 [1.7.24]: https://github.com/dnzckn/LazyLabel/compare/v1.7.23...v1.7.24

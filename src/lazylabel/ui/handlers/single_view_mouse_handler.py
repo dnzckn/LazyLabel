@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING
 
 from PyQt6.QtCore import QPointF, QRectF, Qt
 from PyQt6.QtGui import QPen
-from PyQt6.QtWidgets import QApplication, QGraphicsRectItem
+from PyQt6.QtWidgets import QApplication, QGraphicsEllipseItem, QGraphicsRectItem
 
 from ...utils.logger import logger
 from ..editable_vertex import EditableVertexItem
@@ -90,7 +90,8 @@ class SingleViewMouseHandler:
                         for p in self.segment_manager.segments[i]["vertices"]
                     ]
                     for i in selected_indices
-                    if self.segment_manager.segments[i].get("type") == "Polygon"
+                    if self.segment_manager.segments[i].get("type")
+                    in ("Polygon", "Circle")
                 }
                 event.accept()
                 return
@@ -151,6 +152,18 @@ class SingleViewMouseHandler:
                     )
                 )
                 self.viewer.scene().addItem(self.mw.rubber_band_rect)
+        elif self.mode == "circle":
+            if event.button() == Qt.MouseButton.LeftButton:
+                self.mw.drag_start_pos = pos
+                self.mw.rubber_band_circle = QGraphicsEllipseItem()
+                self.mw.rubber_band_circle.setPen(
+                    QPen(
+                        Qt.GlobalColor.red,
+                        self.mw.line_thickness,
+                        Qt.PenStyle.DashLine,
+                    )
+                )
+                self.viewer.scene().addItem(self.mw.rubber_band_circle)
         elif self.mode == "selection" and event.button() == Qt.MouseButton.LeftButton:
             self.mw._handle_segment_selection_click(pos)
         elif self.mode == "crop" and event.button() == Qt.MouseButton.LeftButton:
@@ -190,6 +203,22 @@ class SingleViewMouseHandler:
             current_pos = event.scenePos()
             rect = QRectF(self.mw.drag_start_pos, current_pos).normalized()
             self.mw.rubber_band_rect.setRect(rect)
+            event.accept()
+            return
+
+        # Handle circle mode drag
+        if (
+            self.mode == "circle"
+            and getattr(self.mw, "rubber_band_circle", None)
+            and self.mw.drag_start_pos
+        ):
+            current_pos = event.scenePos()
+            cx = self.mw.drag_start_pos.x()
+            cy = self.mw.drag_start_pos.y()
+            radius = ((current_pos.x() - cx) ** 2 + (current_pos.y() - cy) ** 2) ** 0.5
+            self.mw.rubber_band_circle.setRect(
+                cx - radius, cy - radius, 2 * radius, 2 * radius
+            )
             event.accept()
             return
 
@@ -265,6 +294,7 @@ class SingleViewMouseHandler:
         elif (
             self._handle_ai_release(event)
             or self._handle_bbox_release(event)
+            or self._handle_circle_release(event)
             or self._handle_crop_release(event)
         ):
             return
@@ -414,6 +444,94 @@ class SingleViewMouseHandler:
                 self.mw._update_lists_incremental(
                     added_segment_index=len(self.segment_manager.segments) - 1
                 )
+
+        event.accept()
+        return True
+
+    def _handle_circle_release(self, event: QGraphicsSceneMouseEvent) -> bool:
+        """Handle circle mode mouse release.
+
+        Returns:
+            True if event was handled, False otherwise
+        """
+        if not (self.mode == "circle" and getattr(self.mw, "rubber_band_circle", None)):
+            return False
+
+        if self.mw.rubber_band_circle.scene():
+            self.viewer.scene().removeItem(self.mw.rubber_band_circle)
+        center = self.mw.drag_start_pos
+        self.mw.rubber_band_circle = None
+        self.mw.drag_start_pos = None
+
+        if center is None:
+            event.accept()
+            return True
+
+        end_pos = event.scenePos()
+        radius = (
+            (end_pos.x() - center.x()) ** 2 + (end_pos.y() - center.y()) ** 2
+        ) ** 0.5
+
+        # Require minimum radius to consider a real drag
+        if radius < 2.0:
+            event.accept()
+            return True
+
+        modifiers = QApplication.keyboardModifiers()
+        shift_pressed = bool(modifiers & Qt.KeyboardModifier.ShiftModifier)
+
+        if shift_pressed:
+            logger.debug("Shift+circle release - activating erase mode")
+            image_height = self.viewer._pixmap_item.pixmap().height()
+            image_width = self.viewer._pixmap_item.pixmap().width()
+            image_size = (image_height, image_width)
+            # Use a rasterized mask of the circle for erase
+            circle_vertices = [
+                [center.x(), center.y()],
+                [center.x() + radius, center.y()],
+            ]
+            erase_mask = self.segment_manager.rasterize_circle(
+                circle_vertices, image_size
+            )
+            if erase_mask is not None:
+                removed_indices, removed_segments_data = (
+                    self.segment_manager.erase_segments_with_mask(
+                        erase_mask, image_size
+                    )
+                )
+                if removed_indices:
+                    self.mw.undo_redo_manager.record_action(
+                        {
+                            "type": "erase_segments",
+                            "removed_segments": removed_segments_data,
+                        }
+                    )
+                    self.mw._show_notification(
+                        f"Applied eraser to {len(removed_indices)} segment(s)"
+                    )
+                    self.mw._update_all_lists()
+                else:
+                    self.mw._show_notification("No segments to erase")
+        else:
+            # Radius point at the 3 o'clock position relative to center
+            new_segment = {
+                "vertices": [
+                    [center.x(), center.y()],
+                    [center.x() + radius, center.y()],
+                ],
+                "type": "Circle",
+                "mask": None,
+            }
+            self.segment_manager.add_segment(new_segment)
+            self.mw.undo_redo_manager.record_action(
+                {
+                    "type": "add_segment",
+                    "segment_index": len(self.segment_manager.segments) - 1,
+                }
+            )
+            self.mw._update_lists_incremental(
+                added_segment_index=len(self.segment_manager.segments) - 1
+            )
 
         event.accept()
         return True

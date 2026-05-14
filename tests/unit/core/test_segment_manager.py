@@ -49,6 +49,37 @@ def test_rasterize_polygon(manager: SegmentManager):
     assert mask[0, 0] == 0
 
 
+def test_rasterize_circle(manager: SegmentManager):
+    """Test rasterizing a circle from [center, radius_point]."""
+    # Center at (5, 5), radius 3 (radius point at 3 o'clock = (8, 5))
+    mask = manager.rasterize_circle([[5, 5], [8, 5]], (11, 11))
+    assert mask is not None
+    assert mask.shape == (11, 11)
+    # Center pixel is inside
+    assert mask[5, 5]
+    # Pixel 3 away on the right is inside (edge)
+    assert mask[5, 7]
+    # Corner is outside
+    assert not mask[0, 0]
+    # Far edge is outside
+    assert not mask[10, 10]
+
+
+def test_rasterize_circle_zero_radius(manager: SegmentManager):
+    """Zero-radius circle should produce no mask."""
+    assert manager.rasterize_circle([[5, 5], [5, 5]], (10, 10)) is None
+    assert manager.rasterize_circle([], (10, 10)) is None
+
+
+def test_circle_in_final_mask_tensor(manager: SegmentManager):
+    """Circle segments contribute to the final mask tensor."""
+    manager.add_segment({"type": "Circle", "vertices": [[5, 5], [8, 5]], "class_id": 0})
+    tensor = manager.create_final_mask_tensor((11, 11), [0])
+    assert tensor.shape == (11, 11, 1)
+    assert tensor[5, 5, 0] == 1
+    assert tensor[0, 0, 0] == 0
+
+
 def test_create_final_mask_tensor(manager: SegmentManager):
     """Test creating the final mask tensor."""
     manager.add_segment(

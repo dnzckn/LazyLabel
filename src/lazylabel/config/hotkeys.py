@@ -47,6 +47,7 @@ class HotkeyManager:
             HotkeyAction("sam_mode", "AI Mode (Points + Box)", "1", category="Modes"),
             HotkeyAction("polygon_mode", "Polygon Mode", "2", category="Modes"),
             HotkeyAction("bbox_mode", "Bounding Box Mode", "3", category="Modes"),
+            HotkeyAction("circle_mode", "Circle Mode", "4", category="Modes"),
             HotkeyAction("selection_mode", "Selection Mode", "E", category="Modes"),
             HotkeyAction("pan_mode", "Pan Mode", "Q", category="Modes"),
             HotkeyAction("edit_mode", "Edit Mode", "R", category="Modes"),
