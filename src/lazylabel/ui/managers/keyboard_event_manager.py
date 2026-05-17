@@ -252,11 +252,41 @@ class KeyboardEventManager:
             self.viewer.scene().removeItem(self.mw.rubber_band_line)
             self.mw.rubber_band_line = None
 
-        # Clear circle rubber band
+        # Cancel in-progress bbox drag (rect + start position)
+        if hasattr(self.mw, "rubber_band_rect") and self.mw.rubber_band_rect:
+            if self.mw.rubber_band_rect.scene():
+                self.viewer.scene().removeItem(self.mw.rubber_band_rect)
+            self.mw.rubber_band_rect = None
+
+        # Cancel in-progress circle drag (ellipse + start position)
         if hasattr(self.mw, "rubber_band_circle") and self.mw.rubber_band_circle:
             if self.mw.rubber_band_circle.scene():
                 self.viewer.scene().removeItem(self.mw.rubber_band_circle)
             self.mw.rubber_band_circle = None
+
+        # bbox + circle share drag_start_pos; clearing it prevents a
+        # subsequent mouse move from continuing the drag visually.
+        if hasattr(self.mw, "drag_start_pos"):
+            self.mw.drag_start_pos = None
+
+        # Cancel in-progress AI drag (rect + start position + time)
+        if hasattr(self.mw, "ai_rubber_band_rect") and self.mw.ai_rubber_band_rect:
+            if self.mw.ai_rubber_band_rect.scene():
+                self.viewer.scene().removeItem(self.mw.ai_rubber_band_rect)
+            self.mw.ai_rubber_band_rect = None
+        if hasattr(self.mw, "ai_click_start_pos"):
+            self.mw.ai_click_start_pos = None
+
+        # Cancel in-progress crop drag
+        crop_manager = getattr(self.mw, "crop_manager", None)
+        if crop_manager is not None:
+            crop_rect_item = getattr(crop_manager, "crop_rect_item", None)
+            if crop_rect_item is not None:
+                if crop_rect_item.scene():
+                    crop_rect_item.scene().removeItem(crop_rect_item)
+                crop_manager.crop_rect_item = None
+            if hasattr(crop_manager, "crop_start_pos"):
+                crop_manager.crop_start_pos = None
 
         # Clear positive/negative points
         self.mw.positive_points.clear()
@@ -314,7 +344,16 @@ class KeyboardEventManager:
                     self.mw.multi_view_viewers[viewer_idx].scene().removeItem(line)
                 self.mw.multi_view_rubber_band_lines[viewer_idx] = None
 
-        # Clear in-progress circle drag in multi-view
+        # Cancel in-progress bbox drag in multi-view
+        if hasattr(self.mw, "_multi_view_bbox_rect") and self.mw._multi_view_bbox_rect:
+            item = self.mw._multi_view_bbox_rect
+            if item.scene():
+                item.scene().removeItem(item)
+            self.mw._multi_view_bbox_rect = None
+        if hasattr(self.mw, "_multi_view_bbox_start"):
+            del self.mw._multi_view_bbox_start
+
+        # Cancel in-progress circle drag in multi-view
         if (
             hasattr(self.mw, "_multi_view_circle_item")
             and self.mw._multi_view_circle_item
@@ -325,3 +364,12 @@ class KeyboardEventManager:
             self.mw._multi_view_circle_item = None
         if hasattr(self.mw, "_multi_view_circle_start"):
             del self.mw._multi_view_circle_start
+
+        # Cancel in-progress AI rubber-band drag in multi-view
+        if hasattr(self.mw, "_multi_view_ai_rect") and self.mw._multi_view_ai_rect:
+            item = self.mw._multi_view_ai_rect
+            if item.scene():
+                item.scene().removeItem(item)
+            self.mw._multi_view_ai_rect = None
+        if hasattr(self.mw, "_multi_view_ai_start"):
+            del self.mw._multi_view_ai_start
