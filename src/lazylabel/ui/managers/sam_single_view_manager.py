@@ -70,6 +70,48 @@ class SAMSingleViewManager:
         """Invalidate the current SAM hash."""
         self.current_sam_hash = None
 
+    def try_cache_restore(self) -> bool:
+        """Attempt to restore SAM state from the embedding cache.
+
+        Synchronous and cheap. Never spawns a worker — used by sequence-mode
+        navigation to make cached frames instant without committing to a full
+        recompute on cache miss.
+
+        Returns:
+            True if the predictor now holds the current frame's embeddings.
+        """
+        if not self.mw.current_image_path:
+            return False
+        if not self.mw.model_manager.is_model_available():
+            return False
+        if self.sam_is_updating or self.model_initializing:
+            return False
+        # Modified-image (operate_on_view) cache restore would need the
+        # adjusted pixels, which aren't readily available here — skip.
+        if getattr(self.mw.settings, "operate_on_view", False):
+            return False
+
+        image_hash = hashlib.md5(self.mw.current_image_path.encode()).hexdigest()
+
+        if image_hash == self.current_sam_hash:
+            self.sam_is_dirty = False
+            return True
+
+        cached = self.mw.embedding_cache.get(image_hash)
+        if cached is None:
+            return False
+
+        try:
+            if self.mw.model_manager.sam_model.set_embeddings(cached):
+                self.current_sam_hash = image_hash
+                self.sam_is_dirty = False
+                if self.mw.sam_preload_scheduler:
+                    self.mw.sam_preload_scheduler.schedule_preload()
+                return True
+        except Exception as e:
+            logger.warning(f"SAM cache restore failed: {e}")
+        return False
+
     # ========== Model Initialization ==========
 
     def start_initialization(self) -> bool:
@@ -207,6 +249,26 @@ class SAMSingleViewManager:
             # SAM already has this exact image state - no update needed
             self.sam_is_dirty = False
             return
+
+        # Try restoring embeddings from the LRU cache — synchronous and cheap.
+        # Avoids spawning SAMUpdateWorker when we already have embeddings for
+        # this image (e.g. it was preloaded, or the user is revisiting it).
+        if image_hash and not self.sam_is_updating:
+            cached = self.mw.embedding_cache.get(image_hash)
+            if cached is not None:
+                try:
+                    if self.mw.model_manager.sam_model.set_embeddings(cached):
+                        self.current_sam_hash = image_hash
+                        self.sam_is_dirty = False
+                        # Schedule preload of neighbors now that we have a
+                        # known-cached current frame.
+                        if self.mw.sam_preload_scheduler:
+                            self.mw.sam_preload_scheduler.schedule_preload()
+                        return
+                except Exception as e:
+                    logger.warning(
+                        f"SAM cache restore failed, falling back to recompute: {e}"
+                    )
 
         # Stop and cleanup existing worker
         self._stop_update_worker()

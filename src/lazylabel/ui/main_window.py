@@ -761,7 +761,7 @@ class MainWindow(QMainWindow):
         self.sam_preload_scheduler = SAMPreloadScheduler(
             embedding_cache=self.embedding_cache,
             preload_callback=self._execute_sam_preload,
-            get_next_path_callback=self._get_next_preload_path,
+            get_default_paths_callback=self._get_default_preload_paths,
             should_preload_callback=self._can_preload_sam,
         )
 
@@ -3584,9 +3584,13 @@ class MainWindow(QMainWindow):
             # Load existing segments for this frame
             self._load_sequence_frame_segments(image_path)
 
-            # Update SAM model for this frame so AI tools work correctly
-            # Mark as dirty so next AI click computes embedding for this frame
-            self.sam_is_dirty = True
+            # Update SAM model for this frame so AI tools work correctly.
+            # Try a cache restore first — if the embeddings are already cached
+            # (preloaded, prior visit, or archetype), the predictor is ready
+            # without any worker. Otherwise mark dirty for lazy compute on AI
+            # entry.
+            if not self.sam_worker_manager.try_cache_restore():
+                self.sam_is_dirty = True
 
     def _load_sequence_frame_segments(self, image_path: str):
         """Load segments for the current sequence frame.
@@ -5172,6 +5176,16 @@ class MainWindow(QMainWindow):
         # Apply suggestions to sequence view mode
         self.sequence_view_mode.set_suggested_frames(suggested_indices)
 
+        # Prioritize archetype frames in the SAM preload queue — these are
+        # the frames the user is most likely to label next.
+        if self.sam_preload_scheduler and self.model_manager.is_model_available():
+            archetype_paths = [
+                self.sequence_view_mode.get_image_path(idx) for idx in suggested_indices
+            ]
+            archetype_paths = [p for p in archetype_paths if p]
+            if archetype_paths:
+                self.sam_preload_scheduler.enqueue_priority(archetype_paths)
+
         # Update timeline colors
         if self.timeline_widget:
             for idx in suggested_indices:
@@ -5815,8 +5829,8 @@ class MainWindow(QMainWindow):
         x1, x2 = min(start_x, end_x), max(start_x, end_x)
         y1, y2 = min(start_y, end_y), max(start_y, end_y)
 
-        # Minimum size check
-        if abs(x2 - x1) < 2 or abs(y2 - y1) < 2:
+        # Minimum size check — allow 1×1 boxes (any non-zero drag).
+        if abs(x2 - x1) < 1 or abs(y2 - y1) < 1:
             return
 
         # Check for shift modifier (erase mode)
@@ -5912,7 +5926,7 @@ class MainWindow(QMainWindow):
         del self._multi_view_circle_start
 
         radius = ((pos.x() - start_x) ** 2 + (pos.y() - start_y) ** 2) ** 0.5
-        if radius < 2.0:
+        if radius < 1.0:
             return
 
         modifiers = QApplication.keyboardModifiers()
@@ -7419,17 +7433,33 @@ class MainWindow(QMainWindow):
         if self.sam_preload_scheduler:
             self.sam_preload_scheduler.schedule_preload()
 
-    def _get_next_preload_path(self) -> str | None:
-        """Get the next image path for preloading (callback for scheduler)."""
-        if not self.current_image_path:
-            return None
+    def _get_default_preload_paths(self) -> list[str]:
+        """Get adjacency paths around current frame for preload (callback).
 
-        next_files = self.right_panel.file_manager.getSurroundingFiles(
-            self.current_image_path, 2
-        )
-        if len(next_files) >= 2 and next_files[1]:
-            return str(next_files[1])
-        return None
+        Returns [N+1, N+2, N-1] when available — the LRU cache is 10 slots,
+        so a few-ahead window keeps non-sequential navigation fast without
+        thrashing.
+        """
+        if not self.current_image_path:
+            return []
+
+        paths: list[str] = []
+        try:
+            fm = self.right_panel.file_manager
+            forward = fm.getSurroundingFiles(self.current_image_path, 3)
+            # getSurroundingFiles returns [current, N+1, N+2, ...]
+            for p in forward[1:]:
+                if p:
+                    paths.append(str(p))
+
+            previous = fm.getPreviousFiles(self.current_image_path, 1)
+            for p in previous:
+                if p:
+                    paths.append(str(p))
+        except Exception:
+            pass
+
+        return paths
 
     def _can_preload_sam(self) -> bool:
         """Check if SAM preload should proceed (callback for scheduler)."""
@@ -7438,25 +7468,48 @@ class MainWindow(QMainWindow):
         return not (self.sam_is_dirty or self.sam_is_updating)
 
     def _execute_sam_preload(self, path: str) -> None:
-        """Execute actual SAM preload for a path (callback for scheduler)."""
-        # Store current state so we can restore after preloading
-        current_hash = self.current_sam_hash
+        """Execute actual SAM preload for a path (callback for scheduler).
+
+        Runs synchronously on the UI thread. After computing and caching the
+        target embeddings, restores the predictor to whatever image the UI is
+        *currently* displaying — not the one captured at preload start —
+        because the user may have navigated mid-preload.
+        """
         image_hash = hashlib.md5(path.encode()).hexdigest()
 
         try:
-            # Load and compute embeddings for next image
+            # Compute and cache embeddings for the preload target.
             self.model_manager.sam_model.set_image_from_path(path)
-
-            # Cache the embeddings (put() handles LRU eviction)
             embeddings = self.model_manager.sam_model.get_embeddings()
             if embeddings is not None:
                 self.embedding_cache.put(image_hash, embeddings)
 
-            # Restore current image's embeddings if we had them cached
-            cached_embeddings = self.embedding_cache.get(current_hash, update_lru=False)
-            if current_hash and cached_embeddings is not None:
-                self.model_manager.sam_model.set_embeddings(cached_embeddings)
-                self.current_sam_hash = current_hash
+            # Restore the predictor to the currently displayed image so the
+            # next AI click doesn't have to recompute. Re-read the path after
+            # set_image to pick up any navigation that happened during the
+            # blocking compute.
+            displayed_path = self.current_image_path
+            if not displayed_path:
+                return
+            displayed_hash = hashlib.md5(displayed_path.encode()).hexdigest()
+            if displayed_hash == image_hash:
+                # User navigated *to* the preload target — keep predictor as-is.
+                self.current_sam_hash = image_hash
+                return
+
+            cached = self.embedding_cache.get(displayed_hash, update_lru=False)
+            if cached is not None and self.model_manager.sam_model.set_embeddings(
+                cached
+            ):
+                self.current_sam_hash = displayed_hash
+                return
+
+            # Predictor now holds the preload target's embeddings but the UI
+            # shows a different image whose embeddings aren't cached. Mark
+            # dirty so the next AI-mode entry will recompute for the right
+            # image — better than leaving current_sam_hash lying about state.
+            self.current_sam_hash = None
+            self.sam_is_dirty = True
 
         except Exception:
             # Silently fail - preloading is optional optimization

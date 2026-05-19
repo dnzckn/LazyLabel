@@ -148,6 +148,10 @@ class SAMWorkerManager:
         """Ensure SAM model is up-to-date (lazy update with threading)."""
         self.single_view.ensure_sam_updated()
 
+    def try_cache_restore(self) -> bool:
+        """Try synchronous cache restore without spawning a worker."""
+        return self.single_view.try_cache_restore()
+
     def reset_for_model_switch(self) -> None:
         """Reset SAM state when switching models."""
         self.single_view.reset_for_model_switch()

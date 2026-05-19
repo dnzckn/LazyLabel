@@ -192,7 +192,11 @@ class FileNavigationManager:
                     self.image_adjustment_manager.saturation,
                 )
                 if getattr(self.mw, "view_mode", "single") == "sequence":
-                    self.mw.sam_is_dirty = True
+                    # In sequence mode, try a cheap cache restore — if the
+                    # embeddings are already cached the predictor is ready
+                    # instantly. Otherwise defer to AI-mode entry as before.
+                    if not self.mw.sam_worker_manager.try_cache_restore():
+                        self.mw.sam_is_dirty = True
                 else:
                     self.mw._update_sam_model_image()
                 self.file_manager.load_existing_mask(
@@ -205,7 +209,8 @@ class FileNavigationManager:
 
         if self.model_manager.is_model_available():
             if getattr(self.mw, "view_mode", "single") == "sequence":
-                self.mw.sam_is_dirty = True
+                if not self.mw.sam_worker_manager.try_cache_restore():
+                    self.mw.sam_is_dirty = True
             else:
                 self.mw._update_sam_model_image()
 
@@ -344,7 +349,8 @@ class FileNavigationManager:
 
         # Update SAM model — defer in sequence mode for instant navigation
         if getattr(self.mw, "view_mode", "single") == "sequence":
-            self.mw.sam_is_dirty = True
+            if not self.mw.sam_worker_manager.try_cache_restore():
+                self.mw.sam_is_dirty = True
         else:
             self.mw._update_sam_model_image()
 

@@ -381,7 +381,7 @@ class SingleViewMouseHandler:
         self.mw.rubber_band_rect = None
         self.mw.drag_start_pos = None
 
-        if rect.width() >= 2 and rect.height() >= 2:
+        if rect.width() >= 1 and rect.height() >= 1:
             modifiers = QApplication.keyboardModifiers()
             shift_pressed = bool(modifiers & Qt.KeyboardModifier.ShiftModifier)
 
@@ -473,7 +473,7 @@ class SingleViewMouseHandler:
         ) ** 0.5
 
         # Require minimum radius to consider a real drag
-        if radius < 2.0:
+        if radius < 1.0:
             event.accept()
             return True
 
