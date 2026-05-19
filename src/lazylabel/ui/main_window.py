@@ -5482,7 +5482,7 @@ class MainWindow(QMainWindow):
     def _handle_multi_view_mouse_move(self, viewer_idx, viewer, event):
         """Handle mouse move in a multi-view viewer."""
         from PyQt6.QtCore import QRectF
-        from PyQt6.QtGui import QColor, QPen
+        from PyQt6.QtGui import QPen
         from PyQt6.QtWidgets import QGraphicsRectItem
 
         scene_pos = viewer.mapToScene(event.pos())
@@ -5504,7 +5504,11 @@ class MainWindow(QMainWindow):
                     ):
                         self._multi_view_ai_rect = QGraphicsRectItem()
                         self._multi_view_ai_rect.setPen(
-                            QPen(QColor(255, 255, 0), 2, Qt.PenStyle.DashLine)
+                            QPen(
+                                Qt.GlobalColor.cyan,
+                                self.line_thickness,
+                                Qt.PenStyle.DashLine,
+                            )
                         )
                         self._multi_view_ai_rect.setZValue(1000)
                         viewer.scene().addItem(self._multi_view_ai_rect)
@@ -5765,7 +5769,7 @@ class MainWindow(QMainWindow):
             viewer: The PhotoViewer instance
             pos: Click position in scene coordinates
         """
-        from PyQt6.QtGui import QColor, QPen
+        from PyQt6.QtGui import QPen
         from PyQt6.QtWidgets import QGraphicsRectItem
 
         # Store starting point
@@ -5773,7 +5777,9 @@ class MainWindow(QMainWindow):
 
         # Create rectangle preview
         rect_item = QGraphicsRectItem(pos.x(), pos.y(), 0, 0)
-        rect_item.setPen(QPen(QColor(255, 255, 0), 2))  # Yellow
+        rect_item.setPen(
+            QPen(Qt.GlobalColor.red, self.line_thickness, Qt.PenStyle.DashLine)
+        )
         rect_item.setZValue(1000)
         viewer.scene().addItem(rect_item)
         self._multi_view_bbox_rect = rect_item
@@ -5873,13 +5879,15 @@ class MainWindow(QMainWindow):
 
     def _handle_multi_view_circle_press(self, viewer_idx: int, viewer, pos):
         """Handle circle press in multi-view mode."""
-        from PyQt6.QtGui import QColor, QPen
+        from PyQt6.QtGui import QPen
         from PyQt6.QtWidgets import QGraphicsEllipseItem
 
         self._multi_view_circle_start = (viewer_idx, pos.x(), pos.y())
 
         ellipse_item = QGraphicsEllipseItem(pos.x(), pos.y(), 0, 0)
-        ellipse_item.setPen(QPen(QColor(255, 255, 0), 2))
+        ellipse_item.setPen(
+            QPen(Qt.GlobalColor.red, self.line_thickness, Qt.PenStyle.DashLine)
+        )
         ellipse_item.setZValue(1000)
         viewer.scene().addItem(ellipse_item)
         self._multi_view_circle_item = ellipse_item
