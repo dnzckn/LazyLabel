@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.6] - 2026-07-01
+
+### Fixed
+
+- Frozen Windows console builds crashed at startup with `UnicodeEncodeError: 'charmap' codec can't encode characters` — the animated startup banner (box-drawing glyphs `█`/`━`/`─`) and the styled logger (`│`) were written to a `cp1252`-encoded `sys.stdout`/`sys.stderr`. `main()` now reconfigures the console text streams to UTF-8 before drawing anything (real Windows consoles render via `WriteConsoleW`), and `StartupDisplay._write` falls back to a lossy encode if reconfigure is unavailable, so the app can no longer crash on a legacy code page
+- `StartupDisplay._capture_output` now opens its `devnull` sink as UTF-8, so a library printing Unicode while the banner is drawn is swallowed instead of crashing on a legacy locale
+- Startup now restores captured `stdout`/`stderr` if initialization raises, so a startup traceback is visible instead of being written to the hidden `devnull` sink
+
+### Changed
+
+- UTF-8 stream setup runs inside `main()` rather than at import time, so importing the `lazylabel` package no longer mutates a host program's global streams
+
 ## [2.0.5] - 2026-05-19
 
 ### Fixed
@@ -1062,6 +1074,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [1.0.2]: https://github.com/dnzckn/LazyLabel/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/dnzckn/LazyLabel/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/dnzckn/LazyLabel/releases/tag/v1.0.0
+[2.0.6]: https://github.com/dnzckn/LazyLabel/compare/v2.0.5...v2.0.6
 [2.0.5]: https://github.com/dnzckn/LazyLabel/compare/v2.0.4...v2.0.5
 [2.0.4]: https://github.com/dnzckn/LazyLabel/compare/v2.0.3...v2.0.4
 [2.0.3]: https://github.com/dnzckn/LazyLabel/compare/v2.0.2...v2.0.3

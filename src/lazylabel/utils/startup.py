@@ -135,7 +135,14 @@ class StartupDisplay:
 
     def _write(self, *parts: str) -> None:
         target = self._real_stdout or sys.stdout
-        target.write("".join(parts))
+        text = "".join(parts)
+        try:
+            target.write(text)
+        except UnicodeEncodeError:
+            # A legacy console (e.g. cp1252) cannot encode the box-drawing art.
+            # Degrade to a lossy encoding rather than crash the application.
+            enc = getattr(target, "encoding", None) or "ascii"
+            target.write(text.encode(enc, "replace").decode(enc, "replace"))
         target.flush()
 
     def _draw_frame(self, step: int, message: str, *, final: bool = False) -> None:
@@ -195,7 +202,9 @@ class StartupDisplay:
         self._real_stdout = sys.stdout
         self._real_stderr = sys.stderr
         self._saved_streams: list[tuple[logging.StreamHandler, object]] = []
-        devnull = open(os.devnull, "w")  # noqa: SIM115
+        # UTF-8 so redirected output (e.g. a library printing Unicode while the
+        # banner is drawn) is swallowed instead of raising on a legacy locale.
+        devnull = open(os.devnull, "w", encoding="utf-8")  # noqa: SIM115
         sys.stdout = devnull
         sys.stderr = devnull
 
