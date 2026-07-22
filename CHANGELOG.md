@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.7] - 2026-07-22
+
+### Changed
+
+- Removed the `pyqtdarktheme` dependency. The dark/light stylesheets, palettes, widget indicator icons, and standard-icon overrides that PyQtDarkTheme 2.1.0 generated are now embedded in `lazylabel.ui.theme_data` (MIT-licensed generated output, attribution retained), so the app renders pixel-identically to the previous theming without the external package. The night/day toggle is unchanged
+- Theme indicator icons are written once per run to `~/.cache/lazylabel/theme-icons` (system temp dir as fallback); files are size-checked and rewritten atomically, so a truncated cache self-heals
+- Standard icons (file-dialog toolbar, message-box question mark, line-edit clear button) keep their Material Design look via a lightweight proxy style that renders the embedded SVGs recolored from the active palette
+- macOS-specific stylesheet rules (overlay scrollbars, rounded popups) are preserved through dedicated Darwin stylesheet variants selected at runtime
+- Replaced the qdarktheme startup double-apply workaround in `MainWindow.showEvent` with a single first-show theme propagation
+- Windows PyInstaller spec no longer collects `qdarktheme` data files or submodules
+
+### Fixed
+
+- Stylesheet `url()` references are now double-quoted, fixing silent stylesheet truncation for Windows user names containing `'` or `&` (a bug inherited from PyQtDarkTheme) and letting the theme degrade gracefully (missing indicator icons only) if no writable icon directory exists
+
 ## [2.0.6] - 2026-07-01
 
 ### Fixed
@@ -1074,6 +1089,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [1.0.2]: https://github.com/dnzckn/LazyLabel/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/dnzckn/LazyLabel/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/dnzckn/LazyLabel/releases/tag/v1.0.0
+[2.0.7]: https://github.com/dnzckn/LazyLabel/compare/v2.0.6...v2.0.7
 [2.0.6]: https://github.com/dnzckn/LazyLabel/compare/v2.0.5...v2.0.6
 [2.0.5]: https://github.com/dnzckn/LazyLabel/compare/v2.0.4...v2.0.5
 [2.0.4]: https://github.com/dnzckn/LazyLabel/compare/v2.0.3...v2.0.4

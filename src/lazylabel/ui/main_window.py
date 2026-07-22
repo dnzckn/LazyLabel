@@ -2112,29 +2112,11 @@ class MainWindow(QMainWindow):
         self.settings.save_to_file(str(self.paths.settings_file))
 
     def showEvent(self, event):
-        """Re-apply theme on first show to match runtime toggle rendering."""
+        """Propagate the persisted theme to child widgets on first show."""
         super().showEvent(event)
-        if not getattr(self, "_theme_fixed", False):
-            self._theme_fixed = True
-            from PyQt6.QtCore import QTimer
-
-            dark = self.settings.dark_mode
-            opposite = "light" if dark else "dark"
-            target = "dark" if dark else "light"
-
-            def _step1():
-                from lazylabel.ui.theme import apply_theme
-
-                apply_theme(opposite)
-                QTimer.singleShot(0, _step2)
-
-            def _step2():
-                from lazylabel.ui.theme import apply_theme
-
-                apply_theme(target)
-                self._propagate_theme(dark)
-
-            QTimer.singleShot(0, _step1)
+        if not getattr(self, "_theme_propagated", False):
+            self._theme_propagated = True
+            self._propagate_theme(self.settings.dark_mode)
 
     def _on_theme_toggled(self, dark_mode: bool):
         """Switch between dark and light theme."""

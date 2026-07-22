@@ -19,7 +19,6 @@ block_cipher = None
 sam_datas = collect_data_files('segment_anything')
 sam2_datas = collect_data_files('sam2', include_py_files=True)
 pyqt_datas = collect_data_files('PyQt6')
-qdarktheme_datas = collect_data_files('qdarktheme')
 hydra_datas = collect_data_files('hydra', include_py_files=True)
 
 # Collect model files (using absolute paths from project root)
@@ -34,7 +33,7 @@ demo_datas = [
 ]
 
 # Combine all data files
-datas = sam_datas + sam2_datas + pyqt_datas + qdarktheme_datas + hydra_datas + model_files + demo_datas
+datas = sam_datas + sam2_datas + pyqt_datas + hydra_datas + model_files + demo_datas
 
 # Hidden imports that PyInstaller might miss
 hiddenimports = [
@@ -86,7 +85,6 @@ hiddenimports = [
     'requests',
     'tqdm',
     'huggingface_hub',
-    'qdarktheme',
 
     # pkg_resources and setuptools dependencies
     'pkg_resources',
@@ -113,9 +111,6 @@ hiddenimports += collect_submodules('sam2')
 # Add Hydra/OmegaConf submodules (required by SAM2 config system)
 hiddenimports += collect_submodules('hydra')
 hiddenimports += collect_submodules('omegaconf')
-
-# Add qdarktheme submodules
-hiddenimports += collect_submodules('qdarktheme')
 
 a = Analysis(
     [str(ROOT_DIR / 'src/lazylabel/main.py')],
