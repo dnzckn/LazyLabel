@@ -27,11 +27,17 @@ class NpzClassMapExporter:
 
         class_map = self._one_hot_to_class_map(ctx.mask_tensor, ctx.class_order)
 
+        # Class id 0 is indistinguishable from background in class_map alone,
+        # so store the foreground mask alongside it. Third-party readers can
+        # ignore this key; LazyLabel uses it to reload class 0 losslessly.
+        foreground = np.any(ctx.mask_tensor > 0, axis=2)
+
         path = self.get_output_path(ctx.image_path)
         os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
         np.savez_compressed(
             path,
             class_map=class_map,
+            foreground=foreground,
             class_order=np.array(ctx.class_order),
             class_aliases=ctx.class_aliases,
         )

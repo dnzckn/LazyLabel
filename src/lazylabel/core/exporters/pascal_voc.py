@@ -6,15 +6,17 @@ import os
 import xml.etree.ElementTree as ET
 
 import cv2
-import numpy as np
 
-from . import ExportContext, ExportFormat, _register
+from . import ExportContext, ExportFormat, _register, iter_object_contours
 
 
 class PascalVocExporter:
     """Save annotations in Pascal VOC XML format.
 
     Output file: ``<base>.xml``
+
+    One ``<object>`` element per object. ``xmax``/``ymax`` are exclusive, so
+    ``xmax - xmin`` is the box width; the VOC loader uses the same convention.
     """
 
     def export(self, ctx: ExportContext) -> str | None:
@@ -30,30 +32,22 @@ class PascalVocExporter:
 
         has_objects = False
 
-        for channel in range(ctx.mask_tensor.shape[2]):
-            single = ctx.mask_tensor[:, :, channel]
-            if not np.any(single):
-                continue
-
-            contours, _ = cv2.findContours(
-                single, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
-            )
+        for channel, contour in iter_object_contours(ctx):
+            x, y, bw, bh = cv2.boundingRect(contour)
             label = ctx.class_labels[channel]
 
-            for contour in contours:
-                x, y, bw, bh = cv2.boundingRect(contour)
-                obj_el = ET.SubElement(root, "object")
-                ET.SubElement(obj_el, "name").text = label
-                ET.SubElement(obj_el, "pose").text = "Unspecified"
-                ET.SubElement(obj_el, "truncated").text = "0"
-                ET.SubElement(obj_el, "difficult").text = "0"
+            obj_el = ET.SubElement(root, "object")
+            ET.SubElement(obj_el, "name").text = label
+            ET.SubElement(obj_el, "pose").text = "Unspecified"
+            ET.SubElement(obj_el, "truncated").text = "0"
+            ET.SubElement(obj_el, "difficult").text = "0"
 
-                bbox_el = ET.SubElement(obj_el, "bndbox")
-                ET.SubElement(bbox_el, "xmin").text = str(x)
-                ET.SubElement(bbox_el, "ymin").text = str(y)
-                ET.SubElement(bbox_el, "xmax").text = str(x + bw)
-                ET.SubElement(bbox_el, "ymax").text = str(y + bh)
-                has_objects = True
+            bbox_el = ET.SubElement(obj_el, "bndbox")
+            ET.SubElement(bbox_el, "xmin").text = str(x)
+            ET.SubElement(bbox_el, "ymin").text = str(y)
+            ET.SubElement(bbox_el, "xmax").text = str(x + bw)
+            ET.SubElement(bbox_el, "ymax").text = str(y + bh)
+            has_objects = True
 
         if not has_objects:
             return None

@@ -199,10 +199,17 @@ class FileNavigationManager:
                         self.mw.sam_is_dirty = True
                 else:
                     self.mw._update_sam_model_image()
-                self.file_manager.load_existing_mask(
-                    self.mw.current_image_path,
-                    image_size=(pixmap.height(), pixmap.width()),
-                )
+                try:
+                    self.file_manager.load_existing_mask(
+                        self.mw.current_image_path,
+                        image_size=(pixmap.height(), pixmap.width()),
+                    )
+                except Exception as e:
+                    # A damaged annotation file must not abort image loading.
+                    logger.error(
+                        f"Error loading annotations for "
+                        f"{self.mw.current_image_path}: {e}"
+                    )
                 self.right_panel.file_tree.setCurrentIndex(index)
                 self.mw._update_all_lists()
                 self.viewer.setFocus()
@@ -332,9 +339,13 @@ class FileNavigationManager:
         )
 
         # Load existing segments
-        self.file_manager.load_existing_mask(
-            path, image_size=(pixmap.height(), pixmap.width())
-        )
+        try:
+            self.file_manager.load_existing_mask(
+                path, image_size=(pixmap.height(), pixmap.width())
+            )
+        except Exception as e:
+            # A damaged annotation file must not abort image loading.
+            logger.error(f"Error loading annotations for {path}: {e}")
 
         # Update UI lists to reflect loaded segments
         self.mw._update_all_lists()

@@ -5,38 +5,32 @@ from __future__ import annotations
 import os
 
 import cv2
-import numpy as np
 
-from . import ExportContext, ExportFormat, _register
+from . import ExportContext, ExportFormat, _register, iter_object_contours
 
 
 class YoloDetectionExporter:
     """Save bounding box annotations in YOLO detection TXT format.
 
     Each line: ``class_id cx cy w h`` (normalized coordinates).
+    One line per object.
     """
 
     def export(self, ctx: ExportContext) -> str | None:
         h, w = ctx.image_size
+        if h <= 0 or w <= 0:
+            return None
 
         annotations: list[str] = []
 
-        for channel in range(ctx.mask_tensor.shape[2]):
-            single = ctx.mask_tensor[:, :, channel]
-            if not np.any(single):
-                continue
-
-            contours, _ = cv2.findContours(
-                single, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
-            )
+        for channel, contour in iter_object_contours(ctx):
+            x, y, bw, bh = cv2.boundingRect(contour)
             class_id = ctx.class_order[channel]
-            for contour in contours:
-                x, y, bw, bh = cv2.boundingRect(contour)
-                cx = (x + bw / 2) / w
-                cy = (y + bh / 2) / h
-                nw = bw / w
-                nh = bh / h
-                annotations.append(f"{class_id} {cx} {cy} {nw} {nh}")
+            cx = (x + bw / 2) / w
+            cy = (y + bh / 2) / h
+            nw = bw / w
+            nh = bh / h
+            annotations.append(f"{class_id} {cx} {cy} {nw} {nh}")
 
         if not annotations:
             return None

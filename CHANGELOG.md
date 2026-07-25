@@ -5,6 +5,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.8] - 2026-07-25
+
+### Fixed
+
+- Bounding box annotations could not be loaded back into LazyLabel. `FileManager.load_existing_mask()` returned early whenever the caller omitted `image_size`, and both the sequence-frame loader and the multi-view → single-view restore omitted it, so every non-NPZ format silently loaded zero segments. Because an empty segment list then looks like an unannotated image, the following auto-save deleted the annotation files. The image size is now read from the image header (`QImageReader`, with an OpenCV fallback) when the caller does not supply one
+- Bounding box exporters fused objects. Boxes were derived from contours of the *merged per-class* mask channel, so two same-class objects that touched or overlapped were written as one box. `SegmentManager.create_instance_contours()` now rasterizes each segment on its own and the detection/polygon exporters emit one entry per object. Each segment is intersected with the final mask tensor, so crop and pixel-priority decisions still apply
+- Multi-view had its own annotation loader and saver, both hardcoded to NPZ. An image annotated as YOLO Detection, COCO, Pascal VOC or CreateML appeared blank in multi-view, and saving from multi-view ignored the selected export formats and wrote NPZ regardless. Both paths now go through `FileManager` and `export_all`
+- Multi-view NPZ writes omitted `class_order` and `class_aliases`, and the multi-view and propagation-reference loaders used the channel index as the class id, so classes were renumbered on reload (an image with classes 3 and 7 came back as 0 and 1) and aliases no longer matched any segment
+- `NPZ Class Map` output had no loader at all, and its class map cannot distinguish class id 0 from background. The exporter now also stores a `foreground` mask (an additive key third-party readers can ignore), and the format is loadable
+- Class ids collided when an annotation file mixed numeric labels with names — a Pascal VOC or CreateML file containing both `0` and `dog` merged the two classes into one. Numeric labels now claim their ids before named labels are assigned
+- COCO and YOLO Segmentation silently dropped objects one pixel wide, whose contours have too few points to form a polygon. Such contours are now closed into a ring that rasterizes back to exactly the original pixels
+- The COCO loader dropped annotations whose `segmentation` was present but unusable (empty, degenerate, or RLE) instead of falling back to `bbox`, and could raise on malformed third-party files. The TXT loaders had no I/O error handling, so an unreadable sidecar propagated out of a Qt slot and aborted image loading
+- Sequence propagation treated only `.npz` as evidence that a frame was labelled, so "+ All Labeled" skipped bbox-annotated frames and "skip labeled" overwrote hand-made bbox labels
+
+### Changed
+
+- The annotation load order is now explicit and documented: NPZ → YOLO Segmentation → COCO JSON → NPZ Class Map → Pascal VOC → CreateML → YOLO Detection. When an image has several annotation files the most faithful one is loaded. A file that fails to parse is logged and the chain continues to the next format rather than one damaged sidecar hiding a healthy one. This governs loading only — exporting never consults it and never deletes a file, so exporting in every format at once is supported
+- `FileManager.find_annotation_file()` answers "is this image annotated?" using the same chain, replacing `.npz` existence probes
+- Legacy NPZ layouts (a `masks` key holding the (H, W, C) tensor, and a `masks` (N, H, W) stack paired with `class_ids`) are handled in `FileManager._load_npz` instead of being duplicated in `main_window`
+- Instance contours are only computed when a selected format reads them, so a mask-only save does not pay for them
+
+### Notes
+
+- The mask formats do not store instance identity: NPZ holds one channel per class and the class map one label per pixel, so reloading either gives one segment per class and same-class objects that touch come back fused. This is the format working as intended — instance separation lives in the detection and polygon formats
+- Deleting every segment and saving still removes all annotation files for that image
+
 ## [2.0.7] - 2026-07-22
 
 ### Changed
@@ -1089,6 +1115,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [1.0.2]: https://github.com/dnzckn/LazyLabel/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/dnzckn/LazyLabel/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/dnzckn/LazyLabel/releases/tag/v1.0.0
+[2.0.8]: https://github.com/dnzckn/LazyLabel/compare/v2.0.7...v2.0.8
 [2.0.7]: https://github.com/dnzckn/LazyLabel/compare/v2.0.6...v2.0.7
 [2.0.6]: https://github.com/dnzckn/LazyLabel/compare/v2.0.5...v2.0.6
 [2.0.5]: https://github.com/dnzckn/LazyLabel/compare/v2.0.4...v2.0.5

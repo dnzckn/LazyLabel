@@ -153,8 +153,9 @@ Manages customizable keyboard shortcuts with JSON persistence.
 Pluggable export system in `core/exporters/` supporting multiple annotation output formats.
 
 ### ExportFormat Enum
-Defines the six supported export formats:
+Defines the seven supported export formats:
 - `NPZ` - NumPy compressed archive with masks and metadata
+- `NPZ_CLASS_MAP` - Single-channel (H, W) class map plus a `foreground` mask
 - `YOLO_DETECTION` - YOLO bounding box detection format
 - `YOLO_SEGMENTATION` - YOLO polygon segmentation format
 - `COCO_JSON` - COCO-style JSON annotations
@@ -167,7 +168,16 @@ Dataclass bundling all data an exporter needs to write output:
 - `class_order`, `class_labels`, `class_aliases`
 - `mask_tensor` - (H, W, C) uint8 array
 - `crop_coords` - optional crop region
-- `segments` - list of segment dicts
+- `instances` - per-object contours from `SegmentManager.create_instance_contours()`
+
+### Instance-aware exporters
+Detection and polygon formats need one entry per *object*. Contouring
+`mask_tensor` alone fuses same-class objects that touch or overlap into a single
+box, so `iter_object_contours(ctx)` walks `ctx.instances` when it is populated
+and falls back to the merged per-class channels when it is not. Each instance
+record is intersected with the final tensor at build time, so crop and pixel
+priority still apply. `contour_to_polygon()` substitutes the bounding box
+outline for contours too degenerate to form a polygon (one-pixel objects).
 
 ### Exporter Protocol
 Every exporter implements three methods:
@@ -179,8 +189,33 @@ Every exporter implements three methods:
 Exporters self-register at import time via `_register(fmt, exporter, extensions)`. The `EXPORTERS` dict maps `ExportFormat` to its `Exporter` instance. Submodules (npz, yolo_detection, yolo_segmentation, coco, pascal_voc, createml) are imported at the bottom of `__init__.py` to trigger registration.
 
 ### export_all / delete_all_outputs
-- `export_all(formats, ctx)` - Runs all enabled exporters and returns a list of paths written
-- `delete_all_outputs(image_path)` - Deletes all known format outputs for a given image
+- `export_all(formats, ctx)` - Runs the enabled exporters and returns a list of paths written. **Writing never deletes.** Exporting in every format at once is supported, and files already next to the image are left untouched — they may be another format's export of the same annotations, or ground truth that shipped with the dataset.
+- `delete_all_outputs(image_path)` - Deletes all known format outputs for a given image. Used only when the image has no segments left, i.e. the user cleared the annotations.
+
+### Load priority chain
+`LOAD_PRIORITY` (in `exporters/__init__.py`) is the canonical fidelity order,
+mirrored by `FileManager._LOAD_CHAIN`: NPZ → YOLO Seg → COCO JSON → NPZ Class
+Map → Pascal VOC → CreateML → YOLO Det. It governs **loading only** — nothing
+in the export path consults it. Pixel masks beat polygons beat boxes; within
+that, formats that keep objects apart beat formats that merge everything of one
+class, which is why the class map sits below the polygon formats despite being
+pixel-exact.
+
+`FileManager.load_existing_mask()` walks that chain and the first format present
+on disk wins, so when an image has several annotation files the most faithful
+one is what comes back. A file that fails to parse is logged and the chain
+continues. Everything below NPZ needs the image size; when the caller omits it,
+it is read from the image header. `FileManager.find_annotation_file()` answers
+"is this image annotated?" using the same chain — probing only for `.npz` misses
+every bbox-annotated image.
+
+The mask formats do not store instance identity: NPZ holds one channel per
+*class* and the class map one label per pixel. Reloading either therefore
+yields one segment per class, and same-class objects that touch come back
+fused. That is the format working as intended, not a bug — instance separation
+lives in the detection and polygon formats. Pixel priority likewise merges and
+reshapes objects on purpose; instance contours are intersected with the final
+mask tensor, so whatever priority decided is exactly what gets exported.
 
 ### ExportFormatWidget
 A `QToolButton` dropdown in `ui/widgets/export_format_widget.py` that presents a checklist of all formats. Users can toggle formats on/off, with at least one required. Emits `formats_changed` when the selection changes. Default selection: NPZ and YOLO Detection.

@@ -6,9 +6,8 @@ import json
 import os
 
 import cv2
-import numpy as np
 
-from . import ExportContext, ExportFormat, _register
+from . import ExportContext, ExportFormat, _register, iter_object_contours
 
 
 class CreateMlExporter:
@@ -32,32 +31,21 @@ class CreateMlExporter:
     """
 
     def export(self, ctx: ExportContext) -> str | None:
-        h_img, w_img = ctx.image_size
         ann_list: list[dict] = []
 
-        for channel in range(ctx.mask_tensor.shape[2]):
-            single = ctx.mask_tensor[:, :, channel]
-            if not np.any(single):
-                continue
-
-            contours, _ = cv2.findContours(
-                single, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
+        for channel, contour in iter_object_contours(ctx):
+            x, y, bw, bh = cv2.boundingRect(contour)
+            ann_list.append(
+                {
+                    "label": ctx.class_labels[channel],
+                    "coordinates": {
+                        "x": int(x) + int(bw) / 2,
+                        "y": int(y) + int(bh) / 2,
+                        "width": int(bw),
+                        "height": int(bh),
+                    },
+                }
             )
-            label = ctx.class_labels[channel]
-
-            for contour in contours:
-                x, y, bw, bh = cv2.boundingRect(contour)
-                ann_list.append(
-                    {
-                        "label": label,
-                        "coordinates": {
-                            "x": x + bw / 2,
-                            "y": y + bh / 2,
-                            "width": bw,
-                            "height": bh,
-                        },
-                    }
-                )
 
         if not ann_list:
             return None

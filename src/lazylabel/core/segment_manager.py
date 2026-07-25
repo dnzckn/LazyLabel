@@ -251,6 +251,69 @@ class SegmentManager:
 
         return final_mask_tensor
 
+    def create_instance_contours(
+        self,
+        image_size: tuple[int, int],
+        class_order: list[int],
+        final_mask_tensor: np.ndarray,
+    ) -> list[dict[str, Any]]:
+        """Extract per-object contours for instance-aware exporters.
+
+        Detection formats (YOLO detection, Pascal VOC, CreateML, COCO) need one
+        entry per *object*. Contouring the merged per-class channels of
+        ``final_mask_tensor`` instead fuses same-class objects that touch or
+        overlap into a single box, so every segment is rasterized on its own
+        here. Intersecting each segment with the final tensor keeps whatever
+        crop and pixel-priority decisions were already applied to that tensor.
+
+        Only the contours are retained, so peak memory stays at one full-size
+        mask regardless of how many segments exist.
+
+        Returns one record per contour-bearing segment::
+
+            {"class_id": int, "channel": int, "contours": list[np.ndarray]}
+        """
+        id_map = {old_id: new_id for new_id, old_id in enumerate(class_order)}
+        records: list[dict[str, Any]] = []
+
+        for seg in self.segments:
+            class_id = seg.get("class_id")
+            if class_id not in id_map:
+                continue
+            channel = id_map[class_id]
+
+            seg_type = seg.get("type")
+            if seg_type == "Polygon" and seg.get("vertices"):
+                qpoints = [QPointF(p[0], p[1]) for p in seg["vertices"]]
+                mask = self.rasterize_polygon(qpoints, image_size)
+            elif seg_type == "Circle" and seg.get("vertices"):
+                mask = self.rasterize_circle(seg["vertices"], image_size)
+            else:
+                mask = seg.get("mask")
+
+            if mask is None or tuple(mask.shape[:2]) != tuple(image_size):
+                continue
+
+            single = np.logical_and(mask, final_mask_tensor[:, :, channel]).astype(
+                np.uint8
+            )
+            if not np.any(single):
+                continue
+
+            contours, _ = cv2.findContours(
+                single, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
+            )
+            if contours:
+                records.append(
+                    {
+                        "class_id": class_id,
+                        "channel": channel,
+                        "contours": list(contours),
+                    }
+                )
+
+        return records
+
     def _apply_pixel_priority(
         self, mask_tensor: np.ndarray, ascending: bool
     ) -> np.ndarray:

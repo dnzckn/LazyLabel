@@ -2,7 +2,12 @@
 
 from PyQt6.QtCore import QThread, pyqtSignal
 
-from ...core.exporters import ExportContext, ExportFormat, export_all
+from ...core.exporters import (
+    INSTANCE_AWARE_FORMATS,
+    ExportContext,
+    ExportFormat,
+    export_all,
+)
 
 
 class SaveWorker(QThread):
@@ -84,6 +89,13 @@ class SaveWorker(QThread):
                     class_aliases=dict(self.file_manager.segment_manager.class_aliases),
                     mask_tensor=mask_tensor,
                     crop_coords=self.crop_coords,
+                    instances=(
+                        self.file_manager.segment_manager.create_instance_contours(
+                            self.image_size, self.class_order, mask_tensor
+                        )
+                        if self.export_formats & INSTANCE_AWARE_FORMATS
+                        else []
+                    ),
                 )
 
                 written = export_all(self.export_formats, ctx)

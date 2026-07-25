@@ -3963,8 +3963,7 @@ class MainWindow(QMainWindow):
             image_path = self.sequence_view_mode.get_image_path(idx)
             if not image_path:
                 continue
-            npz_path = Path(image_path).with_suffix(".npz")
-            if not npz_path.exists():
+            if FileManager.find_annotation_file(image_path) is None:
                 continue
             dims = self._get_sequence_image_dimensions(image_path)
             if self.sequence_view_mode.set_reference_frame(idx, image_dimensions=dims):
@@ -4216,17 +4215,15 @@ class MainWindow(QMainWindow):
         #              "any_failed": bool}}
         self._frame_buffer: dict[int, dict] = {}
 
-        # Precompute the set of labeled frames to skip (have NPZ on disk)
+        # Precompute the set of labeled frames to skip (annotated in any format)
         self._skip_labeled_frames: set[int] = set()
         if skip_labeled and self.sequence_view_mode:
-            from pathlib import Path
-
             for i in range(self.sequence_view_mode.total_frames):
                 # Don't skip reference frames
                 if i in self.sequence_view_mode.reference_frame_indices:
                     continue
                 img_path = self.sequence_view_mode.get_image_path(i)
-                if img_path and Path(img_path).with_suffix(".npz").exists():
+                if img_path and FileManager.find_annotation_file(img_path) is not None:
                     self._skip_labeled_frames.add(i)
             if self._skip_labeled_frames:
                 logger.info(
@@ -4849,82 +4846,33 @@ class MainWindow(QMainWindow):
         self._show_notification(f"Saved {saved} frames to NPZ")
 
     def _load_mask_data_for_path(self, image_path: str) -> dict | None:
-        """Load mask data from NPZ file for an image path.
+        """Load annotations for an image path, in any supported format.
 
         Args:
             image_path: Path to the image file
 
         Returns:
-            Dictionary with segments and class_aliases, or None if no mask file
+            Dictionary with segments and class_aliases, or None if nothing
+            could be loaded.
         """
-        # Construct NPZ path
-        npz_path = Path(image_path).with_suffix(".npz")
-        if not npz_path.exists():
+        if FileManager.find_annotation_file(image_path) is None:
             return None
 
+        # Same priority chain and class_order handling as single view.
+        temp_manager = SegmentManager()
         try:
-            data = np.load(str(npz_path), allow_pickle=True)
-            result = {
-                "segments": [],
-                "class_aliases": {},
-            }
-
-            # Load class aliases if present
-            if "class_aliases" in data:
-                try:
-                    result["class_aliases"] = data["class_aliases"].item()
-                except (AttributeError, ValueError):
-                    # Handle case where class_aliases is already a dict or other type
-                    result["class_aliases"] = dict(data["class_aliases"])
-
-            # Load from "mask" key (standard format - 3D tensor H,W,C where C = num classes)
-            if "mask" in data:
-                mask_tensor = data["mask"]
-                if mask_tensor.ndim == 3:
-                    # Each channel is a class
-                    for class_id in range(mask_tensor.shape[2]):
-                        channel_mask = mask_tensor[:, :, class_id]
-                        if channel_mask.any():
-                            result["segments"].append(
-                                {
-                                    "mask": channel_mask.astype(bool),
-                                    "class_id": class_id,
-                                    "type": "Loaded",
-                                    "vertices": None,
-                                }
-                            )
-                elif mask_tensor.ndim == 2 and mask_tensor.any():
-                    # Single mask
-                    result["segments"].append(
-                        {
-                            "mask": mask_tensor.astype(bool),
-                            "class_id": 0,
-                            "type": "Loaded",
-                            "vertices": None,
-                        }
-                    )
-
-            # Also support alternative format with "masks" and "class_ids" arrays
-            elif "masks" in data and "class_ids" in data:
-                masks = data["masks"]
-                class_ids = data["class_ids"]
-                for i in range(len(masks)):
-                    if masks[i].any():
-                        result["segments"].append(
-                            {
-                                "mask": masks[i].astype(bool),
-                                "class_id": int(class_ids[i])
-                                if i < len(class_ids)
-                                else 0,
-                                "type": "Loaded",
-                                "vertices": None,
-                            }
-                        )
-
-            return result if result["segments"] else None
+            FileManager(temp_manager).load_existing_mask(image_path)
         except Exception as e:
-            logger.debug(f"Failed to load mask from {npz_path}: {e}")
+            logger.debug(f"Failed to load annotations for {image_path}: {e}")
             return None
+
+        if not temp_manager.segments:
+            return None
+
+        return {
+            "segments": temp_manager.segments,
+            "class_aliases": dict(temp_manager.class_aliases),
+        }
 
     def get_cached_sequence_image(self, path: str) -> np.ndarray | None:
         """Get a cached image from sequence memory.
@@ -6152,42 +6100,20 @@ class MainWindow(QMainWindow):
         segment_manager = self.multi_view_segment_managers[viewer_idx]
         segment_manager.clear()
 
-        # Try to load existing annotations
+        # Go through FileManager so multi-view honours the same format priority
+        # chain as single view, instead of only ever seeing NPZ.
         try:
-            # Use file_manager to load, but store in per-viewer segment manager
-            npz_path = os.path.splitext(image_path)[0] + ".npz"
-            if os.path.exists(npz_path):
-                data = np.load(npz_path, allow_pickle=True)
+            image_size = None
+            if viewer_idx < len(self.multi_view_viewers):
+                pixmap = self.multi_view_viewers[viewer_idx]._pixmap_item.pixmap()
+                if not pixmap.isNull():
+                    image_size = (pixmap.height(), pixmap.width())
 
-                # Load masks - check both keys for compatibility
-                # Single-view uses "mask", multi-view previously used "masks"
-                mask_key = (
-                    "mask" if "mask" in data else "masks" if "masks" in data else None
-                )
-                if mask_key:
-                    masks = data[mask_key]
-                    # Handle both 2D and 3D mask arrays
-                    if masks.ndim == 2:
-                        masks = np.expand_dims(masks, axis=-1)
-                    for i in range(masks.shape[2]):
-                        mask = masks[:, :, i].astype(bool)
-                        if np.any(mask):  # Only add non-empty masks
-                            segment_manager.add_segment(
-                                {"type": "Loaded", "mask": mask, "class_id": i}
-                            )
-
-                # Load class aliases
-                if "class_aliases" in data:
-                    try:
-                        aliases = data["class_aliases"].item()
-                        if isinstance(aliases, dict):
-                            for class_id, alias in aliases.items():
-                                segment_manager.set_class_alias(class_id, alias)
-                    except (AttributeError, ValueError):
-                        pass
-
+            FileManager(segment_manager).load_existing_mask(
+                image_path, image_size=image_size
+            )
         except Exception as e:
-            logger.debug(f"No existing annotations for {image_path}: {e}")
+            logger.error(f"Error loading annotations for {image_path}: {e}")
 
         # Update the viewer's segment table
         self._update_multi_view_segment_table(viewer_idx)
@@ -6633,9 +6559,24 @@ class MainWindow(QMainWindow):
     def _save_multi_view_annotations(self):
         """Save annotations for both viewers to their respective image files.
 
-        If all segments are deleted, the NPZ file is also deleted.
+        Runs the same exporter framework as single view, so the user's chosen
+        export formats apply here too. If all segments are deleted, every
+        annotation file for that image is removed.
         """
         from pathlib import Path
+
+        from ..core.exporters import (
+            INSTANCE_AWARE_FORMATS,
+            ExportContext,
+            ExportFormat,
+            delete_all_outputs,
+            export_all,
+        )
+
+        settings = self.control_panel.get_settings()
+        formats = settings.get("export_formats", set())
+        if not isinstance(formats, set):
+            formats = {ExportFormat(f) for f in formats}
 
         for viewer_idx in range(2):
             image_path = self.multi_view_image_paths[viewer_idx]
@@ -6643,27 +6584,15 @@ class MainWindow(QMainWindow):
                 continue
 
             segment_manager = self.multi_view_segment_managers[viewer_idx]
-            npz_path = os.path.splitext(image_path)[0] + ".npz"
 
-            # If no segments, delete the NPZ file if it exists
-            if not segment_manager.segments:
-                if os.path.exists(npz_path):
-                    try:
-                        os.remove(npz_path)
-                        logger.debug(f"Deleted empty annotation file: {npz_path}")
-                        # Update file manager to reflect the change
-                        if hasattr(self, "right_panel") and hasattr(
-                            self.right_panel, "file_manager"
-                        ):
-                            self.right_panel.file_manager.updateFileStatus(
-                                Path(image_path)
-                            )
-                    except Exception as e:
-                        logger.error(f"Error deleting {npz_path}: {e}")
-                continue
-
-            # Use the save_export_manager to save annotations
             try:
+                if not segment_manager.segments:
+                    deleted = delete_all_outputs(image_path)
+                    if deleted:
+                        logger.debug(f"Deleted empty annotation files: {deleted}")
+                        self._refresh_file_status(Path(image_path))
+                    continue
+
                 viewer = self.multi_view_viewers[viewer_idx]
                 pixmap = viewer._pixmap_item.pixmap()
                 if pixmap.isNull():
@@ -6671,29 +6600,45 @@ class MainWindow(QMainWindow):
 
                 image_size = (pixmap.height(), pixmap.width())
                 class_order = segment_manager.get_unique_class_ids()
+                if not class_order:
+                    continue
 
-                if class_order:
-                    # Create mask tensor and save
-                    final_mask = segment_manager.create_final_mask_tensor(
-                        image_size, class_order
-                    )
+                mask_tensor = segment_manager.create_final_mask_tensor(
+                    image_size,
+                    class_order,
+                    settings.get("pixel_priority_enabled", False),
+                    settings.get("pixel_priority_ascending", True),
+                )
 
-                    # Save NPZ file - use "mask" key for single-view compatibility
-                    if npz_path:
-                        np.savez_compressed(
-                            npz_path,
-                            mask=final_mask,  # Use "mask" for consistency with single-view
-                        )
-                        logger.debug(f"Saved multi-view annotations to {npz_path}")
-                        # Update file manager to reflect the change
-                        if hasattr(self, "right_panel") and hasattr(
-                            self.right_panel, "file_manager"
-                        ):
-                            self.right_panel.file_manager.updateFileStatus(
-                                Path(image_path)
+                written = export_all(
+                    formats,
+                    ExportContext(
+                        image_path=image_path,
+                        image_size=image_size,
+                        class_order=class_order,
+                        class_labels=[
+                            segment_manager.get_class_alias(cid) for cid in class_order
+                        ],
+                        class_aliases=dict(segment_manager.class_aliases),
+                        mask_tensor=mask_tensor,
+                        instances=(
+                            segment_manager.create_instance_contours(
+                                image_size, class_order, mask_tensor
                             )
+                            if formats & INSTANCE_AWARE_FORMATS
+                            else []
+                        ),
+                    ),
+                )
+                logger.debug(f"Saved multi-view annotations: {written}")
+                self._refresh_file_status(Path(image_path))
             except Exception as e:
                 logger.error(f"Error saving multi-view annotations: {e}")
+
+    def _refresh_file_status(self, image_path: Path) -> None:
+        """Refresh the file tree's annotation indicators for one image."""
+        if hasattr(self, "right_panel") and hasattr(self.right_panel, "file_manager"):
+            self.right_panel.file_manager.updateFileStatus(image_path)
 
     # ========== Multi-View Linked Operations ==========
 
@@ -7318,7 +7263,10 @@ class MainWindow(QMainWindow):
                 try:
                     self.segment_manager.clear()
                     self.segment_display_manager.clear_all_caches()
-                    self.file_manager.load_existing_mask(self.current_image_path)
+                    self.file_manager.load_existing_mask(
+                        self.current_image_path,
+                        image_size=(pixmap.height(), pixmap.width()),
+                    )
                     self._update_all_lists()
                 except Exception as e:
                     logger.error(f"Error loading segments for single-view: {e}")

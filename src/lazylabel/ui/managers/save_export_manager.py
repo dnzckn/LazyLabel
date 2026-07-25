@@ -19,6 +19,7 @@ from PyQt6.QtGui import QPixmap
 from PyQt6.QtWidgets import QApplication
 
 from ...core.exporters import (
+    INSTANCE_AWARE_FORMATS,
     ExportContext,
     ExportFormat,
     delete_all_outputs,
@@ -423,6 +424,31 @@ class SaveExportManager:
             class_aliases=dict(self.segment_manager.class_aliases),
             mask_tensor=mask_tensor,
             crop_coords=crop_coords,
+            instances=self._build_instances(
+                self.segment_manager, (h, w), class_order, mask_tensor, settings
+            ),
+        )
+
+    @staticmethod
+    def _build_instances(
+        segment_manager,
+        image_size: tuple[int, int],
+        class_order: list[int],
+        mask_tensor,
+        settings: dict,
+    ) -> list[dict]:
+        """Per-object contours, but only when a selected format reads them.
+
+        Building them costs about as much as building the mask tensor, so a
+        mask-only save should not pay for it.
+        """
+        formats = settings.get("export_formats", set())
+        if not isinstance(formats, set):
+            formats = {ExportFormat(f) for f in formats}
+        if not formats & INSTANCE_AWARE_FORMATS:
+            return []
+        return segment_manager.create_instance_contours(
+            image_size, class_order, mask_tensor
         )
 
     def _save_viewer_output(
@@ -482,6 +508,9 @@ class SaveExportManager:
                 class_labels=class_labels,
                 class_aliases=dict(self.segment_manager.class_aliases),
                 mask_tensor=mask_tensor,
+                instances=temp_sm.create_instance_contours(
+                    (h, w), class_order, mask_tensor
+                ),
             )
 
             written = export_all(formats, ctx)

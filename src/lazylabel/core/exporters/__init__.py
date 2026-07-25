@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Protocol
 
+import cv2
 import numpy as np
 
 
@@ -60,6 +62,37 @@ DEFAULT_EXPORT_FORMATS: set[ExportFormat] = {
     ExportFormat.YOLO_DETECTION,
 }
 
+# Order in which annotation files are trusted when an image has more than one,
+# most faithful first. This governs loading only — exporting never consults it
+# and never removes a file. Pixel masks beat polygons beat boxes; within that,
+# formats that keep objects apart beat formats that merge everything of one
+# class. NPZ Class Map is pixel-exact but stores one label per pixel, so it
+# cannot represent overlapping classes or separate objects, and ranks below the
+# polygon formats despite being a mask format.
+# FileManager._LOAD_CHAIN mirrors this order.
+LOAD_PRIORITY: tuple[ExportFormat, ...] = (
+    ExportFormat.NPZ,
+    ExportFormat.YOLO_SEGMENTATION,
+    ExportFormat.COCO_JSON,
+    ExportFormat.NPZ_CLASS_MAP,
+    ExportFormat.PASCAL_VOC,
+    ExportFormat.CREATEML,
+    ExportFormat.YOLO_DETECTION,
+)
+
+# Formats that read ExportContext.instances. Building instance contours costs
+# roughly as much as building the mask tensor, so it is skipped when none of
+# these are selected.
+INSTANCE_AWARE_FORMATS: frozenset[ExportFormat] = frozenset(
+    {
+        ExportFormat.YOLO_DETECTION,
+        ExportFormat.YOLO_SEGMENTATION,
+        ExportFormat.COCO_JSON,
+        ExportFormat.PASCAL_VOC,
+        ExportFormat.CREATEML,
+    }
+)
+
 
 @dataclass
 class ExportContext:
@@ -72,7 +105,56 @@ class ExportContext:
     class_aliases: dict[int, str]
     mask_tensor: np.ndarray  # (H, W, C) uint8
     crop_coords: tuple[int, int, int, int] | None = None
-    segments: list[dict] = field(default_factory=list)
+    # Per-object contours from SegmentManager.create_instance_contours().
+    # Empty means "no instance information" and exporters fall back to
+    # contouring the merged per-class channels of mask_tensor.
+    instances: list[dict] = field(default_factory=list)
+
+
+def iter_object_contours(ctx: ExportContext) -> Iterator[tuple[int, np.ndarray]]:
+    """Yield ``(channel_index, contour)`` for every object to export.
+
+    With ``ctx.instances`` populated each segment contributes its own contours,
+    so same-class objects that touch or overlap stay separate. Without it the
+    merged per-class channel is contoured instead, which fuses those objects
+    into a single box.
+    """
+    if ctx.instances:
+        for record in ctx.instances:
+            for contour in record["contours"]:
+                yield record["channel"], contour
+        return
+
+    for channel in range(ctx.mask_tensor.shape[2]):
+        single = ctx.mask_tensor[:, :, channel]
+        if not np.any(single):
+            continue
+        contours, _ = cv2.findContours(
+            single, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
+        )
+        for contour in contours:
+            yield channel, contour
+
+
+def contour_to_polygon(contour: np.ndarray) -> list[int]:
+    """Flatten a contour to ``[x1, y1, x2, y2, ...]`` pixel coordinates.
+
+    Objects one pixel wide collapse to a one- or two-point contour, which is
+    not a polygon. Rather than drop them, the points are repeated to form a
+    closed ring that rasterizes back to exactly the same pixels: a doubled
+    point for a single pixel, and a there-and-back pair for a line. Using the
+    bounding box instead would fill in the whole square for a diagonal.
+    """
+    points = contour.reshape(-1, 2)
+    if len(points) >= 3:
+        return [int(v) for v in points.reshape(-1).tolist()]
+
+    if len(points) == 2:
+        (x1, y1), (x2, y2) = points
+        return [int(x1), int(y1), int(x2), int(y2), int(x2), int(y2), int(x1), int(y1)]
+
+    x, y = points[0]
+    return [int(x), int(y)] * 4
 
 
 class Exporter(Protocol):
@@ -105,7 +187,14 @@ def _register(fmt: ExportFormat, exporter: Exporter, extensions: set[str]) -> No
 
 
 def export_all(formats: set[ExportFormat], ctx: ExportContext) -> list[str]:
-    """Run all enabled exporters and return list of paths written."""
+    """Run all enabled exporters and return list of paths written.
+
+    Writing never deletes. Every format the user selected is exported, and
+    files already sitting next to the image are left alone — they may be
+    another format's export of the same annotations, or ground truth that
+    shipped with the dataset. When several are present it is the loader's
+    priority chain, not the writer, that decides which one is read back.
+    """
     written: list[str] = []
     for fmt in formats:
         exporter = EXPORTERS.get(fmt)

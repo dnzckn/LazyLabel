@@ -64,7 +64,9 @@ class FileManagerProtocol(Protocol):
 
     def is_image_file(self, path: str) -> bool: ...
 
-    def load_existing_mask(self, image_path: str) -> None: ...
+    def load_existing_mask(
+        self, image_path: str, image_size: tuple[int, int] | None = None
+    ) -> None: ...
 
 
 @runtime_checkable

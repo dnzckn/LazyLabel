@@ -6,9 +6,14 @@ import json
 import os
 
 import cv2
-import numpy as np
 
-from . import ExportContext, ExportFormat, _register
+from . import (
+    ExportContext,
+    ExportFormat,
+    _register,
+    contour_to_polygon,
+    iter_object_contours,
+)
 
 
 def _parse_alias(alias: str) -> tuple[str, str]:
@@ -52,41 +57,29 @@ class CocoExporter:
         annotations = []
         ann_id = 1
 
-        for channel in range(ctx.mask_tensor.shape[2]):
-            single = ctx.mask_tensor[:, :, channel]
-            if not np.any(single):
-                continue
+        for channel, contour in iter_object_contours(ctx):
+            # Polygon segmentation: flatten [[x,y]] to [x1,y1,x2,y2,...]
+            polygon = contour_to_polygon(contour)
 
-            contours, _ = cv2.findContours(
-                single, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
+            # Bounding box
+            x, y, bw, bh = cv2.boundingRect(contour)
+
+            annotations.append(
+                {
+                    "id": ann_id,
+                    "image_id": 1,
+                    "category_id": ctx.class_order[channel],
+                    "bbox": [int(x), int(y), int(bw), int(bh)],
+                    "area": (
+                        int(cv2.contourArea(contour))
+                        if len(contour) >= 3
+                        else int(bw) * int(bh)
+                    ),
+                    "segmentation": [polygon],
+                    "iscrowd": 0,
+                }
             )
-            category_id = ctx.class_order[channel]
-
-            for contour in contours:
-                if len(contour) < 3:
-                    continue
-
-                # Polygon segmentation: flatten [[x,y]] to [x1,y1,x2,y2,...]
-                polygon = contour.reshape(-1).tolist()
-                # Convert numpy ints to Python ints for JSON serialization
-                polygon = [int(v) for v in polygon]
-
-                # Bounding box
-                x, y, bw, bh = cv2.boundingRect(contour)
-                area = int(cv2.contourArea(contour))
-
-                annotations.append(
-                    {
-                        "id": ann_id,
-                        "image_id": 1,
-                        "category_id": category_id,
-                        "bbox": [int(x), int(y), int(bw), int(bh)],
-                        "area": area,
-                        "segmentation": [polygon],
-                        "iscrowd": 0,
-                    }
-                )
-                ann_id += 1
+            ann_id += 1
 
         if not annotations:
             return None
