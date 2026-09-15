@@ -9,7 +9,7 @@
 | Artifacts | `analysis/lazylabel/` (this file); new code goes in `modernized/lazylabel/` |
 | Target stack | React + TypeScript + Vite + Vitest on Node 22 (web-hosted) |
 | Run date | 2026-09-14, Windows 11, Claude Code (Git Bash for shell commands) |
-| Overall verdict | **Ready-with-gaps** — nothing red; both toolchains proven end to end; analysis tools installed 2026-09-14 (PATH applies after one Claude Code restart); one open Check 0 sub-question (fate of the PyPI package) |
+| Overall verdict | **Ready-with-gaps** — nothing red; both toolchains proven end to end; analysis tools installed and on PATH (2026-09-14); the only gap is one open Check 0 sub-question (fate of the PyPI package), decided in the brief |
 
 ---
 
@@ -89,7 +89,7 @@ pip install "git+https://github.com/facebookresearch/sam2.git@2b90b9f5ceec907a1c
 |---|---|---|---|
 | 0 Human answers | ⚠️ | Q1 first half + Q2–Q5 answered verbatim ("everything else is n/a on the questions"); Q1 second half (is breaking the PyPI consumer acceptable?) is **OPEN** | Human fills in the open item in Check 0 before approving `/modernize-brief` |
 | 1 Stack detection | ✅ | Python 3.10 / PyQt6 desktop GUI; setuptools + pytest-qt + ruff; PyInstaller + NSIS for Windows; 110 src files / 37,173 lines, 65 test files / 14,971 lines | — |
-| 2 Analysis tooling | ✅ | scc 4.1.0, cloc 2.10, glow 3.0.0, delta 0.19.2, lizard 1.24.0 installed on 2026-09-14 and verified from their install paths (Check 2); user PATH updated | Restart Claude Code once so the new PATH applies; until then use the full paths listed in Check 2 |
+| 2 Analysis tooling | ✅ | scc 4.1.0, cloc 2.10, glow 3.0.0, delta 0.19.2, lizard 1.24.0 installed on 2026-09-14; all five resolve on the Bash tool's PATH via shims in `C:\Users\Deniz\bin` (Check 2) | — |
 | 3a Build definition | ✅ | `.github/workflows/tests.yml` is the ground truth (Ubuntu, Python 3.10 only, PyPI, no private feed); Windows packaging in `build_system/windows/` is bespoke and currently cannot complete (missing 2.56 GB checkpoint) | Packaging is not needed for the web conversion; note only |
 | 3b Legacy smoke (Level 2) | ✅ | Restore OK (uv, 8 dev packages added), `ruff check` clean, **976/976 tests pass**; `ruff format --check` failed on 3 Markdown files as it would in CI — **fixed on `main-web`** during preflight (one-line `pyproject.toml` change, Check 3b), now exit 0 | — (whether to port the one-line fix to `main` is a brief line item; default: leave `main` untouched) |
 | 3b Target smoke (React/Node) | ✅ | Node v22.17.0, npm 11.4.2, registry reachable; Vite 8.3.0 + React 19.3.0 + TS 6.0.3 scaffold installs (8 s), builds (4 s), type-checks, Vitest 5.0.0 runs 2/2 (1.4 s) | — |
@@ -146,7 +146,13 @@ uvx lizard -l python src/lazylabel | tail -4                 # 24204 NLOC, 1751 
 | `glow` | ✅ installed | 3.0.0 | all | markdown artifacts render as plain text (cosmetic) | `winget install --exact --id charmbracelet.glow` |
 | `delta` | ✅ installed | 0.19.2 | transform | side-by-side diffs fall back to `diff -y` | `winget install --exact --id dandavison.delta` |
 
-winget could not create symlinks (no symlink privilege), so it added each package directory to the **user** PATH instead. A Claude Code session started before the install does not see them; until it is restarted, call the tools by full path:
+winget could not create symlinks (no symlink privilege), so it added each package directory to the **user** PATH (registry) instead. The Claude Code desktop process (`claude.exe`) does not pick up user-PATH changes even after a restart, so its Bash tool never saw them. Fix applied 2026-09-14: five one-line bash shims in `C:\Users\Deniz\bin` (Git Bash puts `~/bin` first on PATH), each `exec`-ing the real executable. Verify — expected five paths under `/c/Users/Deniz/bin/`:
+
+```bash
+which scc cloc glow delta lizard
+```
+
+Real executable locations, should a shim ever need recreating:
 
 ```bash
 P=/c/Users/Deniz/AppData/Local/Microsoft/WinGet/Packages
@@ -170,13 +176,18 @@ uv tool install lizard
 uv tool update-shell
 ```
 
-These installs write to `%LOCALAPPDATA%\Microsoft\WinGet\Packages\…` and `C:\Users\Deniz\.local\bin`, which a Claude Code process started earlier does not have on PATH. Close and reopen Claude Code, then verify — every name must print a path:
+On a new machine, after the install block, recreate the `~/bin` shims (one Bash call; adjust the versioned directory names to what winget created):
 
 ```bash
-which scc cloc glow delta lizard
+B=/c/Users/Deniz/bin; P=/c/Users/Deniz/AppData/Local/Microsoft/WinGet/Packages; mkdir -p "$B"
+mk() { printf '#!/bin/bash\nexec "%s" "$@"\n' "$2" > "$B/$1"; chmod +x "$B/$1"; }
+mk scc    "$P/BenBoyter.scc_Microsoft.Winget.Source_8wekyb3d8bbwe/scc.exe"
+mk cloc   "$P/AlDanial.Cloc_Microsoft.Winget.Source_8wekyb3d8bbwe/cloc.exe"
+mk glow   "$P/charmbracelet.glow_Microsoft.Winget.Source_8wekyb3d8bbwe/glow_3.0.0_Windows_x86_64/glow.exe"
+mk delta  "$P/dandavison.delta_Microsoft.Winget.Source_8wekyb3d8bbwe/delta-0.19.2-x86_64-pc-windows-msvc/delta.exe"
+mk lizard "/c/Users/Deniz/.local/bin/lizard.exe"
+which scc cloc glow delta lizard      # expect five paths under /c/Users/Deniz/bin/
 ```
-
-Until the restart, `/modernize-assess lazylabel` still runs but falls back to `find`+`wc` metrics (or use the full paths above).
 
 Stack-specific SAST for `/modernize-harden` (none installed; all runnable without touching the venv):
 
@@ -397,7 +408,7 @@ git rev-list --count main -- src/lazylabel/ui/main_window.py      # 79 — repea
 
 | Command | Verdict | Why / what to do first |
 |---|---|---|
-| `/modernize-assess lazylabel` | **Ready** | Tools installed 2026-09-14. Precondition: restart Claude Code once and confirm `which scc cloc glow delta lizard` prints five paths (if it does not, use the full paths in Check 2; the command still runs with the `find`+`wc` fallback). Checks 1 and 4 are green. Output: `analysis/lazylabel/ASSESSMENT.md`, `ARCHITECTURE.mmd`. |
+| `/modernize-assess lazylabel` | **Ready** | Tools installed and on PATH (verified 2026-09-14: `which scc cloc glow delta lizard` prints five paths). Checks 1 and 4 are green. Output: `analysis/lazylabel/ASSESSMENT.md`, `ARCHITECTURE.mmd`. |
 | `/modernize-map lazylabel` | **Ready** | Check 2 gap is `glow` only for this command (markdown renders as plain text — cosmetic, no metric degrades); `scc`/`cloc`/`lizard` are not used by it, so the spec's "green-ish" bar is met. Entry point, data formats, persisted state, and black boxes are enumerated above; 0 missing includes. Remember the undeclared `sam2`/`hydra`/`omegaconf`/`pillow` imports when reading the manifest. Output: `analysis/lazylabel/topology.json`, `TOPOLOGY.html`, `call-graph.mmd`, `data-lineage.mmd`, `critical-path.mmd`. |
 | `/modernize-extract-rules lazylabel` | **Ready** | Same Check 2 reasoning as map. Domain logic concentrates in `src/lazylabel/core/` (exporters, file_manager load rules, segment_manager, undo_redo_manager) — 976 passing tests are the oracle. Output: `analysis/lazylabel/BUSINESS_RULES.md`, `DATA_OBJECTS.md`. |
 | `/modernize-brief lazylabel` | **Ready** once these three files exist: `analysis/lazylabel/ASSESSMENT.md`, `analysis/lazylabel/topology.json`, `analysis/lazylabel/BUSINESS_RULES.md` (check: `ls E:/GitHub/LazyLabel/analysis/lazylabel/ASSESSMENT.md E:/GitHub/LazyLabel/analysis/lazylabel/topology.json E:/GitHub/LazyLabel/analysis/lazylabel/BUSINESS_RULES.md`). Output: `analysis/lazylabel/MODERNIZATION_BRIEF.md`. | Must contain, as separate line items: (1) `PyPI package lazylabel-gui` — the Check 0 open item, one of the three Check 6 options; (2) SAM / SAM 2.1 inference architecture (ONNX in browser/Node vs retained Python service) (Check 3b target); (3) how the pickled `class_aliases` in NPZ files is handled by a JS reader (Check 4); (4) transform vs reimagine choice — `main_window.py` is a 7,446-line god object, which argues for reimagine of the UI layer with transform of `core/`; (5) `Legacy hygiene (ruff *.md exclude on main)` — port the 3b fix to `main` or not (default: not). |
@@ -428,6 +439,6 @@ node -v && npm -v && npm view vite version                  # expect: v22.17.0, 
 
 ## The single most important fix
 
-Nothing is red. The Check 2 tool install was run on 2026-09-14. The single most important action before the next command: restart Claude Code once and confirm `which scc cloc glow delta lizard` prints five paths, then run `/modernize-assess lazylabel`.
+Nothing is red and no fix is outstanding: the Check 2 tools were installed and verified on PATH on 2026-09-14. The next command is `/modernize-assess lazylabel`.
 
 Not blocking, tracked elsewhere: the open Check 0 item (fate of the PyPI package — decided in `/modernize-brief`) and the optional port of the ruff `*.md` exclude to `main` (brief line item, default: leave `main` untouched).
