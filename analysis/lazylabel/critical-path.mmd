@@ -1,0 +1,24 @@
+flowchart TD
+  %% Primary persona flow: Label an image with AI clicks (Image annotator preparing training data).
+  %% p50 / p99 wall-clock: not available. LazyLabel has no telemetry (analysis/lazylabel/ASSESSMENT.md, Section 4).
+  persona(["Image annotator preparing training data"])
+  s1["1. Open a folder of images<br/><small>ui.main_window, utils.fast_file_manager</small>"]
+  persona --> s1
+  s1 -.- ds_image_files[("Image folder (png, jpg, jpeg, tiff, tif)")]
+  s2["2. Pick an image; it appears with any labels saved earlier<br/><small>ui.managers.file_navigation_manager, core.file_manager, core.segment_manager, ui.photo_viewer</small>"]
+  s1 --> s2
+  s2 -.- ds_image_files
+  s2 -.- ds_sidecar_npz[("*.npz (NPZ)")]
+  s3["3. The AI model loads once, then prepares each image in the background<br/><small>ui.managers.sam_single_view_manager, ui.workers.single_view_sam_init_worker, ui.workers.sam_update_worker, core.model_manager, models.sam_model, ui.managers.embedding_cache_manager</small>"]
+  s2 --> s3
+  s3 -.- ds_model_checkpoints[("Model checkpoints (*.pth, *.pt)")]
+  s4["4. Click the object to get a mask preview<br/><small>ui.handlers.single_view_mouse_handler, ui.main_window, ui.managers.ai_segment_manager, models.sam_model</small>"]
+  s3 --> s4
+  s5["5. Press Space to accept the mask as a labeled object<br/><small>ui.managers.keyboard_event_manager, ui.main_window, ui.managers.ai_segment_manager, ui.managers.save_export_manager, core.segment_manager, core.undo_redo_manager, ui.managers.segment_display_manager, ui.managers.segment_table_manager</small>"]
+  s4 --> s5
+  s6["6. Go to the next image; labels are saved automatically<br/><small>ui.managers.file_navigation_manager, ui.managers.save_export_manager, core.exporters, core.exporters.npz, core.exporters.yolo_detection</small>"]
+  s5 --> s6
+  s6 -.- ds_sidecar_npz
+  s6 -.- ds_sidecar_yolo_detection[("*.txt (YOLO Detection)")]
+  note["No latency data: add p50 / p99 per step once telemetry exists"]
+  s6 -.- note

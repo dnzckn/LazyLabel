@@ -1,0 +1,57 @@
+graph LR
+  %% LazyLabel data lineage at domain level (71 module-level store edges; domain level is used above 40).
+  %% Thick arrow = writes (or reads and writes); thin arrow = reads only. Evidence per edge is in topology_evidence.json.
+  ai_segmentation["SAM segmentation and SAM 2 propagation"]
+  annotation_io["Annotation file IO and export formats"]
+  app_shell["Main window shell and panels"]
+  file_navigation["Folder browsing and preloading"]
+  image_processing["Image adjustments, crop and thresholds"]
+  runtime_platform["Bootstrap and runtime support"]
+  settings_prefs["Settings, hotkeys and paths"]
+  ds_app_log[("lazylabel.log")]
+  ds_dl_fbaipublicfiles_com[("dl.fbaipublicfiles.com")]
+  ds_download_pytorch_org[("download.pytorch.org")]
+  ds_hotkeys_json[("hotkeys.json")]
+  ds_image_files[("Image folder (png, jpg, jpeg, tiff, tif)")]
+  ds_legacy_alias_json[("*.json class-alias file (removed format)")]
+  ds_model_checkpoints[("Model checkpoints (*.pth, *.pt)")]
+  ds_pyproject_toml[("pyproject.toml (version fallback)")]
+  ds_sam2_frame_cache[("SAM 2 frame staging (JPEG)")]
+  ds_settings_json[("settings.json")]
+  ds_sidecar_coco_json[("*_coco.json (COCO JSON)")]
+  ds_sidecar_createml[("*_createml.json (CreateML)")]
+  ds_sidecar_npz[("*.npz (NPZ)")]
+  ds_sidecar_npz_class_map[("*_CM.npz (NPZ Class Map)")]
+  ds_sidecar_pascal_voc[("*.xml (Pascal VOC)")]
+  ds_sidecar_yolo_detection[("*.txt (YOLO Detection)")]
+  ds_sidecar_yolo_segmentation[("*_seg.txt (YOLO Segmentation)")]
+  ds_theme_icon_cache[("Theme icon cache (SVG)")]
+  ai_segmentation -->|"reads"| ds_dl_fbaipublicfiles_com
+  ai_segmentation -->|"reads"| ds_download_pytorch_org
+  ai_segmentation -->|"reads"| ds_image_files
+  ai_segmentation ==>|"reads and writes"| ds_model_checkpoints
+  ai_segmentation ==>|"reads and writes"| ds_sam2_frame_cache
+  annotation_io -->|"reads"| ds_image_files
+  annotation_io ==>|"writes"| ds_legacy_alias_json
+  annotation_io ==>|"reads and writes"| ds_sidecar_coco_json
+  annotation_io ==>|"reads and writes"| ds_sidecar_createml
+  annotation_io ==>|"reads and writes"| ds_sidecar_npz
+  annotation_io ==>|"reads and writes"| ds_sidecar_npz_class_map
+  annotation_io ==>|"reads and writes"| ds_sidecar_pascal_voc
+  annotation_io ==>|"reads and writes"| ds_sidecar_yolo_detection
+  annotation_io ==>|"reads and writes"| ds_sidecar_yolo_segmentation
+  app_shell -->|"reads"| ds_image_files
+  app_shell ==>|"reads and writes"| ds_theme_icon_cache
+  file_navigation -->|"reads"| ds_image_files
+  file_navigation -->|"reads"| ds_sidecar_coco_json
+  file_navigation -->|"reads"| ds_sidecar_createml
+  file_navigation -->|"reads"| ds_sidecar_npz
+  file_navigation -->|"reads"| ds_sidecar_npz_class_map
+  file_navigation -->|"reads"| ds_sidecar_pascal_voc
+  file_navigation -->|"reads"| ds_sidecar_yolo_detection
+  file_navigation -->|"reads"| ds_sidecar_yolo_segmentation
+  image_processing -->|"reads"| ds_image_files
+  runtime_platform ==>|"writes"| ds_app_log
+  runtime_platform -->|"reads"| ds_pyproject_toml
+  settings_prefs ==>|"reads and writes"| ds_hotkeys_json
+  settings_prefs ==>|"reads and writes"| ds_settings_json

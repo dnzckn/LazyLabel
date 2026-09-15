@@ -1,0 +1,48 @@
+graph TD
+  %% LazyLabel domain-level call graph from analysis/lazylabel/topology.json (extract_topology.py).
+  %% Label = distinct module-to-module call and dispatch edges; 'a / b' = forward / backward when both exist.
+  %% Entry points: launchers declared in pyproject.toml, __main__.py and the PyInstaller spec.
+  launchers["Launchers: lazylabel-gui, python -m lazylabel, LazyLabel.exe"]
+  runtime_platform["Bootstrap and runtime support"]
+  settings_prefs["Settings, hotkeys and paths"]
+  annotation_model["Annotation model and undo-redo"]
+  annotation_io["Annotation file IO and export formats"]
+  app_shell["Main window shell and panels"]
+  canvas_editing["Canvas, drawing and editing tools"]
+  image_processing["Image adjustments, crop and thresholds"]
+  file_navigation["Folder browsing and preloading"]
+  sequence_timeline["Sequence mode and timeline"]
+  ai_segmentation["SAM segmentation and SAM 2 propagation"]
+  launchers --> runtime_platform
+  canvas_editing <-->|"24 / 21"| app_shell
+  app_shell <-->|"20 / 11"| ai_segmentation
+  ai_segmentation -->|"14"| runtime_platform
+  app_shell <-->|"12 / 12"| image_processing
+  canvas_editing <-->|"11 / 1"| annotation_model
+  file_navigation <-->|"8 / 6"| app_shell
+  app_shell <-->|"6 / 2"| settings_prefs
+  canvas_editing -->|"5"| runtime_platform
+  app_shell <-->|"5 / 2"| runtime_platform
+  app_shell <-->|"5 / 3"| sequence_timeline
+  annotation_io -->|"4"| annotation_model
+  ai_segmentation -->|"4"| annotation_model
+  annotation_io -->|"4"| ai_segmentation
+  settings_prefs <-->|"3 / 1"| annotation_io
+  app_shell <-->|"3 / 3"| annotation_io
+  annotation_io -->|"2"| runtime_platform
+  ai_segmentation -->|"2"| settings_prefs
+  runtime_platform <-->|"2 / 1"| settings_prefs
+  app_shell <-->|"2 / 2"| annotation_model
+  file_navigation -->|"2"| runtime_platform
+  ai_segmentation <-->|"2 / 1"| canvas_editing
+  file_navigation -->|"2"| image_processing
+  file_navigation -->|"2"| ai_segmentation
+  sequence_timeline -->|"1"| ai_segmentation
+  canvas_editing <-->|"1 / 1"| image_processing
+  file_navigation <-->|"1 / 1"| annotation_io
+  file_navigation -->|"1"| annotation_model
+  annotation_io -->|"1"| image_processing
+  canvas_editing -->|"1"| settings_prefs
+  sequence_timeline -->|"1"| annotation_model
+  classDef entry fill:#fff3bf,stroke:#e8590c,stroke-width:3px,color:#000
+  class launchers,runtime_platform entry

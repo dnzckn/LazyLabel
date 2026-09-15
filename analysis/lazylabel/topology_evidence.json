@@ -1,0 +1,5887 @@
+{
+ "note": "Evidence per edge (first matches) and extraction statistics for audit; not read by the viewer.",
+ "edges": [
+  {
+   "source": "lazylabel",
+   "target": "lazylabel._version",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/__init__.py:43"
+   ],
+   "count": 1,
+   "reexport": false,
+   "lazy": true
+  },
+  {
+   "source": "lazylabel",
+   "target": "lazylabel.main",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/__init__.py:55"
+   ],
+   "count": 1,
+   "reexport": true,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.__main__",
+   "target": "lazylabel.main",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/__main__.py:3"
+   ],
+   "count": 1,
+   "reexport": false,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ai_availability",
+   "target": "lazylabel.utils.logger",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ai_availability.py:3"
+   ],
+   "count": 1,
+   "reexport": false,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.config",
+   "target": "lazylabel.config.hotkeys",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/config/__init__.py:3"
+   ],
+   "count": 2,
+   "reexport": true,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.config",
+   "target": "lazylabel.config.paths",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/config/__init__.py:4"
+   ],
+   "count": 1,
+   "reexport": true,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.config",
+   "target": "lazylabel.config.settings",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/config/__init__.py:5"
+   ],
+   "count": 2,
+   "reexport": true,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.config.settings",
+   "target": "lazylabel.core.exporters",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/config/settings.py:126"
+   ],
+   "count": 1,
+   "reexport": false,
+   "lazy": true
+  },
+  {
+   "source": "lazylabel.core",
+   "target": "lazylabel.core.app_context",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/core/__init__.py:3"
+   ],
+   "count": 3,
+   "reexport": true,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.core",
+   "target": "lazylabel.core.exceptions",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/core/__init__.py:4"
+   ],
+   "count": 21,
+   "reexport": true,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.core",
+   "target": "lazylabel.core.file_manager",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/core/__init__.py:27"
+   ],
+   "count": 1,
+   "reexport": true,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.core",
+   "target": "lazylabel.core.model_manager",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/core/__init__.py:28"
+   ],
+   "count": 1,
+   "reexport": true,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.core",
+   "target": "lazylabel.core.protocols",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/core/__init__.py:29"
+   ],
+   "count": 13,
+   "reexport": true,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.core",
+   "target": "lazylabel.core.segment_manager",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/core/__init__.py:44"
+   ],
+   "count": 1,
+   "reexport": true,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.core",
+   "target": "lazylabel.core.undo_redo_manager",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/core/__init__.py:45"
+   ],
+   "count": 1,
+   "reexport": true,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.core.exporters",
+   "target": "lazylabel.core.exporters.coco",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/core/exporters/__init__.py:224"
+   ],
+   "count": 1,
+   "reexport": true,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.core.exporters",
+   "target": "lazylabel.core.exporters.createml",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/core/exporters/__init__.py:225"
+   ],
+   "count": 1,
+   "reexport": true,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.core.exporters",
+   "target": "lazylabel.core.exporters.npz",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/core/exporters/__init__.py:226"
+   ],
+   "count": 1,
+   "reexport": true,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.core.exporters",
+   "target": "lazylabel.core.exporters.npz_class_map",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/core/exporters/__init__.py:227"
+   ],
+   "count": 1,
+   "reexport": true,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.core.exporters",
+   "target": "lazylabel.core.exporters.pascal_voc",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/core/exporters/__init__.py:228"
+   ],
+   "count": 1,
+   "reexport": true,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.core.exporters",
+   "target": "lazylabel.core.exporters.yolo_detection",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/core/exporters/__init__.py:229"
+   ],
+   "count": 1,
+   "reexport": true,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.core.exporters",
+   "target": "lazylabel.core.exporters.yolo_segmentation",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/core/exporters/__init__.py:230"
+   ],
+   "count": 1,
+   "reexport": true,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.core.exporters.coco",
+   "target": "lazylabel.core.exporters",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/core/exporters/coco.py:10"
+   ],
+   "count": 5,
+   "reexport": false,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.core.exporters.createml",
+   "target": "lazylabel.core.exporters",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/core/exporters/createml.py:10"
+   ],
+   "count": 4,
+   "reexport": false,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.core.exporters.npz",
+   "target": "lazylabel.core.exporters",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/core/exporters/npz.py:9"
+   ],
+   "count": 3,
+   "reexport": false,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.core.exporters.npz_class_map",
+   "target": "lazylabel.core.exporters",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/core/exporters/npz_class_map.py:9"
+   ],
+   "count": 3,
+   "reexport": false,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.core.exporters.pascal_voc",
+   "target": "lazylabel.core.exporters",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/core/exporters/pascal_voc.py:10"
+   ],
+   "count": 4,
+   "reexport": false,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.core.exporters.yolo_detection",
+   "target": "lazylabel.core.exporters",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/core/exporters/yolo_detection.py:9"
+   ],
+   "count": 4,
+   "reexport": false,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.core.exporters.yolo_segmentation",
+   "target": "lazylabel.core.exporters",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/core/exporters/yolo_segmentation.py:9"
+   ],
+   "count": 5,
+   "reexport": false,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.core.file_manager",
+   "target": "lazylabel.core.segment_manager",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/core/file_manager.py:11"
+   ],
+   "count": 1,
+   "reexport": false,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.core.file_manager",
+   "target": "lazylabel.utils.logger",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/core/file_manager.py:10"
+   ],
+   "count": 1,
+   "reexport": false,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.core.model_manager",
+   "target": "lazylabel.ai_availability",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/core/model_manager.py:6"
+   ],
+   "count": 1,
+   "reexport": false,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.core.model_manager",
+   "target": "lazylabel.config.paths",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/core/model_manager.py:7"
+   ],
+   "count": 1,
+   "reexport": false,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.core.model_manager",
+   "target": "lazylabel.models.sam2_model",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/core/model_manager.py:15"
+   ],
+   "count": 1,
+   "reexport": false,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.core.model_manager",
+   "target": "lazylabel.models.sam_model",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/core/model_manager.py:12"
+   ],
+   "count": 1,
+   "reexport": false,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.core.model_manager",
+   "target": "lazylabel.utils.logger",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/core/model_manager.py:8"
+   ],
+   "count": 1,
+   "reexport": false,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.main",
+   "target": "lazylabel.config.paths",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/main.py:66"
+   ],
+   "count": 1,
+   "reexport": false,
+   "lazy": true
+  },
+  {
+   "source": "lazylabel.main",
+   "target": "lazylabel.config.settings",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/main.py:67"
+   ],
+   "count": 1,
+   "reexport": false,
+   "lazy": true
+  },
+  {
+   "source": "lazylabel.main",
+   "target": "lazylabel.ui.main_window",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/main.py:79"
+   ],
+   "count": 1,
+   "reexport": false,
+   "lazy": true
+  },
+  {
+   "source": "lazylabel.main",
+   "target": "lazylabel.ui.theme",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/main.py:68"
+   ],
+   "count": 1,
+   "reexport": false,
+   "lazy": true
+  },
+  {
+   "source": "lazylabel.main",
+   "target": "lazylabel.utils.logger",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/main.py:24"
+   ],
+   "count": 1,
+   "reexport": false,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.main",
+   "target": "lazylabel.utils.startup",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/main.py:25"
+   ],
+   "count": 1,
+   "reexport": false,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.models",
+   "target": "lazylabel.models.sam_model",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/models/__init__.py:4"
+   ],
+   "count": 1,
+   "reexport": true,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.models.sam2_model",
+   "target": "lazylabel.utils.logger",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/models/sam2_model.py:9"
+   ],
+   "count": 1,
+   "reexport": false,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.models.sam_model",
+   "target": "lazylabel.utils.logger",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/models/sam_model.py:9"
+   ],
+   "count": 1,
+   "reexport": false,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui",
+   "target": "lazylabel.ui.control_panel",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/__init__.py:3"
+   ],
+   "count": 1,
+   "reexport": true,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui",
+   "target": "lazylabel.ui.hotkey_dialog",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/__init__.py:4"
+   ],
+   "count": 1,
+   "reexport": true,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui",
+   "target": "lazylabel.ui.main_window",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/__init__.py:5"
+   ],
+   "count": 1,
+   "reexport": true,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui",
+   "target": "lazylabel.ui.right_panel",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/__init__.py:6"
+   ],
+   "count": 1,
+   "reexport": true,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.control_panel",
+   "target": "lazylabel.ai_availability",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/control_panel.py:17"
+   ],
+   "count": 1,
+   "reexport": false,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.control_panel",
+   "target": "lazylabel.ui.widgets.adjustments_widget",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/control_panel.py:18"
+   ],
+   "count": 1,
+   "reexport": false,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.control_panel",
+   "target": "lazylabel.ui.widgets.annotation_settings_widget",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/control_panel.py:18"
+   ],
+   "count": 1,
+   "reexport": false,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.control_panel",
+   "target": "lazylabel.ui.widgets.border_crop_widget",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/control_panel.py:18"
+   ],
+   "count": 1,
+   "reexport": false,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.control_panel",
+   "target": "lazylabel.ui.widgets.channel_threshold_widget",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/control_panel.py:18"
+   ],
+   "count": 1,
+   "reexport": false,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.control_panel",
+   "target": "lazylabel.ui.widgets.fft_threshold_widget",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/control_panel.py:18"
+   ],
+   "count": 1,
+   "reexport": false,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.control_panel",
+   "target": "lazylabel.ui.widgets.fragment_threshold_widget",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/control_panel.py:18"
+   ],
+   "count": 1,
+   "reexport": false,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.control_panel",
+   "target": "lazylabel.ui.widgets.model_selection_widget",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/control_panel.py:18"
+   ],
+   "count": 1,
+   "reexport": false,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.control_panel",
+   "target": "lazylabel.ui.widgets.rescale_widget",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/control_panel.py:18"
+   ],
+   "count": 1,
+   "reexport": false,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.control_panel",
+   "target": "lazylabel.ui.widgets.settings_widget",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/control_panel.py:18"
+   ],
+   "count": 1,
+   "reexport": false,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.handlers",
+   "target": "lazylabel.ui.handlers.single_view_mouse_handler",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/handlers/__init__.py:3"
+   ],
+   "count": 1,
+   "reexport": true,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.handlers.single_view_mouse_handler",
+   "target": "lazylabel.ui.editable_vertex",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/handlers/single_view_mouse_handler.py:21"
+   ],
+   "count": 1,
+   "reexport": false,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.handlers.single_view_mouse_handler",
+   "target": "lazylabel.utils.logger",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/handlers/single_view_mouse_handler.py:20"
+   ],
+   "count": 1,
+   "reexport": false,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.hotkey_dialog",
+   "target": "lazylabel.config.hotkeys",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/hotkey_dialog.py:20"
+   ],
+   "count": 2,
+   "reexport": false,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.hotkey_dialog",
+   "target": "lazylabel.utils.logger",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/hotkey_dialog.py:21"
+   ],
+   "count": 1,
+   "reexport": false,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.main_window",
+   "target": "lazylabel",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/main_window.py:611"
+   ],
+   "count": 1,
+   "reexport": false,
+   "lazy": true
+  },
+  {
+   "source": "lazylabel.ui.main_window",
+   "target": "lazylabel.ai_availability",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/main_window.py:29"
+   ],
+   "count": 2,
+   "reexport": false,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.main_window",
+   "target": "lazylabel.config.hotkeys",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/main_window.py:30"
+   ],
+   "count": 1,
+   "reexport": false,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.main_window",
+   "target": "lazylabel.config.paths",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/main_window.py:30"
+   ],
+   "count": 1,
+   "reexport": false,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.main_window",
+   "target": "lazylabel.config.settings",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/main_window.py:30"
+   ],
+   "count": 1,
+   "reexport": false,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.main_window",
+   "target": "lazylabel.core.exporters",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/main_window.py:6568"
+   ],
+   "count": 5,
+   "reexport": false,
+   "lazy": true
+  },
+  {
+   "source": "lazylabel.ui.main_window",
+   "target": "lazylabel.core.file_manager",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/main_window.py:31"
+   ],
+   "count": 1,
+   "reexport": false,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.main_window",
+   "target": "lazylabel.core.model_manager",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/main_window.py:31"
+   ],
+   "count": 1,
+   "reexport": false,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.main_window",
+   "target": "lazylabel.core.segment_manager",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/main_window.py:31"
+   ],
+   "count": 1,
+   "reexport": false,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.main_window",
+   "target": "lazylabel.core.undo_redo_manager",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/main_window.py:31"
+   ],
+   "count": 1,
+   "reexport": false,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.main_window",
+   "target": "lazylabel.ui.control_panel",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/main_window.py:35"
+   ],
+   "count": 1,
+   "reexport": false,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.main_window",
+   "target": "lazylabel.ui.editable_vertex",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/main_window.py:2443",
+    "src/lazylabel/ui/main_window.py:2513"
+   ],
+   "count": 2,
+   "reexport": false,
+   "lazy": true
+  },
+  {
+   "source": "lazylabel.ui.main_window",
+   "target": "lazylabel.ui.handlers.single_view_mouse_handler",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/main_window.py:36"
+   ],
+   "count": 1,
+   "reexport": false,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.main_window",
+   "target": "lazylabel.ui.hotkey_dialog",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/main_window.py:37"
+   ],
+   "count": 1,
+   "reexport": false,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.main_window",
+   "target": "lazylabel.ui.hoverable_ellipse_item",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/main_window.py:2670",
+    "src/lazylabel/ui/main_window.py:7056",
+    "src/lazylabel/ui/main_window.py:3812"
+   ],
+   "count": 4,
+   "reexport": false,
+   "lazy": true
+  },
+  {
+   "source": "lazylabel.ui.main_window",
+   "target": "lazylabel.ui.hoverable_pixelmap_item",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/main_window.py:3750",
+    "src/lazylabel/ui/main_window.py:7057"
+   ],
+   "count": 2,
+   "reexport": false,
+   "lazy": true
+  },
+  {
+   "source": "lazylabel.ui.main_window",
+   "target": "lazylabel.ui.hoverable_polygon_item",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/main_window.py:2671",
+    "src/lazylabel/ui/main_window.py:3751",
+    "src/lazylabel/ui/main_window.py:7058"
+   ],
+   "count": 3,
+   "reexport": false,
+   "lazy": true
+  },
+  {
+   "source": "lazylabel.ui.main_window",
+   "target": "lazylabel.ui.managers.ai_segment_manager",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/main_window.py:38"
+   ],
+   "count": 1,
+   "reexport": false,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.main_window",
+   "target": "lazylabel.ui.managers.coordinate_transformer",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/main_window.py:38"
+   ],
+   "count": 1,
+   "reexport": false,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.main_window",
+   "target": "lazylabel.ui.managers.crop_manager",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/main_window.py:38"
+   ],
+   "count": 1,
+   "reexport": false,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.main_window",
+   "target": "lazylabel.ui.managers.drawing_state_manager",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/main_window.py:38"
+   ],
+   "count": 1,
+   "reexport": false,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.main_window",
+   "target": "lazylabel.ui.managers.edit_mode_manager",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/main_window.py:749"
+   ],
+   "count": 1,
+   "reexport": false,
+   "lazy": true
+  },
+  {
+   "source": "lazylabel.ui.main_window",
+   "target": "lazylabel.ui.managers.embedding_cache_manager",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/main_window.py:38"
+   ],
+   "count": 1,
+   "reexport": false,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.main_window",
+   "target": "lazylabel.ui.managers.file_navigation_manager",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/main_window.py:749"
+   ],
+   "count": 1,
+   "reexport": false,
+   "lazy": true
+  },
+  {
+   "source": "lazylabel.ui.main_window",
+   "target": "lazylabel.ui.managers.image_adjustment_manager",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/main_window.py:38"
+   ],
+   "count": 1,
+   "reexport": false,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.main_window",
+   "target": "lazylabel.ui.managers.image_preload_manager",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/main_window.py:38"
+   ],
+   "count": 1,
+   "reexport": false,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.main_window",
+   "target": "lazylabel.ui.managers.keyboard_event_manager",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/main_window.py:38"
+   ],
+   "count": 1,
+   "reexport": false,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.main_window",
+   "target": "lazylabel.ui.managers.mode_manager",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/main_window.py:38"
+   ],
+   "count": 1,
+   "reexport": false,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.main_window",
+   "target": "lazylabel.ui.managers.multi_view_coordinator",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/main_window.py:38"
+   ],
+   "count": 1,
+   "reexport": false,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.main_window",
+   "target": "lazylabel.ui.managers.notification_manager",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/main_window.py:38"
+   ],
+   "count": 1,
+   "reexport": false,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.main_window",
+   "target": "lazylabel.ui.managers.panel_popout_manager",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/main_window.py:38"
+   ],
+   "count": 1,
+   "reexport": false,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.main_window",
+   "target": "lazylabel.ui.managers.polygon_drawing_manager",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/main_window.py:38"
+   ],
+   "count": 1,
+   "reexport": false,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.main_window",
+   "target": "lazylabel.ui.managers.propagation_manager",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/main_window.py:38",
+    "src/lazylabel/ui/main_window.py:62"
+   ],
+   "count": 2,
+   "reexport": false,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.main_window",
+   "target": "lazylabel.ui.managers.sam_multi_view_manager",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/main_window.py:38"
+   ],
+   "count": 1,
+   "reexport": false,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.main_window",
+   "target": "lazylabel.ui.managers.sam_preload_scheduler",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/main_window.py:38"
+   ],
+   "count": 1,
+   "reexport": false,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.main_window",
+   "target": "lazylabel.ui.managers.sam_worker_manager",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/main_window.py:38"
+   ],
+   "count": 1,
+   "reexport": false,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.main_window",
+   "target": "lazylabel.ui.managers.save_export_manager",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/main_window.py:38"
+   ],
+   "count": 1,
+   "reexport": false,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.main_window",
+   "target": "lazylabel.ui.managers.segment_display_manager",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/main_window.py:38"
+   ],
+   "count": 1,
+   "reexport": false,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.main_window",
+   "target": "lazylabel.ui.managers.segment_table_manager",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/main_window.py:38"
+   ],
+   "count": 1,
+   "reexport": false,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.main_window",
+   "target": "lazylabel.ui.managers.ui_layout_manager",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/main_window.py:38"
+   ],
+   "count": 1,
+   "reexport": false,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.main_window",
+   "target": "lazylabel.ui.managers.viewport_manager",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/main_window.py:38"
+   ],
+   "count": 1,
+   "reexport": false,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.main_window",
+   "target": "lazylabel.ui.modes.sequence_view_mode",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/main_window.py:63",
+    "src/lazylabel/ui/main_window.py:64"
+   ],
+   "count": 2,
+   "reexport": false,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.main_window",
+   "target": "lazylabel.ui.photo_viewer",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/main_window.py:65"
+   ],
+   "count": 1,
+   "reexport": false,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.main_window",
+   "target": "lazylabel.ui.reorderable_class_table",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/main_window.py:3066"
+   ],
+   "count": 1,
+   "reexport": false,
+   "lazy": true
+  },
+  {
+   "source": "lazylabel.ui.main_window",
+   "target": "lazylabel.ui.right_panel",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/main_window.py:66"
+   ],
+   "count": 1,
+   "reexport": false,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.main_window",
+   "target": "lazylabel.ui.theme",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/main_window.py:2123"
+   ],
+   "count": 1,
+   "reexport": false,
+   "lazy": true
+  },
+  {
+   "source": "lazylabel.ui.main_window",
+   "target": "lazylabel.ui.widgets.confidence_histogram_dialog",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/main_window.py:4734"
+   ],
+   "count": 1,
+   "reexport": false,
+   "lazy": true
+  },
+  {
+   "source": "lazylabel.ui.main_window",
+   "target": "lazylabel.ui.widgets.rescale_histogram_dialog",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/main_window.py:2794"
+   ],
+   "count": 1,
+   "reexport": false,
+   "lazy": true
+  },
+  {
+   "source": "lazylabel.ui.main_window",
+   "target": "lazylabel.ui.widgets.sequence_widget",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/main_window.py:67"
+   ],
+   "count": 1,
+   "reexport": false,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.main_window",
+   "target": "lazylabel.ui.widgets.status_bar",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/main_window.py:67"
+   ],
+   "count": 1,
+   "reexport": false,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.main_window",
+   "target": "lazylabel.ui.widgets.timeline_widget",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/main_window.py:67"
+   ],
+   "count": 2,
+   "reexport": false,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.main_window",
+   "target": "lazylabel.ui.workers.image_discovery_worker",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/main_window.py:68"
+   ],
+   "count": 1,
+   "reexport": false,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.main_window",
+   "target": "lazylabel.ui.workers.propagation_worker",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/main_window.py:68"
+   ],
+   "count": 4,
+   "reexport": false,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.main_window",
+   "target": "lazylabel.ui.workers.reference_finder_worker",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/main_window.py:5074"
+   ],
+   "count": 1,
+   "reexport": false,
+   "lazy": true
+  },
+  {
+   "source": "lazylabel.ui.main_window",
+   "target": "lazylabel.utils.custom_file_system_model",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/main_window.py:32"
+   ],
+   "count": 1,
+   "reexport": false,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.main_window",
+   "target": "lazylabel.utils.logger",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/main_window.py:33",
+    "src/lazylabel/ui/main_window.py:1800"
+   ],
+   "count": 2,
+   "reexport": false,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.main_window",
+   "target": "lazylabel.utils.startup",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/main_window.py:231",
+    "src/lazylabel/ui/main_window.py:785"
+   ],
+   "count": 2,
+   "reexport": false,
+   "lazy": true
+  },
+  {
+   "source": "lazylabel.ui.main_window",
+   "target": "lazylabel.utils.utils",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/main_window.py:32"
+   ],
+   "count": 1,
+   "reexport": false,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.main_window",
+   "target": "lazylabel.viewmodels.single_view_viewmodel",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/main_window.py:34"
+   ],
+   "count": 1,
+   "reexport": false,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.managers",
+   "target": "lazylabel.ui.managers.ai_segment_manager",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/managers/__init__.py:3"
+   ],
+   "count": 1,
+   "reexport": true,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.managers",
+   "target": "lazylabel.ui.managers.coordinate_transformer",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/managers/__init__.py:4"
+   ],
+   "count": 1,
+   "reexport": true,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.managers",
+   "target": "lazylabel.ui.managers.crop_manager",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/managers/__init__.py:5"
+   ],
+   "count": 1,
+   "reexport": true,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.managers",
+   "target": "lazylabel.ui.managers.drawing_state_manager",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/managers/__init__.py:6"
+   ],
+   "count": 1,
+   "reexport": true,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.managers",
+   "target": "lazylabel.ui.managers.edit_mode_manager",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/managers/__init__.py:7"
+   ],
+   "count": 1,
+   "reexport": true,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.managers",
+   "target": "lazylabel.ui.managers.embedding_cache_manager",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/managers/__init__.py:8"
+   ],
+   "count": 1,
+   "reexport": true,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.managers",
+   "target": "lazylabel.ui.managers.file_navigation_manager",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/managers/__init__.py:9"
+   ],
+   "count": 1,
+   "reexport": true,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.managers",
+   "target": "lazylabel.ui.managers.image_adjustment_manager",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/managers/__init__.py:10"
+   ],
+   "count": 1,
+   "reexport": true,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.managers",
+   "target": "lazylabel.ui.managers.image_preload_manager",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/managers/__init__.py:11"
+   ],
+   "count": 1,
+   "reexport": true,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.managers",
+   "target": "lazylabel.ui.managers.keyboard_event_manager",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/managers/__init__.py:12"
+   ],
+   "count": 1,
+   "reexport": true,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.managers",
+   "target": "lazylabel.ui.managers.mode_manager",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/managers/__init__.py:13"
+   ],
+   "count": 1,
+   "reexport": true,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.managers",
+   "target": "lazylabel.ui.managers.multi_view_coordinator",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/managers/__init__.py:14"
+   ],
+   "count": 1,
+   "reexport": true,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.managers",
+   "target": "lazylabel.ui.managers.notification_manager",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/managers/__init__.py:15"
+   ],
+   "count": 1,
+   "reexport": true,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.managers",
+   "target": "lazylabel.ui.managers.panel_popout_manager",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/managers/__init__.py:16"
+   ],
+   "count": 2,
+   "reexport": true,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.managers",
+   "target": "lazylabel.ui.managers.polygon_drawing_manager",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/managers/__init__.py:17"
+   ],
+   "count": 1,
+   "reexport": true,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.managers",
+   "target": "lazylabel.ui.managers.propagation_manager",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/managers/__init__.py:18"
+   ],
+   "count": 1,
+   "reexport": true,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.managers",
+   "target": "lazylabel.ui.managers.sam_multi_view_manager",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/managers/__init__.py:19"
+   ],
+   "count": 1,
+   "reexport": true,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.managers",
+   "target": "lazylabel.ui.managers.sam_preload_scheduler",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/managers/__init__.py:20"
+   ],
+   "count": 1,
+   "reexport": true,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.managers",
+   "target": "lazylabel.ui.managers.sam_single_view_manager",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/managers/__init__.py:21"
+   ],
+   "count": 1,
+   "reexport": true,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.managers",
+   "target": "lazylabel.ui.managers.sam_worker_manager",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/managers/__init__.py:22"
+   ],
+   "count": 1,
+   "reexport": true,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.managers",
+   "target": "lazylabel.ui.managers.save_export_manager",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/managers/__init__.py:23"
+   ],
+   "count": 1,
+   "reexport": true,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.managers",
+   "target": "lazylabel.ui.managers.segment_display_manager",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/managers/__init__.py:24"
+   ],
+   "count": 1,
+   "reexport": true,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.managers",
+   "target": "lazylabel.ui.managers.segment_table_manager",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/managers/__init__.py:25"
+   ],
+   "count": 1,
+   "reexport": true,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.managers",
+   "target": "lazylabel.ui.managers.ui_layout_manager",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/managers/__init__.py:26"
+   ],
+   "count": 1,
+   "reexport": true,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.managers",
+   "target": "lazylabel.ui.managers.viewport_manager",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/managers/__init__.py:27"
+   ],
+   "count": 1,
+   "reexport": true,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.managers.ai_segment_manager",
+   "target": "lazylabel.utils.logger",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/managers/ai_segment_manager.py:19"
+   ],
+   "count": 1,
+   "reexport": false,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.managers.ai_segment_manager",
+   "target": "lazylabel.utils.utils",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/managers/ai_segment_manager.py:18"
+   ],
+   "count": 1,
+   "reexport": false,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.managers.edit_mode_manager",
+   "target": "lazylabel.ui.editable_vertex",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/managers/edit_mode_manager.py:16"
+   ],
+   "count": 1,
+   "reexport": false,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.managers.edit_mode_manager",
+   "target": "lazylabel.ui.hoverable_ellipse_item",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/managers/edit_mode_manager.py:17"
+   ],
+   "count": 1,
+   "reexport": false,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.managers.edit_mode_manager",
+   "target": "lazylabel.ui.hoverable_polygon_item",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/managers/edit_mode_manager.py:18"
+   ],
+   "count": 1,
+   "reexport": false,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.managers.file_navigation_manager",
+   "target": "lazylabel.utils.logger",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/managers/file_navigation_manager.py:19"
+   ],
+   "count": 1,
+   "reexport": false,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.managers.image_preload_manager",
+   "target": "lazylabel.ui.workers.image_preload_worker",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/managers/image_preload_manager.py:8"
+   ],
+   "count": 1,
+   "reexport": false,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.managers.keyboard_event_manager",
+   "target": "lazylabel.utils.logger",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/managers/keyboard_event_manager.py:16"
+   ],
+   "count": 1,
+   "reexport": false,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.managers.polygon_drawing_manager",
+   "target": "lazylabel.utils.logger",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/managers/polygon_drawing_manager.py:23"
+   ],
+   "count": 1,
+   "reexport": false,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.managers.propagation_manager",
+   "target": "lazylabel.utils.logger",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/managers/propagation_manager.py:21"
+   ],
+   "count": 1,
+   "reexport": false,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.managers.sam_multi_view_manager",
+   "target": "lazylabel.ui.utils.worker_utils",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/managers/sam_multi_view_manager.py:16"
+   ],
+   "count": 1,
+   "reexport": false,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.managers.sam_multi_view_manager",
+   "target": "lazylabel.ui.workers.multi_view_sam_init_worker",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/managers/sam_multi_view_manager.py:17"
+   ],
+   "count": 1,
+   "reexport": false,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.managers.sam_multi_view_manager",
+   "target": "lazylabel.utils.logger",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/managers/sam_multi_view_manager.py:15"
+   ],
+   "count": 1,
+   "reexport": false,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.managers.sam_single_view_manager",
+   "target": "lazylabel.ui.utils.worker_utils",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/managers/sam_single_view_manager.py:15"
+   ],
+   "count": 2,
+   "reexport": false,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.managers.sam_single_view_manager",
+   "target": "lazylabel.ui.workers.sam_update_worker",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/managers/sam_single_view_manager.py:16"
+   ],
+   "count": 1,
+   "reexport": false,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.managers.sam_single_view_manager",
+   "target": "lazylabel.ui.workers.single_view_sam_init_worker",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/managers/sam_single_view_manager.py:16"
+   ],
+   "count": 1,
+   "reexport": false,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.managers.sam_single_view_manager",
+   "target": "lazylabel.utils.logger",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/managers/sam_single_view_manager.py:14"
+   ],
+   "count": 1,
+   "reexport": false,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.managers.sam_worker_manager",
+   "target": "lazylabel.ui.managers.sam_single_view_manager",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/managers/sam_worker_manager.py:11"
+   ],
+   "count": 1,
+   "reexport": false,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.managers.save_export_manager",
+   "target": "lazylabel.core.exporters",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/managers/save_export_manager.py:21"
+   ],
+   "count": 5,
+   "reexport": false,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.managers.save_export_manager",
+   "target": "lazylabel.core.segment_manager",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/managers/save_export_manager.py:487"
+   ],
+   "count": 1,
+   "reexport": false,
+   "lazy": true
+  },
+  {
+   "source": "lazylabel.ui.managers.save_export_manager",
+   "target": "lazylabel.utils.logger",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/managers/save_export_manager.py:28"
+   ],
+   "count": 1,
+   "reexport": false,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.managers.segment_display_manager",
+   "target": "lazylabel.ui.hoverable_ellipse_item",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/managers/segment_display_manager.py:297",
+    "src/lazylabel/ui/managers/segment_display_manager.py:407",
+    "src/lazylabel/ui/managers/segment_display_manager.py:500"
+   ],
+   "count": 3,
+   "reexport": false,
+   "lazy": true
+  },
+  {
+   "source": "lazylabel.ui.managers.segment_display_manager",
+   "target": "lazylabel.ui.hoverable_pixelmap_item",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/managers/segment_display_manager.py:298",
+    "src/lazylabel/ui/managers/segment_display_manager.py:408"
+   ],
+   "count": 2,
+   "reexport": false,
+   "lazy": true
+  },
+  {
+   "source": "lazylabel.ui.managers.segment_display_manager",
+   "target": "lazylabel.ui.hoverable_polygon_item",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/managers/segment_display_manager.py:299",
+    "src/lazylabel/ui/managers/segment_display_manager.py:409"
+   ],
+   "count": 2,
+   "reexport": false,
+   "lazy": true
+  },
+  {
+   "source": "lazylabel.ui.managers.segment_display_manager",
+   "target": "lazylabel.utils.utils",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/managers/segment_display_manager.py:14"
+   ],
+   "count": 1,
+   "reexport": false,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.managers.segment_table_manager",
+   "target": "lazylabel.ui.numeric_table_widget_item",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/managers/segment_table_manager.py:11"
+   ],
+   "count": 1,
+   "reexport": false,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.managers.ui_layout_manager",
+   "target": "lazylabel.ui.photo_viewer",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/managers/ui_layout_manager.py:21"
+   ],
+   "count": 1,
+   "reexport": false,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.managers.ui_layout_manager",
+   "target": "lazylabel.ui.widgets.model_selection_widget",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/managers/ui_layout_manager.py:115"
+   ],
+   "count": 1,
+   "reexport": false,
+   "lazy": true
+  },
+  {
+   "source": "lazylabel.ui.modes",
+   "target": "lazylabel.ui.modes.sequence_view_mode",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/modes/__init__.py:3"
+   ],
+   "count": 1,
+   "reexport": true,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.modes",
+   "target": "lazylabel.ui.modes.single_view_mode",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/modes/__init__.py:4"
+   ],
+   "count": 1,
+   "reexport": true,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.modes.single_view_mode",
+   "target": "lazylabel.ui.hoverable_pixelmap_item",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/modes/single_view_mode.py:8"
+   ],
+   "count": 1,
+   "reexport": false,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.modes.single_view_mode",
+   "target": "lazylabel.ui.hoverable_polygon_item",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/modes/single_view_mode.py:9"
+   ],
+   "count": 1,
+   "reexport": false,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.modes.single_view_mode",
+   "target": "lazylabel.ui.modes.base_mode",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/modes/single_view_mode.py:10"
+   ],
+   "count": 1,
+   "reexport": false,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.modes.single_view_mode",
+   "target": "lazylabel.utils.utils",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/modes/single_view_mode.py:7"
+   ],
+   "count": 1,
+   "reexport": false,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.right_panel",
+   "target": "lazylabel.ui.reorderable_class_table",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/right_panel.py:20"
+   ],
+   "count": 1,
+   "reexport": false,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.right_panel",
+   "target": "lazylabel.utils.fast_file_manager",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/right_panel.py:19"
+   ],
+   "count": 1,
+   "reexport": false,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.theme",
+   "target": "lazylabel.ui.theme_data",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/theme.py:29"
+   ],
+   "count": 10,
+   "reexport": false,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.theme",
+   "target": "lazylabel.utils.logger",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/theme.py:28"
+   ],
+   "count": 1,
+   "reexport": false,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.utils",
+   "target": "lazylabel.ui.utils.scene_utils",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/utils/__init__.py:3"
+   ],
+   "count": 6,
+   "reexport": true,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.utils",
+   "target": "lazylabel.ui.utils.worker_utils",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/utils/__init__.py:11"
+   ],
+   "count": 6,
+   "reexport": true,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.utils.scene_utils",
+   "target": "lazylabel.core.exceptions",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/utils/scene_utils.py:22"
+   ],
+   "count": 1,
+   "reexport": false,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.utils.scene_utils",
+   "target": "lazylabel.utils.logger",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/utils/scene_utils.py:23"
+   ],
+   "count": 1,
+   "reexport": false,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.utils.worker_utils",
+   "target": "lazylabel.core.exceptions",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/utils/worker_utils.py:20"
+   ],
+   "count": 1,
+   "reexport": false,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.utils.worker_utils",
+   "target": "lazylabel.utils.logger",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/utils/worker_utils.py:21"
+   ],
+   "count": 1,
+   "reexport": false,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.widgets",
+   "target": "lazylabel.ui.widgets.adjustments_widget",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/widgets/__init__.py:3"
+   ],
+   "count": 1,
+   "reexport": true,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.widgets",
+   "target": "lazylabel.ui.widgets.annotation_settings_widget",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/widgets/__init__.py:4"
+   ],
+   "count": 1,
+   "reexport": true,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.widgets",
+   "target": "lazylabel.ui.widgets.border_crop_widget",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/widgets/__init__.py:5"
+   ],
+   "count": 1,
+   "reexport": true,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.widgets",
+   "target": "lazylabel.ui.widgets.channel_threshold_widget",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/widgets/__init__.py:6"
+   ],
+   "count": 1,
+   "reexport": true,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.widgets",
+   "target": "lazylabel.ui.widgets.confidence_histogram_dialog",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/widgets/__init__.py:7"
+   ],
+   "count": 1,
+   "reexport": true,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.widgets",
+   "target": "lazylabel.ui.widgets.export_format_widget",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/widgets/__init__.py:8"
+   ],
+   "count": 1,
+   "reexport": true,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.widgets",
+   "target": "lazylabel.ui.widgets.fft_threshold_widget",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/widgets/__init__.py:9"
+   ],
+   "count": 1,
+   "reexport": true,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.widgets",
+   "target": "lazylabel.ui.widgets.fragment_threshold_widget",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/widgets/__init__.py:10"
+   ],
+   "count": 1,
+   "reexport": true,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.widgets",
+   "target": "lazylabel.ui.widgets.model_selection_widget",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/widgets/__init__.py:11"
+   ],
+   "count": 1,
+   "reexport": true,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.widgets",
+   "target": "lazylabel.ui.widgets.rescale_histogram_dialog",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/widgets/__init__.py:12"
+   ],
+   "count": 1,
+   "reexport": true,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.widgets",
+   "target": "lazylabel.ui.widgets.rescale_widget",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/widgets/__init__.py:13"
+   ],
+   "count": 1,
+   "reexport": true,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.widgets",
+   "target": "lazylabel.ui.widgets.sequence_widget",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/widgets/__init__.py:14"
+   ],
+   "count": 3,
+   "reexport": true,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.widgets",
+   "target": "lazylabel.ui.widgets.settings_widget",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/widgets/__init__.py:15"
+   ],
+   "count": 1,
+   "reexport": true,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.widgets",
+   "target": "lazylabel.ui.widgets.status_bar",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/widgets/__init__.py:16"
+   ],
+   "count": 1,
+   "reexport": true,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.widgets",
+   "target": "lazylabel.ui.widgets.timeline_widget",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/widgets/__init__.py:17"
+   ],
+   "count": 2,
+   "reexport": true,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.widgets.export_format_widget",
+   "target": "lazylabel.core.exporters",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/widgets/export_format_widget.py:8"
+   ],
+   "count": 4,
+   "reexport": false,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.widgets.fft_threshold_widget",
+   "target": "lazylabel.ui.widgets.channel_threshold_widget",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/widgets/fft_threshold_widget.py:21"
+   ],
+   "count": 1,
+   "reexport": false,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.widgets.sequence_widget",
+   "target": "lazylabel.ai_availability",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/widgets/sequence_widget.py:22"
+   ],
+   "count": 1,
+   "reexport": false,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.widgets.settings_widget",
+   "target": "lazylabel.core.exporters",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/widgets/settings_widget.py:18"
+   ],
+   "count": 2,
+   "reexport": false,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.widgets.settings_widget",
+   "target": "lazylabel.ui.widgets.export_format_widget",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/widgets/settings_widget.py:19"
+   ],
+   "count": 1,
+   "reexport": false,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.workers",
+   "target": "lazylabel.ui.workers.image_discovery_worker",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/workers/__init__.py:3"
+   ],
+   "count": 1,
+   "reexport": true,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.workers",
+   "target": "lazylabel.ui.workers.image_preload_worker",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/workers/__init__.py:4"
+   ],
+   "count": 1,
+   "reexport": true,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.workers",
+   "target": "lazylabel.ui.workers.multi_view_sam_init_worker",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/workers/__init__.py:5"
+   ],
+   "count": 1,
+   "reexport": true,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.workers",
+   "target": "lazylabel.ui.workers.propagation_worker",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/workers/__init__.py:6"
+   ],
+   "count": 5,
+   "reexport": true,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.workers",
+   "target": "lazylabel.ui.workers.reference_finder_worker",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/workers/__init__.py:13"
+   ],
+   "count": 1,
+   "reexport": true,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.workers",
+   "target": "lazylabel.ui.workers.sam_update_worker",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/workers/__init__.py:14"
+   ],
+   "count": 1,
+   "reexport": true,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.workers",
+   "target": "lazylabel.ui.workers.save_worker",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/workers/__init__.py:15"
+   ],
+   "count": 1,
+   "reexport": true,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.workers",
+   "target": "lazylabel.ui.workers.single_view_sam_init_worker",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/workers/__init__.py:16"
+   ],
+   "count": 1,
+   "reexport": true,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.workers.multi_view_sam_init_worker",
+   "target": "lazylabel.ai_availability",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/workers/multi_view_sam_init_worker.py:7"
+   ],
+   "count": 2,
+   "reexport": false,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.workers.multi_view_sam_init_worker",
+   "target": "lazylabel.models.sam2_model",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/workers/multi_view_sam_init_worker.py:98"
+   ],
+   "count": 1,
+   "reexport": false,
+   "lazy": true
+  },
+  {
+   "source": "lazylabel.ui.workers.multi_view_sam_init_worker",
+   "target": "lazylabel.models.sam_model",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/workers/multi_view_sam_init_worker.py:95"
+   ],
+   "count": 1,
+   "reexport": false,
+   "lazy": true
+  },
+  {
+   "source": "lazylabel.ui.workers.multi_view_sam_init_worker",
+   "target": "lazylabel.utils.logger",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/workers/multi_view_sam_init_worker.py:8"
+   ],
+   "count": 1,
+   "reexport": false,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.workers.propagation_worker",
+   "target": "lazylabel.ui.managers.propagation_manager",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/workers/propagation_worker.py:12"
+   ],
+   "count": 1,
+   "reexport": false,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.workers.propagation_worker",
+   "target": "lazylabel.utils.logger",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/workers/propagation_worker.py:11"
+   ],
+   "count": 1,
+   "reexport": false,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.workers.reference_finder_worker",
+   "target": "lazylabel.ai_availability",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/workers/reference_finder_worker.py:14"
+   ],
+   "count": 2,
+   "reexport": false,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.workers.reference_finder_worker",
+   "target": "lazylabel.config.paths",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/workers/reference_finder_worker.py:15"
+   ],
+   "count": 1,
+   "reexport": false,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.workers.reference_finder_worker",
+   "target": "lazylabel.utils.logger",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/workers/reference_finder_worker.py:16"
+   ],
+   "count": 1,
+   "reexport": false,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.ui.workers.save_worker",
+   "target": "lazylabel.core.exporters",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/ui/workers/save_worker.py:5"
+   ],
+   "count": 4,
+   "reexport": false,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.utils",
+   "target": "lazylabel.utils.custom_file_system_model",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/utils/__init__.py:3"
+   ],
+   "count": 1,
+   "reexport": true,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.utils",
+   "target": "lazylabel.utils.utils",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/utils/__init__.py:4"
+   ],
+   "count": 1,
+   "reexport": true,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.utils.fast_file_manager",
+   "target": "lazylabel.utils.logger",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/utils/fast_file_manager.py:34"
+   ],
+   "count": 1,
+   "reexport": false,
+   "lazy": false
+  },
+  {
+   "source": "lazylabel.viewmodels",
+   "target": "lazylabel.viewmodels.single_view_viewmodel",
+   "kind": "call",
+   "evidence": [
+    "src/lazylabel/viewmodels/__init__.py:7"
+   ],
+   "count": 1,
+   "reexport": true,
+   "lazy": false
+  },
+  {
+   "source": "job:console_script_lazylabel-gui",
+   "target": "lazylabel.main",
+   "kind": "dispatch",
+   "evidence": [
+    "pyproject.toml [project.scripts]"
+   ],
+   "count": 1,
+   "via": "lazylabel.main:main"
+  },
+  {
+   "source": "job:python_m",
+   "target": "lazylabel.__main__",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/__main__.py"
+   ],
+   "count": 1,
+   "via": "runpy"
+  },
+  {
+   "source": "job:windows_exe",
+   "target": "lazylabel.main",
+   "kind": "dispatch",
+   "evidence": [
+    "build_system/windows/lazylabel.spec"
+   ],
+   "count": 1,
+   "via": "PyInstaller Analysis"
+  },
+  {
+   "source": "lazylabel.core.exporters",
+   "target": "lazylabel.core.exporters.coco",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/core/exporters/coco.py:110"
+   ],
+   "count": 1,
+   "via": "exporter registry COCO_JSON"
+  },
+  {
+   "source": "lazylabel.core.exporters",
+   "target": "lazylabel.core.exporters.createml",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/core/exporters/createml.py:77"
+   ],
+   "count": 1,
+   "via": "exporter registry CREATEML"
+  },
+  {
+   "source": "lazylabel.core.exporters",
+   "target": "lazylabel.core.exporters.npz",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/core/exporters/npz.py:40"
+   ],
+   "count": 1,
+   "via": "exporter registry NPZ"
+  },
+  {
+   "source": "lazylabel.core.exporters",
+   "target": "lazylabel.core.exporters.npz_class_map",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/core/exporters/npz_class_map.py:76"
+   ],
+   "count": 1,
+   "via": "exporter registry NPZ_CLASS_MAP"
+  },
+  {
+   "source": "lazylabel.core.exporters",
+   "target": "lazylabel.core.exporters.pascal_voc",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/core/exporters/pascal_voc.py:73"
+   ],
+   "count": 1,
+   "via": "exporter registry PASCAL_VOC"
+  },
+  {
+   "source": "lazylabel.core.exporters",
+   "target": "lazylabel.core.exporters.yolo_detection",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/core/exporters/yolo_detection.py:56"
+   ],
+   "count": 1,
+   "via": "exporter registry YOLO_DETECTION"
+  },
+  {
+   "source": "lazylabel.core.exporters",
+   "target": "lazylabel.core.exporters.yolo_segmentation",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/core/exporters/yolo_segmentation.py:66"
+   ],
+   "count": 1,
+   "via": "exporter registry YOLO_SEGMENTATION"
+  },
+  {
+   "source": "lazylabel.core.model_manager",
+   "target": "lazylabel.models.sam2_model",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/core/model_manager.py:145"
+   ],
+   "count": 1,
+   "via": "model factory by checkpoint filename"
+  },
+  {
+   "source": "lazylabel.core.model_manager",
+   "target": "lazylabel.models.sam_model",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/core/model_manager.py:50"
+   ],
+   "count": 1,
+   "via": "model factory by checkpoint filename"
+  },
+  {
+   "source": "lazylabel.core.undo_redo_manager",
+   "target": "lazylabel.core.segment_manager",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/core/undo_redo_manager.py:166",
+    "src/lazylabel/core/undo_redo_manager.py:168",
+    "src/lazylabel/core/undo_redo_manager.py:173"
+   ],
+   "count": 23,
+   "via": "attribute chain .segments"
+  },
+  {
+   "source": "lazylabel.core.undo_redo_manager",
+   "target": "lazylabel.ui.main_window",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/core/undo_redo_manager.py:56",
+    "src/lazylabel/core/undo_redo_manager.py:84",
+    "src/lazylabel/core/undo_redo_manager.py:97"
+   ],
+   "count": 150,
+   "via": "back-reference"
+  },
+  {
+   "source": "lazylabel.core.undo_redo_manager",
+   "target": "lazylabel.ui.photo_viewer",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/core/undo_redo_manager.py:204",
+    "src/lazylabel/core/undo_redo_manager.py:252"
+   ],
+   "count": 2,
+   "via": "attribute chain .scene"
+  },
+  {
+   "source": "lazylabel.core.undo_redo_manager",
+   "target": "lazylabel.ui.right_panel",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/core/undo_redo_manager.py:174"
+   ],
+   "count": 1,
+   "via": "attribute chain .clear_selections"
+  },
+  {
+   "source": "lazylabel.ui.control_panel",
+   "target": "lazylabel.ui.main_window",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/main_window.py:858",
+    "src/lazylabel/ui/main_window.py:859",
+    "src/lazylabel/ui/main_window.py:860"
+   ],
+   "count": 37,
+   "via": "signal sam_mode_requested"
+  },
+  {
+   "source": "lazylabel.ui.control_panel",
+   "target": "lazylabel.ui.managers.crop_manager",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/main_window.py:900",
+    "src/lazylabel/ui/main_window.py:903",
+    "src/lazylabel/ui/main_window.py:904"
+   ],
+   "count": 3,
+   "via": "signal crop_draw_requested"
+  },
+  {
+   "source": "lazylabel.ui.control_panel",
+   "target": "lazylabel.ui.managers.panel_popout_manager",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/main_window.py:969"
+   ],
+   "count": 1,
+   "via": "signal pop_out_requested"
+  },
+  {
+   "source": "lazylabel.ui.editable_vertex",
+   "target": "lazylabel.core.undo_redo_manager",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/editable_vertex.py:53",
+    "src/lazylabel/ui/editable_vertex.py:125"
+   ],
+   "count": 2,
+   "via": "attribute chain .record_action"
+  },
+  {
+   "source": "lazylabel.ui.editable_vertex",
+   "target": "lazylabel.ui.main_window",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/editable_vertex.py:34",
+    "src/lazylabel/ui/editable_vertex.py:53",
+    "src/lazylabel/ui/editable_vertex.py:102"
+   ],
+   "count": 4,
+   "via": "back-reference"
+  },
+  {
+   "source": "lazylabel.ui.handlers.single_view_mouse_handler",
+   "target": "lazylabel.core.segment_manager",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/handlers/single_view_mouse_handler.py:90",
+    "src/lazylabel/ui/handlers/single_view_mouse_handler.py:93",
+    "src/lazylabel/ui/handlers/single_view_mouse_handler.py:186"
+   ],
+   "count": 13,
+   "via": "attribute chain .segments"
+  },
+  {
+   "source": "lazylabel.ui.handlers.single_view_mouse_handler",
+   "target": "lazylabel.core.undo_redo_manager",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/handlers/single_view_mouse_handler.py:313",
+    "src/lazylabel/ui/handlers/single_view_mouse_handler.py:414",
+    "src/lazylabel/ui/handlers/single_view_mouse_handler.py:433"
+   ],
+   "count": 5,
+   "via": "attribute chain .record_action"
+  },
+  {
+   "source": "lazylabel.ui.handlers.single_view_mouse_handler",
+   "target": "lazylabel.ui.main_window",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/handlers/single_view_mouse_handler.py:49",
+    "src/lazylabel/ui/handlers/single_view_mouse_handler.py:54",
+    "src/lazylabel/ui/handlers/single_view_mouse_handler.py:59"
+   ],
+   "count": 115,
+   "via": "back-reference"
+  },
+  {
+   "source": "lazylabel.ui.handlers.single_view_mouse_handler",
+   "target": "lazylabel.ui.managers.crop_manager",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/handlers/single_view_mouse_handler.py:170",
+    "src/lazylabel/ui/handlers/single_view_mouse_handler.py:171",
+    "src/lazylabel/ui/handlers/single_view_mouse_handler.py:172"
+   ],
+   "count": 15,
+   "via": "attribute chain .crop_start_pos"
+  },
+  {
+   "source": "lazylabel.ui.handlers.single_view_mouse_handler",
+   "target": "lazylabel.ui.right_panel",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/handlers/single_view_mouse_handler.py:86"
+   ],
+   "count": 1,
+   "via": "attribute chain .get_selected_segment_indices"
+  },
+  {
+   "source": "lazylabel.ui.hoverable_ellipse_item",
+   "target": "lazylabel.ui.main_window",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/hoverable_ellipse_item.py:39",
+    "src/lazylabel/ui/hoverable_ellipse_item.py:42",
+    "src/lazylabel/ui/hoverable_ellipse_item.py:50"
+   ],
+   "count": 4,
+   "via": "back-reference"
+  },
+  {
+   "source": "lazylabel.ui.hoverable_pixelmap_item",
+   "target": "lazylabel.ui.main_window",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/hoverable_pixelmap_item.py:32",
+    "src/lazylabel/ui/hoverable_pixelmap_item.py:35",
+    "src/lazylabel/ui/hoverable_pixelmap_item.py:44"
+   ],
+   "count": 4,
+   "via": "back-reference"
+  },
+  {
+   "source": "lazylabel.ui.hoverable_polygon_item",
+   "target": "lazylabel.ui.main_window",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/hoverable_polygon_item.py:34",
+    "src/lazylabel/ui/hoverable_polygon_item.py:37",
+    "src/lazylabel/ui/hoverable_polygon_item.py:46"
+   ],
+   "count": 4,
+   "via": "back-reference"
+  },
+  {
+   "source": "lazylabel.ui.main_window",
+   "target": "lazylabel.models.sam2_model",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/main_window.py:1591",
+    "src/lazylabel/ui/main_window.py:1599",
+    "src/lazylabel/ui/main_window.py:1610"
+   ],
+   "count": 11,
+   "via": "attribute chain .set_embeddings"
+  },
+  {
+   "source": "lazylabel.ui.main_window",
+   "target": "lazylabel.models.sam_model",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/main_window.py:1591",
+    "src/lazylabel/ui/main_window.py:1599",
+    "src/lazylabel/ui/main_window.py:1610"
+   ],
+   "count": 11,
+   "via": "attribute chain .set_embeddings"
+  },
+  {
+   "source": "lazylabel.ui.main_window",
+   "target": "lazylabel.ui.managers.panel_popout_manager",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/main_window.py:2069",
+    "src/lazylabel/ui/main_window.py:2071"
+   ],
+   "count": 2,
+   "via": "attribute chain .close"
+  },
+  {
+   "source": "lazylabel.ui.main_window",
+   "target": "lazylabel.ui.managers.propagation_manager",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/main_window.py:4151",
+    "src/lazylabel/ui/main_window.py:4155",
+    "src/lazylabel/ui/main_window.py:4205"
+   ],
+   "count": 6,
+   "via": "attribute chain .skipped_frame_indices"
+  },
+  {
+   "source": "lazylabel.ui.main_window",
+   "target": "lazylabel.ui.managers.sam_worker_manager",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/main_window.py:247",
+    "src/lazylabel/ui/main_window.py:252"
+   ],
+   "count": 2,
+   "via": "getattr proxy"
+  },
+  {
+   "source": "lazylabel.ui.main_window",
+   "target": "lazylabel.ui.photo_viewer",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/main_window.py:3765",
+    "src/lazylabel/ui/main_window.py:3773",
+    "src/lazylabel/ui/main_window.py:3809"
+   ],
+   "count": 5,
+   "via": "attribute chain .removeItem"
+  },
+  {
+   "source": "lazylabel.ui.main_window",
+   "target": "lazylabel.ui.widgets.channel_threshold_widget",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/main_window.py:841",
+    "src/lazylabel/ui/main_window.py:2889",
+    "src/lazylabel/ui/main_window.py:2891"
+   ],
+   "count": 3,
+   "via": "attribute chain .thresholdChanged"
+  },
+  {
+   "source": "lazylabel.ui.main_window",
+   "target": "lazylabel.ui.widgets.fft_threshold_widget",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/main_window.py:825",
+    "src/lazylabel/ui/main_window.py:2848",
+    "src/lazylabel/ui/main_window.py:2852"
+   ],
+   "count": 5,
+   "via": "attribute chain .fft_threshold_changed"
+  },
+  {
+   "source": "lazylabel.ui.main_window",
+   "target": "lazylabel.ui.widgets.model_selection_widget",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/main_window.py:1222",
+    "src/lazylabel/ui/main_window.py:1245",
+    "src/lazylabel/ui/main_window.py:1264"
+   ],
+   "count": 3,
+   "via": "attribute chain .get_selected_model_path"
+  },
+  {
+   "source": "lazylabel.ui.main_window",
+   "target": "lazylabel.ui.widgets.rescale_widget",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/main_window.py:2789",
+    "src/lazylabel/ui/main_window.py:2801",
+    "src/lazylabel/ui/main_window.py:2802"
+   ],
+   "count": 19,
+   "via": "attribute chain .get_image_for_histogram"
+  },
+  {
+   "source": "lazylabel.ui.main_window",
+   "target": "lazylabel.ui.widgets.sequence_widget",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/main_window.py:2099",
+    "src/lazylabel/ui/main_window.py:3311",
+    "src/lazylabel/ui/main_window.py:4167"
+   ],
+   "count": 6,
+   "via": "attribute chain .value"
+  },
+  {
+   "source": "lazylabel.ui.main_window",
+   "target": "lazylabel.ui.widgets.settings_widget",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/main_window.py:867",
+    "src/lazylabel/ui/main_window.py:1383"
+   ],
+   "count": 2,
+   "via": "attribute chain .settings_changed"
+  },
+  {
+   "source": "lazylabel.ui.main_window",
+   "target": "lazylabel.ui.widgets.timeline_widget",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/main_window.py:5258"
+   ],
+   "count": 1,
+   "via": "attribute chain .is_sorted"
+  },
+  {
+   "source": "lazylabel.ui.main_window",
+   "target": "lazylabel.utils.fast_file_manager",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/main_window.py:964",
+    "src/lazylabel/ui/main_window.py:1080",
+    "src/lazylabel/ui/main_window.py:1774"
+   ],
+   "count": 13,
+   "via": "attribute chain .displaySettingsChanged"
+  },
+  {
+   "source": "lazylabel.ui.managers.ai_segment_manager",
+   "target": "lazylabel.core.model_manager",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/managers/ai_segment_manager.py:492",
+    "src/lazylabel/ui/managers/ai_segment_manager.py:495"
+   ],
+   "count": 2,
+   "via": "attribute chain .is_model_available"
+  },
+  {
+   "source": "lazylabel.ui.managers.ai_segment_manager",
+   "target": "lazylabel.core.segment_manager",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/managers/ai_segment_manager.py:161",
+    "src/lazylabel/ui/managers/ai_segment_manager.py:190",
+    "src/lazylabel/ui/managers/ai_segment_manager.py:254"
+   ],
+   "count": 5,
+   "via": "attribute chain .segments"
+  },
+  {
+   "source": "lazylabel.ui.managers.ai_segment_manager",
+   "target": "lazylabel.core.undo_redo_manager",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/managers/ai_segment_manager.py:261",
+    "src/lazylabel/ui/managers/ai_segment_manager.py:286",
+    "src/lazylabel/ui/managers/ai_segment_manager.py:352"
+   ],
+   "count": 5,
+   "via": "attribute chain .record_action"
+  },
+  {
+   "source": "lazylabel.ui.managers.ai_segment_manager",
+   "target": "lazylabel.models.sam2_model",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/managers/ai_segment_manager.py:495"
+   ],
+   "count": 1,
+   "via": "attribute chain .predict"
+  },
+  {
+   "source": "lazylabel.ui.managers.ai_segment_manager",
+   "target": "lazylabel.models.sam_model",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/managers/ai_segment_manager.py:495"
+   ],
+   "count": 1,
+   "via": "attribute chain .predict"
+  },
+  {
+   "source": "lazylabel.ui.managers.ai_segment_manager",
+   "target": "lazylabel.ui.main_window",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/managers/ai_segment_manager.py:55",
+    "src/lazylabel/ui/managers/ai_segment_manager.py:60",
+    "src/lazylabel/ui/managers/ai_segment_manager.py:65"
+   ],
+   "count": 87,
+   "via": "back-reference"
+  },
+  {
+   "source": "lazylabel.ui.managers.ai_segment_manager",
+   "target": "lazylabel.ui.managers.coordinate_transformer",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/managers/ai_segment_manager.py:506"
+   ],
+   "count": 1,
+   "via": "attribute chain .scale_mask_to_display"
+  },
+  {
+   "source": "lazylabel.ui.managers.ai_segment_manager",
+   "target": "lazylabel.ui.managers.multi_view_coordinator",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/managers/ai_segment_manager.py:315",
+    "src/lazylabel/ui/managers/ai_segment_manager.py:322"
+   ],
+   "count": 2,
+   "via": "attribute chain .get_target_viewers"
+  },
+  {
+   "source": "lazylabel.ui.managers.ai_segment_manager",
+   "target": "lazylabel.ui.managers.segment_display_manager",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/managers/ai_segment_manager.py:268"
+   ],
+   "count": 1,
+   "via": "attribute chain .clear_pixmap_caches"
+  },
+  {
+   "source": "lazylabel.ui.managers.coordinate_transformer",
+   "target": "lazylabel.ui.main_window",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/managers/coordinate_transformer.py:31",
+    "src/lazylabel/ui/managers/coordinate_transformer.py:47",
+    "src/lazylabel/ui/managers/coordinate_transformer.py:49"
+   ],
+   "count": 17,
+   "via": "back-reference"
+  },
+  {
+   "source": "lazylabel.ui.managers.crop_manager",
+   "target": "lazylabel.ui.control_panel",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/managers/crop_manager.py:52",
+    "src/lazylabel/ui/managers/crop_manager.py:60",
+    "src/lazylabel/ui/managers/crop_manager.py:67"
+   ],
+   "count": 7,
+   "via": "attribute chain .set_crop_status"
+  },
+  {
+   "source": "lazylabel.ui.managers.crop_manager",
+   "target": "lazylabel.ui.main_window",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/main_window.py:907",
+    "src/lazylabel/ui/main_window.py:908",
+    "src/lazylabel/ui/managers/crop_manager.py:45"
+   ],
+   "count": 32,
+   "via": "signal crop_applied"
+  },
+  {
+   "source": "lazylabel.ui.managers.edit_mode_manager",
+   "target": "lazylabel.core.segment_manager",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/managers/edit_mode_manager.py:106",
+    "src/lazylabel/ui/managers/edit_mode_manager.py:162",
+    "src/lazylabel/ui/managers/edit_mode_manager.py:251"
+   ],
+   "count": 3,
+   "via": "attribute chain .segments"
+  },
+  {
+   "source": "lazylabel.ui.managers.edit_mode_manager",
+   "target": "lazylabel.core.undo_redo_manager",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/managers/edit_mode_manager.py:167",
+    "src/lazylabel/ui/managers/edit_mode_manager.py:222"
+   ],
+   "count": 2,
+   "via": "attribute chain .record_action"
+  },
+  {
+   "source": "lazylabel.ui.managers.edit_mode_manager",
+   "target": "lazylabel.ui.main_window",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/managers/edit_mode_manager.py:53",
+    "src/lazylabel/ui/managers/edit_mode_manager.py:58",
+    "src/lazylabel/ui/managers/edit_mode_manager.py:63"
+   ],
+   "count": 15,
+   "via": "back-reference"
+  },
+  {
+   "source": "lazylabel.ui.managers.edit_mode_manager",
+   "target": "lazylabel.ui.right_panel",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/managers/edit_mode_manager.py:100"
+   ],
+   "count": 1,
+   "via": "attribute chain .get_selected_segment_indices"
+  },
+  {
+   "source": "lazylabel.ui.managers.file_navigation_manager",
+   "target": "lazylabel.core.file_manager",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/managers/file_navigation_manager.py:147",
+    "src/lazylabel/ui/managers/file_navigation_manager.py:203",
+    "src/lazylabel/ui/managers/file_navigation_manager.py:343"
+   ],
+   "count": 4,
+   "via": "attribute chain .is_image_file"
+  },
+  {
+   "source": "lazylabel.ui.managers.file_navigation_manager",
+   "target": "lazylabel.core.model_manager",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/managers/file_navigation_manager.py:217"
+   ],
+   "count": 1,
+   "via": "attribute chain .is_model_available"
+  },
+  {
+   "source": "lazylabel.ui.managers.file_navigation_manager",
+   "target": "lazylabel.core.segment_manager",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/managers/file_navigation_manager.py:281"
+   ],
+   "count": 1,
+   "via": "attribute chain .clear"
+  },
+  {
+   "source": "lazylabel.ui.managers.file_navigation_manager",
+   "target": "lazylabel.ui.control_panel",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/managers/file_navigation_manager.py:157",
+    "src/lazylabel/ui/managers/file_navigation_manager.py:234",
+    "src/lazylabel/ui/managers/file_navigation_manager.py:238"
+   ],
+   "count": 4,
+   "via": "attribute chain .get_settings"
+  },
+  {
+   "source": "lazylabel.ui.managers.file_navigation_manager",
+   "target": "lazylabel.ui.main_window",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/managers/file_navigation_manager.py:60",
+    "src/lazylabel/ui/managers/file_navigation_manager.py:65",
+    "src/lazylabel/ui/managers/file_navigation_manager.py:70"
+   ],
+   "count": 64,
+   "via": "back-reference"
+  },
+  {
+   "source": "lazylabel.ui.managers.file_navigation_manager",
+   "target": "lazylabel.ui.managers.crop_manager",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/managers/file_navigation_manager.py:229",
+    "src/lazylabel/ui/managers/file_navigation_manager.py:230",
+    "src/lazylabel/ui/managers/file_navigation_manager.py:231"
+   ],
+   "count": 6,
+   "via": "attribute chain .crop_coords_by_size"
+  },
+  {
+   "source": "lazylabel.ui.managers.file_navigation_manager",
+   "target": "lazylabel.ui.managers.image_adjustment_manager",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/managers/file_navigation_manager.py:189",
+    "src/lazylabel/ui/managers/file_navigation_manager.py:190",
+    "src/lazylabel/ui/managers/file_navigation_manager.py:191"
+   ],
+   "count": 8,
+   "via": "attribute chain .brightness"
+  },
+  {
+   "source": "lazylabel.ui.managers.file_navigation_manager",
+   "target": "lazylabel.ui.managers.image_preload_manager",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/managers/file_navigation_manager.py:169",
+    "src/lazylabel/ui/managers/file_navigation_manager.py:248",
+    "src/lazylabel/ui/managers/file_navigation_manager.py:372"
+   ],
+   "count": 3,
+   "via": "attribute chain .get_preloaded_pixmap"
+  },
+  {
+   "source": "lazylabel.ui.managers.file_navigation_manager",
+   "target": "lazylabel.ui.managers.sam_worker_manager",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/managers/file_navigation_manager.py:198",
+    "src/lazylabel/ui/managers/file_navigation_manager.py:219",
+    "src/lazylabel/ui/managers/file_navigation_manager.py:363"
+   ],
+   "count": 3,
+   "via": "attribute chain .try_cache_restore"
+  },
+  {
+   "source": "lazylabel.ui.managers.file_navigation_manager",
+   "target": "lazylabel.ui.right_panel",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/managers/file_navigation_manager.py:213",
+    "src/lazylabel/ui/managers/file_navigation_manager.py:359",
+    "src/lazylabel/ui/managers/file_navigation_manager.py:413"
+   ],
+   "count": 6,
+   "via": "attribute chain .file_tree"
+  },
+  {
+   "source": "lazylabel.ui.managers.file_navigation_manager",
+   "target": "lazylabel.utils.custom_file_system_model",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/managers/file_navigation_manager.py:141",
+    "src/lazylabel/ui/managers/file_navigation_manager.py:145",
+    "src/lazylabel/ui/managers/file_navigation_manager.py:438"
+   ],
+   "count": 6,
+   "via": "attribute chain .isDir"
+  },
+  {
+   "source": "lazylabel.ui.managers.file_navigation_manager",
+   "target": "lazylabel.utils.fast_file_manager",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/managers/file_navigation_manager.py:415"
+   ],
+   "count": 1,
+   "via": "attribute chain .getConsecutiveFile"
+  },
+  {
+   "source": "lazylabel.ui.managers.image_adjustment_manager",
+   "target": "lazylabel.ui.control_panel",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/managers/image_adjustment_manager.py:169",
+    "src/lazylabel/ui/managers/image_adjustment_manager.py:318",
+    "src/lazylabel/ui/managers/image_adjustment_manager.py:365"
+   ],
+   "count": 14,
+   "via": "attribute chain .adjustments_widget"
+  },
+  {
+   "source": "lazylabel.ui.managers.image_adjustment_manager",
+   "target": "lazylabel.ui.main_window",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/managers/image_adjustment_manager.py:57",
+    "src/lazylabel/ui/managers/image_adjustment_manager.py:62",
+    "src/lazylabel/ui/managers/image_adjustment_manager.py:67"
+   ],
+   "count": 80,
+   "via": "back-reference"
+  },
+  {
+   "source": "lazylabel.ui.managers.image_adjustment_manager",
+   "target": "lazylabel.ui.managers.crop_manager",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/managers/image_adjustment_manager.py:354",
+    "src/lazylabel/ui/managers/image_adjustment_manager.py:355",
+    "src/lazylabel/ui/managers/image_adjustment_manager.py:393"
+   ],
+   "count": 11,
+   "via": "attribute chain .current_crop_coords"
+  },
+  {
+   "source": "lazylabel.ui.managers.image_adjustment_manager",
+   "target": "lazylabel.ui.photo_viewer",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/managers/image_adjustment_manager.py:134",
+    "src/lazylabel/ui/managers/image_adjustment_manager.py:136",
+    "src/lazylabel/ui/managers/image_adjustment_manager.py:138"
+   ],
+   "count": 3,
+   "via": "attribute chain ._original_image"
+  },
+  {
+   "source": "lazylabel.ui.managers.image_adjustment_manager",
+   "target": "lazylabel.ui.widgets.adjustments_widget",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/managers/image_adjustment_manager.py:169"
+   ],
+   "count": 1,
+   "via": "attribute chain .reset_to_defaults"
+  },
+  {
+   "source": "lazylabel.ui.managers.image_adjustment_manager",
+   "target": "lazylabel.ui.widgets.channel_threshold_widget",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/managers/image_adjustment_manager.py:321",
+    "src/lazylabel/ui/managers/image_adjustment_manager.py:333",
+    "src/lazylabel/ui/managers/image_adjustment_manager.py:371"
+   ],
+   "count": 4,
+   "via": "attribute chain .has_active_thresholding"
+  },
+  {
+   "source": "lazylabel.ui.managers.image_adjustment_manager",
+   "target": "lazylabel.ui.widgets.fft_threshold_widget",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/managers/image_adjustment_manager.py:374",
+    "src/lazylabel/ui/managers/image_adjustment_manager.py:634"
+   ],
+   "count": 2,
+   "via": "attribute chain .is_active"
+  },
+  {
+   "source": "lazylabel.ui.managers.image_adjustment_manager",
+   "target": "lazylabel.ui.widgets.rescale_widget",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/managers/image_adjustment_manager.py:373",
+    "src/lazylabel/ui/managers/image_adjustment_manager.py:394",
+    "src/lazylabel/ui/managers/image_adjustment_manager.py:621"
+   ],
+   "count": 4,
+   "via": "attribute chain .has_active_rescaling"
+  },
+  {
+   "source": "lazylabel.ui.managers.image_preload_manager",
+   "target": "lazylabel.ui.main_window",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/managers/image_preload_manager.py:41",
+    "src/lazylabel/ui/managers/image_preload_manager.py:45",
+    "src/lazylabel/ui/managers/image_preload_manager.py:53"
+   ],
+   "count": 9,
+   "via": "back-reference"
+  },
+  {
+   "source": "lazylabel.ui.managers.image_preload_manager",
+   "target": "lazylabel.ui.right_panel",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/managers/image_preload_manager.py:88",
+    "src/lazylabel/ui/managers/image_preload_manager.py:95"
+   ],
+   "count": 2,
+   "via": "attribute chain .get_next_file_pair"
+  },
+  {
+   "source": "lazylabel.ui.managers.keyboard_event_manager",
+   "target": "lazylabel.ui.main_window",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/managers/keyboard_event_manager.py:42",
+    "src/lazylabel/ui/managers/keyboard_event_manager.py:47",
+    "src/lazylabel/ui/managers/keyboard_event_manager.py:50"
+   ],
+   "count": 141,
+   "via": "back-reference"
+  },
+  {
+   "source": "lazylabel.ui.managers.keyboard_event_manager",
+   "target": "lazylabel.ui.managers.multi_view_coordinator",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/managers/keyboard_event_manager.py:81",
+    "src/lazylabel/ui/managers/keyboard_event_manager.py:107",
+    "src/lazylabel/ui/managers/keyboard_event_manager.py:214"
+   ],
+   "count": 3,
+   "via": "attribute chain .active_viewer_idx"
+  },
+  {
+   "source": "lazylabel.ui.managers.keyboard_event_manager",
+   "target": "lazylabel.ui.right_panel",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/managers/keyboard_event_manager.py:57",
+    "src/lazylabel/ui/managers/keyboard_event_manager.py:239"
+   ],
+   "count": 2,
+   "via": "attribute chain .clear_selections"
+  },
+  {
+   "source": "lazylabel.ui.managers.mode_manager",
+   "target": "lazylabel.core.segment_manager",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/managers/mode_manager.py:91",
+    "src/lazylabel/ui/managers/mode_manager.py:104"
+   ],
+   "count": 2,
+   "via": "attribute chain .segments"
+  },
+  {
+   "source": "lazylabel.ui.managers.mode_manager",
+   "target": "lazylabel.ui.control_panel",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/managers/mode_manager.py:127"
+   ],
+   "count": 1,
+   "via": "attribute chain .set_mode_text"
+  },
+  {
+   "source": "lazylabel.ui.managers.mode_manager",
+   "target": "lazylabel.ui.main_window",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/managers/mode_manager.py:60",
+    "src/lazylabel/ui/managers/mode_manager.py:63",
+    "src/lazylabel/ui/managers/mode_manager.py:64"
+   ],
+   "count": 33,
+   "via": "back-reference"
+  },
+  {
+   "source": "lazylabel.ui.managers.mode_manager",
+   "target": "lazylabel.ui.right_panel",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/managers/mode_manager.py:100"
+   ],
+   "count": 1,
+   "via": "attribute chain .get_selected_segment_indices"
+  },
+  {
+   "source": "lazylabel.ui.managers.notification_manager",
+   "target": "lazylabel.ui.main_window",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/managers/notification_manager.py:30"
+   ],
+   "count": 1,
+   "via": "back-reference"
+  },
+  {
+   "source": "lazylabel.ui.managers.notification_manager",
+   "target": "lazylabel.ui.widgets.status_bar",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/managers/notification_manager.py:39",
+    "src/lazylabel/ui/managers/notification_manager.py:48",
+    "src/lazylabel/ui/managers/notification_manager.py:59"
+   ],
+   "count": 5,
+   "via": "attribute chain .show_message"
+  },
+  {
+   "source": "lazylabel.ui.managers.panel_popout_manager",
+   "target": "lazylabel.ui.control_panel",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/managers/panel_popout_manager.py:71",
+    "src/lazylabel/ui/managers/panel_popout_manager.py:81",
+    "src/lazylabel/ui/managers/panel_popout_manager.py:85"
+   ],
+   "count": 9,
+   "via": "attribute chain .setParent"
+  },
+  {
+   "source": "lazylabel.ui.managers.panel_popout_manager",
+   "target": "lazylabel.ui.main_window",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/managers/panel_popout_manager.py:42",
+    "src/lazylabel/ui/managers/panel_popout_manager.py:67",
+    "src/lazylabel/ui/managers/panel_popout_manager.py:71"
+   ],
+   "count": 36,
+   "via": "back-reference"
+  },
+  {
+   "source": "lazylabel.ui.managers.panel_popout_manager",
+   "target": "lazylabel.ui.right_panel",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/managers/panel_popout_manager.py:97",
+    "src/lazylabel/ui/managers/panel_popout_manager.py:107",
+    "src/lazylabel/ui/managers/panel_popout_manager.py:111"
+   ],
+   "count": 9,
+   "via": "attribute chain .setParent"
+  },
+  {
+   "source": "lazylabel.ui.managers.polygon_drawing_manager",
+   "target": "lazylabel.core.segment_manager",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/managers/polygon_drawing_manager.py:181",
+    "src/lazylabel/ui/managers/polygon_drawing_manager.py:206",
+    "src/lazylabel/ui/managers/polygon_drawing_manager.py:211"
+   ],
+   "count": 4,
+   "via": "attribute chain .erase_segments_with_shape"
+  },
+  {
+   "source": "lazylabel.ui.managers.polygon_drawing_manager",
+   "target": "lazylabel.core.undo_redo_manager",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/managers/polygon_drawing_manager.py:114",
+    "src/lazylabel/ui/managers/polygon_drawing_manager.py:188",
+    "src/lazylabel/ui/managers/polygon_drawing_manager.py:208"
+   ],
+   "count": 3,
+   "via": "attribute chain .record_action"
+  },
+  {
+   "source": "lazylabel.ui.managers.polygon_drawing_manager",
+   "target": "lazylabel.ui.main_window",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/managers/polygon_drawing_manager.py:54",
+    "src/lazylabel/ui/managers/polygon_drawing_manager.py:59",
+    "src/lazylabel/ui/managers/polygon_drawing_manager.py:64"
+   ],
+   "count": 34,
+   "via": "back-reference"
+  },
+  {
+   "source": "lazylabel.ui.managers.propagation_manager",
+   "target": "lazylabel.core.model_manager",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/managers/propagation_manager.py:139"
+   ],
+   "count": 1,
+   "via": "attribute chain .sam_model"
+  },
+  {
+   "source": "lazylabel.ui.managers.propagation_manager",
+   "target": "lazylabel.core.segment_manager",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/managers/propagation_manager.py:453",
+    "src/lazylabel/ui/managers/propagation_manager.py:458"
+   ],
+   "count": 2,
+   "via": "attribute chain .segments"
+  },
+  {
+   "source": "lazylabel.ui.managers.propagation_manager",
+   "target": "lazylabel.models.sam2_model",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/managers/propagation_manager.py:305",
+    "src/lazylabel/ui/managers/propagation_manager.py:449",
+    "src/lazylabel/ui/managers/propagation_manager.py:481"
+   ],
+   "count": 19,
+   "via": "attribute chain .cleanup_video_predictor"
+  },
+  {
+   "source": "lazylabel.ui.managers.propagation_manager",
+   "target": "lazylabel.models.sam_model",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/managers/propagation_manager.py:305",
+    "src/lazylabel/ui/managers/propagation_manager.py:449",
+    "src/lazylabel/ui/managers/propagation_manager.py:481"
+   ],
+   "count": 19,
+   "via": "attribute chain .cleanup_video_predictor"
+  },
+  {
+   "source": "lazylabel.ui.managers.propagation_manager",
+   "target": "lazylabel.ui.main_window",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/managers/propagation_manager.py:139",
+    "src/lazylabel/ui/managers/propagation_manager.py:145"
+   ],
+   "count": 2,
+   "via": "back-reference"
+  },
+  {
+   "source": "lazylabel.ui.managers.sam_multi_view_manager",
+   "target": "lazylabel.ui.main_window",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/managers/sam_multi_view_manager.py:114",
+    "src/lazylabel/ui/managers/sam_multi_view_manager.py:145",
+    "src/lazylabel/ui/managers/sam_multi_view_manager.py:158"
+   ],
+   "count": 6,
+   "via": "back-reference"
+  },
+  {
+   "source": "lazylabel.ui.managers.sam_single_view_manager",
+   "target": "lazylabel.core.model_manager",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/managers/sam_single_view_manager.py:85",
+    "src/lazylabel/ui/managers/sam_single_view_manager.py:105",
+    "src/lazylabel/ui/managers/sam_single_view_manager.py:161"
+   ],
+   "count": 7,
+   "via": "attribute chain .is_model_available"
+  },
+  {
+   "source": "lazylabel.ui.managers.sam_single_view_manager",
+   "target": "lazylabel.core.undo_redo_manager",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/managers/sam_single_view_manager.py:398"
+   ],
+   "count": 1,
+   "via": "attribute chain .clear"
+  },
+  {
+   "source": "lazylabel.ui.managers.sam_single_view_manager",
+   "target": "lazylabel.models.sam2_model",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/managers/sam_single_view_manager.py:105",
+    "src/lazylabel/ui/managers/sam_single_view_manager.py:260",
+    "src/lazylabel/ui/managers/sam_single_view_manager.py:360"
+   ],
+   "count": 3,
+   "via": "attribute chain .set_embeddings"
+  },
+  {
+   "source": "lazylabel.ui.managers.sam_single_view_manager",
+   "target": "lazylabel.models.sam_model",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/managers/sam_single_view_manager.py:105",
+    "src/lazylabel/ui/managers/sam_single_view_manager.py:260",
+    "src/lazylabel/ui/managers/sam_single_view_manager.py:360"
+   ],
+   "count": 3,
+   "via": "attribute chain .set_embeddings"
+  },
+  {
+   "source": "lazylabel.ui.managers.sam_single_view_manager",
+   "target": "lazylabel.ui.control_panel",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/managers/sam_single_view_manager.py:170",
+    "src/lazylabel/ui/managers/sam_single_view_manager.py:171",
+    "src/lazylabel/ui/managers/sam_single_view_manager.py:197"
+   ],
+   "count": 3,
+   "via": "attribute chain .set_current_model"
+  },
+  {
+   "source": "lazylabel.ui.managers.sam_single_view_manager",
+   "target": "lazylabel.ui.main_window",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/managers/sam_single_view_manager.py:51",
+    "src/lazylabel/ui/managers/sam_single_view_manager.py:67",
+    "src/lazylabel/ui/managers/sam_single_view_manager.py:83"
+   ],
+   "count": 54,
+   "via": "back-reference"
+  },
+  {
+   "source": "lazylabel.ui.managers.sam_single_view_manager",
+   "target": "lazylabel.ui.managers.embedding_cache_manager",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/managers/sam_single_view_manager.py:100",
+    "src/lazylabel/ui/managers/sam_single_view_manager.py:257",
+    "src/lazylabel/ui/managers/sam_single_view_manager.py:362"
+   ],
+   "count": 3,
+   "via": "attribute chain .get"
+  },
+  {
+   "source": "lazylabel.ui.managers.sam_single_view_manager",
+   "target": "lazylabel.ui.managers.sam_preload_scheduler",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/managers/sam_single_view_manager.py:109",
+    "src/lazylabel/ui/managers/sam_single_view_manager.py:266",
+    "src/lazylabel/ui/managers/sam_single_view_manager.py:366"
+   ],
+   "count": 3,
+   "via": "attribute chain .schedule_preload"
+  },
+  {
+   "source": "lazylabel.ui.managers.sam_single_view_manager",
+   "target": "lazylabel.ui.widgets.status_bar",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/managers/sam_single_view_manager.py:193",
+    "src/lazylabel/ui/managers/sam_single_view_manager.py:278",
+    "src/lazylabel/ui/managers/sam_single_view_manager.py:346"
+   ],
+   "count": 4,
+   "via": "attribute chain .show_message"
+  },
+  {
+   "source": "lazylabel.ui.managers.save_export_manager",
+   "target": "lazylabel.core.file_manager",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/managers/save_export_manager.py:415"
+   ],
+   "count": 1,
+   "via": "attribute chain ._apply_crop_to_mask"
+  },
+  {
+   "source": "lazylabel.ui.managers.save_export_manager",
+   "target": "lazylabel.core.model_manager",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/managers/save_export_manager.py:153",
+    "src/lazylabel/ui/managers/save_export_manager.py:239"
+   ],
+   "count": 2,
+   "via": "attribute chain .is_model_available"
+  },
+  {
+   "source": "lazylabel.ui.managers.save_export_manager",
+   "target": "lazylabel.core.segment_manager",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/managers/save_export_manager.py:107",
+    "src/lazylabel/ui/managers/save_export_manager.py:115",
+    "src/lazylabel/ui/managers/save_export_manager.py:186"
+   ],
+   "count": 16,
+   "via": "attribute chain .segments"
+  },
+  {
+   "source": "lazylabel.ui.managers.save_export_manager",
+   "target": "lazylabel.core.undo_redo_manager",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/managers/save_export_manager.py:188",
+    "src/lazylabel/ui/managers/save_export_manager.py:266"
+   ],
+   "count": 2,
+   "via": "attribute chain .record_action"
+  },
+  {
+   "source": "lazylabel.ui.managers.save_export_manager",
+   "target": "lazylabel.models.sam2_model",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/managers/save_export_manager.py:239"
+   ],
+   "count": 1,
+   "via": "attribute chain .predict"
+  },
+  {
+   "source": "lazylabel.ui.managers.save_export_manager",
+   "target": "lazylabel.models.sam_model",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/managers/save_export_manager.py:239"
+   ],
+   "count": 1,
+   "via": "attribute chain .predict"
+  },
+  {
+   "source": "lazylabel.ui.managers.save_export_manager",
+   "target": "lazylabel.ui.control_panel",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/managers/save_export_manager.py:112",
+    "src/lazylabel/ui/managers/save_export_manager.py:344",
+    "src/lazylabel/ui/managers/save_export_manager.py:480"
+   ],
+   "count": 3,
+   "via": "attribute chain .get_settings"
+  },
+  {
+   "source": "lazylabel.ui.managers.save_export_manager",
+   "target": "lazylabel.ui.main_window",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/managers/save_export_manager.py:60",
+    "src/lazylabel/ui/managers/save_export_manager.py:67",
+    "src/lazylabel/ui/managers/save_export_manager.py:72"
+   ],
+   "count": 60,
+   "via": "back-reference"
+  },
+  {
+   "source": "lazylabel.ui.managers.save_export_manager",
+   "target": "lazylabel.ui.managers.coordinate_transformer",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/managers/save_export_manager.py:251"
+   ],
+   "count": 1,
+   "via": "attribute chain .scale_mask_to_display"
+  },
+  {
+   "source": "lazylabel.ui.managers.save_export_manager",
+   "target": "lazylabel.ui.managers.crop_manager",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/managers/save_export_manager.py:413"
+   ],
+   "count": 1,
+   "via": "attribute chain .current_crop_coords"
+  },
+  {
+   "source": "lazylabel.ui.managers.save_export_manager",
+   "target": "lazylabel.ui.right_panel",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/managers/save_export_manager.py:535",
+    "src/lazylabel/ui/managers/save_export_manager.py:578"
+   ],
+   "count": 2,
+   "via": "attribute chain .file_manager"
+  },
+  {
+   "source": "lazylabel.ui.managers.save_export_manager",
+   "target": "lazylabel.utils.fast_file_manager",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/managers/save_export_manager.py:535",
+    "src/lazylabel/ui/managers/save_export_manager.py:578"
+   ],
+   "count": 2,
+   "via": "attribute chain .updateFileStatus"
+  },
+  {
+   "source": "lazylabel.ui.managers.segment_display_manager",
+   "target": "lazylabel.core.segment_manager",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/managers/segment_display_manager.py:320",
+    "src/lazylabel/ui/managers/segment_display_manager.py:328",
+    "src/lazylabel/ui/managers/segment_display_manager.py:413"
+   ],
+   "count": 6,
+   "via": "attribute chain .get_unique_class_ids"
+  },
+  {
+   "source": "lazylabel.ui.managers.segment_display_manager",
+   "target": "lazylabel.ui.main_window",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/managers/segment_display_manager.py:60",
+    "src/lazylabel/ui/managers/segment_display_manager.py:310",
+    "src/lazylabel/ui/managers/segment_display_manager.py:314"
+   ],
+   "count": 30,
+   "via": "back-reference"
+  },
+  {
+   "source": "lazylabel.ui.managers.segment_table_manager",
+   "target": "lazylabel.core.segment_manager",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/managers/segment_table_manager.py:56",
+    "src/lazylabel/ui/managers/segment_table_manager.py:81",
+    "src/lazylabel/ui/managers/segment_table_manager.py:93"
+   ],
+   "count": 15,
+   "via": "attribute chain .assign_segments_to_class"
+  },
+  {
+   "source": "lazylabel.ui.managers.segment_table_manager",
+   "target": "lazylabel.ui.main_window",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/managers/segment_table_manager.py:36",
+    "src/lazylabel/ui/managers/segment_table_manager.py:41",
+    "src/lazylabel/ui/managers/segment_table_manager.py:46"
+   ],
+   "count": 40,
+   "via": "back-reference"
+  },
+  {
+   "source": "lazylabel.ui.managers.segment_table_manager",
+   "target": "lazylabel.ui.managers.segment_display_manager",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/managers/segment_table_manager.py:84",
+    "src/lazylabel/ui/managers/segment_table_manager.py:124",
+    "src/lazylabel/ui/managers/segment_table_manager.py:233"
+   ],
+   "count": 6,
+   "via": "attribute chain .clear_pixmap_caches"
+  },
+  {
+   "source": "lazylabel.ui.managers.segment_table_manager",
+   "target": "lazylabel.ui.reorderable_class_table",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/managers/segment_table_manager.py:341",
+    "src/lazylabel/ui/managers/segment_table_manager.py:346",
+    "src/lazylabel/ui/managers/segment_table_manager.py:347"
+   ],
+   "count": 6,
+   "via": "attribute chain .blockSignals"
+  },
+  {
+   "source": "lazylabel.ui.managers.segment_table_manager",
+   "target": "lazylabel.ui.right_panel",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/managers/segment_table_manager.py:55",
+    "src/lazylabel/ui/managers/segment_table_manager.py:80",
+    "src/lazylabel/ui/managers/segment_table_manager.py:98"
+   ],
+   "count": 13,
+   "via": "attribute chain .get_selected_segment_indices"
+  },
+  {
+   "source": "lazylabel.ui.managers.ui_layout_manager",
+   "target": "lazylabel.config.paths",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/managers/ui_layout_manager.py:148"
+   ],
+   "count": 1,
+   "via": "attribute chain .settings_file"
+  },
+  {
+   "source": "lazylabel.ui.managers.ui_layout_manager",
+   "target": "lazylabel.ui.main_window",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/managers/ui_layout_manager.py:48",
+    "src/lazylabel/ui/managers/ui_layout_manager.py:53",
+    "src/lazylabel/ui/managers/ui_layout_manager.py:85"
+   ],
+   "count": 18,
+   "via": "back-reference"
+  },
+  {
+   "source": "lazylabel.ui.managers.viewport_manager",
+   "target": "lazylabel.ui.control_panel",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/managers/viewport_manager.py:25",
+    "src/lazylabel/ui/managers/viewport_manager.py:26",
+    "src/lazylabel/ui/managers/viewport_manager.py:31"
+   ],
+   "count": 4,
+   "via": "attribute chain .get_annotation_size"
+  },
+  {
+   "source": "lazylabel.ui.managers.viewport_manager",
+   "target": "lazylabel.ui.main_window",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/managers/viewport_manager.py:25",
+    "src/lazylabel/ui/managers/viewport_manager.py:26",
+    "src/lazylabel/ui/managers/viewport_manager.py:31"
+   ],
+   "count": 15,
+   "via": "back-reference"
+  },
+  {
+   "source": "lazylabel.ui.modes.sequence_view_mode",
+   "target": "lazylabel.core.segment_manager",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/modes/sequence_view_mode.py:254"
+   ],
+   "count": 1,
+   "via": "attribute chain .segments"
+  },
+  {
+   "source": "lazylabel.ui.modes.sequence_view_mode",
+   "target": "lazylabel.ui.main_window",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/main_window.py:3333",
+    "src/lazylabel/ui/main_window.py:3336",
+    "src/lazylabel/ui/modes/sequence_view_mode.py:253"
+   ],
+   "count": 3,
+   "via": "signal frame_status_changed"
+  },
+  {
+   "source": "lazylabel.ui.modes.single_view_mode",
+   "target": "lazylabel.core.undo_redo_manager",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/modes/single_view_mode.py:67",
+    "src/lazylabel/ui/modes/single_view_mode.py:166",
+    "src/lazylabel/ui/modes/single_view_mode.py:288"
+   ],
+   "count": 3,
+   "via": "attribute chain .record_action"
+  },
+  {
+   "source": "lazylabel.ui.modes.single_view_mode",
+   "target": "lazylabel.ui.main_window",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/modes/single_view_mode.py:22",
+    "src/lazylabel/ui/modes/single_view_mode.py:23",
+    "src/lazylabel/ui/modes/single_view_mode.py:29"
+   ],
+   "count": 78,
+   "via": "back-reference"
+  },
+  {
+   "source": "lazylabel.ui.modes.single_view_mode",
+   "target": "lazylabel.ui.managers.segment_display_manager",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/modes/single_view_mode.py:189"
+   ],
+   "count": 1,
+   "via": "attribute chain .get_color_for_class"
+  },
+  {
+   "source": "lazylabel.ui.modes.single_view_mode",
+   "target": "lazylabel.ui.photo_viewer",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/modes/single_view_mode.py:63",
+    "src/lazylabel/ui/modes/single_view_mode.py:100",
+    "src/lazylabel/ui/modes/single_view_mode.py:114"
+   ],
+   "count": 13,
+   "via": "attribute chain .scene"
+  },
+  {
+   "source": "lazylabel.ui.reorderable_class_table",
+   "target": "lazylabel.ui.main_window",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/main_window.py:3224",
+    "src/lazylabel/ui/main_window.py:3227"
+   ],
+   "count": 2,
+   "via": "signal itemChanged"
+  },
+  {
+   "source": "lazylabel.ui.reorderable_class_table",
+   "target": "lazylabel.ui.right_panel",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/right_panel.py:212",
+    "src/lazylabel/ui/right_panel.py:213"
+   ],
+   "count": 2,
+   "via": "signal itemChanged"
+  },
+  {
+   "source": "lazylabel.ui.right_panel",
+   "target": "lazylabel.ui.main_window",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/main_window.py:946",
+    "src/lazylabel/ui/main_window.py:947",
+    "src/lazylabel/ui/main_window.py:949"
+   ],
+   "count": 10,
+   "via": "signal open_folder_requested"
+  },
+  {
+   "source": "lazylabel.ui.right_panel",
+   "target": "lazylabel.ui.managers.panel_popout_manager",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/main_window.py:972"
+   ],
+   "count": 1,
+   "via": "signal pop_out_requested"
+  },
+  {
+   "source": "lazylabel.ui.right_panel",
+   "target": "lazylabel.ui.reorderable_class_table",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/right_panel.py:234"
+   ],
+   "count": 1,
+   "via": "attribute chain .item"
+  },
+  {
+   "source": "lazylabel.ui.widgets.adjustments_widget",
+   "target": "lazylabel.ui.control_panel",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/control_panel.py:576",
+    "src/lazylabel/ui/control_panel.py:577",
+    "src/lazylabel/ui/control_panel.py:578"
+   ],
+   "count": 8,
+   "via": "signal brightness_changed"
+  },
+  {
+   "source": "lazylabel.ui.widgets.annotation_settings_widget",
+   "target": "lazylabel.ui.control_panel",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/control_panel.py:565",
+    "src/lazylabel/ui/control_panel.py:568",
+    "src/lazylabel/ui/control_panel.py:571"
+   ],
+   "count": 3,
+   "via": "signal annotation_size_changed"
+  },
+  {
+   "source": "lazylabel.ui.widgets.border_crop_widget",
+   "target": "lazylabel.ui.control_panel",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/control_panel.py:596",
+    "src/lazylabel/ui/control_panel.py:597",
+    "src/lazylabel/ui/control_panel.py:598"
+   ],
+   "count": 3,
+   "via": "signal crop_draw_requested"
+  },
+  {
+   "source": "lazylabel.ui.widgets.channel_threshold_widget",
+   "target": "lazylabel.ui.control_panel",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/control_panel.py:601",
+    "src/lazylabel/ui/control_panel.py:604",
+    "src/lazylabel/ui/control_panel.py:607"
+   ],
+   "count": 3,
+   "via": "signal thresholdChanged"
+  },
+  {
+   "source": "lazylabel.ui.widgets.channel_threshold_widget",
+   "target": "lazylabel.ui.main_window",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/main_window.py:841"
+   ],
+   "count": 1,
+   "via": "signal thresholdChanged"
+  },
+  {
+   "source": "lazylabel.ui.widgets.export_format_widget",
+   "target": "lazylabel.ui.widgets.settings_widget",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/widgets/settings_widget.py:128"
+   ],
+   "count": 1,
+   "via": "signal formats_changed"
+  },
+  {
+   "source": "lazylabel.ui.widgets.fft_threshold_widget",
+   "target": "lazylabel.ui.control_panel",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/control_panel.py:618"
+   ],
+   "count": 1,
+   "via": "signal fft_threshold_changed"
+  },
+  {
+   "source": "lazylabel.ui.widgets.fft_threshold_widget",
+   "target": "lazylabel.ui.main_window",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/main_window.py:825"
+   ],
+   "count": 1,
+   "via": "signal fft_threshold_changed"
+  },
+  {
+   "source": "lazylabel.ui.widgets.fragment_threshold_widget",
+   "target": "lazylabel.ui.control_panel",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/control_panel.py:591"
+   ],
+   "count": 1,
+   "via": "signal fragment_threshold_changed"
+  },
+  {
+   "source": "lazylabel.ui.widgets.model_selection_widget",
+   "target": "lazylabel.ui.control_panel",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/control_panel.py:555",
+    "src/lazylabel/ui/control_panel.py:556",
+    "src/lazylabel/ui/control_panel.py:557"
+   ],
+   "count": 5,
+   "via": "signal browse_requested"
+  },
+  {
+   "source": "lazylabel.ui.widgets.rescale_histogram_dialog",
+   "target": "lazylabel.ui.main_window",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/main_window.py:2806"
+   ],
+   "count": 1,
+   "via": "signal lut_applied"
+  },
+  {
+   "source": "lazylabel.ui.widgets.rescale_histogram_dialog",
+   "target": "lazylabel.ui.widgets.rescale_widget",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/main_window.py:2805"
+   ],
+   "count": 1,
+   "via": "signal applied"
+  },
+  {
+   "source": "lazylabel.ui.widgets.rescale_widget",
+   "target": "lazylabel.ui.control_panel",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/control_panel.py:612",
+    "src/lazylabel/ui/control_panel.py:613",
+    "src/lazylabel/ui/control_panel.py:614"
+   ],
+   "count": 4,
+   "via": "signal rescaleChanged"
+  },
+  {
+   "source": "lazylabel.ui.widgets.sequence_widget",
+   "target": "lazylabel.ui.main_window",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/main_window.py:3352",
+    "src/lazylabel/ui/main_window.py:3353",
+    "src/lazylabel/ui/main_window.py:3354"
+   ],
+   "count": 25,
+   "via": "signal set_start_requested"
+  },
+  {
+   "source": "lazylabel.ui.widgets.settings_widget",
+   "target": "lazylabel.ui.control_panel",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/control_panel.py:562"
+   ],
+   "count": 1,
+   "via": "signal settings_changed"
+  },
+  {
+   "source": "lazylabel.ui.widgets.settings_widget",
+   "target": "lazylabel.ui.main_window",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/main_window.py:867"
+   ],
+   "count": 1,
+   "via": "signal settings_changed"
+  },
+  {
+   "source": "lazylabel.ui.widgets.status_bar",
+   "target": "lazylabel.ui.main_window",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/main_window.py:709"
+   ],
+   "count": 1,
+   "via": "signal theme_toggled"
+  },
+  {
+   "source": "lazylabel.ui.widgets.timeline_widget",
+   "target": "lazylabel.ui.main_window",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/main_window.py:3292",
+    "src/lazylabel/ui/main_window.py:3293",
+    "src/lazylabel/ui/main_window.py:3294"
+   ],
+   "count": 3,
+   "via": "signal frame_selected"
+  },
+  {
+   "source": "lazylabel.ui.workers.image_discovery_worker",
+   "target": "lazylabel.ui.main_window",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/main_window.py:7300",
+    "src/lazylabel/ui/main_window.py:7303"
+   ],
+   "count": 2,
+   "via": "signal images_discovered"
+  },
+  {
+   "source": "lazylabel.ui.workers.image_preload_worker",
+   "target": "lazylabel.ui.managers.image_preload_manager",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/managers/image_preload_manager.py:118",
+    "src/lazylabel/ui/managers/image_preload_manager.py:119"
+   ],
+   "count": 2,
+   "via": "signal image_loaded"
+  },
+  {
+   "source": "lazylabel.ui.workers.multi_view_sam_init_worker",
+   "target": "lazylabel.models.sam2_model",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/workers/multi_view_sam_init_worker.py:141"
+   ],
+   "count": 1,
+   "via": "model factory by checkpoint filename"
+  },
+  {
+   "source": "lazylabel.ui.workers.multi_view_sam_init_worker",
+   "target": "lazylabel.models.sam_model",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/workers/multi_view_sam_init_worker.py:149"
+   ],
+   "count": 1,
+   "via": "model factory by checkpoint filename"
+  },
+  {
+   "source": "lazylabel.ui.workers.multi_view_sam_init_worker",
+   "target": "lazylabel.ui.managers.sam_multi_view_manager",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/managers/sam_multi_view_manager.py:130",
+    "src/lazylabel/ui/managers/sam_multi_view_manager.py:131",
+    "src/lazylabel/ui/managers/sam_multi_view_manager.py:132"
+   ],
+   "count": 4,
+   "via": "signal progress"
+  },
+  {
+   "source": "lazylabel.ui.workers.propagation_worker",
+   "target": "lazylabel.ui.main_window",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/main_window.py:4111",
+    "src/lazylabel/ui/main_window.py:4112",
+    "src/lazylabel/ui/main_window.py:4115"
+   ],
+   "count": 11,
+   "via": "signal progress"
+  },
+  {
+   "source": "lazylabel.ui.workers.reference_finder_worker",
+   "target": "lazylabel.ui.main_window",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/main_window.py:5077",
+    "src/lazylabel/ui/main_window.py:5080",
+    "src/lazylabel/ui/main_window.py:5083"
+   ],
+   "count": 3,
+   "via": "signal progress"
+  },
+  {
+   "source": "lazylabel.ui.workers.sam_update_worker",
+   "target": "lazylabel.ui.managers.sam_single_view_manager",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/managers/sam_single_view_manager.py:292",
+    "src/lazylabel/ui/managers/sam_single_view_manager.py:295"
+   ],
+   "count": 2,
+   "via": "signal finished"
+  },
+  {
+   "source": "lazylabel.ui.workers.single_view_sam_init_worker",
+   "target": "lazylabel.ui.managers.sam_single_view_manager",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/managers/sam_single_view_manager.py:146",
+    "src/lazylabel/ui/managers/sam_single_view_manager.py:147",
+    "src/lazylabel/ui/managers/sam_single_view_manager.py:148"
+   ],
+   "count": 3,
+   "via": "signal model_initialized"
+  },
+  {
+   "source": "lazylabel.utils.fast_file_manager",
+   "target": "lazylabel.ui.main_window",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/main_window.py:964"
+   ],
+   "count": 1,
+   "via": "signal displaySettingsChanged"
+  },
+  {
+   "source": "lazylabel.utils.fast_file_manager",
+   "target": "lazylabel.ui.right_panel",
+   "kind": "dispatch",
+   "evidence": [
+    "src/lazylabel/ui/right_panel.py:208"
+   ],
+   "count": 1,
+   "via": "signal fileSelected"
+  },
+  {
+   "source": "lazylabel",
+   "target": "ds:pyproject_toml",
+   "kind": "read",
+   "evidence": [
+    "src/lazylabel/__init__.py:34"
+   ],
+   "count": 1,
+   "via": "rule"
+  },
+  {
+   "source": "lazylabel.config.hotkeys",
+   "target": "ds:hotkeys_json",
+   "kind": "read",
+   "evidence": [
+    "src/lazylabel/config/hotkeys.py:267"
+   ],
+   "count": 1,
+   "via": "rule"
+  },
+  {
+   "source": "lazylabel.config.settings",
+   "target": "ds:settings_json",
+   "kind": "read",
+   "evidence": [
+    "src/lazylabel/config/settings.py:91"
+   ],
+   "count": 1,
+   "via": "rule"
+  },
+  {
+   "source": "lazylabel.core.file_manager",
+   "target": "ds:image_files",
+   "kind": "read",
+   "evidence": [
+    "src/lazylabel/core/file_manager.py:219"
+   ],
+   "count": 1,
+   "via": "image read"
+  },
+  {
+   "source": "lazylabel.core.file_manager",
+   "target": "ds:sidecar_coco_json",
+   "kind": "read",
+   "evidence": [
+    "src/lazylabel/core/file_manager.py:128"
+   ],
+   "count": 1,
+   "via": "_LOAD_CHAIN"
+  },
+  {
+   "source": "lazylabel.core.file_manager",
+   "target": "ds:sidecar_createml",
+   "kind": "read",
+   "evidence": [
+    "src/lazylabel/core/file_manager.py:128"
+   ],
+   "count": 1,
+   "via": "_LOAD_CHAIN"
+  },
+  {
+   "source": "lazylabel.core.file_manager",
+   "target": "ds:sidecar_npz",
+   "kind": "read",
+   "evidence": [
+    "src/lazylabel/core/file_manager.py:128"
+   ],
+   "count": 1,
+   "via": "_LOAD_CHAIN"
+  },
+  {
+   "source": "lazylabel.core.file_manager",
+   "target": "ds:sidecar_npz_class_map",
+   "kind": "read",
+   "evidence": [
+    "src/lazylabel/core/file_manager.py:128"
+   ],
+   "count": 1,
+   "via": "_LOAD_CHAIN"
+  },
+  {
+   "source": "lazylabel.core.file_manager",
+   "target": "ds:sidecar_pascal_voc",
+   "kind": "read",
+   "evidence": [
+    "src/lazylabel/core/file_manager.py:128"
+   ],
+   "count": 1,
+   "via": "_LOAD_CHAIN"
+  },
+  {
+   "source": "lazylabel.core.file_manager",
+   "target": "ds:sidecar_yolo_detection",
+   "kind": "read",
+   "evidence": [
+    "src/lazylabel/core/file_manager.py:128"
+   ],
+   "count": 1,
+   "via": "_LOAD_CHAIN"
+  },
+  {
+   "source": "lazylabel.core.file_manager",
+   "target": "ds:sidecar_yolo_segmentation",
+   "kind": "read",
+   "evidence": [
+    "src/lazylabel/core/file_manager.py:128"
+   ],
+   "count": 1,
+   "via": "_LOAD_CHAIN"
+  },
+  {
+   "source": "lazylabel.core.model_manager",
+   "target": "ds:model_checkpoints",
+   "kind": "read",
+   "evidence": [
+    "src/lazylabel/core/model_manager.py:65"
+   ],
+   "count": 1,
+   "via": "rule"
+  },
+  {
+   "source": "lazylabel.models.sam2_model",
+   "target": "ds:image_files",
+   "kind": "read",
+   "evidence": [
+    "src/lazylabel/models/sam2_model.py:351"
+   ],
+   "count": 1,
+   "via": "image read"
+  },
+  {
+   "source": "lazylabel.models.sam2_model",
+   "target": "ds:model_checkpoints",
+   "kind": "read",
+   "evidence": [
+    "src/lazylabel/models/sam2_model.py:144"
+   ],
+   "count": 1,
+   "via": "rule"
+  },
+  {
+   "source": "lazylabel.models.sam2_model",
+   "target": "ds:sam2_frame_cache",
+   "kind": "read",
+   "evidence": [
+    "src/lazylabel/models/sam2_model.py:831"
+   ],
+   "count": 1,
+   "via": "rule"
+  },
+  {
+   "source": "lazylabel.models.sam_model",
+   "target": "ds:dl.fbaipublicfiles.com",
+   "kind": "read",
+   "evidence": [
+    "src/lazylabel/models/sam_model.py:25"
+   ],
+   "count": 1,
+   "via": "rule"
+  },
+  {
+   "source": "lazylabel.models.sam_model",
+   "target": "ds:image_files",
+   "kind": "read",
+   "evidence": [
+    "src/lazylabel/models/sam_model.py:198"
+   ],
+   "count": 1,
+   "via": "image read"
+  },
+  {
+   "source": "lazylabel.models.sam_model",
+   "target": "ds:model_checkpoints",
+   "kind": "read",
+   "evidence": [
+    "src/lazylabel/models/sam_model.py:141"
+   ],
+   "count": 1,
+   "via": "rule"
+  },
+  {
+   "source": "lazylabel.ui.handlers.single_view_mouse_handler",
+   "target": "scr:tab_sequence",
+   "kind": "read",
+   "evidence": [
+    "src/lazylabel/ui/handlers/single_view_mouse_handler.py:63"
+   ],
+   "count": 1,
+   "via": "user input"
+  },
+  {
+   "source": "lazylabel.ui.handlers.single_view_mouse_handler",
+   "target": "scr:tab_single",
+   "kind": "read",
+   "evidence": [
+    "src/lazylabel/ui/handlers/single_view_mouse_handler.py:63"
+   ],
+   "count": 1,
+   "via": "user input"
+  },
+  {
+   "source": "lazylabel.ui.main_window",
+   "target": "ds:image_files",
+   "kind": "read",
+   "evidence": [
+    "src/lazylabel/ui/main_window.py:2939"
+   ],
+   "count": 1,
+   "via": "image read"
+  },
+  {
+   "source": "lazylabel.ui.main_window",
+   "target": "scr:confidence_histogram",
+   "kind": "read",
+   "evidence": [
+    "src/lazylabel/ui/main_window.py:4738"
+   ],
+   "count": 1,
+   "via": "user input"
+  },
+  {
+   "source": "lazylabel.ui.main_window",
+   "target": "scr:control_panel",
+   "kind": "read",
+   "evidence": [
+    "signal from lazylabel.ui.widgets.fft_threshold_widget",
+    "signal from lazylabel.ui.widgets.channel_threshold_widget",
+    "signal from lazylabel.ui.control_panel"
+   ],
+   "count": 40,
+   "via": "signal"
+  },
+  {
+   "source": "lazylabel.ui.main_window",
+   "target": "scr:hotkey_dialog",
+   "kind": "read",
+   "evidence": [
+    "src/lazylabel/ui/main_window.py:2043"
+   ],
+   "count": 1,
+   "via": "user input"
+  },
+  {
+   "source": "lazylabel.ui.main_window",
+   "target": "scr:pick_image_folder",
+   "kind": "read",
+   "evidence": [
+    "src/lazylabel/ui/main_window.py:1433"
+   ],
+   "count": 1,
+   "via": "user input"
+  },
+  {
+   "source": "lazylabel.ui.main_window",
+   "target": "scr:pick_models_folder",
+   "kind": "read",
+   "evidence": [
+    "src/lazylabel/ui/main_window.py:1197"
+   ],
+   "count": 1,
+   "via": "user input"
+  },
+  {
+   "source": "lazylabel.ui.main_window",
+   "target": "scr:rescale_histogram",
+   "kind": "read",
+   "evidence": [
+    "src/lazylabel/ui/main_window.py:2794",
+    "signal from lazylabel.ui.widgets.rescale_histogram_dialog"
+   ],
+   "count": 2,
+   "via": "user input"
+  },
+  {
+   "source": "lazylabel.ui.main_window",
+   "target": "scr:right_panel",
+   "kind": "read",
+   "evidence": [
+    "signal from lazylabel.ui.right_panel",
+    "signal from lazylabel.utils.fast_file_manager",
+    "signal from lazylabel.ui.reorderable_class_table"
+   ],
+   "count": 13,
+   "via": "signal"
+  },
+  {
+   "source": "lazylabel.ui.main_window",
+   "target": "scr:status_bar",
+   "kind": "read",
+   "evidence": [
+    "signal from lazylabel.ui.widgets.status_bar"
+   ],
+   "count": 1,
+   "via": "signal"
+  },
+  {
+   "source": "lazylabel.ui.main_window",
+   "target": "scr:tab_multi",
+   "kind": "read",
+   "evidence": [
+    "src/lazylabel/ui/main_window.py:5406"
+   ],
+   "count": 1,
+   "via": "user input"
+  },
+  {
+   "source": "lazylabel.ui.managers.coordinate_transformer",
+   "target": "ds:image_files",
+   "kind": "read",
+   "evidence": [
+    "src/lazylabel/ui/managers/coordinate_transformer.py:80"
+   ],
+   "count": 1,
+   "via": "image read"
+  },
+  {
+   "source": "lazylabel.ui.managers.crop_manager",
+   "target": "ds:image_files",
+   "kind": "read",
+   "evidence": [
+    "src/lazylabel/ui/managers/crop_manager.py:82"
+   ],
+   "count": 1,
+   "via": "image read"
+  },
+  {
+   "source": "lazylabel.ui.managers.crop_manager",
+   "target": "scr:control_panel",
+   "kind": "read",
+   "evidence": [
+    "signal from lazylabel.ui.control_panel"
+   ],
+   "count": 3,
+   "via": "signal"
+  },
+  {
+   "source": "lazylabel.ui.managers.file_navigation_manager",
+   "target": "ds:image_files",
+   "kind": "read",
+   "evidence": [
+    "src/lazylabel/ui/managers/file_navigation_manager.py:299"
+   ],
+   "count": 1,
+   "via": "image read"
+  },
+  {
+   "source": "lazylabel.ui.managers.image_adjustment_manager",
+   "target": "ds:image_files",
+   "kind": "read",
+   "evidence": [
+    "src/lazylabel/ui/managers/image_adjustment_manager.py:464"
+   ],
+   "count": 1,
+   "via": "image read"
+  },
+  {
+   "source": "lazylabel.ui.managers.keyboard_event_manager",
+   "target": "scr:main_window",
+   "kind": "read",
+   "evidence": [
+    "src/lazylabel/ui/managers/keyboard_event_manager.py:87"
+   ],
+   "count": 1,
+   "via": "user input"
+  },
+  {
+   "source": "lazylabel.ui.managers.panel_popout_manager",
+   "target": "scr:control_panel",
+   "kind": "read",
+   "evidence": [
+    "signal from lazylabel.ui.control_panel"
+   ],
+   "count": 1,
+   "via": "signal"
+  },
+  {
+   "source": "lazylabel.ui.managers.panel_popout_manager",
+   "target": "scr:right_panel",
+   "kind": "read",
+   "evidence": [
+    "signal from lazylabel.ui.right_panel"
+   ],
+   "count": 1,
+   "via": "signal"
+  },
+  {
+   "source": "lazylabel.ui.managers.propagation_manager",
+   "target": "ds:image_files",
+   "kind": "read",
+   "evidence": [
+    "src/lazylabel/ui/managers/propagation_manager.py:232"
+   ],
+   "count": 1,
+   "via": "image read"
+  },
+  {
+   "source": "lazylabel.ui.managers.save_export_manager",
+   "target": "ds:image_files",
+   "kind": "read",
+   "evidence": [
+    "src/lazylabel/ui/managers/save_export_manager.py:475"
+   ],
+   "count": 1,
+   "via": "image read"
+  },
+  {
+   "source": "lazylabel.ui.theme",
+   "target": "ds:theme_icon_cache",
+   "kind": "read",
+   "evidence": [
+    "src/lazylabel/ui/theme.py:69"
+   ],
+   "count": 1,
+   "via": "rule"
+  },
+  {
+   "source": "lazylabel.ui.widgets.rescale_widget",
+   "target": "scr:rescale_histogram",
+   "kind": "read",
+   "evidence": [
+    "signal from lazylabel.ui.widgets.rescale_histogram_dialog"
+   ],
+   "count": 1,
+   "via": "signal"
+  },
+  {
+   "source": "lazylabel.ui.workers.image_discovery_worker",
+   "target": "ds:image_files",
+   "kind": "read",
+   "evidence": [
+    "src/lazylabel/ui/workers/image_discovery_worker.py:49"
+   ],
+   "count": 1,
+   "via": "image read"
+  },
+  {
+   "source": "lazylabel.ui.workers.image_preload_worker",
+   "target": "ds:image_files",
+   "kind": "read",
+   "evidence": [
+    "src/lazylabel/ui/workers/image_preload_worker.py:31"
+   ],
+   "count": 1,
+   "via": "image read"
+  },
+  {
+   "source": "lazylabel.ui.workers.reference_finder_worker",
+   "target": "ds:download.pytorch.org",
+   "kind": "read",
+   "evidence": [
+    "src/lazylabel/ui/workers/reference_finder_worker.py:104"
+   ],
+   "count": 1,
+   "via": "rule"
+  },
+  {
+   "source": "lazylabel.ui.workers.reference_finder_worker",
+   "target": "ds:image_files",
+   "kind": "read",
+   "evidence": [
+    "src/lazylabel/ui/workers/reference_finder_worker.py:161"
+   ],
+   "count": 1,
+   "via": "image read"
+  },
+  {
+   "source": "lazylabel.ui.workers.reference_finder_worker",
+   "target": "ds:model_checkpoints",
+   "kind": "read",
+   "evidence": [
+    "src/lazylabel/ui/workers/reference_finder_worker.py:89"
+   ],
+   "count": 1,
+   "via": "rule"
+  },
+  {
+   "source": "lazylabel.utils.custom_file_system_model",
+   "target": "ds:image_files",
+   "kind": "read",
+   "evidence": [
+    "src/lazylabel/utils/custom_file_system_model.py:30"
+   ],
+   "count": 1,
+   "via": "image read"
+  },
+  {
+   "source": "lazylabel.utils.custom_file_system_model",
+   "target": "ds:sidecar_coco_json",
+   "kind": "read",
+   "evidence": [
+    "src/lazylabel/utils/custom_file_system_model.py:8"
+   ],
+   "count": 1,
+   "via": "_FORMAT_COLUMNS"
+  },
+  {
+   "source": "lazylabel.utils.custom_file_system_model",
+   "target": "ds:sidecar_createml",
+   "kind": "read",
+   "evidence": [
+    "src/lazylabel/utils/custom_file_system_model.py:8"
+   ],
+   "count": 1,
+   "via": "_FORMAT_COLUMNS"
+  },
+  {
+   "source": "lazylabel.utils.custom_file_system_model",
+   "target": "ds:sidecar_npz",
+   "kind": "read",
+   "evidence": [
+    "src/lazylabel/utils/custom_file_system_model.py:8"
+   ],
+   "count": 1,
+   "via": "_FORMAT_COLUMNS"
+  },
+  {
+   "source": "lazylabel.utils.custom_file_system_model",
+   "target": "ds:sidecar_npz_class_map",
+   "kind": "read",
+   "evidence": [
+    "src/lazylabel/utils/custom_file_system_model.py:8"
+   ],
+   "count": 1,
+   "via": "_FORMAT_COLUMNS"
+  },
+  {
+   "source": "lazylabel.utils.custom_file_system_model",
+   "target": "ds:sidecar_pascal_voc",
+   "kind": "read",
+   "evidence": [
+    "src/lazylabel/utils/custom_file_system_model.py:8"
+   ],
+   "count": 1,
+   "via": "_FORMAT_COLUMNS"
+  },
+  {
+   "source": "lazylabel.utils.custom_file_system_model",
+   "target": "ds:sidecar_yolo_detection",
+   "kind": "read",
+   "evidence": [
+    "src/lazylabel/utils/custom_file_system_model.py:8"
+   ],
+   "count": 1,
+   "via": "_FORMAT_COLUMNS"
+  },
+  {
+   "source": "lazylabel.utils.custom_file_system_model",
+   "target": "ds:sidecar_yolo_segmentation",
+   "kind": "read",
+   "evidence": [
+    "src/lazylabel/utils/custom_file_system_model.py:8"
+   ],
+   "count": 1,
+   "via": "_FORMAT_COLUMNS"
+  },
+  {
+   "source": "lazylabel.utils.fast_file_manager",
+   "target": "ds:image_files",
+   "kind": "read",
+   "evidence": [
+    "src/lazylabel/utils/fast_file_manager.py:186"
+   ],
+   "count": 1,
+   "via": "image read"
+  },
+  {
+   "source": "lazylabel.utils.fast_file_manager",
+   "target": "ds:sidecar_coco_json",
+   "kind": "read",
+   "evidence": [
+    "src/lazylabel/utils/fast_file_manager.py:630"
+   ],
+   "count": 1,
+   "via": "suffix literal"
+  },
+  {
+   "source": "lazylabel.utils.fast_file_manager",
+   "target": "ds:sidecar_createml",
+   "kind": "read",
+   "evidence": [
+    "src/lazylabel/utils/fast_file_manager.py:632"
+   ],
+   "count": 1,
+   "via": "suffix literal"
+  },
+  {
+   "source": "lazylabel.utils.fast_file_manager",
+   "target": "ds:sidecar_npz",
+   "kind": "read",
+   "evidence": [
+    "src/lazylabel/utils/fast_file_manager.py:195"
+   ],
+   "count": 1,
+   "via": "suffix literal"
+  },
+  {
+   "source": "lazylabel.utils.fast_file_manager",
+   "target": "ds:sidecar_npz_class_map",
+   "kind": "read",
+   "evidence": [
+    "src/lazylabel/utils/fast_file_manager.py:627"
+   ],
+   "count": 1,
+   "via": "suffix literal"
+  },
+  {
+   "source": "lazylabel.utils.fast_file_manager",
+   "target": "ds:sidecar_pascal_voc",
+   "kind": "read",
+   "evidence": [
+    "src/lazylabel/utils/fast_file_manager.py:210"
+   ],
+   "count": 1,
+   "via": "suffix literal"
+  },
+  {
+   "source": "lazylabel.utils.fast_file_manager",
+   "target": "ds:sidecar_yolo_detection",
+   "kind": "read",
+   "evidence": [
+    "src/lazylabel/utils/fast_file_manager.py:200"
+   ],
+   "count": 1,
+   "via": "suffix literal"
+  },
+  {
+   "source": "lazylabel.utils.fast_file_manager",
+   "target": "ds:sidecar_yolo_segmentation",
+   "kind": "read",
+   "evidence": [
+    "src/lazylabel/utils/fast_file_manager.py:629"
+   ],
+   "count": 1,
+   "via": "suffix literal"
+  },
+  {
+   "source": "lazylabel.config.hotkeys",
+   "target": "ds:hotkeys_json",
+   "kind": "write",
+   "evidence": [
+    "src/lazylabel/config/hotkeys.py:258"
+   ],
+   "count": 1,
+   "via": "rule"
+  },
+  {
+   "source": "lazylabel.config.settings",
+   "target": "ds:settings_json",
+   "kind": "write",
+   "evidence": [
+    "src/lazylabel/config/settings.py:81"
+   ],
+   "count": 1,
+   "via": "rule"
+  },
+  {
+   "source": "lazylabel.core.exporters",
+   "target": "ds:sidecar_coco_json",
+   "kind": "write",
+   "evidence": [
+    "src/lazylabel/core/exporters/__init__.py:209"
+   ],
+   "count": 1,
+   "via": "delete_all_outputs"
+  },
+  {
+   "source": "lazylabel.core.exporters",
+   "target": "ds:sidecar_createml",
+   "kind": "write",
+   "evidence": [
+    "src/lazylabel/core/exporters/__init__.py:209"
+   ],
+   "count": 1,
+   "via": "delete_all_outputs"
+  },
+  {
+   "source": "lazylabel.core.exporters",
+   "target": "ds:sidecar_npz",
+   "kind": "write",
+   "evidence": [
+    "src/lazylabel/core/exporters/__init__.py:209"
+   ],
+   "count": 1,
+   "via": "delete_all_outputs"
+  },
+  {
+   "source": "lazylabel.core.exporters",
+   "target": "ds:sidecar_npz_class_map",
+   "kind": "write",
+   "evidence": [
+    "src/lazylabel/core/exporters/__init__.py:209"
+   ],
+   "count": 1,
+   "via": "delete_all_outputs"
+  },
+  {
+   "source": "lazylabel.core.exporters",
+   "target": "ds:sidecar_pascal_voc",
+   "kind": "write",
+   "evidence": [
+    "src/lazylabel/core/exporters/__init__.py:209"
+   ],
+   "count": 1,
+   "via": "delete_all_outputs"
+  },
+  {
+   "source": "lazylabel.core.exporters",
+   "target": "ds:sidecar_yolo_detection",
+   "kind": "write",
+   "evidence": [
+    "src/lazylabel/core/exporters/__init__.py:209"
+   ],
+   "count": 1,
+   "via": "delete_all_outputs"
+  },
+  {
+   "source": "lazylabel.core.exporters",
+   "target": "ds:sidecar_yolo_segmentation",
+   "kind": "write",
+   "evidence": [
+    "src/lazylabel/core/exporters/__init__.py:209"
+   ],
+   "count": 1,
+   "via": "delete_all_outputs"
+  },
+  {
+   "source": "lazylabel.core.exporters.coco",
+   "target": "ds:sidecar_coco_json",
+   "kind": "write",
+   "evidence": [
+    "src/lazylabel/core/exporters/coco.py:110"
+   ],
+   "count": 1,
+   "via": "_register"
+  },
+  {
+   "source": "lazylabel.core.exporters.createml",
+   "target": "ds:sidecar_createml",
+   "kind": "write",
+   "evidence": [
+    "src/lazylabel/core/exporters/createml.py:77"
+   ],
+   "count": 1,
+   "via": "_register"
+  },
+  {
+   "source": "lazylabel.core.exporters.npz",
+   "target": "ds:sidecar_npz",
+   "kind": "write",
+   "evidence": [
+    "src/lazylabel/core/exporters/npz.py:40"
+   ],
+   "count": 1,
+   "via": "_register"
+  },
+  {
+   "source": "lazylabel.core.exporters.npz_class_map",
+   "target": "ds:sidecar_npz_class_map",
+   "kind": "write",
+   "evidence": [
+    "src/lazylabel/core/exporters/npz_class_map.py:76"
+   ],
+   "count": 1,
+   "via": "_register"
+  },
+  {
+   "source": "lazylabel.core.exporters.pascal_voc",
+   "target": "ds:sidecar_pascal_voc",
+   "kind": "write",
+   "evidence": [
+    "src/lazylabel/core/exporters/pascal_voc.py:73"
+   ],
+   "count": 1,
+   "via": "_register"
+  },
+  {
+   "source": "lazylabel.core.exporters.yolo_detection",
+   "target": "ds:sidecar_yolo_detection",
+   "kind": "write",
+   "evidence": [
+    "src/lazylabel/core/exporters/yolo_detection.py:56"
+   ],
+   "count": 1,
+   "via": "_register"
+  },
+  {
+   "source": "lazylabel.core.exporters.yolo_segmentation",
+   "target": "ds:sidecar_yolo_segmentation",
+   "kind": "write",
+   "evidence": [
+    "src/lazylabel/core/exporters/yolo_segmentation.py:66"
+   ],
+   "count": 1,
+   "via": "_register"
+  },
+  {
+   "source": "lazylabel.core.file_manager",
+   "target": "ds:sidecar_npz",
+   "kind": "write",
+   "evidence": [
+    "src/lazylabel/core/file_manager.py:20"
+   ],
+   "count": 1,
+   "via": "FileManager.save_npz"
+  },
+  {
+   "source": "lazylabel.core.file_manager",
+   "target": "ds:sidecar_yolo_detection",
+   "kind": "write",
+   "evidence": [
+    "src/lazylabel/core/file_manager.py:74"
+   ],
+   "count": 1,
+   "via": "FileManager.save_bb_txt"
+  },
+  {
+   "source": "lazylabel.models.sam2_model",
+   "target": "ds:sam2_frame_cache",
+   "kind": "write",
+   "evidence": [
+    "src/lazylabel/models/sam2_model.py:768"
+   ],
+   "count": 1,
+   "via": "rule"
+  },
+  {
+   "source": "lazylabel.models.sam_model",
+   "target": "ds:model_checkpoints",
+   "kind": "write",
+   "evidence": [
+    "src/lazylabel/models/sam_model.py:31"
+   ],
+   "count": 1,
+   "via": "rule"
+  },
+  {
+   "source": "lazylabel.ui.control_panel",
+   "target": "scr:control_panel",
+   "kind": "write",
+   "evidence": [
+    "src/lazylabel/ui/control_panel.py:228"
+   ],
+   "count": 1,
+   "via": "renders"
+  },
+  {
+   "source": "lazylabel.ui.hotkey_dialog",
+   "target": "scr:hotkey_dialog",
+   "kind": "write",
+   "evidence": [
+    "src/lazylabel/ui/hotkey_dialog.py:140"
+   ],
+   "count": 1,
+   "via": "renders"
+  },
+  {
+   "source": "lazylabel.ui.main_window",
+   "target": "scr:main_window",
+   "kind": "write",
+   "evidence": [
+    "src/lazylabel/ui/main_window.py:77"
+   ],
+   "count": 1,
+   "via": "renders"
+  },
+  {
+   "source": "lazylabel.ui.main_window",
+   "target": "scr:tab_multi",
+   "kind": "write",
+   "evidence": [
+    "src/lazylabel/ui/main_window.py:3252"
+   ],
+   "count": 1,
+   "via": "renders"
+  },
+  {
+   "source": "lazylabel.ui.main_window",
+   "target": "scr:tab_sequence",
+   "kind": "write",
+   "evidence": [
+    "src/lazylabel/ui/main_window.py:3324"
+   ],
+   "count": 1,
+   "via": "renders"
+  },
+  {
+   "source": "lazylabel.ui.main_window",
+   "target": "scr:tab_single",
+   "kind": "write",
+   "evidence": [
+    "src/lazylabel/ui/main_window.py:685"
+   ],
+   "count": 1,
+   "via": "renders"
+  },
+  {
+   "source": "lazylabel.ui.managers.panel_popout_manager",
+   "target": "scr:popout_window",
+   "kind": "write",
+   "evidence": [
+    "src/lazylabel/ui/managers/panel_popout_manager.py:14"
+   ],
+   "count": 1,
+   "via": "renders"
+  },
+  {
+   "source": "lazylabel.ui.managers.save_export_manager",
+   "target": "ds:legacy_alias_json",
+   "kind": "write",
+   "evidence": [
+    "src/lazylabel/ui/managers/save_export_manager.py:558"
+   ],
+   "count": 1,
+   "via": "rule"
+  },
+  {
+   "source": "lazylabel.ui.photo_viewer",
+   "target": "scr:tab_multi",
+   "kind": "write",
+   "evidence": [
+    "src/lazylabel/ui/photo_viewer.py:8"
+   ],
+   "count": 1,
+   "via": "renders"
+  },
+  {
+   "source": "lazylabel.ui.photo_viewer",
+   "target": "scr:tab_sequence",
+   "kind": "write",
+   "evidence": [
+    "src/lazylabel/ui/photo_viewer.py:8"
+   ],
+   "count": 1,
+   "via": "renders"
+  },
+  {
+   "source": "lazylabel.ui.photo_viewer",
+   "target": "scr:tab_single",
+   "kind": "write",
+   "evidence": [
+    "src/lazylabel/ui/photo_viewer.py:8"
+   ],
+   "count": 1,
+   "via": "renders"
+  },
+  {
+   "source": "lazylabel.ui.reorderable_class_table",
+   "target": "scr:right_panel",
+   "kind": "write",
+   "evidence": [
+    "src/lazylabel/ui/right_panel.py:180"
+   ],
+   "count": 1,
+   "via": "hosted ReorderableClassTable"
+  },
+  {
+   "source": "lazylabel.ui.right_panel",
+   "target": "scr:right_panel",
+   "kind": "write",
+   "evidence": [
+    "src/lazylabel/ui/right_panel.py:23"
+   ],
+   "count": 1,
+   "via": "renders"
+  },
+  {
+   "source": "lazylabel.ui.theme",
+   "target": "ds:theme_icon_cache",
+   "kind": "write",
+   "evidence": [
+    "src/lazylabel/ui/theme.py:72"
+   ],
+   "count": 1,
+   "via": "rule"
+  },
+  {
+   "source": "lazylabel.ui.widgets.adjustments_widget",
+   "target": "scr:control_panel",
+   "kind": "write",
+   "evidence": [
+    "src/lazylabel/ui/control_panel.py:197"
+   ],
+   "count": 1,
+   "via": "hosted AdjustmentsWidget"
+  },
+  {
+   "source": "lazylabel.ui.widgets.annotation_settings_widget",
+   "target": "scr:control_panel",
+   "kind": "write",
+   "evidence": [
+    "src/lazylabel/ui/control_panel.py:196"
+   ],
+   "count": 1,
+   "via": "hosted AnnotationSettingsWidget"
+  },
+  {
+   "source": "lazylabel.ui.widgets.border_crop_widget",
+   "target": "scr:control_panel",
+   "kind": "write",
+   "evidence": [
+    "src/lazylabel/ui/control_panel.py:191"
+   ],
+   "count": 1,
+   "via": "hosted BorderCropWidget"
+  },
+  {
+   "source": "lazylabel.ui.widgets.channel_threshold_widget",
+   "target": "scr:control_panel",
+   "kind": "write",
+   "evidence": [
+    "src/lazylabel/ui/control_panel.py:192"
+   ],
+   "count": 1,
+   "via": "hosted ChannelThresholdWidget"
+  },
+  {
+   "source": "lazylabel.ui.widgets.confidence_histogram_dialog",
+   "target": "scr:confidence_histogram",
+   "kind": "write",
+   "evidence": [
+    "src/lazylabel/ui/widgets/confidence_histogram_dialog.py:264"
+   ],
+   "count": 1,
+   "via": "renders"
+  },
+  {
+   "source": "lazylabel.ui.widgets.fft_threshold_widget",
+   "target": "scr:control_panel",
+   "kind": "write",
+   "evidence": [
+    "src/lazylabel/ui/control_panel.py:194"
+   ],
+   "count": 1,
+   "via": "hosted FFTThresholdWidget"
+  },
+  {
+   "source": "lazylabel.ui.widgets.fragment_threshold_widget",
+   "target": "scr:control_panel",
+   "kind": "write",
+   "evidence": [
+    "src/lazylabel/ui/control_panel.py:198"
+   ],
+   "count": 1,
+   "via": "hosted FragmentThresholdWidget"
+  },
+  {
+   "source": "lazylabel.ui.widgets.model_selection_widget",
+   "target": "scr:control_panel",
+   "kind": "write",
+   "evidence": [
+    "src/lazylabel/ui/control_panel.py:190"
+   ],
+   "count": 1,
+   "via": "hosted ModelSelectionWidget"
+  },
+  {
+   "source": "lazylabel.ui.widgets.rescale_histogram_dialog",
+   "target": "scr:rescale_histogram",
+   "kind": "write",
+   "evidence": [
+    "src/lazylabel/ui/widgets/rescale_histogram_dialog.py:310"
+   ],
+   "count": 1,
+   "via": "renders"
+  },
+  {
+   "source": "lazylabel.ui.widgets.rescale_widget",
+   "target": "scr:control_panel",
+   "kind": "write",
+   "evidence": [
+    "src/lazylabel/ui/control_panel.py:193"
+   ],
+   "count": 1,
+   "via": "hosted RescaleWidget"
+  },
+  {
+   "source": "lazylabel.ui.widgets.sequence_widget",
+   "target": "scr:tab_sequence",
+   "kind": "write",
+   "evidence": [
+    "src/lazylabel/ui/widgets/sequence_widget.py:47"
+   ],
+   "count": 1,
+   "via": "renders"
+  },
+  {
+   "source": "lazylabel.ui.widgets.settings_widget",
+   "target": "scr:control_panel",
+   "kind": "write",
+   "evidence": [
+    "src/lazylabel/ui/control_panel.py:195"
+   ],
+   "count": 1,
+   "via": "hosted SettingsWidget"
+  },
+  {
+   "source": "lazylabel.ui.widgets.status_bar",
+   "target": "scr:status_bar",
+   "kind": "write",
+   "evidence": [
+    "src/lazylabel/ui/widgets/status_bar.py:81"
+   ],
+   "count": 1,
+   "via": "renders"
+  },
+  {
+   "source": "lazylabel.ui.widgets.timeline_widget",
+   "target": "scr:tab_sequence",
+   "kind": "write",
+   "evidence": [
+    "src/lazylabel/ui/widgets/timeline_widget.py:497"
+   ],
+   "count": 1,
+   "via": "renders"
+  },
+  {
+   "source": "lazylabel.ui.workers.reference_finder_worker",
+   "target": "ds:model_checkpoints",
+   "kind": "write",
+   "evidence": [
+    "src/lazylabel/ui/workers/reference_finder_worker.py:114"
+   ],
+   "count": 1,
+   "via": "rule"
+  },
+  {
+   "source": "lazylabel.utils.fast_file_manager",
+   "target": "scr:right_panel",
+   "kind": "write",
+   "evidence": [
+    "src/lazylabel/ui/right_panel.py:117"
+   ],
+   "count": 1,
+   "via": "hosted FastFileManager"
+  },
+  {
+   "source": "lazylabel.utils.logger",
+   "target": "ds:app_log",
+   "kind": "write",
+   "evidence": [
+    "src/lazylabel/utils/logger.py:59"
+   ],
+   "count": 1,
+   "via": "rule"
+  }
+ ],
+ "ghost_members": {
+  "multi_view_positive_points": [
+   "src/lazylabel/core/undo_redo_manager.py:215",
+   "src/lazylabel/core/undo_redo_manager.py:220"
+  ],
+  "multi_view_negative_points": [
+   "src/lazylabel/core/undo_redo_manager.py:222"
+  ],
+  "multi_view_point_items": [
+   "src/lazylabel/core/undo_redo_manager.py:229",
+   "src/lazylabel/core/undo_redo_manager.py:230",
+   "src/lazylabel/core/undo_redo_manager.py:232"
+  ],
+  "_update_multi_view_ai_preview": [
+   "src/lazylabel/core/undo_redo_manager.py:239",
+   "src/lazylabel/core/undo_redo_manager.py:240"
+  ],
+  "_draw_multi_view_polygon_preview": [
+   "src/lazylabel/core/undo_redo_manager.py:282",
+   "src/lazylabel/core/undo_redo_manager.py:283"
+  ],
+  "_add_multi_view_point": [
+   "src/lazylabel/core/undo_redo_manager.py:407",
+   "src/lazylabel/core/undo_redo_manager.py:413"
+  ],
+  "_multi_view_mouse_release": [
+   "src/lazylabel/ui/handlers/single_view_mouse_handler.py:282",
+   "src/lazylabel/ui/handlers/single_view_mouse_handler.py:284"
+  ],
+  "multi_view_images": [
+   "src/lazylabel/ui/managers/crop_manager.py:51",
+   "src/lazylabel/ui/managers/crop_manager.py:80",
+   "src/lazylabel/ui/managers/image_adjustment_manager.py:146",
+   "src/lazylabel/ui/managers/image_adjustment_manager.py:147",
+   "src/lazylabel/ui/managers/image_adjustment_manager.py:172",
+   "src/lazylabel/ui/managers/image_adjustment_manager.py:202",
+   "src/lazylabel/ui/managers/image_adjustment_manager.py:202",
+   "src/lazylabel/ui/managers/image_adjustment_manager.py:208",
+   "src/lazylabel/ui/managers/image_adjustment_manager.py:210",
+   "src/lazylabel/ui/managers/image_adjustment_manager.py:249",
+   "src/lazylabel/ui/managers/image_adjustment_manager.py:249",
+   "src/lazylabel/ui/managers/image_adjustment_manager.py:254",
+   "src/lazylabel/ui/managers/image_adjustment_manager.py:255",
+   "src/lazylabel/ui/managers/image_adjustment_manager.py:278",
+   "src/lazylabel/ui/managers/image_adjustment_manager.py:278",
+   "src/lazylabel/ui/managers/image_adjustment_manager.py:284",
+   "src/lazylabel/ui/managers/image_adjustment_manager.py:286"
+  ],
+  "_current_view_mode": [
+   "src/lazylabel/ui/managers/edit_mode_manager.py:80",
+   "src/lazylabel/ui/managers/edit_mode_manager.py:81"
+  ],
+  "_update_display": [
+   "src/lazylabel/ui/managers/file_navigation_manager.py:354",
+   "src/lazylabel/ui/managers/file_navigation_manager.py:355"
+  ],
+  "multi_view_models": [
+   "src/lazylabel/ui/managers/image_adjustment_manager.py:211",
+   "src/lazylabel/ui/managers/image_adjustment_manager.py:212",
+   "src/lazylabel/ui/managers/image_adjustment_manager.py:256",
+   "src/lazylabel/ui/managers/image_adjustment_manager.py:257",
+   "src/lazylabel/ui/managers/image_adjustment_manager.py:287",
+   "src/lazylabel/ui/managers/image_adjustment_manager.py:288"
+  ],
+  "_clear_multi_view_highlights": [
+   "src/lazylabel/ui/managers/keyboard_event_manager.py:53",
+   "src/lazylabel/ui/managers/keyboard_event_manager.py:55"
+  ],
+  "multi_view_mode_handler": [
+   "src/lazylabel/ui/managers/keyboard_event_manager.py:134",
+   "src/lazylabel/ui/managers/keyboard_event_manager.py:135",
+   "src/lazylabel/ui/managers/keyboard_event_manager.py:137",
+   "src/lazylabel/ui/managers/keyboard_event_manager.py:174",
+   "src/lazylabel/ui/managers/keyboard_event_manager.py:175",
+   "src/lazylabel/ui/managers/keyboard_event_manager.py:177",
+   "src/lazylabel/ui/managers/save_export_manager.py:148",
+   "src/lazylabel/ui/managers/save_export_manager.py:149"
+  ],
+  "multi_view_rubber_band_lines": [
+   "src/lazylabel/ui/managers/keyboard_event_manager.py:337",
+   "src/lazylabel/ui/managers/keyboard_event_manager.py:338",
+   "src/lazylabel/ui/managers/keyboard_event_manager.py:345"
+  ],
+  "multi_view_viewmodel": [
+   "src/lazylabel/ui/managers/ui_layout_manager.py:48"
+  ],
+  "multi_view_unlink_buttons": [
+   "src/lazylabel/ui/managers/ui_layout_manager.py:98"
+  ],
+  "polygon_lasso_lines": [
+   "src/lazylabel/ui/modes/single_view_mode.py:247",
+   "src/lazylabel/ui/modes/single_view_mode.py:248",
+   "src/lazylabel/ui/modes/single_view_mode.py:250",
+   "src/lazylabel/ui/modes/single_view_mode.py:253",
+   "src/lazylabel/ui/modes/single_view_mode.py:271",
+   "src/lazylabel/ui/modes/single_view_mode.py:272",
+   "src/lazylabel/ui/modes/single_view_mode.py:274",
+   "src/lazylabel/ui/modes/single_view_mode.py:277"
+  ]
+ },
+ "unresolved_connections": [
+  "src/lazylabel/ui/main_window.py:4413",
+  "src/lazylabel/ui/managers/ui_layout_manager.py:129",
+  "src/lazylabel/utils/fast_file_manager.py:1130",
+  "src/lazylabel/utils/fast_file_manager.py:1133",
+  "src/lazylabel/utils/fast_file_manager.py:1138"
+ ],
+ "suppressed_dead_end_candidates": {
+  "lazylabel.config": "package __init__ runs whenever a submodule is imported",
+  "lazylabel.core": "package __init__ runs whenever a submodule is imported",
+  "lazylabel.models": "package __init__ runs whenever a submodule is imported",
+  "lazylabel.ui": "package __init__ runs whenever a submodule is imported",
+  "lazylabel.ui.handlers": "package __init__ runs whenever a submodule is imported",
+  "lazylabel.ui.managers": "package __init__ runs whenever a submodule is imported",
+  "lazylabel.ui.modes": "package __init__ runs whenever a submodule is imported",
+  "lazylabel.ui.utils": "package __init__ runs whenever a submodule is imported",
+  "lazylabel.ui.widgets": "package __init__ runs whenever a submodule is imported",
+  "lazylabel.ui.workers": "package __init__ runs whenever a submodule is imported",
+  "lazylabel.utils": "package __init__ runs whenever a submodule is imported",
+  "lazylabel.viewmodels": "package __init__ runs whenever a submodule is imported"
+ },
+ "unreachable_from_entry_points": [
+  "lazylabel.core.app_context",
+  "lazylabel.core.protocols",
+  "lazylabel.ui.modes.base_mode",
+  "lazylabel.ui.modes.single_view_mode",
+  "lazylabel.ui.utils.scene_utils",
+  "lazylabel.ui.workers.save_worker"
+ ],
+ "reexport_only_modules": [
+  "lazylabel.core.app_context",
+  "lazylabel.core.protocols",
+  "lazylabel.ui.modes.single_view_mode",
+  "lazylabel.ui.utils.scene_utils",
+  "lazylabel.ui.workers.save_worker"
+ ],
+ "largest_scc": [
+  "lazylabel.core.undo_redo_manager",
+  "lazylabel.ui.control_panel",
+  "lazylabel.ui.editable_vertex",
+  "lazylabel.ui.handlers.single_view_mouse_handler",
+  "lazylabel.ui.hoverable_ellipse_item",
+  "lazylabel.ui.hoverable_pixelmap_item",
+  "lazylabel.ui.hoverable_polygon_item",
+  "lazylabel.ui.main_window",
+  "lazylabel.ui.managers.ai_segment_manager",
+  "lazylabel.ui.managers.coordinate_transformer",
+  "lazylabel.ui.managers.crop_manager",
+  "lazylabel.ui.managers.edit_mode_manager",
+  "lazylabel.ui.managers.file_navigation_manager",
+  "lazylabel.ui.managers.image_adjustment_manager",
+  "lazylabel.ui.managers.image_preload_manager",
+  "lazylabel.ui.managers.keyboard_event_manager",
+  "lazylabel.ui.managers.mode_manager",
+  "lazylabel.ui.managers.notification_manager",
+  "lazylabel.ui.managers.panel_popout_manager",
+  "lazylabel.ui.managers.polygon_drawing_manager",
+  "lazylabel.ui.managers.propagation_manager",
+  "lazylabel.ui.managers.sam_multi_view_manager",
+  "lazylabel.ui.managers.sam_single_view_manager",
+  "lazylabel.ui.managers.sam_worker_manager",
+  "lazylabel.ui.managers.save_export_manager",
+  "lazylabel.ui.managers.segment_display_manager",
+  "lazylabel.ui.managers.segment_table_manager",
+  "lazylabel.ui.managers.ui_layout_manager",
+  "lazylabel.ui.managers.viewport_manager",
+  "lazylabel.ui.modes.sequence_view_mode",
+  "lazylabel.ui.reorderable_class_table",
+  "lazylabel.ui.right_panel",
+  "lazylabel.ui.widgets.adjustments_widget",
+  "lazylabel.ui.widgets.annotation_settings_widget",
+  "lazylabel.ui.widgets.border_crop_widget",
+  "lazylabel.ui.widgets.channel_threshold_widget",
+  "lazylabel.ui.widgets.export_format_widget",
+  "lazylabel.ui.widgets.fft_threshold_widget",
+  "lazylabel.ui.widgets.fragment_threshold_widget",
+  "lazylabel.ui.widgets.model_selection_widget",
+  "lazylabel.ui.widgets.rescale_histogram_dialog",
+  "lazylabel.ui.widgets.rescale_widget",
+  "lazylabel.ui.widgets.sequence_widget",
+  "lazylabel.ui.widgets.settings_widget",
+  "lazylabel.ui.widgets.status_bar",
+  "lazylabel.ui.widgets.timeline_widget",
+  "lazylabel.ui.workers.image_discovery_worker",
+  "lazylabel.ui.workers.image_preload_worker",
+  "lazylabel.ui.workers.multi_view_sam_init_worker",
+  "lazylabel.ui.workers.propagation_worker",
+  "lazylabel.ui.workers.reference_finder_worker",
+  "lazylabel.ui.workers.sam_update_worker",
+  "lazylabel.ui.workers.single_view_sam_init_worker",
+  "lazylabel.utils.fast_file_manager"
+ ]
+}
