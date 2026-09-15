@@ -50,3 +50,13 @@ CLAUDE.md
 
 # Test images
 test_images/
+# Modernization workspace (main-web): legacy/ is a local frozen worktree of main, never committed;
+# re-include the two file types the global *.json / *.txt rules would otherwise swallow in the analysis and modernized trees.
+/legacy/
+!/analysis/**/*.json
+!/analysis/**/*.txt
+!/modernized/**/*.json
+!/modernized/**/*.txt
+node_modules/
+coverage/
+*.onnx
