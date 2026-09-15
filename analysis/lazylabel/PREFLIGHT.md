@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | System | LazyLabel — `lazylabel-gui` 2.0.8, Python 3.10 / PyQt6 image-segmentation GUI with SAM 1 / SAM 2.1 |
-| System dir for `/modernize-*` commands | `lazylabel` — run `/modernize-assess lazylabel`, `/modernize-map lazylabel`, … from `E:\GitHub\LazyLabel` |
+| System dir for `/modernize-*` commands | `lazylabel` — run `/code-modernization:modernize-assess lazylabel`, `/code-modernization:modernize-map lazylabel`, … from `E:\GitHub\LazyLabel`. In this app the `code-modernization:` prefix is required; the short `/modernize-assess` form returns "Unknown command". Short names elsewhere in this report refer to these commands |
 | Legacy source | `legacy/lazylabel/` = linked `git worktree` at detached HEAD **2a7d5d8** (verify: `git -C E:/GitHub/LazyLabel worktree list`); ignored via `.gitignore` rule `/legacy/`; **read-only — never edit files in it, never run `git switch`/`git checkout` inside it** |
 | Live checkout | `E:\GitHub\LazyLabel` on branch **`main-web`** — every modernization change goes here; `main` is untouched |
 | Artifacts | `analysis/lazylabel/` (this file); new code goes in `modernized/lazylabel/` |
@@ -439,6 +439,6 @@ node -v && npm -v && npm view vite version                  # expect: v22.17.0, 
 
 ## The single most important fix
 
-Nothing is red and no fix is outstanding: the Check 2 tools were installed and verified on PATH on 2026-09-14. The next command is `/modernize-assess lazylabel`.
+Nothing is red and no fix is outstanding: the Check 2 tools were installed and verified on PATH on 2026-09-14. `/code-modernization:modernize-assess lazylabel` ran on 2026-09-15 and wrote `analysis/lazylabel/ASSESSMENT.md`; its Section 10 lists the next commands.
 
 Not blocking, tracked elsewhere: the open Check 0 item (fate of the PyPI package — decided in `/modernize-brief`) and the optional port of the ruff `*.md` exclude to `main` (brief line item, default: leave `main` untouched).

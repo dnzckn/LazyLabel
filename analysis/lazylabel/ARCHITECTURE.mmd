@@ -1,0 +1,63 @@
+graph TD
+  %% LazyLabel 2.0.8 (legacy/lazylabel @ 2a7d5d8): domain-level dependencies, produced by /code-modernization:modernize-assess on 2026-09-15.
+  %% Solid arrow = import or direct call across domains. Dotted arrow = shared state reached without an import (MainWindow back-references, Qt signals, the shared Settings object).
+  %% All 30 import edges were re-derived mechanically from the AST; counts match. 11 low-signal import edges are omitted to stay near 40 edges (logger and package-barrel imports).
+  %% Two omitted import edges still matter for a port: core/__init__.py:28 pulls the AI probe into annotation_model, and ui/widgets/sequence_widget.py:22 reads AI availability.
+  subgraph platform["Platform - bootstrap and configuration"]
+    runtime_platform["Bootstrap and runtime support"]
+    settings_prefs["Settings, hotkeys and paths"]
+  end
+  subgraph core["Core annotation logic"]
+    annotation_model["Annotation model and undo-redo"]
+    annotation_io["Annotation file IO and export formats"]
+  end
+  subgraph ui["PyQt6 user interface"]
+    app_shell["Main window shell and panels"]
+    canvas_editing["Canvas, drawing and editing tools"]
+    image_processing["Image adjustments, crop and thresholds"]
+    file_navigation["Folder browsing and preloading"]
+    sequence_timeline["Sequence mode and timeline"]
+  end
+  subgraph ai["AI extra - include-ai umbrella"]
+    ai_segmentation["SAM segmentation and SAM 2 propagation"]
+  end
+  runtime_platform --> app_shell
+  settings_prefs --> annotation_io
+  annotation_model --> app_shell
+  annotation_model -.-> canvas_editing
+  annotation_io --> annotation_model
+  annotation_io --> app_shell
+  annotation_io --> image_processing
+  annotation_io -.-> canvas_editing
+  annotation_io --> ai_segmentation
+  app_shell --> canvas_editing
+  app_shell --> ai_segmentation
+  app_shell --> image_processing
+  app_shell --> runtime_platform
+  app_shell --> file_navigation
+  app_shell --> settings_prefs
+  app_shell --> sequence_timeline
+  app_shell --> annotation_io
+  app_shell --> annotation_model
+  canvas_editing --> app_shell
+  canvas_editing --> runtime_platform
+  canvas_editing --> annotation_model
+  canvas_editing -.-> image_processing
+  canvas_editing -.-> settings_prefs
+  image_processing --> app_shell
+  image_processing --> canvas_editing
+  image_processing -.-> settings_prefs
+  file_navigation --> app_shell
+  file_navigation --> image_processing
+  file_navigation --> annotation_model
+  file_navigation --> canvas_editing
+  file_navigation --> annotation_io
+  file_navigation --> ai_segmentation
+  sequence_timeline --> app_shell
+  sequence_timeline -.-> annotation_model
+  ai_segmentation --> runtime_platform
+  ai_segmentation --> app_shell
+  ai_segmentation --> annotation_model
+  ai_segmentation --> settings_prefs
+  ai_segmentation --> canvas_editing
+  ai_segmentation -.-> image_processing
