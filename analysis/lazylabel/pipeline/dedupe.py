@@ -117,6 +117,21 @@ def drop_contained(values: list, split_parts: bool) -> list:
             if not any(j != i and v.lower() in w.lower() and len(v) < len(w) for j, w in enumerate(values))]
 
 
+PANEL_POINTER = "Judges' reasoning: analysis/lazylabel/P0_PANEL.md."
+
+
+def collapse_panel_pointer(question):
+    """Merged questions repeat the pointer to the panel record once per folded card; keep one."""
+    if not question or question.count(PANEL_POINTER) < 2:
+        return question
+    parts = []
+    for part in question.split(" | "):
+        part = part.replace(PANEL_POINTER, "").strip()
+        if part and part not in parts:
+            parts.append(part)
+    return (" | ".join(parts) + " " + PANEL_POINTER).strip()
+
+
 def merge(result_path, clusters_path, out_path):
     """Merge reviewed clusters. Each cluster lists members by "names" (preferred) or by "members" indices.
 
@@ -176,6 +191,7 @@ def merge(result_path, clusters_path, out_path):
             vals = drop_contained(vals, key == "parameters")
             if vals:
                 base[key] = " | ".join(vals) if key != "parameters" else "; ".join(vals)
+        base["smeQuestion"] = collapse_panel_pointer(base.get("smeQuestion"))
         if base["confidence"] != "High" and not base.get("smeQuestion"):
             base["smeQuestion"] = "Merged near-duplicate cards disagreed on confidence; confirm the specification against the cited code."
         base["mergedSpecs"] = [{k: r.get(k) for k in ("name", "category", "priority", "confidence", "source", "plainEnglish",
