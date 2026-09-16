@@ -162,9 +162,9 @@ if never_judged:
 a("Defects the rewrite must **not** reproduce, even where a rule describes today's behavior: delete-on-empty saves and silent loss on close or multi-view navigation (`ASSESSMENT.md` 5.1), pickled class aliases (5.3), and settings reset on unknown keys (5.8). Each rule card's **Suspected defect** line records the preserve-or-fix question, and decision 7 settles the save semantics.")
 p0_section = "\n".join(S)
 p0_scope_note = (
-    f"The compliance judge rated {len(awaiting)} of these rules not P0 because LazyLabel moves no money and carries no regulatory duty, "
-    "while the fidelity judge rated the same rules P0 because they guard annotation data (`P0_PANEL.md`). The workflow demoted them, so they "
-    "are listed in §5 but gate no phase. Choose (a) restore them all to P0, (b) keep them all at P1, where they are tested but do not gate, "
+    f"The compliance judge rated {len(awaiting)} rules not P0 because LazyLabel moves no money and carries no regulatory duty, "
+    "while the fidelity judge rated those same rules P0 because they guard annotation data (`P0_PANEL.md`). The workflow demoted them, so §5 "
+    "lists them separately and they gate no phase. Choose (a) restore them all to P0, (b) keep them all at P1, where they are tested but do not gate, "
     "or (c) restore a named subset. *Recommended:* (c), restoring every rule assigned to P1 or P4, because reading and writing users' "
     "existing annotation files is this conversion's core promise."
 )

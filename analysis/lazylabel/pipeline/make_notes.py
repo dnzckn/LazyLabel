@@ -79,7 +79,7 @@ coverage = (
 
 dump_json({"snapshot": snapshot, "date": date, "coverage": coverage}, run_out)
 dump_json({"budgetNote": (
-    f"`/modernize-reimagine` and multi-slice transforms fan out many agents. Rule extraction alone needed {runs} workflow "
-    f"runs and hit usage limits {limit_hits} times, each time losing the agents in flight."
+    f"Rule extraction alone needed {runs} workflow runs and hit usage limits {limit_hits} times, each time losing the "
+    f"agents in flight."
 )}, brief_out)
 print(f"coverage note: {len(coverage)} chars | panel both {both} one {one} none {none} split {split} | dtos {dtos} | rules {len(rules)} folded {folded} dead {dead}")
