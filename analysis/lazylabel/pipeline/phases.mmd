@@ -1,0 +1,14 @@
+flowchart LR
+  p1["P1 Annotation format library - pilot: YOLO segmentation - S"]
+  p2["P2 Target architecture and service scaffold - S"]
+  p3["P3 Inference service - pilot: SAM 1 click prediction - S"]
+  p4["P4 Workspace shell, dataset browser, persistence - pilot: dataset browser - L"]
+  p5["P5 Annotation tools, AI tools, image tools - pilot: polygon tool - L"]
+  p6["P6 Sequence propagation, multi-view decision, cutover - pilot: timeline and references - L"]
+  p1 --> p2
+  p2 --> p3
+  p2 --> p4
+  p3 --> p5
+  p4 --> p5
+  p3 --> p6
+  p5 --> p6

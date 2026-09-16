@@ -1,0 +1,411 @@
+[
+ {
+  "merge": true,
+  "names": [
+   "YOLO Detection export: normalized center/size box per object",
+   "YOLO Detection export line format"
+  ]
+ },
+ {
+  "merge": true,
+  "names": [
+   "YOLO Detection import: denormalize, round half-to-even, clamp",
+   "YOLO Detection import validation, rounding and clamping"
+  ]
+ },
+ {
+  "merge": true,
+  "names": [
+   "YOLO Segmentation export: simplified normalized polygons",
+   "YOLO Segmentation export polygon simplification"
+  ]
+ },
+ {
+  "merge": true,
+  "names": [
+   "YOLO Segmentation import: polygon rasterization",
+   "YOLO Segmentation import validation"
+  ]
+ },
+ {
+  "merge": true,
+  "names": [
+   "COCO JSON export: categories, bbox, area, polygon",
+   "COCO JSON export structure and area"
+  ]
+ },
+ {
+  "merge": true,
+  "names": [
+   "COCO JSON import: categories to aliases, polygon then bbox fallback",
+   "COCO JSON import with polygon-then-box fallback"
+  ]
+ },
+ {
+  "merge": true,
+  "names": [
+   "Pascal VOC export/import: 0-based exclusive max bounds, depth always 3",
+   "Pascal VOC export uses alias names and exclusive max bounds"
+  ]
+ },
+ {
+  "merge": true,
+  "names": [
+   "CreateML export/import: pixel center boxes",
+   "CreateML export uses pixel center coordinates"
+  ]
+ },
+ {
+  "merge": true,
+  "names": [
+   "NPZ one-hot mask export and class channel order",
+   "NPZ export content",
+   "Saved class channel order is ascending class ID, not the Class Order table"
+  ]
+ },
+ {
+  "merge": true,
+  "names": [
+   "NPZ import: class_order mapping and legacy layouts",
+   "NPZ import (current and legacy layouts)"
+  ]
+ },
+ {
+  "merge": true,
+  "names": [
+   "NPZ Class Map export/import with foreground mask",
+   "NPZ Class Map export resolves overlaps to lowest class and stores foreground",
+   "NPZ Class Map import requires matching size"
+  ]
+ },
+ {
+  "merge": true,
+  "names": [
+   "Annotation load priority chain",
+   "Annotation load priority chain (one format wins)",
+   "Annotations load from the best file present, and a damaged non-NPZ file stops the search",
+   "A damaged or empty higher-priority file blocks lower-priority files"
+  ]
+ },
+ {
+  "merge": true,
+  "names": [
+   "Label-to-class-id resolution for YOLO, VOC and CreateML labels",
+   "Label text to class ID resolution on import"
+  ]
+ },
+ {
+  "merge": true,
+  "names": [
+   "Pixel priority for overlapping classes",
+   "Pixel priority resolves overlapping classes"
+  ]
+ },
+ {
+  "merge": true,
+  "names": [
+   "One exported object per segment outline (instance separation)",
+   "Detection and polygon exports keep same-class objects separate"
+  ]
+ },
+ {
+  "merge": true,
+  "names": [
+   "Crop removes annotations outside the rectangle but keeps full-image coordinates",
+   "Crop zeroes saved annotations outside the crop (last row and column always lost)",
+   "Crop is clamped to the image and blanks everything outside it on save, including the last row and column"
+  ]
+ },
+ {
+  "merge": true,
+  "names": [
+   "Saving an image with zero segments deletes all sidecar files",
+   "Saving an image with zero segments deletes all of its annotation files",
+   "Saving an image with no segments deletes all of its annotation files"
+  ]
+ },
+ {
+  "merge": true,
+  "names": [
+   "Auto-save on navigate",
+   "Auto-save current image before switching images (single view)",
+   "Opening another image auto-saves the current one first"
+  ]
+ },
+ {
+  "merge": true,
+  "names": [
+   "Multi-view batch navigation always saves, ignoring the Auto-Save setting",
+   "Multi-view pair navigation always saves or deletes both images"
+  ]
+ },
+ {
+  "merge": true,
+  "names": [
+   "Class id assignment for new segments",
+   "Class assignment for new segments and next class ID",
+   "New segments take the active class, otherwise the next free class id (highest + 1)"
+  ]
+ },
+ {
+  "merge": true,
+  "names": [
+   "Merge selected segments into the lowest selected class",
+   "Merge selected segments into the smallest class"
+  ]
+ },
+ {
+  "merge": true,
+  "names": [
+   "Reassign class ids from class table order",
+   "Reassign class IDs from Class Order table"
+  ]
+ },
+ {
+  "merge": true,
+  "names": [
+   "AI fragment filter",
+   "The fragment filter keeps only regions at least X% of the largest region"
+  ]
+ },
+ {
+  "merge": true,
+  "names": [
+   "Eraser splits segments and drops pieces of 10 pixels or less",
+   "Erase subtracts pixels, splits remainders and drops tiny parts"
+  ]
+ },
+ {
+  "merge": true,
+  "names": [
+   "Undo of an erase adds a phantom segment instead of restoring",
+   "Undoing an erase does not restore the erased shapes",
+   "Undoing an erase inserts malformed segment records"
+  ]
+ },
+ {
+  "merge": true,
+  "names": [
+   "Deleting segments cannot be undone",
+   "Undo/redo history scope",
+   "Undo history is unbounded, per image, and does not cover deletes or class changes"
+  ]
+ },
+ {
+  "merge": true,
+  "names": [
+   "Auto-convert AI masks to polygons and polygon resolution mapping",
+   "Auto-convert AI masks to polygons"
+  ]
+ },
+ {
+  "merge": true,
+  "names": [
+   "Polygon closes when clicking near the first point",
+   "Polygon completion and join threshold",
+   "A polygon needs 3 points and closes when clicking within the join distance of its first point"
+  ]
+ },
+ {
+  "merge": true,
+  "names": [
+   "AI click versus drag and minimum shape sizes",
+   "AI mode click versus drag thresholds",
+   "AI mode: click adds a point, a drag over 5 px draws a box, Space accepts the preview"
+  ]
+ },
+ {
+  "merge": true,
+  "names": [
+   "SAM best-mask selection and click coordinate mapping",
+   "Model picks the highest-scoring candidate mask"
+  ]
+ },
+ {
+  "merge": true,
+  "names": [
+   "Toggle Recent Class hotkey fallback",
+   "Active class toggle and recent-class hotkey"
+  ]
+ },
+ {
+  "merge": true,
+  "names": [
+   "Edit mode entry and mode toggling",
+   "Switching tools discards unfinished work; startup mode"
+  ]
+ },
+ {
+  "merge": true,
+  "names": [
+   "Edit mode eligibility and 200-vertex limit",
+   "Edit mode requires a selected polygon or circle"
+  ]
+ },
+ {
+  "merge": true,
+  "names": [
+   "SAM 2 propagation confidence score",
+   "Propagation confidence score per object"
+  ]
+ },
+ {
+  "merge": true,
+  "names": [
+   "Propagated frame flagging and commit (Keep Flagged Masks)",
+   "Low-confidence frames are flagged using the minimum object score",
+   "A propagated frame is Flagged when its weakest object scores below Min Conf",
+   "Keep Flagged Masks decides whether partial frames keep masks"
+  ]
+ },
+ {
+  "merge": true,
+  "names": [
+   "Save All propagated frames eligibility",
+   "Save All writes propagated, non-flagged frames",
+   "Save All writes propagated frames except those the engine currently flags"
+  ]
+ },
+ {
+  "merge": true,
+  "names": [
+   "Min Conf change re-evaluates flags in the engine but not on the timeline",
+   "Changing Min Conf re-flags frames in the engine but not on the timeline"
+  ]
+ },
+ {
+  "merge": true,
+  "names": [
+   "Propagation direction and range",
+   "Propagation direction and range",
+   "The propagation range only limits one side of each pass"
+  ]
+ },
+ {
+  "merge": true,
+  "names": [
+   "Streaming (chunked) propagation windows",
+   "Timelines longer than the window propagate in overlapping chunks"
+  ]
+ },
+ {
+  "merge": true,
+  "names": [
+   "Reference image size lock and skipped frames",
+   "Reference frames must share one image size",
+   "Reference frames must match the first reference's image size"
+  ]
+ },
+ {
+  "merge": true,
+  "names": [
+   "Only mask-based segments seed propagation",
+   "Propagation seeds come only from mask segments on reference frames",
+   "Only reference frames that actually have annotations become propagation prompts"
+  ]
+ },
+ {
+  "merge": true,
+  "names": [
+   "Sequence frame load priority and per-class merging",
+   "Sequence frame load order and per-class merge",
+   "Sequence frames load propagated masks first and merge them into one mask per class"
+  ]
+ },
+ {
+  "merge": true,
+  "names": [
+   "Frame status precedence, suggestions and timeline sort",
+   "Timeline colors and Sort order follow review status",
+   "Next/previous flagged, reference and suggested navigation wraps around"
+  ]
+ },
+ {
+  "merge": true,
+  "names": [
+   "Timeline trim and keep ranges",
+   "Timeline trim and keep range",
+   "Trim removes frames from the timeline only and re-keys state by image path"
+  ]
+ },
+ {
+  "merge": true,
+  "names": [
+   "Archetype (suggested reference frame) selection",
+   "Find Archetypes suggests about 2% of frames (between 5 and 50) as references",
+   "Archetype reference suggestions"
+  ]
+ },
+ {
+  "merge": true,
+  "names": [
+   "Sequence frame auto-save when changing frames",
+   "Leaving a sequence frame saves it and marks it Saved, even if it is a reference"
+  ]
+ },
+ {
+  "merge": true,
+  "names": [
+   "Skip Labeled protects frames that already have annotations",
+   "Propagation never overwrites reference frames and, by default, frames already labeled"
+  ]
+ },
+ {
+  "merge": true,
+  "names": [
+   "Propagation preconditions",
+   "Propagate needs the AI extras, a reference, a SAM 2 video model and no running job"
+  ]
+ },
+ {
+  "merge": true,
+  "names": [
+   "Sequence initialization excludes mismatched images",
+   "First propagation sets up the engine once and marks wrong-size frames Skipped"
+  ]
+ },
+ {
+  "merge": true,
+  "names": [
+   "Timeline frame status lifecycle",
+   "Sequence frame status lifecycle: seven states, every frame starts Pending"
+  ]
+ },
+ {
+  "merge": true,
+  "names": [
+   "Settings persistence, legacy migration and reset",
+   "Settings file loading, fallback and legacy migration",
+   "One unknown key in settings.json resets every preference; old save flags migrate to export formats"
+  ]
+ },
+ {
+  "merge": true,
+  "names": [
+   "Model discovery and type detection by file name",
+   "Model type detected from file name"
+  ]
+ },
+ {
+  "merge": true,
+  "names": [
+   "Linked multi-view shape mirroring and class ids",
+   "Linked multi-view operations",
+   "Linked multi-view applies accept, erase and polygon completion to both viewers"
+  ]
+ },
+ {
+  "merge": true,
+  "names": [
+   "AI features require segment-anything and PyTorch 2.7.1+",
+   "AI features require segment-anything and PyTorch 2.7.1 or newer"
+  ]
+ },
+ {
+  "merge": true,
+  "names": [
+   "File list annotation-status indicators",
+   "File list checkmarks come from annotation file names next to each image"
+  ]
+ }
+]

@@ -1,0 +1,3 @@
+{
+ "budgetNote": "`/modernize-reimagine` and multi-slice transforms fan out many agents. Rule extraction alone needed 4 workflow runs and hit usage limits 4 times, each time losing the agents in flight."
+}
