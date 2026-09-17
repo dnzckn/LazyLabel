@@ -119,6 +119,16 @@ def drop_contained(values: list, split_parts: bool) -> list:
 
 PANEL_POINTER = "Judges' reasoning: analysis/lazylabel/P0_PANEL.md."
 
+def tidy(text):
+    """Collapse whitespace and drop a 'Panel:' label whose sentence was removed as answered."""
+    if not text:
+        return text
+    s = re.sub(r"[ 	]+", " ", str(text)).strip()
+    s = re.sub(r"Panel:\s*(?=(\||$))", "", s)
+    s = re.sub(r"\s*\|\s*(?=\||$)", "", s)
+    return s.strip(" |").strip()
+
+
 
 def collapse_panel_pointer(question):
     """Merged questions repeat the pointer to the panel record once per folded card; keep one."""
@@ -129,7 +139,7 @@ def collapse_panel_pointer(question):
         part = part.replace(PANEL_POINTER, "").strip()
         if part and part not in parts:
             parts.append(part)
-    return (" | ".join(parts) + " " + PANEL_POINTER).strip()
+    return tidy(" | ".join(parts)) + " " + PANEL_POINTER
 
 
 def merge(result_path, clusters_path, out_path):
@@ -191,7 +201,7 @@ def merge(result_path, clusters_path, out_path):
             vals = drop_contained(vals, key == "parameters")
             if vals:
                 base[key] = " | ".join(vals) if key != "parameters" else "; ".join(vals)
-        base["smeQuestion"] = collapse_panel_pointer(base.get("smeQuestion"))
+        base["smeQuestion"] = tidy(collapse_panel_pointer(base.get("smeQuestion")))
         if base["confidence"] != "High" and not base.get("smeQuestion"):
             base["smeQuestion"] = "Merged near-duplicate cards disagreed on confidence; confirm the specification against the cited code."
         base["mergedSpecs"] = [{k: r.get(k) for k in ("name", "category", "priority", "confidence", "source", "plainEnglish",

@@ -1,6 +1,6 @@
 # DATA OBJECTS: `lazylabel`
 
-Core records, entities and file payloads of LazyLabel 2.0.8 (`legacy/lazylabel` at 2a7d5d8), catalogued on 2026-09-15 by the modernize-extract-rules workflow. Rule IDs refer to `analysis/lazylabel/BUSINESS_RULES.md`.
+Core records, entities and file payloads of LazyLabel 2.0.8 (`legacy/lazylabel` at 2a7d5d8), catalogued on 2026-09-17 by the modernize-extract-rules workflow. Rule IDs refer to `analysis/lazylabel/BUSINESS_RULES.md`.
 
 | Data object | Source | Fields | Rules |
 |---|---|---|---|
@@ -63,7 +63,7 @@ Core records, entities and file payloads of LazyLabel 2.0.8 (`legacy/lazylabel` 
 | `views` | `dict[int, {mask, vertices}] \| None` | Optional multi-view payload keyed by viewer index (segment_manager.py:794-803) |
 | `_source_viewer` | `int \| None` | Legacy multi-view marker, stripped before export (save_export_manager.py:372-390) |
 
-**Rules that read or produce it:** RULE-013 (New segments take the active class, otherwise the next free class id (highest + 1)); RULE-012 (Merge selected segments into the lowest selected class); RULE-015 (Reassign class ids from class table order); RULE-016 (Shape rasterization before export (truncated vertices, rounded circles)); RULE-005 (Final per-class mask composition); RULE-011 (Eraser splits segments and drops pieces of 10 pixels or less); RULE-020 (Auto-convert AI masks to polygons); RULE-004 (Detection and polygon exports keep same-class objects separate); RULE-022 (Propagation seeds come only from mask segments on reference frames); RULE-090 (Sequence frame load order and per-class merge); RULE-057 (Undo/redo history scope); RULE-092 (Linked multi-view shape mirroring and class ids)
+**Rules that read or produce it:** RULE-011 (New segments take the active class, otherwise the next free class id (highest + 1)); RULE-017 (Merge selected segments into the lowest selected class); RULE-013 (Reassign class ids from class table order); RULE-015 (Shape rasterization before export (truncated vertices, rounded circles)); RULE-010 (Final per-class mask composition); RULE-009 (Eraser splits segments and drops pieces of 10 pixels or less); RULE-021 (Auto-convert AI masks to polygons); RULE-008 (Detection and polygon exports keep same-class objects separate); RULE-023 (Propagation seeds come only from mask segments on reference frames); RULE-090 (Sequence frame load order and per-class merge); RULE-052 (Undo/redo history scope); RULE-092 (Linked multi-view shape mirroring and class ids)
 
 ## SegmentManager state (per-image class registry)
 
@@ -77,7 +77,7 @@ Core records, entities and file payloads of LazyLabel 2.0.8 (`legacy/lazylabel` 
 | `active_class_id` | `int \| None` |  |
 | `last_toggled_class_id` | `int \| None` | Hotkey fallback: last toggled, else highest existing id (segment_manager.py:425-440) |
 
-**Rules that read or produce it:** RULE-086 (Active class toggle and recent-class hotkey); RULE-042 (Class alias editing is unvalidated); RULE-013 (New segments take the active class, otherwise the next free class id (highest + 1)); RULE-015 (Reassign class ids from class table order); RULE-003 (Label text to class ID resolution on import)
+**Rules that read or produce it:** RULE-086 (Active class toggle and recent-class hotkey); RULE-042 (Class alias editing is unvalidated); RULE-011 (New segments take the active class, otherwise the next free class id (highest + 1)); RULE-013 (Reassign class ids from class table order); RULE-007 (Label text to class ID resolution on import)
 
 ## Multi-view view payload (segment['views'][viewer_index])
 
@@ -88,7 +88,7 @@ Core records, entities and file payloads of LazyLabel 2.0.8 (`legacy/lazylabel` 
 | `mask` | `np.ndarray bool \| None` |  |
 | `vertices` | `list[[int,int]] \| None` | Erase mirrored into other viewers keeps only the largest contour (segment_manager.py:616-622) |
 
-**Rules that read or produce it:** RULE-092 (Linked multi-view shape mirroring and class ids); RULE-053 (Multi-view batch navigation always saves, ignoring the Auto-Save setting)
+**Rules that read or produce it:** RULE-092 (Linked multi-view shape mirroring and class ids); RULE-057 (Multi-view batch navigation always saves, ignoring the Auto-Save setting)
 
 ## Erased-segment backup record
 
@@ -99,7 +99,7 @@ Core records, entities and file payloads of LazyLabel 2.0.8 (`legacy/lazylabel` 
 | `index` | `int` | Index the segment held before erase |
 | `segment` | `dict` | Shallow copy of the pre-erase Segment |
 
-**Rules that read or produce it:** RULE-058 (Undoing an erase inserts malformed segment records); RULE-011 (Eraser splits segments and drops pieces of 10 pixels or less)
+**Rules that read or produce it:** RULE-053 (Undoing an erase inserts malformed segment records); RULE-009 (Eraser splits segments and drops pieces of 10 pixels or less)
 
 ## Instance contour record
 
@@ -111,7 +111,7 @@ Core records, entities and file payloads of LazyLabel 2.0.8 (`legacy/lazylabel` 
 | `channel` | `int` | Index into ExportContext.class_order / mask_tensor third axis |
 | `contours` | `list[np.ndarray]` | cv2.findContours RETR_EXTERNAL output for the single segment, intersected with the final tensor channel (segment_manager.py:297-305) |
 
-**Rules that read or produce it:** RULE-004 (Detection and polygon exports keep same-class objects separate); RULE-002 (YOLO Detection export line format); RULE-010 (YOLO Segmentation export polygon simplification); RULE-007 (COCO JSON export structure and area); RULE-009 (Pascal VOC export uses alias names and exclusive max bounds); RULE-008 (CreateML export/import: pixel center boxes)
+**Rules that read or produce it:** RULE-008 (Detection and polygon exports keep same-class objects separate); RULE-005 (YOLO Detection export line format); RULE-006 (YOLO Segmentation export polygon simplification); RULE-001 (COCO JSON export structure and area); RULE-004 (Pascal VOC export uses alias names and exclusive max bounds); RULE-002 (CreateML export/import: pixel center boxes)
 
 ## Final mask tensor
 
@@ -123,7 +123,7 @@ Core records, entities and file payloads of LazyLabel 2.0.8 (`legacy/lazylabel` 
 | `channel order` | `list[int] class_order` | Built from get_unique_class_ids() (save_export_manager.py:400), i.e. ascending class id — not the Class Order table |
 | `pixel priority` | `applied in place` | Overlapping pixels collapse to argmin/argmax of channel index (segment_manager.py:346-371) |
 
-**Rules that read or produce it:** RULE-005 (Final per-class mask composition); RULE-014 (Pixel priority resolves overlapping classes); RULE-006 (Saved class channel order is ascending class ID, not the Class Order table); RULE-001 (NPZ Class Map export resolves overlaps to lowest class and stores foreground); RULE-023 (Crop is clamped to the image and blanks everything outside it on save, including the last row and column)
+**Rules that read or produce it:** RULE-010 (Final per-class mask composition); RULE-012 (Pixel priority resolves overlapping classes); RULE-014 (Saved class channel order is ascending class ID, not the Class Order table); RULE-003 (NPZ Class Map export resolves overlaps to lowest class and stores foreground); RULE-016 (Crop is clamped to the image and blanks everything outside it on save, including the last row and column)
 
 ## ExportContext
 
@@ -140,7 +140,7 @@ Core records, entities and file payloads of LazyLabel 2.0.8 (`legacy/lazylabel` 
 | `crop_coords` | `tuple[int,int,int,int] \| None` | Carried for information; the crop is already applied to mask_tensor at save_export_manager.py:413-417 |
 | `instances` | `list[dict]` | Empty unless an instance-aware format is selected (save_export_manager.py:445-452); empty means exporters contour merged channels instead |
 
-**Rules that read or produce it:** RULE-079 (Export writes every selected format and never removes other files); RULE-002 (YOLO Detection export line format); RULE-010 (YOLO Segmentation export polygon simplification); RULE-007 (COCO JSON export structure and area); RULE-009 (Pascal VOC export uses alias names and exclusive max bounds); RULE-008 (CreateML export/import: pixel center boxes); RULE-006 (Saved class channel order is ascending class ID, not the Class Order table); RULE-001 (NPZ Class Map export resolves overlaps to lowest class and stores foreground)
+**Rules that read or produce it:** RULE-079 (Export writes every selected format and never removes other files); RULE-005 (YOLO Detection export line format); RULE-006 (YOLO Segmentation export polygon simplification); RULE-001 (COCO JSON export structure and area); RULE-004 (Pascal VOC export uses alias names and exclusive max bounds); RULE-002 (CreateML export/import: pixel center boxes); RULE-014 (Saved class channel order is ascending class ID, not the Class Order table); RULE-003 (NPZ Class Map export resolves overlaps to lowest class and stores foreground)
 
 ## ExportFormat registry and load priority
 
@@ -155,7 +155,7 @@ Core records, entities and file payloads of LazyLabel 2.0.8 (`legacy/lazylabel` 
 | `EXPORTERS` | `dict[ExportFormat, Exporter]` | Each exporter exposes export/get_output_path/delete_output (exporters/__init__.py:160-177) |
 | `_OUTPUT_EXTENSIONS` | `set[str]` | '.npz', '_CM.npz', '.txt', '_seg.txt', '_coco.json', '.xml', '_createml.json' — the delete-all set |
 
-**Rules that read or produce it:** RULE-078 (Annotations load from the best file present, and a damaged non-NPZ file stops the search); RULE-079 (Export writes every selected format and never removes other files); RULE-084 (Sidecar file naming and suffix collisions); RULE-082 (Saving an image with no segments deletes all of its annotation files)
+**Rules that read or produce it:** RULE-078 (Annotations load from the best file present, and a damaged non-NPZ file stops the search); RULE-079 (Export writes every selected format and never removes other files); RULE-080 (Sidecar file naming and suffix collisions); RULE-083 (Saving an image with no segments deletes all of its annotation files)
 
 ## FileManager._LOAD_CHAIN entry
 
@@ -166,7 +166,7 @@ Core records, entities and file payloads of LazyLabel 2.0.8 (`legacy/lazylabel` 
 | `suffix` | `str` | Appended to splitext(image_path)[0]: '.npz', '_seg.txt', '_coco.json', '_CM.npz', '.xml', '_createml.json', '.txt' |
 | `fmt` | `str` | Loader key dispatched at file_manager.py:187-201 |
 
-**Rules that read or produce it:** RULE-078 (Annotations load from the best file present, and a damaged non-NPZ file stops the search); RULE-084 (Sidecar file naming and suffix collisions); RULE-036 (File list annotation-status indicators)
+**Rules that read or produce it:** RULE-078 (Annotations load from the best file present, and a damaged non-NPZ file stops the search); RULE-080 (Sidecar file naming and suffix collisions); RULE-036 (File list annotation-status indicators)
 
 ## Imported box tuple (label, x1, y1, x2, y2)
 
@@ -178,7 +178,7 @@ Core records, entities and file payloads of LazyLabel 2.0.8 (`legacy/lazylabel` 
 | `x1, y1` | `int` | Inclusive pixel min, clamped to \>= 0 |
 | `x2, y2` | `int` | Exclusive pixel max, clamped to image w/h; box dropped if it collapses (file_manager.py:394-398) |
 
-**Rules that read or produce it:** RULE-040 (YOLO Detection import validation, rounding and clamping); RULE-009 (Pascal VOC export uses alias names and exclusive max bounds); RULE-039 (Pascal VOC and CreateML import rules); RULE-008 (CreateML export/import: pixel center boxes); RULE-038 (COCO JSON import with polygon-then-box fallback)
+**Rules that read or produce it:** RULE-040 (YOLO Detection import validation, rounding and clamping); RULE-004 (Pascal VOC export uses alias names and exclusive max bounds); RULE-039 (Pascal VOC and CreateML import rules); RULE-002 (CreateML export/import: pixel center boxes); RULE-037 (COCO JSON import with polygon-then-box fallback)
 
 ## Label-to-class-id map
 
@@ -190,7 +190,7 @@ Core records, entities and file payloads of LazyLabel 2.0.8 (`legacy/lazylabel` 
 | `reverse_aliases` | `dict[str, int]` | Inverted class_aliases; duplicate alias text silently collapses |
 | `unnamed` | `list[str]` | Non-numeric labels; each gets the lowest free id and is registered as an alias (file_manager.py:370-377) |
 
-**Rules that read or produce it:** RULE-003 (Label text to class ID resolution on import); RULE-041 (YOLO Segmentation import validation); RULE-039 (Pascal VOC and CreateML import rules)
+**Rules that read or produce it:** RULE-007 (Label text to class ID resolution on import); RULE-041 (YOLO Segmentation import validation); RULE-039 (Pascal VOC and CreateML import rules)
 
 ## NPZ archive (.npz)
 
@@ -202,7 +202,7 @@ Core records, entities and file payloads of LazyLabel 2.0.8 (`legacy/lazylabel` 
 | `class_order` | `np.ndarray[int]` | Channel i maps to class_order[i]; absent in pre-key files, where channel index is taken as the class id (file_manager.py:254-258) |
 | `class_aliases` | `dict[int, str] (pickled object array)` | Requires allow_pickle=True on load (file_manager.py:231, 335-343) |
 
-**Rules that read or produce it:** RULE-006 (Saved class channel order is ascending class ID, not the Class Order table); RULE-037 (NPZ import (current and legacy layouts))
+**Rules that read or produce it:** RULE-014 (Saved class channel order is ascending class ID, not the Class Order table); RULE-038 (NPZ import (current and legacy layouts))
 
 ## NPZ Class Map archive (_CM.npz)
 
@@ -215,7 +215,7 @@ Core records, entities and file payloads of LazyLabel 2.0.8 (`legacy/lazylabel` 
 | `class_order` | `np.ndarray[int]` |  |
 | `class_aliases` | `dict[int, str]` |  |
 
-**Rules that read or produce it:** RULE-001 (NPZ Class Map export resolves overlaps to lowest class and stores foreground)
+**Rules that read or produce it:** RULE-003 (NPZ Class Map export resolves overlaps to lowest class and stores foreground)
 
 ## COCO JSON document (_coco.json)
 
@@ -230,7 +230,7 @@ Core records, entities and file payloads of LazyLabel 2.0.8 (`legacy/lazylabel` 
 | `annotations[].segmentation` | `[[x1,y1,...]]` | Degenerate 1-2 point contours are padded into a closed ring (exporters/__init__.py:139-157) |
 | `annotations[].iscrowd` | `int (always 0)` |  |
 
-**Rules that read or produce it:** RULE-007 (COCO JSON export structure and area); RULE-038 (COCO JSON import with polygon-then-box fallback)
+**Rules that read or produce it:** RULE-001 (COCO JSON export structure and area); RULE-037 (COCO JSON import with polygon-then-box fallback)
 
 ## YOLO Detection line (.txt)
 
@@ -243,7 +243,7 @@ Core records, entities and file payloads of LazyLabel 2.0.8 (`legacy/lazylabel` 
 | `nw, nh` | `float` | w/W, h/H |
 | `line grammar on import` | `exactly 5 whitespace tokens` | Other line lengths are silently skipped (file_manager.py:433-441) |
 
-**Rules that read or produce it:** RULE-002 (YOLO Detection export line format); RULE-040 (YOLO Detection import validation, rounding and clamping)
+**Rules that read or produce it:** RULE-005 (YOLO Detection export line format); RULE-040 (YOLO Detection import validation, rounding and clamping)
 
 ## YOLO Segmentation line (_seg.txt)
 
@@ -256,7 +256,7 @@ Core records, entities and file payloads of LazyLabel 2.0.8 (`legacy/lazylabel` 
 | `import validation` | `\>= 7 tokens and odd token count` | Even-length lines rejected; \< 3 points dropped (file_manager.py:562-577) |
 | `stored vertices` | `list[[int,int]]` | Import keeps both a rasterized mask and the vertices (file_manager.py:590-598) |
 
-**Rules that read or produce it:** RULE-010 (YOLO Segmentation export polygon simplification); RULE-041 (YOLO Segmentation import validation)
+**Rules that read or produce it:** RULE-006 (YOLO Segmentation export polygon simplification); RULE-041 (YOLO Segmentation import validation)
 
 ## Pascal VOC XML document (.xml)
 
@@ -270,7 +270,7 @@ Core records, entities and file payloads of LazyLabel 2.0.8 (`legacy/lazylabel` 
 | `object[].bndbox` | `{xmin, ymin, xmax, ymax} int` | xmax = x + w, i.e. exclusive; the loader reads it the same way (pascal_voc.py:48-49, file_manager.py:456-492) |
 | `object[].pose/truncated/difficult` | `'Unspecified' / '0' / '0'` | Constant placeholders |
 
-**Rules that read or produce it:** RULE-009 (Pascal VOC export uses alias names and exclusive max bounds); RULE-039 (Pascal VOC and CreateML import rules)
+**Rules that read or produce it:** RULE-004 (Pascal VOC export uses alias names and exclusive max bounds); RULE-039 (Pascal VOC and CreateML import rules)
 
 ## CreateML JSON document (_createml.json)
 
@@ -283,7 +283,7 @@ Core records, entities and file payloads of LazyLabel 2.0.8 (`legacy/lazylabel` 
 | `annotations[].coordinates` | `{x, y, width, height}` | x,y are the pixel box centre (x + w/2), width/height are integers (createml.py:42-46) |
 | `import shape guard` | `list whose first element is a dict` | Anything else is ignored (file_manager.py:509-510) |
 
-**Rules that read or produce it:** RULE-008 (CreateML export/import: pixel center boxes); RULE-039 (Pascal VOC and CreateML import rules)
+**Rules that read or produce it:** RULE-002 (CreateML export/import: pixel center boxes); RULE-039 (Pascal VOC and CreateML import rules)
 
 ## Settings (settings.json)
 
@@ -304,7 +304,7 @@ Core records, entities and file payloads of LazyLabel 2.0.8 (`legacy/lazylabel` 
 | `load behaviour` | `cls(**data)` | Any unknown key raises TypeError and the whole file falls back to defaults (settings.py:96-98) |
 | `legacy migration` | `save_npz/save_txt -\> export_formats` | bb_use_alias and save_class_aliases are dropped with no equivalent (settings.py:100-118) |
 
-**Rules that read or produce it:** RULE-088 (One unknown key in settings.json resets every preference; old save flags migrate to export formats); RULE-055 (Auto-save current image before switching images (single view)); RULE-050 (Annotation setting input limits); RULE-033 (Annotation marker size, pan step and zoom); RULE-026 (Streaming (chunked) propagation windows); RULE-020 (Auto-convert AI masks to polygons); RULE-028 (Display image adjustments (saturation, brightness/contrast, gamma)); RULE-089 (Operate On View chooses which pixels the AI segments)
+**Rules that read or produce it:** RULE-088 (One unknown key in settings.json resets every preference; old save flags migrate to export formats); RULE-059 (Auto-save current image before switching images (single view)); RULE-050 (Annotation setting input limits); RULE-033 (Annotation marker size, pan step and zoom); RULE-026 (Streaming (chunked) propagation windows); RULE-021 (Auto-convert AI masks to polygons); RULE-028 (Display image adjustments (saturation, brightness/contrast, gamma)); RULE-089 (Operate On View chooses which pixels the AI segments)
 
 ## Control-panel save settings dict
 
@@ -318,7 +318,7 @@ Core records, entities and file payloads of LazyLabel 2.0.8 (`legacy/lazylabel` 
 | `pixel_priority_enabled` | `bool` |  |
 | `pixel_priority_ascending` | `bool` |  |
 
-**Rules that read or produce it:** RULE-079 (Export writes every selected format and never removes other files); RULE-014 (Pixel priority resolves overlapping classes); RULE-055 (Auto-save current image before switching images (single view)); RULE-089 (Operate On View chooses which pixels the AI segments); RULE-088 (One unknown key in settings.json resets every preference; old save flags migrate to export formats)
+**Rules that read or produce it:** RULE-079 (Export writes every selected format and never removes other files); RULE-012 (Pixel priority resolves overlapping classes); RULE-059 (Auto-save current image before switching images (single view)); RULE-089 (Operate On View chooses which pixels the AI segments); RULE-088 (One unknown key in settings.json resets every preference; old save flags migrate to export formats)
 
 ## HotkeyAction (hotkeys.json)
 
@@ -349,7 +349,7 @@ Core records, entities and file payloads of LazyLabel 2.0.8 (`legacy/lazylabel` 
 | `thumbnail` | `QPixmap \| None` |  |
 | `image extension set` | `{'.png','.jpg','.jpeg','.tiff','.tif'}` | fast_file_manager.py:37 and file_manager.py:743; image_discovery_worker.py:8 accepts three more (.bmp/.gif/.webp) — the two lists disagree |
 
-**Rules that read or produce it:** RULE-036 (File list annotation-status indicators); RULE-051 (Supported image formats); RULE-084 (Sidecar file naming and suffix collisions); RULE-093 (Timeline is built from the file list order between Start and End)
+**Rules that read or produce it:** RULE-036 (File list annotation-status indicators); RULE-051 (Supported image formats); RULE-080 (Sidecar file naming and suffix collisions); RULE-093 (Timeline is built from the file list order between Start and End)
 
 ## Undo/redo action record
 
@@ -368,7 +368,7 @@ Core records, entities and file payloads of LazyLabel 2.0.8 (`legacy/lazylabel` 
 | `viewer_mode / viewer_index` | `str = 'single' \| int` |  |
 | `history` | `list, unbounded` | Cleared per image/frame (main_window.py:3588-3589); no size cap anywhere |
 
-**Rules that read or produce it:** RULE-057 (Undo/redo history scope); RULE-058 (Undoing an erase inserts malformed segment records); RULE-059 (Undoing a circle center drag changes the circle's radius)
+**Rules that read or produce it:** RULE-052 (Undo/redo history scope); RULE-053 (Undoing an erase inserts malformed segment records); RULE-061 (Undoing a circle center drag changes the circle's radius)
 
 ## Crop state
 
@@ -381,7 +381,7 @@ Core records, entities and file payloads of LazyLabel 2.0.8 (`legacy/lazylabel` 
 | `clamping` | `0..w-1 / 0..h-1` | crop_manager.py:131-134; combined with the zeroing at file_manager.py:728-737 the last row and column are always blanked |
 | `crop_mode / crop_rect_item / overlays` | `bool / QGraphicsRectItem / list` | Transient drawing state |
 
-**Rules that read or produce it:** RULE-023 (Crop is clamped to the image and blanks everything outside it on save, including the last row and column); RULE-067 (Crop persistence across image navigation); RULE-045 (Crop coordinate validation and reuse by image size)
+**Rules that read or produce it:** RULE-016 (Crop is clamped to the image and blanks everything outside it on save, including the last row and column); RULE-067 (Crop persistence across image navigation); RULE-045 (Crop coordinate validation and reuse by image size)
 
 ## PropagationState
 
@@ -401,7 +401,7 @@ Core records, entities and file payloads of LazyLabel 2.0.8 (`legacy/lazylabel` 
 | `all_image_paths / image_cache` | `list[str] / dict[str, np.ndarray] \| None` |  |
 | `chunk_config` | `ChunkConfig` |  |
 
-**Rules that read or produce it:** RULE-025 (Propagation direction and range); RULE-044 (Propagation preconditions); RULE-048 (Reference frames must match the first reference's image size); RULE-071 (First propagation sets up the engine once and marks wrong-size frames Skipped); RULE-073 (Min Conf change re-evaluates flags in the engine but not on the timeline); RULE-075 (Each Propagate run resets earlier results except reference and skipped frames); RULE-080 (Propagation never overwrites reference frames and, by default, frames already labeled)
+**Rules that read or produce it:** RULE-025 (Propagation direction and range); RULE-044 (Propagation preconditions); RULE-048 (Reference frames must match the first reference's image size); RULE-071 (First propagation sets up the engine once and marks wrong-size frames Skipped); RULE-073 (Min Conf change re-evaluates flags in the engine but not on the timeline); RULE-075 (Each Propagate run resets earlier results except reference and skipped frames); RULE-081 (Propagation never overwrites reference frames and, by default, frames already labeled)
 
 ## PropagationResult
 
@@ -415,7 +415,7 @@ Core records, entities and file payloads of LazyLabel 2.0.8 (`legacy/lazylabel` 
 | `confidence` | `float` | Compared against state.confidence_threshold at propagation_manager.py:764 and 1096 |
 | `image_path` | `str` |  |
 
-**Rules that read or produce it:** RULE-017 (Propagation confidence score per object); RULE-056 (Propagated frame flagging and commit (Keep Flagged Masks)); RULE-081 (Save All propagated frames eligibility); RULE-035 (Confidence histogram binning)
+**Rules that read or produce it:** RULE-018 (Propagation confidence score per object); RULE-060 (Propagated frame flagging and commit (Keep Flagged Masks)); RULE-082 (Save All propagated frames eligibility); RULE-035 (Confidence histogram binning)
 
 ## ReferenceAnnotation (propagation engine)
 
@@ -429,7 +429,7 @@ Core records, entities and file payloads of LazyLabel 2.0.8 (`legacy/lazylabel` 
 | `class_id` | `int` |  |
 | `class_name` | `str` | Alias, or 'Class {id}' fallback (propagation_manager.py:458-460) |
 
-**Rules that read or produce it:** RULE-022 (Propagation seeds come only from mask segments on reference frames); RULE-044 (Propagation preconditions)
+**Rules that read or produce it:** RULE-023 (Propagation seeds come only from mask segments on reference frames); RULE-044 (Propagation preconditions)
 
 ## ReferenceAnnotation (sequence mode) — divergent twin
 
@@ -443,7 +443,7 @@ Core records, entities and file payloads of LazyLabel 2.0.8 (`legacy/lazylabel` 
 | `class_id` | `int = 0` |  |
 | `points / labels` | `list / list` | Present here but absent from the engine dataclass; never populated in the code read |
 
-**Rules that read or produce it:** RULE-022 (Propagation seeds come only from mask segments on reference frames); RULE-048 (Reference frames must match the first reference's image size); RULE-021 (Find Archetypes suggests about 2% of frames (between 5 and 50) as references)
+**Rules that read or produce it:** RULE-023 (Propagation seeds come only from mask segments on reference frames); RULE-048 (Reference frames must match the first reference's image size); RULE-022 (Find Archetypes suggests about 2% of frames (between 5 and 50) as references)
 
 ## ChunkConfig
 
@@ -469,7 +469,7 @@ Core records, entities and file payloads of LazyLabel 2.0.8 (`legacy/lazylabel` 
 | `class_name` | `str` |  |
 | `obj_id` | `int` |  |
 
-**Rules that read or produce it:** RULE-022 (Propagation seeds come only from mask segments on reference frames); RULE-044 (Propagation preconditions)
+**Rules that read or produce it:** RULE-023 (Propagation seeds come only from mask segments on reference frames); RULE-044 (Propagation preconditions)
 
 ## SequenceViewMode frame state
 
@@ -489,7 +489,7 @@ Core records, entities and file payloads of LazyLabel 2.0.8 (`legacy/lazylabel` 
 | `to_dict/from_dict snapshot` | `dict` | image_paths, current_frame_idx, reference_frame_indices, frame_statuses, confidence_scores, confidence_threshold, obj_class_map (sequence_view_mode.py:711-718) — no production caller; only tests invoke it |
 | `trim re-keying` | `path-keyed snapshots` | All per-frame maps are rebuilt from image-path keys (sequence_view_mode.py:627-673) |
 
-**Rules that read or produce it:** RULE-076 (Timeline frame status lifecycle); RULE-072 (Frame status precedence, suggestions and timeline sort); RULE-077 (Trim removes frames from the timeline only and re-keys state by image path); RULE-064 (Leaving the Sequence tab or clicking New Timeline discards all sequence work without saving); RULE-052 (Leaving a sequence frame saves it and marks it Saved, even if it is a reference); RULE-090 (Sequence frame load order and per-class merge); RULE-021 (Find Archetypes suggests about 2% of frames (between 5 and 50) as references); RULE-062 (Clear Flags repaints non-reference frames as pending without touching results); RULE-073 (Min Conf change re-evaluates flags in the engine but not on the timeline)
+**Rules that read or produce it:** RULE-076 (Timeline frame status lifecycle); RULE-072 (Frame status precedence, suggestions and timeline sort); RULE-077 (Trim removes frames from the timeline only and re-keys state by image path); RULE-056 (Leaving the Sequence tab or clicking New Timeline discards all sequence work without saving); RULE-055 (Leaving a sequence frame saves it and marks it Saved, even if it is a reference); RULE-090 (Sequence frame load order and per-class merge); RULE-022 (Find Archetypes suggests about 2% of frames (between 5 and 50) as references); RULE-064 (Clear Flags repaints non-reference frames as pending without touching results); RULE-073 (Min Conf change re-evaluates flags in the engine but not on the timeline)
 
 ## FrameStatus (two divergent enums)
 
@@ -501,7 +501,7 @@ Core records, entities and file payloads of LazyLabel 2.0.8 (`legacy/lazylabel` 
 | `propagation_manager.FrameStatus` | `Enum(PENDING, REFERENCE, PROPAGATED, FLAGGED, SKIPPED)` | propagation_manager.py:37-44 — a second, five-state enum with the same name; no SAVED or SUGGESTED |
 | `wire format` | `str value` | Signals carry status.value, not the enum (sequence_view_mode.py:322) |
 
-**Rules that read or produce it:** RULE-076 (Timeline frame status lifecycle); RULE-072 (Frame status precedence, suggestions and timeline sort); RULE-056 (Propagated frame flagging and commit (Keep Flagged Masks))
+**Rules that read or produce it:** RULE-076 (Timeline frame status lifecycle); RULE-072 (Frame status precedence, suggestions and timeline sort); RULE-060 (Propagated frame flagging and commit (Keep Flagged Masks))
 
 ## Timeline frame model
 
@@ -530,7 +530,7 @@ Core records, entities and file payloads of LazyLabel 2.0.8 (`legacy/lazylabel` 
 | `scores` | `list[float]` | Per-frame confidence values |
 | `_threshold` | `float` | Draggable Min Conf marker |
 
-**Rules that read or produce it:** RULE-035 (Confidence histogram binning); RULE-017 (Propagation confidence score per object); RULE-056 (Propagated frame flagging and commit (Keep Flagged Masks))
+**Rules that read or produce it:** RULE-035 (Confidence histogram binning); RULE-018 (Propagation confidence score per object); RULE-060 (Propagated frame flagging and commit (Keep Flagged Masks))
 
 ## Image adjustment state
 
@@ -595,7 +595,7 @@ Core records, entities and file payloads of LazyLabel 2.0.8 (`legacy/lazylabel` 
 | `logits` | `np.ndarray` | logits[best_mask_idx]; returned but unused on the save path |
 | `box variant` | `predict_from_box(box)` | Same tuple shape (sam_model.py:238-251) |
 
-**Rules that read or produce it:** RULE-019 (SAM best-mask selection and click coordinate mapping); RULE-066 (Accepting AI previews); RULE-060 (AI mode: click adds a point, a drag over 5 px draws a box, Space accepts the preview); RULE-027 (The fragment filter keeps only regions at least X% of the largest region)
+**Rules that read or produce it:** RULE-020 (SAM best-mask selection and click coordinate mapping); RULE-066 (Accepting AI previews); RULE-062 (AI mode: click adds a point, a drag over 5 px draws a box, Space accepts the preview); RULE-027 (The fragment filter keeps only regions at least X% of the largest region)
 
 ## Model entry (display_name, full_path)
 
@@ -608,7 +608,7 @@ Core records, entities and file payloads of LazyLabel 2.0.8 (`legacy/lazylabel` 
 | `detected type` | `str` | Substring match on the lowercased filename: sam2/hiera/_t./_s./_b+./_l. → sam2_*, else vit_l/vit_b/vit_h with vit_h as the fallback (model_manager.py:74-104) |
 | `SAM1 fallback mapping` | `dict[str,str]` | sam2_tiny/small→vit_b, base_plus→vit_l, large→vit_h (model_manager.py:151-157) |
 
-**Rules that read or produce it:** RULE-085 (Model type detected from file name); RULE-083 (AI features require segment-anything and PyTorch 2.7.1+); RULE-044 (Propagation preconditions); RULE-087 (Default model download integrity check)
+**Rules that read or produce it:** RULE-085 (Model type detected from file name); RULE-084 (AI features require segment-anything and PyTorch 2.7.1+); RULE-044 (Propagation preconditions); RULE-087 (Default model download integrity check)
 
 ## SAM2 video staging directory
 
@@ -621,7 +621,7 @@ Core records, entities and file payloads of LazyLabel 2.0.8 (`legacy/lazylabel` 
 | `unreadable frame` | `continue` | sam2_model.py:800-802 skips writing without removing the index, so the staged sequence has a numbering gap while video_image_paths still counts it |
 | `already-JPEG frames` | `symlink, copy2 fallback` | sam2_model.py:788-796 |
 
-**Rules that read or produce it:** RULE-018 (SAM 2 frame staging numbering gap); RULE-048 (Reference frames must match the first reference's image size); RULE-071 (First propagation sets up the engine once and marks wrong-size frames Skipped)
+**Rules that read or produce it:** RULE-019 (SAM 2 frame staging numbering gap); RULE-048 (Reference frames must match the first reference's image size); RULE-071 (First propagation sets up the engine once and marks wrong-size frames Skipped)
 
 ## Embedding cache entry
 
@@ -633,7 +633,7 @@ Core records, entities and file payloads of LazyLabel 2.0.8 (`legacy/lazylabel` 
 | `value` | `SAM embeddings (opaque)` | None values are refused (embedding_cache_manager.py:66-67) |
 | `_max_size` | `int = 10` | OrderedDict LRU; oldest evicted on overflow (embedding_cache_manager.py:18, 69-71) |
 
-**Rules that read or produce it:** RULE-091 (Up to 10 image embeddings are cached by file path and computed ahead for nearby images); RULE-074 (AI embedding goes dirty, then updating, then ready, and a failed embed is reported as ready); RULE-019 (SAM best-mask selection and click coordinate mapping)
+**Rules that read or produce it:** RULE-091 (Up to 10 image embeddings are cached by file path and computed ahead for nearby images); RULE-074 (AI embedding goes dirty, then updating, then ready, and a failed embed is reported as ready); RULE-020 (SAM best-mask selection and click coordinate mapping)
 
 ## AppContext / UIContext / FullContext
 
@@ -663,7 +663,7 @@ Core records, entities and file payloads of LazyLabel 2.0.8 (`legacy/lazylabel` 
 | `_is_dragging_polygon / _drag_initial_vertices` | `bool / dict` | Feeds the move_polygon undo record |
 | `annotation slider bounds` | `size 1-50, pan 1-100, join 1-10` | annotation_settings_widget.py:68-91; size and pan are stored as value/10 |
 
-**Rules that read or produce it:** RULE-060 (AI mode: click adds a point, a drag over 5 px draws a box, Space accepts the preview); RULE-047 (A polygon needs 3 points and closes when clicking within the join distance of its first point); RULE-043 (Manual box and circle minimum sizes); RULE-066 (Accepting AI previews); RULE-050 (Annotation setting input limits); RULE-033 (Annotation marker size, pan step and zoom); RULE-046 (Edit mode eligibility and 200-vertex limit); RULE-069 (Edit mode entry and mode toggling)
+**Rules that read or produce it:** RULE-062 (AI mode: click adds a point, a drag over 5 px draws a box, Space accepts the preview); RULE-047 (A polygon needs 3 points and closes when clicking within the join distance of its first point); RULE-043 (Manual box and circle minimum sizes); RULE-066 (Accepting AI previews); RULE-050 (Annotation setting input limits); RULE-033 (Annotation marker size, pan step and zoom); RULE-046 (Edit mode eligibility and 200-vertex limit); RULE-069 (Edit mode entry and mode toggling)
 
 ## Class display colour
 

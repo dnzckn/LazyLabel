@@ -50,6 +50,16 @@ for r in rules:
     if any(split_panel(pn) for pn in [r.get("p0Panel")] + [m.get("p0Panel") for m in r.get("mergedSpecs") or []] if pn):
         awaiting += 1
 
+applied = annotated.get("decisionsApplied")
+restored = sum(1 for r in rules if r.get("restoredByDecision") == 14)
+decision_text = (
+    f"Decision 14, taken on {applied['date']}, restored {restored} of those rules to P0; the remaining {awaiting} land "
+    f"only in Phase 3 or Phase 6 and stay P1 until those phases start."
+    if applied else
+    f"{awaiting} merged rules therefore sit at P1 for that reason alone, pending the approver's decision "
+    f"(`MODERNIZATION_BRIEF.md` §7 decision 14, which lists them)."
+)
+
 panel_cov = f"{both} of {len(panels)} P0 candidate cards carry both verdicts"
 if one:
     panel_cov += f", {one} carry one"
@@ -69,8 +79,7 @@ coverage = (
     f"{runs} workflow runs, because judge agents kept failing on usage limits; in this record {panel_cov} "
     f"In {split} cards the two judges disagreed in one direction: the compliance judge said the rule is not P0 because "
     f"nothing here is financial or regulated, while the fidelity judge said it is P0 because it guards annotation data. "
-    f"The workflow demotes a card on any disagreement, so {awaiting} merged rules sit at P1 for that reason alone, "
-    f"pending the approver's decision (`MODERNIZATION_BRIEF.md` §7 decision 14, which lists them). Every verdict and its "
+    f"The workflow demotes a card on any disagreement. {decision_text} Every verdict and its "
     f"reasoning is in `P0_PANEL.md`. "
     f"The {len(cards)} confirmed cards were then reviewed for near-duplicates across lenses and merged into {len(rules)} "
     f"distinct rules, with each folded card's own specification kept in the table at the end of this file.{dead_text} "

@@ -1,0 +1,45 @@
+{
+ "approval": {
+  "approvedBy": "Repository owner, in session",
+  "date": "2026-09-17",
+  "covers": "Full plan",
+  "note": "Approved in chat (\"yeah do it all\"). The §7 answers below were taken by Claude under that blanket approval, not dictated by the owner; every one is reversible by editing this file and re-running build_brief.py."
+ },
+ "answers": {
+  "1": "**(c) Frozen at 2.0.8.** No further PyPI releases of `lazylabel-gui`; the existing release stays installable so the desktop app remains available until Phase 6 exit. Revisit if the owner wants the package to keep shipping the Python inference client.",
+  "2": "**Python/PyTorch inference service**, reusing the legacy model code. The target is therefore React/Node.js plus a Python inference service, not Node.js alone. An in-browser ONNX decoder stays a Phase 3 fallback if click latency needs it.",
+  "3": "**Single-user self-hosted first.** One trusted user per deployment, no tenant isolation in this plan. Every API route still carries a user scope so multi-tenancy is an added check rather than a redesign. Upload limits are sized for one annotator.",
+  "4": "**JSON string in a unicode array** (`class_aliases` written as a single JSON document), plus an offline converter for existing pickled files. No code path unpickles.",
+  "5": "**PostgreSQL plus S3-compatible object storage**, as in §2. For a self-hosted deployment that is Postgres and MinIO in the same compose file. Annotation files stay the interchange format, produced by export rather than stored as the source of truth.",
+  "6": "**Keep legacy per-image class ids and aliases.** Exported ids must match legacy exports byte for byte, which a project-wide label map would break. A project label map may be layered on later as an optional view.",
+  "7": "**Explicit save with dirty tracking.** Do not reproduce delete-on-empty, the silent loss on close, or the silent loss on multi-view navigation. Deleting annotation files requires explicit user action, and a failed load never presents as \"no annotations\".",
+  "8": "**Rebuild multi-view as a synchronized split view** from the linked-operation rules, and delete the half-migrated legacy path rather than porting it. Reassess at Phase 6 entry if the restored rules prove too thin to specify it.",
+  "9": "Per-image-size crop restore: **do not carry over**, a crop applies to the current image only. Deletion: **make it undoable** in the web app. Image formats: **support .bmp, .gif and .webp** in addition to the legacy five. COCO versus YOLO polygon simplification: **keep the legacy difference** so exports stay equivalent, and record it in the format library. Propagation confidence threshold: **persist it** with the other settings.",
+  "10": "Text, JSON and XML exports **byte-identical**. NPZ **array-identical**, except the alias encoding from decision 4. SAM masks **IoU at least 0.98** against legacy output on golden prompts. Display adjustments and thresholds **within 1/255 per channel**.",
+  "11": "Answered per rule on the cards in `BUSINESS_RULES.md`. Questions that restate a judge's fidelity finding are answered by correcting the specification from that finding; questions that are product choices are answered by the decisions above.",
+  "12": "**One slice at a time.** Keep each fan-out under about 40 agents, and resume an interrupted workflow rather than restarting it. Rule extraction needed four runs for want of this rule.",
+  "13": "**No.** The ruff `*.md` exclude stays on `main-web` only.",
+  "14": "**(c) Restore the split rules whose work lands in Phase 1 or Phase 4**, listed in `restoreP0` below. The two that land only in Phase 3 or Phase 6 stay P1 and are revisited at those phases' entry."
+ },
+ "restoreP0": [
+  "COCO JSON export structure and area",
+  "CreateML export/import: pixel center boxes",
+  "Pascal VOC export uses alias names and exclusive max bounds",
+  "YOLO Segmentation export polygon simplification",
+  "Eraser splits segments and drops pieces of 10 pixels or less",
+  "New segments take the active class, otherwise the next free class id (highest + 1)",
+  "Pixel priority resolves overlapping classes",
+  "Reassign class ids from class table order",
+  "Shape rasterization before export (truncated vertices, rounded circles)",
+  "Crop is clamped to the image and blanks everything outside it on save, including the last row and column",
+  "COCO JSON import with polygon-then-box fallback",
+  "Pascal VOC and CreateML import rules",
+  "YOLO Detection import validation, rounding and clamping",
+  "YOLO Segmentation import validation",
+  "Undo/redo history scope",
+  "Undoing an erase inserts malformed segment records",
+  "Closing the application never saves the open image's annotations",
+  "Leaving the Sequence tab or clicking New Timeline discards all sequence work without saving",
+  "Sidecar file naming and suffix collisions"
+ ]
+}

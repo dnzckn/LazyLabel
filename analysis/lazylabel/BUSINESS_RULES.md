@@ -3,12 +3,12 @@
 | | |
 |---|---|
 | System | LazyLabel 2.0.8, legacy snapshot `legacy/lazylabel` at 2a7d5d8 |
-| Produced | 2026-09-15 by `/code-modernization:modernize-extract-rules lazylabel` (Method A, workflow `extract-rules.js`) |
+| Produced | 2026-09-17 by `/code-modernization:modernize-extract-rules lazylabel` (Method A, workflow `extract-rules.js`) |
 | Method | Three lens-scoped extractors (calculations, validations, lifecycle); every rule's citation re-read by an independent referee; every P0 candidate sent to two independent judges (compliance and fidelity lenses); near-duplicate cards from different lenses reviewed and merged |
 | Result | 94 distinct rules from 173 confirmed cards (79 near-duplicates folded into another card); 2 candidate rules rejected by referees; 0 instruction-shaped source locations flagged |
 | Companions | `analysis/lazylabel/DATA_OBJECTS.md` (data objects) and `analysis/lazylabel/P0_PANEL.md` (every P0 judge verdict with its reasoning) |
 
-**Coverage note.** Extraction ran **one round** of the three lenses. The workflow normally repeats rounds until two in a row find nothing new; it was capped at one round after the first run's later rounds died on usage limits, and a failed round is indistinguishable from a dry one. Rules that only a later round would surface are therefore not in this catalog. Every one of the 175 candidate rules was refereed against its citation. The P0 panel needed 4 workflow runs, because judge agents kept failing on usage limits; in this record 74 of 74 P0 candidate cards carry both verdicts. In 37 cards the two judges disagreed in one direction: the compliance judge said the rule is not P0 because nothing here is financial or regulated, while the fidelity judge said it is P0 because it guards annotation data. The workflow demotes a card on any disagreement, so 21 merged rules sit at P1 for that reason alone, pending the approver's decision (`MODERNIZATION_BRIEF.md` §7 decision 14, which lists them). Every verdict and its reasoning is in `P0_PANEL.md`. The 173 confirmed cards were then reviewed for near-duplicates across lenses and merged into 94 distinct rules, with each folded card's own specification kept in the table at the end of this file. The data-object catalog returned 45 objects (`DATA_OBJECTS.md`).
+**Coverage note.** Extraction ran **one round** of the three lenses. The workflow normally repeats rounds until two in a row find nothing new; it was capped at one round after the first run's later rounds died on usage limits, and a failed round is indistinguishable from a dry one. Rules that only a later round would surface are therefore not in this catalog. Every one of the 175 candidate rules was refereed against its citation. The P0 panel needed 4 workflow runs, because judge agents kept failing on usage limits; in this record 74 of 74 P0 candidate cards carry both verdicts. In 37 cards the two judges disagreed in one direction: the compliance judge said the rule is not P0 because nothing here is financial or regulated, while the fidelity judge said it is P0 because it guards annotation data. The workflow demotes a card on any disagreement. Decision 14, taken on 2026-09-17, restored 19 of those rules to P0; the remaining 2 land only in Phase 3 or Phase 6 and stay P1 until those phases start. Every verdict and its reasoning is in `P0_PANEL.md`. The 173 confirmed cards were then reviewed for near-duplicates across lenses and merged into 94 distinct rules, with each folded card's own specification kept in the table at the end of this file. The data-object catalog returned 45 objects (`DATA_OBJECTS.md`).
 
 How to read a card: **Source** paths are relative to the repository root. **Priority** P0 means the rule guards data integrity (for LazyLabel: what is written to or read from annotation files, and which pixels belong to which class), so it becomes part of the behavior contract every rewrite phase must prove equivalent. **Confidence** below High carries the exact question a subject-matter expert must answer.
 
@@ -21,42 +21,42 @@ How to read a card: **Source** paths are relative to the repository root. **Prio
 | Validation | 15 |
 | Lifecycle | 26 |
 | Policy | 17 |
-| Priority P0 | 17 |
-| Priority P1 | 69 |
+| Priority P0 | 36 |
+| Priority P1 | 50 |
 | Priority P2 | 8 |
-| Confidence High | 51 |
-| Confidence Medium | 43 |
+| Confidence High | 63 |
+| Confidence Medium | 31 |
 | Confidence Low | 0 |
-| Needing SME confirmation (confidence below High) | 43 |
-| P0 rules below High confidence (blockers for the behavior contract) | 9 |
+| Needing SME confirmation (confidence below High) | 31 |
+| P0 rules below High confidence (blockers for the behavior contract) | 16 |
 | Cards sent to the P0 panel | 74 |
 | Candidate rules rejected by citation referees | 2 |
 
 | ID | Name | Category | Priority | Source | Confidence |
 |---|---|---|---|---|---|
-| [RULE-001](#rule-001-npz-class-map-export-resolves-overlaps-to-lowest-class-and-stores-foreground) | NPZ Class Map export resolves overlaps to lowest class and stores foreground | Calculation | P0 | `legacy/lazylabel/src/lazylabel/core/exporters/npz_class_map.py:20-76` (+1 more) | Medium |
-| [RULE-002](#rule-002-yolo-detection-export-line-format) | YOLO Detection export line format | Calculation | P0 | `legacy/lazylabel/src/lazylabel/core/exporters/yolo_detection.py:19-46` (+1 more) | Medium |
-| [RULE-003](#rule-003-label-text-to-class-id-resolution-on-import) | Label text to class ID resolution on import | Calculation | P0 | `legacy/lazylabel/src/lazylabel/core/file_manager.py:345-379` (+2 more) | High |
-| [RULE-004](#rule-004-detection-and-polygon-exports-keep-same-class-objects-separate) | Detection and polygon exports keep same-class objects separate | Calculation | P0 | `legacy/lazylabel/src/lazylabel/core/segment_manager.py:254-315` (+3 more) | High |
-| [RULE-005](#rule-005-final-per-class-mask-composition) | Final per-class mask composition | Calculation | P0 | `legacy/lazylabel/src/lazylabel/core/segment_manager.py:212-252` (+1 more) | High |
-| [RULE-006](#rule-006-saved-class-channel-order-is-ascending-class-id-not-the-class-order-table) | Saved class channel order is ascending class ID, not the Class Order table | Calculation | P0 | `legacy/lazylabel/src/lazylabel/core/segment_manager.py:87-95` (+4 more) | High |
-| [RULE-007](#rule-007-coco-json-export-structure-and-area) | COCO JSON export structure and area | Calculation | P1 | `legacy/lazylabel/src/lazylabel/core/exporters/coco.py:19-100` | Medium |
-| [RULE-008](#rule-008-createml-exportimport-pixel-center-boxes) | CreateML export/import: pixel center boxes | Calculation | P1 | `legacy/lazylabel/src/lazylabel/core/exporters/createml.py:33-67` (+1 more) | Medium |
-| [RULE-009](#rule-009-pascal-voc-export-uses-alias-names-and-exclusive-max-bounds) | Pascal VOC export uses alias names and exclusive max bounds | Calculation | P1 | `legacy/lazylabel/src/lazylabel/core/exporters/pascal_voc.py:22-63` (+1 more) | Medium |
-| [RULE-010](#rule-010-yolo-segmentation-export-polygon-simplification) | YOLO Segmentation export polygon simplification | Calculation | P1 | `legacy/lazylabel/src/lazylabel/core/exporters/yolo_segmentation.py:25-56` (+1 more) | Medium |
-| [RULE-011](#rule-011-eraser-splits-segments-and-drops-pieces-of-10-pixels-or-less) | Eraser splits segments and drops pieces of 10 pixels or less | Calculation | P1 | `legacy/lazylabel/src/lazylabel/core/segment_manager.py:646-707` (+3 more) | Medium |
-| [RULE-012](#rule-012-merge-selected-segments-into-the-lowest-selected-class) | Merge selected segments into the lowest selected class | Calculation | P1 | `legacy/lazylabel/src/lazylabel/core/segment_manager.py:65-85` (+2 more) | Medium |
-| [RULE-013](#rule-013-new-segments-take-the-active-class-otherwise-the-next-free-class-id-highest--1) | New segments take the active class, otherwise the next free class id (highest + 1) | Calculation | P1 | `legacy/lazylabel/src/lazylabel/core/segment_manager.py:28-85` (+3 more) | Medium |
-| [RULE-014](#rule-014-pixel-priority-resolves-overlapping-classes) | Pixel priority resolves overlapping classes | Calculation | P1 | `legacy/lazylabel/src/lazylabel/core/segment_manager.py:317-373` (+3 more) | Medium |
-| [RULE-015](#rule-015-reassign-class-ids-from-class-table-order) | Reassign class ids from class table order | Calculation | P1 | `legacy/lazylabel/src/lazylabel/core/segment_manager.py:375-391` (+3 more) | Medium |
-| [RULE-016](#rule-016-shape-rasterization-before-export-truncated-vertices-rounded-circles) | Shape rasterization before export (truncated vertices, rounded circles) | Calculation | P1 | `legacy/lazylabel/src/lazylabel/core/segment_manager.py:174-252` (+1 more) | Medium |
-| [RULE-017](#rule-017-propagation-confidence-score-per-object) | Propagation confidence score per object | Calculation | P1 | `legacy/lazylabel/src/lazylabel/models/sam2_model.py:1029-1044` (+2 more) | Medium |
-| [RULE-018](#rule-018-sam-2-frame-staging-numbering-gap) | SAM 2 frame staging numbering gap | Calculation | P1 | `legacy/lazylabel/src/lazylabel/models/sam2_model.py:759-803` (+1 more) | Medium |
-| [RULE-019](#rule-019-sam-best-mask-selection-and-click-coordinate-mapping) | SAM best-mask selection and click coordinate mapping | Calculation | P1 | `legacy/lazylabel/src/lazylabel/models/sam_model.py:217-255` (+4 more) | High |
-| [RULE-020](#rule-020-auto-convert-ai-masks-to-polygons) | Auto-convert AI masks to polygons | Calculation | P1 | `legacy/lazylabel/src/lazylabel/ui/main_window.py:1788-1829` (+5 more) | High |
-| [RULE-021](#rule-021-find-archetypes-suggests-about-2-of-frames-between-5-and-50-as-references) | Find Archetypes suggests about 2% of frames (between 5 and 50) as references | Calculation | P1 | `legacy/lazylabel/src/lazylabel/ui/main_window.py:5039-5139` (+3 more) | High |
-| [RULE-022](#rule-022-propagation-seeds-come-only-from-mask-segments-on-reference-frames) | Propagation seeds come only from mask segments on reference frames | Calculation | P1 | `legacy/lazylabel/src/lazylabel/ui/main_window.py:3640-3668` (+4 more) | Medium |
-| [RULE-023](#rule-023-crop-is-clamped-to-the-image-and-blanks-everything-outside-it-on-save-including-the-last-row-and-column) | Crop is clamped to the image and blanks everything outside it on save, including the last row and column | Calculation | P1 | `legacy/lazylabel/src/lazylabel/ui/managers/crop_manager.py:47-57` (+6 more) | Medium |
+| [RULE-001](#rule-001-coco-json-export-structure-and-area) | COCO JSON export structure and area | Calculation | P0 | `legacy/lazylabel/src/lazylabel/core/exporters/coco.py:19-100` | Medium |
+| [RULE-002](#rule-002-createml-exportimport-pixel-center-boxes) | CreateML export/import: pixel center boxes | Calculation | P0 | `legacy/lazylabel/src/lazylabel/core/exporters/createml.py:33-67` (+1 more) | High |
+| [RULE-003](#rule-003-npz-class-map-export-resolves-overlaps-to-lowest-class-and-stores-foreground) | NPZ Class Map export resolves overlaps to lowest class and stores foreground | Calculation | P0 | `legacy/lazylabel/src/lazylabel/core/exporters/npz_class_map.py:20-76` (+1 more) | Medium |
+| [RULE-004](#rule-004-pascal-voc-export-uses-alias-names-and-exclusive-max-bounds) | Pascal VOC export uses alias names and exclusive max bounds | Calculation | P0 | `legacy/lazylabel/src/lazylabel/core/exporters/pascal_voc.py:22-63` (+1 more) | Medium |
+| [RULE-005](#rule-005-yolo-detection-export-line-format) | YOLO Detection export line format | Calculation | P0 | `legacy/lazylabel/src/lazylabel/core/exporters/yolo_detection.py:19-46` (+1 more) | Medium |
+| [RULE-006](#rule-006-yolo-segmentation-export-polygon-simplification) | YOLO Segmentation export polygon simplification | Calculation | P0 | `legacy/lazylabel/src/lazylabel/core/exporters/yolo_segmentation.py:25-56` (+1 more) | High |
+| [RULE-007](#rule-007-label-text-to-class-id-resolution-on-import) | Label text to class ID resolution on import | Calculation | P0 | `legacy/lazylabel/src/lazylabel/core/file_manager.py:345-379` (+2 more) | High |
+| [RULE-008](#rule-008-detection-and-polygon-exports-keep-same-class-objects-separate) | Detection and polygon exports keep same-class objects separate | Calculation | P0 | `legacy/lazylabel/src/lazylabel/core/segment_manager.py:254-315` (+3 more) | High |
+| [RULE-009](#rule-009-eraser-splits-segments-and-drops-pieces-of-10-pixels-or-less) | Eraser splits segments and drops pieces of 10 pixels or less | Calculation | P0 | `legacy/lazylabel/src/lazylabel/core/segment_manager.py:646-707` (+3 more) | High |
+| [RULE-010](#rule-010-final-per-class-mask-composition) | Final per-class mask composition | Calculation | P0 | `legacy/lazylabel/src/lazylabel/core/segment_manager.py:212-252` (+1 more) | High |
+| [RULE-011](#rule-011-new-segments-take-the-active-class-otherwise-the-next-free-class-id-highest--1) | New segments take the active class, otherwise the next free class id (highest + 1) | Calculation | P0 | `legacy/lazylabel/src/lazylabel/core/segment_manager.py:28-85` (+3 more) | Medium |
+| [RULE-012](#rule-012-pixel-priority-resolves-overlapping-classes) | Pixel priority resolves overlapping classes | Calculation | P0 | `legacy/lazylabel/src/lazylabel/core/segment_manager.py:317-373` (+3 more) | High |
+| [RULE-013](#rule-013-reassign-class-ids-from-class-table-order) | Reassign class ids from class table order | Calculation | P0 | `legacy/lazylabel/src/lazylabel/core/segment_manager.py:375-391` (+3 more) | High |
+| [RULE-014](#rule-014-saved-class-channel-order-is-ascending-class-id-not-the-class-order-table) | Saved class channel order is ascending class ID, not the Class Order table | Calculation | P0 | `legacy/lazylabel/src/lazylabel/core/segment_manager.py:87-95` (+4 more) | High |
+| [RULE-015](#rule-015-shape-rasterization-before-export-truncated-vertices-rounded-circles) | Shape rasterization before export (truncated vertices, rounded circles) | Calculation | P0 | `legacy/lazylabel/src/lazylabel/core/segment_manager.py:174-252` (+1 more) | High |
+| [RULE-016](#rule-016-crop-is-clamped-to-the-image-and-blanks-everything-outside-it-on-save-including-the-last-row-and-column) | Crop is clamped to the image and blanks everything outside it on save, including the last row and column | Calculation | P0 | `legacy/lazylabel/src/lazylabel/ui/managers/crop_manager.py:47-57` (+6 more) | Medium |
+| [RULE-017](#rule-017-merge-selected-segments-into-the-lowest-selected-class) | Merge selected segments into the lowest selected class | Calculation | P1 | `legacy/lazylabel/src/lazylabel/core/segment_manager.py:65-85` (+2 more) | Medium |
+| [RULE-018](#rule-018-propagation-confidence-score-per-object) | Propagation confidence score per object | Calculation | P1 | `legacy/lazylabel/src/lazylabel/models/sam2_model.py:1029-1044` (+2 more) | Medium |
+| [RULE-019](#rule-019-sam-2-frame-staging-numbering-gap) | SAM 2 frame staging numbering gap | Calculation | P1 | `legacy/lazylabel/src/lazylabel/models/sam2_model.py:759-803` (+1 more) | Medium |
+| [RULE-020](#rule-020-sam-best-mask-selection-and-click-coordinate-mapping) | SAM best-mask selection and click coordinate mapping | Calculation | P1 | `legacy/lazylabel/src/lazylabel/models/sam_model.py:217-255` (+4 more) | High |
+| [RULE-021](#rule-021-auto-convert-ai-masks-to-polygons) | Auto-convert AI masks to polygons | Calculation | P1 | `legacy/lazylabel/src/lazylabel/ui/main_window.py:1788-1829` (+5 more) | High |
+| [RULE-022](#rule-022-find-archetypes-suggests-about-2-of-frames-between-5-and-50-as-references) | Find Archetypes suggests about 2% of frames (between 5 and 50) as references | Calculation | P1 | `legacy/lazylabel/src/lazylabel/ui/main_window.py:5039-5139` (+3 more) | High |
+| [RULE-023](#rule-023-propagation-seeds-come-only-from-mask-segments-on-reference-frames) | Propagation seeds come only from mask segments on reference frames | Calculation | P1 | `legacy/lazylabel/src/lazylabel/ui/main_window.py:3640-3668` (+4 more) | Medium |
 | [RULE-024](#rule-024-grayscale-detection-tolerance-and-16-bit-display-conversion) | Grayscale detection tolerance and 16-bit display conversion | Calculation | P1 | `legacy/lazylabel/src/lazylabel/ui/managers/image_adjustment_manager.py:451-480` (+1 more) | High |
 | [RULE-025](#rule-025-propagation-direction-and-range) | Propagation direction and range | Calculation | P1 | `legacy/lazylabel/src/lazylabel/ui/managers/propagation_manager.py:577-686` (+5 more) | High |
 | [RULE-026](#rule-026-streaming-chunked-propagation-windows) | Streaming (chunked) propagation windows | Calculation | P1 | `legacy/lazylabel/src/lazylabel/ui/managers/propagation_manager.py:69-76` (+5 more) | High |
@@ -70,11 +70,11 @@ How to read a card: **Source** paths are relative to the repository root. **Prio
 | [RULE-034](#rule-034-class-display-color) | Class display color | Calculation | P2 | `legacy/lazylabel/src/lazylabel/ui/managers/segment_display_manager.py:219-245` | High |
 | [RULE-035](#rule-035-confidence-histogram-binning) | Confidence histogram binning | Calculation | P2 | `legacy/lazylabel/src/lazylabel/ui/widgets/confidence_histogram_dialog.py:26-76` (+2 more) | High |
 | [RULE-036](#rule-036-file-list-annotation-status-indicators) | File list annotation-status indicators | Calculation | P2 | `legacy/lazylabel/src/lazylabel/utils/fast_file_manager.py:186-235` (+2 more) | High |
-| [RULE-037](#rule-037-npz-import-current-and-legacy-layouts) | NPZ import (current and legacy layouts) | Validation | P0 | `legacy/lazylabel/src/lazylabel/core/file_manager.py:224-280` (+1 more) | High |
-| [RULE-038](#rule-038-coco-json-import-with-polygon-then-box-fallback) | COCO JSON import with polygon-then-box fallback | Validation | P1 | `legacy/lazylabel/src/lazylabel/core/file_manager.py:602-710` | Medium |
-| [RULE-039](#rule-039-pascal-voc-and-createml-import-rules) | Pascal VOC and CreateML import rules | Validation | P1 | `legacy/lazylabel/src/lazylabel/core/file_manager.py:456-540` | Medium |
-| [RULE-040](#rule-040-yolo-detection-import-validation-rounding-and-clamping) | YOLO Detection import validation, rounding and clamping | Validation | P1 | `legacy/lazylabel/src/lazylabel/core/file_manager.py:381-454` | Medium |
-| [RULE-041](#rule-041-yolo-segmentation-import-validation) | YOLO Segmentation import validation | Validation | P1 | `legacy/lazylabel/src/lazylabel/core/file_manager.py:542-600` | Medium |
+| [RULE-037](#rule-037-coco-json-import-with-polygon-then-box-fallback) | COCO JSON import with polygon-then-box fallback | Validation | P0 | `legacy/lazylabel/src/lazylabel/core/file_manager.py:602-710` | High |
+| [RULE-038](#rule-038-npz-import-current-and-legacy-layouts) | NPZ import (current and legacy layouts) | Validation | P0 | `legacy/lazylabel/src/lazylabel/core/file_manager.py:224-280` (+1 more) | High |
+| [RULE-039](#rule-039-pascal-voc-and-createml-import-rules) | Pascal VOC and CreateML import rules | Validation | P0 | `legacy/lazylabel/src/lazylabel/core/file_manager.py:456-540` | High |
+| [RULE-040](#rule-040-yolo-detection-import-validation-rounding-and-clamping) | YOLO Detection import validation, rounding and clamping | Validation | P0 | `legacy/lazylabel/src/lazylabel/core/file_manager.py:381-454` | Medium |
+| [RULE-041](#rule-041-yolo-segmentation-import-validation) | YOLO Segmentation import validation | Validation | P0 | `legacy/lazylabel/src/lazylabel/core/file_manager.py:542-600` | Medium |
 | [RULE-042](#rule-042-class-alias-editing-is-unvalidated) | Class alias editing is unvalidated | Validation | P1 | `legacy/lazylabel/src/lazylabel/core/segment_manager.py:393-399` (+3 more) | Medium |
 | [RULE-043](#rule-043-manual-box-and-circle-minimum-sizes) | Manual box and circle minimum sizes | Validation | P1 | `legacy/lazylabel/src/lazylabel/ui/handlers/single_view_mouse_handler.py:370-449` (+2 more) | High |
 | [RULE-044](#rule-044-propagation-preconditions) | Propagation preconditions | Validation | P1 | `legacy/lazylabel/src/lazylabel/ui/main_window.py:4011-4120` (+3 more) | High |
@@ -85,19 +85,19 @@ How to read a card: **Source** paths are relative to the repository root. **Prio
 | [RULE-049](#rule-049-hotkey-assignment-conflicts-are-blocked) | Hotkey assignment conflicts are blocked | Validation | P2 | `legacy/lazylabel/src/lazylabel/config/hotkeys.py:210-275` (+1 more) | High |
 | [RULE-050](#rule-050-annotation-setting-input-limits) | Annotation setting input limits | Validation | P2 | `legacy/lazylabel/src/lazylabel/ui/widgets/annotation_settings_widget.py:69-93` (+2 more) | High |
 | [RULE-051](#rule-051-supported-image-formats) | Supported image formats | Validation | P2 | `legacy/lazylabel/src/lazylabel/utils/fast_file_manager.py:36-37` (+4 more) | Medium |
-| [RULE-052](#rule-052-leaving-a-sequence-frame-saves-it-and-marks-it-saved-even-if-it-is-a-reference) | Leaving a sequence frame saves it and marks it Saved, even if it is a reference | Lifecycle | P0 | `legacy/lazylabel/src/lazylabel/ui/main_window.py:3414-3434` (+3 more) | Medium |
-| [RULE-053](#rule-053-multi-view-batch-navigation-always-saves-ignoring-the-auto-save-setting) | Multi-view batch navigation always saves, ignoring the Auto-Save setting | Lifecycle | P0 | `legacy/lazylabel/src/lazylabel/ui/main_window.py:6559-6636` (+3 more) | High |
-| [RULE-054](#rule-054-propagation-finish-save-all-and-trim-reload-the-current-frame-without-saving-it) | Propagation finish, Save All and Trim reload the current frame without saving it | Lifecycle | P0 | `legacy/lazylabel/src/lazylabel/ui/main_window.py:4638-4645` (+4 more) | High |
-| [RULE-055](#rule-055-auto-save-current-image-before-switching-images-single-view) | Auto-save current image before switching images (single view) | Lifecycle | P0 | `legacy/lazylabel/src/lazylabel/ui/managers/file_navigation_manager.py:153-162` (+7 more) | Medium |
-| [RULE-056](#rule-056-propagated-frame-flagging-and-commit-keep-flagged-masks) | Propagated frame flagging and commit (Keep Flagged Masks) | Lifecycle | P0 | `legacy/lazylabel/src/lazylabel/ui/managers/propagation_manager.py:751-810` (+8 more) | Medium |
-| [RULE-057](#rule-057-undoredo-history-scope) | Undo/redo history scope | Lifecycle | P1 | `legacy/lazylabel/src/lazylabel/core/undo_redo_manager.py:28-131` (+7 more) | Medium |
-| [RULE-058](#rule-058-undoing-an-erase-inserts-malformed-segment-records) | Undoing an erase inserts malformed segment records | Lifecycle | P1 | `legacy/lazylabel/src/lazylabel/core/undo_redo_manager.py:574-629` (+4 more) | Medium |
-| [RULE-059](#rule-059-undoing-a-circle-center-drag-changes-the-circles-radius) | Undoing a circle center drag changes the circle's radius | Lifecycle | P1 | `legacy/lazylabel/src/lazylabel/ui/editable_vertex.py:30-66` (+2 more) | High |
-| [RULE-060](#rule-060-ai-mode-click-adds-a-point-a-drag-over-5-px-draws-a-box-space-accepts-the-preview) | AI mode: click adds a point, a drag over 5 px draws a box, Space accepts the preview | Lifecycle | P1 | `legacy/lazylabel/src/lazylabel/ui/handlers/single_view_mouse_handler.py:130-139` (+8 more) | High |
-| [RULE-061](#rule-061-abort-stops-the-running-step-and-keeps-frames-already-committed) | Abort stops the running step and keeps frames already committed | Lifecycle | P1 | `legacy/lazylabel/src/lazylabel/ui/main_window.py:4406-4445` (+3 more) | High |
-| [RULE-062](#rule-062-clear-flags-repaints-non-reference-frames-as-pending-without-touching-results) | Clear Flags repaints non-reference frames as pending without touching results | Lifecycle | P1 | `legacy/lazylabel/src/lazylabel/ui/main_window.py:3457-3478` (+1 more) | High |
-| [RULE-063](#rule-063-closing-the-application-never-saves-the-open-images-annotations) | Closing the application never saves the open image's annotations | Lifecycle | P1 | `legacy/lazylabel/src/lazylabel/ui/main_window.py:2064-2108` | Medium |
-| [RULE-064](#rule-064-leaving-the-sequence-tab-or-clicking-new-timeline-discards-all-sequence-work-without-saving) | Leaving the Sequence tab or clicking New Timeline discards all sequence work without saving | Lifecycle | P1 | `legacy/lazylabel/src/lazylabel/ui/main_window.py:3043-3060` (+4 more) | Medium |
+| [RULE-052](#rule-052-undoredo-history-scope) | Undo/redo history scope | Lifecycle | P0 | `legacy/lazylabel/src/lazylabel/core/undo_redo_manager.py:28-131` (+7 more) | High |
+| [RULE-053](#rule-053-undoing-an-erase-inserts-malformed-segment-records) | Undoing an erase inserts malformed segment records | Lifecycle | P0 | `legacy/lazylabel/src/lazylabel/core/undo_redo_manager.py:574-629` (+4 more) | High |
+| [RULE-054](#rule-054-closing-the-application-never-saves-the-open-images-annotations) | Closing the application never saves the open image's annotations | Lifecycle | P0 | `legacy/lazylabel/src/lazylabel/ui/main_window.py:2064-2108` | Medium |
+| [RULE-055](#rule-055-leaving-a-sequence-frame-saves-it-and-marks-it-saved-even-if-it-is-a-reference) | Leaving a sequence frame saves it and marks it Saved, even if it is a reference | Lifecycle | P0 | `legacy/lazylabel/src/lazylabel/ui/main_window.py:3414-3434` (+3 more) | Medium |
+| [RULE-056](#rule-056-leaving-the-sequence-tab-or-clicking-new-timeline-discards-all-sequence-work-without-saving) | Leaving the Sequence tab or clicking New Timeline discards all sequence work without saving | Lifecycle | P0 | `legacy/lazylabel/src/lazylabel/ui/main_window.py:3043-3060` (+4 more) | High |
+| [RULE-057](#rule-057-multi-view-batch-navigation-always-saves-ignoring-the-auto-save-setting) | Multi-view batch navigation always saves, ignoring the Auto-Save setting | Lifecycle | P0 | `legacy/lazylabel/src/lazylabel/ui/main_window.py:6559-6636` (+3 more) | High |
+| [RULE-058](#rule-058-propagation-finish-save-all-and-trim-reload-the-current-frame-without-saving-it) | Propagation finish, Save All and Trim reload the current frame without saving it | Lifecycle | P0 | `legacy/lazylabel/src/lazylabel/ui/main_window.py:4638-4645` (+4 more) | High |
+| [RULE-059](#rule-059-auto-save-current-image-before-switching-images-single-view) | Auto-save current image before switching images (single view) | Lifecycle | P0 | `legacy/lazylabel/src/lazylabel/ui/managers/file_navigation_manager.py:153-162` (+7 more) | Medium |
+| [RULE-060](#rule-060-propagated-frame-flagging-and-commit-keep-flagged-masks) | Propagated frame flagging and commit (Keep Flagged Masks) | Lifecycle | P0 | `legacy/lazylabel/src/lazylabel/ui/managers/propagation_manager.py:751-810` (+8 more) | Medium |
+| [RULE-061](#rule-061-undoing-a-circle-center-drag-changes-the-circles-radius) | Undoing a circle center drag changes the circle's radius | Lifecycle | P1 | `legacy/lazylabel/src/lazylabel/ui/editable_vertex.py:30-66` (+2 more) | High |
+| [RULE-062](#rule-062-ai-mode-click-adds-a-point-a-drag-over-5-px-draws-a-box-space-accepts-the-preview) | AI mode: click adds a point, a drag over 5 px draws a box, Space accepts the preview | Lifecycle | P1 | `legacy/lazylabel/src/lazylabel/ui/handlers/single_view_mouse_handler.py:130-139` (+8 more) | High |
+| [RULE-063](#rule-063-abort-stops-the-running-step-and-keeps-frames-already-committed) | Abort stops the running step and keeps frames already committed | Lifecycle | P1 | `legacy/lazylabel/src/lazylabel/ui/main_window.py:4406-4445` (+3 more) | High |
+| [RULE-064](#rule-064-clear-flags-repaints-non-reference-frames-as-pending-without-touching-results) | Clear Flags repaints non-reference frames as pending without touching results | Lifecycle | P1 | `legacy/lazylabel/src/lazylabel/ui/main_window.py:3457-3478` (+1 more) | High |
 | [RULE-065](#rule-065-selecting-a-file-in-the-sequence-tab-jumps-to-its-frame-a-file-outside-the-timeline-bounces-back) | Selecting a file in the Sequence tab jumps to its frame; a file outside the timeline bounces back | Lifecycle | P1 | `legacy/lazylabel/src/lazylabel/ui/main_window.py:1440-1459` (+5 more) | Medium |
 | [RULE-066](#rule-066-accepting-ai-previews) | Accepting AI previews | Lifecycle | P1 | `legacy/lazylabel/src/lazylabel/ui/managers/ai_segment_manager.py:74-200` (+3 more) | High |
 | [RULE-067](#rule-067-crop-persistence-across-image-navigation) | Crop persistence across image navigation | Lifecycle | P1 | `legacy/lazylabel/src/lazylabel/ui/managers/file_navigation_manager.py:227-238` (+3 more) | Medium |
@@ -113,11 +113,11 @@ How to read a card: **Source** paths are relative to the repository root. **Prio
 | [RULE-077](#rule-077-trim-removes-frames-from-the-timeline-only-and-re-keys-state-by-image-path) | Trim removes frames from the timeline only and re-keys state by image path | Lifecycle | P1 | `legacy/lazylabel/src/lazylabel/ui/modes/sequence_view_mode.py:598-709` (+1 more) | High |
 | [RULE-078](#rule-078-annotations-load-from-the-best-file-present-and-a-damaged-non-npz-file-stops-the-search) | Annotations load from the best file present, and a damaged non-NPZ file stops the search | Policy | P0 | `legacy/lazylabel/src/lazylabel/core/exporters/__init__.py:65-81` (+7 more) | Medium |
 | [RULE-079](#rule-079-export-writes-every-selected-format-and-never-removes-other-files) | Export writes every selected format and never removes other files | Policy | P0 | `legacy/lazylabel/src/lazylabel/core/exporters/__init__.py:189-206` (+4 more) | High |
-| [RULE-080](#rule-080-propagation-never-overwrites-reference-frames-and-by-default-frames-already-labeled) | Propagation never overwrites reference frames and, by default, frames already labeled | Policy | P0 | `legacy/lazylabel/src/lazylabel/ui/main_window.py:4218-4231` (+4 more) | Medium |
-| [RULE-081](#rule-081-save-all-propagated-frames-eligibility) | Save All propagated frames eligibility | Policy | P0 | `legacy/lazylabel/src/lazylabel/ui/main_window.py:4741-4846` (+6 more) | Medium |
-| [RULE-082](#rule-082-saving-an-image-with-no-segments-deletes-all-of-its-annotation-files) | Saving an image with no segments deletes all of its annotation files | Policy | P0 | `legacy/lazylabel/src/lazylabel/ui/managers/save_export_manager.py:97-133` (+5 more) | Medium |
-| [RULE-083](#rule-083-ai-features-require-segment-anything-and-pytorch-271) | AI features require segment-anything and PyTorch 2.7.1+ | Policy | P1 | `legacy/lazylabel/src/lazylabel/ai_availability.py:8-47` (+3 more) | Medium |
-| [RULE-084](#rule-084-sidecar-file-naming-and-suffix-collisions) | Sidecar file naming and suffix collisions | Policy | P1 | `legacy/lazylabel/src/lazylabel/core/exporters/npz_class_map.py:46-47` (+4 more) | Medium |
+| [RULE-080](#rule-080-sidecar-file-naming-and-suffix-collisions) | Sidecar file naming and suffix collisions | Policy | P0 | `legacy/lazylabel/src/lazylabel/core/exporters/npz_class_map.py:46-47` (+4 more) | High |
+| [RULE-081](#rule-081-propagation-never-overwrites-reference-frames-and-by-default-frames-already-labeled) | Propagation never overwrites reference frames and, by default, frames already labeled | Policy | P0 | `legacy/lazylabel/src/lazylabel/ui/main_window.py:4218-4231` (+4 more) | Medium |
+| [RULE-082](#rule-082-save-all-propagated-frames-eligibility) | Save All propagated frames eligibility | Policy | P0 | `legacy/lazylabel/src/lazylabel/ui/main_window.py:4741-4846` (+6 more) | Medium |
+| [RULE-083](#rule-083-saving-an-image-with-no-segments-deletes-all-of-its-annotation-files) | Saving an image with no segments deletes all of its annotation files | Policy | P0 | `legacy/lazylabel/src/lazylabel/ui/managers/save_export_manager.py:97-133` (+5 more) | Medium |
+| [RULE-084](#rule-084-ai-features-require-segment-anything-and-pytorch-271) | AI features require segment-anything and PyTorch 2.7.1+ | Policy | P1 | `legacy/lazylabel/src/lazylabel/ai_availability.py:8-47` (+3 more) | Medium |
 | [RULE-085](#rule-085-model-type-detected-from-file-name) | Model type detected from file name | Policy | P1 | `legacy/lazylabel/src/lazylabel/core/model_manager.py:58-104` (+2 more) | Medium |
 | [RULE-086](#rule-086-active-class-toggle-and-recent-class-hotkey) | Active class toggle and recent-class hotkey | Policy | P1 | `legacy/lazylabel/src/lazylabel/core/segment_manager.py:401-440` (+4 more) | Medium |
 | [RULE-087](#rule-087-default-model-download-integrity-check) | Default model download integrity check | Policy | P1 | `legacy/lazylabel/src/lazylabel/models/sam_model.py:20-65` (+2 more) | Medium |
@@ -131,7 +131,35 @@ How to read a card: **Source** paths are relative to the repository root. **Prio
 
 ## Calculation rules (36)
 
-### RULE-001: NPZ Class Map export resolves overlaps to lowest class and stores foreground
+### RULE-001: COCO JSON export structure and area
+**Category:** Calculation  
+**Priority:** P0  
+**Source:** `legacy/lazylabel/src/lazylabel/core/exporters/coco.py:19-100`  
+**Plain English:** One COCO file per image with image id 1, a category per class (alias 'name.supercategory' split at the last dot), and one annotation per object with polygon, [x, y, w, h] box, area and iscrowd 0.  
+**Specification:**  
+  Given Class 2 alias 'dog.animal'; object = filled 10x10 square at (100,50)  
+  When  Saving COCO JSON  
+  Then  category {id 2, name 'dog', supercategory 'animal'}; annotation {id 1, image_id 1, category_id 2, bbox [100,50,10,10], area 81, segmentation [[100,50,100,59,109,59,109,50]], iscrowd 0}  
+**Parameters:** area = int(polygon contour area) when contour has \>= 3 points, else box w x h; annotation ids restart at 1 per file; image id 1; annotation ids start at 1 per file; iscrowd 0; supercategory separator = last '.'; suffix '_coco.json'  
+**Edge cases handled:** Area 81 under-counts the 100 pixels because the polygon passes through pixel centers; An alias with an unintended dot ('St. Bernard') becomes name 'St', supercategory ' Bernard'; Per-image ids collide when files are merged into one dataset; No file when there are no objects; Alias with a literal dot such as 'v1.0' becomes name 'v1', supercategory '0'; Polygon is not simplified, unlike YOLO Segmentation  
+**Suspected defect:** 'area' is the polygon area through pixel centers, which undercounts the object's pixel count (10x10 square -\> 81, roughly (w-1)x(h-1)); COCO small/medium/large buckets (32^2, 96^2) may misclassify objects.  
+**Confidence:** Medium — SME question: Should COCO 'area' be the mask pixel count (COCO convention) instead of the contour polygon area? Panel: The fidelity judge found the specification unfaithful to the code. Correct the card from the judge's findings before writing its equivalence test. Judges' reasoning: analysis/lazylabel/P0_PANEL.md.
+
+### RULE-002: CreateML export/import: pixel center boxes
+**Category:** Calculation  
+**Priority:** P0  
+**Source:** `legacy/lazylabel/src/lazylabel/core/exporters/createml.py:33-67; legacy/lazylabel/src/lazylabel/core/file_manager.py:495-540`  
+**Plain English:** CreateML annotations store the box center in pixels (x + width/2, y + height/2) and integer width/height with the class alias as label; import rebuilds x1=round(cx-w/2), x2=x1+round(w).  
+**Specification:**  
+  Given Class 2 alias 'cat', object pixels columns 101-300 (x=101, w=200) and rows 50-149 (y=50, h=100)  
+  When  Saved as CreateML and reloaded  
+  Then  JSON [{image:'\<file\>', annotations:[{label:'cat', coordinates:{x:201.0, y:100.0, width:200, height:100}}]}]; reload fills columns 101-300, rows 50-149 exactly  
+  And   Only the first image entry of the JSON array is read; boxes are clamped to the image and dropped if empty  
+**Parameters:** Center = integer origin + integer size / 2 (float); suffix '_createml.json'  
+**Edge cases handled:** Odd widths give .5 centers (x=100, w=201 -\> 200.5) and still round-trip; Label names map to class ids by first appearance (ids not preserved); No file when there are no objects; Same alias-only class identity as Pascal VOC  
+**Confidence:** High — citation confirmed by an independent referee; both P0 judges (compliance and fidelity lenses) rated it P0 and the specification faithful; 1 near-duplicate card(s) from other lenses were folded in
+
+### RULE-003: NPZ Class Map export resolves overlaps to lowest class and stores foreground
 **Category:** Calculation  
 **Priority:** P0  
 **Source:** `legacy/lazylabel/src/lazylabel/core/exporters/npz_class_map.py:20-76; legacy/lazylabel/src/lazylabel/core/file_manager.py:282-333`  
@@ -144,7 +172,21 @@ How to read a card: **Source** paths are relative to the repository root. **Prio
 **Edge cases handled:** No file when no pixel is labelled; Class IDs above 65535 overflow; Readers ignoring 'foreground' cannot tell class 0 from background; Class ids above 65535 cannot be encoded (NumPy overflow -\> save error); Per-object separation is lost: one segment per class after reload; Files without foreground silently drop all class-0 annotations; A 240x320 class map is rejected with an error and 0 segments (chain stops)  
 **Confidence:** Medium — SME question: The fidelity judge found the specification unfaithful to the code. Correct the card from the judge's findings before writing its equivalence test. Judges' reasoning: analysis/lazylabel/P0_PANEL.md.
 
-### RULE-002: YOLO Detection export line format
+### RULE-004: Pascal VOC export uses alias names and exclusive max bounds
+**Category:** Calculation  
+**Priority:** P0  
+**Source:** `legacy/lazylabel/src/lazylabel/core/exporters/pascal_voc.py:22-63; legacy/lazylabel/src/lazylabel/core/file_manager.py:456-493`  
+**Plain English:** Each object is written with the class alias as its name and a box whose xmax/ymax equal xmin/ymin plus width/height (exclusive), with fixed pose, truncated and difficult values.  
+**Specification:**  
+  Given 640x480 image; class 2 alias 'dog'; object pixels x 100-109, y 50-59  
+  When  Saving Pascal VOC  
+  Then  img.xml object: name 'dog', xmin 100, ymin 50, xmax 110, ymax 60; size width 640 height 480 depth 3; pose 'Unspecified', truncated 0, difficult 0  
+**Parameters:** depth '3' (hard-coded); coordinates 0-based; xmax/ymax exclusive; suffix '.xml'  
+**Edge cases handled:** Depth is always 3, even for grayscale images; Most VOC consumers read xmax as inclusive, so boxes appear 1 px larger; Class identity is the alias text only; two classes sharing an alias merge on reload; a class without alias is named by its number; Class ids are not preserved when aliases exist (see label resolution rule)  
+**Suspected defect:** Hardcoded depth 3; exclusive xmax/ymax deviates from common VOC usage. | Depth is always '3' even for single-channel images; standard PASCAL VOC boxes are 1-based with inclusive xmax/ymax, so third-party VOC tools will be offset by 1 px and official VOC files read into LazyLabel lose a row/column.  
+**Confidence:** Medium — SME question: Which VOC bound convention do downstream training tools expect? | Must VOC exports interoperate with standard VOC tooling (1-based inclusive) or only round-trip within LazyLabel? Panel: The fidelity judge found the specification unfaithful to the code. Correct the card from the judge's findings before writing its equivalence test. Judges' reasoning: analysis/lazylabel/P0_PANEL.md.
+
+### RULE-005: YOLO Detection export line format
 **Category:** Calculation  
 **Priority:** P0  
 **Source:** `legacy/lazylabel/src/lazylabel/core/exporters/yolo_detection.py:19-46; legacy/lazylabel/src/lazylabel/core/exporters/__init__.py:114-136`  
@@ -157,7 +199,20 @@ How to read a card: **Source** paths are relative to the repository root. **Prio
 **Edge cases handled:** No file written when image height or width \<= 0 or no objects (old file kept); Non-contiguous class IDs such as 0 and 5 are written as-is; Crop does not change the coordinate frame: coordinates stay relative to the full image; A segment made of two disconnected blobs produces two lines; Without per-object instances the merged class channel is contoured, fusing touching same-class objects  
 **Confidence:** Medium — SME question: Must YOLO class indices be contiguous 0..N-1 across the dataset? Panel: The fidelity judge found the specification unfaithful to the code. Correct the card from the judge's findings before writing its equivalence test. | The compliance judge rated this not P0 while the fidelity judge rated it P0. Decide whether it guards annotation data integrity and belongs in the behavior contract. Judges' reasoning: analysis/lazylabel/P0_PANEL.md.
 
-### RULE-003: Label text to class ID resolution on import
+### RULE-006: YOLO Segmentation export polygon simplification
+**Category:** Calculation  
+**Priority:** P0  
+**Source:** `legacy/lazylabel/src/lazylabel/core/exporters/yolo_segmentation.py:25-56; legacy/lazylabel/src/lazylabel/core/exporters/__init__.py:139-157`  
+**Plain English:** One line per object: class ID followed by outer-contour vertices simplified with tolerance 0.1% of the contour perimeter, x divided by width and y by height.  
+**Specification:**  
+  Given 640x480 image; class 0 object = filled 10x10 square with top-left (100,50)  
+  When  Saving YOLO Segmentation  
+  Then  img_seg.txt line: '0 0.15625 0.104166... 0.15625 0.122916... 0.1703125 0.122916... 0.1703125 0.104166...' (vertices (100,50),(100,59),(109,59),(109,50))  
+**Parameters:** epsilon = 0.001 x contour arc length; output \<base\>_seg.txt; Simplification epsilon = 0.001 x closed arc length (Douglas-Peucker); normalization by width/height; suffix '_seg.txt'  
+**Edge cases handled:** A 1-pixel object is written as the same point repeated 4 times; a 1-pixel-wide line as a there-and-back 4-point ring (ARCHITECTURE.md:179-180 says a bounding-box outline is used instead); Holes are not exported (external contours only); Disconnected parts of one segment become separate lines; Holes inside objects are not exported (external contours only); Axis-aligned shapes round-trip to the exact pixel set on reload  
+**Confidence:** High — citation confirmed by an independent referee; both P0 judges (compliance and fidelity lenses) rated it P0 and the specification faithful; 1 near-duplicate card(s) from other lenses were folded in
+
+### RULE-007: Label text to class ID resolution on import
 **Category:** Calculation  
 **Priority:** P0  
 **Source:** `legacy/lazylabel/src/lazylabel/core/file_manager.py:345-379; legacy/lazylabel/src/lazylabel/core/segment_manager.py:20-26; legacy/lazylabel/src/lazylabel/ui/main_window.py:2138-2141`  
@@ -171,7 +226,7 @@ How to read a card: **Source** paths are relative to the repository root. **Prio
 **Suspected defect:** Name-based formats cannot round-trip class IDs consistently across a dataset because alias memory is per image.  
 **Confidence:** High — citation confirmed by an independent referee; both P0 judges (compliance and fidelity lenses) rated it P0 and the specification faithful; 1 near-duplicate card(s) from other lenses were folded in
 
-### RULE-004: Detection and polygon exports keep same-class objects separate
+### RULE-008: Detection and polygon exports keep same-class objects separate
 **Category:** Calculation  
 **Priority:** P0  
 **Source:** `legacy/lazylabel/src/lazylabel/core/segment_manager.py:254-315; legacy/lazylabel/src/lazylabel/core/exporters/__init__.py:83-136; legacy/lazylabel/src/lazylabel/ui/managers/save_export_manager.py:432-452; legacy/lazylabel/src/lazylabel/ARCHITECTURE.md:212-218`  
@@ -184,7 +239,20 @@ How to read a card: **Source** paths are relative to the repository root. **Prio
 **Edge cases handled:** Segments reloaded from NPZ or Class Map are one per class, so re-exporting them fuses touching objects (documented as intended); Sequence frames are merged by class on display, so their exports fuse touching objects; A segment whose mask size differs from the image is silently omitted from detection exports; A segment with two separate blobs yields two objects; Identical overlapping segments yield duplicate boxes  
 **Confidence:** High — citation confirmed by an independent referee; both P0 judges (compliance and fidelity lenses) rated it P0 and the specification faithful; 1 near-duplicate card(s) from other lenses were folded in
 
-### RULE-005: Final per-class mask composition
+### RULE-009: Eraser splits segments and drops pieces of 10 pixels or less
+**Category:** Calculation  
+**Priority:** P0  
+**Source:** `legacy/lazylabel/src/lazylabel/core/segment_manager.py:646-707; legacy/lazylabel/src/lazylabel/core/segment_manager.py:752-814; legacy/lazylabel/src/lazylabel/core/segment_manager.py:509-517; legacy/lazylabel/src/lazylabel/ui/managers/polygon_drawing_manager.py:175-198`  
+**Plain English:** Erasing removes the erase shape's pixels from every overlapping segment; the remainder is split into 8-connected pieces and only pieces larger than 10 pixels survive as new mask segments of the same class.  
+**Specification:**  
+  Given A class-2 polygon cut by a Shift+box erase into a 500-pixel piece and an 8-pixel sliver  
+  When  The erase is applied  
+  Then  The polygon is removed, one 500-pixel class-2 mask segment (type AI) is appended at the end of the list, and the sliver is discarded  
+**Parameters:** Minimum surviving piece \> 10 pixels; connectivity 8; minimum kept component \> 10 px  
+**Edge cases handled:** Erased polygons and circles lose their vertices and are no longer editable; Affected segments move to the end of the segment order; Erased polygons and circles become masks and lose vertex editing; Segment order changes (survivors move to the end); A mask of different size than the image is nearest-neighbour resized first; Multi-view mirrored erase keeps only the largest contour for polygon views  
+**Confidence:** High — citation confirmed by an independent referee; the only P0 judge that returned a verdict rated it P0 and faithful (the other judge failed); 1 near-duplicate card(s) from other lenses were folded in
+
+### RULE-010: Final per-class mask composition
 **Category:** Calculation  
 **Priority:** P0  
 **Source:** `legacy/lazylabel/src/lazylabel/core/segment_manager.py:212-252; legacy/lazylabel/src/lazylabel/core/segment_manager.py:174-203`  
@@ -197,7 +265,46 @@ How to read a card: **Source** paths are relative to the repository root. **Prio
 **Edge cases handled:** Polygon vertices are truncated to integers before filling; A circle whose rounded radius is 0 contributes nothing; A stored mask whose size differs from the image raises; save fails with 'Error saving: ...' and nothing is written  
 **Confidence:** High — citation confirmed by an independent referee; both P0 judges (compliance and fidelity lenses) rated it P0 and the specification faithful
 
-### RULE-006: Saved class channel order is ascending class ID, not the Class Order table
+### RULE-011: New segments take the active class, otherwise the next free class id (highest + 1)
+**Category:** Calculation  
+**Priority:** P0  
+**Source:** `legacy/lazylabel/src/lazylabel/core/segment_manager.py:28-85; legacy/lazylabel/src/lazylabel/core/segment_manager.py:375-391; legacy/lazylabel/src/lazylabel/core/segment_manager.py:816-826; legacy/lazylabel/src/lazylabel/core/segment_manager.py:409-419`  
+**Plain English:** A segment added without a class gets the active class, otherwise one more than the highest class id in use. Merging selected segments gives them all the lowest class id among them. Reordering classes renumbers them 0..n-1 in the chosen order.  
+**Specification:**  
+  Given Segments use classes 0 and 3; no class is active  
+  When  The user adds a segment, then selects segments of classes 3 and 5 and presses M  
+  Then  The new segment gets class 4. After the merge, both selected segments are class 3, and the next free id is recalculated as the highest remaining class + 1.  
+**Parameters:** next_class_id = max(existing ids) + 1; 0 when empty  
+**Edge cases handled:** With no segments the first class is 0.; Merging segments that have no class gives them the next free id.; Deleting all segments of the highest class lowers the next id.; Reordering drops classes that had no alias from the alias table.; Gaps are never reused (ids 0 and 3 give 4, not 1); A loaded file with id 250 makes the next new class 251; Gaps are not reused (classes 0 and 4 give next 5); Deleting all class-4 segments makes the next new class 2; Aliases of classes without segments do not reserve IDs; Each multi-view viewer computes its own next ID  
+**Confidence:** Medium — SME question: The compliance and fidelity judges rated this not P0. Decide whether it guards annotation data integrity and belongs in the behavior contract. Judges' reasoning: analysis/lazylabel/P0_PANEL.md.
+
+### RULE-012: Pixel priority resolves overlapping classes
+**Category:** Calculation  
+**Priority:** P0  
+**Source:** `legacy/lazylabel/src/lazylabel/core/segment_manager.py:317-373; legacy/lazylabel/src/lazylabel/ui/widgets/settings_widget.py:68-102; legacy/lazylabel/src/lazylabel/config/settings.py:60-62; legacy/lazylabel/src/lazylabel/ui/main_window.py:2721-2728`  
+**Plain English:** With Pixel Priority enabled, a pixel claimed by several classes keeps only the lowest channel (Ascending) or highest channel (Descending); pixels with a single class are untouched.  
+**Specification:**  
+  Given Classes 1 and 4 present (channels 0 and 1); pixel (10,10) covered by both; Pixel Priority enabled  
+  When  Saving with Ascending / with Descending  
+  Then  Ascending: pixel (10,10) stays only in class 1; Descending: only in class 4  
+**Parameters:** pixel_priority_enabled default False; pixel_priority_ascending default True; Default enabled False, ascending True; priority by channel index = ascending class id  
+**Edge cases handled:** Ranking is by channel index = ascending class ID, while the recent-class hotkey uses the table order when priority is on; Disabled: NPZ keeps overlaps, NPZ Class Map gives overlap to the lowest class ID; Detection exports use the prioritized tensor, so a lower-priority object can shrink or split into several boxes; Detection formats intersect each object with the prioritized tensor, so an object fully covered by a higher-priority class disappears from YOLO/COCO/VOC/CreateML; 'Reassign Class IDs' changes ids and therefore priority  
+**Confidence:** High — citation confirmed by an independent referee; both P0 judges (compliance and fidelity lenses) rated it P0 and the specification faithful; 1 near-duplicate card(s) from other lenses were folded in
+
+### RULE-013: Reassign class ids from class table order
+**Category:** Calculation  
+**Priority:** P0  
+**Source:** `legacy/lazylabel/src/lazylabel/core/segment_manager.py:375-391; legacy/lazylabel/src/lazylabel/ui/managers/segment_table_manager.py:96-100; legacy/lazylabel/src/lazylabel/ui/managers/segment_table_manager.py:338-366; legacy/lazylabel/src/lazylabel/ui/right_panel.py:361-371`  
+**Plain English:** 'Reassign Class IDs' renumbers classes 0..N-1 in the current table row order and carries aliases along.  
+**Specification:**  
+  Given Class table rows ordered 7, 2, 5 after dragging; aliases {7:'car', 2:'person'}  
+  When  The user clicks 'Reassign Class IDs'  
+  Then  7 -\> 0, 2 -\> 1, 5 -\> 2; aliases become {0:'car', 1:'person'}  
+**Parameters:** new id = row position  
+**Edge cases handled:** The table is rebuilt in ascending id order on every refresh, so a dragged order is lost unless reassigned first; Aliases for classes with no segments are discarded; Aliases for classes not in the table are dropped; A segment whose class is missing from the order keeps its old ID and can collide with a new one; Renumbering is per image, so IDs diverge across images; Not undoable  
+**Confidence:** High — citation confirmed by an independent referee; the only P0 judge that returned a verdict rated it P0 and faithful (the other judge failed); 1 near-duplicate card(s) from other lenses were folded in
+
+### RULE-014: Saved class channel order is ascending class ID, not the Class Order table
 **Category:** Calculation  
 **Priority:** P0  
 **Source:** `legacy/lazylabel/src/lazylabel/core/segment_manager.py:87-95; legacy/lazylabel/src/lazylabel/ui/right_panel.py:180-198; legacy/lazylabel/src/lazylabel/ui/managers/segment_table_manager.py:338-368; legacy/lazylabel/src/lazylabel/ui/managers/save_export_manager.py:394-430; legacy/lazylabel/src/lazylabel/core/exporters/npz.py:15-37`  
@@ -211,75 +318,35 @@ How to read a card: **Source** paths are relative to the repository root. **Prio
 **Suspected defect:** Class table tooltip says 'drag to reorder channels for saving' (right_panel.py:181-183) but save ignores table order.  
 **Confidence:** High — citation confirmed by an independent referee; both P0 judges (compliance and fidelity lenses) rated it P0 and the specification faithful; 2 near-duplicate card(s) from other lenses were folded in
 
-### RULE-007: COCO JSON export structure and area
+### RULE-015: Shape rasterization before export (truncated vertices, rounded circles)
 **Category:** Calculation  
-**Priority:** P1  
-**Source:** `legacy/lazylabel/src/lazylabel/core/exporters/coco.py:19-100`  
-**Plain English:** One COCO file per image with image id 1, a category per class (alias 'name.supercategory' split at the last dot), and one annotation per object with polygon, [x, y, w, h] box, area and iscrowd 0.  
+**Priority:** P0  
+**Source:** `legacy/lazylabel/src/lazylabel/core/segment_manager.py:174-252; legacy/lazylabel/src/lazylabel/ui/handlers/single_view_mouse_handler.py:384-438`  
+**Plain English:** Before export, polygons and boxes are filled using vertex coordinates truncated toward zero with edges included, circles use a rounded center and rounded radius, and all segments of a class are OR-ed into one channel.  
 **Specification:**  
-  Given Class 2 alias 'dog.animal'; object = filled 10x10 square at (100,50)  
-  When  Saving COCO JSON  
-  Then  category {id 2, name 'dog', supercategory 'animal'}; annotation {id 1, image_id 1, category_id 2, bbox [100,50,10,10], area 81, segmentation [[100,50,100,59,109,59,109,50]], iscrowd 0}  
-**Parameters:** area = int(polygon contour area) when contour has \>= 3 points, else box w x h; annotation ids restart at 1 per file; image id 1; annotation ids start at 1 per file; iscrowd 0; supercategory separator = last '.'; suffix '_coco.json'  
-**Edge cases handled:** Area 81 under-counts the 100 pixels because the polygon passes through pixel centers; An alias with an unintended dot ('St. Bernard') becomes name 'St', supercategory ' Bernard'; Per-image ids collide when files are merged into one dataset; No file when there are no objects; Alias with a literal dot such as 'v1.0' becomes name 'v1', supercategory '0'; Polygon is not simplified, unlike YOLO Segmentation  
-**Suspected defect:** 'area' is the polygon area through pixel centers, which undercounts the object's pixel count (10x10 square -\> 81, roughly (w-1)x(h-1)); COCO small/medium/large buckets (32^2, 96^2) may misclassify objects.  
-**Confidence:** Medium — SME question: The compliance judge rated this not P0 while the fidelity judge rated it P0. Decide whether it guards annotation data integrity and belongs in the behavior contract. | Should COCO 'area' be the mask pixel count (COCO convention) instead of the contour polygon area? Panel: The compliance judge rated this not P0 while the fidelity judge rated it P0. Decide whether it guards annotation data integrity and belongs in the behavior contract. The fidelity judge found the specification unfaithful to the code. Correct the card from the judge's findings before writing its equivalence test. Judges' reasoning: analysis/lazylabel/P0_PANEL.md.
+  Given A user drags a box from (10.7, 10.2) to (20.9, 30.8)  
+  When  The image is saved  
+  Then  Vertices become (10,10)-(20,30); 11 x 21 = 231 pixels are filled; COCO bbox [10,10,11,21] and YOLO width 11/image width  
+  And   A circle with center (20.4, 20.6) and radius point 5.4 px away becomes center (20,21), radius 5, 81 pixels; a radius that rounds to 0 produces no pixels  
+**Parameters:** Vertex cast to int32 (truncation); cv2.fillPoly boundary inclusive; circle radius = round(distance); center = round(x), round(y)  
+**Edge cases handled:** Boxes export 1 px larger than the drawn span; Out-of-image vertices are clipped by the rasterizer  
+**Confidence:** High — citation confirmed by an independent referee; both P0 judges (compliance and fidelity lenses) rated it P0 and the specification faithful
 
-### RULE-008: CreateML export/import: pixel center boxes
+### RULE-016: Crop is clamped to the image and blanks everything outside it on save, including the last row and column
 **Category:** Calculation  
-**Priority:** P1  
-**Source:** `legacy/lazylabel/src/lazylabel/core/exporters/createml.py:33-67; legacy/lazylabel/src/lazylabel/core/file_manager.py:495-540`  
-**Plain English:** CreateML annotations store the box center in pixels (x + width/2, y + height/2) and integer width/height with the class alias as label; import rebuilds x1=round(cx-w/2), x2=x1+round(w).  
+**Priority:** P0  
+**Source:** `legacy/lazylabel/src/lazylabel/ui/managers/crop_manager.py:47-57; legacy/lazylabel/src/lazylabel/ui/managers/crop_manager.py:102-153; legacy/lazylabel/src/lazylabel/core/file_manager.py:712-739; legacy/lazylabel/src/lazylabel/ui/managers/save_export_manager.py:412-417; legacy/lazylabel/src/lazylabel/ui/handlers/single_view_mouse_handler.py:539-561; legacy/lazylabel/src/lazylabel/ui/main_window.py:2148-2156; legacy/lazylabel/src/lazylabel/ui/managers/file_navigation_manager.py:227-238`  
+**Plain English:** Crop corners are rounded, clamped to 0..width-1 and 0..height-1, and put in order. On save, mask pixels outside rows y1..y2-1 and columns x1..x2-1 are cleared. The crop applies only to the current image.  
 **Specification:**  
-  Given Class 2 alias 'cat', object pixels columns 101-300 (x=101, w=200) and rows 50-149 (y=50, h=100)  
-  When  Saved as CreateML and reloaded  
-  Then  JSON [{image:'\<file\>', annotations:[{label:'cat', coordinates:{x:201.0, y:100.0, width:200, height:100}}]}]; reload fills columns 101-300, rows 50-149 exactly  
-  And   Only the first image entry of the JSON array is read; boxes are clamped to the image and dropped if empty  
-**Parameters:** Center = integer origin + integer size / 2 (float); suffix '_createml.json'  
-**Edge cases handled:** Odd widths give .5 centers (x=100, w=201 -\> 200.5) and still round-trip; Label names map to class ids by first appearance (ids not preserved); No file when there are no objects; Same alias-only class identity as Pascal VOC  
-**Confidence:** Medium — SME question: The compliance judge rated this not P0 while the fidelity judge rated it P0. Decide whether it guards annotation data integrity and belongs in the behavior contract. Judges' reasoning: analysis/lazylabel/P0_PANEL.md.
+  Given A 1000x800 image; the user enters crop (-10, 50) to (1200, 700)  
+  When  The crop is applied and the image is saved  
+  Then  The stored crop is x1=0, y1=50, x2=999, y2=700 ('Crop applied: 0:999, 50:700'). Saved masks keep rows 50-699 and columns 0-998 only, so column 999 and row 700 are always cleared.  
+**Parameters:** A drawn crop must be larger than 5x5 px. Crops are remembered per image size (width, height), but only the unreachable legacy loader restores them.; Clamp x in [0, width-1], y in [0, height-1]; x2/y2 exclusive in the mask; minimum drawn size \> 5 px; x2/y2 exclusive in mask zeroing; x2 \<= width-1 and y2 \<= height-1 by clamping  
+**Edge cases handled:** A full-image crop (0,0)-(999,799) still clears the last row and column.; Opening another image, or loading a different model, clears the active crop.; Finishing a drawn crop switches to the legacy 'sam_points' mode.; Crop does not affect the AI embedding key.; Channel threshold, FFT and rescale are also limited to the crop region; Multi-view saves ignore the crop; Every crop drops its own last column and row; Sequence Save All uses the crop of the frame on screen; Multi-view saves never crop  
+**Suspected defect:** Off-by-one: clamping to width-1/height-1 combined with an exclusive end drops the final column and row. | Clamping to width-1/height-1 combined with exclusive x2/y2 means no crop can ever keep the last pixel column and row, even a full-image crop. | Inclusive clamping combined with exclusive slicing makes it impossible to keep the image's last row/column once any crop is active.  
+**Confidence:** Medium — SME question: Should a crop carry over to other images of the same size, as the unreachable loader does, or reset for each image? | Is crop end (x2, y2) meant to be inclusive or exclusive, and should a full-frame crop keep the entire image? Judges' reasoning: analysis/lazylabel/P0_PANEL.md.
 
-### RULE-009: Pascal VOC export uses alias names and exclusive max bounds
-**Category:** Calculation  
-**Priority:** P1  
-**Source:** `legacy/lazylabel/src/lazylabel/core/exporters/pascal_voc.py:22-63; legacy/lazylabel/src/lazylabel/core/file_manager.py:456-493`  
-**Plain English:** Each object is written with the class alias as its name and a box whose xmax/ymax equal xmin/ymin plus width/height (exclusive), with fixed pose, truncated and difficult values.  
-**Specification:**  
-  Given 640x480 image; class 2 alias 'dog'; object pixels x 100-109, y 50-59  
-  When  Saving Pascal VOC  
-  Then  img.xml object: name 'dog', xmin 100, ymin 50, xmax 110, ymax 60; size width 640 height 480 depth 3; pose 'Unspecified', truncated 0, difficult 0  
-**Parameters:** depth '3' (hard-coded); coordinates 0-based; xmax/ymax exclusive; suffix '.xml'  
-**Edge cases handled:** Depth is always 3, even for grayscale images; Most VOC consumers read xmax as inclusive, so boxes appear 1 px larger; Class identity is the alias text only; two classes sharing an alias merge on reload; a class without alias is named by its number; Class ids are not preserved when aliases exist (see label resolution rule)  
-**Suspected defect:** Hardcoded depth 3; exclusive xmax/ymax deviates from common VOC usage. | Depth is always '3' even for single-channel images; standard PASCAL VOC boxes are 1-based with inclusive xmax/ymax, so third-party VOC tools will be offset by 1 px and official VOC files read into LazyLabel lose a row/column.  
-**Confidence:** Medium — SME question: Which VOC bound convention do downstream training tools expect? Panel: The compliance judge rated this not P0 while the fidelity judge rated it P0. Decide whether it guards annotation data integrity and belongs in the behavior contract. | Must VOC exports interoperate with standard VOC tooling (1-based inclusive) or only round-trip within LazyLabel? Panel: The compliance judge rated this not P0 while the fidelity judge rated it P0. Decide whether it guards annotation data integrity and belongs in the behavior contract. The fidelity judge found the specification unfaithful to the code. Correct the card from the judge's findings before writing its equivalence test. Judges' reasoning: analysis/lazylabel/P0_PANEL.md.
-
-### RULE-010: YOLO Segmentation export polygon simplification
-**Category:** Calculation  
-**Priority:** P1  
-**Source:** `legacy/lazylabel/src/lazylabel/core/exporters/yolo_segmentation.py:25-56; legacy/lazylabel/src/lazylabel/core/exporters/__init__.py:139-157`  
-**Plain English:** One line per object: class ID followed by outer-contour vertices simplified with tolerance 0.1% of the contour perimeter, x divided by width and y by height.  
-**Specification:**  
-  Given 640x480 image; class 0 object = filled 10x10 square with top-left (100,50)  
-  When  Saving YOLO Segmentation  
-  Then  img_seg.txt line: '0 0.15625 0.104166... 0.15625 0.122916... 0.1703125 0.122916... 0.1703125 0.104166...' (vertices (100,50),(100,59),(109,59),(109,50))  
-**Parameters:** epsilon = 0.001 x contour arc length; output \<base\>_seg.txt; Simplification epsilon = 0.001 x closed arc length (Douglas-Peucker); normalization by width/height; suffix '_seg.txt'  
-**Edge cases handled:** A 1-pixel object is written as the same point repeated 4 times; a 1-pixel-wide line as a there-and-back 4-point ring (ARCHITECTURE.md:179-180 says a bounding-box outline is used instead); Holes are not exported (external contours only); Disconnected parts of one segment become separate lines; Holes inside objects are not exported (external contours only); Axis-aligned shapes round-trip to the exact pixel set on reload  
-**Confidence:** Medium — SME question: The compliance judge rated this not P0 while the fidelity judge rated it P0. Decide whether it guards annotation data integrity and belongs in the behavior contract. Judges' reasoning: analysis/lazylabel/P0_PANEL.md.
-
-### RULE-011: Eraser splits segments and drops pieces of 10 pixels or less
-**Category:** Calculation  
-**Priority:** P1  
-**Source:** `legacy/lazylabel/src/lazylabel/core/segment_manager.py:646-707; legacy/lazylabel/src/lazylabel/core/segment_manager.py:752-814; legacy/lazylabel/src/lazylabel/core/segment_manager.py:509-517; legacy/lazylabel/src/lazylabel/ui/managers/polygon_drawing_manager.py:175-198`  
-**Plain English:** Erasing removes the erase shape's pixels from every overlapping segment; the remainder is split into 8-connected pieces and only pieces larger than 10 pixels survive as new mask segments of the same class.  
-**Specification:**  
-  Given A class-2 polygon cut by a Shift+box erase into a 500-pixel piece and an 8-pixel sliver  
-  When  The erase is applied  
-  Then  The polygon is removed, one 500-pixel class-2 mask segment (type AI) is appended at the end of the list, and the sliver is discarded  
-**Parameters:** Minimum surviving piece \> 10 pixels; connectivity 8; minimum kept component \> 10 px  
-**Edge cases handled:** Erased polygons and circles lose their vertices and are no longer editable; Affected segments move to the end of the segment order; Erased polygons and circles become masks and lose vertex editing; Segment order changes (survivors move to the end); A mask of different size than the image is nearest-neighbour resized first; Multi-view mirrored erase keeps only the largest contour for polygon views  
-**Confidence:** Medium — SME question: The compliance judge rated this not P0 while the fidelity judge rated it P0. Decide whether it guards annotation data integrity and belongs in the behavior contract. Judges' reasoning: analysis/lazylabel/P0_PANEL.md.
-
-### RULE-012: Merge selected segments into the lowest selected class
+### RULE-017: Merge selected segments into the lowest selected class
 **Category:** Calculation  
 **Priority:** P1  
 **Source:** `legacy/lazylabel/src/lazylabel/core/segment_manager.py:65-85; legacy/lazylabel/src/lazylabel/ui/managers/keyboard_event_manager.py:236-239; legacy/lazylabel/src/lazylabel/ui/managers/segment_table_manager.py:53-57`  
@@ -293,60 +360,7 @@ How to read a card: **Source** paths are relative to the repository root. **Prio
 **Suspected defect:** Docstrings say merge assigns 'to the active class', but the executable code ignores the active class. | Handler docstrings say 'assign selected segments to active class' but the active class is never used.  
 **Confidence:** Medium — SME question: Should Merge assign to the active class when one is set? Panel: The compliance and fidelity judges rated this not P0. Decide whether it guards annotation data integrity and belongs in the behavior contract. Judges' reasoning: analysis/lazylabel/P0_PANEL.md.
 
-### RULE-013: New segments take the active class, otherwise the next free class id (highest + 1)
-**Category:** Calculation  
-**Priority:** P1  
-**Source:** `legacy/lazylabel/src/lazylabel/core/segment_manager.py:28-85; legacy/lazylabel/src/lazylabel/core/segment_manager.py:375-391; legacy/lazylabel/src/lazylabel/core/segment_manager.py:816-826; legacy/lazylabel/src/lazylabel/core/segment_manager.py:409-419`  
-**Plain English:** A segment added without a class gets the active class, otherwise one more than the highest class id in use. Merging selected segments gives them all the lowest class id among them. Reordering classes renumbers them 0..n-1 in the chosen order.  
-**Specification:**  
-  Given Segments use classes 0 and 3; no class is active  
-  When  The user adds a segment, then selects segments of classes 3 and 5 and presses M  
-  Then  The new segment gets class 4. After the merge, both selected segments are class 3, and the next free id is recalculated as the highest remaining class + 1.  
-**Parameters:** next_class_id = max(existing ids) + 1; 0 when empty  
-**Edge cases handled:** With no segments the first class is 0.; Merging segments that have no class gives them the next free id.; Deleting all segments of the highest class lowers the next id.; Reordering drops classes that had no alias from the alias table.; Gaps are never reused (ids 0 and 3 give 4, not 1); A loaded file with id 250 makes the next new class 251; Gaps are not reused (classes 0 and 4 give next 5); Deleting all class-4 segments makes the next new class 2; Aliases of classes without segments do not reserve IDs; Each multi-view viewer computes its own next ID  
-**Confidence:** Medium — SME question: The compliance and fidelity judges rated this not P0. Decide whether it guards annotation data integrity and belongs in the behavior contract. | The compliance judge rated this not P0 while the fidelity judge rated it P0. Decide whether it guards annotation data integrity and belongs in the behavior contract. Judges' reasoning: analysis/lazylabel/P0_PANEL.md.
-
-### RULE-014: Pixel priority resolves overlapping classes
-**Category:** Calculation  
-**Priority:** P1  
-**Source:** `legacy/lazylabel/src/lazylabel/core/segment_manager.py:317-373; legacy/lazylabel/src/lazylabel/ui/widgets/settings_widget.py:68-102; legacy/lazylabel/src/lazylabel/config/settings.py:60-62; legacy/lazylabel/src/lazylabel/ui/main_window.py:2721-2728`  
-**Plain English:** With Pixel Priority enabled, a pixel claimed by several classes keeps only the lowest channel (Ascending) or highest channel (Descending); pixels with a single class are untouched.  
-**Specification:**  
-  Given Classes 1 and 4 present (channels 0 and 1); pixel (10,10) covered by both; Pixel Priority enabled  
-  When  Saving with Ascending / with Descending  
-  Then  Ascending: pixel (10,10) stays only in class 1; Descending: only in class 4  
-**Parameters:** pixel_priority_enabled default False; pixel_priority_ascending default True; Default enabled False, ascending True; priority by channel index = ascending class id  
-**Edge cases handled:** Ranking is by channel index = ascending class ID, while the recent-class hotkey uses the table order when priority is on; Disabled: NPZ keeps overlaps, NPZ Class Map gives overlap to the lowest class ID; Detection exports use the prioritized tensor, so a lower-priority object can shrink or split into several boxes; Detection formats intersect each object with the prioritized tensor, so an object fully covered by a higher-priority class disappears from YOLO/COCO/VOC/CreateML; 'Reassign Class IDs' changes ids and therefore priority  
-**Confidence:** Medium — SME question: The compliance judge rated this not P0 while the fidelity judge rated it P0. Decide whether it guards annotation data integrity and belongs in the behavior contract. Judges' reasoning: analysis/lazylabel/P0_PANEL.md.
-
-### RULE-015: Reassign class ids from class table order
-**Category:** Calculation  
-**Priority:** P1  
-**Source:** `legacy/lazylabel/src/lazylabel/core/segment_manager.py:375-391; legacy/lazylabel/src/lazylabel/ui/managers/segment_table_manager.py:96-100; legacy/lazylabel/src/lazylabel/ui/managers/segment_table_manager.py:338-366; legacy/lazylabel/src/lazylabel/ui/right_panel.py:361-371`  
-**Plain English:** 'Reassign Class IDs' renumbers classes 0..N-1 in the current table row order and carries aliases along.  
-**Specification:**  
-  Given Class table rows ordered 7, 2, 5 after dragging; aliases {7:'car', 2:'person'}  
-  When  The user clicks 'Reassign Class IDs'  
-  Then  7 -\> 0, 2 -\> 1, 5 -\> 2; aliases become {0:'car', 1:'person'}  
-**Parameters:** new id = row position  
-**Edge cases handled:** The table is rebuilt in ascending id order on every refresh, so a dragged order is lost unless reassigned first; Aliases for classes with no segments are discarded; Aliases for classes not in the table are dropped; A segment whose class is missing from the order keeps its old ID and can collide with a new one; Renumbering is per image, so IDs diverge across images; Not undoable  
-**Confidence:** Medium — SME question: The compliance judge rated this not P0 while the fidelity judge rated it P0. Decide whether it guards annotation data integrity and belongs in the behavior contract. Judges' reasoning: analysis/lazylabel/P0_PANEL.md.
-
-### RULE-016: Shape rasterization before export (truncated vertices, rounded circles)
-**Category:** Calculation  
-**Priority:** P1  
-**Source:** `legacy/lazylabel/src/lazylabel/core/segment_manager.py:174-252; legacy/lazylabel/src/lazylabel/ui/handlers/single_view_mouse_handler.py:384-438`  
-**Plain English:** Before export, polygons and boxes are filled using vertex coordinates truncated toward zero with edges included, circles use a rounded center and rounded radius, and all segments of a class are OR-ed into one channel.  
-**Specification:**  
-  Given A user drags a box from (10.7, 10.2) to (20.9, 30.8)  
-  When  The image is saved  
-  Then  Vertices become (10,10)-(20,30); 11 x 21 = 231 pixels are filled; COCO bbox [10,10,11,21] and YOLO width 11/image width  
-  And   A circle with center (20.4, 20.6) and radius point 5.4 px away becomes center (20,21), radius 5, 81 pixels; a radius that rounds to 0 produces no pixels  
-**Parameters:** Vertex cast to int32 (truncation); cv2.fillPoly boundary inclusive; circle radius = round(distance); center = round(x), round(y)  
-**Edge cases handled:** Boxes export 1 px larger than the drawn span; Out-of-image vertices are clipped by the rasterizer  
-**Confidence:** Medium — SME question: The compliance judge rated this not P0 while the fidelity judge rated it P0. Decide whether it guards annotation data integrity and belongs in the behavior contract. Judges' reasoning: analysis/lazylabel/P0_PANEL.md.
-
-### RULE-017: Propagation confidence score per object
+### RULE-018: Propagation confidence score per object
 **Category:** Calculation  
 **Priority:** P1  
 **Source:** `legacy/lazylabel/src/lazylabel/models/sam2_model.py:1029-1044; legacy/lazylabel/src/lazylabel/models/sam2_model.py:893-909; legacy/lazylabel/src/lazylabel/models/sam2_model.py:683-690`  
@@ -359,7 +373,7 @@ How to read a card: **Source** paths are relative to the repository root. **Prio
 **Edge cases handled:** Score ignores mask size; a tiny confident fragment can score high; Confidence ignores mask size, so tiny confident masks score high; Empty masks are skipped before flagging  
 **Confidence:** Medium — SME question: The compliance judge rated this not P0 while the fidelity judge rated it P0. Decide whether it guards annotation data integrity and belongs in the behavior contract. Judges' reasoning: analysis/lazylabel/P0_PANEL.md.
 
-### RULE-018: SAM 2 frame staging numbering gap
+### RULE-019: SAM 2 frame staging numbering gap
 **Category:** Calculation  
 **Priority:** P1  
 **Source:** `legacy/lazylabel/src/lazylabel/models/sam2_model.py:759-803; legacy/lazylabel/src/lazylabel/ui/managers/propagation_manager.py:778-781`  
@@ -373,7 +387,7 @@ How to read a card: **Source** paths are relative to the repository root. **Prio
 **Suspected defect:** Masks for every frame after an unreadable image may be attributed to the wrong image.  
 **Confidence:** Medium — SME question: Does the SAM 2 video loader index frames by sorted list position (making numbering gaps shift frames), or by the number in the file name? Panel: The compliance judge rated this not P0 while the fidelity judge rated it P0. Decide whether it guards annotation data integrity and belongs in the behavior contract. Judges' reasoning: analysis/lazylabel/P0_PANEL.md.
 
-### RULE-019: SAM best-mask selection and click coordinate mapping
+### RULE-020: SAM best-mask selection and click coordinate mapping
 **Category:** Calculation  
 **Priority:** P1  
 **Source:** `legacy/lazylabel/src/lazylabel/models/sam_model.py:217-255; legacy/lazylabel/src/lazylabel/models/sam2_model.py:371-411; legacy/lazylabel/src/lazylabel/ui/managers/coordinate_transformer.py:33-143; legacy/lazylabel/src/lazylabel/ui/workers/sam_update_worker.py:42-43; legacy/lazylabel/src/lazylabel/ui/managers/ai_segment_manager.py:487-515`  
@@ -386,7 +400,7 @@ How to read a card: **Source** paths are relative to the repository root. **Prio
 **Edge cases handled:** With Operate On View off, coordinates are scaled by original/display size (1.0 in practice); Masks are resized with nearest neighbor if the scale factor is not 1.0  
 **Confidence:** High — citation confirmed by an independent referee; 1 near-duplicate card(s) from other lenses were folded in
 
-### RULE-020: Auto-convert AI masks to polygons
+### RULE-021: Auto-convert AI masks to polygons
 **Category:** Calculation  
 **Priority:** P1  
 **Source:** `legacy/lazylabel/src/lazylabel/ui/main_window.py:1788-1829; legacy/lazylabel/src/lazylabel/core/segment_manager.py:907-954; legacy/lazylabel/src/lazylabel/ui/control_panel.py:431-436; legacy/lazylabel/src/lazylabel/config/settings.py:29-31; legacy/lazylabel/src/lazylabel/ui/control_panel.py:892-939; legacy/lazylabel/src/lazylabel/ui/main_window.py:1073-1078`  
@@ -400,7 +414,7 @@ How to read a card: **Source** paths are relative to the repository root. **Prio
 **Suspected defect:** Comment says default slider 80 equals epsilon 0.001 (control_panel.py:434-436); the formula yields about 0.000219. Secondary blobs are silently discarded. | Code comments claim slider 80 gives epsilon 0.001, but the executable mapping gives 0.000219; disconnected parts of the AI mask are silently dropped.  
 **Confidence:** High — citation confirmed by an independent referee; 1 near-duplicate card(s) from other lenses were folded in
 
-### RULE-021: Find Archetypes suggests about 2% of frames (between 5 and 50) as references
+### RULE-022: Find Archetypes suggests about 2% of frames (between 5 and 50) as references
 **Category:** Calculation  
 **Priority:** P1  
 **Source:** `legacy/lazylabel/src/lazylabel/ui/main_window.py:5039-5139; legacy/lazylabel/src/lazylabel/ui/workers/reference_finder_worker.py:199-289; legacy/lazylabel/src/lazylabel/ui/modes/sequence_view_mode.py:486-509; legacy/lazylabel/src/lazylabel/ui/workers/reference_finder_worker.py:122-136`  
@@ -413,7 +427,7 @@ How to read a card: **Source** paths are relative to the repository root. **Prio
 **Edge cases handled:** Fewer than 5 frames: 'Need at least 5 frames to find archetypes'.; No timeline built: 'Build a timeline first'.; Clicking again while running aborts.; Earlier suggestions are cleared first.; All frames are noise: 'No diverse reference frames found'.; More clusters than the budget: each still gets 1, so suggestions can exceed the budget.; Frames already reference, saved or propagated keep their status but still count as suggestions for navigation.; More clusters than budget still gives each cluster 1, exceeding the budget; Noise frames are never suggested; No clusters means no suggestions; Clicking again while running aborts the analysis  
 **Confidence:** High — citation confirmed by an independent referee; 2 near-duplicate card(s) from other lenses were folded in
 
-### RULE-022: Propagation seeds come only from mask segments on reference frames
+### RULE-023: Propagation seeds come only from mask segments on reference frames
 **Category:** Calculation  
 **Priority:** P1  
 **Source:** `legacy/lazylabel/src/lazylabel/ui/main_window.py:3640-3668; legacy/lazylabel/src/lazylabel/ui/main_window.py:4257-4298; legacy/lazylabel/src/lazylabel/ui/handlers/single_view_mouse_handler.py:426-431; legacy/lazylabel/src/lazylabel/ui/workers/propagation_worker.py:254-287; legacy/lazylabel/src/lazylabel/ui/main_window.py:4475-4481`  
@@ -426,20 +440,6 @@ How to read a card: **Source** paths are relative to the repository root. **Prio
 **Edge cases handled:** Polygons, boxes and circles on the open frame have no mask and are silently excluded until saved and reloaded; Class names for all objects come from the open frame's aliases; No usable masks: 'No valid segments in reference frames'; The same polygon would be included after saving and reloading from NPZ, YOLO Seg or COCO, which carry masks; If no reference yields a non-empty mask: 'No valid segments in reference frames' and the run ends.; Aliases stored in a reference frame's own file are ignored when naming objects.  
 **Suspected defect:** Shape annotations on the open reference frame are silently left out of propagation. | Polygons, boxes, circles and auto-converted AI polygons (mask None) on the open reference frame are silently excluded from propagation.  
 **Confidence:** Medium — SME question: Should drawn polygons, boxes and circles be rasterized and used as propagation seeds? | The compliance and fidelity judges rated this not P0. Decide whether it guards annotation data integrity and belongs in the behavior contract. Judges' reasoning: analysis/lazylabel/P0_PANEL.md.
-
-### RULE-023: Crop is clamped to the image and blanks everything outside it on save, including the last row and column
-**Category:** Calculation  
-**Priority:** P1  
-**Source:** `legacy/lazylabel/src/lazylabel/ui/managers/crop_manager.py:47-57; legacy/lazylabel/src/lazylabel/ui/managers/crop_manager.py:102-153; legacy/lazylabel/src/lazylabel/core/file_manager.py:712-739; legacy/lazylabel/src/lazylabel/ui/managers/save_export_manager.py:412-417; legacy/lazylabel/src/lazylabel/ui/handlers/single_view_mouse_handler.py:539-561; legacy/lazylabel/src/lazylabel/ui/main_window.py:2148-2156; legacy/lazylabel/src/lazylabel/ui/managers/file_navigation_manager.py:227-238`  
-**Plain English:** Crop corners are rounded, clamped to 0..width-1 and 0..height-1, and put in order. On save, mask pixels outside rows y1..y2-1 and columns x1..x2-1 are cleared. The crop applies only to the current image.  
-**Specification:**  
-  Given A 1000x800 image; the user enters crop (-10, 50) to (1200, 700)  
-  When  The crop is applied and the image is saved  
-  Then  The stored crop is x1=0, y1=50, x2=999, y2=700 ('Crop applied: 0:999, 50:700'). Saved masks keep rows 50-699 and columns 0-998 only, so column 999 and row 700 are always cleared.  
-**Parameters:** A drawn crop must be larger than 5x5 px. Crops are remembered per image size (width, height), but only the unreachable legacy loader restores them.; Clamp x in [0, width-1], y in [0, height-1]; x2/y2 exclusive in the mask; minimum drawn size \> 5 px; x2/y2 exclusive in mask zeroing; x2 \<= width-1 and y2 \<= height-1 by clamping  
-**Edge cases handled:** A full-image crop (0,0)-(999,799) still clears the last row and column.; Opening another image, or loading a different model, clears the active crop.; Finishing a drawn crop switches to the legacy 'sam_points' mode.; Crop does not affect the AI embedding key.; Channel threshold, FFT and rescale are also limited to the crop region; Multi-view saves ignore the crop; Every crop drops its own last column and row; Sequence Save All uses the crop of the frame on screen; Multi-view saves never crop  
-**Suspected defect:** Off-by-one: clamping to width-1/height-1 combined with an exclusive end drops the final column and row. | Clamping to width-1/height-1 combined with exclusive x2/y2 means no crop can ever keep the last pixel column and row, even a full-image crop. | Inclusive clamping combined with exclusive slicing makes it impossible to keep the image's last row/column once any crop is active.  
-**Confidence:** Medium — SME question: Should a crop carry over to other images of the same size, as the unreachable loader does, or reset for each image? Panel: The compliance judge rated this not P0 while the fidelity judge rated it P0. Decide whether it guards annotation data integrity and belongs in the behavior contract. | Is crop end (x2, y2) meant to be inclusive or exclusive, and should a full-frame crop keep the entire image? Panel: The compliance judge rated this not P0 while the fidelity judge rated it P0. Decide whether it guards annotation data integrity and belongs in the behavior contract. Judges' reasoning: analysis/lazylabel/P0_PANEL.md.
 
 ### RULE-024: Grayscale detection tolerance and 16-bit display conversion
 **Category:** Calculation  
@@ -623,7 +623,20 @@ How to read a card: **Source** paths are relative to the repository root. **Prio
 
 ## Validation rules (15)
 
-### RULE-037: NPZ import (current and legacy layouts)
+### RULE-037: COCO JSON import with polygon-then-box fallback
+**Category:** Validation  
+**Priority:** P0  
+**Source:** `legacy/lazylabel/src/lazylabel/core/file_manager.py:602-710`  
+**Plain English:** Categories become aliases ('name.supercategory' when they differ); each polygon of 6+ numbers becomes its own mask segment with category_id as class; if no polygon yields pixels, the [x, y, w, h] box is used, clamped to the image.  
+**Specification:**  
+  Given 640x480 image; category {id 2, name 'dog', supercategory 'animal'}; annotation category_id 2 with RLE segmentation and bbox [630, 470, 20, 20]  
+  When  img_coco.json is loaded  
+  Then  Alias 2 = 'dog.animal'; RLE ignored; box clamped to x 630-639, y 470-479 giving one 10x10 segment of class 2  
+**Parameters:** Minimum polygon length 6 numbers; coordinates rounded with Python round()  
+**Edge cases handled:** Missing category_id becomes class 0; non-numeric category_id skips the annotation; image_id is ignored; every annotation is assumed to belong to this image; A multi-polygon annotation becomes several segments; Top level not an object: error logged, nothing loaded; Annotations whose polygon and bbox are both unusable are silently dropped; NPZ loading replaces aliases wholesale while COCO merges them  
+**Confidence:** High — citation confirmed by an independent referee; both P0 judges (compliance and fidelity lenses) rated it P0 and the specification faithful; 1 near-duplicate card(s) from other lenses were folded in
+
+### RULE-038: NPZ import (current and legacy layouts)
 **Category:** Validation  
 **Priority:** P0  
 **Source:** `legacy/lazylabel/src/lazylabel/core/file_manager.py:224-280; legacy/lazylabel/src/lazylabel/core/file_manager.py:335-343`  
@@ -636,22 +649,9 @@ How to read a card: **Source** paths are relative to the repository root. **Prio
 **Edge cases handled:** Older files without class_order treat channel index as class ID; class_order shorter than the channel count: extra channels use their index; A 2-D mask is treated as a single channel; Mask size is not checked against the image; a mismatch surfaces later as a save failure; Legacy stack entry without a class_ids value becomes class 0; NPZ mask size is not checked against the image size; a mismatched file loads and later fails at save; An NPZ with neither 'mask' nor 'masks' loads nothing and still stops the load chain  
 **Confidence:** High — citation confirmed by an independent referee; both P0 judges (compliance and fidelity lenses) rated it P0 and the specification faithful; 1 near-duplicate card(s) from other lenses were folded in
 
-### RULE-038: COCO JSON import with polygon-then-box fallback
-**Category:** Validation  
-**Priority:** P1  
-**Source:** `legacy/lazylabel/src/lazylabel/core/file_manager.py:602-710`  
-**Plain English:** Categories become aliases ('name.supercategory' when they differ); each polygon of 6+ numbers becomes its own mask segment with category_id as class; if no polygon yields pixels, the [x, y, w, h] box is used, clamped to the image.  
-**Specification:**  
-  Given 640x480 image; category {id 2, name 'dog', supercategory 'animal'}; annotation category_id 2 with RLE segmentation and bbox [630, 470, 20, 20]  
-  When  img_coco.json is loaded  
-  Then  Alias 2 = 'dog.animal'; RLE ignored; box clamped to x 630-639, y 470-479 giving one 10x10 segment of class 2  
-**Parameters:** Minimum polygon length 6 numbers; coordinates rounded with Python round()  
-**Edge cases handled:** Missing category_id becomes class 0; non-numeric category_id skips the annotation; image_id is ignored; every annotation is assumed to belong to this image; A multi-polygon annotation becomes several segments; Top level not an object: error logged, nothing loaded; Annotations whose polygon and bbox are both unusable are silently dropped; NPZ loading replaces aliases wholesale while COCO merges them  
-**Confidence:** Medium — SME question: The compliance judge rated this not P0 while the fidelity judge rated it P0. Decide whether it guards annotation data integrity and belongs in the behavior contract. Judges' reasoning: analysis/lazylabel/P0_PANEL.md.
-
 ### RULE-039: Pascal VOC and CreateML import rules
 **Category:** Validation  
-**Priority:** P1  
+**Priority:** P0  
 **Source:** `legacy/lazylabel/src/lazylabel/core/file_manager.py:456-540`  
 **Plain English:** VOC objects need both a name and a bndbox (missing coordinates default to 0, xmax/ymax exclusive); CreateML uses only the first image entry and converts center/size pixels to a box; both then use name-to-class resolution and clamp/drop rules.  
 **Specification:**  
@@ -660,11 +660,11 @@ How to read a card: **Source** paths are relative to the repository root. **Prio
   Then  One 10x10 mask segment covering columns 100-109 and rows 50-59  
 **Parameters:** None  
 **Edge cases handled:** VOC files from tools using inclusive xmax lose 1 px in width and height; Empty name becomes label '0' (class 0); CreateML arrays with several images: only the first is used; missing label becomes '0'  
-**Confidence:** Medium — SME question: The compliance judge rated this not P0 while the fidelity judge rated it P0. Decide whether it guards annotation data integrity and belongs in the behavior contract. Judges' reasoning: analysis/lazylabel/P0_PANEL.md.
+**Confidence:** High — citation confirmed by an independent referee; both P0 judges (compliance and fidelity lenses) rated it P0 and the specification faithful
 
 ### RULE-040: YOLO Detection import validation, rounding and clamping
 **Category:** Validation  
-**Priority:** P1  
+**Priority:** P0  
 **Source:** `legacy/lazylabel/src/lazylabel/core/file_manager.py:381-454`  
 **Plain English:** Each line must have exactly 5 tokens with numeric coordinates; boxes are converted to pixels with rounding, clamped to the image, dropped if empty, and loaded as filled rectangular mask segments.  
 **Specification:**  
@@ -673,11 +673,11 @@ How to read a card: **Source** paths are relative to the repository root. **Prio
   Then  Line 1: class 3 mask columns 240-399, rows 120-359; line 2 skipped (4 tokens); line 3: x1 = 640, x2 clamped to 640, box empty and dropped  
 **Parameters:** x2/y2 exclusive; Python round() (half to even); Rounding = Python round() (10.5 -\> 10, 11.5 -\> 12); clamp x1,y1 \>= 0, x2 \<= width, y2 \<= height  
 **Edge cases handled:** Label 'cat' still receives a class ID and alias even though its only box was dropped; Prediction files with a 6th confidence token are skipped line by line; Loaded boxes are masks (type 'Loaded'), not editable rectangles; A same-named non-annotation .txt (e.g. a caption file) loads nothing but still stops the load chain; Negative coordinates are clamped to 0  
-**Confidence:** Medium — SME question: The compliance judge rated this not P0 while the fidelity judge rated it P0. Decide whether it guards annotation data integrity and belongs in the behavior contract. | The compliance judge rated this not P0 while the fidelity judge rated it P0. Decide whether it guards annotation data integrity and belongs in the behavior contract. The fidelity judge found the specification unfaithful to the code. Correct the card from the judge's findings before writing its equivalence test. Judges' reasoning: analysis/lazylabel/P0_PANEL.md.
+**Confidence:** Medium — SME question: The fidelity judge found the specification unfaithful to the code. Correct the card from the judge's findings before writing its equivalence test. Judges' reasoning: analysis/lazylabel/P0_PANEL.md.
 
 ### RULE-041: YOLO Segmentation import validation
 **Category:** Validation  
-**Priority:** P1  
+**Priority:** P0  
 **Source:** `legacy/lazylabel/src/lazylabel/core/file_manager.py:542-600`  
 **Plain English:** A line needs a label plus at least 3 coordinate pairs (7 or more tokens, odd count, all numeric); points are scaled to pixels with rounding, filled into a mask, and dropped if no pixel is set.  
 **Specification:**  
@@ -686,7 +686,7 @@ How to read a card: **Source** paths are relative to the repository root. **Prio
   Then  One segment of class 0, vertices [[64,48],[128,48],[128,96]], mask = filled triangle  
 **Parameters:** min tokens 7; token count must be odd; Minimum tokens 7; rounding Python round()  
 **Edge cases handled:** An 8-token line is skipped entirely; A polygon fully outside the image yields no pixels and is dropped; Loaded segments are type 'Loaded' masks and cannot be vertex-edited even though vertices are kept; Loaded polygons are type 'Loaded', so Edit mode (Polygon/Circle only) cannot edit them despite stored vertices; A 5-token YOLO Detection file with a colliding '_seg.txt' name loads nothing  
-**Confidence:** Medium — SME question: The compliance judge rated this not P0 while the fidelity judge rated it P0. Decide whether it guards annotation data integrity and belongs in the behavior contract. The fidelity judge found the specification unfaithful to the code. Correct the card from the judge's findings before writing its equivalence test. Judges' reasoning: analysis/lazylabel/P0_PANEL.md.
+**Confidence:** Medium — SME question: The fidelity judge found the specification unfaithful to the code. Correct the card from the judge's findings before writing its equivalence test. Judges' reasoning: analysis/lazylabel/P0_PANEL.md.
 
 ### RULE-042: Class alias editing is unvalidated
 **Category:** Validation  
@@ -824,7 +824,49 @@ How to read a card: **Source** paths are relative to the repository root. **Prio
 
 ## Lifecycle rules (26)
 
-### RULE-052: Leaving a sequence frame saves it and marks it Saved, even if it is a reference
+### RULE-052: Undo/redo history scope
+**Category:** Lifecycle  
+**Priority:** P0  
+**Source:** `legacy/lazylabel/src/lazylabel/core/undo_redo_manager.py:28-131; legacy/lazylabel/src/lazylabel/ui/main_window.py:2186-2189; legacy/lazylabel/src/lazylabel/ui/main_window.py:3585-3589; legacy/lazylabel/src/lazylabel/core/segment_manager.py:58-63; legacy/lazylabel/src/lazylabel/core/undo_redo_manager.py:631-683; legacy/lazylabel/src/lazylabel/core/undo_redo_manager.py:135-181; legacy/lazylabel/src/lazylabel/ui/managers/segment_table_manager.py:53-100; legacy/lazylabel/src/lazylabel/ui/main_window.py:3025-3026`  
+**Plain English:** Any new recorded action clears the redo stack; history is cleared when a new image or timeline frame loads; only add segment, add point, add polygon point, move polygon, move vertex, move circle and erase are undoable.  
+**Specification:**  
+  Given User added 2 segments and undid 1  
+  When  The user draws a new polygon  
+  Then  The undone segment can no longer be redone  
+**Parameters:** No history length cap; Recorded actions: add_segment, add_point, add_polygon_point, move_polygon, move_vertex, move_circle, erase_segments. A delete_segments handler exists but nothing records it. No depth limit.  
+**Edge cases handled:** Undo of add segment works by list index, so unrecorded deletes/merges can make it remove another segment or fail; Not undoable: delete, merge, reassign IDs, alias edits, auto-polygon conversion, multi-view polygon add/erase, crop; Redo of erase removes the last N segments in the list; If the earlier add's index is still in range, undo removes a different segment than the one originally added; Multi-view deletes are also not undoable; An unknown action type shows a warning and is dropped from both lists.; Redo of add_segment re-appends the segment at the end, not at its original index.  
+**Suspected defect:** Undo/redo handlers for 'delete_segments' exist but no code records that action type. | Unrecorded deletions shift indices, so undo can remove the wrong segment; the deletion itself cannot be undone.  
+**Confidence:** High — citation confirmed by an independent referee; the only P0 judge that returned a verdict rated it P0 and faithful (the other judge failed); 2 near-duplicate card(s) from other lenses were folded in
+
+### RULE-053: Undoing an erase inserts malformed segment records
+**Category:** Lifecycle  
+**Priority:** P0  
+**Source:** `legacy/lazylabel/src/lazylabel/core/undo_redo_manager.py:574-629; legacy/lazylabel/src/lazylabel/core/segment_manager.py:525-525; legacy/lazylabel/src/lazylabel/ui/managers/ai_segment_manager.py:253-266; legacy/lazylabel/src/lazylabel/core/segment_manager.py:646-707; legacy/lazylabel/src/lazylabel/core/segment_manager.py:752-814`  
+**Plain English:** Erase records wrapper entries {index, segment}, but undo passes each wrapper straight to add_segment, so undo appends records with no mask, type or vertices and leaves the pieces created by the erase in place.  
+**Specification:**  
+  Given Segment #2 (class 1, 1,000 px) was erased down to a 942-px piece  
+  When  The user presses Ctrl+Z  
+  Then  The 942-px piece stays; a new record {index 2, segment {...}, class_id = active or next class} with no mask is appended; notification 'Undid: Erase 1 segment(s)'; the original is not restored  
+**Parameters:** Action type 'erase_segments'; redo deletes the last N segments; Surviving pieces must be more than 10 px, using 8-connectivity. Erased polygons and circles become mask segments of type 'AI'.  
+**Edge cases handled:** The malformed record can introduce a new class ID, producing an empty extra channel in NPZ on save; Redo then deletes the last N list entries, which may be unrelated segments; Redo then deletes the phantom but the original stays lost; A segment erased completely also cannot be restored.; Redo deletes the last N segments, which removes the wrong ones if anything was added after the undo.  
+**Suspected defect:** Payload shape mismatch between erase recording and undo replay. | Undo should restore the original segments at their indices and remove the split pieces; instead it corrupts the class list with an empty class. | Erase undo restores wrapper records instead of segments and never removes the split pieces.  
+**Confidence:** High — citation confirmed by an independent referee; both P0 judges (compliance and fidelity lenses) rated it P0 and the specification faithful; 2 near-duplicate card(s) from other lenses were folded in
+
+### RULE-054: Closing the application never saves the open image's annotations
+**Category:** Lifecycle  
+**Priority:** P0  
+**Source:** `legacy/lazylabel/src/lazylabel/ui/main_window.py:2064-2108`  
+**Plain English:** On window close only application settings are written; the segments of the open image, sequence frame or multi-view pair are discarded without saving or asking, even when Auto-Save is on.  
+**Specification:**  
+  Given img_005.png open with 4 unsaved segments; Auto-Save on  
+  When  The user closes the main window  
+  Then  settings.json is written; no img_005.npz or img_005.txt is written; the 4 segments are lost  
+**Parameters:** None  
+**Edge cases handled:** Propagated but unsaved sequence frames are also lost; The hotkey dialog does prompt for unsaved changes, the main window does not  
+**Suspected defect:** Auto-Save implies work is preserved, yet the last image edited before exit is never saved.  
+**Confidence:** Medium — SME question: Should closing auto-save (when Auto-Save is on) or prompt about unsaved annotations? Judges' reasoning: analysis/lazylabel/P0_PANEL.md.
+
+### RULE-055: Leaving a sequence frame saves it and marks it Saved, even if it is a reference
 **Category:** Lifecycle  
 **Priority:** P0  
 **Source:** `legacy/lazylabel/src/lazylabel/ui/main_window.py:3414-3434; legacy/lazylabel/src/lazylabel/ui/main_window.py:3480-3519; legacy/lazylabel/src/lazylabel/ui/modes/sequence_view_mode.py:365-373; legacy/lazylabel/src/lazylabel/ui/modes/sequence_view_mode.py:143-159`  
@@ -838,7 +880,21 @@ How to read a card: **Source** paths are relative to the repository root. **Prio
 **Suspected defect:** Saving overwrites REFERENCE with SAVED. The next Propagate then resets SAVED to PENDING, so a reference frame's status silently degrades, and Find Archetypes can later mark it 'suggested'. Deleting every mask on a propagated frame also does not stick: the empty save deletes the files but keeps the propagated masks and 'propagated' status, so revisiting the frame or Save All brings them back.  
 **Confidence:** Medium — SME question: Should a reference frame keep its 'reference' status after it is saved? Should clearing all masks on a propagated frame discard its propagated result? | The compliance judge rated this not P0 while the fidelity judge rated it P0. Decide whether it guards annotation data integrity and belongs in the behavior contract. Judges' reasoning: analysis/lazylabel/P0_PANEL.md.
 
-### RULE-053: Multi-view batch navigation always saves, ignoring the Auto-Save setting
+### RULE-056: Leaving the Sequence tab or clicking New Timeline discards all sequence work without saving
+**Category:** Lifecycle  
+**Priority:** P0  
+**Source:** `legacy/lazylabel/src/lazylabel/ui/main_window.py:3043-3060; legacy/lazylabel/src/lazylabel/ui/main_window.py:4998-5035; legacy/lazylabel/src/lazylabel/ui/main_window.py:5346-5382; legacy/lazylabel/src/lazylabel/ui/main_window.py:7242-7272; legacy/lazylabel/src/lazylabel/ui/main_window.py:2064-2108`  
+**Plain English:** Switching away from the Sequence tab, or clicking New Timeline, stops archetype analysis, resets the engine, and wipes references, statuses, unsaved propagated masks and the Start/End markers. The current frame is not auto-saved. Switching tabs never saves, and closing the app saves settings only.  
+**Specification:**  
+  Given Sequence tab with 300 frames: 250 green (propagated, unsaved) and unsaved edits on the current frame  
+  When  The user clicks the Single tab  
+  Then  All 250 propagated results, all references and the current frame's edits are discarded. Single view reloads the current image's annotations from disk. Returning to Sequence shows the setup screen (Set Start / Set End / Build Timeline).  
+**Parameters:** None  
+**Edge cases handled:** The branch in _enter_sequence_mode that restores a timeline when returning to the tab can never run, because leaving the tab always clears the built flag.; Going from Single to Multi and back also reloads from disk, dropping unsaved single-view edits.; Closing the window stops workers and saves settings only; there is no annotation save or prompt.  
+**Suspected defect:** Unsaved propagated masks and edits are lost silently, with no confirmation.  
+**Confidence:** High — citation confirmed by an independent referee; both P0 judges (compliance and fidelity lenses) rated it P0 and the specification faithful
+
+### RULE-057: Multi-view batch navigation always saves, ignoring the Auto-Save setting
 **Category:** Lifecycle  
 **Priority:** P0  
 **Source:** `legacy/lazylabel/src/lazylabel/ui/main_window.py:6559-6636; legacy/lazylabel/src/lazylabel/ui/managers/crop_manager.py:102-107; legacy/lazylabel/src/lazylabel/ui/managers/file_navigation_manager.py:390-423; legacy/lazylabel/src/lazylabel/ui/main_window.py:6491-6557`  
@@ -852,7 +908,7 @@ How to read a card: **Source** paths are relative to the repository root. **Prio
 **Suspected defect:** Auto-Save setting ignored; behavior differs from single-view and sequence mode.  
 **Confidence:** High — citation confirmed by an independent referee; both P0 judges (compliance and fidelity lenses) rated it P0 and the specification faithful; 1 near-duplicate card(s) from other lenses were folded in
 
-### RULE-054: Propagation finish, Save All and Trim reload the current frame without saving it
+### RULE-058: Propagation finish, Save All and Trim reload the current frame without saving it
 **Category:** Lifecycle  
 **Priority:** P0  
 **Source:** `legacy/lazylabel/src/lazylabel/ui/main_window.py:4638-4645; legacy/lazylabel/src/lazylabel/ui/main_window.py:4834-4839; legacy/lazylabel/src/lazylabel/ui/main_window.py:5290-5291; legacy/lazylabel/src/lazylabel/ui/main_window.py:3577-3638; legacy/lazylabel/src/lazylabel/ui/main_window.py:4257-4298`  
@@ -866,7 +922,7 @@ How to read a card: **Source** paths are relative to the repository root. **Prio
 **Suspected defect:** Unsaved annotations on the current frame, including a reference that was just used for propagation, are silently discarded.  
 **Confidence:** High — citation confirmed by an independent referee; both P0 judges (compliance and fidelity lenses) rated it P0 and the specification faithful
 
-### RULE-055: Auto-save current image before switching images (single view)
+### RULE-059: Auto-save current image before switching images (single view)
 **Category:** Lifecycle  
 **Priority:** P0  
 **Source:** `legacy/lazylabel/src/lazylabel/ui/managers/file_navigation_manager.py:153-162; legacy/lazylabel/src/lazylabel/config/settings.py:45-46; legacy/lazylabel/src/lazylabel/ui/widgets/settings_widget.py:38-44; legacy/lazylabel/src/lazylabel/ui/main_window.py:3480-3519; legacy/lazylabel/src/lazylabel/ui/managers/file_navigation_manager.py:401-403; legacy/lazylabel/src/lazylabel/ui/main_window.py:6491-6497; legacy/lazylabel/src/lazylabel/ui/managers/file_navigation_manager.py:254-376; legacy/lazylabel/src/lazylabel/ui/main_window.py:2138-2193`  
@@ -880,7 +936,7 @@ How to read a card: **Source** paths are relative to the repository root. **Prio
 **Suspected defect:** No confirmation before discarding unsaved work when Auto-Save is off or the save fails. | Multi-view navigation (loading a pair, next/previous batch) always saves and deletes empty viewers' files even when Auto-Save is off. | The path is committed before decoding succeeds, so a failed load leads to that image's annotations being deleted on the next save.  
 **Confidence:** Medium — SME question: The fidelity judge found the specification unfaithful to the code. Correct the card from the judge's findings before writing its equivalence test. | The compliance and fidelity judges found the specification unfaithful to the code. Correct the card from the judge's findings before writing its equivalence test. | The compliance judge found the specification unfaithful to the code. Correct the card from the judge's findings before writing its equivalence test. Judges' reasoning: analysis/lazylabel/P0_PANEL.md.
 
-### RULE-056: Propagated frame flagging and commit (Keep Flagged Masks)
+### RULE-060: Propagated frame flagging and commit (Keep Flagged Masks)
 **Category:** Lifecycle  
 **Priority:** P0  
 **Source:** `legacy/lazylabel/src/lazylabel/ui/managers/propagation_manager.py:751-810; legacy/lazylabel/src/lazylabel/ui/main_window.py:4459-4594; legacy/lazylabel/src/lazylabel/ui/modes/sequence_view_mode.py:290-345; legacy/lazylabel/src/lazylabel/ui/widgets/sequence_widget.py:333-398; legacy/lazylabel/src/lazylabel/ui/modes/sequence_view_mode.py:539-541; legacy/lazylabel/src/lazylabel/ui/managers/propagation_manager.py:744-805; legacy/lazylabel/src/lazylabel/ui/managers/propagation_manager.py:1254-1273; legacy/lazylabel/src/lazylabel/ui/main_window.py:4164-4170; legacy/lazylabel/src/lazylabel/ui/main_window.py:4369-4378`  
@@ -894,35 +950,7 @@ How to read a card: **Source** paths are relative to the repository root. **Prio
 **Edge cases handled:** Skip Labeled tooltip says NPZ files, but any supported sidecar format marks a frame as labeled; Changing Min Conf after propagation recomputes the propagation manager's flagged set (used by Save All) but not the timeline statuses; With Keep Flagged off, masks of failed frames are already discarded and lowering the threshold cannot recover them; A confidence of exactly 0.99 is not flagged.; Objects with zero-pixel masks are dropped and do not lower the minimum; a frame where every object is empty is never committed and stays pending.; If a frame is committed twice (e.g. overlapping streaming chunks), masks merge and the running minimum is kept.; A safety check re-flags a 'propagated' or 'pending' frame whose stored score is below threshold.; Cancelling loses the frame being buffered; Frames where every object mask is empty keep their previous status (pending)  
 **Confidence:** Medium — SME question: The fidelity judge found the specification unfaithful to the code. Correct the card from the judge's findings before writing its equivalence test. | The compliance judge rated this not P0 while the fidelity judge rated it P0. Decide whether it guards annotation data integrity and belongs in the behavior contract. Judges' reasoning: analysis/lazylabel/P0_PANEL.md.
 
-### RULE-057: Undo/redo history scope
-**Category:** Lifecycle  
-**Priority:** P1  
-**Source:** `legacy/lazylabel/src/lazylabel/core/undo_redo_manager.py:28-131; legacy/lazylabel/src/lazylabel/ui/main_window.py:2186-2189; legacy/lazylabel/src/lazylabel/ui/main_window.py:3585-3589; legacy/lazylabel/src/lazylabel/core/segment_manager.py:58-63; legacy/lazylabel/src/lazylabel/core/undo_redo_manager.py:631-683; legacy/lazylabel/src/lazylabel/core/undo_redo_manager.py:135-181; legacy/lazylabel/src/lazylabel/ui/managers/segment_table_manager.py:53-100; legacy/lazylabel/src/lazylabel/ui/main_window.py:3025-3026`  
-**Plain English:** Any new recorded action clears the redo stack; history is cleared when a new image or timeline frame loads; only add segment, add point, add polygon point, move polygon, move vertex, move circle and erase are undoable.  
-**Specification:**  
-  Given User added 2 segments and undid 1  
-  When  The user draws a new polygon  
-  Then  The undone segment can no longer be redone  
-**Parameters:** No history length cap; Recorded actions: add_segment, add_point, add_polygon_point, move_polygon, move_vertex, move_circle, erase_segments. A delete_segments handler exists but nothing records it. No depth limit.  
-**Edge cases handled:** Undo of add segment works by list index, so unrecorded deletes/merges can make it remove another segment or fail; Not undoable: delete, merge, reassign IDs, alias edits, auto-polygon conversion, multi-view polygon add/erase, crop; Redo of erase removes the last N segments in the list; If the earlier add's index is still in range, undo removes a different segment than the one originally added; Multi-view deletes are also not undoable; An unknown action type shows a warning and is dropped from both lists.; Redo of add_segment re-appends the segment at the end, not at its original index.  
-**Suspected defect:** Undo/redo handlers for 'delete_segments' exist but no code records that action type. | Unrecorded deletions shift indices, so undo can remove the wrong segment; the deletion itself cannot be undone.  
-**Confidence:** Medium — SME question: The compliance judge rated this not P0 while the fidelity judge rated it P0. Decide whether it guards annotation data integrity and belongs in the behavior contract. Judges' reasoning: analysis/lazylabel/P0_PANEL.md.
-
-### RULE-058: Undoing an erase inserts malformed segment records
-**Category:** Lifecycle  
-**Priority:** P1  
-**Source:** `legacy/lazylabel/src/lazylabel/core/undo_redo_manager.py:574-629; legacy/lazylabel/src/lazylabel/core/segment_manager.py:525-525; legacy/lazylabel/src/lazylabel/ui/managers/ai_segment_manager.py:253-266; legacy/lazylabel/src/lazylabel/core/segment_manager.py:646-707; legacy/lazylabel/src/lazylabel/core/segment_manager.py:752-814`  
-**Plain English:** Erase records wrapper entries {index, segment}, but undo passes each wrapper straight to add_segment, so undo appends records with no mask, type or vertices and leaves the pieces created by the erase in place.  
-**Specification:**  
-  Given Segment #2 (class 1, 1,000 px) was erased down to a 942-px piece  
-  When  The user presses Ctrl+Z  
-  Then  The 942-px piece stays; a new record {index 2, segment {...}, class_id = active or next class} with no mask is appended; notification 'Undid: Erase 1 segment(s)'; the original is not restored  
-**Parameters:** Action type 'erase_segments'; redo deletes the last N segments; Surviving pieces must be more than 10 px, using 8-connectivity. Erased polygons and circles become mask segments of type 'AI'.  
-**Edge cases handled:** The malformed record can introduce a new class ID, producing an empty extra channel in NPZ on save; Redo then deletes the last N list entries, which may be unrelated segments; Redo then deletes the phantom but the original stays lost; A segment erased completely also cannot be restored.; Redo deletes the last N segments, which removes the wrong ones if anything was added after the undo.  
-**Suspected defect:** Payload shape mismatch between erase recording and undo replay. | Undo should restore the original segments at their indices and remove the split pieces; instead it corrupts the class list with an empty class. | Erase undo restores wrapper records instead of segments and never removes the split pieces.  
-**Confidence:** Medium — SME question: The compliance judge rated this not P0 while the fidelity judge rated it P0. Decide whether it guards annotation data integrity and belongs in the behavior contract. Judges' reasoning: analysis/lazylabel/P0_PANEL.md.
-
-### RULE-059: Undoing a circle center drag changes the circle's radius
+### RULE-061: Undoing a circle center drag changes the circle's radius
 **Category:** Lifecycle  
 **Priority:** P1  
 **Source:** `legacy/lazylabel/src/lazylabel/ui/editable_vertex.py:30-66; legacy/lazylabel/src/lazylabel/ui/managers/edit_mode_manager.py:188-239; legacy/lazylabel/src/lazylabel/core/undo_redo_manager.py:309-348`  
@@ -936,7 +964,7 @@ How to read a card: **Source** paths are relative to the repository root. **Prio
 **Suspected defect:** Single-view handles record move_vertex instead of move_circle.  
 **Confidence:** High — citation confirmed by an independent referee
 
-### RULE-060: AI mode: click adds a point, a drag over 5 px draws a box, Space accepts the preview
+### RULE-062: AI mode: click adds a point, a drag over 5 px draws a box, Space accepts the preview
 **Category:** Lifecycle  
 **Priority:** P1  
 **Source:** `legacy/lazylabel/src/lazylabel/ui/handlers/single_view_mouse_handler.py:130-139; legacy/lazylabel/src/lazylabel/ui/main_window.py:2216-2276; legacy/lazylabel/src/lazylabel/ui/managers/ai_segment_manager.py:74-200; legacy/lazylabel/src/lazylabel/ui/managers/ai_segment_manager.py:405-515; legacy/lazylabel/src/lazylabel/ui/main_window.py:1788-1829; legacy/lazylabel/src/lazylabel/ui/control_panel.py:916-921; legacy/lazylabel/src/lazylabel/ui/managers/keyboard_event_manager.py:44-72; legacy/lazylabel/src/lazylabel/ui/handlers/single_view_mouse_handler.py:225-255; legacy/lazylabel/src/lazylabel/ui/handlers/single_view_mouse_handler.py:326-537`  
@@ -949,7 +977,7 @@ How to read a card: **Source** paths are relative to the repository root. **Prio
 **Edge cases handled:** Clicks are refused while the model is starting up or embedding ('AI model is initializing/updating, please wait...').; Negative points alone produce no preview.; If the fragment filter removes everything, a warning is shown: a point preview is dropped but its points stay, and a box preview stays in place.; With no preview, Space shows 'No AI segment preview to accept'.; A drag just over 5 px with a thin box is silently discarded; Box prediction blocked with 'AI model not available' or 'AI model is updating, please wait...'; Non-boolean model masks are thresholded at 0.5  
 **Confidence:** High — citation confirmed by an independent referee; 2 near-duplicate card(s) from other lenses were folded in
 
-### RULE-061: Abort stops the running step and keeps frames already committed
+### RULE-063: Abort stops the running step and keeps frames already committed
 **Category:** Lifecycle  
 **Priority:** P1  
 **Source:** `legacy/lazylabel/src/lazylabel/ui/main_window.py:4406-4445; legacy/lazylabel/src/lazylabel/ui/workers/propagation_worker.py:59-104; legacy/lazylabel/src/lazylabel/ui/managers/propagation_manager.py:533-536; legacy/lazylabel/src/lazylabel/ui/managers/propagation_manager.py:731-733`  
@@ -962,7 +990,7 @@ How to read a card: **Source** paths are relative to the repository root. **Prio
 **Edge cases handled:** Aborting during setup or reference registration also clears the queued propagation request.  
 **Confidence:** High — citation confirmed by an independent referee
 
-### RULE-062: Clear Flags repaints non-reference frames as pending without touching results
+### RULE-064: Clear Flags repaints non-reference frames as pending without touching results
 **Category:** Lifecycle  
 **Priority:** P1  
 **Source:** `legacy/lazylabel/src/lazylabel/ui/main_window.py:3457-3478; legacy/lazylabel/src/lazylabel/ui/widgets/timeline_widget.py:598-603`  
@@ -975,34 +1003,6 @@ How to read a card: **Source** paths are relative to the repository root. **Prio
 **Edge cases handled:** A reference frame whose status had already become 'saved' is also reset to pending.; Status changes skip the thread lock and send no per-frame change signals.  
 **Suspected defect:** A cosmetic reset that leaves the timeline out of sync with the data used by navigation and Save All.  
 **Confidence:** High — citation confirmed by an independent referee
-
-### RULE-063: Closing the application never saves the open image's annotations
-**Category:** Lifecycle  
-**Priority:** P1  
-**Source:** `legacy/lazylabel/src/lazylabel/ui/main_window.py:2064-2108`  
-**Plain English:** On window close only application settings are written; the segments of the open image, sequence frame or multi-view pair are discarded without saving or asking, even when Auto-Save is on.  
-**Specification:**  
-  Given img_005.png open with 4 unsaved segments; Auto-Save on  
-  When  The user closes the main window  
-  Then  settings.json is written; no img_005.npz or img_005.txt is written; the 4 segments are lost  
-**Parameters:** None  
-**Edge cases handled:** Propagated but unsaved sequence frames are also lost; The hotkey dialog does prompt for unsaved changes, the main window does not  
-**Suspected defect:** Auto-Save implies work is preserved, yet the last image edited before exit is never saved.  
-**Confidence:** Medium — SME question: Should closing auto-save (when Auto-Save is on) or prompt about unsaved annotations? Panel: The compliance judge rated this not P0 while the fidelity judge rated it P0. Decide whether it guards annotation data integrity and belongs in the behavior contract. Judges' reasoning: analysis/lazylabel/P0_PANEL.md.
-
-### RULE-064: Leaving the Sequence tab or clicking New Timeline discards all sequence work without saving
-**Category:** Lifecycle  
-**Priority:** P1  
-**Source:** `legacy/lazylabel/src/lazylabel/ui/main_window.py:3043-3060; legacy/lazylabel/src/lazylabel/ui/main_window.py:4998-5035; legacy/lazylabel/src/lazylabel/ui/main_window.py:5346-5382; legacy/lazylabel/src/lazylabel/ui/main_window.py:7242-7272; legacy/lazylabel/src/lazylabel/ui/main_window.py:2064-2108`  
-**Plain English:** Switching away from the Sequence tab, or clicking New Timeline, stops archetype analysis, resets the engine, and wipes references, statuses, unsaved propagated masks and the Start/End markers. The current frame is not auto-saved. Switching tabs never saves, and closing the app saves settings only.  
-**Specification:**  
-  Given Sequence tab with 300 frames: 250 green (propagated, unsaved) and unsaved edits on the current frame  
-  When  The user clicks the Single tab  
-  Then  All 250 propagated results, all references and the current frame's edits are discarded. Single view reloads the current image's annotations from disk. Returning to Sequence shows the setup screen (Set Start / Set End / Build Timeline).  
-**Parameters:** None  
-**Edge cases handled:** The branch in _enter_sequence_mode that restores a timeline when returning to the tab can never run, because leaving the tab always clears the built flag.; Going from Single to Multi and back also reloads from disk, dropping unsaved single-view edits.; Closing the window stops workers and saves settings only; there is no annotation save or prompt.  
-**Suspected defect:** Unsaved propagated masks and edits are lost silently, with no confirmation.  
-**Confidence:** Medium — SME question: The compliance judge rated this not P0 while the fidelity judge rated it P0. Decide whether it guards annotation data integrity and belongs in the behavior contract. Judges' reasoning: analysis/lazylabel/P0_PANEL.md.
 
 ### RULE-065: Selecting a file in the Sequence tab jumps to its frame; a file outside the timeline bounces back
 **Category:** Lifecycle  
@@ -1213,7 +1213,21 @@ How to read a card: **Source** paths are relative to the repository root. **Prio
 **Edge cases handled:** A format that finds no objects returns without writing and does not delete its old file, so a stale file can survive; Success notification lists only files actually written  
 **Confidence:** High — citation confirmed by an independent referee; both P0 judges (compliance and fidelity lenses) rated it P0 and the specification faithful
 
-### RULE-080: Propagation never overwrites reference frames and, by default, frames already labeled
+### RULE-080: Sidecar file naming and suffix collisions
+**Category:** Policy  
+**Priority:** P0  
+**Source:** `legacy/lazylabel/src/lazylabel/core/exporters/npz_class_map.py:46-47; legacy/lazylabel/src/lazylabel/core/exporters/yolo_detection.py:45-46; legacy/lazylabel/src/lazylabel/core/exporters/yolo_segmentation.py:55-56; legacy/lazylabel/src/lazylabel/utils/fast_file_manager.py:186-235; legacy/lazylabel/src/lazylabel/core/file_manager.py:741-743`  
+**Plain English:** Annotation files sit next to the image, named image base name plus a format suffix, and the file list classifies files by suffix only; supported image types are png, jpg, jpeg, tiff and tif.  
+**Specification:**  
+  Given Images foo.png and foo_seg.png in one folder with YOLO Detection selected  
+  When  foo_seg.png is saved and foo.png is later opened (no foo.npz)  
+  Then  foo_seg.png writes foo_seg.txt, which is also foo.png's YOLO Segmentation name; foo.png loads it as segmentation (5-token lines rejected) and appears unlabeled; the file list marks foo as having YOLO Seg  
+**Parameters:** Suffixes .npz, _CM.npz, .txt, _seg.txt, _coco.json, .xml, _createml.json  
+**Edge cases handled:** foo.png and foo.jpg share and overwrite the same sidecar files; Batch file-status refresh never updates the NPZ Class Map column (fast_file_manager.py:651-677)  
+**Suspected defect:** Image names ending in _seg or _CM, or images differing only by extension, cause cross-image loading, wrong checkmarks and cross-image deletion.  
+**Confidence:** High — citation confirmed by an independent referee; both P0 judges (compliance and fidelity lenses) rated it P0 and the specification faithful
+
+### RULE-081: Propagation never overwrites reference frames and, by default, frames already labeled
 **Category:** Policy  
 **Priority:** P0  
 **Source:** `legacy/lazylabel/src/lazylabel/ui/main_window.py:4218-4231; legacy/lazylabel/src/lazylabel/ui/main_window.py:4459-4481; legacy/lazylabel/src/lazylabel/ui/managers/propagation_manager.py:744-749; legacy/lazylabel/src/lazylabel/ui/widgets/sequence_widget.py:346-354; legacy/lazylabel/src/lazylabel/core/file_manager.py:128-151`  
@@ -1226,7 +1240,7 @@ How to read a card: **Source** paths are relative to the repository root. **Prio
 **Edge cases handled:** The labeled set is computed once when the run starts; files created during the run are not protected.; Any unrelated \<stem\>.txt or \<stem\>.xml counts as a label.; With Skip Labeled off, propagated masks overwrite those files when they are saved.; Any same-named .txt, .xml or .json counts as labeled even if it is not an annotation; Tooltip says 'NPZ files' but all formats count; With Skip Labeled off, visiting the frame after propagation auto-saves propagated masks over its files  
 **Confidence:** Medium — SME question: The fidelity judge found the specification unfaithful to the code. Correct the card from the judge's findings before writing its equivalence test. Judges' reasoning: analysis/lazylabel/P0_PANEL.md.
 
-### RULE-081: Save All propagated frames eligibility
+### RULE-082: Save All propagated frames eligibility
 **Category:** Policy  
 **Priority:** P0  
 **Source:** `legacy/lazylabel/src/lazylabel/ui/main_window.py:4741-4846; legacy/lazylabel/src/lazylabel/ui/modes/sequence_view_mode.py:365-373; legacy/lazylabel/src/lazylabel/ui/main_window.py:3982-4009; legacy/lazylabel/src/lazylabel/ui/managers/save_export_manager.py:97-133; legacy/lazylabel/src/lazylabel/ui/managers/save_export_manager.py:394-417; legacy/lazylabel/src/lazylabel/ui/managers/propagation_manager.py:300-309; legacy/lazylabel/src/lazylabel/ui/managers/propagation_manager.py:1254-1273`  
@@ -1241,7 +1255,7 @@ How to read a card: **Source** paths are relative to the repository root. **Prio
 **Suspected defect:** When the reference class has no alias, propagated frames get alias 'Class N', so VOC/CreateML labels read 'Class 3' while the reference frame exports '3'; the message says NPZ although all selected formats are written. | Unsaved edits on the current frame are discarded; class-0 fallback can mislabel all objects. | Exclusion uses the engine's flagged set, which is recalculated when Min Conf changes, while the timeline's flags are not, so the frames saved can differ from the red frames shown. Failed writes are still recorded as saved.  
 **Confidence:** Medium — SME question: Should Save All first commit edits on the open frame, and should objects with unknown class be saved as class 0? | The compliance judge rated this not P0 while the fidelity judge rated it P0. Decide whether it guards annotation data integrity and belongs in the behavior contract. Judges' reasoning: analysis/lazylabel/P0_PANEL.md.
 
-### RULE-082: Saving an image with no segments deletes all of its annotation files
+### RULE-083: Saving an image with no segments deletes all of its annotation files
 **Category:** Policy  
 **Priority:** P0  
 **Source:** `legacy/lazylabel/src/lazylabel/ui/managers/save_export_manager.py:97-133; legacy/lazylabel/src/lazylabel/ui/managers/save_export_manager.py:523-542; legacy/lazylabel/src/lazylabel/core/exporters/__init__.py:189-215; legacy/lazylabel/src/lazylabel/ui/managers/keyboard_event_manager.py:187-234; legacy/lazylabel/src/lazylabel/ui/widgets/export_format_widget.py:94-106; legacy/lazylabel/src/lazylabel/ui/main_window.py:6588-6594`  
@@ -1255,7 +1269,7 @@ How to read a card: **Source** paths are relative to the repository root. **Prio
 **Suspected defect:** Nothing tracks whether the image changed or loaded successfully, so an empty list is read as 'delete everything'. | Contradicts export_all's stated policy that writing never deletes ground truth shipped with the dataset; combined with loaders that silently fail, a damaged or unparseable annotation file makes the image look empty and its ground truth is destroyed on navigation. | The export contract says files already next to the image 'may be ... ground truth that shipped with the dataset' and are left alone (core/exporters/__init__.py:192-197), and ARCHITECTURE.md:193 says deletion is used only when the user cleared the annotations. The code cannot distinguish 'user cleared everything' from 'nothing was ever loaded', so it destroys annotations it never read.  
 **Confidence:** Medium — SME question: The compliance judge found the specification unfaithful to the code. Correct the card from the judge's findings before writing its equivalence test. Judges' reasoning: analysis/lazylabel/P0_PANEL.md. | Should deletion happen only when the user explicitly removed previously loaded segments, and only for files LazyLabel itself wrote?
 
-### RULE-083: AI features require segment-anything and PyTorch 2.7.1+
+### RULE-084: AI features require segment-anything and PyTorch 2.7.1+
 **Category:** Policy  
 **Priority:** P1  
 **Source:** `legacy/lazylabel/src/lazylabel/ai_availability.py:8-47; legacy/lazylabel/src/lazylabel/ui/widgets/sequence_widget.py:274-311; legacy/lazylabel/src/lazylabel/ui/widgets/sequence_widget.py:825-835; legacy/lazylabel/src/lazylabel/ui/main_window.py:1234-1238`  
@@ -1268,20 +1282,6 @@ How to read a card: **Source** paths are relative to the repository root. **Prio
 **Edge cases handled:** Pre-release versions such as '2.8.0a0' or '2.10.0rc1' raise ValueError during parsing; only ImportError is caught, so startup fails; SAM 2 additionally requires the sam2 package; Pre-release versions such as 2.8.0a0 or 2.10.0rc1 have a non-numeric third part; int() raises ValueError and only ImportError is caught.  
 **Suspected defect:** Unhandled ValueError for pre-release PyTorch version strings. | The version parser catches only ImportError.  
 **Confidence:** Medium — SME question: Are pre-release or nightly PyTorch builds supported? With such a build, does the uncaught ValueError during the import-time check stop the app from starting?
-
-### RULE-084: Sidecar file naming and suffix collisions
-**Category:** Policy  
-**Priority:** P1  
-**Source:** `legacy/lazylabel/src/lazylabel/core/exporters/npz_class_map.py:46-47; legacy/lazylabel/src/lazylabel/core/exporters/yolo_detection.py:45-46; legacy/lazylabel/src/lazylabel/core/exporters/yolo_segmentation.py:55-56; legacy/lazylabel/src/lazylabel/utils/fast_file_manager.py:186-235; legacy/lazylabel/src/lazylabel/core/file_manager.py:741-743`  
-**Plain English:** Annotation files sit next to the image, named image base name plus a format suffix, and the file list classifies files by suffix only; supported image types are png, jpg, jpeg, tiff and tif.  
-**Specification:**  
-  Given Images foo.png and foo_seg.png in one folder with YOLO Detection selected  
-  When  foo_seg.png is saved and foo.png is later opened (no foo.npz)  
-  Then  foo_seg.png writes foo_seg.txt, which is also foo.png's YOLO Segmentation name; foo.png loads it as segmentation (5-token lines rejected) and appears unlabeled; the file list marks foo as having YOLO Seg  
-**Parameters:** Suffixes .npz, _CM.npz, .txt, _seg.txt, _coco.json, .xml, _createml.json  
-**Edge cases handled:** foo.png and foo.jpg share and overwrite the same sidecar files; Batch file-status refresh never updates the NPZ Class Map column (fast_file_manager.py:651-677)  
-**Suspected defect:** Image names ending in _seg or _CM, or images differing only by extension, cause cross-image loading, wrong checkmarks and cross-image deletion.  
-**Confidence:** Medium — SME question: The compliance judge rated this not P0 while the fidelity judge rated it P0. Decide whether it guards annotation data integrity and belongs in the behavior contract. Judges' reasoning: analysis/lazylabel/P0_PANEL.md.
 
 ### RULE-085: Model type detected from file name
 **Category:** Policy  
@@ -1424,43 +1424,31 @@ How to read a card: **Source** paths are relative to the repository root. **Prio
 
 Answer each question on the rule card (or in the brief's open questions). P0 rules block their phase until answered.
 
-- [ ] **[RULE-001](#rule-001-npz-class-map-export-resolves-overlaps-to-lowest-class-and-stores-foreground)** (P0, Medium) NPZ Class Map export resolves overlaps to lowest class and stores foreground: The fidelity judge found the specification unfaithful to the code. Correct the card from the judge's findings before writing its equivalence test. Judges' reasoning: analysis/lazylabel/P0_PANEL.md.
-- [ ] **[RULE-002](#rule-002-yolo-detection-export-line-format)** (P0, Medium) YOLO Detection export line format: Must YOLO class indices be contiguous 0..N-1 across the dataset? Panel: The fidelity judge found the specification unfaithful to the code. Correct the card from the judge's findings before writing its equivalence test. | The compliance judge rated this not P0 while the fidelity judge rated it P0. Decide whether it guards annotation data integrity and belongs in the behavior contract. Judges' … (full question and evidence on the card)
-- [ ] **[RULE-052](#rule-052-leaving-a-sequence-frame-saves-it-and-marks-it-saved-even-if-it-is-a-reference)** (P0, Medium) Leaving a sequence frame saves it and marks it Saved, even if it is a reference: Should a reference frame keep its 'reference' status after it is saved? Should clearing all masks on a propagated frame discard its propagated result? | The compliance judge rated this not P0 while the fidelity judge rated it P0. Decide whether it guards annotation data integrity and belongs in the behavior contract. Judges' reasoning: analysis/lazylabel/P0_PANEL.md.
-- [ ] **[RULE-055](#rule-055-auto-save-current-image-before-switching-images-single-view)** (P0, Medium) Auto-save current image before switching images (single view): The fidelity judge found the specification unfaithful to the code. Correct the card from the judge's findings before writing its equivalence test. | The compliance and fidelity judges found the specification unfaithful to the code. Correct the card from the judge's findings before writing its equivalence test. | The compliance judge found the specification unfaithful to the code. Correct the card … (full question and evidence on the card)
-- [ ] **[RULE-056](#rule-056-propagated-frame-flagging-and-commit-keep-flagged-masks)** (P0, Medium) Propagated frame flagging and commit (Keep Flagged Masks): The fidelity judge found the specification unfaithful to the code. Correct the card from the judge's findings before writing its equivalence test. | The compliance judge rated this not P0 while the fidelity judge rated it P0. Decide whether it guards annotation data integrity and belongs in the behavior contract. Judges' reasoning: analysis/lazylabel/P0_PANEL.md.
+- [ ] **[RULE-001](#rule-001-coco-json-export-structure-and-area)** (P0, Medium) COCO JSON export structure and area: Should COCO 'area' be the mask pixel count (COCO convention) instead of the contour polygon area? Panel: The fidelity judge found the specification unfaithful to the code. Correct the card from the judge's findings before writing its equivalence test. Judges' reasoning: analysis/lazylabel/P0_PANEL.md.
+- [ ] **[RULE-003](#rule-003-npz-class-map-export-resolves-overlaps-to-lowest-class-and-stores-foreground)** (P0, Medium) NPZ Class Map export resolves overlaps to lowest class and stores foreground: The fidelity judge found the specification unfaithful to the code. Correct the card from the judge's findings before writing its equivalence test. Judges' reasoning: analysis/lazylabel/P0_PANEL.md.
+- [ ] **[RULE-004](#rule-004-pascal-voc-export-uses-alias-names-and-exclusive-max-bounds)** (P0, Medium) Pascal VOC export uses alias names and exclusive max bounds: Which VOC bound convention do downstream training tools expect? | Must VOC exports interoperate with standard VOC tooling (1-based inclusive) or only round-trip within LazyLabel? Panel: The fidelity judge found the specification unfaithful to the code. Correct the card from the judge's findings before writing its equivalence test. Judges' reasoning: analysis/lazylabel/P0_PANEL.md.
+- [ ] **[RULE-005](#rule-005-yolo-detection-export-line-format)** (P0, Medium) YOLO Detection export line format: Must YOLO class indices be contiguous 0..N-1 across the dataset? Panel: The fidelity judge found the specification unfaithful to the code. Correct the card from the judge's findings before writing its equivalence test. | The compliance judge rated this not P0 while the fidelity judge rated it P0. Decide whether it guards annotation data integrity and belongs in the behavior contract. Judges' … (full question and evidence on the card)
+- [ ] **[RULE-011](#rule-011-new-segments-take-the-active-class-otherwise-the-next-free-class-id-highest--1)** (P0, Medium) New segments take the active class, otherwise the next free class id (highest + 1): The compliance and fidelity judges rated this not P0. Decide whether it guards annotation data integrity and belongs in the behavior contract. Judges' reasoning: analysis/lazylabel/P0_PANEL.md.
+- [ ] **[RULE-016](#rule-016-crop-is-clamped-to-the-image-and-blanks-everything-outside-it-on-save-including-the-last-row-and-column)** (P0, Medium) Crop is clamped to the image and blanks everything outside it on save, including the last row and column: Should a crop carry over to other images of the same size, as the unreachable loader does, or reset for each image? | Is crop end (x2, y2) meant to be inclusive or exclusive, and should a full-frame crop keep the entire image? Judges' reasoning: analysis/lazylabel/P0_PANEL.md.
+- [ ] **[RULE-040](#rule-040-yolo-detection-import-validation-rounding-and-clamping)** (P0, Medium) YOLO Detection import validation, rounding and clamping: The fidelity judge found the specification unfaithful to the code. Correct the card from the judge's findings before writing its equivalence test. Judges' reasoning: analysis/lazylabel/P0_PANEL.md.
+- [ ] **[RULE-041](#rule-041-yolo-segmentation-import-validation)** (P0, Medium) YOLO Segmentation import validation: The fidelity judge found the specification unfaithful to the code. Correct the card from the judge's findings before writing its equivalence test. Judges' reasoning: analysis/lazylabel/P0_PANEL.md.
+- [ ] **[RULE-054](#rule-054-closing-the-application-never-saves-the-open-images-annotations)** (P0, Medium) Closing the application never saves the open image's annotations: Should closing auto-save (when Auto-Save is on) or prompt about unsaved annotations? Judges' reasoning: analysis/lazylabel/P0_PANEL.md.
+- [ ] **[RULE-055](#rule-055-leaving-a-sequence-frame-saves-it-and-marks-it-saved-even-if-it-is-a-reference)** (P0, Medium) Leaving a sequence frame saves it and marks it Saved, even if it is a reference: Should a reference frame keep its 'reference' status after it is saved? Should clearing all masks on a propagated frame discard its propagated result? | The compliance judge rated this not P0 while the fidelity judge rated it P0. Decide whether it guards annotation data integrity and belongs in the behavior contract. Judges' reasoning: analysis/lazylabel/P0_PANEL.md.
+- [ ] **[RULE-059](#rule-059-auto-save-current-image-before-switching-images-single-view)** (P0, Medium) Auto-save current image before switching images (single view): The fidelity judge found the specification unfaithful to the code. Correct the card from the judge's findings before writing its equivalence test. | The compliance and fidelity judges found the specification unfaithful to the code. Correct the card from the judge's findings before writing its equivalence test. | The compliance judge found the specification unfaithful to the code. Correct the card … (full question and evidence on the card)
+- [ ] **[RULE-060](#rule-060-propagated-frame-flagging-and-commit-keep-flagged-masks)** (P0, Medium) Propagated frame flagging and commit (Keep Flagged Masks): The fidelity judge found the specification unfaithful to the code. Correct the card from the judge's findings before writing its equivalence test. | The compliance judge rated this not P0 while the fidelity judge rated it P0. Decide whether it guards annotation data integrity and belongs in the behavior contract. Judges' reasoning: analysis/lazylabel/P0_PANEL.md.
 - [ ] **[RULE-078](#rule-078-annotations-load-from-the-best-file-present-and-a-damaged-non-npz-file-stops-the-search)** (P0, Medium) Annotations load from the best file present, and a damaged non-NPZ file stops the search: The fidelity judge found the specification unfaithful to the code. Correct the card from the judge's findings before writing its equivalence test. Judges' reasoning: analysis/lazylabel/P0_PANEL.md.
-- [ ] **[RULE-080](#rule-080-propagation-never-overwrites-reference-frames-and-by-default-frames-already-labeled)** (P0, Medium) Propagation never overwrites reference frames and, by default, frames already labeled: The fidelity judge found the specification unfaithful to the code. Correct the card from the judge's findings before writing its equivalence test. Judges' reasoning: analysis/lazylabel/P0_PANEL.md.
-- [ ] **[RULE-081](#rule-081-save-all-propagated-frames-eligibility)** (P0, Medium) Save All propagated frames eligibility: Should Save All first commit edits on the open frame, and should objects with unknown class be saved as class 0? | The compliance judge rated this not P0 while the fidelity judge rated it P0. Decide whether it guards annotation data integrity and belongs in the behavior contract. Judges' reasoning: analysis/lazylabel/P0_PANEL.md.
-- [ ] **[RULE-082](#rule-082-saving-an-image-with-no-segments-deletes-all-of-its-annotation-files)** (P0, Medium) Saving an image with no segments deletes all of its annotation files: The compliance judge found the specification unfaithful to the code. Correct the card from the judge's findings before writing its equivalence test. Judges' reasoning: analysis/lazylabel/P0_PANEL.md. | Should deletion happen only when the user explicitly removed previously loaded segments, and only for files LazyLabel itself wrote?
-- [ ] **[RULE-007](#rule-007-coco-json-export-structure-and-area)** (P1, Medium) COCO JSON export structure and area: The compliance judge rated this not P0 while the fidelity judge rated it P0. Decide whether it guards annotation data integrity and belongs in the behavior contract. | Should COCO 'area' be the mask pixel count (COCO convention) instead of the contour polygon area? Panel: The compliance judge rated this not P0 while the fidelity judge rated it P0. Decide whether it guards annotation data … (full question and evidence on the card)
-- [ ] **[RULE-008](#rule-008-createml-exportimport-pixel-center-boxes)** (P1, Medium) CreateML export/import: pixel center boxes: The compliance judge rated this not P0 while the fidelity judge rated it P0. Decide whether it guards annotation data integrity and belongs in the behavior contract. Judges' reasoning: analysis/lazylabel/P0_PANEL.md.
-- [ ] **[RULE-009](#rule-009-pascal-voc-export-uses-alias-names-and-exclusive-max-bounds)** (P1, Medium) Pascal VOC export uses alias names and exclusive max bounds: Which VOC bound convention do downstream training tools expect? Panel: The compliance judge rated this not P0 while the fidelity judge rated it P0. Decide whether it guards annotation data integrity and belongs in the behavior contract. | Must VOC exports interoperate with standard VOC tooling (1-based inclusive) or only round-trip within LazyLabel? Panel: The compliance judge rated this not P0 … (full question and evidence on the card)
-- [ ] **[RULE-010](#rule-010-yolo-segmentation-export-polygon-simplification)** (P1, Medium) YOLO Segmentation export polygon simplification: The compliance judge rated this not P0 while the fidelity judge rated it P0. Decide whether it guards annotation data integrity and belongs in the behavior contract. Judges' reasoning: analysis/lazylabel/P0_PANEL.md.
-- [ ] **[RULE-011](#rule-011-eraser-splits-segments-and-drops-pieces-of-10-pixels-or-less)** (P1, Medium) Eraser splits segments and drops pieces of 10 pixels or less: The compliance judge rated this not P0 while the fidelity judge rated it P0. Decide whether it guards annotation data integrity and belongs in the behavior contract. Judges' reasoning: analysis/lazylabel/P0_PANEL.md.
-- [ ] **[RULE-012](#rule-012-merge-selected-segments-into-the-lowest-selected-class)** (P1, Medium) Merge selected segments into the lowest selected class: Should Merge assign to the active class when one is set? Panel: The compliance and fidelity judges rated this not P0. Decide whether it guards annotation data integrity and belongs in the behavior contract. Judges' reasoning: analysis/lazylabel/P0_PANEL.md.
-- [ ] **[RULE-013](#rule-013-new-segments-take-the-active-class-otherwise-the-next-free-class-id-highest--1)** (P1, Medium) New segments take the active class, otherwise the next free class id (highest + 1): The compliance and fidelity judges rated this not P0. Decide whether it guards annotation data integrity and belongs in the behavior contract. | The compliance judge rated this not P0 while the fidelity judge rated it P0. Decide whether it guards annotation data integrity and belongs in the behavior contract. Judges' reasoning: analysis/lazylabel/P0_PANEL.md.
-- [ ] **[RULE-014](#rule-014-pixel-priority-resolves-overlapping-classes)** (P1, Medium) Pixel priority resolves overlapping classes: The compliance judge rated this not P0 while the fidelity judge rated it P0. Decide whether it guards annotation data integrity and belongs in the behavior contract. Judges' reasoning: analysis/lazylabel/P0_PANEL.md.
-- [ ] **[RULE-015](#rule-015-reassign-class-ids-from-class-table-order)** (P1, Medium) Reassign class ids from class table order: The compliance judge rated this not P0 while the fidelity judge rated it P0. Decide whether it guards annotation data integrity and belongs in the behavior contract. Judges' reasoning: analysis/lazylabel/P0_PANEL.md.
-- [ ] **[RULE-016](#rule-016-shape-rasterization-before-export-truncated-vertices-rounded-circles)** (P1, Medium) Shape rasterization before export (truncated vertices, rounded circles): The compliance judge rated this not P0 while the fidelity judge rated it P0. Decide whether it guards annotation data integrity and belongs in the behavior contract. Judges' reasoning: analysis/lazylabel/P0_PANEL.md.
-- [ ] **[RULE-017](#rule-017-propagation-confidence-score-per-object)** (P1, Medium) Propagation confidence score per object: The compliance judge rated this not P0 while the fidelity judge rated it P0. Decide whether it guards annotation data integrity and belongs in the behavior contract. Judges' reasoning: analysis/lazylabel/P0_PANEL.md.
-- [ ] **[RULE-018](#rule-018-sam-2-frame-staging-numbering-gap)** (P1, Medium) SAM 2 frame staging numbering gap: Does the SAM 2 video loader index frames by sorted list position (making numbering gaps shift frames), or by the number in the file name? Panel: The compliance judge rated this not P0 while the fidelity judge rated it P0. Decide whether it guards annotation data integrity and belongs in the behavior contract. Judges' reasoning: analysis/lazylabel/P0_PANEL.md.
-- [ ] **[RULE-022](#rule-022-propagation-seeds-come-only-from-mask-segments-on-reference-frames)** (P1, Medium) Propagation seeds come only from mask segments on reference frames: Should drawn polygons, boxes and circles be rasterized and used as propagation seeds? | The compliance and fidelity judges rated this not P0. Decide whether it guards annotation data integrity and belongs in the behavior contract. Judges' reasoning: analysis/lazylabel/P0_PANEL.md.
-- [ ] **[RULE-023](#rule-023-crop-is-clamped-to-the-image-and-blanks-everything-outside-it-on-save-including-the-last-row-and-column)** (P1, Medium) Crop is clamped to the image and blanks everything outside it on save, including the last row and column: Should a crop carry over to other images of the same size, as the unreachable loader does, or reset for each image? Panel: The compliance judge rated this not P0 while the fidelity judge rated it P0. Decide whether it guards annotation data integrity and belongs in the behavior contract. | Is crop end (x2, y2) meant to be inclusive or exclusive, and should a full-frame crop keep the entire image? … (full question and evidence on the card)
-- [ ] **[RULE-038](#rule-038-coco-json-import-with-polygon-then-box-fallback)** (P1, Medium) COCO JSON import with polygon-then-box fallback: The compliance judge rated this not P0 while the fidelity judge rated it P0. Decide whether it guards annotation data integrity and belongs in the behavior contract. Judges' reasoning: analysis/lazylabel/P0_PANEL.md.
-- [ ] **[RULE-039](#rule-039-pascal-voc-and-createml-import-rules)** (P1, Medium) Pascal VOC and CreateML import rules: The compliance judge rated this not P0 while the fidelity judge rated it P0. Decide whether it guards annotation data integrity and belongs in the behavior contract. Judges' reasoning: analysis/lazylabel/P0_PANEL.md.
-- [ ] **[RULE-040](#rule-040-yolo-detection-import-validation-rounding-and-clamping)** (P1, Medium) YOLO Detection import validation, rounding and clamping: The compliance judge rated this not P0 while the fidelity judge rated it P0. Decide whether it guards annotation data integrity and belongs in the behavior contract. | The compliance judge rated this not P0 while the fidelity judge rated it P0. Decide whether it guards annotation data integrity and belongs in the behavior contract. The fidelity judge found the specification unfaithful to the … (full question and evidence on the card)
-- [ ] **[RULE-041](#rule-041-yolo-segmentation-import-validation)** (P1, Medium) YOLO Segmentation import validation: The compliance judge rated this not P0 while the fidelity judge rated it P0. Decide whether it guards annotation data integrity and belongs in the behavior contract. The fidelity judge found the specification unfaithful to the code. Correct the card from the judge's findings before writing its equivalence test. Judges' reasoning: analysis/lazylabel/P0_PANEL.md.
+- [ ] **[RULE-081](#rule-081-propagation-never-overwrites-reference-frames-and-by-default-frames-already-labeled)** (P0, Medium) Propagation never overwrites reference frames and, by default, frames already labeled: The fidelity judge found the specification unfaithful to the code. Correct the card from the judge's findings before writing its equivalence test. Judges' reasoning: analysis/lazylabel/P0_PANEL.md.
+- [ ] **[RULE-082](#rule-082-save-all-propagated-frames-eligibility)** (P0, Medium) Save All propagated frames eligibility: Should Save All first commit edits on the open frame, and should objects with unknown class be saved as class 0? | The compliance judge rated this not P0 while the fidelity judge rated it P0. Decide whether it guards annotation data integrity and belongs in the behavior contract. Judges' reasoning: analysis/lazylabel/P0_PANEL.md.
+- [ ] **[RULE-083](#rule-083-saving-an-image-with-no-segments-deletes-all-of-its-annotation-files)** (P0, Medium) Saving an image with no segments deletes all of its annotation files: The compliance judge found the specification unfaithful to the code. Correct the card from the judge's findings before writing its equivalence test. Judges' reasoning: analysis/lazylabel/P0_PANEL.md. | Should deletion happen only when the user explicitly removed previously loaded segments, and only for files LazyLabel itself wrote?
+- [ ] **[RULE-017](#rule-017-merge-selected-segments-into-the-lowest-selected-class)** (P1, Medium) Merge selected segments into the lowest selected class: Should Merge assign to the active class when one is set? Panel: The compliance and fidelity judges rated this not P0. Decide whether it guards annotation data integrity and belongs in the behavior contract. Judges' reasoning: analysis/lazylabel/P0_PANEL.md.
+- [ ] **[RULE-018](#rule-018-propagation-confidence-score-per-object)** (P1, Medium) Propagation confidence score per object: The compliance judge rated this not P0 while the fidelity judge rated it P0. Decide whether it guards annotation data integrity and belongs in the behavior contract. Judges' reasoning: analysis/lazylabel/P0_PANEL.md.
+- [ ] **[RULE-019](#rule-019-sam-2-frame-staging-numbering-gap)** (P1, Medium) SAM 2 frame staging numbering gap: Does the SAM 2 video loader index frames by sorted list position (making numbering gaps shift frames), or by the number in the file name? Panel: The compliance judge rated this not P0 while the fidelity judge rated it P0. Decide whether it guards annotation data integrity and belongs in the behavior contract. Judges' reasoning: analysis/lazylabel/P0_PANEL.md.
+- [ ] **[RULE-023](#rule-023-propagation-seeds-come-only-from-mask-segments-on-reference-frames)** (P1, Medium) Propagation seeds come only from mask segments on reference frames: Should drawn polygons, boxes and circles be rasterized and used as propagation seeds? | The compliance and fidelity judges rated this not P0. Decide whether it guards annotation data integrity and belongs in the behavior contract. Judges' reasoning: analysis/lazylabel/P0_PANEL.md.
 - [ ] **[RULE-042](#rule-042-class-alias-editing-is-unvalidated)** (P1, Medium) Class alias editing is unvalidated: Must aliases be unique, non-empty, and defined once per project?
 - [ ] **[RULE-045](#rule-045-crop-coordinate-validation-and-reuse-by-image-size)** (P1, Medium) Crop coordinate validation and reuse by image size: Should a crop automatically apply to every later image with the same resolution, and on all navigation paths?
-- [ ] **[RULE-057](#rule-057-undoredo-history-scope)** (P1, Medium) Undo/redo history scope: The compliance judge rated this not P0 while the fidelity judge rated it P0. Decide whether it guards annotation data integrity and belongs in the behavior contract. Judges' reasoning: analysis/lazylabel/P0_PANEL.md.
-- [ ] **[RULE-058](#rule-058-undoing-an-erase-inserts-malformed-segment-records)** (P1, Medium) Undoing an erase inserts malformed segment records: The compliance judge rated this not P0 while the fidelity judge rated it P0. Decide whether it guards annotation data integrity and belongs in the behavior contract. Judges' reasoning: analysis/lazylabel/P0_PANEL.md.
-- [ ] **[RULE-063](#rule-063-closing-the-application-never-saves-the-open-images-annotations)** (P1, Medium) Closing the application never saves the open image's annotations: Should closing auto-save (when Auto-Save is on) or prompt about unsaved annotations? Panel: The compliance judge rated this not P0 while the fidelity judge rated it P0. Decide whether it guards annotation data integrity and belongs in the behavior contract. Judges' reasoning: analysis/lazylabel/P0_PANEL.md.
-- [ ] **[RULE-064](#rule-064-leaving-the-sequence-tab-or-clicking-new-timeline-discards-all-sequence-work-without-saving)** (P1, Medium) Leaving the Sequence tab or clicking New Timeline discards all sequence work without saving: The compliance judge rated this not P0 while the fidelity judge rated it P0. Decide whether it guards annotation data integrity and belongs in the behavior contract. Judges' reasoning: analysis/lazylabel/P0_PANEL.md.
 - [ ] **[RULE-065](#rule-065-selecting-a-file-in-the-sequence-tab-jumps-to-its-frame-a-file-outside-the-timeline-bounces-back)** (P1, Medium) Selecting a file in the Sequence tab jumps to its frame; a file outside the timeline bounces back: Should selecting a file outside the timeline switch to single view, and should this save mark the frame Saved and clear its propagated masks?
 - [ ] **[RULE-067](#rule-067-crop-persistence-across-image-navigation)** (P1, Medium) Crop persistence across image navigation: Should a crop apply to all images of the same size in a session, or only to the image where it was drawn?
-- [ ] **[RULE-083](#rule-083-ai-features-require-segment-anything-and-pytorch-271)** (P1, Medium) AI features require segment-anything and PyTorch 2.7.1+: Are pre-release or nightly PyTorch builds supported? With such a build, does the uncaught ValueError during the import-time check stop the app from starting?
-- [ ] **[RULE-084](#rule-084-sidecar-file-naming-and-suffix-collisions)** (P1, Medium) Sidecar file naming and suffix collisions: The compliance judge rated this not P0 while the fidelity judge rated it P0. Decide whether it guards annotation data integrity and belongs in the behavior contract. Judges' reasoning: analysis/lazylabel/P0_PANEL.md.
+- [ ] **[RULE-084](#rule-084-ai-features-require-segment-anything-and-pytorch-271)** (P1, Medium) AI features require segment-anything and PyTorch 2.7.1+: Are pre-release or nightly PyTorch builds supported? With such a build, does the uncaught ValueError during the import-time check stop the app from starting?
 - [ ] **[RULE-085](#rule-085-model-type-detected-from-file-name)** (P1, Medium) Model type detected from file name: Should model type be chosen explicitly or read from checkpoint metadata? | Should model size come from checkpoint metadata rather than file-name substrings?
 - [ ] **[RULE-086](#rule-086-active-class-toggle-and-recent-class-hotkey)** (P1, Medium) Active class toggle and recent-class hotkey: Citation was corrected by referee (The rule is right, but only half the citation supports it. The other half points at unused code that does the opposite. Live code, which implements the rule (main_window.py:2712-2738): - X is bound to toggle_recent_class (config/hotkeys.py:105), which calls _toggle_recent_class (main_window.py:1011). - It first uses get_last_toggled_class() and toggles that … (full question and evidence on the card)
 - [ ] **[RULE-087](#rule-087-default-model-download-integrity-check)** (P1, Medium) Default model download integrity check: Should checkpoints be checksum-verified and partial downloads discarded?
@@ -1483,39 +1471,39 @@ The three extraction lenses often described the same behavior. Each group below 
 
 | Folded card | Lens category | Kept as | Folded card's outcome (Then) |
 |---|---|---|---|
-| NPZ Class Map export/import with foreground mask | Calculation | [RULE-001](#rule-001-npz-class-map-export-resolves-overlaps-to-lowest-class-and-stores-foreground) | class_map is 2 at the overlap and 0 at the class-0 pixel with foreground True; reload creates one segment per class id found in the foreground And No file when no pixel is labeled; on load a class map whose shape differs from the image is rejected; files without 'foreground' treat 0 as background |
-| NPZ Class Map import requires matching size | Validation | [RULE-001](#rule-001-npz-class-map-export-resolves-overlaps-to-lowest-class-and-stores-foreground) | Segments for class 0 (the foreground zeros) and class 4 |
-| YOLO Detection export: normalized center/size box per object | Calculation | [RULE-002](#rule-002-yolo-detection-export-line-format) | \<base\>.txt contains '3 0.3125 0.20833333333333334 0.3125 0.20833333333333334' (cx=(100+200/2)/640, cy=(50+100/2)/480, w=200/640, h=100/480), written at full float precision with no rounding And No file is written when there are no objects or when image width/height is 0; the class value is the real class id, not the channel index |
-| Label-to-class-id resolution for YOLO, VOC and CreateML labels | Calculation | [RULE-003](#rule-003-label-text-to-class-id-resolution-on-import) | '0' -\> class 0; 'dog' -\> class 1 (alias 'dog'); 'cat' -\> class 2 (alias 'cat') |
-| One exported object per segment outline (instance separation) | Calculation | [RULE-004](#rule-004-detection-and-polygon-exports-keep-same-class-objects-separate) | Two lines are written, one box per segment, instead of one merged box And Instances are computed only when YOLO Det, YOLO Seg, COCO, Pascal VOC or CreateML is selected; NPZ-only saves skip it |
-| NPZ export content | Calculation | [RULE-006](#rule-006-saved-class-channel-order-is-ascending-class-id-not-the-class-order-table) | img.npz holds mask shape (480, 640, 2), class_order [0, 3], class_aliases {0: 'car', 3: 'person'} |
-| NPZ one-hot mask export and class channel order | Calculation | [RULE-006](#rule-006-saved-class-channel-order-is-ascending-class-id-not-the-class-order-table) | \<base\>.npz has mask shape (480,640,2) where channel 0 is class 2 and channel 1 is class 7, class_order [2,7], and class_aliases; overlapping classes are both 1 unless pixel priority is on And The file is skipped only when the tensor has zero size; a crop that removes every pixel still writes an all-zero NPZ |
-| COCO JSON export: categories, bbox, area, polygon | Calculation | [RULE-007](#rule-007-coco-json-export-structure-and-area) | categories=[{id:5,name:'dog',supercategory:'animal'}]; annotation {id:1,image_id:1,category_id:5,bbox:[10,10,10,10],area:81,segmentation:[[10,10,10,19,19,19,19,10]],iscrowd:0} And area = contour polygon area when the outline has 3+ points, otherwise bbox width x height; an alias with no dot uses the same text for name and supercategory; no file when there are no objects |
-| CreateML export uses pixel center coordinates | Calculation | [RULE-008](#rule-008-createml-exportimport-pixel-center-boxes) | img_createml.json annotation {label 'dog', coordinates {x 105.0, y 55.0, width 10, height 10}} |
-| Pascal VOC export/import: 0-based exclusive max bounds, depth always 3 | Calculation | [RULE-009](#rule-009-pascal-voc-export-uses-alias-names-and-exclusive-max-bounds) | \<base\>.xml has name 'cat', pose 'Unspecified', truncated 0, difficult 0, xmin 100, ymin 50, xmax 300, ymax 150, size depth 3; reload fills exactly columns 100-299, rows 50-149 And Missing bndbox fields default to '0'; missing name defaults to '0'; objects without name or bndbox are skipped |
-| YOLO Segmentation export: simplified normalized polygons | Calculation | [RULE-010](#rule-010-yolo-segmentation-export-polygon-simplification) | \<base\>_seg.txt contains '0 0.1 0.1 0.1 0.19 0.19 0.19 0.19 0.1' (outline through pixel centers; epsilon = 0.001 x perimeter) And Outlines with only 1 or 2 points are written as a closed 4-point ring (repeated point or there-and-back pair) instead of being dropped |
-| Erase subtracts pixels, splits remainders and drops tiny parts | Calculation | [RULE-011](#rule-011-eraser-splits-segments-and-drops-pieces-of-10-pixels-or-less) | Original removed; one new 'AI' mask segment of 942 px, class 2, added at the end; the 8-px part is lost |
-| Merge selected segments into the smallest class | Calculation | [RULE-012](#rule-012-merge-selected-segments-into-the-lowest-selected-class) | Both segments become class 1 (the active class 5 is ignored) |
-| Class assignment for new segments and next class ID | Calculation | [RULE-013](#rule-013-new-segments-take-the-active-class-otherwise-the-next-free-class-id-highest--1) | The new segment is class 5; with class 1 active it would be class 1 |
-| Class id assignment for new segments | Calculation | [RULE-013](#rule-013-new-segments-take-the-active-class-otherwise-the-next-free-class-id-highest--1) | The new segment gets class 4 And If class 3 is active the segment gets class 3; toggling the active class again deactivates it |
-| Pixel priority for overlapping classes | Policy | [RULE-014](#rule-014-pixel-priority-resolves-overlapping-classes) | Ascending keeps only class 1 at that pixel; Descending keeps only class 4; non-overlapping pixels are unchanged |
-| Reassign class IDs from Class Order table | Calculation | [RULE-015](#rule-015-reassign-class-ids-from-class-table-order) | 4 becomes 0, 0 becomes 1, 1 becomes 2; aliases {0: 'car'} |
-| SAM 2 propagation confidence score | Calculation | [RULE-017](#rule-017-propagation-confidence-score-per-object) | Confidence = 0.99005, which passes the default 0.99 threshold; an average of 4.59 gives 0.98995 and is flagged |
-| Model picks the highest-scoring candidate mask | Calculation | [RULE-019](#rule-019-sam-best-mask-selection-and-click-coordinate-mapping) | Candidate 2 (score 0.94) is shown |
-| Auto-convert AI masks to polygons and polygon resolution mapping | Calculation | [RULE-020](#rule-020-auto-convert-ai-masks-to-polygons) | factor = 0.000219; the polygon is built from the largest blob only and the small blob is discarded; if fewer than 3 vertices result the mask stays an AI mask |
-| Archetype (suggested reference frame) selection | Calculation | [RULE-021](#rule-021-find-archetypes-suggests-about-2-of-frames-between-5-and-50-as-references) | Budget 20, minimum cluster size 10; initial allocation 12/6/1 = 19; the extra slot goes to A, so 13/6/1 frames are suggested |
-| Archetype reference suggestions | Policy | [RULE-021](#rule-021-find-archetypes-suggests-about-2-of-frames-between-5-and-50-as-references) | 12 pending frames marked suggested; message 'Only 12 reference frames identified (expected ~20)' |
-| Only mask-based segments seed propagation | Validation | [RULE-022](#rule-022-propagation-seeds-come-only-from-mask-segments-on-reference-frames) | Only the class-1 object is propagated (object id 1); the polygon is ignored; with no mask segments at all: 'No valid segments in reference frames' |
-| Only reference frames that actually have annotations become propagation prompts | Policy | [RULE-022](#rule-022-propagation-seeds-come-only-from-mask-segments-on-reference-frames) | Objects 1 and 2 come from frame 0's in-memory masks and object 3 from frame 99's file. Frame 50 contributes nothing, is not registered with the engine, and is also excluded from receiving results, so it stays unlabeled. Object class names come from the on-screen frame's alias table, otherwise 'Class \<id\>'. |
-| Crop removes annotations outside the rectangle but keeps full-image coordinates | Calculation | [RULE-023](#rule-023-crop-is-clamped-to-the-image-and-blanks-everything-outside-it-on-save-including-the-last-row-and-column) | Coordinates are clamped to x2=99, y2=99, so column 99 and row 99 are zeroed; a full-image box exports with width 99/100 And Drawn crops must be wider and taller than 5 px; edges are truncated, rounded, clamped and swapped if reversed; mode switches to AI points after drawing |
-| Crop zeroes saved annotations outside the crop (last row and column always lost) | Calculation | [RULE-023](#rule-023-crop-is-clamped-to-the-image-and-blanks-everything-outside-it-on-save-including-the-last-row-and-column) | Column 639 and row 479 are zeroed; the box is 639x479 px: cx = 319.5/640 = 0.49921875, cy = 239.5/480 (0.498958...), w = 639/640 = 0.9984375, h = 479/480 (0.997916...) |
+| COCO JSON export: categories, bbox, area, polygon | Calculation | [RULE-001](#rule-001-coco-json-export-structure-and-area) | categories=[{id:5,name:'dog',supercategory:'animal'}]; annotation {id:1,image_id:1,category_id:5,bbox:[10,10,10,10],area:81,segmentation:[[10,10,10,19,19,19,19,10]],iscrowd:0} And area = contour polygon area when the outline has 3+ points, otherwise bbox width x height; an alias with no dot uses the same text for name and supercategory; no file when there are no objects |
+| CreateML export uses pixel center coordinates | Calculation | [RULE-002](#rule-002-createml-exportimport-pixel-center-boxes) | img_createml.json annotation {label 'dog', coordinates {x 105.0, y 55.0, width 10, height 10}} |
+| NPZ Class Map export/import with foreground mask | Calculation | [RULE-003](#rule-003-npz-class-map-export-resolves-overlaps-to-lowest-class-and-stores-foreground) | class_map is 2 at the overlap and 0 at the class-0 pixel with foreground True; reload creates one segment per class id found in the foreground And No file when no pixel is labeled; on load a class map whose shape differs from the image is rejected; files without 'foreground' treat 0 as background |
+| NPZ Class Map import requires matching size | Validation | [RULE-003](#rule-003-npz-class-map-export-resolves-overlaps-to-lowest-class-and-stores-foreground) | Segments for class 0 (the foreground zeros) and class 4 |
+| Pascal VOC export/import: 0-based exclusive max bounds, depth always 3 | Calculation | [RULE-004](#rule-004-pascal-voc-export-uses-alias-names-and-exclusive-max-bounds) | \<base\>.xml has name 'cat', pose 'Unspecified', truncated 0, difficult 0, xmin 100, ymin 50, xmax 300, ymax 150, size depth 3; reload fills exactly columns 100-299, rows 50-149 And Missing bndbox fields default to '0'; missing name defaults to '0'; objects without name or bndbox are skipped |
+| YOLO Detection export: normalized center/size box per object | Calculation | [RULE-005](#rule-005-yolo-detection-export-line-format) | \<base\>.txt contains '3 0.3125 0.20833333333333334 0.3125 0.20833333333333334' (cx=(100+200/2)/640, cy=(50+100/2)/480, w=200/640, h=100/480), written at full float precision with no rounding And No file is written when there are no objects or when image width/height is 0; the class value is the real class id, not the channel index |
+| YOLO Segmentation export: simplified normalized polygons | Calculation | [RULE-006](#rule-006-yolo-segmentation-export-polygon-simplification) | \<base\>_seg.txt contains '0 0.1 0.1 0.1 0.19 0.19 0.19 0.19 0.1' (outline through pixel centers; epsilon = 0.001 x perimeter) And Outlines with only 1 or 2 points are written as a closed 4-point ring (repeated point or there-and-back pair) instead of being dropped |
+| Label-to-class-id resolution for YOLO, VOC and CreateML labels | Calculation | [RULE-007](#rule-007-label-text-to-class-id-resolution-on-import) | '0' -\> class 0; 'dog' -\> class 1 (alias 'dog'); 'cat' -\> class 2 (alias 'cat') |
+| One exported object per segment outline (instance separation) | Calculation | [RULE-008](#rule-008-detection-and-polygon-exports-keep-same-class-objects-separate) | Two lines are written, one box per segment, instead of one merged box And Instances are computed only when YOLO Det, YOLO Seg, COCO, Pascal VOC or CreateML is selected; NPZ-only saves skip it |
+| Erase subtracts pixels, splits remainders and drops tiny parts | Calculation | [RULE-009](#rule-009-eraser-splits-segments-and-drops-pieces-of-10-pixels-or-less) | Original removed; one new 'AI' mask segment of 942 px, class 2, added at the end; the 8-px part is lost |
+| Class assignment for new segments and next class ID | Calculation | [RULE-011](#rule-011-new-segments-take-the-active-class-otherwise-the-next-free-class-id-highest--1) | The new segment is class 5; with class 1 active it would be class 1 |
+| Class id assignment for new segments | Calculation | [RULE-011](#rule-011-new-segments-take-the-active-class-otherwise-the-next-free-class-id-highest--1) | The new segment gets class 4 And If class 3 is active the segment gets class 3; toggling the active class again deactivates it |
+| Pixel priority for overlapping classes | Policy | [RULE-012](#rule-012-pixel-priority-resolves-overlapping-classes) | Ascending keeps only class 1 at that pixel; Descending keeps only class 4; non-overlapping pixels are unchanged |
+| Reassign class IDs from Class Order table | Calculation | [RULE-013](#rule-013-reassign-class-ids-from-class-table-order) | 4 becomes 0, 0 becomes 1, 1 becomes 2; aliases {0: 'car'} |
+| NPZ export content | Calculation | [RULE-014](#rule-014-saved-class-channel-order-is-ascending-class-id-not-the-class-order-table) | img.npz holds mask shape (480, 640, 2), class_order [0, 3], class_aliases {0: 'car', 3: 'person'} |
+| NPZ one-hot mask export and class channel order | Calculation | [RULE-014](#rule-014-saved-class-channel-order-is-ascending-class-id-not-the-class-order-table) | \<base\>.npz has mask shape (480,640,2) where channel 0 is class 2 and channel 1 is class 7, class_order [2,7], and class_aliases; overlapping classes are both 1 unless pixel priority is on And The file is skipped only when the tensor has zero size; a crop that removes every pixel still writes an all-zero NPZ |
+| Crop removes annotations outside the rectangle but keeps full-image coordinates | Calculation | [RULE-016](#rule-016-crop-is-clamped-to-the-image-and-blanks-everything-outside-it-on-save-including-the-last-row-and-column) | Coordinates are clamped to x2=99, y2=99, so column 99 and row 99 are zeroed; a full-image box exports with width 99/100 And Drawn crops must be wider and taller than 5 px; edges are truncated, rounded, clamped and swapped if reversed; mode switches to AI points after drawing |
+| Crop zeroes saved annotations outside the crop (last row and column always lost) | Calculation | [RULE-016](#rule-016-crop-is-clamped-to-the-image-and-blanks-everything-outside-it-on-save-including-the-last-row-and-column) | Column 639 and row 479 are zeroed; the box is 639x479 px: cx = 319.5/640 = 0.49921875, cy = 239.5/480 (0.498958...), w = 639/640 = 0.9984375, h = 479/480 (0.997916...) |
+| Merge selected segments into the smallest class | Calculation | [RULE-017](#rule-017-merge-selected-segments-into-the-lowest-selected-class) | Both segments become class 1 (the active class 5 is ignored) |
+| SAM 2 propagation confidence score | Calculation | [RULE-018](#rule-018-propagation-confidence-score-per-object) | Confidence = 0.99005, which passes the default 0.99 threshold; an average of 4.59 gives 0.98995 and is flagged |
+| Model picks the highest-scoring candidate mask | Calculation | [RULE-020](#rule-020-sam-best-mask-selection-and-click-coordinate-mapping) | Candidate 2 (score 0.94) is shown |
+| Auto-convert AI masks to polygons and polygon resolution mapping | Calculation | [RULE-021](#rule-021-auto-convert-ai-masks-to-polygons) | factor = 0.000219; the polygon is built from the largest blob only and the small blob is discarded; if fewer than 3 vertices result the mask stays an AI mask |
+| Archetype (suggested reference frame) selection | Calculation | [RULE-022](#rule-022-find-archetypes-suggests-about-2-of-frames-between-5-and-50-as-references) | Budget 20, minimum cluster size 10; initial allocation 12/6/1 = 19; the extra slot goes to A, so 13/6/1 frames are suggested |
+| Archetype reference suggestions | Policy | [RULE-022](#rule-022-find-archetypes-suggests-about-2-of-frames-between-5-and-50-as-references) | 12 pending frames marked suggested; message 'Only 12 reference frames identified (expected ~20)' |
+| Only mask-based segments seed propagation | Validation | [RULE-023](#rule-023-propagation-seeds-come-only-from-mask-segments-on-reference-frames) | Only the class-1 object is propagated (object id 1); the polygon is ignored; with no mask segments at all: 'No valid segments in reference frames' |
+| Only reference frames that actually have annotations become propagation prompts | Policy | [RULE-023](#rule-023-propagation-seeds-come-only-from-mask-segments-on-reference-frames) | Objects 1 and 2 come from frame 0's in-memory masks and object 3 from frame 99's file. Frame 50 contributes nothing, is not registered with the engine, and is also excluded from receiving results, so it stays unlabeled. Object class names come from the on-screen frame's alias table, otherwise 'Class \<id\>'. |
 | Propagation direction and range | Policy | [RULE-025](#rule-025-propagation-direction-and-range) | Forward pass covers frames 21-99 and backward pass covers frames 19-0; frames between the references are filled only by the forward pass And A range start of the first frame and end of the last frame are passed as 'no limit'; a skipped range start snaps to the next valid frame and a skipped end to the previous one |
 | The propagation range only limits one side of each pass | Calculation | [RULE-025](#rule-025-propagation-direction-and-range) | The forward pass covers frames 11-99, including 11-49, which are outside the requested range. The backward pass is skipped because the reference (10) is not after the range start (50). With the default range 1-200, no limits are passed, so frames 11-199 (forward) and 9 down to 0 (backward) are propagated. |
 | Timelines longer than the window propagate in overlapping chunks | Policy | [RULE-026](#rule-026-streaming-chunked-propagation-windows) | Chunks cover frames 0-249, 245-494 and 490-599. Frames already produced by an earlier chunk are skipped in the overlap, and reference frames are never overwritten. If the user unticks Streaming with 600 frames, a warning estimates about 7 GB (600 x 12.6 MB / 1024) and defaults to keeping Streaming on. |
 | AI fragment filter | Calculation | [RULE-027](#rule-027-the-fragment-filter-keeps-only-regions-at-least-x-of-the-largest-region) | Minimum area = 0.10 x 841 = 84.1, so only the 30x30 blob is kept; the 10x10 blob is dropped although it is 11% of the largest by pixel count And If every piece is dropped or the mask has zero contour area, nothing is added ('All segments filtered out by fragment threshold'); hotkey Z toggles between 0 and the last non-zero value (100 if none was set) |
 | File list checkmarks come from annotation file names next to each image | Policy | [RULE-036](#rule-036-file-list-annotation-status-indicators) | img1 shows Class Map and YOLO Detection checks (the caption counts); img2 shows a YOLO Seg check; the NPZ column is empty for both |
-| NPZ import: class_order mapping and legacy layouts | Calculation | [RULE-037](#rule-037-npz-import-current-and-legacy-layouts) | Two segments: class 2 from channel 0 and class 7 from channel 1; aliases become exactly {2:'cat'} And A 'masks' key is accepted as the tensor; a 'masks' (N,H,W) stack with 'class_ids' yields one segment per mask (missing id -\> 0); a 2-D mask is treated as one channel; empty channels are skipped |
-| COCO JSON import: categories to aliases, polygon then bbox fallback | Calculation | [RULE-038](#rule-038-coco-json-import-with-polygon-then-box-fallback) | Class 5 alias becomes 'dog.animal' and one class-5 segment covers columns 90-99, rows 90-99 (x2=min(100, 90+20)) And Multiple polygons in one annotation create one segment each; RLE (dict) segmentation falls back to bbox; missing category_id defaults to class 0; COCO aliases are merged into existing aliases |
+| COCO JSON import: categories to aliases, polygon then bbox fallback | Calculation | [RULE-037](#rule-037-coco-json-import-with-polygon-then-box-fallback) | Class 5 alias becomes 'dog.animal' and one class-5 segment covers columns 90-99, rows 90-99 (x2=min(100, 90+20)) And Multiple polygons in one annotation create one segment each; RLE (dict) segmentation falls back to bbox; missing category_id defaults to class 0; COCO aliases are merged into existing aliases |
+| NPZ import: class_order mapping and legacy layouts | Calculation | [RULE-038](#rule-038-npz-import-current-and-legacy-layouts) | Two segments: class 2 from channel 0 and class 7 from channel 1; aliases become exactly {2:'cat'} And A 'masks' key is accepted as the tensor; a 'masks' (N,H,W) stack with 'class_ids' yields one segment per mask (missing id -\> 0); a 2-D mask is treated as one channel; empty channels are skipped |
 | YOLO Detection import: denormalize, round half-to-even, clamp | Calculation | [RULE-040](#rule-040-yolo-detection-import-validation-rounding-and-clamping) | One segment (class resolved from label '3') fills columns 100-299 and rows 50-149 (x1=round((cx-w/2)*640)=100, x2=round((cx+w/2)*640)=300 exclusive) And Lines with other than 5 tokens or non-numeric values are silently skipped; boxes that collapse to zero width or height after clamping are dropped |
 | YOLO Segmentation import: polygon rasterization | Validation | [RULE-041](#rule-041-yolo-segmentation-import-validation) | Vertices (10,10),(10,19),(19,19),(19,10) are filled into a 100-pixel class-0 segment of type 'Loaded' that also keeps the vertices And Lines with fewer than 7 tokens, an even token count, or non-numeric values are skipped; polygons that fill zero pixels are skipped |
 | Propagate needs the AI extras, a reference, a SAM 2 video model and no running job | Validation | [RULE-044](#rule-044-propagation-preconditions) | Nothing starts and the user sees 'SAM 2 video predictor not available'. With a SAM 2 model loaded, propagation starts in both directions. With no model: 'SAM model not loaded'. With no reference: 'Please set a reference frame first'. While running, the button reads 'Abort' and another click cancels. |
@@ -1524,19 +1512,19 @@ The three extraction lenses often described the same behavior. Each group below 
 | Polygon completion and join threshold | Validation | [RULE-047](#rule-047-a-polygon-needs-3-points-and-closes-when-clicking-within-the-join-distance-of-its-first-point) | (101,101), distance 1.41: polygon closes and is saved; (102,100), distance 2.0: a 4th point is added |
 | Reference frames must share one image size | Validation | [RULE-048](#rule-048-reference-frames-must-match-the-first-references-image-size) | Rejected: 'Cannot add reference: image is 1280x720 but reference requires 1920x1080' |
 | Reference image size lock and skipped frames | Validation | [RULE-048](#rule-048-reference-frames-must-match-the-first-references-image-size) | Adding fails with 'Cannot add reference: image is 1280x720 but reference requires 1920x1080'; during propagation frame 40 is SKIPPED and gets no mask And Clearing all references clears the size lock and the skipped marks |
-| Sequence frame auto-save when changing frames | Lifecycle | [RULE-052](#rule-052-leaving-a-sequence-frame-saves-it-and-marks-it-saved-even-if-it-is-a-reference) | img_022 outputs are written; frame 22 status saved; its propagated masks cleared so it reloads from disk |
-| Multi-view pair navigation always saves or deletes both images | Policy | [RULE-053](#rule-053-multi-view-batch-navigation-always-saves-ignoring-the-auto-save-setting) | p1.npz and any other p1 annotation files are deleted, p2's selected formats are written, and the next pair loads |
-| Auto-save on navigate | Lifecycle | [RULE-055](#rule-055-auto-save-current-image-before-switching-images-single-view) | A is exported in all selected formats before B loads (in sequence mode the frame is marked SAVED); an A with no segments has its sidecars deleted |
-| Opening another image auto-saves the current one first | Lifecycle | [RULE-055](#rule-055-auto-save-current-image-before-switching-images-single-view) | a.npz and a.txt are written. The current image becomes b.png; segments, undo history and crop reset; b.png's annotations load from b.npz; and b.png's AI embedding is computed or restored from cache immediately if a model is loaded. |
-| A propagated frame is Flagged when its weakest object scores below Min Conf | Calculation | [RULE-056](#rule-056-propagated-frame-flagging-and-commit-keep-flagged-masks) | Frame 12 becomes 'flagged' with confidence 0.9850 and no masks are stored. With Keep Flagged Masks on, both masks are kept but the frame is still 'flagged' at 0.985. If the scores were 0.995 and 0.992, the frame would become 'propagated' with confidence 0.992. |
-| Keep Flagged Masks decides whether partial frames keep masks | Policy | [RULE-056](#rule-056-propagated-frame-flagging-and-commit-keep-flagged-masks) | Keep Flagged OFF: no masks stored, flagged at 0.97; ON: masks A and B stored, flagged at 0.97 |
-| Low-confidence frames are flagged using the minimum object score | Policy | [RULE-056](#rule-056-propagated-frame-flagging-and-commit-keep-flagged-masks) | Frame confidence 0.985, status flagged; C does not affect the score |
-| Deleting segments cannot be undone | Lifecycle | [RULE-057](#rule-057-undoredo-history-scope) | 3 segments remain; Ctrl+Z tries to undo the earlier add and reports 'Cannot undo: Segment no longer exists' |
-| Undo history is unbounded, per image, and does not cover deletes or class changes | Lifecycle | [RULE-057](#rule-057-undoredo-history-scope) | The first undo targets 'add C' at index 2, finds only 2 segments, and warns 'Cannot undo: Segment no longer exists'. The second undo targets 'add B' at index 1 and removes C instead of B. |
-| Undo of an erase adds a phantom segment instead of restoring | Lifecycle | [RULE-058](#rule-058-undoing-an-erase-inserts-malformed-segment-records) | (Actual) the list holds the remaining piece plus a phantom entry with no mask or vertices that receives class 3; saves add an empty class-3 channel to NPZ and a class-3 category to COCO |
-| Undoing an erase does not restore the erased shapes | Lifecycle | [RULE-058](#rule-058-undoing-an-erase-inserts-malformed-segment-records) | After the erase, the polygon is gone and two class-2 'AI' mask segments exist. After undo, a third record with no shape and class 3 is added, the two pieces remain, and the original polygon is not restored. Saving writes the erased result plus an empty class-3 channel in the NPZ. Redo removes the last record again. |
-| AI click versus drag and minimum shape sizes | Validation | [RULE-060](#rule-060-ai-mode-click-adds-a-point-a-drag-over-5-px-draws-a-box-space-accepts-the-preview) | (104,103): positive point at the release position; (130,108): drag \>5 but box 30x8, nothing happens; (130,130): SAM box prediction And Right-click adds a negative point |
-| AI mode click versus drag thresholds | Validation | [RULE-060](#rule-060-ai-mode-click-adds-a-point-a-drag-over-5-px-draws-a-box-space-accepts-the-preview) | (103,103): positive point; (130,140): box preview 'press Space to confirm'; (108,106): nothing (8x6 box too small, no point either) |
+| Deleting segments cannot be undone | Lifecycle | [RULE-052](#rule-052-undoredo-history-scope) | 3 segments remain; Ctrl+Z tries to undo the earlier add and reports 'Cannot undo: Segment no longer exists' |
+| Undo history is unbounded, per image, and does not cover deletes or class changes | Lifecycle | [RULE-052](#rule-052-undoredo-history-scope) | The first undo targets 'add C' at index 2, finds only 2 segments, and warns 'Cannot undo: Segment no longer exists'. The second undo targets 'add B' at index 1 and removes C instead of B. |
+| Undo of an erase adds a phantom segment instead of restoring | Lifecycle | [RULE-053](#rule-053-undoing-an-erase-inserts-malformed-segment-records) | (Actual) the list holds the remaining piece plus a phantom entry with no mask or vertices that receives class 3; saves add an empty class-3 channel to NPZ and a class-3 category to COCO |
+| Undoing an erase does not restore the erased shapes | Lifecycle | [RULE-053](#rule-053-undoing-an-erase-inserts-malformed-segment-records) | After the erase, the polygon is gone and two class-2 'AI' mask segments exist. After undo, a third record with no shape and class 3 is added, the two pieces remain, and the original polygon is not restored. Saving writes the erased result plus an empty class-3 channel in the NPZ. Redo removes the last record again. |
+| Sequence frame auto-save when changing frames | Lifecycle | [RULE-055](#rule-055-leaving-a-sequence-frame-saves-it-and-marks-it-saved-even-if-it-is-a-reference) | img_022 outputs are written; frame 22 status saved; its propagated masks cleared so it reloads from disk |
+| Multi-view pair navigation always saves or deletes both images | Policy | [RULE-057](#rule-057-multi-view-batch-navigation-always-saves-ignoring-the-auto-save-setting) | p1.npz and any other p1 annotation files are deleted, p2's selected formats are written, and the next pair loads |
+| Auto-save on navigate | Lifecycle | [RULE-059](#rule-059-auto-save-current-image-before-switching-images-single-view) | A is exported in all selected formats before B loads (in sequence mode the frame is marked SAVED); an A with no segments has its sidecars deleted |
+| Opening another image auto-saves the current one first | Lifecycle | [RULE-059](#rule-059-auto-save-current-image-before-switching-images-single-view) | a.npz and a.txt are written. The current image becomes b.png; segments, undo history and crop reset; b.png's annotations load from b.npz; and b.png's AI embedding is computed or restored from cache immediately if a model is loaded. |
+| A propagated frame is Flagged when its weakest object scores below Min Conf | Calculation | [RULE-060](#rule-060-propagated-frame-flagging-and-commit-keep-flagged-masks) | Frame 12 becomes 'flagged' with confidence 0.9850 and no masks are stored. With Keep Flagged Masks on, both masks are kept but the frame is still 'flagged' at 0.985. If the scores were 0.995 and 0.992, the frame would become 'propagated' with confidence 0.992. |
+| Keep Flagged Masks decides whether partial frames keep masks | Policy | [RULE-060](#rule-060-propagated-frame-flagging-and-commit-keep-flagged-masks) | Keep Flagged OFF: no masks stored, flagged at 0.97; ON: masks A and B stored, flagged at 0.97 |
+| Low-confidence frames are flagged using the minimum object score | Policy | [RULE-060](#rule-060-propagated-frame-flagging-and-commit-keep-flagged-masks) | Frame confidence 0.985, status flagged; C does not affect the score |
+| AI click versus drag and minimum shape sizes | Validation | [RULE-062](#rule-062-ai-mode-click-adds-a-point-a-drag-over-5-px-draws-a-box-space-accepts-the-preview) | (104,103): positive point at the release position; (130,108): drag \>5 but box 30x8, nothing happens; (130,130): SAM box prediction And Right-click adds a negative point |
+| AI mode click versus drag thresholds | Validation | [RULE-062](#rule-062-ai-mode-click-adds-a-point-a-drag-over-5-px-draws-a-box-space-accepts-the-preview) | (103,103): positive point; (130,140): box preview 'press Space to confirm'; (108,106): nothing (8x6 box too small, no point either) |
 | Switching tools discards unfinished work; startup mode | Policy | [RULE-069](#rule-069-edit-mode-entry-and-mode-toggling) | The 5 points are discarded |
 | Sequence initialization excludes mismatched images | Validation | [RULE-071](#rule-071-first-propagation-sets-up-the-engine-once-and-marks-wrong-size-frames-skipped) | Frame 4 skipped; message '1 frames have different dimensions (reference is 1920x1080) and will be skipped during propagation' |
 | Next/previous flagged, reference and suggested navigation wraps around | Policy | [RULE-072](#rule-072-frame-status-precedence-suggestions-and-timeline-sort) | Frame 5 opens (wrap-around). From frame 3, Shift+N opens frame 90. With no flagged frames the user sees 'No more flagged frames'. |
@@ -1548,12 +1536,12 @@ The three extraction lenses often described the same behavior. Each group below 
 | A damaged or empty higher-priority file blocks lower-priority files | Validation | [RULE-078](#rule-078-annotations-load-from-the-best-file-present-and-a-damaged-non-npz-file-stops-the-search) | 'Error loading COCO JSON ...' is logged, 0 segments load and img.xml is never tried; navigating away with Auto-Save on then deletes both files |
 | Annotation load priority chain | Policy | [RULE-078](#rule-078-annotations-load-from-the-best-file-present-and-a-damaged-non-npz-file-stops-the-search) | Only foo_coco.json is loaded; foo.txt is ignored And The chain continues to the next file only when a loader raises an exception; 'already labelled' status uses the same chain (find_annotation_file) |
 | Annotation load priority chain (one format wins) | Policy | [RULE-078](#rule-078-annotations-load-from-the-best-file-present-and-a-damaged-non-npz-file-stops-the-search) | Only the 3 polygons from img_seg.txt are loaded; img.txt is ignored |
-| Skip Labeled protects frames that already have annotations | Policy | [RULE-080](#rule-080-propagation-never-overwrites-reference-frames-and-by-default-frames-already-labeled) | No masks stored for frame 30; timeline shows skipped; img_030.xml untouched |
-| Save All writes propagated frames except those the engine currently flags | Policy | [RULE-081](#rule-081-save-all-propagated-frames-eligibility) | Frames 11 and 12 are written in every selected format, with each object's class taken from its reference annotation (otherwise class 0, 'Class 0'), and turn 'saved' (cyan). Frame 13 is excluded, frame 14 is skipped because its masks were already cleared, the user sees 'Saved 2 frames to NPZ', and the current frame is reloaded from disk. |
-| Save All writes propagated, non-flagged frames | Lifecycle | [RULE-081](#rule-081-save-all-propagated-frames-eligibility) | Frames 21, 22, 24, 25 are written from the original propagated masks; frame 23 is not saved; frame 22's manual correction is overwritten and lost |
-| Saving an image with zero segments deletes all of its annotation files | Policy | [RULE-082](#rule-082-saving-an-image-with-no-segments-deletes-all-of-its-annotation-files) | img_001.npz, img_001.txt and img_001.xml are deleted (and img_001_CM.npz, img_001_seg.txt, img_001_coco.json, img_001_createml.json if present); notification 'Deleted: img_001.npz, ...'; if no file existed the warning 'No segments to save.' is shown |
-| Saving an image with zero segments deletes all sidecar files | Lifecycle | [RULE-082](#rule-082-saving-an-image-with-no-segments-deletes-all-of-its-annotation-files) | foo.npz, foo_CM.npz, foo.txt, foo_seg.txt, foo_coco.json, foo.xml and foo_createml.json are removed if present, with a 'Deleted: ...' notification ('No segments to save.' if nothing existed) And Multi-view applies the same rule per viewer; sequence mode applies it on frame change |
-| AI features require segment-anything and PyTorch 2.7.1 or newer | Validation | [RULE-083](#rule-083-ai-features-require-segment-anything-and-pytorch-271) | Machine A: AI available. Machine B: AI unavailable, with the log message 'PyTorch 2.7.0 found but \>=2.7.1 is required for AI features.' |
+| Skip Labeled protects frames that already have annotations | Policy | [RULE-081](#rule-081-propagation-never-overwrites-reference-frames-and-by-default-frames-already-labeled) | No masks stored for frame 30; timeline shows skipped; img_030.xml untouched |
+| Save All writes propagated frames except those the engine currently flags | Policy | [RULE-082](#rule-082-save-all-propagated-frames-eligibility) | Frames 11 and 12 are written in every selected format, with each object's class taken from its reference annotation (otherwise class 0, 'Class 0'), and turn 'saved' (cyan). Frame 13 is excluded, frame 14 is skipped because its masks were already cleared, the user sees 'Saved 2 frames to NPZ', and the current frame is reloaded from disk. |
+| Save All writes propagated, non-flagged frames | Lifecycle | [RULE-082](#rule-082-save-all-propagated-frames-eligibility) | Frames 21, 22, 24, 25 are written from the original propagated masks; frame 23 is not saved; frame 22's manual correction is overwritten and lost |
+| Saving an image with zero segments deletes all of its annotation files | Policy | [RULE-083](#rule-083-saving-an-image-with-no-segments-deletes-all-of-its-annotation-files) | img_001.npz, img_001.txt and img_001.xml are deleted (and img_001_CM.npz, img_001_seg.txt, img_001_coco.json, img_001_createml.json if present); notification 'Deleted: img_001.npz, ...'; if no file existed the warning 'No segments to save.' is shown |
+| Saving an image with zero segments deletes all sidecar files | Lifecycle | [RULE-083](#rule-083-saving-an-image-with-no-segments-deletes-all-of-its-annotation-files) | foo.npz, foo_CM.npz, foo.txt, foo_seg.txt, foo_coco.json, foo.xml and foo_createml.json are removed if present, with a 'Deleted: ...' notification ('No segments to save.' if nothing existed) And Multi-view applies the same rule per viewer; sequence mode applies it on frame change |
+| AI features require segment-anything and PyTorch 2.7.1 or newer | Validation | [RULE-084](#rule-084-ai-features-require-segment-anything-and-pytorch-271) | Machine A: AI available. Machine B: AI unavailable, with the log message 'PyTorch 2.7.0 found but \>=2.7.1 is required for AI features.' |
 | Model discovery and type detection by file name | Policy | [RULE-085](#rule-085-model-type-detected-from-file-name) | It is treated as SAM 2; the image predictor picks the small config because '_s' appears in '_segmenter', while the video predictor checks 'large' first and picks the large config |
 | Toggle Recent Class hotkey fallback | Policy | [RULE-086](#rule-086-active-class-toggle-and-recent-class-hotkey) | Class 1 becomes the active class |
 | Settings file loading, fallback and legacy migration | Policy | [RULE-088](#rule-088-one-unknown-key-in-settingsjson-resets-every-preference-old-save-flags-migrate-to-export-formats) | Unknown key future_option causes all defaults: auto_save true, formats NPZ + YOLO Detection; without future_option: auto_save false and formats [NPZ] |

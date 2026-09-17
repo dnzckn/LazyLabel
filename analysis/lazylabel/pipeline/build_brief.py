@@ -27,6 +27,7 @@ ANALYSIS = Path(r"E:\GitHub\LazyLabel\analysis\lazylabel")
 rules_path, out_path, brief_note_path = sys.argv[1], sys.argv[2], sys.argv[3]
 rules = load_json(rules_path)
 brief_note = load_json(brief_note_path)
+decisions = load_json(sys.argv[4]) if len(sys.argv) > 4 else None
 topo = load_json(ANALYSIS / "topology.json")
 sizes = load_json(HERE / "phase_sizes.json")
 tpl = (HERE / "brief_template.md").read_text(encoding="utf-8")
@@ -149,7 +150,11 @@ for r in rules:
         awaiting.append(r)
     elif any(unjudged(pn) for pn in panels if pn):
         never_judged.append(r)
-a(f"**Awaiting decision 14: {len(awaiting)} rules the panel split on.** For each, the compliance judge rated it not P0 because nothing here is regulated or financial, and the fidelity judge rated it P0 because it guards annotation data. The workflow demoted them to P1. If decision 14 restores them, they join the table above and gate their phases.")
+restored = [r for r in rules if r.get("restoredByDecision") == 14]
+if restored:
+    a(f"**Decision 14 restored {len(restored)} rules to P0** that the panel had demoted only because the compliance judge said nothing here is financial or regulated. They are in the table above and gate their phases. The {len(awaiting)} rules below were part of the same split but land only in Phase 3 or Phase 6, so they stay P1 until those phases start.")
+else:
+    a(f"**Awaiting decision 14: {len(awaiting)} rules the panel split on.** For each, the compliance judge rated it not P0 because nothing here is regulated or financial, and the fidelity judge rated it P0 because it guards annotation data. The workflow demoted them to P1. If decision 14 restores them, they join the table above and gate their phases.")
 a("")
 a("| ID | Rule | Phases | Confidence |")
 a("|---|---|---|---|")
@@ -180,5 +185,27 @@ out = (tpl.replace("{{INPUTS}}", inputs_text)
 left = re.findall(r"\{\{[A-Z0-9_]+\}\}", out)
 if left:
     sys.exit(f"unfilled placeholders: {left}")
+
+# -- record the approver's answers in §7 and §8 ------------------------------------------------
+if decisions:
+    ap = decisions["approval"]
+    lines = out.split("\n")
+    for i, line in enumerate(lines):
+        m = re.match(r"- \[ \] \*\*(\d+)\.", line)
+        if m and m.group(1) in decisions["answers"]:
+            lines[i] = line.replace("- [ ]", "- [x]", 1) + f" **Answer ({ap['date']}):** {decisions['answers'][m.group(1)]}"
+    out = "\n".join(lines)
+    unanswered = len(re.findall(r"^- \[ \] \*\*\d+\.", out, re.M))
+    out = out.replace(
+        "| Status | **DRAFT, not approved.** No phase in §3 may start until §8 is filled in. |",
+        f"| Status | **Approved: {ap['covers'].lower()}**, {ap['date']}, by the repository owner in session. "
+        f"The §3 phase gates still apply. " + ("Every §7 question is answered." if not unanswered
+                                               else f"{unanswered} §7 question(s) are still open.") + " |")
+    out = out.replace(
+        "Approved by: ________________  Date: __________\nApproval covers: Phase 1 only | Full plan",
+        f"Approved by: {ap['approvedBy']}  Date: {ap['date']}\nApproval covers: {ap['covers']}")
+    out = out.replace(
+        "Tick each box and write the answer beside it. Entry criteria in §3 refer to these numbers.",
+        "Entry criteria in §3 refer to these numbers. " + ap["note"])
 Path(out_path).write_text(out, encoding="utf-8")
 print(f"brief written: {out_path} | P0 {len(p0)} (live {len(live_p0)}) | blockers {len(blockers)} | per phase {dict(by_phase)}")

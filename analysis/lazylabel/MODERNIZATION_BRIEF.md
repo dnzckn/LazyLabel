@@ -4,9 +4,9 @@
 |---|---|
 | System | LazyLabel 2.0.8, a PyQt6 desktop app (`legacy/lazylabel` at 2a7d5d8), becoming LazyLabel web |
 | Target stack | `react/node.js`: React 19 + TypeScript web app, Node.js 22 API, plus the inference and storage choices in §7 |
-| Status | **DRAFT, not approved.** No phase in §3 may start until §8 is filled in. |
+| Status | **Approved: full plan**, 2026-09-17, by the repository owner in session. The §3 phase gates still apply. Every §7 question is answered. |
 | Branch | `main-web` |
-| Built from | `ASSESSMENT.md` (2026-09-15 01:34); `ARCHITECTURE.mmd` (2026-09-15 01:22); `topology.json` (2026-09-15 04:21); `call-graph.mmd` (2026-09-15 04:21); `data-lineage.mmd` (2026-09-15 04:21); `critical-path.mmd` (2026-09-15 04:21); `BUSINESS_RULES.md` (2026-09-15 19:31); `DATA_OBJECTS.md` (2026-09-15 19:31); `P0_PANEL.md` (2026-09-15 19:31); `PREFLIGHT.md` (2026-09-15 01:35). `DELTA_CATALOG.md` is not required: this is a cross-stack rebuild, not a same-stack uplift. |
+| Built from | `ASSESSMENT.md` (2026-09-15 01:34); `ARCHITECTURE.mmd` (2026-09-15 01:22); `topology.json` (2026-09-15 04:21); `call-graph.mmd` (2026-09-15 04:21); `data-lineage.mmd` (2026-09-15 04:21); `critical-path.mmd` (2026-09-15 04:21); `BUSINESS_RULES.md` (2026-09-17 11:50); `DATA_OBJECTS.md` (2026-09-17 11:50); `P0_PANEL.md` (2026-09-17 11:50); `PREFLIGHT.md` (2026-09-15 01:35). `DELTA_CATALOG.md` is not required: this is a cross-stack rebuild, not a same-stack uplift. |
 | How to steer | Edit this file. `/code-modernization:modernize-transform` and `/code-modernization:modernize-reimagine` read §3's scope, entry criteria and exit criteria as binding gates. An edited criterion is honored; a note in chat is not. |
 | Commands | In this app every plugin command needs the `code-modernization:` prefix |
 
@@ -298,67 +298,74 @@ These are the four persona flows from `analysis/lazylabel/topology.json`. Each s
 
 ## 5. Behavior Contract
 
-`BUSINESS_RULES.md` holds 94 confirmed rules. **17 are P0**, meaning they guard data integrity: what is written to or read from annotation files, and which pixels belong to which class. Together they are the regression suite. **No phase ships until every P0 rule assigned to it passes an equivalence test** (§6).
+`BUSINESS_RULES.md` holds 94 confirmed rules. **36 are P0**, meaning they guard data integrity: what is written to or read from annotation files, and which pixels belong to which class. Together they are the regression suite. **No phase ships until every P0 rule assigned to it passes an equivalence test** (§6).
 
-P0 rules per phase: P1 11, P2 2, P3 0, P4 8, P5 3, P6 8. A rule citing code in several phases is proven in each.
+P0 rules per phase: P1 28, P2 3, P3 0, P4 16, P5 9, P6 10. A rule citing code in several phases is proven in each.
 
 | ID | Rule | Phases | Confidence |
 |---|---|---|---|
-| RULE-001 | NPZ Class Map export resolves overlaps to lowest class and stores foreground | P1 | Medium (blocker) |
-| RULE-002 | YOLO Detection export line format | P1 | Medium (blocker) |
-| RULE-003 | Label text to class ID resolution on import | P1, P4 | High |
-| RULE-004 | Detection and polygon exports keep same-class objects separate | P1, P4 | High |
-| RULE-005 | Final per-class mask composition | P1 | High |
-| RULE-006 | Saved class channel order is ascending class ID, not the Class Order table | P1, P4, P5 | High |
-| RULE-037 | NPZ import (current and legacy layouts) | P1 | High |
-| RULE-052 | Leaving a sequence frame saves it and marks it Saved, even if it is a reference | P6 | Medium (blocker) |
-| RULE-053 | Multi-view batch navigation always saves, ignoring the Auto-Save setting | P4, P5, P6 | High |
-| RULE-054 | Propagation finish, Save All and Trim reload the current frame without saving it | P6 | High |
-| RULE-055 | Auto-save current image before switching images (single view) | P2, P4, P6 | Medium (blocker) |
-| RULE-056 | Propagated frame flagging and commit (Keep Flagged Masks) | P6 | Medium (blocker) |
+| RULE-001 | COCO JSON export structure and area | P1 | Medium (blocker) |
+| RULE-002 | CreateML export/import: pixel center boxes | P1 | High |
+| RULE-003 | NPZ Class Map export resolves overlaps to lowest class and stores foreground | P1 | Medium (blocker) |
+| RULE-004 | Pascal VOC export uses alias names and exclusive max bounds | P1 | Medium (blocker) |
+| RULE-005 | YOLO Detection export line format | P1 | Medium (blocker) |
+| RULE-006 | YOLO Segmentation export polygon simplification | P1 | High |
+| RULE-007 | Label text to class ID resolution on import | P1, P4 | High |
+| RULE-008 | Detection and polygon exports keep same-class objects separate | P1, P4 | High |
+| RULE-009 | Eraser splits segments and drops pieces of 10 pixels or less | P1, P5 | High |
+| RULE-010 | Final per-class mask composition | P1 | High |
+| RULE-011 | New segments take the active class, otherwise the next free class id (highest + 1) | P1 | Medium (blocker) |
+| RULE-012 | Pixel priority resolves overlapping classes | P1, P2, P4 | High |
+| RULE-013 | Reassign class ids from class table order | P1, P4, P5 | High |
+| RULE-014 | Saved class channel order is ascending class ID, not the Class Order table | P1, P4, P5 | High |
+| RULE-015 | Shape rasterization before export (truncated vertices, rounded circles) | P1, P5 | High |
+| RULE-016 | Crop is clamped to the image and blanks everything outside it on save, including the last row and column | P1, P4, P5 | Medium (blocker) |
+| RULE-037 | COCO JSON import with polygon-then-box fallback | P1 | High |
+| RULE-038 | NPZ import (current and legacy layouts) | P1 | High |
+| RULE-039 | Pascal VOC and CreateML import rules | P1 | High |
+| RULE-040 | YOLO Detection import validation, rounding and clamping | P1 | Medium (blocker) |
+| RULE-041 | YOLO Segmentation import validation | P1 | Medium (blocker) |
+| RULE-052 | Undo/redo history scope | P1, P4, P5, P6 | High |
+| RULE-053 | Undoing an erase inserts malformed segment records | P1, P4, P5 | High |
+| RULE-054 | Closing the application never saves the open image's annotations | P4 | Medium (blocker) |
+| RULE-055 | Leaving a sequence frame saves it and marks it Saved, even if it is a reference | P6 | Medium (blocker) |
+| RULE-056 | Leaving the Sequence tab or clicking New Timeline discards all sequence work without saving | P4, P6 | High |
+| RULE-057 | Multi-view batch navigation always saves, ignoring the Auto-Save setting | P4, P5, P6 | High |
+| RULE-058 | Propagation finish, Save All and Trim reload the current frame without saving it | P6 | High |
+| RULE-059 | Auto-save current image before switching images (single view) | P2, P4, P6 | Medium (blocker) |
+| RULE-060 | Propagated frame flagging and commit (Keep Flagged Masks) | P6 | Medium (blocker) |
 | RULE-078 | Annotations load from the best file present, and a damaged non-NPZ file stops the search | P1 | Medium (blocker) |
 | RULE-079 | Export writes every selected format and never removes other files | P1, P2, P4 | High |
-| RULE-080 | Propagation never overwrites reference frames and, by default, frames already labeled | P1, P6 | Medium (blocker) |
-| RULE-081 | Save All propagated frames eligibility | P4, P6 | Medium (blocker) |
-| RULE-082 | Saving an image with no segments deletes all of its annotation files | P1, P4, P5, P6 | Medium (blocker) |
+| RULE-080 | Sidecar file naming and suffix collisions | P1, P4 | High |
+| RULE-081 | Propagation never overwrites reference frames and, by default, frames already labeled | P1, P6 | Medium (blocker) |
+| RULE-082 | Save All propagated frames eligibility | P4, P6 | Medium (blocker) |
+| RULE-083 | Saving an image with no segments deletes all of its annotation files | P1, P4, P5, P6 | Medium (blocker) |
 
-**Blockers: 9 P0 rules are below High confidence.** Each needs an SME answer, recorded in `BUSINESS_RULES.md`, before the phases it belongs to start:
+**Blockers: 16 P0 rules are below High confidence.** Each needs an SME answer, recorded in `BUSINESS_RULES.md`, before the phases it belongs to start:
 
-- [ ] **RULE-001** (P1) NPZ Class Map export resolves overlaps to lowest class and stores foreground: The fidelity judge found the specification unfaithful to the code. Correct the card from the judge's findings before writing its equivalence test. Judges' reasoning: analysis/lazylabel/P0_PANEL.md.
-- [ ] **RULE-002** (P1) YOLO Detection export line format: Must YOLO class indices be contiguous 0..N-1 across the dataset? Panel: The fidelity judge found the specification unfaithful to the code. Correct the card from the judge's findings before writing its equivalence test. \| The compliance judge rated this not P0 while the fidelity judge rated it P0. Decide whether it guards annotation data integrity and belongs in the behavior contract. Judges' reasoning: analysis/lazylabel/P0_PANEL.md.
-- [ ] **RULE-052** (P6) Leaving a sequence frame saves it and marks it Saved, even if it is a reference: Should a reference frame keep its 'reference' status after it is saved? Should clearing all masks on a propagated frame discard its propagated result? \| The compliance judge rated this not P0 while the fidelity judge rated it P0. Decide whether it guards annotation data integrity and belongs in the behavior contract. Judges' reasoning: analysis/lazylabel/P0_PANEL.md.
-- [ ] **RULE-055** (P2, P4, P6) Auto-save current image before switching images (single view): The fidelity judge found the specification unfaithful to the code. Correct the card from the judge's findings before writing its equivalence test. \| The compliance and fidelity judges found the specification unfaithful to the code. Correct the card from the judge's findings before writing its equivalence test. \| The compliance judge found the specification unfaithful to the code. Correct the card from the judge's findings before writing its equivalence test. Judges' reasoning: analysis/lazylabel/P0_PANEL.md.
-- [ ] **RULE-056** (P6) Propagated frame flagging and commit (Keep Flagged Masks): The fidelity judge found the specification unfaithful to the code. Correct the card from the judge's findings before writing its equivalence test. \| The compliance judge rated this not P0 while the fidelity judge rated it P0. Decide whether it guards annotation data integrity and belongs in the behavior contract. Judges' reasoning: analysis/lazylabel/P0_PANEL.md.
+- [ ] **RULE-001** (P1) COCO JSON export structure and area: Should COCO 'area' be the mask pixel count (COCO convention) instead of the contour polygon area? Panel: The fidelity judge found the specification unfaithful to the code. Correct the card from the judge's findings before writing its equivalence test. Judges' reasoning: analysis/lazylabel/P0_PANEL.md.
+- [ ] **RULE-003** (P1) NPZ Class Map export resolves overlaps to lowest class and stores foreground: The fidelity judge found the specification unfaithful to the code. Correct the card from the judge's findings before writing its equivalence test. Judges' reasoning: analysis/lazylabel/P0_PANEL.md.
+- [ ] **RULE-004** (P1) Pascal VOC export uses alias names and exclusive max bounds: Which VOC bound convention do downstream training tools expect? \| Must VOC exports interoperate with standard VOC tooling (1-based inclusive) or only round-trip within LazyLabel? Panel: The fidelity judge found the specification unfaithful to the code. Correct the card from the judge's findings before writing its equivalence test. Judges' reasoning: analysis/lazylabel/P0_PANEL.md.
+- [ ] **RULE-005** (P1) YOLO Detection export line format: Must YOLO class indices be contiguous 0..N-1 across the dataset? Panel: The fidelity judge found the specification unfaithful to the code. Correct the card from the judge's findings before writing its equivalence test. \| The compliance judge rated this not P0 while the fidelity judge rated it P0. Decide whether it guards annotation data integrity and belongs in the behavior contract. Judges' reasoning: analysis/lazylabel/P0_PANEL.md.
+- [ ] **RULE-011** (P1) New segments take the active class, otherwise the next free class id (highest + 1): The compliance and fidelity judges rated this not P0. Decide whether it guards annotation data integrity and belongs in the behavior contract. Judges' reasoning: analysis/lazylabel/P0_PANEL.md.
+- [ ] **RULE-016** (P1, P4, P5) Crop is clamped to the image and blanks everything outside it on save, including the last row and column: Should a crop carry over to other images of the same size, as the unreachable loader does, or reset for each image? \| Is crop end (x2, y2) meant to be inclusive or exclusive, and should a full-frame crop keep the entire image? Judges' reasoning: analysis/lazylabel/P0_PANEL.md.
+- [ ] **RULE-040** (P1) YOLO Detection import validation, rounding and clamping: The fidelity judge found the specification unfaithful to the code. Correct the card from the judge's findings before writing its equivalence test. Judges' reasoning: analysis/lazylabel/P0_PANEL.md.
+- [ ] **RULE-041** (P1) YOLO Segmentation import validation: The fidelity judge found the specification unfaithful to the code. Correct the card from the judge's findings before writing its equivalence test. Judges' reasoning: analysis/lazylabel/P0_PANEL.md.
+- [ ] **RULE-054** (P4) Closing the application never saves the open image's annotations: Should closing auto-save (when Auto-Save is on) or prompt about unsaved annotations? Judges' reasoning: analysis/lazylabel/P0_PANEL.md.
+- [ ] **RULE-055** (P6) Leaving a sequence frame saves it and marks it Saved, even if it is a reference: Should a reference frame keep its 'reference' status after it is saved? Should clearing all masks on a propagated frame discard its propagated result? \| The compliance judge rated this not P0 while the fidelity judge rated it P0. Decide whether it guards annotation data integrity and belongs in the behavior contract. Judges' reasoning: analysis/lazylabel/P0_PANEL.md.
+- [ ] **RULE-059** (P2, P4, P6) Auto-save current image before switching images (single view): The fidelity judge found the specification unfaithful to the code. Correct the card from the judge's findings before writing its equivalence test. \| The compliance and fidelity judges found the specification unfaithful to the code. Correct the card from the judge's findings before writing its equivalence test. \| The compliance judge found the specification unfaithful to the code. Correct the card from the judge's findings before writing its equivalence test. Judges' reasoning: analysis/lazylabel/P0_PANEL.md.
+- [ ] **RULE-060** (P6) Propagated frame flagging and commit (Keep Flagged Masks): The fidelity judge found the specification unfaithful to the code. Correct the card from the judge's findings before writing its equivalence test. \| The compliance judge rated this not P0 while the fidelity judge rated it P0. Decide whether it guards annotation data integrity and belongs in the behavior contract. Judges' reasoning: analysis/lazylabel/P0_PANEL.md.
 - [ ] **RULE-078** (P1) Annotations load from the best file present, and a damaged non-NPZ file stops the search: The fidelity judge found the specification unfaithful to the code. Correct the card from the judge's findings before writing its equivalence test. Judges' reasoning: analysis/lazylabel/P0_PANEL.md.
-- [ ] **RULE-080** (P1, P6) Propagation never overwrites reference frames and, by default, frames already labeled: The fidelity judge found the specification unfaithful to the code. Correct the card from the judge's findings before writing its equivalence test. Judges' reasoning: analysis/lazylabel/P0_PANEL.md.
-- [ ] **RULE-081** (P4, P6) Save All propagated frames eligibility: Should Save All first commit edits on the open frame, and should objects with unknown class be saved as class 0? \| The compliance judge rated this not P0 while the fidelity judge rated it P0. Decide whether it guards annotation data integrity and belongs in the behavior contract. Judges' reasoning: analysis/lazylabel/P0_PANEL.md.
-- [ ] **RULE-082** (P1, P4, P5, P6) Saving an image with no segments deletes all of its annotation files: The compliance judge found the specification unfaithful to the code. Correct the card from the judge's findings before writing its equivalence test. Judges' reasoning: analysis/lazylabel/P0_PANEL.md. \| Should deletion happen only when the user explicitly removed previously loaded segments, and only for files LazyLabel itself wrote?
+- [ ] **RULE-081** (P1, P6) Propagation never overwrites reference frames and, by default, frames already labeled: The fidelity judge found the specification unfaithful to the code. Correct the card from the judge's findings before writing its equivalence test. Judges' reasoning: analysis/lazylabel/P0_PANEL.md.
+- [ ] **RULE-082** (P4, P6) Save All propagated frames eligibility: Should Save All first commit edits on the open frame, and should objects with unknown class be saved as class 0? \| The compliance judge rated this not P0 while the fidelity judge rated it P0. Decide whether it guards annotation data integrity and belongs in the behavior contract. Judges' reasoning: analysis/lazylabel/P0_PANEL.md.
+- [ ] **RULE-083** (P1, P4, P5, P6) Saving an image with no segments deletes all of its annotation files: The compliance judge found the specification unfaithful to the code. Correct the card from the judge's findings before writing its equivalence test. Judges' reasoning: analysis/lazylabel/P0_PANEL.md. \| Should deletion happen only when the user explicitly removed previously loaded segments, and only for files LazyLabel itself wrote?
 
-**Awaiting decision 14: 21 rules the panel split on.** For each, the compliance judge rated it not P0 because nothing here is regulated or financial, and the fidelity judge rated it P0 because it guards annotation data. The workflow demoted them to P1. If decision 14 restores them, they join the table above and gate their phases.
+**Decision 14 restored 19 rules to P0** that the panel had demoted only because the compliance judge said nothing here is financial or regulated. They are in the table above and gate their phases. The 2 rules below were part of the same split but land only in Phase 3 or Phase 6, so they stay P1 until those phases start.
 
 | ID | Rule | Phases | Confidence |
 |---|---|---|---|
-| RULE-007 | COCO JSON export structure and area | P1 | Medium |
-| RULE-008 | CreateML export/import: pixel center boxes | P1 | Medium |
-| RULE-009 | Pascal VOC export uses alias names and exclusive max bounds | P1 | Medium |
-| RULE-010 | YOLO Segmentation export polygon simplification | P1 | Medium |
-| RULE-011 | Eraser splits segments and drops pieces of 10 pixels or less | P1, P5 | Medium |
-| RULE-013 | New segments take the active class, otherwise the next free class id (highest + 1) | P1 | Medium |
-| RULE-014 | Pixel priority resolves overlapping classes | P1, P2, P4 | Medium |
-| RULE-015 | Reassign class ids from class table order | P1, P4, P5 | Medium |
-| RULE-016 | Shape rasterization before export (truncated vertices, rounded circles) | P1, P5 | Medium |
-| RULE-017 | Propagation confidence score per object | P3 | Medium |
-| RULE-018 | SAM 2 frame staging numbering gap | P3, P6 | Medium |
-| RULE-023 | Crop is clamped to the image and blanks everything outside it on save, including the last row and column | P1, P4, P5 | Medium |
-| RULE-038 | COCO JSON import with polygon-then-box fallback | P1 | Medium |
-| RULE-039 | Pascal VOC and CreateML import rules | P1 | Medium |
-| RULE-040 | YOLO Detection import validation, rounding and clamping | P1 | Medium |
-| RULE-041 | YOLO Segmentation import validation | P1 | Medium |
-| RULE-057 | Undo/redo history scope | P1, P4, P5, P6 | Medium |
-| RULE-058 | Undoing an erase inserts malformed segment records | P1, P4, P5 | Medium |
-| RULE-063 | Closing the application never saves the open image's annotations | P4 | Medium |
-| RULE-064 | Leaving the Sequence tab or clicking New Timeline discards all sequence work without saving | P4, P6 | Medium |
-| RULE-084 | Sidecar file naming and suffix collisions | P1, P4 | Medium |
+| RULE-018 | Propagation confidence score per object | P3 | Medium |
+| RULE-019 | SAM 2 frame staging numbering gap | P3, P6 | Medium |
 
 Defects the rewrite must **not** reproduce, even where a rule describes today's behavior: delete-on-empty saves and silent loss on close or multi-view navigation (`ASSESSMENT.md` 5.1), pickled class aliases (5.3), and settings reset on unknown keys (5.8). Each rule card's **Suspected defect** line records the preserve-or-fix question, and decision 7 settles the save semantics.
 
@@ -381,28 +388,28 @@ Both runtimes work on this machine (`PREFLIGHT.md` Check 3), so dual execution a
 
 ## 7. Open Questions
 
-Tick each box and write the answer beside it. Entry criteria in §3 refer to these numbers.
+Entry criteria in §3 refer to these numbers. Approved in chat ("yeah do it all"). The §7 answers below were taken by Claude under that blanket approval, not dictated by the owner; every one is reversible by editing this file and re-running build_brief.py.
 
-- [ ] **1. PyPI package `lazylabel-gui`** (open since `PREFLIGHT.md` Check 0). Choose (a) the web app replaces it and 2.0.8 is the last release, (b) it coexists, with Python kept for inference and still published, or (c) it is frozen at 2.0.8 with no further releases.
-- [ ] **2. Inference hosting.** *Recommended:* a Python/PyTorch service reusing the legacy model code, because SAM 2 video propagation has no browser equivalent; add an in-browser ONNX decoder later only if click latency needs it. Ticking this accepts that the target is "React/Node.js plus a Python inference service", not Node.js alone.
-- [ ] **3. Hosting and tenancy.** Single-user self-hosted, small team, or multi-tenant service. This decides auth, upload limits and cost controls.
-- [ ] **4. NPZ class-alias encoding.** *Recommended:* a JSON string in a unicode array, plus an offline converter for existing pickled files.
-- [ ] **5. Storage model.** *Recommended:* PostgreSQL for projects, segments, classes and settings, and S3-compatible object storage for images and exports. The alternative is a server filesystem that keeps annotation files beside images.
-- [ ] **6. Class identity.** Keep legacy per-image class ids and aliases, or introduce a project-wide label map. This changes exported ids (`ASSESSMENT.md` Section 7, gap 3).
-- [ ] **7. Save semantics.** *Recommended:* explicit save with dirty tracking, and do not preserve delete-on-empty or the silent losses on close and multi-view navigation (`ASSESSMENT.md` 5.1).
-- [ ] **8. Multi-view.** Keep the two-viewer mode, redesign it, or drop it. Today it is half-migrated, with 14 undefined members.
-- [ ] **9. Legacy behavior questions** (`ASSESSMENT.md` 5.12): per-image-size crop restore; undoable deletion; .bmp, .gif and .webp support; COCO unsimplified versus YOLO simplified polygons; persisting the propagation confidence threshold.
-- [ ] **10. Equivalence tolerances.** Byte-identical for text, JSON and XML exports; array-identical for NPZ; an IoU threshold for SAM masks (for example 0.98); a pixel tolerance for display adjustments.
-- [ ] **11. P0 rules below High confidence.** Answer each question listed in §5 before its phase starts.
-- [ ] **12. Agent budget.** `/modernize-reimagine` and multi-slice transforms fan out many agents. Rule extraction alone needed 4 workflow runs and hit usage limits 4 times, each time losing the agents in flight. Approve the budget per phase, or run phases one slice at a time.
-- [ ] **13. Legacy hygiene.** Port the `pyproject.toml` ruff `*.md` exclude from `main-web` to `main`? *Default:* no.
-- [ ] **14. P0 scope.** The compliance judge rated 21 rules not P0 because LazyLabel moves no money and carries no regulatory duty, while the fidelity judge rated those same rules P0 because they guard annotation data (`P0_PANEL.md`). The workflow demoted them, so §5 lists them separately and they gate no phase. Choose (a) restore them all to P0, (b) keep them all at P1, where they are tested but do not gate, or (c) restore a named subset. *Recommended:* (c), restoring every rule assigned to P1 or P4, because reading and writing users' existing annotation files is this conversion's core promise.
+- [x] **1. PyPI package `lazylabel-gui`** (open since `PREFLIGHT.md` Check 0). Choose (a) the web app replaces it and 2.0.8 is the last release, (b) it coexists, with Python kept for inference and still published, or (c) it is frozen at 2.0.8 with no further releases. **Answer (2026-09-17):** **(c) Frozen at 2.0.8.** No further PyPI releases of `lazylabel-gui`; the existing release stays installable so the desktop app remains available until Phase 6 exit. Revisit if the owner wants the package to keep shipping the Python inference client.
+- [x] **2. Inference hosting.** *Recommended:* a Python/PyTorch service reusing the legacy model code, because SAM 2 video propagation has no browser equivalent; add an in-browser ONNX decoder later only if click latency needs it. Ticking this accepts that the target is "React/Node.js plus a Python inference service", not Node.js alone. **Answer (2026-09-17):** **Python/PyTorch inference service**, reusing the legacy model code. The target is therefore React/Node.js plus a Python inference service, not Node.js alone. An in-browser ONNX decoder stays a Phase 3 fallback if click latency needs it.
+- [x] **3. Hosting and tenancy.** Single-user self-hosted, small team, or multi-tenant service. This decides auth, upload limits and cost controls. **Answer (2026-09-17):** **Single-user self-hosted first.** One trusted user per deployment, no tenant isolation in this plan. Every API route still carries a user scope so multi-tenancy is an added check rather than a redesign. Upload limits are sized for one annotator.
+- [x] **4. NPZ class-alias encoding.** *Recommended:* a JSON string in a unicode array, plus an offline converter for existing pickled files. **Answer (2026-09-17):** **JSON string in a unicode array** (`class_aliases` written as a single JSON document), plus an offline converter for existing pickled files. No code path unpickles.
+- [x] **5. Storage model.** *Recommended:* PostgreSQL for projects, segments, classes and settings, and S3-compatible object storage for images and exports. The alternative is a server filesystem that keeps annotation files beside images. **Answer (2026-09-17):** **PostgreSQL plus S3-compatible object storage**, as in §2. For a self-hosted deployment that is Postgres and MinIO in the same compose file. Annotation files stay the interchange format, produced by export rather than stored as the source of truth.
+- [x] **6. Class identity.** Keep legacy per-image class ids and aliases, or introduce a project-wide label map. This changes exported ids (`ASSESSMENT.md` Section 7, gap 3). **Answer (2026-09-17):** **Keep legacy per-image class ids and aliases.** Exported ids must match legacy exports byte for byte, which a project-wide label map would break. A project label map may be layered on later as an optional view.
+- [x] **7. Save semantics.** *Recommended:* explicit save with dirty tracking, and do not preserve delete-on-empty or the silent losses on close and multi-view navigation (`ASSESSMENT.md` 5.1). **Answer (2026-09-17):** **Explicit save with dirty tracking.** Do not reproduce delete-on-empty, the silent loss on close, or the silent loss on multi-view navigation. Deleting annotation files requires explicit user action, and a failed load never presents as "no annotations".
+- [x] **8. Multi-view.** Keep the two-viewer mode, redesign it, or drop it. Today it is half-migrated, with 14 undefined members. **Answer (2026-09-17):** **Rebuild multi-view as a synchronized split view** from the linked-operation rules, and delete the half-migrated legacy path rather than porting it. Reassess at Phase 6 entry if the restored rules prove too thin to specify it.
+- [x] **9. Legacy behavior questions** (`ASSESSMENT.md` 5.12): per-image-size crop restore; undoable deletion; .bmp, .gif and .webp support; COCO unsimplified versus YOLO simplified polygons; persisting the propagation confidence threshold. **Answer (2026-09-17):** Per-image-size crop restore: **do not carry over**, a crop applies to the current image only. Deletion: **make it undoable** in the web app. Image formats: **support .bmp, .gif and .webp** in addition to the legacy five. COCO versus YOLO polygon simplification: **keep the legacy difference** so exports stay equivalent, and record it in the format library. Propagation confidence threshold: **persist it** with the other settings.
+- [x] **10. Equivalence tolerances.** Byte-identical for text, JSON and XML exports; array-identical for NPZ; an IoU threshold for SAM masks (for example 0.98); a pixel tolerance for display adjustments. **Answer (2026-09-17):** Text, JSON and XML exports **byte-identical**. NPZ **array-identical**, except the alias encoding from decision 4. SAM masks **IoU at least 0.98** against legacy output on golden prompts. Display adjustments and thresholds **within 1/255 per channel**.
+- [x] **11. P0 rules below High confidence.** Answer each question listed in §5 before its phase starts. **Answer (2026-09-17):** Answered per rule on the cards in `BUSINESS_RULES.md`. Questions that restate a judge's fidelity finding are answered by correcting the specification from that finding; questions that are product choices are answered by the decisions above.
+- [x] **12. Agent budget.** `/modernize-reimagine` and multi-slice transforms fan out many agents. Rule extraction alone needed 4 workflow runs and hit usage limits 4 times, each time losing the agents in flight. Approve the budget per phase, or run phases one slice at a time. **Answer (2026-09-17):** **One slice at a time.** Keep each fan-out under about 40 agents, and resume an interrupted workflow rather than restarting it. Rule extraction needed four runs for want of this rule.
+- [x] **13. Legacy hygiene.** Port the `pyproject.toml` ruff `*.md` exclude from `main-web` to `main`? *Default:* no. **Answer (2026-09-17):** **No.** The ruff `*.md` exclude stays on `main-web` only.
+- [x] **14. P0 scope.** The compliance judge rated 2 rules not P0 because LazyLabel moves no money and carries no regulatory duty, while the fidelity judge rated those same rules P0 because they guard annotation data (`P0_PANEL.md`). The workflow demoted them, so §5 lists them separately and they gate no phase. Choose (a) restore them all to P0, (b) keep them all at P1, where they are tested but do not gate, or (c) restore a named subset. *Recommended:* (c), restoring every rule assigned to P1 or P4, because reading and writing users' existing annotation files is this conversion's core promise. **Answer (2026-09-17):** **(c) Restore the split rules whose work lands in Phase 1 or Phase 4**, listed in `restoreP0` below. The two that land only in Phase 3 or Phase 6 stay P1 and are revisited at those phases' entry.
 
 ---
 
 ## 8. Approval Block
 
 ```
-Approved by: ________________  Date: __________
-Approval covers: Phase 1 only | Full plan
+Approved by: Repository owner, in session  Date: 2026-09-17
+Approval covers: Full plan
 ```
