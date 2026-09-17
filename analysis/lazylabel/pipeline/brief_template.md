@@ -27,7 +27,7 @@ LazyLabel today is a single-maintainer Python 3.10 / PyQt6 desktop tool for SAM-
 Binding design rules, each traced to a finding:
 - **One format library.** The seven annotation formats, their load priority and their input limits live in one TypeScript package used by both the web app and the API. Today the suffix-to-format mapping is written out four times (`ASSESSMENT.md` 5.10; `topology.json` observations).
 - **No pickle, anywhere.** Class aliases in NPZ files use the encoding chosen in decision 4. Existing pickled files enter only through an offline converter (SEC-01, `ASSESSMENT.md` 5.3).
-- **Explicit saves.** Annotation files are deleted only on explicit user intent, and a load failure never looks like "no annotations" (`ASSESSMENT.md` 5.1, SEC-04).
+- **Explicit deletes, and saves that persist.** Annotation files are deleted only on explicit user intent, and a load failure never looks like "no annotations" (`ASSESSMENT.md` 5.1, SEC-04). A save with no segments writes empty files for the selected formats rather than writing nothing, so clearing an image survives a reload.
 - **Pinned models.** Checkpoints load from a manifest with SHA-256 checks and no runtime downloads (SEC-03, SEC-05, SEC-17, `ASSESSMENT.md` 5.7).
 - **Hostile uploads by default.** Pixel, object, class and array-shape caps apply, image decoders are restricted by content, and XML parsing rejects DTDs (SEC-02, SEC-06, SEC-07, SEC-09).
 - **Behavior comes from §5, not the old docs.** `ARCHITECTURE.md` and `USAGE_MANUAL.md` contradict the code in 44 places (`ASSESSMENT.md` Appendix A).
@@ -48,9 +48,9 @@ Binding design rules, each traced to a finding:
 | Multi-view: MainWindow's multi-view methods, `sam_multi_view_manager.py`, `multi_view_coordinator.py`, `ui_layout_manager.py` | Per decision 8: web split view, redesign, or dropped | P6 |
 | settings_prefs: `config/settings.py`, `config/hotkeys.py`, `config/paths.py`, settings and hotkey dialogs | Versioned per-user settings in the API; web settings and hotkey editor | P2, P4 |
 | runtime_platform: `main.py`, logger, PyInstaller and NSIS packaging, CI | Container images, CI/CD, structured logging | P2 |
-| Data: seven annotation files beside each image | Segments in the database; export files in object storage; import of existing files | P1, P4 |
-| Data: `settings.json`, `hotkeys.json` | Per-user settings rows; one-time import | P4 |
-| Data: `models/` checkpoints, SAM 2 frame staging, theme icon cache, `lazylabel.log` | Manifest-pinned model artifacts; job-scoped staging; static web assets; central logs | P3, P6, P2 |
+| Data: seven annotation files beside each image | The same files, read and written in place by the API through the format library | P1, P4 |
+| Data: `settings.json`, `hotkeys.json` | Versioned rows in a local SQLite database; one-time import | P4 |
+| Data: `models/` checkpoints, SAM 2 frame staging, theme icon cache, `lazylabel.log` | Manifest-pinned checkpoints on disk; job-scoped staging; static web assets; structured logs | P3, P6, P2 |
 | Launchers: `lazylabel-gui` console script, `python -m lazylabel`, `LazyLabel.exe` | Web deployment; the PyPI package handled per decision 1 | P6 |
 
 ---
@@ -149,8 +149,8 @@ This is a cross-stack rebuild, so the order is **strangler-fig**: the lowest-ris
   4. Upload limits and content allow-lists are enforced (SEC-02, SEC-06, SEC-07, SEC-09).
 - **Relative scale:** L.
 - **Risk:** High.
-  1. Moving from files beside images to a database and object storage breaks round-trips users rely on. *Mitigation:* annotation files stay the interchange format, backed by differential export tests.
-  2. Large 16-bit TIFF images strain the browser. *Mitigation:* server-side thumbnails and tiling, with a size cap under decision 3.
+  1. Reading and writing the user's annotation files in place risks corrupting a dataset the user cannot easily restore. *Mitigation:* writes are atomic per file, the format library is proven equivalent both directions, and nothing is deleted without explicit action.
+  2. Large 16-bit TIFF images strain the browser, which cannot decode them at all. *Mitigation:* the API owns one image pipeline that decodes, normalizes 16-bit to 8-bit per RULE-024, and serves tiles and thumbnails; the browser never sees the original encoding.
 
 ### Phase 5: Annotation tools, AI tools and image tools
 
@@ -231,7 +231,7 @@ Tick each box and write the answer beside it. Entry criteria in §3 refer to the
 - [ ] **2. Inference hosting.** *Recommended:* a Python/PyTorch service reusing the legacy model code, because SAM 2 video propagation has no browser equivalent; add an in-browser ONNX decoder later only if click latency needs it. Ticking this accepts that the target is "React/Node.js plus a Python inference service", not Node.js alone.
 - [ ] **3. Hosting and tenancy.** Single-user self-hosted, small team, or multi-tenant service. This decides auth, upload limits and cost controls.
 - [ ] **4. NPZ class-alias encoding.** *Recommended:* a JSON string in a unicode array, plus an offline converter for existing pickled files.
-- [ ] **5. Storage model.** *Recommended:* PostgreSQL for projects, segments, classes and settings, and S3-compatible object storage for images and exports. The alternative is a server filesystem that keeps annotation files beside images.
+- [ ] **5. Storage model.** Where do annotations actually live: in a database that the files are exported from, or in the files themselves? *Recommended:* the files, with a small local database for settings, projects, sequences and jobs.
 - [ ] **6. Class identity.** Keep legacy per-image class ids and aliases, or introduce a project-wide label map. This changes exported ids (`ASSESSMENT.md` Section 7, gap 3).
 - [ ] **7. Save semantics.** *Recommended:* explicit save with dirty tracking, and do not preserve delete-on-empty or the silent losses on close and multi-view navigation (`ASSESSMENT.md` 5.1).
 - [ ] **8. Multi-view.** Keep the two-viewer mode, redesign it, or drop it. Today it is half-migrated, with 14 undefined members.

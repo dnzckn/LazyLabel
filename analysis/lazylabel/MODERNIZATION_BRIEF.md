@@ -6,7 +6,7 @@
 | Target stack | `react/node.js`: React 19 + TypeScript web app, Node.js 22 API, plus the inference and storage choices in §7 |
 | Status | **Approved: full plan**, 2026-09-17, by the repository owner in session. The §3 phase gates still apply. Every §7 question is answered. |
 | Branch | `main-web` |
-| Built from | `ASSESSMENT.md` (2026-09-15 01:34); `ARCHITECTURE.mmd` (2026-09-15 01:22); `topology.json` (2026-09-15 04:21); `call-graph.mmd` (2026-09-15 04:21); `data-lineage.mmd` (2026-09-15 04:21); `critical-path.mmd` (2026-09-15 04:21); `BUSINESS_RULES.md` (2026-09-17 12:14); `DATA_OBJECTS.md` (2026-09-17 12:14); `P0_PANEL.md` (2026-09-17 12:14); `PREFLIGHT.md` (2026-09-15 01:35). `DELTA_CATALOG.md` is not required: this is a cross-stack rebuild, not a same-stack uplift. |
+| Built from | `ASSESSMENT.md` (2026-09-15 01:34); `ARCHITECTURE.mmd` (2026-09-15 01:22); `topology.json` (2026-09-15 04:21); `call-graph.mmd` (2026-09-15 04:21); `data-lineage.mmd` (2026-09-15 04:21); `critical-path.mmd` (2026-09-15 04:21); `BUSINESS_RULES.md` (2026-09-17 13:49); `DATA_OBJECTS.md` (2026-09-17 13:49); `P0_PANEL.md` (2026-09-17 13:49); `PREFLIGHT.md` (2026-09-15 01:35). `DELTA_CATALOG.md` is not required: this is a cross-stack rebuild, not a same-stack uplift. |
 | How to steer | Edit this file. `/code-modernization:modernize-transform` and `/code-modernization:modernize-reimagine` read §3's scope, entry criteria and exit criteria as binding gates. An edited criterion is honored; a note in chat is not. |
 | Commands | In this app every plugin command needs the `code-modernization:` prefix |
 
@@ -27,31 +27,32 @@ C4Container
   Person(mleng, "ML engineer", "Imports labeled datasets and exports training formats")
   System_Boundary(web, "LazyLabel web") {
     Container(spa, "Web app", "React 19, TypeScript, Vite", "Dataset browser, canvas editor, AI click tools, sequence timeline, settings and hotkeys")
-    Container(api, "API", "Node.js 22, TypeScript", "Projects, images, annotations, import and export jobs, user settings, auth")
-    Container(formats, "Annotation format library", "TypeScript package", "Seven annotation formats, load priority, input limits; embedded in web app and API")
-    Container(inference, "Inference service", "Python and PyTorch, or ONNX - decision 2", "SAM 1 and SAM 2.1 prompts, SAM 2 propagation jobs, archetype finding, model manifest")
-    ContainerDb(db, "Annotation database", "PostgreSQL", "Projects, image metadata, segments, classes, jobs, user settings")
-    ContainerDb(store, "Object storage", "S3-compatible", "Images, exported annotation files, frame staging, checksummed model artifacts")
+    Container(api, "API", "Node.js 22, TypeScript", "Reads and writes annotation files in place, image pipeline, export and import jobs, settings, propagation job proxy")
+    Container(formats, "Annotation format library", "TypeScript package", "Seven annotation formats, load priority, mask editing rules, input limits; embedded in web app and API")
+    Container(inference, "Inference service", "Python and PyTorch - decision 2", "SAM 1 and SAM 2.1 prompts, SAM 2 propagation jobs, archetype finding, model manifest")
+    ContainerDb(folder, "Dataset folder", "Mounted filesystem", "The user's images and their annotation sidecar files - the source of truth")
+    ContainerDb(db, "Local database", "SQLite", "Settings, hotkeys, projects, sequences, job records, dataset index")
+    ContainerDb(models, "Model artifacts", "Local directory", "Checkpoints pinned by SHA-256 in a manifest, mirrored at build time")
   }
-  System_Ext(idp, "Identity provider", "OIDC")
   System_Ext(modelsrc, "Model publishers", "dl.fbaipublicfiles.com, download.pytorch.org")
   Rel(annotator, spa, "Uses", "HTTPS")
   Rel(mleng, spa, "Uses", "HTTPS")
   Rel(spa, api, "Calls", "HTTPS JSON and WebSocket")
   Rel(spa, formats, "Embeds")
   Rel(api, formats, "Embeds")
+  Rel(api, folder, "Reads and writes annotation files in place", "filesystem")
   Rel(api, db, "Reads and writes", "SQL")
-  Rel(api, store, "Reads and writes", "S3 API")
   Rel(api, inference, "Requests predictions and jobs", "internal HTTP")
-  Rel(inference, store, "Reads images, stages frames, loads models", "S3 API")
-  Rel(api, idp, "Validates sessions", "OIDC")
-  Rel(store, modelsrc, "Mirrors pinned model artifacts from", "build pipeline")
+  Rel(api, spa, "Serves the built web app", "HTTPS")
+  Rel(inference, folder, "Reads images and stages frames", "filesystem")
+  Rel(inference, models, "Loads checkpoints through the manifest", "filesystem")
+  Rel(models, modelsrc, "Mirrored from, at build time", "not at runtime")
 ```
 
 Binding design rules, each traced to a finding:
 - **One format library.** The seven annotation formats, their load priority and their input limits live in one TypeScript package used by both the web app and the API. Today the suffix-to-format mapping is written out four times (`ASSESSMENT.md` 5.10; `topology.json` observations).
 - **No pickle, anywhere.** Class aliases in NPZ files use the encoding chosen in decision 4. Existing pickled files enter only through an offline converter (SEC-01, `ASSESSMENT.md` 5.3).
-- **Explicit saves.** Annotation files are deleted only on explicit user intent, and a load failure never looks like "no annotations" (`ASSESSMENT.md` 5.1, SEC-04).
+- **Explicit deletes, and saves that persist.** Annotation files are deleted only on explicit user intent, and a load failure never looks like "no annotations" (`ASSESSMENT.md` 5.1, SEC-04). A save with no segments writes empty files for the selected formats rather than writing nothing, so clearing an image survives a reload.
 - **Pinned models.** Checkpoints load from a manifest with SHA-256 checks and no runtime downloads (SEC-03, SEC-05, SEC-17, `ASSESSMENT.md` 5.7).
 - **Hostile uploads by default.** Pixel, object, class and array-shape caps apply, image decoders are restricted by content, and XML parsing rejects DTDs (SEC-02, SEC-06, SEC-07, SEC-09).
 - **Behavior comes from §5, not the old docs.** `ARCHITECTURE.md` and `USAGE_MANUAL.md` contradict the code in 44 places (`ASSESSMENT.md` Appendix A).
@@ -72,9 +73,9 @@ Binding design rules, each traced to a finding:
 | Multi-view: MainWindow's multi-view methods, `sam_multi_view_manager.py`, `multi_view_coordinator.py`, `ui_layout_manager.py` | Per decision 8: web split view, redesign, or dropped | P6 |
 | settings_prefs: `config/settings.py`, `config/hotkeys.py`, `config/paths.py`, settings and hotkey dialogs | Versioned per-user settings in the API; web settings and hotkey editor | P2, P4 |
 | runtime_platform: `main.py`, logger, PyInstaller and NSIS packaging, CI | Container images, CI/CD, structured logging | P2 |
-| Data: seven annotation files beside each image | Segments in the database; export files in object storage; import of existing files | P1, P4 |
-| Data: `settings.json`, `hotkeys.json` | Per-user settings rows; one-time import | P4 |
-| Data: `models/` checkpoints, SAM 2 frame staging, theme icon cache, `lazylabel.log` | Manifest-pinned model artifacts; job-scoped staging; static web assets; central logs | P3, P6, P2 |
+| Data: seven annotation files beside each image | The same files, read and written in place by the API through the format library | P1, P4 |
+| Data: `settings.json`, `hotkeys.json` | Versioned rows in a local SQLite database; one-time import | P4 |
+| Data: `models/` checkpoints, SAM 2 frame staging, theme icon cache, `lazylabel.log` | Manifest-pinned checkpoints on disk; job-scoped staging; static web assets; structured logs | P3, P6, P2 |
 | Launchers: `lazylabel-gui` console script, `python -m lazylabel`, `LazyLabel.exe` | Web deployment; the PyPI package handled per decision 1 | P6 |
 
 ---
@@ -195,8 +196,8 @@ Size bands: S up to 10% of statements, M up to 25%, L up to 40%, XL above 40%.
   4. Upload limits and content allow-lists are enforced (SEC-02, SEC-06, SEC-07, SEC-09).
 - **Relative scale:** L.
 - **Risk:** High.
-  1. Moving from files beside images to a database and object storage breaks round-trips users rely on. *Mitigation:* annotation files stay the interchange format, backed by differential export tests.
-  2. Large 16-bit TIFF images strain the browser. *Mitigation:* server-side thumbnails and tiling, with a size cap under decision 3.
+  1. Reading and writing the user's annotation files in place risks corrupting a dataset the user cannot easily restore. *Mitigation:* writes are atomic per file, the format library is proven equivalent both directions, and nothing is deleted without explicit action.
+  2. Large 16-bit TIFF images strain the browser, which cannot decode them at all. *Mitigation:* the API owns one image pipeline that decodes, normalizes 16-bit to 8-bit per RULE-024, and serves tiles and thumbnails; the browser never sees the original encoding.
 
 ### Phase 5: Annotation tools, AI tools and image tools
 
@@ -300,7 +301,7 @@ These are the four persona flows from `analysis/lazylabel/topology.json`. Each s
 
 `BUSINESS_RULES.md` holds 94 confirmed rules. **36 are P0**, meaning they guard data integrity: what is written to or read from annotation files, and which pixels belong to which class. Together they are the regression suite. **No phase ships until every P0 rule assigned to it passes an equivalence test** (§6).
 
-P0 rules per phase: P1 28, P2 3, P3 0, P4 17, P5 9, P6 10. A rule citing code in several phases is proven in each.
+P0 rules per phase: P1 28, P2 3, P3 0, P4 16, P5 9, P6 10. A rule citing code in several phases is proven in each.
 
 | ID | Rule | Phases | Confidence |
 |---|---|---|---|
@@ -331,7 +332,7 @@ P0 rules per phase: P1 28, P2 3, P3 0, P4 17, P5 9, P6 10. A rule citing code in
 | RULE-055 | Leaving a sequence frame saves it and marks it Saved, even if it is a reference | P6 | Medium (blocker) |
 | RULE-056 | Leaving the Sequence tab or clicking New Timeline discards all sequence work without saving | P4, P6 | High |
 | RULE-057 | Multi-view batch navigation always saves, ignoring the Auto-Save setting | P4, P5, P6 | High |
-| RULE-058 | Propagation finish, Save All and Trim reload the current frame without saving it | P4, P6 | High |
+| RULE-058 | Propagation finish, Save All and Trim reload the current frame without saving it | P6 | High |
 | RULE-059 | Auto-save current image before switching images (single view) | P2, P4, P6 | Medium (blocker) |
 | RULE-060 | Propagated frame flagging and commit (Keep Flagged Masks) | P6 | Medium (blocker) |
 | RULE-078 | Annotations load from the best file present, and a damaged non-NPZ file stops the search | P1 | Medium (blocker) |
@@ -341,13 +342,12 @@ P0 rules per phase: P1 28, P2 3, P3 0, P4 17, P5 9, P6 10. A rule citing code in
 | RULE-082 | Save All propagated frames eligibility | P4, P6 | Medium (blocker) |
 | RULE-083 | Saving an image with no segments deletes all of its annotation files | P1, P4, P5, P6 | Medium (blocker) |
 
-**11 of these rules had their question answered** on 2026-09-17: each specification was re-derived from the cited legacy source and corrected, and the answer is on the card in `BUSINESS_RULES.md`. They satisfy their phase's entry criterion. Confidence stays Medium because the correction has not been confirmed by the system's owner: RULE-001, RULE-003, RULE-004, RULE-005, RULE-011, RULE-016, RULE-040, RULE-041, RULE-078, RULE-081, RULE-083.
+**12 of these rules had their question answered** on 2026-09-17: each specification was re-derived from the cited legacy source and corrected, and the answer is on the card in `BUSINESS_RULES.md`. They satisfy their phase's entry criterion. Confidence stays Medium because the correction has not been confirmed by the system's owner: RULE-001, RULE-003, RULE-004, RULE-005, RULE-011, RULE-016, RULE-040, RULE-041, RULE-059, RULE-078, RULE-081, RULE-083.
 
-**Blockers: 5 P0 rules are below High confidence with no answer.** Each needs an SME answer, recorded in `BUSINESS_RULES.md`, before the phases it belongs to start:
+**Blockers: 4 P0 rules are below High confidence with no answer.** Each needs an SME answer, recorded in `BUSINESS_RULES.md`, before the phases it belongs to start:
 
 - [ ] **RULE-054** (P4) Closing the application never saves the open image's annotations: Should closing auto-save (when Auto-Save is on) or prompt about unsaved annotations? Judges' reasoning: analysis/lazylabel/P0_PANEL.md.
 - [ ] **RULE-055** (P6) Leaving a sequence frame saves it and marks it Saved, even if it is a reference: Should a reference frame keep its 'reference' status after it is saved? Should clearing all masks on a propagated frame discard its propagated result? \| The compliance judge rated this not P0 while the fidelity judge rated it P0. Decide whether it guards annotation data integrity and belongs in the behavior contract. Judges' reasoning: analysis/lazylabel/P0_PANEL.md.
-- [ ] **RULE-059** (P2, P4, P6) Auto-save current image before switching images (single view): The fidelity judge found the specification unfaithful to the code. Correct the card from the judge's findings before writing its equivalence test. \| The compliance and fidelity judges found the specification unfaithful to the code. Correct the card from the judge's findings before writing its equivalence test. \| The compliance judge found the specification unfaithful to the code. Correct the card from the judge's findings before writing its equivalence test. Judges' reasoning: analysis/lazylabel/P0_PANEL.md.
 - [ ] **RULE-060** (P6) Propagated frame flagging and commit (Keep Flagged Masks): The fidelity judge found the specification unfaithful to the code. Correct the card from the judge's findings before writing its equivalence test. \| The compliance judge rated this not P0 while the fidelity judge rated it P0. Decide whether it guards annotation data integrity and belongs in the behavior contract. Judges' reasoning: analysis/lazylabel/P0_PANEL.md.
 - [ ] **RULE-082** (P4, P6) Save All propagated frames eligibility: Should Save All first commit edits on the open frame, and should objects with unknown class be saved as class 0? \| The compliance judge rated this not P0 while the fidelity judge rated it P0. Decide whether it guards annotation data integrity and belongs in the behavior contract. Judges' reasoning: analysis/lazylabel/P0_PANEL.md.
 
@@ -383,9 +383,11 @@ Entry criteria in §3 refer to these numbers. Approved in chat ("yeah do it all"
 
 - [x] **1. PyPI package `lazylabel-gui`** (open since `PREFLIGHT.md` Check 0). Choose (a) the web app replaces it and 2.0.8 is the last release, (b) it coexists, with Python kept for inference and still published, or (c) it is frozen at 2.0.8 with no further releases. **Answer (2026-09-17):** **(c) Frozen at 2.0.8.** No further PyPI releases of `lazylabel-gui`; the existing release stays installable so the desktop app remains available until Phase 6 exit. Revisit if the owner wants the package to keep shipping the Python inference client.
 - [x] **2. Inference hosting.** *Recommended:* a Python/PyTorch service reusing the legacy model code, because SAM 2 video propagation has no browser equivalent; add an in-browser ONNX decoder later only if click latency needs it. Ticking this accepts that the target is "React/Node.js plus a Python inference service", not Node.js alone. **Answer (2026-09-17):** **Python/PyTorch inference service**, reusing the legacy model code. The target is therefore React/Node.js plus a Python inference service, not Node.js alone. An in-browser ONNX decoder stays a Phase 3 fallback if click latency needs it.
-- [x] **3. Hosting and tenancy.** Single-user self-hosted, small team, or multi-tenant service. This decides auth, upload limits and cost controls. **Answer (2026-09-17):** **Single-user self-hosted first.** One trusted user per deployment, no tenant isolation in this plan. Every API route still carries a user scope so multi-tenancy is an added check rather than a redesign. Upload limits are sized for one annotator.
+- [x] **3. Hosting and tenancy.** Single-user self-hosted, small team, or multi-tenant service. This decides auth, upload limits and cost controls. **Answer (2026-09-17):** **Single-user self-hosted.** One trusted user per deployment, no tenant isolation. Authentication is a single local credential or whatever the reverse proxy in front of it provides, not an external identity provider, which would put a third party in the critical path of opening your own images. Every route still carries a user scope, so multi-tenancy stays a policy change rather than a redesign.
 - [x] **4. NPZ class-alias encoding.** *Recommended:* a JSON string in a unicode array, plus an offline converter for existing pickled files. **Answer (2026-09-17):** **JSON string in a unicode array** (`class_aliases` written as a single JSON document), plus an offline converter for existing pickled files. No code path unpickles.
-- [x] **5. Storage model.** *Recommended:* PostgreSQL for projects, segments, classes and settings, and S3-compatible object storage for images and exports. The alternative is a server filesystem that keeps annotation files beside images. **Answer (2026-09-17):** **PostgreSQL plus S3-compatible object storage**, as in §2. For a self-hosted deployment that is Postgres and MinIO in the same compose file. Annotation files stay the interchange format, produced by export rather than stored as the source of truth.
+- [x] **5. Storage model.** Where do annotations actually live: in a database that the files are exported from, or in the files themselves? *Recommended:* the files, with a small local database for settings, projects, sequences and jobs. **Answer (2026-09-17):** **The annotation files beside the user's images are the source of truth.** The API mounts the dataset folder and reads and writes sidecars in place; a local SQLite database holds only settings, hotkeys, projects, sequences, job records and a dataset index. No object storage, and no external identity provider.
+
+This reverses the PostgreSQL and S3 answer originally recorded here. The architecture critic showed that answer created two sources of truth for the same annotations, that its stated justification did not hold (a SQL transaction cannot make a seven-file write atomic), and that it silently gave up the property the desktop app had: your annotations are files in your folder that you can copy, diff and back up. It also removed the export path that the ML engineer persona exists for. For the single trusted user decision 3 fixes, two containers beat five plus a third-party dependency. Concurrent multi-user editing would need a real database later, but that migration would cover settings and jobs, a few thousand rows, not the annotation payload.
 - [x] **6. Class identity.** Keep legacy per-image class ids and aliases, or introduce a project-wide label map. This changes exported ids (`ASSESSMENT.md` Section 7, gap 3). **Answer (2026-09-17):** **Keep legacy per-image class ids and aliases.** Exported ids must match legacy exports byte for byte, which a project-wide label map would break. A project label map may be layered on later as an optional view.
 - [x] **7. Save semantics.** *Recommended:* explicit save with dirty tracking, and do not preserve delete-on-empty or the silent losses on close and multi-view navigation (`ASSESSMENT.md` 5.1). **Answer (2026-09-17):** **Explicit save with dirty tracking.** Do not reproduce delete-on-empty, the silent loss on close, or the silent loss on multi-view navigation. Deleting annotation files requires explicit user action, and a failed load never presents as "no annotations".
 - [x] **8. Multi-view.** Keep the two-viewer mode, redesign it, or drop it. Today it is half-migrated, with 14 undefined members. **Answer (2026-09-17):** **Rebuild multi-view as a synchronized split view** from the linked-operation rules, and delete the half-migrated legacy path rather than porting it. Reassess at Phase 6 entry if the restored rules prove too thin to specify it.

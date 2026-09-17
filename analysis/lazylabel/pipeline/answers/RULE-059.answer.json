@@ -1,0 +1,25 @@
+{
+ "id": "RULE-059",
+ "given": "img_001.png open with 2 segments; Auto-Save on; export formats NPZ + YOLO Detection",
+ "when": "The user presses Right (or double-clicks img_002.png)",
+ "then": "img_001.npz and img_001.txt are written, then img_002.png loads with only its own annotations; aliases, crop and undo history from img_001 are cleared",
+ "and": "",
+ "parameters": "auto_save default True; re-selecting the already open path is a no-op (no save, no reload); Auto-Save default True",
+ "edgeCases": [
+  "First image of the session: nothing to save",
+  "Auto-Save off: in-memory segments are discarded with no unsaved-changes prompt",
+  "A save error shows 'Error saving: ...' but navigation still proceeds, discarding the unsaved segments",
+  "Next on the last row does nothing (no wrap, no save)",
+  "The first image load of a session triggers no save",
+  "Selecting the image already open does nothing.",
+  "The first image of a session triggers no save.",
+  "With Auto-Save off, unsaved work is discarded silently.",
+  "If b.png cannot be decoded (cv2.imread returns None, e.g. a non-ASCII path on Windows), b.png is already the current path with 0 segments while a.png's picture stays on screen. The next navigation deletes b.png's annotation files."
+ ],
+ "answer": "Decided 2026-09-17, before Phase 2 scaffolds anything, because this rule gates that phase. KEEP auto-save on navigation as the default. The annotator's loop is click, accept, next, and removing the automatic save would change the tool's core interaction under cover of a security fix. Decision 7 forbids SILENT LOSS, not automatic saving, and the specification had quietly widened it into a ban on both. What must change is the unsafe part: the rewrite tracks whether the in-memory annotations came from a successful load, saves on navigation only when they did and the image is dirty, never infers a deletion from an empty segment list, and writes empty files for the selected formats rather than deleting sidecars. The setting stays user-visible and defaults on, as it does today.",
+ "corrections": [
+  "Recorded the decision that auto-save on navigation is kept, with dirty tracking and a successful-load token, rather than replaced by explicit-save-only."
+ ],
+ "unresolved": "",
+ "injectionSuspects": []
+}

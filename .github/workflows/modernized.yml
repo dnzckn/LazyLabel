@@ -50,6 +50,21 @@ jobs:
       - name: Build
         run: npm run build
 
+  analysis:
+    name: analysis documents
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+      # Every rule id cited in an analysis document must exist, and every P0 rule must have a home.
+      # The first draft of the Phase 2 spec mis-cited about half its rules and cited one that does
+      # not exist; a downstream agent turns those ids into tests mechanically.
+      - name: Check rule citations
+        working-directory: analysis/lazylabel/pipeline
+        run: python check_citations.py
+
   # The differential suites compare against the legacy Python implementation, which needs the legacy
   # package and its dependencies. They are the strongest proof the port is equivalent, so they run
   # here rather than only on the maintainer's machine.
