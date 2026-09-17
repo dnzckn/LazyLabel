@@ -124,10 +124,24 @@ async function inflateRaw(data: Uint8Array): Promise<Uint8Array> {
   return through(data, new DecompressionStream("deflate-raw"));
 }
 
-async function through(data: Uint8Array, transform: TransformStream<Uint8Array, Uint8Array>): Promise<Uint8Array> {
-  const stream = new Blob([data as unknown as BlobPart]).stream().pipeThrough(transform);
+/** Push bytes through a compression stream and collect the result. */
+async function through(
+  data: Uint8Array,
+  transform: CompressionStream | DecompressionStream,
+): Promise<Uint8Array> {
+  const writer = transform.writable.getWriter();
+  // The stream types demand a buffer that is not shared. Nothing here ever allocates a
+  // SharedArrayBuffer, so assert rather than copy the mask, which can be tens of megabytes.
+  const written = writer.write(data as Uint8Array<ArrayBuffer>).then(() => writer.close());
+
   const chunks: Uint8Array[] = [];
-  for await (const chunk of stream as unknown as AsyncIterable<Uint8Array>) chunks.push(chunk);
+  const reader = transform.readable.getReader();
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    if (value) chunks.push(value);
+  }
+  await written;
   return concat(chunks);
 }
 

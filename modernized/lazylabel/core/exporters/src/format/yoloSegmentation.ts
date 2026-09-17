@@ -10,7 +10,7 @@
  */
 
 import { approxPolyDP, arcLength, fillPoly } from "../geometry/contours.js";
-import { buildLabelMap, parseFloatLikePython, toPixel } from "./labels.js";
+import { buildLabelMap, parseFloatLikePython, toInt32Pixel } from "./labels.js";
 import type { LoadedAnnotations, ExportContext, Segment } from "../types.js";
 import { contourToPolygon, iterObjectContours } from "./objects.js";
 import { pyRepr } from "./pyRepr.js";
@@ -73,8 +73,8 @@ export function parseYoloSegmentation(
     const points: [number, number][] = [];
     for (let i = 0; i < coords.length; i += 2) {
       points.push([
-        toPixel(coords[i]! * width, "a polygon x coordinate"),
-        toPixel(coords[i + 1]! * height, "a polygon y coordinate"),
+        toInt32Pixel(coords[i]! * width, "a polygon x coordinate"),
+        toInt32Pixel(coords[i + 1]! * height, "a polygon y coordinate"),
       ]);
     }
     if (points.length >= 3) polygons.push({ label: parts[0]!, points });

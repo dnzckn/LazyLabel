@@ -12,10 +12,10 @@
     ".": "./src/index.ts"
   },
   "scripts": {
-    "test": "vitest run",
+    "test": "vitest run --exclude test/differential/**",
     "test:watch": "vitest",
-    "typecheck": "tsc --noEmit",
-    "golden": "echo \"run tools/generate_golden.py with the lazylabel venv; see tools/README.md\" && exit 1"
+    "test:differential": "vitest run test/differential",
+    "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
     "@types/node": "^26.6.1",

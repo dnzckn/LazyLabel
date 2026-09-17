@@ -35,11 +35,11 @@ def read_aliases(archive: np.lib.npyio.NpzFile, key: str = "class_aliases") -> d
     return {int(k): str(v) for k, v in json.loads(str(value)).items()}
 
 
-def compare(case: str, produced: pathlib.Path, golden: pathlib.Path) -> list[str]:
+def compare(case: str, produced: pathlib.Path, golden: pathlib.Path, keys: tuple[str, ...]) -> list[str]:
     problems: list[str] = []
     # Our own output must never need pickle; that is the point of decision 4.
     with np.load(produced, allow_pickle=False) as ours, np.load(golden, allow_pickle=True) as theirs:
-        for key in ("mask", "class_order"):
+        for key in keys:
             if key not in ours.files:
                 problems.append(f"{case}: our archive has no {key!r} member")
                 continue
@@ -72,14 +72,17 @@ def main() -> None:
 
     problems: list[str] = []
     for path in files:
-        case = path.stem
-        golden = GOLDENS / case / "image.npz"
+        # "<case>.npz" is the one-hot tensor; "<case>_CM.npz" is the class map.
+        is_class_map = path.stem.endswith("_CM")
+        case = path.stem[: -len("_CM")] if is_class_map else path.stem
+        golden = GOLDENS / case / ("image_CM.npz" if is_class_map else "image.npz")
+        keys = ("class_map", "foreground", "class_order") if is_class_map else ("mask", "class_order")
         if not golden.exists():
-            problems.append(f"{case}: no golden at {golden}")
+            problems.append(f"{path.stem}: no golden at {golden}")
             continue
-        found = compare(case, path, golden)
+        found = compare(path.stem, path, golden, keys)
         problems.extend(found)
-        print(f"{'FAIL' if found else 'ok  '}  {case}")
+        print(f"{'FAIL' if found else 'ok  '}  {path.stem}")
 
     if problems:
         print("\n" + "\n".join(problems))

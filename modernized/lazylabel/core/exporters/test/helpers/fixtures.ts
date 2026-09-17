@@ -39,7 +39,7 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 /** Package root: .../modernized/lazylabel/core/exporters */
 export const PACKAGE_ROOT = resolve(HERE, "..", "..");
 const FIXTURES_PATH = join(PACKAGE_ROOT, "tools", "fixtures.json");
-const GOLDENS_DIR = join(PACKAGE_ROOT, "goldens");
+export const GOLDENS_DIR = join(PACKAGE_ROOT, "goldens");
 
 /* -------------------------------------------------------------------------- */
 /* fixtures.json                                                              */
@@ -277,7 +277,15 @@ const RECORDED_SHAPE_RASTER: Readonly<Record<string, readonly RowSpan[]>> = {
 export type Contour = readonly (readonly [number, number])[];
 type Tracer = (mask: BinaryMask) => readonly Contour[];
 
-const TRACER_NAMES = ["traceContours", "findContours", "traceExternalContours"] as const;
+const TRACER_NAMES = [
+  // The name src/format/objects.ts already imports.
+  "findExternalContours",
+  "traceContours",
+  "findContours",
+  // src/geometry/suzukiAbe.ts exports this as (mask, direct); called with one argument, `direct`
+  // is undefined, which is the falsy CHAIN_APPROX_SIMPLE branch we want.
+  "traceExternalContours",
+] as const;
 let cachedTracer: Tracer | null = null;
 
 /**

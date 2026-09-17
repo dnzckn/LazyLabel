@@ -13,7 +13,7 @@
  */
 
 import { boundingRect, contourArea, fillPoly } from "../geometry/contours.js";
-import { toPixel } from "./labels.js";
+import { toInt32Pixel, toPixel } from "./labels.js";
 import { contourToPolygon, iterObjectContours } from "./objects.js";
 import { pythonJsonDumps } from "../util/pythonJson.js";
 import type { ExportContext, LoadedAnnotations, Segment } from "../types.js";
@@ -109,7 +109,7 @@ export function parseCoco(
             usable = false;
             break;
           }
-          points.push([toPixel(px, "a COCO polygon x"), toPixel(py, "a COCO polygon y")]);
+          points.push([toInt32Pixel(px, "a COCO polygon x"), toInt32Pixel(py, "a COCO polygon y")]);
         }
         if (!usable) continue;
 

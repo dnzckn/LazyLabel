@@ -17,7 +17,6 @@ Everything random is driven from SEED, so re-running reproduces the file byte fo
 
 from __future__ import annotations
 
-
 import json
 import os
 import sys

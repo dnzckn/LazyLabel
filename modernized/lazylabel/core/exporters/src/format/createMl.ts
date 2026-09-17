@@ -16,7 +16,7 @@ import { boundingRect } from "../geometry/contours.js";
 import { boxesToSegments, type ImportedBox } from "./boxes.js";
 import { toPixel } from "./labels.js";
 import { iterObjectContours } from "./objects.js";
-import { pythonJsonDumps } from "../util/pythonJson.js";
+import { pyFloat, pythonJsonDumps } from "../util/pythonJson.js";
 import type { ExportContext, LoadedAnnotations } from "../types.js";
 
 /** Render the document, or null when there is no object to write. */
@@ -27,7 +27,9 @@ export function renderCreateMl(ctx: ExportContext): string | null {
     const { x, y, width: bw, height: bh } = boundingRect(contour);
     annotations.push({
       label: ctx.classLabels[channel] ?? String(ctx.classOrder[channel]),
-      coordinates: { x: x + bw / 2, y: y + bh / 2, width: bw, height: bh },
+      // The centres are int + int/2 in Python, so they are floats even when whole: "20.0", not "20".
+      // The sizes stay ints.
+      coordinates: { x: pyFloat(x + bw / 2), y: pyFloat(y + bh / 2), width: bw, height: bh },
     });
   }
   if (annotations.length === 0) return null;

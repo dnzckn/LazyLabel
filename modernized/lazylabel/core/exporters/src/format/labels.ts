@@ -48,8 +48,11 @@ export function buildLabelMap(
 }
 
 /**
- * Python's float(): accepts "nan", "inf", "infinity", a leading "+" and surrounding whitespace,
- * and rejects "", "0x10" and "1_0" that JavaScript's Number() would take or mis-take.
+ * Python's float(), which differs from JavaScript's Number() in both directions.
+ *
+ * Python accepts, JavaScript does not: "nan", "inf", "infinity", and digit separators such as
+ * "1_0" (10.0) or "1_0e1_0", allowed singly BETWEEN digits only (PEP 515).
+ * JavaScript accepts, Python does not: "0x10", "0b1", "" and " " (Number gives 16, 1, 0 and 0).
  *
  * Returns null where float() raises ValueError, which makes the caller skip that line. A returned
  * NaN or Infinity is NOT a parse failure: the legacy loaders accept it here and then raise later,
@@ -57,17 +60,24 @@ export function buildLabelMap(
  */
 export function parseFloatLikePython(token: string): number | null {
   const text = token.trim();
-  if (/^[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$/.test(text)) return Number(text);
+  const digits = String.raw`\d(?:_?\d)*`;
+  const decimal = new RegExp(`^[+-]?(?:${digits}(?:\\.(?:${digits})?)?|\\.${digits})(?:[eE][+-]?${digits})?$`);
+  if (decimal.test(text)) return Number(text.replace(/_/g, ""));
   const special = /^([+-]?)(nan|inf|infinity)$/i.exec(text);
   if (!special) return null;
   if (/nan/i.test(special[2]!)) return Number.NaN;
   return special[1] === "-" ? Number.NEGATIVE_INFINITY : Number.POSITIVE_INFINITY;
 }
 
-/** Python's int(): optional sign then digits. Number() would accept "1.5" and "0x10". */
+/**
+ * Python's int(): optional sign, then digits with optional single separators between them.
+ *
+ * "1_0" is 10, so a label written that way stays NUMERIC. Treating it as a name instead would
+ * quietly split one class into two on reload, with a fresh id and an alias.
+ */
 export function parseIntLikePython(token: string): number | null {
   const text = token.trim();
-  return /^[+-]?\d+$/.test(text) ? Number.parseInt(text, 10) : null;
+  return /^[+-]?\d(?:_?\d)*$/.test(text) ? Number.parseInt(text.replace(/_/g, ""), 10) : null;
 }
 
 /**
@@ -96,4 +106,24 @@ export function toPixel(value: number, what: string): number {
   if (diff > 0.5) return floor + 1;
   if (diff < 0.5) return floor;
   return floor % 2 === 0 ? floor : floor + 1;
+}
+
+const INT32_MAX = 2_147_483_647;
+const INT32_MIN = -2_147_483_648;
+
+/**
+ * As toPixel, but for coordinates that legacy hands to `np.array(..., dtype=np.int32)`.
+ *
+ * NumPy raises OverflowError past the 32-bit range, and that raise happens outside the loaders'
+ * per-line guard, so the whole file is abandoned rather than the polygon clipped. Only the polygon
+ * paths convert this way; the box paths clamp to the image instead and never overflow.
+ */
+export function toInt32Pixel(value: number, what: string): number {
+  const pixel = toPixel(value, what);
+  if (pixel > INT32_MAX || pixel < INT32_MIN) {
+    throw new MalformedAnnotationError(
+      `${what} is ${pixel}, which does not fit a 32-bit integer; the whole file is rejected, as in legacy`,
+    );
+  }
+  return pixel;
 }
