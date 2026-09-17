@@ -158,6 +158,7 @@ for p in ("P0", "P1", "P2"):
 for c in ("High", "Medium", "Low"):
     a(f"| Confidence {c} | {conf.get(c, 0)} |")
 a(f"| Needing SME confirmation (confidence below High) | {len(needs_sme)} |")
+a(f"| Of those, answered since extraction | {sum(1 for r in needs_sme if r.get('answer'))} |")
 a(f"| P0 rules below High confidence (blockers for the behavior contract) | {len(p0_blockers)} |")
 a(f"| Cards sent to the P0 panel | {len(candidates)} |")
 a(f"| Candidate rules rejected by citation referees | {len(rejected)} |")
@@ -192,6 +193,12 @@ for cat, items in by_cat.items():
         a(f"**Edge cases handled:** {'; '.join(md(e) for e in edges) if edges else 'None recorded'}{BR}")
         if r.get("suspectedDefect"):
             a(f"**Suspected defect:** {md(r['suspectedDefect'])}{BR}")
+        ans = r.get("answer")
+        if ans:
+            text = md(ans["text"])
+            if ans.get("unresolved"):
+                text += " **Still open for the owner:** " + md(ans["unresolved"])
+            a(f"**Answer ({ans['date']}):** {text}{BR}")
         if r["confidence"] == "High":
             why = "citation confirmed by an independent referee"
             if r["priority"] == "P0":
@@ -202,6 +209,10 @@ for cat, items in by_cat.items():
                 why += f"; {len(r['mergedSpecs'])} near-duplicate card(s) from other lenses were folded in"
         else:
             why = "SME question: " + md(r.get("smeQuestion") or "not recorded by the extractor; confirm the specification against the cited code")
+            if r.get("answer"):
+                why += f" Answered on {r['answer']['date']}, above."
+        if r.get("confidenceNote"):
+            why += " " + md(r["confidenceNote"])
         a(f"**Confidence:** {r['confidence']} — {why}")
         a("")
 
@@ -211,6 +222,8 @@ if needs_sme:
     a("Answer each question on the rule card (or in the brief's open questions). P0 rules block their phase until answered.")
     a("")
     for r in sorted(needs_sme, key=lambda r: (PRIORITY_ORDER.get(r["priority"], 9), r["id"])):
+        if r.get("answer"):
+            continue  # answered on the card; listed in the answered section below
         q = md(r.get("smeQuestion") or "Confirm the specification against the cited code.")
         if len(q) > 400:
             q = q[:400].rsplit(" ", 1)[0] + " … (full question and evidence on the card)"
@@ -218,6 +231,19 @@ if needs_sme:
 else:
     a("None.")
 a("")
+
+answered = [r for r in rules if r.get("answer")]
+if answered:
+    a("## Questions answered since extraction")
+    a("")
+    a("Each rule below had its specification re-derived from the cited legacy source, and its question answered from that code or from an approved decision in `MODERNIZATION_BRIEF.md` §7. The full answer, and the corrections made to the card, are on the card itself.")
+    a("")
+    for r in sorted(answered, key=lambda r: r["id"]):
+        first = md(r["answer"]["text"]).split(". ")[0]
+        a(f"- **[{r['id']}]({anchor(r['id'], r['name'])})** ({r['priority']}, {r['confidence']}) {md(r['name'])}: {first}.")
+        for c in r["answer"].get("corrections") or []:
+            a(f"  - {md(c)}")
+    a("")
 
 a("## Candidate rules rejected by the citation referees")
 a("")

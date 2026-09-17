@@ -83,7 +83,7 @@ This is a cross-stack rebuild, so the order is **strangler-fig**: the lowest-ris
   6. `node -v` prints v22 and the Vitest recipe in `PREFLIGHT.md` Check 3b passes.
 - **Exit criteria:**
   1. Pilot: for every fixture, the TypeScript writer's `_seg.txt` is byte-identical to the legacy exporter's, and the TypeScript reader returns the same segments (class ids, pixel masks) as `FileManager.load_yolo_seg_txt`.
-  2. All seven formats pass differential tests against the legacy Python code on generated masks: text, JSON and XML outputs are byte-identical, and NPZ members are array-identical except for the alias encoding set by decision 4.
+  2. All seven formats pass differential tests against the legacy Python code on generated masks: text, JSON and XML outputs are byte-identical under decision 10's line-ending rule, and NPZ members are array-identical except for the alias encoding set by decision 4.
   3. The load-priority chain and legacy fallbacks match legacy on the fixture corpus, including damaged-file cases; any intentional change is recorded under decision 7.
   4. Every §5 rule assigned to P1 has a passing test.
   5. No code path deserializes pickle, and input limits are enforced.
@@ -241,6 +241,7 @@ Tick each box and write the answer beside it. Entry criteria in §3 refer to the
 - [ ] **12. Agent budget.** `/modernize-reimagine` and multi-slice transforms fan out many agents. {{BUDGET_NOTE}} Approve the budget per phase, or run phases one slice at a time.
 - [ ] **13. Legacy hygiene.** Port the `pyproject.toml` ruff `*.md` exclude from `main-web` to `main`? *Default:* no.
 - [ ] **14. P0 scope.** {{P0_SCOPE_NOTE}}
+- [ ] **15. Questions raised while re-deriving the Phase 1 rules.** Eleven P0 rules were re-derived from the legacy source on 2026-09-17 (`BUSINESS_RULES.md`, "Questions answered since extraction"). That review surfaced nine choices no earlier decision covered. Each is answered below with a default; change any of them by editing this file.
 
 ---
 

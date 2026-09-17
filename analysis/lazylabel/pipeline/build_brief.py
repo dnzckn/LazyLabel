@@ -122,13 +122,18 @@ a("|---|---|---|---|")
 for r in live_p0:
     a(f"| {r['id']} | {md(r['name'])} | {', '.join(r['phases'])} | {r['confidence']}{' (blocker)' if r['confidence'] != 'High' else ''} |")
 a("")
-if blockers:
-    a(f"**Blockers: {len(blockers)} P0 rules are below High confidence.** Each needs an SME answer, recorded in `BUSINESS_RULES.md`, before the phases it belongs to start:")
+open_blockers = [r for r in blockers if not r.get("answer")]
+answered_blockers = [r for r in blockers if r.get("answer")]
+if answered_blockers:
+    a(f"**{len(answered_blockers)} of these rules had their question answered** on {answered_blockers[0]['answer']['date']}: each specification was re-derived from the cited legacy source and corrected, and the answer is on the card in `BUSINESS_RULES.md`. They satisfy their phase's entry criterion. Confidence stays Medium because the correction has not been confirmed by the system's owner: " + ", ".join(r["id"] for r in answered_blockers) + ".")
     a("")
-    for r in blockers:
+if open_blockers:
+    a(f"**Blockers: {len(open_blockers)} P0 rules are below High confidence with no answer.** Each needs an SME answer, recorded in `BUSINESS_RULES.md`, before the phases it belongs to start:")
+    a("")
+    for r in open_blockers:
         a(f"- [ ] **{r['id']}** ({', '.join(r['phases'])}) {md(r['name'])}: {md(r.get('smeQuestion') or 'Confirm the specification against the cited code.')}")
 else:
-    a("No P0 rule is below High confidence, so there are no SME blockers.")
+    a("No P0 rule is below High confidence without an answer, so no SME blocker remains.")
 a("")
 
 # Cards the panel demoted because the compliance judge said "not P0" while the fidelity judge said "P0".
