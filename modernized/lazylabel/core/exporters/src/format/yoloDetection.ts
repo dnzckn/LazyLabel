@@ -12,7 +12,7 @@
  */
 
 import { boundingRect } from "../geometry/contours.js";
-import { MalformedAnnotationError, parseFloatLikePython, toPixel } from "./labels.js";
+import { assertText, MalformedAnnotationError, parseFloatLikePython, toPixel } from "./labels.js";
 import { boxesToSegments, type ImportedBox } from "./boxes.js";
 import { iterObjectContours } from "./objects.js";
 import { pyRepr } from "./pyRepr.js";
@@ -51,15 +51,24 @@ export function parseYoloDetection(
   imageSize: readonly [number, number],
   existingAliases: ReadonlyMap<number, string> = new Map(),
 ): LoadedAnnotations {
+  assertText(text, "YOLO Detection");
   const [height, width] = imageSize;
   const boxes: ImportedBox[] = [];
+  let rejected = 0;
 
   for (const line of text.split(/\r?\n/)) {
     const parts = line.trim().split(/\s+/).filter((token) => token.length > 0);
-    if (parts.length !== 5) continue;
+    if (parts.length === 0) continue; // a blank line is not a rejection
+    if (parts.length !== 5) {
+      rejected += 1;
+      continue;
+    }
 
     const numbers = parts.slice(1).map((token) => parseFloatLikePython(token));
-    if (numbers.some((value) => value === null)) continue;
+    if (numbers.some((value) => value === null)) {
+      rejected += 1;
+      continue;
+    }
     const [cx, cy, bw, bh] = numbers as [number, number, number, number];
 
     boxes.push({
@@ -70,7 +79,8 @@ export function parseYoloDetection(
       y2: toPixel((cy + bh / 2) * height, "a box's bottom edge"),
     });
   }
-  return boxesToSegments(boxes, imageSize, existingAliases);
+  const loaded = boxesToSegments(boxes, imageSize, existingAliases);
+  return { ...loaded, rejected: loaded.rejected + rejected };
 }
 
 export { MalformedAnnotationError };

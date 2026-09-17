@@ -14,7 +14,7 @@
 
 import { boundingRect } from "../geometry/contours.js";
 import { boxesToSegments, type ImportedBox } from "./boxes.js";
-import { toPixel } from "./labels.js";
+import { parseFloatLikePython, toPixel } from "./labels.js";
 import { iterObjectContours } from "./objects.js";
 import { pyFloat, pythonJsonDumps } from "../util/pythonJson.js";
 import type { ExportContext, LoadedAnnotations } from "../types.js";
@@ -50,25 +50,35 @@ export function parseCreateMl(
 ): LoadedAnnotations {
   const document: unknown = JSON.parse(text);
   if (!Array.isArray(document) || document.length === 0 || typeof document[0] !== "object" || !document[0]) {
-    return { segments: [], classAliases: new Map(existingAliases) };
+    return { segments: [], classAliases: new Map(), rejected: 0 };
   }
 
   const first = document[0] as Record<string, unknown>;
   const boxes: ImportedBox[] = [];
   const entries = Array.isArray(first["annotations"]) ? (first["annotations"] as unknown[]) : [];
 
+  let rejected = 0;
   for (const entry of entries) {
-    if (!entry || typeof entry !== "object") continue;
+    if (!entry || typeof entry !== "object") {
+      rejected += 1;
+      continue;
+    }
     const annotation = entry as Record<string, unknown>;
     const coordinates = annotation["coordinates"];
-    if (!coordinates || typeof coordinates !== "object") continue;
+    if (!coordinates || typeof coordinates !== "object") {
+      rejected += 1;
+      continue;
+    }
     const box = coordinates as Record<string, unknown>;
 
     const cx = asNumber(box["x"]);
     const cy = asNumber(box["y"]);
     const bw = asNumber(box["width"]);
     const bh = asNumber(box["height"]);
-    if (cx === null || cy === null || bw === null || bh === null) continue;
+    if (cx === null || cy === null || bw === null || bh === null) {
+      rejected += 1;
+      continue;
+    }
 
     // The corner rounds first, then the size is added, so x2 is NOT round(cx + bw/2).
     const x1 = toPixel(cx - bw / 2, "a CreateML box left edge");
@@ -81,16 +91,23 @@ export function parseCreateMl(
       y2: y1 + toPixel(bh, "a CreateML box height"),
     });
   }
-  return boxesToSegments(boxes, imageSize, existingAliases);
+  const loaded = boxesToSegments(boxes, imageSize, existingAliases);
+  return { ...loaded, rejected: loaded.rejected + rejected };
 }
 
+/**
+ * A coordinate as Python's `float(coords.get(key, 0))` reads it.
+ *
+ * A missing key defaults to 0. A string goes through Python's float rules, so "nan" and "inf"
+ * parse rather than fail here and are refused later by toPixel, which discards the whole file.
+ * That matters: in the legacy loader the rounding sits OUTSIDE the try, so one bad coordinate
+ * loses every annotation in the file rather than one. Skipping just that annotation would load
+ * boxes the legacy app never loads.
+ */
 function asNumber(value: unknown): number | null {
   if (typeof value === "number") return value;
-  if (typeof value === "string" && value.trim() !== "") {
-    const parsed = Number(value);
-    return Number.isNaN(parsed) ? null : parsed;
-  }
-  return value === undefined ? 0 : null; // a missing key defaults to 0, as float(coords.get(k, 0)) does
+  if (typeof value === "string") return parseFloatLikePython(value);
+  return value === undefined ? 0 : null;
 }
 
 function baseName(path: string): string {

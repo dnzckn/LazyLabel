@@ -10,6 +10,8 @@
  * Python dict literal padded so the data starts on a 64-byte boundary.
  */
 
+import { assertWithin, DEFAULT_LIMITS, type AnnotationLimits } from "../limits.js";
+
 const MAGIC = new Uint8Array([0x93, 0x4e, 0x55, 0x4d, 0x50, 0x59]); // \x93NUMPY
 
 export type NpyDType = "uint8" | "int64" | "bool" | "str";
@@ -72,6 +74,11 @@ function encodeBody(array: NpyArray): Uint8Array {
   const count = array.shape.reduce((a, b) => a * b, 1);
   if (array.dtype === "uint8" || array.dtype === "bool") {
     if (!(array.data instanceof Uint8Array)) throw new TypeError("uint8 array needs Uint8Array data");
+    // Without this, a tensor whose data and shape disagree is written silently: two thirds of the
+    // mask survives, misattributed to the wrong classes, with no error anywhere.
+    if (array.data.length !== count) {
+      throw new RangeError(`this array declares ${count} elements but carries ${array.data.length}`);
+    }
     return array.data;
   }
   const out = new Uint8Array(count * 8);
@@ -80,15 +87,15 @@ function encodeBody(array: NpyArray): Uint8Array {
   return out;
 }
 
-export function decodeNpy(bytes: Uint8Array): NpyArray {
+export function decodeNpy(bytes: Uint8Array, limits: AnnotationLimits = DEFAULT_LIMITS): NpyArray {
   for (let i = 0; i < MAGIC.length; i += 1) {
     if (bytes[i] !== MAGIC[i]) throw new Error("not an .npy array: bad magic");
   }
   const major = bytes[6]!;
   const headerLength =
     major === 1
-      ? new DataView(bytes.buffer, bytes.byteOffset).getUint16(8, true)
-      : new DataView(bytes.buffer, bytes.byteOffset).getUint32(8, true);
+      ? new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength).getUint16(8, true)
+      : new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength).getUint32(8, true);
   const headerStart = major === 1 ? 10 : 12;
   const header = new TextDecoder().decode(bytes.subarray(headerStart, headerStart + headerLength));
 
@@ -104,6 +111,10 @@ export function decodeNpy(bytes: Uint8Array): NpyArray {
     .filter((part) => part.length > 0)
     .map((part) => Number.parseInt(part, 10));
   const count = shape.reduce((a, b) => a * b, 1);
+  assertWithin(
+    Number.isFinite(count) && count >= 0 && count <= limits.maxPixels * limits.maxChannels,
+    `this array declares ${count} elements, more than the limits allow`,
+  );
   const body = bytes.subarray(headerStart + headerLength);
 
   // NumPy unicode: "<U<n>" holds n UTF-32 little-endian code points per item, trailing zeros trimmed.
@@ -111,7 +122,8 @@ export function decodeNpy(bytes: Uint8Array): NpyArray {
   if (unicode) {
     const points = Number.parseInt(unicode[1]!, 10);
     if (count !== 1) throw new Error("only a single unicode string is supported, not an array of them");
-    const view32 = new DataView(body.buffer, body.byteOffset);
+    if (body.length < points * 4) throw new Error("truncated .npy string");
+    const view32 = new DataView(body.buffer, body.byteOffset, body.byteLength);
     let text = "";
     for (let i = 0; i < points; i += 1) {
       const code = view32.getUint32(i * 4, true);
@@ -134,7 +146,7 @@ export function decodeNpy(bytes: Uint8Array): NpyArray {
   if (dtype === "uint8" || dtype === "bool") {
     return { dtype, shape, data: body.subarray(0, count) };
   }
-  const view = new DataView(body.buffer, body.byteOffset);
+  const view = new DataView(body.buffer, body.byteOffset, body.byteLength);
   const values = new Float64Array(count);
   for (let i = 0; i < count; i += 1) values[i] = Number(view.getBigInt64(i * 8, true));
   return { dtype, shape, data: values };

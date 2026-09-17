@@ -3,7 +3,7 @@
  *
  * The expected values in python-expectations.json were produced by CPython 3.10 in the project
  * venv, not by this implementation, so these are characterization tests rather than a restatement
- * of the code. Regenerate them with the snippet in tools/README.md if the corpus needs extending.
+ * of the code. tools/generate_expectations.py regenerates them if the corpus needs extending.
  */
 
 import { readFileSync } from "node:fs";

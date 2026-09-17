@@ -7,6 +7,10 @@
  * NumPy writes .npz with deflate (np.savez_compressed) or stored (np.savez); both are read here.
  */
 
+import { assertWithin, DEFAULT_LIMITS, type AnnotationLimits } from "../limits.js";
+
+const UINT32_MAX = 0xffffffff;
+
 export interface ZipEntry {
   readonly name: string;
   readonly data: Uint8Array;
@@ -28,6 +32,10 @@ export async function writeZip(entries: readonly ZipEntry[]): Promise<Uint8Array
     const body = useDeflate ? compressed : entry.data;
     const method = useDeflate ? METHOD.deflated : METHOD.stored;
     const crc = crc32(entry.data);
+    assertWithin(
+      body.length <= UINT32_MAX && entry.data.length <= UINT32_MAX && offset <= UINT32_MAX,
+      `member ${entry.name} does not fit a zip32 archive; LazyLabel does not write zip64`,
+    );
 
     const local = new Uint8Array(30 + name.length);
     const lv = new DataView(local.buffer);
@@ -77,7 +85,10 @@ export async function writeZip(entries: readonly ZipEntry[]): Promise<Uint8Array
   return concat([...locals, ...centrals, end]);
 }
 
-export async function readZip(bytes: Uint8Array): Promise<ZipEntry[]> {
+export async function readZip(
+  bytes: Uint8Array,
+  limits: AnnotationLimits = DEFAULT_LIMITS,
+): Promise<ZipEntry[]> {
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   let end = -1;
   for (let i = bytes.length - 22; i >= 0; i -= 1) {
@@ -89,8 +100,13 @@ export async function readZip(bytes: Uint8Array): Promise<ZipEntry[]> {
   if (end < 0) throw new Error("not a zip archive: no end-of-central-directory record");
 
   const count = view.getUint16(end + 10, true);
+  assertWithin(
+    count <= limits.maxArchiveMembers,
+    `this archive declares ${count} members, over the ${limits.maxArchiveMembers} limit`,
+  );
   let pointer = view.getUint32(end + 16, true);
   const entries: ZipEntry[] = [];
+  let totalUncompressed = 0;
 
   for (let i = 0; i < count; i += 1) {
     if (view.getUint32(pointer, true) !== SIGNATURE.central) throw new Error("corrupt zip directory");
@@ -110,6 +126,13 @@ export async function readZip(bytes: Uint8Array): Promise<ZipEntry[]> {
     if (method !== METHOD.stored && method !== METHOD.deflated) {
       throw new Error(`unsupported zip compression method ${method} for member ${name}`);
     }
+    // Check the DECLARED size before inflating: that is the whole point of a zip bomb.
+    const declared = view.getUint32(pointer + 24, true);
+    totalUncompressed += declared;
+    assertWithin(
+      totalUncompressed <= limits.maxUncompressedBytes,
+      `this archive decompresses to over ${limits.maxUncompressedBytes} bytes`,
+    );
     entries.push({ name, data: method === METHOD.deflated ? await inflateRaw(raw) : raw });
     pointer += 46 + nameLength + extraLength + commentLength;
   }
@@ -124,7 +147,15 @@ async function inflateRaw(data: Uint8Array): Promise<Uint8Array> {
   return through(data, new DecompressionStream("deflate-raw"));
 }
 
-/** Push bytes through a compression stream and collect the result. */
+/**
+ * Push bytes through a compression stream and collect the result.
+ *
+ * Both ends of the stream must be handled, or a corrupt archive takes the process down: when
+ * inflate fails, the read side rejects first, and an unhandled rejection on the write side then
+ * crashes Node even though the caller caught the error it saw. The failure is also reported with a
+ * message, because the raw stream error carries an empty one, which would surface to a user as a
+ * banner ending in a bare colon.
+ */
 async function through(
   data: Uint8Array,
   transform: CompressionStream | DecompressionStream,
@@ -132,17 +163,37 @@ async function through(
   const writer = transform.writable.getWriter();
   // The stream types demand a buffer that is not shared. Nothing here ever allocates a
   // SharedArrayBuffer, so assert rather than copy the mask, which can be tens of megabytes.
-  const written = writer.write(data as Uint8Array<ArrayBuffer>).then(() => writer.close());
+  const written = writer
+    .write(data as Uint8Array<ArrayBuffer>)
+    .then(() => writer.close())
+    .catch(() => undefined); // the read side reports the real failure
 
   const chunks: Uint8Array[] = [];
   const reader = transform.readable.getReader();
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    if (value) chunks.push(value);
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (value) chunks.push(value);
+    }
+  } catch (cause) {
+    const detail = cause instanceof Error && cause.message ? cause.message : String(cause);
+    throw new CompressionError(`the compressed data could not be read: ${detail || "stream failed"}`, cause);
+  } finally {
+    await written;
   }
-  await written;
   return concat(chunks);
+}
+
+/** A zip member that could not be inflated: damaged, truncated, or not deflate data at all. */
+export class CompressionError extends Error {
+  constructor(
+    message: string,
+    override readonly cause: unknown,
+  ) {
+    super(message);
+    this.name = "CompressionError";
+  }
 }
 
 function concat(parts: readonly Uint8Array[]): Uint8Array {

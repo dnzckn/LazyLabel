@@ -10,7 +10,7 @@
  */
 
 import { approxPolyDP, arcLength, fillPoly } from "../geometry/contours.js";
-import { buildLabelMap, parseFloatLikePython, toInt32Pixel } from "./labels.js";
+import { assertText, buildLabelMap, parseFloatLikePython, toInt32Pixel } from "./labels.js";
 import type { LoadedAnnotations, ExportContext, Segment } from "../types.js";
 import { contourToPolygon, iterObjectContours } from "./objects.js";
 import { pyRepr } from "./pyRepr.js";
@@ -60,15 +60,24 @@ export function parseYoloSegmentation(
   imageSize: readonly [number, number],
   existingAliases: ReadonlyMap<number, string> = new Map(),
 ): LoadedAnnotations {
+  assertText(text, "YOLO Segmentation");
   const [height, width] = imageSize;
   const polygons: { label: string; points: [number, number][] }[] = [];
+  let rejected = 0;
 
   for (const line of text.split(/\r?\n/)) {
     const parts = line.trim().split(/\s+/).filter((token) => token.length > 0);
-    if (parts.length < 7 || parts.length % 2 === 0) continue;
+    if (parts.length === 0) continue; // a blank line is not a rejection
+    if (parts.length < 7 || parts.length % 2 === 0) {
+      rejected += 1;
+      continue;
+    }
 
     const coords = parts.slice(1).map((token) => parseFloatLikePython(token));
-    if (coords.some((value) => value === null)) continue;
+    if (coords.some((value) => value === null)) {
+      rejected += 1;
+      continue;
+    }
 
     const points: [number, number][] = [];
     for (let i = 0; i < coords.length; i += 2) {
@@ -84,7 +93,10 @@ export function parseYoloSegmentation(
   const segments: Segment[] = [];
   for (const { label, points } of polygons) {
     const mask = fillPoly(height, width, [points]);
-    if (!mask.data.some((v) => v !== 0)) continue; // a polygon that covers nothing is dropped
+    if (!mask.data.some((v) => v !== 0)) {
+      rejected += 1; // covers no pixels, but its label already claimed an id
+      continue;
+    }
     segments.push({
       type: "Loaded",
       classId: labelMap.get(label)!,
@@ -92,5 +104,5 @@ export function parseYoloSegmentation(
       vertices: points.map(([x, y]) => [x, y] as const),
     });
   }
-  return { segments, classAliases: newAliases };
+  return { segments, classAliases: newAliases, rejected };
 }

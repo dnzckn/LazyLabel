@@ -6,17 +6,24 @@
  *
  * One deliberate deviation, approved as decision 4: the legacy writer stores `class_aliases` as a
  * pickled Python dict, so loading one executes arbitrary code (SEC-01). Here the aliases travel as
- * JSON inside a NumPy unicode scalar, and a pickled member is refused rather than unpickled. Files
- * this writer produces are still readable by NumPy; legacy LazyLabel reads their masks and ignores
- * the alias member. The offline converter handles existing pickled files.
+ * JSON inside a NumPy unicode scalar, and a pickled member is refused rather than unpickled.
+ *
+ * The JSON lives under the name `class_aliases_json`, NOT `class_aliases`, and that detail is
+ * load-bearing. Legacy's _restore_aliases (file_manager.py:335-343) calls `.item()` on the member
+ * inside a try and then `.items()` on the result OUTSIDE it; for a unicode scalar `.item()` returns
+ * a str, so `.items()` raises and the whole legacy load fails with zero segments. Under the new
+ * name legacy takes its `if "class_aliases" not in data: return` early exit and reads the masks
+ * normally, losing only the alias names. Both names are accepted on read.
  */
 
+import { ALIAS_MEMBER, readAliasMember } from "./aliases.js";
 import { decodeNpy, encodeNpy, encodeNpyString } from "../util/npy.js";
 import { readZip, writeZip } from "../util/zip.js";
 import type { BinaryMask, ExportContext, LoadedAnnotations, Segment } from "../types.js";
 
 /** Render the archive, or null where the legacy exporter writes no file (an empty tensor). */
 export async function renderNpz(ctx: ExportContext): Promise<Uint8Array | null> {
+  assertConsistent(ctx);
   const { height, width, data } = ctx.maskTensor;
   const channels = ctx.classOrder.length;
   if (height * width * channels === 0) return null;
@@ -28,7 +35,7 @@ export async function renderNpz(ctx: ExportContext): Promise<Uint8Array | null> 
       name: "class_order.npy",
       data: encodeNpy({ dtype: "int64", shape: [channels], data: Float64Array.from(ctx.classOrder) }),
     },
-    { name: "class_aliases.npy", data: encodeNpyString(JSON.stringify(aliases)) },
+    { name: `${ALIAS_MEMBER}.npy`, data: encodeNpyString(JSON.stringify(aliases)) },
   ]);
 }
 
@@ -46,7 +53,7 @@ export async function parseNpz(bytes: Uint8Array): Promise<LoadedAnnotations> {
     members.set(entry.name.replace(/\.npy$/, ""), entry.data);
   }
 
-  const classAliases = readAliases(members);
+  const classAliases = readAliasMember(members);
   const segments: Segment[] = [];
 
   if (members.has("masks") && members.has("class_ids") && !members.has("mask")) {
@@ -59,11 +66,11 @@ export async function parseNpz(bytes: Uint8Array): Promise<LoadedAnnotations> {
       if (!plane.some((v) => v !== 0)) continue;
       segments.push(loadedSegment(toMask(plane, height, width), idAt(ids.data, i)));
     }
-    return { segments, classAliases };
+    return { segments, classAliases, rejected: 0 };
   }
 
   const maskKey = members.has("mask") ? "mask" : members.has("masks") ? "masks" : null;
-  if (!maskKey) return { segments, classAliases };
+  if (!maskKey) return { segments, classAliases, rejected: 0 };
 
   const mask = decodeNpy(members.get(maskKey)!);
   const [height = 0, width = 0, channels = 1] = mask.shape; // a 2-D mask is one channel
@@ -86,31 +93,7 @@ export async function parseNpz(bytes: Uint8Array): Promise<LoadedAnnotations> {
     const classId = classOrder && channel < classOrder.length ? classOrder[channel]! : channel;
     segments.push(loadedSegment(toMask(plane, height, width), classId));
   }
-  return { segments, classAliases };
-}
-
-function readAliases(members: ReadonlyMap<string, Uint8Array>): Map<number, string> {
-  const raw = members.get("class_aliases");
-  if (!raw) return new Map();
-  let decoded;
-  try {
-    decoded = decodeNpy(raw);
-  } catch {
-    // A pickled alias table from a legacy file: treat as absent rather than executing it (SEC-01).
-    return new Map();
-  }
-  if (decoded.dtype !== "str" || typeof decoded.data !== "string") return new Map();
-  try {
-    const parsed: unknown = JSON.parse(decoded.data);
-    if (!parsed || typeof parsed !== "object") return new Map();
-    return new Map(
-      Object.entries(parsed as Record<string, unknown>)
-        .filter(([id, name]) => /^-?\d+$/.test(id) && typeof name === "string")
-        .map(([id, name]) => [Number.parseInt(id, 10), name as string]),
-    );
-  } catch {
-    return new Map();
-  }
+  return { segments, classAliases, rejected: 0 };
 }
 
 function idAt(data: Uint8Array | Float64Array | string, index: number): number {
@@ -125,4 +108,31 @@ function toMask(data: Uint8Array, height: number, width: number): BinaryMask {
 
 function loadedSegment(mask: BinaryMask, classId: number): Segment {
   return { type: "Loaded", classId, mask };
+}
+
+/**
+ * Refuse a context that contradicts itself.
+ *
+ * ExportContext carries the class order twice, once at the top level and once inside the mask
+ * tensor, and the two are assembled by hand in the web app and in the API. When they disagree the
+ * mask is written with the wrong channel count and silently misattributed to the wrong classes.
+ */
+function assertConsistent(ctx: ExportContext): void {
+  const tensorOrder = ctx.maskTensor.classOrder;
+  const sameOrder =
+    tensorOrder.length === ctx.classOrder.length &&
+    tensorOrder.every((id, index) => id === ctx.classOrder[index]);
+  if (!sameOrder) {
+    throw new RangeError(
+      `the context's class order [${ctx.classOrder.join(", ")}] does not match the mask tensor's ` +
+        `[${tensorOrder.join(", ")}]`,
+    );
+  }
+  const expected = ctx.maskTensor.height * ctx.maskTensor.width * tensorOrder.length;
+  if (ctx.maskTensor.data.length !== expected) {
+    throw new RangeError(
+      `the mask tensor says ${ctx.maskTensor.height}x${ctx.maskTensor.width}x${tensorOrder.length} ` +
+        `(${expected} values) but carries ${ctx.maskTensor.data.length}`,
+    );
+  }
 }

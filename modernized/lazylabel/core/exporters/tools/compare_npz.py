@@ -25,9 +25,15 @@ HERE = pathlib.Path(__file__).resolve().parent
 GOLDENS = HERE.parent / "goldens"
 
 
-def read_aliases(archive: np.lib.npyio.NpzFile, key: str = "class_aliases") -> dict[int, str]:
-    """Read an alias table written either as JSON text (new) or as a pickled dict (legacy)."""
-    if key not in archive.files:
+def read_aliases(archive: np.lib.npyio.NpzFile) -> dict[int, str]:
+    """Read an alias table under either member name.
+
+    This library writes JSON text under `class_aliases_json`; the legacy exporter writes a pickled
+    dict under `class_aliases`. The names differ deliberately, so that the legacy loader skips ours
+    instead of crashing on it.
+    """
+    key = next((k for k in ("class_aliases_json", "class_aliases") if k in archive.files), None)
+    if key is None:
         return {}
     value = archive[key]
     if value.dtype == object:  # legacy pickle
@@ -62,6 +68,35 @@ def compare(case: str, produced: pathlib.Path, golden: pathlib.Path, keys: tuple
     return problems
 
 
+def legacy_can_read(produced: pathlib.Path, is_class_map: bool) -> list[str]:
+    """The desktop app must still open what the web app writes, until Phase 6 cutover (decision 1).
+
+    This is the check that caught the alias member name: a NumPy unicode scalar under the legacy
+    name `class_aliases` makes FileManager._restore_aliases raise outside its own try, so the whole
+    legacy load fails with zero segments and the app quietly falls back to a lower-priority sidecar.
+    """
+    try:
+        from lazylabel.core.file_manager import FileManager
+        from lazylabel.core.segment_manager import SegmentManager
+    except ImportError:
+        return []  # legacy not importable here; the array comparison above still ran
+
+    manager = SegmentManager()
+    reader = FileManager(manager)
+    try:
+        if is_class_map:
+            with np.load(produced, allow_pickle=False) as archive:
+                shape = archive["class_map"].shape
+            reader.load_npz_class_map(str(produced), (int(shape[0]), int(shape[1])))
+        else:
+            reader._load_npz(str(produced))
+    except Exception as exc:  # noqa: BLE001 - any raise here is the failure we are testing for
+        return [f"{produced.stem}: the legacy loader raised {type(exc).__name__}: {exc}"]
+    if not manager.segments:
+        return [f"{produced.stem}: the legacy loader read zero segments"]
+    return []
+
+
 def main() -> None:
     if len(sys.argv) < 2:
         sys.exit(__doc__)
@@ -81,6 +116,7 @@ def main() -> None:
             problems.append(f"{path.stem}: no golden at {golden}")
             continue
         found = compare(path.stem, path, golden, keys)
+        found += legacy_can_read(path, is_class_map)
         problems.extend(found)
         print(f"{'FAIL' if found else 'ok  '}  {path.stem}")
 

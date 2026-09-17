@@ -32,16 +32,20 @@ export function boxesToSegments(
   const { labelMap, aliases } = buildLabelMap(boxes.map((box) => box.label), existingAliases);
   const segments: Segment[] = [];
 
+  let rejected = 0;
   for (const box of boxes) {
     const x1 = Math.max(0, box.x1);
     const y1 = Math.max(0, box.y1);
     const x2 = Math.min(width, box.x2);
     const y2 = Math.min(height, box.y2);
-    if (x2 <= x1 || y2 <= y1) continue;
+    if (x2 <= x1 || y2 <= y1) {
+      rejected += 1; // collapsed entirely against the image edge
+      continue;
+    }
 
     const data = new Uint8Array(height * width);
     for (let y = y1; y < y2; y += 1) data.fill(1, y * width + x1, y * width + x2);
     segments.push({ type: "Loaded", classId: labelMap.get(box.label)!, mask: { height, width, data } });
   }
-  return { segments, classAliases: aliases };
+  return { segments, classAliases: aliases, rejected };
 }

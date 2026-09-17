@@ -101,6 +101,20 @@ export const FORMAT_SUFFIX: Readonly<Record<AnnotationFormat, string>> = {
 /** A parsed annotation file, as the readers return it. */
 export interface LoadedAnnotations {
   readonly segments: readonly Segment[];
-  /** Aliases the file carried, by class id. Empty when the format stores no names. */
+  /**
+   * Class names this file establishes, by id: names it stored (NPZ, COCO) or assigned to its own
+   * unnamed labels (the text formats). Empty when the format carries no names.
+   *
+   * It never echoes the alias table passed into the reader. The caller merges this into its store,
+   * so which sidecar an image happens to have cannot change the names the user already set.
+   */
   readonly classAliases: ReadonlyMap<number, string>;
+  /**
+   * How many lines or objects the reader skipped as unreadable.
+   *
+   * A file can be well-formed and still be mostly junk. Phase 4 shows this so a user sees "412
+   * unreadable lines" instead of an empty canvas, which decision 15d requires and the legacy app
+   * never did.
+   */
+  readonly rejected: number;
 }

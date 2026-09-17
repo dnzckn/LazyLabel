@@ -64,7 +64,8 @@ export function renderCoco(ctx: ExportContext): string | null {
  *
  * Each annotation prefers its polygons; an RLE dictionary, an empty list, or polygons too
  * degenerate to rasterize all fall through to the bounding box, so an object is never lost.
- * Categories restore aliases, rejoining "name.supercategory" when the two differ.
+ * Categories restore aliases, rejoining "name.supercategory" when the two differ. As with every
+ * reader, the returned alias map holds only what this file establishes.
  */
 export function parseCoco(
   text: string,
@@ -78,7 +79,7 @@ export function parseCoco(
   }
   const root = document as Record<string, unknown>;
 
-  const classAliases = new Map(existingAliases);
+  const classAliases = new Map<number, string>();
   for (const entry of asArray(root["categories"])) {
     if (!entry || typeof entry !== "object") continue;
     const category = entry as Record<string, unknown>;
@@ -90,8 +91,12 @@ export function parseCoco(
   }
 
   const segments: Segment[] = [];
+  let rejected = 0;
   for (const entry of asArray(root["annotations"])) {
-    if (!entry || typeof entry !== "object") continue;
+    if (!entry || typeof entry !== "object") {
+      rejected += 1;
+      continue;
+    }
     const annotation = entry as Record<string, unknown>;
     const categoryId = asInt(annotation["category_id"]) ?? 0;
 
@@ -127,16 +132,25 @@ export function parseCoco(
     if (added) continue;
 
     const bbox = annotation["bbox"];
-    if (!Array.isArray(bbox) || bbox.length !== 4) continue;
+    if (!Array.isArray(bbox) || bbox.length !== 4) {
+      rejected += 1; // no usable polygon and no usable box: the object is lost
+      continue;
+    }
     const values = bbox.map((v) => asNumber(v));
-    if (values.some((v) => v === null)) continue;
+    if (values.some((v) => v === null)) {
+      rejected += 1;
+      continue;
+    }
     const [bx, by, bw, bh] = values.map((v) => toPixel(v!, "a COCO box value")) as [number, number, number, number];
 
     const x1 = Math.max(0, bx);
     const y1 = Math.max(0, by);
     const x2 = Math.min(width, bx + bw);
     const y2 = Math.min(height, by + bh);
-    if (x2 <= x1 || y2 <= y1) continue;
+    if (x2 <= x1 || y2 <= y1) {
+      rejected += 1;
+      continue;
+    }
 
     const data = new Uint8Array(height * width);
     for (let y = y1; y < y2; y += 1) data.fill(1, y * width + x1, y * width + x2);
@@ -144,7 +158,7 @@ export function parseCoco(
   }
 
   // COCO carries explicit category ids, so unlike the text formats it needs no label map.
-  return { segments, classAliases };
+  return { segments, classAliases, rejected };
 }
 
 function baseName(path: string): string {

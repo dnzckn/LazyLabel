@@ -61,13 +61,23 @@ Each traces to an approved decision in the brief's section 7.
 1. **Class aliases are JSON, not pickle** (decision 4, closes SEC-01). The legacy NPZ writers store
    the alias table as a pickled Python dict, so opening one executes whatever it contains. Here it
    is JSON inside a NumPy unicode scalar, which NumPy still reads with a plain `str()`. A pickled
-   member in an incoming file is refused rather than executed, and read as absent. This is a one-way
-   break: legacy LazyLabel reads the masks of a file this library writes but not its aliases. The
-   offline converter for existing files is a Phase 4 deliverable.
-2. **A damaged file is reported, not swallowed** (decisions 7 and 15c). In legacy, five of seven
-   loaders catch their own errors and return normally, so a corrupt file yields an empty canvas and
-   the chain stops. With auto-save on, navigating away then deletes the user's healthy files. Here
-   the chain raises, and the caller must surface it. The priority order is unchanged.
+   member in an incoming file is refused rather than executed, and read as absent.
+
+   The member is named `class_aliases_json`, not `class_aliases`, and that detail decides whether
+   the desktop app can open these files at all. Legacy's `_restore_aliases` calls `.item()` on the
+   member inside a try and `.items()` on the result outside it, so a unicode scalar under the old
+   name raises and the entire legacy load fails with zero segments. Under the new name legacy takes
+   its early exit and reads the masks, losing only the names. Verified by running the legacy loader
+   against this library's output, and gated by `tools/compare_npz.py`. The offline converter for
+   existing pickled files is a Phase 4 deliverable.
+2. **A damaged file is reported, not swallowed** (decisions 7 and 15c). In legacy, the loaders that
+   catch their own errors return normally, so a corrupt file yields an empty canvas and the chain
+   stops there; the ones that raise let the chain continue to a lower-priority file. With auto-save
+   on, the first case then deletes the user's healthy files on the next navigation. Here any
+   unreadable winner raises `AnnotationLoadError`, the caller must surface it, and the chain never
+   falls through. The priority order is unchanged. Readers also return a `rejected` count, so a
+   file that is readable but mostly junk can be reported as "412 unreadable lines" rather than as
+   an empty canvas.
 3. **Nothing is deleted by this library** (decision 7). The legacy save path deletes every sidecar of
    an image whose segments are empty, whatever wrote them. Deletion is not part of the format layer.
 4. **Text output uses LF** (decision 10). Legacy opens files in text mode and emits CRLF on Windows,
@@ -89,6 +99,46 @@ Each traces to an approved decision in the brief's section 7.
 - The `Exporter` protocol's `delete_output` methods, for the same reason.
 - Legacy NPZ layouts are READ but never written: the `masks` key and the `(N, H, W)` stack with
   `class_ids`.
+
+## Architecture review, 2026-09-17
+
+An adversarial review verified its findings by execution and reported eight high-severity items.
+All eight are fixed, each with a test that fails without the fix:
+
+| Finding | Fix |
+|---|---|
+| Legacy could not read ANY NPZ this library wrote, and these notes claimed otherwise | alias member renamed; legacy read proven and gated |
+| A corrupt NPZ crashed the Node process and produced an empty error message | both stream ends handled; failures carry a message |
+| "Damaged files are reported" held for four of seven formats | XML and text readers now refuse binary and non-XML, and count rejects |
+| `src/mask/tensor.ts`, four P0 rules, had no test of its own | direct suite against the manifest and the goldens; mutation-checked |
+| `classAliases` meant two different things depending on which file won | readers return only what the file establishes; caller merges |
+| No input limits existed, so a 204-byte file allocated 1.8 GB | `src/limits.ts`, enforced in the archive and array readers |
+| The load chain was not exported and the package had no build output | exported; `npm run build` emits `dist/` with declarations |
+| Reads past the end of a member, and silent corruption from a self-contradictory context | bounded views, truncation checks, context consistency checks |
+
+Two of those fixes were themselves corrected by testing against real data. An expansion-ratio guard
+against zip bombs rejected ordinary annotation files, because a sparse mask legitimately compresses
+about 1027 to 1 while deflate cannot exceed roughly 1032 to 1; the absolute size cap is the control
+that works. And the new NPZ gate exhausted the heap by converting a 67-million-value mask into a
+JavaScript array, which is the dense-mask cost recorded below.
+
+Accepted and not acted on, with reasons:
+
+- **Dense full-image masks per segment** (measured: 150 objects on a 3000x3000 image retain 1350 MB).
+  Region-bounded masks are the right model for a browser, but the type belongs to the workspace
+  store that Phase 4 designs, and changing it now would be speculative. The pixel cap in
+  `src/limits.ts` bounds the damage meanwhile. **Phase 4 entry should settle this first.**
+- **Export is O(segments x pixels)**, about 5 s of main-thread work for 150 objects on a 3000x3000
+  image, of which only the 380 ms NPZ step is async. Bounding-box tracing per segment would fix it.
+  Until then, exports belong in a worker.
+- **No format registry or context builder**, so each consumer writes its own switch over the seven
+  writers. Phase 2 should add `renderAnnotations(ctx, formats)` and a context builder rather than
+  copy that logic into the web app and the API.
+- **A damaged winner dead-ends the load** even when a healthy lower-priority file sits beside it.
+  That is decision 15c working as intended, but `AnnotationLoadError` should carry the list of
+  available fallbacks so Phase 4 can offer one.
+- **Small-integer dtypes** (`<i4` and friends) are refused for `class_order`, which files from an
+  older NumPy on Windows may use. Worth accepting for the id arrays when a real file turns up.
 
 ## Residual risks
 

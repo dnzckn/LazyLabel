@@ -19,6 +19,16 @@ export { outputPathFor } from "./paths.js";
 
 export { pyRepr } from "./format/pyRepr.js";
 export { MalformedAnnotationError } from "./format/labels.js";
+export { MalformedXmlError } from "./format/xml.js";
+export { CompressionError } from "./util/zip.js";
+
+// Choosing which annotation file wins, and reporting the ones that cannot be read.
+export {
+  loadAnnotations,
+  AnnotationLoadError,
+  type AnnotationSources,
+  type LoadOutcome,
+} from "./load/chain.js";
 
 export { renderYoloSegmentation, parseYoloSegmentation } from "./format/yoloSegmentation.js";
 export { renderYoloDetection, parseYoloDetection } from "./format/yoloDetection.js";

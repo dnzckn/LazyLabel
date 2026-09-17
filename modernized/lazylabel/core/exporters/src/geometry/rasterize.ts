@@ -258,7 +258,7 @@ function fillEdgeCollection(
 
   // std::sort is not stable; Array.prototype.sort is. The comparator is a strict weak
   // ordering on (y0, x, dx), so the two can only disagree for edges equal in all three,
-  // which differ at most in y1. See test/geometry/fill.test.ts for the coverage.
+  // which differ at most in y1. See test/geometry/raster.test.ts for the coverage.
   edges.sort(cmpEdges);
 
   // `tmp` is the active-list head; a *separate* copy with y0 = INT_MAX is appended to

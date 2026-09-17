@@ -17,8 +17,9 @@
 
 import { boundingRect } from "../geometry/contours.js";
 import { boxesToSegments, type ImportedBox } from "./boxes.js";
-import { toPixel } from "./labels.js";
+import { parseFloatLikePython, toPixel } from "./labels.js";
 import { iterObjectContours } from "./objects.js";
+import { childText, directChildren, escapeXml, readXmlRoot } from "./xml.js";
 import type { ExportContext, LoadedAnnotations } from "../types.js";
 
 /** Render the document, or null when there is no object to write. */
@@ -65,29 +66,37 @@ export function renderPascalVoc(ctx: ExportContext): string | null {
 /**
  * Parse a VOC document into segments.
  *
- * An object without a name or a bndbox is skipped, a missing coordinate defaults to 0, and
- * xmax/ymax are read as exclusive, matching what the writer emits.
+ * An object without a name or a bndbox is skipped and counted in `rejected`, a missing coordinate
+ * defaults to 0, and xmax/ymax are read as exclusive, matching what the writer emits. A document
+ * that is not XML, or carries no <annotation> root, is refused outright rather than read as "no
+ * objects", which would win the load chain and show an empty canvas (decision 15c).
  */
 export function parsePascalVoc(
   text: string,
   imageSize: readonly [number, number],
   existingAliases: ReadonlyMap<number, string> = new Map(),
 ): LoadedAnnotations {
+  const root = readXmlRoot(text, "annotation");
   const boxes: ImportedBox[] = [];
+  let rejected = 0;
 
-  for (const object of text.matchAll(/<object\b[^>]*>([\s\S]*?)<\/object>/g)) {
-    const body = object[1] ?? "";
-    const name = tagText(body, "name");
-    const bndbox = /<bndbox\b[^>]*>([\s\S]*?)<\/bndbox>/.exec(body)?.[1];
-    if (name === null || bndbox === undefined) continue;
+  for (const object of directChildren(root, "object")) {
+    const name = childText(object, "name");
+    const bndbox = directChildren(object, "bndbox")[0];
+    if (name === null || bndbox === undefined) {
+      rejected += 1;
+      continue;
+    }
 
-    const read = (tag: string): number | null => {
-      const raw = tagText(bndbox, tag) ?? "0";
-      const value = Number(raw.trim());
-      return Number.isNaN(value) ? null : value;
-    };
-    const [x1, y1, x2, y2] = [read("xmin"), read("ymin"), read("xmax"), read("ymax")];
-    if (x1 === null || y1 === null || x2 === null || y2 === null) continue;
+    // A missing coordinate defaults to "0", as findtext does, but a present but unreadable one
+    // drops the object, as float() raising inside the legacy try does.
+    const read = (tag: string): number | null => parseFloatLikePython(childText(bndbox, tag) ?? "0");
+    const corners = [read("xmin"), read("ymin"), read("xmax"), read("ymax")];
+    if (corners.some((value) => value === null)) {
+      rejected += 1;
+      continue;
+    }
+    const [x1, y1, x2, y2] = corners as [number, number, number, number];
 
     boxes.push({
       label: name === "" ? "0" : name,
@@ -97,27 +106,8 @@ export function parsePascalVoc(
       y2: toPixel(y2, "a VOC ymax"),
     });
   }
-  return boxesToSegments(boxes, imageSize, existingAliases);
-}
-
-function tagText(xml: string, tag: string): string | null {
-  const match = new RegExp(`<${tag}\\b[^>]*>([\\s\\S]*?)</${tag}>`).exec(xml);
-  if (!match) return null;
-  return unescapeXml(match[1] ?? "");
-}
-
-function escapeXml(text: string): string {
-  return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-}
-
-function unescapeXml(text: string): string {
-  return text
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"')
-    .replace(/&apos;/g, "'")
-    .replace(/&#(\d+);/g, (_, code: string) => String.fromCodePoint(Number(code)))
-    .replace(/&amp;/g, "&");
+  const loaded = boxesToSegments(boxes, imageSize, existingAliases);
+  return { ...loaded, rejected: loaded.rejected + rejected };
 }
 
 function baseName(path: string): string {

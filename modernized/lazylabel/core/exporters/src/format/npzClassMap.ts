@@ -12,6 +12,8 @@
  *     raises rather than wrapping, and so does this one.
  */
 
+import { ALIAS_MEMBER, readAliasMember } from "./aliases.js";
+import { assertPixels } from "../limits.js";
 import { decodeNpy, encodeNpy, encodeNpyString } from "../util/npy.js";
 import { readZip, writeZip } from "../util/zip.js";
 import type { ExportContext, LoadedAnnotations, Segment } from "../types.js";
@@ -20,9 +22,18 @@ const MAX_CLASS_ID = 0xffff;
 
 /** Render the archive, or null when the tensor is empty or no pixel carries a class. */
 export async function renderNpzClassMap(ctx: ExportContext): Promise<Uint8Array | null> {
+  assertConsistent(ctx);
   const { height, width, data } = ctx.maskTensor;
   const channels = ctx.classOrder.length;
   if (height * width * channels === 0) return null;
+
+  // "The first channel wins an overlap" only equals "the lowest class wins" while the order is
+  // ascending, which every in-library builder guarantees and a hand-built context might not.
+  for (let i = 1; i < ctx.classOrder.length; i += 1) {
+    if (ctx.classOrder[i]! <= ctx.classOrder[i - 1]!) {
+      throw new RangeError("a class map needs an ascending class order, or overlaps resolve wrongly");
+    }
+  }
 
   for (const id of ctx.classOrder) {
     if (id < 0 || id > MAX_CLASS_ID) {
@@ -56,7 +67,7 @@ export async function renderNpzClassMap(ctx: ExportContext): Promise<Uint8Array 
       name: "class_order.npy",
       data: encodeNpy({ dtype: "int64", shape: [channels], data: Float64Array.from(ctx.classOrder) }),
     },
-    { name: "class_aliases.npy", data: encodeNpyString(JSON.stringify(aliases)) },
+    { name: `${ALIAS_MEMBER}.npy`, data: encodeNpyString(JSON.stringify(aliases)) },
   ]);
 }
 
@@ -106,7 +117,7 @@ export async function parseNpzClassMap(
     .sort(([a], [b]) => a - b) // np.unique returns ascending ids
     .map(([classId, mask]) => ({ type: "Loaded" as const, classId, mask: { height, width, data: mask } }));
 
-  return { segments, classAliases: readAliases(members) };
+  return { segments, classAliases: readAliasMember(members), rejected: 0 };
 }
 
 function encodeUint16(data: Uint8Array, height: number, width: number): Uint8Array {
@@ -124,7 +135,7 @@ function encodeUint16(data: Uint8Array, height: number, width: number): Uint8Arr
 }
 
 function decodeUint16(bytes: Uint8Array): { height: number; width: number; values: Uint16Array } {
-  const headerLength = new DataView(bytes.buffer, bytes.byteOffset).getUint16(8, true);
+  const headerLength = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength).getUint16(8, true);
   const header = new TextDecoder().decode(bytes.subarray(10, 10 + headerLength));
   const descr = /'descr':\s*'([^']+)'/.exec(header)?.[1];
   if (descr !== "<u2" && descr !== "|u2" && descr !== "=u2") {
@@ -136,26 +147,38 @@ function decodeUint16(bytes: Uint8Array): { height: number; width: number; value
     .filter(Boolean)
     .map(Number);
   const [height = 0, width = 0] = shape;
+  assertPixels(height, width);
   const body = bytes.subarray(10 + headerLength);
+  if (body.length < height * width * 2) throw new Error("truncated class_map array");
   const values = new Uint16Array(height * width);
-  const view = new DataView(body.buffer, body.byteOffset);
+  const view = new DataView(body.buffer, body.byteOffset, body.byteLength);
   for (let i = 0; i < values.length; i += 1) values[i] = view.getUint16(i * 2, true);
   return { height, width, values };
 }
 
-function readAliases(members: ReadonlyMap<string, Uint8Array>): Map<number, string> {
-  const raw = members.get("class_aliases");
-  if (!raw) return new Map();
-  try {
-    const decoded = decodeNpy(raw);
-    if (decoded.dtype !== "str" || typeof decoded.data !== "string") return new Map();
-    const parsed = JSON.parse(decoded.data) as Record<string, unknown>;
-    return new Map(
-      Object.entries(parsed)
-        .filter(([id, name]) => /^-?\d+$/.test(id) && typeof name === "string")
-        .map(([id, name]) => [Number.parseInt(id, 10), name as string]),
+/**
+ * Refuse a context that contradicts itself.
+ *
+ * ExportContext carries the class order twice, once at the top level and once inside the mask
+ * tensor, and the two are assembled by hand in the web app and in the API. When they disagree the
+ * mask is written with the wrong channel count and silently misattributed to the wrong classes.
+ */
+function assertConsistent(ctx: ExportContext): void {
+  const tensorOrder = ctx.maskTensor.classOrder;
+  const sameOrder =
+    tensorOrder.length === ctx.classOrder.length &&
+    tensorOrder.every((id, index) => id === ctx.classOrder[index]);
+  if (!sameOrder) {
+    throw new RangeError(
+      `the context's class order [${ctx.classOrder.join(", ")}] does not match the mask tensor's ` +
+        `[${tensorOrder.join(", ")}]`,
     );
-  } catch {
-    return new Map(); // a pickled table from a legacy file is treated as absent, never executed
+  }
+  const expected = ctx.maskTensor.height * ctx.maskTensor.width * tensorOrder.length;
+  if (ctx.maskTensor.data.length !== expected) {
+    throw new RangeError(
+      `the mask tensor says ${ctx.maskTensor.height}x${ctx.maskTensor.width}x${tensorOrder.length} ` +
+        `(${expected} values) but carries ${ctx.maskTensor.data.length}`,
+    );
   }
 }

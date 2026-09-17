@@ -1,0 +1,1 @@
+{"version":3,"file":"npz.d.ts","sourceRoot":"","sources":["../../src/format/npz.ts"],"names":[],"mappings":"AAAA;;;;;;;;;;;;;;;;GAgBG;AAKH,OAAO,KAAK,EAAc,aAAa,EAAE,iBAAiB,EAAW,MAAM,aAAa,CAAC;AAEzF,8FAA8F;AAC9F,wBAAsB,SAAS,CAAC,GAAG,EAAE,aAAa,GAAG,OAAO,CAAC,UAAU,GAAG,IAAI,CAAC,CAe9E;AAED;;;;;;;GAOG;AACH,wBAAsB,QAAQ,CAAC,KAAK,EAAE,UAAU,GAAG,OAAO,CAAC,iBAAiB,CAAC,CA+C5E"}
