@@ -10,7 +10,7 @@
  */
 
 import { approxPolyDP, arcLength, fillPoly } from "../geometry/contours.js";
-import { roundHalfToEven } from "../util/pyNumbers.js";
+import { buildLabelMap, parseFloatLikePython, toPixel } from "./labels.js";
 import type { LoadedAnnotations, ExportContext, Segment } from "../types.js";
 import { contourToPolygon, iterObjectContours } from "./objects.js";
 import { pyRepr } from "./pyRepr.js";
@@ -50,6 +50,10 @@ export function renderYoloSegmentation(ctx: ExportContext): string | null {
  * and an odd token count, coordinates must all parse as numbers, and fewer than 3 points is
  * dropped. Coordinates denormalize with round-half-to-even, so a tie moves to the EVEN pixel.
  * A polygon that rasterizes to no pixels is dropped rather than stored empty.
+ *
+ * The label token is never parsed as a number here, so a line beginning "dog" loads fine. A
+ * non-finite coordinate rejects the entire file rather than one line, because that is what the
+ * legacy loader does and skipping the line would draw polygons legacy never draws.
  */
 export function parseYoloSegmentation(
   text: string,
@@ -69,14 +73,14 @@ export function parseYoloSegmentation(
     const points: [number, number][] = [];
     for (let i = 0; i < coords.length; i += 2) {
       points.push([
-        roundHalfToEven(coords[i]! * width),
-        roundHalfToEven(coords[i + 1]! * height),
+        toPixel(coords[i]! * width, "a polygon x coordinate"),
+        toPixel(coords[i + 1]! * height, "a polygon y coordinate"),
       ]);
     }
     if (points.length >= 3) polygons.push({ label: parts[0]!, points });
   }
 
-  const { labelMap, newAliases } = buildLabelMap(polygons.map((p) => p.label), existingAliases);
+  const { labelMap, aliases: newAliases } = buildLabelMap(polygons.map((p) => p.label), existingAliases);
   const segments: Segment[] = [];
   for (const { label, points } of polygons) {
     const mask = fillPoly(height, width, [points]);
@@ -89,69 +93,4 @@ export function parseYoloSegmentation(
     });
   }
   return { segments, classAliases: newAliases };
-}
-
-/**
- * Python's float() accepts more spellings than Number(): "nan", "inf", "infinity", a leading "+",
- * and surrounding whitespace, while rejecting "" and JavaScript's "0x10" and "1_0".
- * Returns null where float() would raise ValueError, which makes the caller skip the line.
- */
-function parseFloatLikePython(token: string): number | null {
-  const text = token.trim();
-  if (!/^[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$/.test(text)) {
-    if (/^[+-]?(nan|inf|infinity)$/i.test(text)) {
-      const negative = text.startsWith("-");
-      if (/nan$/i.test(text)) return Number.NaN;
-      return negative ? Number.NEGATIVE_INFINITY : Number.POSITIVE_INFINITY;
-    }
-    return null;
-  }
-  return Number(text);
-}
-
-/**
- * Resolve every label in one file to a class id.
- *
- * Order per label: an existing alias, then a plain integer, then a freshly assigned id. Assignment
- * happens only after every numeric label has claimed its id, so a file mixing "dog" with "0" does
- * not hand both the same id and merge two classes. Newly assigned ids are registered as aliases so
- * the name survives.
- */
-function buildLabelMap(
-  labels: readonly string[],
-  existingAliases: ReadonlyMap<number, string>,
-): { labelMap: Map<string, number>; newAliases: Map<number, string> } {
-  const reverse = new Map<string, number>();
-  for (const [id, alias] of existingAliases) reverse.set(alias, id);
-
-  const labelMap = new Map<string, number>();
-  const unnamed: string[] = [];
-  for (const label of labels) {
-    if (labelMap.has(label) || unnamed.includes(label)) continue;
-    const aliased = reverse.get(label);
-    if (aliased !== undefined) {
-      labelMap.set(label, aliased);
-      continue;
-    }
-    const asInt = parseIntLikePython(label);
-    if (asInt !== null) labelMap.set(label, asInt);
-    else unnamed.push(label);
-  }
-
-  const taken = new Set<number>([...existingAliases.keys(), ...labelMap.values()]);
-  const newAliases = new Map<number, string>(existingAliases);
-  let nextId = 0;
-  for (const label of unnamed) {
-    while (taken.has(nextId)) nextId += 1;
-    labelMap.set(label, nextId);
-    taken.add(nextId);
-    newAliases.set(nextId, label);
-  }
-  return { labelMap, newAliases };
-}
-
-/** Python's int(): optional sign, digits only. Number() would accept "1.5" and "0x10". */
-function parseIntLikePython(token: string): number | null {
-  const text = token.trim();
-  return /^[+-]?\d+$/.test(text) ? Number.parseInt(text, 10) : null;
 }
