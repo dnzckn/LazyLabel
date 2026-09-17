@@ -1,0 +1,106 @@
+name: Modernized services
+
+# The rebuild lives on main-web (MODERNIZATION_BRIEF.md). The existing tests.yml workflow covers the
+# legacy Python app on main and is left alone; this one builds and tests the TypeScript services.
+#
+# Phase 2 exit criterion 4 requires every service to build and test on every push to main-web. New
+# services are added to the matrix as each phase scaffolds them.
+on:
+  push:
+    branches: [main-web]
+  pull_request:
+    branches: [main-web]
+
+permissions:
+  contents: read
+
+jobs:
+  services:
+    name: ${{ matrix.service }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - service: annotation format library
+            path: modernized/lazylabel/core/exporters
+
+    defaults:
+      run:
+        working-directory: ${{ matrix.path }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: ${{ matrix.path }}/package-lock.json
+
+      - name: Install
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Test
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+  # The differential suites compare against the legacy Python implementation, which needs the legacy
+  # package and its dependencies. They are the strongest proof the port is equivalent, so they run
+  # here rather than only on the maintainer's machine.
+  differential:
+    name: differential against legacy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The legacy snapshot is an older commit, so the shallow default cannot reach it.
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: modernized/lazylabel/core/exporters/package-lock.json
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Check out the legacy snapshot
+        id: legacy
+        run: |
+          # legacy/lazylabel is a gitignored worktree on the maintainer's machine, so CI materializes
+          # the same snapshot from the commit the analysis pinned.
+          git worktree add --detach legacy/lazylabel 2a7d5d8
+          echo "available=true" >> "$GITHUB_OUTPUT"
+
+      - name: Install Python dependencies
+        # PyQt6 is needed only because the legacy SegmentManager imports QPointF; QtCore works
+        # headless, so no display server is required.
+        run: python -m pip install --quiet numpy opencv-python-headless PyQt6
+
+      - name: Install Node dependencies
+        working-directory: modernized/lazylabel/core/exporters
+        run: npm ci
+
+      - name: Emit port output
+        working-directory: modernized/lazylabel/core/exporters
+        run: npm run test:differential
+
+      - name: Compare archives with NumPy, and prove the legacy app still reads them
+        working-directory: modernized/lazylabel/core/exporters
+        env:
+          PYTHONPATH: ${{ github.workspace }}/legacy/lazylabel/src
+        run: python tools/compare_npz.py .differential
+
+      - name: Compare readers against the legacy loaders
+        working-directory: modernized/lazylabel/core/exporters
+        env:
+          PYTHONPATH: ${{ github.workspace }}/legacy/lazylabel/src
+        run: python tools/compare_readers.py .differential/read
