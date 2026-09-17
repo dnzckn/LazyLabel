@@ -1,0 +1,2 @@
+# Golden files are exact legacy output, including CRLF line endings. Never convert them.
+* -text
