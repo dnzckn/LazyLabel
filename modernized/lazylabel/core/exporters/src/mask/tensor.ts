@@ -56,6 +56,14 @@ export function createFinalMaskTensor(
     if (channel === undefined) continue;
     const mask = rasterizeSegment(segment, height, width);
     if (!mask) continue;
+    if (mask.height !== height || mask.width !== width) {
+      // numpy raises "operands could not be broadcast together" here and the whole save fails
+      // (RULE-010). Indexing past a short mask instead scatters its pixels across the image, and
+      // createInstanceContours skips the same segment, so one save would disagree with itself.
+      throw new RangeError(
+        `a segment's mask is ${mask.height}x${mask.width} but the image is ${height}x${width}`,
+      );
+    }
     for (let pixel = 0; pixel < height * width; pixel += 1) {
       if (mask.data[pixel]) data[pixel * channels + channel] = 1;
     }

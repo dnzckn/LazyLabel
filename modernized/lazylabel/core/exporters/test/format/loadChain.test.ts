@@ -74,13 +74,23 @@ describe("annotation load chain", () => {
     expect(await loadAnnotations({}, SIZE)).toBeNull();
   });
 
-  // The deviation from legacy that decision 15c requires: a damaged winner is reported, not
-  // silently treated as "no annotations", and the chain does not fall through to a lower format.
-  it("reports a damaged file instead of showing an empty canvas", async () => {
+  // The deviation from legacy that decision 15c requires: a damaged file is never silently treated
+  // as "no annotations". The chain continues so the user's work is recovered from the next file,
+  // and the failure travels with the outcome so the caller has to show it.
+  it("recovers from a damaged winner and reports the failure", async () => {
     const sources = allSources();
     sources.NPZ = new Uint8Array([0, 1, 2, 3, 4]); // not a zip
-    await expect(loadAnnotations(sources, SIZE)).rejects.toBeInstanceOf(AnnotationLoadError);
-    await expect(loadAnnotations(sources, SIZE)).rejects.toMatchObject({ format: "NPZ" });
+
+    const outcome = await loadAnnotations(sources, SIZE);
+    expect(outcome?.format).toBe("YOLO_SEGMENTATION");
+    expect(outcome?.segments.map((s) => s.classId)).toEqual([3, 7]);
+    expect(outcome?.failures.map((f) => f.format)).toEqual(["NPZ"]);
+  });
+
+  it("raises when the damaged file is the only one present", async () => {
+    await expect(loadAnnotations({ NPZ: new Uint8Array([0, 1, 2]) }, SIZE)).rejects.toBeInstanceOf(
+      AnnotationLoadError,
+    );
   });
 
   it("keeps an empty but valid file as the winner", async () => {

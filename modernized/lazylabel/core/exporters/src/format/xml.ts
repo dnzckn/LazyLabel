@@ -28,26 +28,30 @@ function stripNonContent(xml: string): string {
 }
 
 /**
- * Check this really is XML, and return its content with non-content removed.
+ * Check this really is XML, and return the root element's content with non-content removed.
  *
- * Refuses binary (a NUL byte), anything whose first non-whitespace character is not "<", and any
- * document without the expected root element. Without these a JPEG or a truncated file parses to
- * "no objects", wins the load chain, and shows the user an empty canvas.
+ * Refuses binary (a NUL byte) and anything whose first non-whitespace character is not "<". Without
+ * those checks a JPEG renamed to .xml parses to "no objects", wins the load chain, and shows the
+ * user an empty canvas.
+ *
+ * The root's NAME is not required to match: legacy never checks it, because ElementTree parses the
+ * document and runs findall("object") on whatever the root happens to be (file_manager.py:472).
+ * Demanding <annotation> would refuse third-party Pascal VOC files that the legacy app reads.
  */
 export function readXmlRoot(xml: string, rootTag: string): string {
   if (xml.includes("\0")) throw new MalformedXmlError("this is binary data, not XML");
   const stripped = stripNonContent(xml);
-  const firstContent = stripped.trimStart();
-  if (!firstContent.startsWith("<")) {
+  if (!stripped.trimStart().startsWith("<")) {
     throw new MalformedXmlError("the file does not start with an XML element");
   }
-  const root = new RegExp(`<${rootTag}\\b[^>]*>([\\s\\S]*)</${rootTag}>`).exec(stripped);
-  if (!root) {
-    const selfClosing = new RegExp(`<${rootTag}\\b[^>]*/>`).test(stripped);
-    if (selfClosing) return "";
-    throw new MalformedXmlError(`no <${rootTag}> element; this is not a LazyLabel annotation file`);
-  }
-  return root[1] ?? "";
+
+  const named = new RegExp(`<${rootTag}\\b[^>]*>([\\s\\S]*)</${rootTag}>`).exec(stripped);
+  if (named) return named[1] ?? "";
+  if (new RegExp(`<${rootTag}\\b[^>]*/>`).test(stripped)) return "";
+
+  const anyRoot = /<([A-Za-z_][\w.-]*)\b[^>]*>([\s\S]*)<\/\1\s*>/.exec(stripped);
+  if (anyRoot) return anyRoot[2] ?? "";
+  throw new MalformedXmlError("no XML element with content; this is not an annotation file");
 }
 
 /**

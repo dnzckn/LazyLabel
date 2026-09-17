@@ -22,12 +22,21 @@ the legacy source and decide from it; the cards carry an "Answer" line where one
 
 | Path | Scope |
 |---|---|
+| `test/RULE_COVERAGE.md` | Which test covers which P0 rule assigned to Phase 1, and what is deferred |
 | `test/helpers/fixtures.ts` | Rebuilds each declared case's INPUT, independently of `src/mask/` |
 | `test/format/` | Per-format characterization, the all-format differential, the load chain, the NPZ gate |
 | `test/mask/` | The shipped mask composition, crop, pixel priority and instance contours |
 | `test/geometry/` | Contour tracing, simplification and fills against the OpenCV corpus |
 | `test/util/` | CPython parity, archive limits, corrupt-archive handling |
 | `test/differential/` | Emits NPZ files for the Python cross-check; excluded from `npm test` |
+
+A fifth oracle sits alongside the four in the table above: the legacy code run read-only for one
+value, with the command and the legacy `file:line` in a comment beside the expectation. That is how
+the reader tests and the branches no golden fixture reaches were written. Use it the same way:
+
+```bash
+PYTHONPATH=E:/GitHub/LazyLabel/legacy/lazylabel/src E:/venv/lazylabel/Scripts/python.exe
+```
 
 The fixture helper deliberately reimplements mask composition so the test input does not come from
 the code under test. `test/mask/tensor.test.ts` then exercises the shipped path against the same

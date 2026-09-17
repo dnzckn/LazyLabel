@@ -70,14 +70,19 @@ Each traces to an approved decision in the brief's section 7.
    its early exit and reads the masks, losing only the names. Verified by running the legacy loader
    against this library's output, and gated by `tools/compare_npz.py`. The offline converter for
    existing pickled files is a Phase 4 deliverable.
-2. **A damaged file is reported, not swallowed** (decisions 7 and 15c). In legacy, the loaders that
-   catch their own errors return normally, so a corrupt file yields an empty canvas and the chain
-   stops there; the ones that raise let the chain continue to a lower-priority file. With auto-save
-   on, the first case then deletes the user's healthy files on the next navigation. Here any
-   unreadable winner raises `AnnotationLoadError`, the caller must surface it, and the chain never
-   falls through. The priority order is unchanged. Readers also return a `rejected` count, so a
-   file that is readable but mostly junk can be reported as "412 unreadable lines" rather than as
-   an empty canvas.
+2. **A damaged file is reported, and the chain continues** (decisions 7 and 15c, as revised on
+   2026-09-17). In legacy, the loaders that catch their own errors return normally, so a corrupt
+   file yields an empty canvas and the chain stops there; the ones that raise let it continue. With
+   auto-save on, the first case then deletes the user's healthy files on the next navigation.
+
+   Here every failure is recorded and the chain moves to the next format, because a damaged file
+   usually sits beside a healthy one written by the same save. The outcome carries the failures, so
+   a caller cannot present the recovery silently, and if every file present fails the load raises
+   rather than returning an empty set. This reverses an earlier reading of decision 15c that stopped
+   the chain outright; the rule card's own answer, which is grounded in the legacy code, requires
+   continuing, and stopping would have discarded recoverable annotations. Readers also return a
+   `rejected` count, so a file that parses but is mostly junk reports "412 unreadable lines"
+   instead of showing an empty canvas.
 3. **Nothing is deleted by this library** (decision 7). The legacy save path deletes every sidecar of
    an image whose segments are empty, whatever wrote them. Deletion is not part of the format layer.
 4. **Text output uses LF** (decision 10). Legacy opens files in text mode and emits CRLF on Windows,
@@ -139,6 +144,30 @@ Accepted and not acted on, with reasons:
   available fallbacks so Phase 4 can offer one.
 - **Small-integer dtypes** (`<i4` and friends) are refused for `class_order`, which files from an
   older NumPy on Windows may use. Worth accepting for the id arrays when a real file turns up.
+
+## Rule coverage audit, 2026-09-17
+
+An audit mapped every P0 rule assigned to this phase to the test that would catch a regression in
+it, and found exit criterion 4 was not met: of 28 rules, 5 were fully covered, 11 only on the path
+the golden fixtures happen to exercise, 5 had no test, and 7 belong to later phases. The gap was
+systematic, because all 12 fixtures give every class an alias, use whole-pixel circle centres and
+write all seven formats, so the `str(class_id)` fallback, the alias dot-notation split, the circle
+centre rounding and every writer's null return were invisible to a suite comparing 60 files byte for
+byte. Five of the seven readers had no test beyond "some segments came back".
+
+111 tests were added, and `test/RULE_COVERAGE.md` records the mapping rule by rule, including the
+seven deferred to Phases 4 to 6 with the reason each cannot be tested at this layer.
+
+The audit also found three defects, all now fixed:
+
+- **A non-numeric COCO `category_id` loaded as class 0** instead of skipping the annotation, so a
+  document that legacy reads as one segment read as two here, the extra one a class the user never
+  drew.
+- **A wrong-sized mask was silently garbled** rather than failing. numpy raises a broadcast error and
+  the save writes nothing; indexing past a short mask scattered its pixels, and because the instance
+  path skipped the same segment, one save disagreed with itself.
+- **Pascal VOC refused a document whose root is not `<annotation>`**, which legacy reads: it never
+  checks the root tag. That was hardening I added, and it would have rejected third-party files.
 
 ## Residual risks
 

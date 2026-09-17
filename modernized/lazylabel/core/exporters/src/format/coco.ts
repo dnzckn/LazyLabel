@@ -98,7 +98,14 @@ export function parseCoco(
       continue;
     }
     const annotation = entry as Record<string, unknown>;
-    const categoryId = asInt(annotation["category_id"]) ?? 0;
+    // Legacy does int(ann.get("category_id", 0)), which RAISES on a non-numeric value and skips the
+    // annotation (file_manager.py:629-630). Defaulting to 0 instead would invent a class the user
+    // never drew, which a differential test caught: 2 segments where legacy loads 1.
+    const categoryId = "category_id" in annotation ? asInt(annotation["category_id"]) : 0;
+    if (categoryId === null) {
+      rejected += 1;
+      continue;
+    }
 
     let added = false;
     const segmentation = annotation["segmentation"];

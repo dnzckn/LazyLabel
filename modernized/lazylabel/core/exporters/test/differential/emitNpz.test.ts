@@ -8,7 +8,7 @@
  * Run: npx vitest run test/differential  then  python tools/compare_npz.py .differential
  */
 
-import { mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { beforeAll, describe, expect, it } from "vitest";
 
@@ -20,8 +20,13 @@ const OUT = join(PACKAGE_ROOT, ".differential");
 
 describe("emit NPZ archives for the NumPy cross-check", () => {
   beforeAll(() => {
-    rmSync(OUT, { recursive: true, force: true });
+    // Clear only the archives this file owns. Removing the whole directory would race with
+    // emitReads.test.ts, which writes .differential/read in a worker of its own: whichever
+    // beforeAll ran second wiped the other's output, and `npx vitest run` is how both are invoked.
     mkdirSync(OUT, { recursive: true });
+    for (const name of readdirSync(OUT)) {
+      if (name.endsWith(".npz")) rmSync(join(OUT, name), { force: true });
+    }
   });
 
   for (const id of CASE_IDS) {

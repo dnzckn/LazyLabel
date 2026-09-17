@@ -12,9 +12,15 @@
  *
  * ONE DELIBERATE DEVIATION, required by decisions 7 and 15c. In legacy, five of the seven loaders
  * catch their own read and parse errors and return normally, so a damaged file yields zero segments
- * and the chain STOPS there, showing an empty canvas. With auto-save on, navigating away then
- * deletes the user's healthy annotation files. Here a damaged file raises AnnotationLoadError, the
- * caller must surface it, and nothing is deleted. The priority order itself is unchanged.
+ * and the chain STOPS there, showing an empty canvas; with auto-save on, navigating away then
+ * deletes the user's healthy annotation files. The other two raise, and the chain continues past them.
+ *
+ * Here EVERY failure is reported and the chain continues to the next format. A damaged file usually
+ * sits beside a healthy one written by the same save, so continuing recovers the user's work; what
+ * must never happen is presenting that silently, so the outcome carries the failures and the caller
+ * has to say which file failed and which supplied the annotations. If every file present fails, the
+ * load raises rather than returning an empty set. Nothing is deleted on any of these paths, and the
+ * priority order itself is unchanged.
  */
 
 import { parseCoco } from "../format/coco.js";
@@ -29,19 +35,39 @@ import { LOAD_PRIORITY, type AnnotationFormat, type LoadedAnnotations } from "..
 /** The bytes or text of one candidate file, keyed by the format that writes it. */
 export type AnnotationSources = Partial<Record<AnnotationFormat, string | Uint8Array>>;
 
+export interface LoadFailure {
+  readonly format: AnnotationFormat;
+  readonly reason: string;
+}
+
 export interface LoadOutcome extends LoadedAnnotations {
   /** Which format actually supplied the annotations. */
   readonly format: AnnotationFormat;
+  /**
+   * Higher-priority files that exist but could not be read, in priority order.
+   *
+   * Never empty silently: the caller must tell the user which file failed and which one supplied
+   * the annotations they are looking at. A damaged file usually sits beside a healthy one written
+   * by the same save, so continuing recovers the work, but presenting it as if nothing happened
+   * would hide that the newest file is broken.
+   */
+  readonly failures: readonly LoadFailure[];
 }
 
-/** Raised when the winning file exists but cannot be read. Never presented as "no annotations". */
+/** Raised when every annotation file present failed to read. Never presented as "no annotations". */
 export class AnnotationLoadError extends Error {
-  constructor(
-    readonly format: AnnotationFormat,
-    override readonly cause: unknown,
-  ) {
-    super(`the ${format} annotation file could not be read: ${describe(cause)}`);
+  constructor(readonly failures: readonly LoadFailure[]) {
+    super(
+      failures.length === 1
+        ? `the ${failures[0]!.format} annotation file could not be read: ${failures[0]!.reason}`
+        : `no annotation file could be read: ${failures.map((f) => `${f.format} (${f.reason})`).join("; ")}`,
+    );
     this.name = "AnnotationLoadError";
+  }
+
+  /** The format of the highest-priority file that failed, which is the one to report first. */
+  get format(): AnnotationFormat | undefined {
+    return this.failures[0]?.format;
   }
 }
 
@@ -57,16 +83,20 @@ export async function loadAnnotations(
   imageSize: readonly [number, number],
   existingAliases: ReadonlyMap<number, string> = new Map(),
 ): Promise<LoadOutcome | null> {
+  const failures: LoadFailure[] = [];
+
   for (const format of LOAD_PRIORITY) {
     const content = sources[format];
     if (content === undefined) continue;
     try {
       const loaded = await parseOne(format, content, imageSize, existingAliases);
-      return { ...loaded, format };
+      return { ...loaded, format, failures };
     } catch (cause) {
-      throw new AnnotationLoadError(format, cause);
+      failures.push({ format, reason: describe(cause) });
     }
   }
+
+  if (failures.length > 0) throw new AnnotationLoadError(failures);
   return null;
 }
 

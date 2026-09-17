@@ -77,6 +77,8 @@ describe("emit reader output for the legacy comparison", () => {
       }
       writeFileSync(join(OUT, `${id}.json`), JSON.stringify({ imageSize: size, formats: results }, null, 1));
       expect(Object.keys(results)).toHaveLength(7);
-    });
+    // The 8192x8192 case summarizes seven 67-megapixel masks, which takes well past the 5 s
+    // default. Raising it here rather than globally keeps a genuine hang in the fast tests visible.
+    }, 120_000);
   }
 });

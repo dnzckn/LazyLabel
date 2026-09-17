@@ -485,17 +485,17 @@ describe("label text to class id", () => {
   // "the store's aliases afterwards" are the same object there and distinct here. The tests above
   // assert the NEW registrations only; if the library instead returns existingAliases merged with
   // the new ones, this is the test that has to start passing and the ones above that must change.
-  it.skip("pending API decision: does classAliases echo the aliases passed in?", () => {
+  it("returns only the names this file establishes, never the caller's table echoed back", () => {
     const loaded = parse(
       "cat 0.1 0.1 0.2 0.1 0.2 0.2",
       480,
       640,
       new Map([[5, "dog"]]),
     );
-    expect([...loaded.classAliases].sort()).toEqual([
-      [0, "cat"],
-      [5, "dog"],
-    ]);
+    // Settled 2026-09-17: a reader returns what its file established, and the caller merges. The
+    // alternative made a reader's output depend on what the caller passed, which silently loses a
+    // user's class names depending only on which sidecar an image happens to have.
+    expect([...loaded.classAliases]).toEqual([[0, "cat"]]);
   });
 });
 
