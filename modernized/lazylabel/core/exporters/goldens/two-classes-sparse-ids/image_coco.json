@@ -1,0 +1,74 @@
+{
+  "images": [
+    {
+      "id": 1,
+      "file_name": "image.png",
+      "width": 30,
+      "height": 20
+    }
+  ],
+  "annotations": [
+    {
+      "id": 1,
+      "image_id": 1,
+      "category_id": 3,
+      "bbox": [
+        4,
+        5,
+        10,
+        5
+      ],
+      "area": 36,
+      "segmentation": [
+        [
+          4,
+          5,
+          4,
+          9,
+          13,
+          9,
+          13,
+          5
+        ]
+      ],
+      "iscrowd": 0
+    },
+    {
+      "id": 2,
+      "image_id": 1,
+      "category_id": 7,
+      "bbox": [
+        20,
+        12,
+        8,
+        6
+      ],
+      "area": 35,
+      "segmentation": [
+        [
+          20,
+          12,
+          20,
+          17,
+          27,
+          17,
+          27,
+          12
+        ]
+      ],
+      "iscrowd": 0
+    }
+  ],
+  "categories": [
+    {
+      "id": 3,
+      "name": "cat",
+      "supercategory": "cat"
+    },
+    {
+      "id": 7,
+      "name": "dog",
+      "supercategory": "dog"
+    }
+  ]
+}

@@ -1,0 +1,16 @@
+[
+  {
+    "image": "image.png",
+    "annotations": [
+      {
+        "label": "speck",
+        "coordinates": {
+          "x": 0.5,
+          "y": 0.5,
+          "width": 1,
+          "height": 1
+        }
+      }
+    ]
+  }
+]

@@ -1,0 +1,33 @@
+<?xml version='1.0' encoding='utf-8'?>
+<annotation>
+  <filename>image.png</filename>
+  <size>
+    <width>16</width>
+    <height>16</height>
+    <depth>3</depth>
+  </size>
+  <object>
+    <name>dot</name>
+    <pose>Unspecified</pose>
+    <truncated>0</truncated>
+    <difficult>0</difficult>
+    <bndbox>
+      <xmin>12</xmin>
+      <ymin>9</ymin>
+      <xmax>13</xmax>
+      <ymax>10</ymax>
+    </bndbox>
+  </object>
+  <object>
+    <name>dot</name>
+    <pose>Unspecified</pose>
+    <truncated>0</truncated>
+    <difficult>0</difficult>
+    <bndbox>
+      <xmin>3</xmin>
+      <ymin>3</ymin>
+      <xmax>4</xmax>
+      <ymax>4</ymax>
+    </bndbox>
+  </object>
+</annotation>

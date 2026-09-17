@@ -1,0 +1,123 @@
+{
+ "note": "Declarative export fixtures. Both implementations build identical inputs from this file: the legacy Python exporters (tools/generate_golden.py, which writes goldens/) and the TypeScript library under test. Rects are [x1, y1, x2, y2] with x2/y2 EXCLUSIVE, matching numpy slicing. Vertices are [x, y] in pixels. imageSize is [height, width], as the legacy ExportContext stores it.",
+ "cases": [
+  {
+   "id": "two-classes-sparse-ids",
+   "why": "Non-contiguous per-image class ids (3, 7) must be written verbatim, never renumbered 0..N-1 (RULE-005).",
+   "imageSize": [20, 30],
+   "aliases": {"3": "cat", "7": "dog"},
+   "segments": [
+    {"type": "AI", "classId": 3, "rects": [[4, 5, 14, 10]]},
+    {"type": "AI", "classId": 7, "rects": [[20, 12, 28, 18]]}
+   ]
+  },
+  {
+   "id": "split-segment-two-islands",
+   "why": "One segment whose pixels fall in two islands writes two lines, in OpenCV contour order rather than top-to-bottom (RULE-005).",
+   "imageSize": [200, 400],
+   "aliases": {"1": "cell"},
+   "segments": [
+    {"type": "AI", "classId": 1, "rects": [[10, 10, 20, 20], [300, 100, 340, 120]]}
+   ]
+  },
+  {
+   "id": "full-frame-box",
+   "why": "A mask touching all four edges makes normalized width and height exactly 1.0, which Python writes as '1.0' and naive JavaScript as '1' (RULE-005).",
+   "imageSize": [64, 64],
+   "aliases": {"0": "all"},
+   "segments": [
+    {"type": "AI", "classId": 0, "rects": [[0, 0, 64, 64]]}
+   ]
+  },
+  {
+   "id": "tiny-box-huge-image",
+   "why": "A single pixel on an 8192px image drives coordinates below 1e-4, where Python switches to exponential form with a zero-padded exponent (RULE-005).",
+   "imageSize": [8192, 8192],
+   "aliases": {"2": "speck"},
+   "segments": [
+    {"type": "AI", "classId": 2, "rects": [[0, 0, 1, 1]]}
+   ]
+  },
+  {
+   "id": "non-ascii-aliases",
+   "why": "Python's json.dump escapes non-ASCII as \\uXXXX by default; JSON.stringify does not (RULE-001).",
+   "imageSize": [40, 40],
+   "aliases": {"1": "Zelle", "5": "細胞"},
+   "segments": [
+    {"type": "AI", "classId": 1, "rects": [[2, 2, 12, 12]]},
+    {"type": "AI", "classId": 5, "rects": [[20, 20, 35, 30]]}
+   ]
+  },
+  {
+   "id": "overlap-pixel-priority-off",
+   "why": "Overlapping classes stay set in both channels when pixel priority is off (RULE-014).",
+   "imageSize": [50, 50],
+   "aliases": {"1": "a", "4": "b"},
+   "segments": [
+    {"type": "AI", "classId": 1, "rects": [[10, 10, 30, 30]]},
+    {"type": "AI", "classId": 4, "rects": [[20, 20, 40, 40]]}
+   ]
+  },
+  {
+   "id": "overlap-pixel-priority-ascending",
+   "why": "With pixel priority ascending the lowest class wins the overlap, which changes masks, boxes and polygons.",
+   "imageSize": [50, 50],
+   "pixelPriority": {"enabled": true, "ascending": true},
+   "aliases": {"1": "a", "4": "b"},
+   "segments": [
+    {"type": "AI", "classId": 1, "rects": [[10, 10, 30, 30]]},
+    {"type": "AI", "classId": 4, "rects": [[20, 20, 40, 40]]}
+   ]
+  },
+  {
+   "id": "overlap-pixel-priority-descending",
+   "why": "Descending priority hands the overlap to the highest class instead.",
+   "imageSize": [50, 50],
+   "pixelPriority": {"enabled": true, "ascending": false},
+   "aliases": {"1": "a", "4": "b"},
+   "segments": [
+    {"type": "AI", "classId": 1, "rects": [[10, 10, 30, 30]]},
+    {"type": "AI", "classId": 4, "rects": [[20, 20, 40, 40]]}
+   ]
+  },
+  {
+   "id": "polygon-and-circle",
+   "why": "Polygon and circle segments are rasterized at save time: vertices truncate toward zero and the circle radius rounds half-to-even (RULE-016 and the shape rasterization rule).",
+   "imageSize": [100, 100],
+   "aliases": {"0": "poly", "1": "circle"},
+   "segments": [
+    {"type": "Polygon", "classId": 0, "vertices": [[10.7, 10.2], [20.9, 10.2], [20.9, 30.8], [10.7, 30.8]]},
+    {"type": "Circle", "classId": 1, "vertices": [[60.0, 60.0], [63.9, 60.0]]}
+   ]
+  },
+  {
+   "id": "crop-clears-last-row-and-column",
+   "why": "The crop end coordinates are clamped inclusively but sliced exclusively, so the image's last row and column can never survive a crop (RULE-016).",
+   "imageSize": [80, 100],
+   "crop": [0, 10, 99, 79],
+   "aliases": {"2": "inside"},
+   "segments": [
+    {"type": "AI", "classId": 2, "rects": [[0, 0, 100, 80]]}
+   ]
+  },
+  {
+   "id": "class-zero-and-background",
+   "why": "NPZ Class Map stores class 0 and needs the foreground mask to tell it apart from background (RULE-003).",
+   "imageSize": [30, 30],
+   "aliases": {"0": "zero", "3": "three"},
+   "segments": [
+    {"type": "AI", "classId": 0, "rects": [[1, 1, 10, 10]]},
+    {"type": "AI", "classId": 3, "rects": [[15, 15, 25, 25]]}
+   ]
+  },
+  {
+   "id": "single-pixel-objects",
+   "why": "A one-pixel object has an inclusive bounding span of 1 and a contour of a single point, which the polygon formats must still handle.",
+   "imageSize": [16, 16],
+   "aliases": {"9": "dot"},
+   "segments": [
+    {"type": "AI", "classId": 9, "rects": [[3, 3, 4, 4], [12, 9, 13, 10]]}
+   ]
+  }
+ ]
+}

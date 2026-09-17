@@ -1,0 +1,25 @@
+[
+  {
+    "image": "image.png",
+    "annotations": [
+      {
+        "label": "poly",
+        "coordinates": {
+          "x": 15.5,
+          "y": 20.5,
+          "width": 11,
+          "height": 21
+        }
+      },
+      {
+        "label": "circle",
+        "coordinates": {
+          "x": 60.5,
+          "y": 60.5,
+          "width": 9,
+          "height": 9
+        }
+      }
+    ]
+  }
+]

@@ -1,0 +1,33 @@
+<?xml version='1.0' encoding='utf-8'?>
+<annotation>
+  <filename>image.png</filename>
+  <size>
+    <width>40</width>
+    <height>40</height>
+    <depth>3</depth>
+  </size>
+  <object>
+    <name>Zelle</name>
+    <pose>Unspecified</pose>
+    <truncated>0</truncated>
+    <difficult>0</difficult>
+    <bndbox>
+      <xmin>2</xmin>
+      <ymin>2</ymin>
+      <xmax>12</xmax>
+      <ymax>12</ymax>
+    </bndbox>
+  </object>
+  <object>
+    <name>細胞</name>
+    <pose>Unspecified</pose>
+    <truncated>0</truncated>
+    <difficult>0</difficult>
+    <bndbox>
+      <xmin>20</xmin>
+      <ymin>20</ymin>
+      <xmax>35</xmax>
+      <ymax>30</ymax>
+    </bndbox>
+  </object>
+</annotation>

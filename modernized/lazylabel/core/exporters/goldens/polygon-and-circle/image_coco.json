@@ -1,0 +1,106 @@
+{
+  "images": [
+    {
+      "id": 1,
+      "file_name": "image.png",
+      "width": 100,
+      "height": 100
+    }
+  ],
+  "annotations": [
+    {
+      "id": 1,
+      "image_id": 1,
+      "category_id": 0,
+      "bbox": [
+        10,
+        10,
+        11,
+        21
+      ],
+      "area": 200,
+      "segmentation": [
+        [
+          10,
+          10,
+          10,
+          30,
+          20,
+          30,
+          20,
+          10
+        ]
+      ],
+      "iscrowd": 0
+    },
+    {
+      "id": 2,
+      "image_id": 1,
+      "category_id": 1,
+      "bbox": [
+        56,
+        56,
+        9,
+        9
+      ],
+      "area": 38,
+      "segmentation": [
+        [
+          60,
+          56,
+          59,
+          57,
+          58,
+          57,
+          57,
+          58,
+          57,
+          59,
+          56,
+          60,
+          57,
+          61,
+          57,
+          62,
+          58,
+          63,
+          59,
+          63,
+          60,
+          64,
+          61,
+          63,
+          62,
+          63,
+          63,
+          62,
+          63,
+          61,
+          64,
+          60,
+          63,
+          59,
+          63,
+          58,
+          62,
+          57,
+          61,
+          57
+        ]
+      ],
+      "iscrowd": 0
+    }
+  ],
+  "categories": [
+    {
+      "id": 0,
+      "name": "poly",
+      "supercategory": "poly"
+    },
+    {
+      "id": 1,
+      "name": "circle",
+      "supercategory": "circle"
+    }
+  ]
+}

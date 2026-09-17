@@ -1,0 +1,1195 @@
+{
+ "source": "legacy/lazylabel at 2a7d5d8",
+ "cases": {
+  "two-classes-sparse-ids": {
+   "classOrder": [
+    3,
+    7
+   ],
+   "classLabels": [
+    "cat",
+    "dog"
+   ],
+   "instanceCount": 2,
+   "maskShape": [
+    20,
+    30,
+    2
+   ],
+   "maskSetPixels": 98,
+   "outputs": {
+    "COCO_JSON": {
+     "bytes": 1073,
+     "sha256": "19f954205e20a0dc1a2966feaf82639a7b84d49b34c5a6930820a6e2ebbe10eb",
+     "file": "image_coco.json"
+    },
+    "CREATEML": {
+     "bytes": 410,
+     "sha256": "483bd57c1e24d925ccb8208ace35501674ac680f46507dc267437dc3e22ba9c4",
+     "file": "image_createml.json"
+    },
+    "NPZ": {
+     "bytes": 759,
+     "sha256": "2664e436bd1e29273ee6333062db46cf19122f65a2a5c1af042d4d9e8dece57b",
+     "members": {
+      "mask": {
+       "shape": [
+        20,
+        30,
+        2
+       ],
+       "dtype": "uint8"
+      },
+      "class_order": {
+       "shape": [
+        2
+       ],
+       "dtype": "int64"
+      },
+      "class_aliases": {
+       "shape": [],
+       "dtype": "object"
+      }
+     },
+     "file": "image.npz"
+    },
+    "NPZ_CLASS_MAP": {
+     "bytes": 983,
+     "sha256": "4355f03b9f2c11e1638aa9684232a6866c6a5da7399e80cb0dcb29dec9684eaa",
+     "members": {
+      "class_map": {
+       "shape": [
+        20,
+        30
+       ],
+       "dtype": "uint16"
+      },
+      "foreground": {
+       "shape": [
+        20,
+        30
+       ],
+       "dtype": "bool"
+      },
+      "class_order": {
+       "shape": [
+        2
+       ],
+       "dtype": "int64"
+      },
+      "class_aliases": {
+       "shape": [],
+       "dtype": "object"
+      }
+     },
+     "file": "image_CM.npz"
+    },
+    "PASCAL_VOC": {
+     "bytes": 706,
+     "sha256": "d6c6a65790436b157d74712ff35226ad9bf22fdf6c57a24e166a1d487288d06e",
+     "file": "image.xml"
+    },
+    "YOLO_DETECTION": {
+     "bytes": 73,
+     "sha256": "834af64241133d33d3aaa17d8150039b8fb3cd03ff3fcafeee9da681a87ea6a2",
+     "file": "image.txt"
+    },
+    "YOLO_SEGMENTATION": {
+     "bytes": 170,
+     "sha256": "b0b7820871dae9083e3de0b338c7b80b4e0b7907e07027164ad636cef2ddd42c",
+     "file": "image_seg.txt"
+    }
+   }
+  },
+  "split-segment-two-islands": {
+   "classOrder": [
+    1
+   ],
+   "classLabels": [
+    "cell"
+   ],
+   "instanceCount": 1,
+   "maskShape": [
+    200,
+    400,
+    1
+   ],
+   "maskSetPixels": 900,
+   "outputs": {
+    "COCO_JSON": {
+     "bytes": 1016,
+     "sha256": "60fb52f2ff75e473fbb30781ede67a699c51c0663151634016f5cb4fd7e72be7",
+     "file": "image_coco.json"
+    },
+    "CREATEML": {
+     "bytes": 419,
+     "sha256": "7025749418a09c87d8a23883826ab53fae5f8ae86a46646b186a6c9ac8cb43f1",
+     "file": "image_createml.json"
+    },
+    "NPZ": {
+     "bytes": 920,
+     "sha256": "1e27d64b5da00eefa86cc63ed57ed829cd66d7592ebb994c32608fec2fcc9307",
+     "members": {
+      "mask": {
+       "shape": [
+        200,
+        400,
+        1
+       ],
+       "dtype": "uint8"
+      },
+      "class_order": {
+       "shape": [
+        1
+       ],
+       "dtype": "int64"
+      },
+      "class_aliases": {
+       "shape": [],
+       "dtype": "object"
+      }
+     },
+     "file": "image.npz"
+    },
+    "NPZ_CLASS_MAP": {
+     "bytes": 1381,
+     "sha256": "7f42e2fa758b5739f263a3423e0e4d55b4e04c7c64ccde1667ab933a21fc0035",
+     "members": {
+      "class_map": {
+       "shape": [
+        200,
+        400
+       ],
+       "dtype": "uint16"
+      },
+      "foreground": {
+       "shape": [
+        200,
+        400
+       ],
+       "dtype": "bool"
+      },
+      "class_order": {
+       "shape": [
+        1
+       ],
+       "dtype": "int64"
+      },
+      "class_aliases": {
+       "shape": [],
+       "dtype": "object"
+      }
+     },
+     "file": "image_CM.npz"
+    },
+    "PASCAL_VOC": {
+     "bytes": 716,
+     "sha256": "afdecf9300e6b1b115299da8539cdfb0baf24f0cbbbf7d85dbe6fb9f538c7eff",
+     "file": "image.xml"
+    },
+    "YOLO_DETECTION": {
+     "bytes": 47,
+     "sha256": "4a828187f874d3adb15ca7743556c1eae4e589089e5427a45e4c8e4f5605049f",
+     "file": "image.txt"
+    },
+    "YOLO_SEGMENTATION": {
+     "bytes": 98,
+     "sha256": "dda54ef7480bc6025c4c95cdc793d1c3542c203ef4cc64b4489633479b8828c6",
+     "file": "image_seg.txt"
+    }
+   }
+  },
+  "full-frame-box": {
+   "classOrder": [
+    0
+   ],
+   "classLabels": [
+    "all"
+   ],
+   "instanceCount": 1,
+   "maskShape": [
+    64,
+    64,
+    1
+   ],
+   "maskSetPixels": 4096,
+   "outputs": {
+    "COCO_JSON": {
+     "bytes": 626,
+     "sha256": "49cc318cba312ef21dfce09e6454620a5ba1b53346ca120066871a8b6f3ec5a4",
+     "file": "image_coco.json"
+    },
+    "CREATEML": {
+     "bytes": 242,
+     "sha256": "ecae8a4207e3c61e4096d73ff104e08150b604f7a697fe038d02af0fd5132c65",
+     "file": "image_createml.json"
+    },
+    "NPZ": {
+     "bytes": 757,
+     "sha256": "0dcc196f4bb607a99dc380b2fd5167f304cee0c44b837db538b5fad6d4320680",
+     "members": {
+      "mask": {
+       "shape": [
+        64,
+        64,
+        1
+       ],
+       "dtype": "uint8"
+      },
+      "class_order": {
+       "shape": [
+        1
+       ],
+       "dtype": "int64"
+      },
+      "class_aliases": {
+       "shape": [],
+       "dtype": "object"
+      }
+     },
+     "file": "image.npz"
+    },
+    "NPZ_CLASS_MAP": {
+     "bytes": 999,
+     "sha256": "25f84cf0cdf4ff9c39515f048932796444ef7c599108869f220b8916870082c5",
+     "members": {
+      "class_map": {
+       "shape": [
+        64,
+        64
+       ],
+       "dtype": "uint16"
+      },
+      "foreground": {
+       "shape": [
+        64,
+        64
+       ],
+       "dtype": "bool"
+      },
+      "class_order": {
+       "shape": [
+        1
+       ],
+       "dtype": "int64"
+      },
+      "class_aliases": {
+       "shape": [],
+       "dtype": "object"
+      }
+     },
+     "file": "image_CM.npz"
+    },
+    "PASCAL_VOC": {
+     "bytes": 448,
+     "sha256": "c708de7df4793302c213ec612a0cbdf1fd349de338be368bf221d149ee76166e",
+     "file": "image.xml"
+    },
+    "YOLO_DETECTION": {
+     "bytes": 19,
+     "sha256": "33bcc4179e91e2a1b061a27e18d69db571ff1227da3ee996b305c482f8250719",
+     "file": "image.txt"
+    },
+    "YOLO_SEGMENTATION": {
+     "bytes": 55,
+     "sha256": "10163eb7db3f02676e7ee56fc59a0c0ea7b076964effb651aeec63da385821db",
+     "file": "image_seg.txt"
+    }
+   }
+  },
+  "tiny-box-huge-image": {
+   "classOrder": [
+    2
+   ],
+   "classLabels": [
+    "speck"
+   ],
+   "instanceCount": 1,
+   "maskShape": [
+    8192,
+    8192,
+    1
+   ],
+   "maskSetPixels": 1,
+   "outputs": {
+    "COCO_JSON": {
+     "bytes": 625,
+     "sha256": "ed7c287535c1d7279bdb81553d24ef4c47fa8c67f5b846426694509a0b9a16aa",
+     "file": "image_coco.json"
+    },
+    "CREATEML": {
+     "bytes": 240,
+     "sha256": "c081260f9834e7c2c28ac56c1e5fc73cab5743c14f2f7f2ed0f754c2dabb1310",
+     "file": "image_createml.json"
+    },
+    "NPZ": {
+     "bytes": 65978,
+     "sha256": "c02f4cc8e31deaf3aafbe878cebd5090456eb0b984e048e6e7128f0628839892",
+     "members": {
+      "mask": {
+       "shape": [
+        8192,
+        8192,
+        1
+       ],
+       "dtype": "uint8"
+      },
+      "class_order": {
+       "shape": [
+        1
+       ],
+       "dtype": "int64"
+      },
+      "class_aliases": {
+       "shape": [],
+       "dtype": "object"
+      }
+     },
+     "file": "image.npz"
+    },
+    "NPZ_CLASS_MAP": {
+     "bytes": 196658,
+     "sha256": "19dd6a417ba4d789cfd04eb775bec646c05fd6e121a5bfba88e00b230f9c11c3",
+     "members": {
+      "class_map": {
+       "shape": [
+        8192,
+        8192
+       ],
+       "dtype": "uint16"
+      },
+      "foreground": {
+       "shape": [
+        8192,
+        8192
+       ],
+       "dtype": "bool"
+      },
+      "class_order": {
+       "shape": [
+        1
+       ],
+       "dtype": "int64"
+      },
+      "class_aliases": {
+       "shape": [],
+       "dtype": "object"
+      }
+     },
+     "file": "image_CM.npz"
+    },
+    "PASCAL_VOC": {
+     "bytes": 452,
+     "sha256": "e98f26209143af5e12164f1d9b5853d09b6bd7ff9773fa3cb340cc7e4712f0ba",
+     "file": "image.xml"
+    },
+    "YOLO_DETECTION": {
+     "bytes": 67,
+     "sha256": "d3aeaed332a5d320b45927ad0e6cf09e44379d61ae5872b8e22eeedd2b6d5194",
+     "file": "image.txt"
+    },
+    "YOLO_SEGMENTATION": {
+     "bytes": 35,
+     "sha256": "031be94330838994c5535045a4cfd3c60ebc930049afb58e238fc6e04ed5c8a0",
+     "file": "image_seg.txt"
+    }
+   }
+  },
+  "non-ascii-aliases": {
+   "classOrder": [
+    1,
+    5
+   ],
+   "classLabels": [
+    "Zelle",
+    "\u7d30\u80de"
+   ],
+   "instanceCount": 2,
+   "maskShape": [
+    40,
+    40,
+    2
+   ],
+   "maskSetPixels": 250,
+   "outputs": {
+    "COCO_JSON": {
+     "bytes": 1101,
+     "sha256": "8234a71705250a932fbdc741f8026a213839ac449f1db96c7449c2a74065a616",
+     "file": "image_coco.json"
+    },
+    "CREATEML": {
+     "bytes": 424,
+     "sha256": "a1f0ddd3569d498c5b43f9412aaa70f041a8030fb9293353503edf461e333db8",
+     "file": "image_createml.json"
+    },
+    "NPZ": {
+     "bytes": 786,
+     "sha256": "4be717df84ab4b0c795f5b463e9a9d62fed31334b3ce1ec6920e88767e3c5ab1",
+     "members": {
+      "mask": {
+       "shape": [
+        40,
+        40,
+        2
+       ],
+       "dtype": "uint8"
+      },
+      "class_order": {
+       "shape": [
+        2
+       ],
+       "dtype": "int64"
+      },
+      "class_aliases": {
+       "shape": [],
+       "dtype": "object"
+      }
+     },
+     "file": "image.npz"
+    },
+    "NPZ_CLASS_MAP": {
+     "bytes": 1014,
+     "sha256": "8cbd0586bc9da3d3c8490b36dba5beb1adafd52340913710f013e78f9bdbdc96",
+     "members": {
+      "class_map": {
+       "shape": [
+        40,
+        40
+       ],
+       "dtype": "uint16"
+      },
+      "foreground": {
+       "shape": [
+        40,
+        40
+       ],
+       "dtype": "bool"
+      },
+      "class_order": {
+       "shape": [
+        2
+       ],
+       "dtype": "int64"
+      },
+      "class_aliases": {
+       "shape": [],
+       "dtype": "object"
+      }
+     },
+     "file": "image_CM.npz"
+    },
+    "PASCAL_VOC": {
+     "bytes": 711,
+     "sha256": "3423e3549d0d124d68b410a19b808b5463a729f961bfaf6aea12a016db8587a7",
+     "file": "image.xml"
+    },
+    "YOLO_DETECTION": {
+     "bytes": 52,
+     "sha256": "974c66b34621f6f269c61c017f32311c03277c762ae04c98360cce2abf033ccf",
+     "file": "image.txt"
+    },
+    "YOLO_SEGMENTATION": {
+     "bytes": 88,
+     "sha256": "cb0f3ed6f2536ee2a85f3dcd584470f412a70a5150982e7d41ad1fb702c8c784",
+     "file": "image_seg.txt"
+    }
+   }
+  },
+  "overlap-pixel-priority-off": {
+   "classOrder": [
+    1,
+    4
+   ],
+   "classLabels": [
+    "a",
+    "b"
+   ],
+   "instanceCount": 2,
+   "maskShape": [
+    50,
+    50,
+    2
+   ],
+   "maskSetPixels": 800,
+   "outputs": {
+    "COCO_JSON": {
+     "bytes": 1078,
+     "sha256": "f5d911191770b2c410257a18a0cbc82c688274e09ca11b864df6fdfd46ea387e",
+     "file": "image_coco.json"
+    },
+    "CREATEML": {
+     "bytes": 411,
+     "sha256": "da4f084450fb81764dae846f1a4a245b380bfe7ed0fe9fe0dcec8063cf06cf56",
+     "file": "image_createml.json"
+    },
+    "NPZ": {
+     "bytes": 790,
+     "sha256": "42e9c4aa9b75916abe5ee480a8b441c93be52fee705b181dc90ffa64a5975d28",
+     "members": {
+      "mask": {
+       "shape": [
+        50,
+        50,
+        2
+       ],
+       "dtype": "uint8"
+      },
+      "class_order": {
+       "shape": [
+        2
+       ],
+       "dtype": "int64"
+      },
+      "class_aliases": {
+       "shape": [],
+       "dtype": "object"
+      }
+     },
+     "file": "image.npz"
+    },
+    "NPZ_CLASS_MAP": {
+     "bytes": 1027,
+     "sha256": "c0ed634c3c99730d9fb0c25e0a9f25ae0547952d7a5102e03784f0039a13944f",
+     "members": {
+      "class_map": {
+       "shape": [
+        50,
+        50
+       ],
+       "dtype": "uint16"
+      },
+      "foreground": {
+       "shape": [
+        50,
+        50
+       ],
+       "dtype": "bool"
+      },
+      "class_order": {
+       "shape": [
+        2
+       ],
+       "dtype": "int64"
+      },
+      "class_aliases": {
+       "shape": [],
+       "dtype": "object"
+      }
+     },
+     "file": "image_CM.npz"
+    },
+    "PASCAL_VOC": {
+     "bytes": 704,
+     "sha256": "5aaa86514ae9643eb96acde63102c97ae9c3dcd4236f9f32b45392c16d0ece83",
+     "file": "image.xml"
+    },
+    "YOLO_DETECTION": {
+     "bytes": 38,
+     "sha256": "eda9167c6357604dfc89758c2ec016c8c6b4d5f19a562d811f08887afcfb651b",
+     "file": "image.txt"
+    },
+    "YOLO_SEGMENTATION": {
+     "bytes": 78,
+     "sha256": "c4d592b1aad576d51f338e661cf1d218a2a41e6d4169a7cfc91ed6de1438cc10",
+     "file": "image_seg.txt"
+    }
+   }
+  },
+  "overlap-pixel-priority-ascending": {
+   "classOrder": [
+    1,
+    4
+   ],
+   "classLabels": [
+    "a",
+    "b"
+   ],
+   "instanceCount": 2,
+   "maskShape": [
+    50,
+    50,
+    2
+   ],
+   "maskSetPixels": 700,
+   "outputs": {
+    "COCO_JSON": {
+     "bytes": 1168,
+     "sha256": "e97db336d7a00c80a908841b5989ea51e6efda5e39ff467c116e1de07ade302f",
+     "file": "image_coco.json"
+    },
+    "CREATEML": {
+     "bytes": 411,
+     "sha256": "da4f084450fb81764dae846f1a4a245b380bfe7ed0fe9fe0dcec8063cf06cf56",
+     "file": "image_createml.json"
+    },
+    "NPZ": {
+     "bytes": 789,
+     "sha256": "2106dd3e7e626a45115d4b1f49d482a2dcabc3fec27708d7fc694148e2c62b17",
+     "members": {
+      "mask": {
+       "shape": [
+        50,
+        50,
+        2
+       ],
+       "dtype": "uint8"
+      },
+      "class_order": {
+       "shape": [
+        2
+       ],
+       "dtype": "int64"
+      },
+      "class_aliases": {
+       "shape": [],
+       "dtype": "object"
+      }
+     },
+     "file": "image.npz"
+    },
+    "NPZ_CLASS_MAP": {
+     "bytes": 1027,
+     "sha256": "c0ed634c3c99730d9fb0c25e0a9f25ae0547952d7a5102e03784f0039a13944f",
+     "members": {
+      "class_map": {
+       "shape": [
+        50,
+        50
+       ],
+       "dtype": "uint16"
+      },
+      "foreground": {
+       "shape": [
+        50,
+        50
+       ],
+       "dtype": "bool"
+      },
+      "class_order": {
+       "shape": [
+        2
+       ],
+       "dtype": "int64"
+      },
+      "class_aliases": {
+       "shape": [],
+       "dtype": "object"
+      }
+     },
+     "file": "image_CM.npz"
+    },
+    "PASCAL_VOC": {
+     "bytes": 704,
+     "sha256": "5aaa86514ae9643eb96acde63102c97ae9c3dcd4236f9f32b45392c16d0ece83",
+     "file": "image.xml"
+    },
+    "YOLO_DETECTION": {
+     "bytes": 38,
+     "sha256": "eda9167c6357604dfc89758c2ec016c8c6b4d5f19a562d811f08887afcfb651b",
+     "file": "image.txt"
+    },
+    "YOLO_SEGMENTATION": {
+     "bytes": 104,
+     "sha256": "1e23efd38a0511d9fb4d9eef87b24bfcb7668888ad01dcf92403b9e0f5b373e2",
+     "file": "image_seg.txt"
+    }
+   }
+  },
+  "overlap-pixel-priority-descending": {
+   "classOrder": [
+    1,
+    4
+   ],
+   "classLabels": [
+    "a",
+    "b"
+   ],
+   "instanceCount": 2,
+   "maskShape": [
+    50,
+    50,
+    2
+   ],
+   "maskSetPixels": 700,
+   "outputs": {
+    "COCO_JSON": {
+     "bytes": 1168,
+     "sha256": "5e04dc26f3f8368635ab2f5ae0770ad8780c4bb42919d0ec9f30c2b3af90be25",
+     "file": "image_coco.json"
+    },
+    "CREATEML": {
+     "bytes": 411,
+     "sha256": "da4f084450fb81764dae846f1a4a245b380bfe7ed0fe9fe0dcec8063cf06cf56",
+     "file": "image_createml.json"
+    },
+    "NPZ": {
+     "bytes": 789,
+     "sha256": "1c34c8ebc4c019c3cb1ea9506285422920e91965d142ea44c680b026a074893e",
+     "members": {
+      "mask": {
+       "shape": [
+        50,
+        50,
+        2
+       ],
+       "dtype": "uint8"
+      },
+      "class_order": {
+       "shape": [
+        2
+       ],
+       "dtype": "int64"
+      },
+      "class_aliases": {
+       "shape": [],
+       "dtype": "object"
+      }
+     },
+     "file": "image.npz"
+    },
+    "NPZ_CLASS_MAP": {
+     "bytes": 1025,
+     "sha256": "d703e69ad20ea0570b96e7d2d30c4e71fb948d0611f45929ea51899041337a40",
+     "members": {
+      "class_map": {
+       "shape": [
+        50,
+        50
+       ],
+       "dtype": "uint16"
+      },
+      "foreground": {
+       "shape": [
+        50,
+        50
+       ],
+       "dtype": "bool"
+      },
+      "class_order": {
+       "shape": [
+        2
+       ],
+       "dtype": "int64"
+      },
+      "class_aliases": {
+       "shape": [],
+       "dtype": "object"
+      }
+     },
+     "file": "image_CM.npz"
+    },
+    "PASCAL_VOC": {
+     "bytes": 704,
+     "sha256": "5aaa86514ae9643eb96acde63102c97ae9c3dcd4236f9f32b45392c16d0ece83",
+     "file": "image.xml"
+    },
+    "YOLO_DETECTION": {
+     "bytes": 38,
+     "sha256": "eda9167c6357604dfc89758c2ec016c8c6b4d5f19a562d811f08887afcfb651b",
+     "file": "image.txt"
+    },
+    "YOLO_SEGMENTATION": {
+     "bytes": 106,
+     "sha256": "8f10b78692b19c0323bc580f08dd21af98063dc256bf2bd6f1bdb0f2deb28a57",
+     "file": "image_seg.txt"
+    }
+   }
+  },
+  "polygon-and-circle": {
+   "classOrder": [
+    0,
+    1
+   ],
+   "classLabels": [
+    "poly",
+    "circle"
+   ],
+   "instanceCount": 2,
+   "maskShape": [
+    100,
+    100,
+    2
+   ],
+   "maskSetPixels": 280,
+   "outputs": {
+    "COCO_JSON": {
+     "bytes": 1573,
+     "sha256": "1197f35c567071a72f53eaa2741b25a78280106c4eb3c1fd7eabc2c17e4fba1e",
+     "file": "image_coco.json"
+    },
+    "CREATEML": {
+     "bytes": 417,
+     "sha256": "050f048ab815587ded314837e6deb5dda82245924d6ac08eb76ca8c5f2292e22",
+     "file": "image_createml.json"
+    },
+    "NPZ": {
+     "bytes": 858,
+     "sha256": "acbcb34605091236cc48a986892634f6690cb0b590d05505d949590e2bf87af8",
+     "members": {
+      "mask": {
+       "shape": [
+        100,
+        100,
+        2
+       ],
+       "dtype": "uint8"
+      },
+      "class_order": {
+       "shape": [
+        2
+       ],
+       "dtype": "int64"
+      },
+      "class_aliases": {
+       "shape": [],
+       "dtype": "object"
+      }
+     },
+     "file": "image.npz"
+    },
+    "NPZ_CLASS_MAP": {
+     "bytes": 1120,
+     "sha256": "5eaf9193063f5502634b7379bcec92e07a113a154ff739e26b5621e745458f34",
+     "members": {
+      "class_map": {
+       "shape": [
+        100,
+        100
+       ],
+       "dtype": "uint16"
+      },
+      "foreground": {
+       "shape": [
+        100,
+        100
+       ],
+       "dtype": "bool"
+      },
+      "class_order": {
+       "shape": [
+        2
+       ],
+       "dtype": "int64"
+      },
+      "class_aliases": {
+       "shape": [],
+       "dtype": "object"
+      }
+     },
+     "file": "image_CM.npz"
+    },
+    "PASCAL_VOC": {
+     "bytes": 714,
+     "sha256": "135d9eef9f2740882a9e96e20e5a9217af6310b7e71b57ec6cf701f6620ce8b5",
+     "file": "image.xml"
+    },
+    "YOLO_DETECTION": {
+     "bytes": 50,
+     "sha256": "9b82bc4d5008e268c3062850ac8b0b0d06355182d308f87179069bab1d43a1bf",
+     "file": "image.txt"
+    },
+    "YOLO_SEGMENTATION": {
+     "bytes": 234,
+     "sha256": "47871ce0bc56533045d9c98661e4c62163de9d4fe799d159bce9c8e8e966c37a",
+     "file": "image_seg.txt"
+    }
+   }
+  },
+  "crop-clears-last-row-and-column": {
+   "classOrder": [
+    2
+   ],
+   "classLabels": [
+    "inside"
+   ],
+   "instanceCount": 1,
+   "maskShape": [
+    80,
+    100,
+    1
+   ],
+   "maskSetPixels": 6831,
+   "outputs": {
+    "COCO_JSON": {
+     "bytes": 636,
+     "sha256": "956dfb18ac9b391399e898da2befdf5da27335b57aa65ae3da242396d89ea637",
+     "file": "image_coco.json"
+    },
+    "CREATEML": {
+     "bytes": 245,
+     "sha256": "858eddc0f47d9a34839a89328b9c346fd01e7ba42056b4ed5361629998d4d2ba",
+     "file": "image_createml.json"
+    },
+    "NPZ": {
+     "bytes": 797,
+     "sha256": "9c8c791586bc175dc6f520d9f1ea29706d2f1ed98886994a603a30d25b49a51c",
+     "members": {
+      "mask": {
+       "shape": [
+        80,
+        100,
+        1
+       ],
+       "dtype": "uint8"
+      },
+      "class_order": {
+       "shape": [
+        1
+       ],
+       "dtype": "int64"
+      },
+      "class_aliases": {
+       "shape": [],
+       "dtype": "object"
+      }
+     },
+     "file": "image.npz"
+    },
+    "NPZ_CLASS_MAP": {
+     "bytes": 1119,
+     "sha256": "bd7a22d553bc8d7ac73a864de225336a9e9cf5c6253a71766f39ab143cf80d5b",
+     "members": {
+      "class_map": {
+       "shape": [
+        80,
+        100
+       ],
+       "dtype": "uint16"
+      },
+      "foreground": {
+       "shape": [
+        80,
+        100
+       ],
+       "dtype": "bool"
+      },
+      "class_order": {
+       "shape": [
+        1
+       ],
+       "dtype": "int64"
+      },
+      "class_aliases": {
+       "shape": [],
+       "dtype": "object"
+      }
+     },
+     "file": "image_CM.npz"
+    },
+    "PASCAL_VOC": {
+     "bytes": 453,
+     "sha256": "18abc7d842159a4c633b52906afe3112ad616aa81d5b606c03cb6aaf4f116fd8",
+     "file": "image.xml"
+    },
+    "YOLO_DETECTION": {
+     "bytes": 29,
+     "sha256": "33ecb806d4335166638a873de961efc34713321a3da4b6eb999f7b2c2a02dc1c",
+     "file": "image.txt"
+    },
+    "YOLO_SEGMENTATION": {
+     "bytes": 45,
+     "sha256": "92d68617c226835d83fe1a1678b6013b47737ebdfb4bf9f98e102c6d7f68f9c4",
+     "file": "image_seg.txt"
+    }
+   }
+  },
+  "class-zero-and-background": {
+   "classOrder": [
+    0,
+    3
+   ],
+   "classLabels": [
+    "zero",
+    "three"
+   ],
+   "instanceCount": 2,
+   "maskShape": [
+    30,
+    30,
+    2
+   ],
+   "maskSetPixels": 181,
+   "outputs": {
+    "COCO_JSON": {
+     "bytes": 1078,
+     "sha256": "7d20e661192ce7c1c4e8b1aa5b648074fc648569178ed210d77f437bb138b46d",
+     "file": "image_coco.json"
+    },
+    "CREATEML": {
+     "bytes": 414,
+     "sha256": "5be47bbda144ca456979159f6e6b1382336714127e073994536a255455d41aef",
+     "file": "image_createml.json"
+    },
+    "NPZ": {
+     "bytes": 769,
+     "sha256": "46bc257d412a2ea38581784ae7e1b2b70045eb13b270d45ebfc087f10514693d",
+     "members": {
+      "mask": {
+       "shape": [
+        30,
+        30,
+        2
+       ],
+       "dtype": "uint8"
+      },
+      "class_order": {
+       "shape": [
+        2
+       ],
+       "dtype": "int64"
+      },
+      "class_aliases": {
+       "shape": [],
+       "dtype": "object"
+      }
+     },
+     "file": "image.npz"
+    },
+    "NPZ_CLASS_MAP": {
+     "bytes": 986,
+     "sha256": "80e73db3b2de1d4da4c15e1b23145dc4a6b8a34591114b8d56ce90c7a5cf1a08",
+     "members": {
+      "class_map": {
+       "shape": [
+        30,
+        30
+       ],
+       "dtype": "uint16"
+      },
+      "foreground": {
+       "shape": [
+        30,
+        30
+       ],
+       "dtype": "bool"
+      },
+      "class_order": {
+       "shape": [
+        2
+       ],
+       "dtype": "int64"
+      },
+      "class_aliases": {
+       "shape": [],
+       "dtype": "object"
+      }
+     },
+     "file": "image_CM.npz"
+    },
+    "PASCAL_VOC": {
+     "bytes": 709,
+     "sha256": "83bf981e13a6da0d24d569d738467b3eb32f00a6ffc825547bc95c0f153a6338",
+     "file": "image.xml"
+    },
+    "YOLO_DETECTION": {
+     "bytes": 130,
+     "sha256": "5cb342324b230c45437cd6195f354c13f777f76689e4fcb722b9abaec1c9db2a",
+     "file": "image.txt"
+    },
+    "YOLO_SEGMENTATION": {
+     "bytes": 134,
+     "sha256": "90f2a9acfd8df35043b74b98daff37e865733ef7b871dc2d3f32ffbe6ff38cf9",
+     "file": "image_seg.txt"
+    }
+   }
+  },
+  "single-pixel-objects": {
+   "classOrder": [
+    9
+   ],
+   "classLabels": [
+    "dot"
+   ],
+   "instanceCount": 1,
+   "maskShape": [
+    16,
+    16,
+    1
+   ],
+   "maskSetPixels": 2,
+   "outputs": {
+    "COCO_JSON": {
+     "bytes": 980,
+     "sha256": "4cdf56dc0f83ecb1ad6d855cc85db3c017156ed94025c1561a21739d93e0186d",
+     "file": "image_coco.json"
+    },
+    "CREATEML": {
+     "bytes": 408,
+     "sha256": "601fda469248ee247680c8ab6ffd6df04bb1744926be6efa59d831b08d4a37cf",
+     "file": "image_createml.json"
+    },
+    "NPZ": {
+     "bytes": 740,
+     "sha256": "a344b65af38090ba6d7a049e1c7b48dea87df7e3c738e6fac63f503d997fb185",
+     "members": {
+      "mask": {
+       "shape": [
+        16,
+        16,
+        1
+       ],
+       "dtype": "uint8"
+      },
+      "class_order": {
+       "shape": [
+        1
+       ],
+       "dtype": "int64"
+      },
+      "class_aliases": {
+       "shape": [],
+       "dtype": "object"
+      }
+     },
+     "file": "image.npz"
+    },
+    "NPZ_CLASS_MAP": {
+     "bytes": 959,
+     "sha256": "319d3f4f7b691bb9151c7e4ac292b9dfa25656e522b4f14cc6f0f0af4a2a3e27",
+     "members": {
+      "class_map": {
+       "shape": [
+        16,
+        16
+       ],
+       "dtype": "uint16"
+      },
+      "foreground": {
+       "shape": [
+        16,
+        16
+       ],
+       "dtype": "bool"
+      },
+      "class_order": {
+       "shape": [
+        1
+       ],
+       "dtype": "int64"
+      },
+      "class_aliases": {
+       "shape": [],
+       "dtype": "object"
+      }
+     },
+     "file": "image_CM.npz"
+    },
+    "PASCAL_VOC": {
+     "bytes": 703,
+     "sha256": "37f19df38cd09ddc6ae8b147b588f6ce63c33c0619a39903fe1ceaa4310eee81",
+     "file": "image.xml"
+    },
+    "YOLO_DETECTION": {
+     "bytes": 66,
+     "sha256": "b9ad402283f31bbe48f4e51c81548d83e6e411962824cb0477035ba4f8957aae",
+     "file": "image.txt"
+    },
+    "YOLO_SEGMENTATION": {
+     "bytes": 110,
+     "sha256": "58a748350fab956a91142a443884742b8336037c333abb001904da844a6ed017",
+     "file": "image_seg.txt"
+    }
+   }
+  }
+ }
+}

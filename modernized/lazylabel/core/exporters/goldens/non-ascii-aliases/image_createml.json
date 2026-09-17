@@ -1,0 +1,25 @@
+[
+  {
+    "image": "image.png",
+    "annotations": [
+      {
+        "label": "Zelle",
+        "coordinates": {
+          "x": 7.0,
+          "y": 7.0,
+          "width": 10,
+          "height": 10
+        }
+      },
+      {
+        "label": "\u7d30\u80de",
+        "coordinates": {
+          "x": 27.5,
+          "y": 25.0,
+          "width": 15,
+          "height": 10
+        }
+      }
+    ]
+  }
+]

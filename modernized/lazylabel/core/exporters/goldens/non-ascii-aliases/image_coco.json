@@ -1,0 +1,74 @@
+{
+  "images": [
+    {
+      "id": 1,
+      "file_name": "image.png",
+      "width": 40,
+      "height": 40
+    }
+  ],
+  "annotations": [
+    {
+      "id": 1,
+      "image_id": 1,
+      "category_id": 1,
+      "bbox": [
+        2,
+        2,
+        10,
+        10
+      ],
+      "area": 81,
+      "segmentation": [
+        [
+          2,
+          2,
+          2,
+          11,
+          11,
+          11,
+          11,
+          2
+        ]
+      ],
+      "iscrowd": 0
+    },
+    {
+      "id": 2,
+      "image_id": 1,
+      "category_id": 5,
+      "bbox": [
+        20,
+        20,
+        15,
+        10
+      ],
+      "area": 126,
+      "segmentation": [
+        [
+          20,
+          20,
+          20,
+          29,
+          34,
+          29,
+          34,
+          20
+        ]
+      ],
+      "iscrowd": 0
+    }
+  ],
+  "categories": [
+    {
+      "id": 1,
+      "name": "Zelle",
+      "supercategory": "Zelle"
+    },
+    {
+      "id": 5,
+      "name": "\u7d30\u80de",
+      "supercategory": "\u7d30\u80de"
+    }
+  ]
+}

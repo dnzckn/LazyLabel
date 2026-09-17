@@ -1,0 +1,44 @@
+{
+  "images": [
+    {
+      "id": 1,
+      "file_name": "image.png",
+      "width": 64,
+      "height": 64
+    }
+  ],
+  "annotations": [
+    {
+      "id": 1,
+      "image_id": 1,
+      "category_id": 0,
+      "bbox": [
+        0,
+        0,
+        64,
+        64
+      ],
+      "area": 3969,
+      "segmentation": [
+        [
+          0,
+          0,
+          0,
+          63,
+          63,
+          63,
+          63,
+          0
+        ]
+      ],
+      "iscrowd": 0
+    }
+  ],
+  "categories": [
+    {
+      "id": 0,
+      "name": "all",
+      "supercategory": "all"
+    }
+  ]
+}

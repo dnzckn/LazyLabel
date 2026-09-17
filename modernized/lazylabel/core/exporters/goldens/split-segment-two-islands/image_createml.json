@@ -1,0 +1,25 @@
+[
+  {
+    "image": "image.png",
+    "annotations": [
+      {
+        "label": "cell",
+        "coordinates": {
+          "x": 320.0,
+          "y": 110.0,
+          "width": 40,
+          "height": 20
+        }
+      },
+      {
+        "label": "cell",
+        "coordinates": {
+          "x": 15.0,
+          "y": 15.0,
+          "width": 10,
+          "height": 10
+        }
+      }
+    ]
+  }
+]

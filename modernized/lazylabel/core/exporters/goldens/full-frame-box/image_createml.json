@@ -1,0 +1,16 @@
+[
+  {
+    "image": "image.png",
+    "annotations": [
+      {
+        "label": "all",
+        "coordinates": {
+          "x": 32.0,
+          "y": 32.0,
+          "width": 64,
+          "height": 64
+        }
+      }
+    ]
+  }
+]

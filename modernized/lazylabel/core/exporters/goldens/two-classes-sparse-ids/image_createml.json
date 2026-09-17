@@ -1,0 +1,25 @@
+[
+  {
+    "image": "image.png",
+    "annotations": [
+      {
+        "label": "cat",
+        "coordinates": {
+          "x": 9.0,
+          "y": 7.5,
+          "width": 10,
+          "height": 5
+        }
+      },
+      {
+        "label": "dog",
+        "coordinates": {
+          "x": 24.0,
+          "y": 15.0,
+          "width": 8,
+          "height": 6
+        }
+      }
+    ]
+  }
+]

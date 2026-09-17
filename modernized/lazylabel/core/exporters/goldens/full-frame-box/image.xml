@@ -1,0 +1,21 @@
+<?xml version='1.0' encoding='utf-8'?>
+<annotation>
+  <filename>image.png</filename>
+  <size>
+    <width>64</width>
+    <height>64</height>
+    <depth>3</depth>
+  </size>
+  <object>
+    <name>all</name>
+    <pose>Unspecified</pose>
+    <truncated>0</truncated>
+    <difficult>0</difficult>
+    <bndbox>
+      <xmin>0</xmin>
+      <ymin>0</ymin>
+      <xmax>64</xmax>
+      <ymax>64</ymax>
+    </bndbox>
+  </object>
+</annotation>
