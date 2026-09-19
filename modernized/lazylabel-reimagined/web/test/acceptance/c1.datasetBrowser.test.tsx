@@ -10,7 +10,10 @@ import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { WireDatasetListing } from "@lazylabel/contracts";
 
+import { defaultSettings } from "@lazylabel/settings-schema";
+
 import { DatasetBrowser } from "../../src/dataset/DatasetBrowser.jsx";
+import { SettingsProvider } from "../../src/settings/SettingsProvider.jsx";
 import type { AnnotationsResult, ApiClient } from "../../src/api/client.js";
 
 afterEach(cleanup);
@@ -60,6 +63,9 @@ function client(overrides: Partial<ApiClient> = {}): ApiClient {
     listImages: async () => listing(),
     loadAnnotations: async (): Promise<AnnotationsResult> => ({ kind: "none" }),
     imageMetadata: async () => ({ width: 1920, height: 1080, sourceDepth: 8, sourceFormat: "png" }),
+    getSettings: async () => defaultSettings(),
+    putSettings: async (settings: unknown) => settings,
+    saveAnnotations: async () => ({ written: { NPZ: "r1" }, stale: [], skippedEmpty: [] }),
     pixelsUrl: () => "/api/pixels",
     thumbnailUrl: () => "/api/thumbnail",
     ...overrides,
@@ -67,7 +73,14 @@ function client(overrides: Partial<ApiClient> = {}): ApiClient {
 }
 
 function show(overrides: Partial<ApiClient> = {}) {
-  return render(<DatasetBrowser client={client(overrides)} projectId="p1" folder="frames" />);
+  // The browser reads the export-format selection from settings, so it needs the provider the app
+  // mounts it inside.
+  const api = client(overrides);
+  return render(
+    <SettingsProvider client={api}>
+      <DatasetBrowser client={api} projectId="p1" folder="frames" />
+    </SettingsProvider>,
+  );
 }
 
 describe("C1: the dataset browser", () => {
@@ -77,10 +90,10 @@ describe("C1: the dataset browser", () => {
     await waitFor(() => expect(screen.getByText("a.png")).toBeTruthy());
     expect(screen.getByText("b.png")).toBeTruthy();
 
-    // One column per format, in load-priority order, labelled by the suffix a user would recognize.
-    for (const column of COLUMNS) {
-      expect(screen.getByText(column.suffix)).toBeTruthy();
-    }
+    // One column per format, in load-priority order, labelled by the suffix a user would
+    // recognize. Scoped to the table: the format chooser shows the same suffixes.
+    const headers = screen.getAllByRole("columnheader").map((cell) => cell.textContent);
+    expect(headers).toEqual(["Image", ...COLUMNS.map((column) => column.suffix)]);
   });
 
   it("says how many images are already annotated", async () => {

@@ -23,9 +23,15 @@ import type {
   WireDatasetImage,
   WireDatasetListing,
   WireImageMetadata,
+  WireLoadResponse,
+  WireSaveResponse,
 } from "@lazylabel/contracts";
 
 import { AnnotationCanvas } from "../canvas/AnnotationCanvas.jsx";
+import { ExportFormats } from "./ExportFormats.jsx";
+import { useSettings } from "../settings/SettingsProvider.jsx";
+import { normalizeExportFormats } from "@lazylabel/settings-schema";
+
 import type { AnnotationsResult, ApiClient } from "../api/client.js";
 
 export interface DatasetBrowserProps {
@@ -155,8 +161,12 @@ export function DatasetBrowser({ client, projectId, folder = "" }: DatasetBrowse
       )}
 
 
+      <ExportFormats />
+
       {selected !== null && (
         <OpenedImage
+          client={client}
+          projectId={projectId}
           image={selected}
           result={opened}
           error={openError}
@@ -169,12 +179,16 @@ export function DatasetBrowser({ client, projectId, folder = "" }: DatasetBrowse
 }
 
 function OpenedImage({
+  client,
+  projectId,
   image,
   result,
   error,
   metadata,
   pixelsUrl,
 }: {
+  readonly client: ApiClient;
+  readonly projectId: string;
   readonly image: WireDatasetImage;
   readonly result: AnnotationsResult | null;
   readonly error: string | null;
@@ -275,8 +289,106 @@ function OpenedImage({
                 .join(", ")}
             </p>
           )}
+
+          {metadata !== null && (
+            <ConvertButton
+              client={client}
+              projectId={projectId}
+              image={image}
+              annotations={result.annotations}
+              size={[metadata.height, metadata.width]}
+            />
+          )}
         </>
       )}
     </section>
+  );
+}
+
+/**
+ * Persona flow 4's last step: write the chosen formats beside the image.
+ *
+ * Three things the response says that the button has to pass on rather than swallow, because each
+ * of them is a way a save can be less than it looks:
+ *
+ *   - `stale`, sidecars in formats that were NOT selected and are still on disk. Decision 15f says
+ *     report and offer removal, never delete; the offer is Phase 5's, the report is now.
+ *   - `skippedEmpty`, a selected format that could not be rendered at all.
+ *   - a save that wrote nothing because the class names were missing would look like success, so
+ *     the warning above it stays on screen.
+ */
+function ConvertButton({
+  client,
+  projectId,
+  image,
+  annotations,
+  size,
+}: {
+  readonly client: ApiClient;
+  readonly projectId: string;
+  readonly image: WireDatasetImage;
+  readonly annotations: WireLoadResponse;
+  readonly size: readonly [number, number];
+}): ReactNode {
+  const { settings } = useSettings();
+  const [state, setState] = useState<
+    | { readonly status: "idle" }
+    | { readonly status: "saving" }
+    | { readonly status: "saved"; readonly result: WireSaveResponse }
+    | { readonly status: "failed"; readonly reason: string }
+  >({ status: "idle" });
+
+  const formats = normalizeExportFormats(settings.values["export_formats"]).formats;
+
+  const convert = useCallback(() => {
+    setState({ status: "saving" });
+    client
+      .saveAnnotations(projectId, image.key, {
+        imageSize: size,
+        formats,
+        segments: annotations.segments,
+        classAliases: annotations.classAliases,
+      })
+      .then((result) => setState({ status: "saved", result }))
+      .catch((cause: unknown) =>
+        setState({ status: "failed", reason: cause instanceof Error ? cause.message : String(cause) }),
+      );
+  }, [annotations, client, formats, image.key, projectId, size]);
+
+  return (
+    <div>
+      <button type="button" onClick={convert} disabled={state.status === "saving"}>
+        {state.status === "saving" ? "Writing…" : `Write ${formats.length} format${formats.length === 1 ? "" : "s"}`}
+      </button>
+
+      {state.status === "failed" && (
+        <p role="alert" className="banner banner--error">
+          Nothing was written: {state.reason}
+        </p>
+      )}
+
+      {state.status === "saved" && (
+        <>
+          <p role="status">
+            Wrote {Object.keys(state.result.written).join(", ")} beside {image.name}.
+          </p>
+
+          {state.result.stale.length > 0 && (
+            <p role="status" className="banner banner--warning">
+              {state.result.stale.join(", ")} {state.result.stale.length === 1 ? "is" : "are"} still
+              on disk for this image and {state.result.stale.length === 1 ? "was" : "were"} not
+              rewritten, so {state.result.stale.length === 1 ? "it" : "they"} may now disagree with
+              what you just saved. Nothing has been deleted.
+            </p>
+          )}
+
+          {state.result.skippedEmpty.length > 0 && (
+            <p role="status" className="banner banner--warning">
+              {state.result.skippedEmpty.join(", ")} could not be written: {state.result.note}
+            </p>
+          )}
+        </>
+      )}
+    </div>
   );
 }

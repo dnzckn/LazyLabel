@@ -108,7 +108,7 @@ export const CAPABILITIES: readonly Capability[] = [
     id: "C12",
     summary: "Convert a dataset from one annotation format to another",
     builtIn: "P1, P4",
-    webStatus: "not-this-service",
+    webStatus: "built",
   },
   {
     id: "C13",

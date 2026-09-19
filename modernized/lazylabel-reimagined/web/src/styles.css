@@ -175,3 +175,16 @@ fieldset input {
   border-radius: 0.25rem;
   image-rendering: pixelated;
 }
+
+.formats {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+  gap: 0.25rem 1rem;
+}
+
+.formats code {
+  color: var(--muted);
+}
