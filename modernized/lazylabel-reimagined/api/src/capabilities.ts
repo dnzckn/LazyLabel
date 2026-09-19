@@ -51,7 +51,10 @@ export const CAPABILITIES: readonly Capability[] = [
     builtIn: "P3, P5",
     apiStatus: "pending",
     apiPhase: "P3",
-    missing: "the inference proxy, embedding handles and the rendered-pixels route",
+    missing:
+      "the rendered-pixels route, which is what makes Operate On View implementable (RULE-089) and "
+      + "waits for the adjustment pipeline in Phase 5. The proxy, the embedding handles and the "
+      + "contract with the inference service are built",
   },
   {
     id: "C4",

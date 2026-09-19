@@ -38,6 +38,14 @@ export function put(
   };
 }
 
+export function post(
+  path: string,
+  body: unknown,
+  headers: Readonly<Record<string, string>> = {},
+): ApiRequest {
+  return { ...put(path, body, headers), method: "POST" };
+}
+
 export function request(
   method: string,
   path: string,

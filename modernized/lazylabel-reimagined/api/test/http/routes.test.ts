@@ -98,7 +98,12 @@ describe("the API envelope", () => {
 
       expect(response.status).toBe(200);
       expect(jsonBody(response)).toMatchObject({ status: "degraded", database: "unavailable" });
-      expect(jsonBody(response).degraded).toHaveLength(1);
+      // Two independent losses: settings, and the AI tools, since no inference service is
+      // configured in this test. Each is named separately because each has its own fix.
+      const reasons = jsonBody(response).degraded as string[];
+      expect(reasons).toHaveLength(2);
+      expect(reasons.some((r) => r.includes("settings"))).toBe(true);
+      expect(reasons.some((r) => r.includes("AI tools"))).toBe(true);
     });
 
     it("is 503 when the dataset folder cannot be read", async () => {

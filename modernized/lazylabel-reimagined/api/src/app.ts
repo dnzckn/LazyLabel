@@ -32,6 +32,11 @@ import {
   UnsupportedImageError,
 } from "./images/pipeline.js";
 import { RevisionConflictError, type BlobStore } from "./ports/blobStore.js";
+import {
+  InferenceError,
+  InferenceUnreachableError,
+  type InferenceClient,
+} from "./ports/inference.js";
 import type { MetadataStore } from "./ports/metadataStore.js";
 import { silentLogger, type Logger } from "./http/log.js";
 import { HttpError, badRequest, notFound, payloadTooLarge, unprocessable } from "./http/problem.js";
@@ -70,6 +75,14 @@ export interface AppDeps {
   readonly logger?: Logger;
   /** Reports whether the dataset root is reachable. Drives the health endpoint. */
   readonly datasetHealthy?: () => Promise<boolean>;
+  /**
+   * The inference service, when one is configured.
+   *
+   * Absent is a supported deployment, not a broken one: the failure-mode table says everything
+   * except SAM prompts and propagation still works without it, so the AI routes answer 503 with a
+   * reason and nothing else changes.
+   */
+  readonly inference?: InferenceClient;
 }
 
 type Handler = (request: ApiRequest, params: Readonly<Record<string, string>>) => Promise<ApiResponse>;
@@ -112,6 +125,16 @@ export function createApp(deps: AppDeps): App {
       method: "PUT",
       pattern: "/projects/:projectId/images/*imagePath/annotations",
       handler: (request, params) => putAnnotations(deps, request, params),
+    },
+    {
+      method: "POST",
+      pattern: "/inference/embeddings",
+      handler: (request) => proxyEmbed(deps, request),
+    },
+    {
+      method: "POST",
+      pattern: "/inference/segment",
+      handler: (request) => proxySegment(deps, request),
     },
     { method: "GET", pattern: "/users/me/settings", handler: () => getSettings(deps) },
     { method: "PUT", pattern: "/users/me/settings", handler: (request) => putSettings(deps, request) },
@@ -171,9 +194,10 @@ export function createApp(deps: AppDeps): App {
 }
 
 async function health(deps: AppDeps): Promise<ApiResponse> {
-  const [dataset, database] = await Promise.all([
+  const [dataset, database, ai] = await Promise.all([
     deps.datasetHealthy?.() ?? Promise.resolve(true),
     deps.metadataStore.healthy(),
+    inferenceHealth(deps),
   ]);
 
   // The dataset folder is the source of truth, so losing it is fatal; losing the database costs
@@ -184,8 +208,114 @@ async function health(deps: AppDeps): Promise<ApiResponse> {
     status: dataset ? (database ? "ok" : "degraded") : "unavailable",
     dataset: dataset ? "ok" : "unreadable",
     database: database ? "ok" : "unavailable",
-    degraded: database ? [] : ["settings and hotkeys are unavailable; annotation work continues"],
+    // The AI tools are a third independent axis. Losing them disables clicking objects with SAM
+    // and nothing else, so it degrades rather than breaks -- RULE-084's behaviour, with the reason
+    // attached so the browser shows "AI tools disabled, and here is why" instead of a dead button.
+    ai,
+    degraded: [
+      ...(database ? [] : ["settings and hotkeys are unavailable; annotation work continues"]),
+      ...(ai.available ? [] : [ai.reason ?? "AI tools are unavailable"]),
+    ],
   });
+}
+
+async function inferenceHealth(deps: AppDeps): Promise<{
+  available: boolean;
+  reason: string | null;
+  videoCapable: boolean;
+}> {
+  if (deps.inference === undefined) {
+    return {
+      available: false,
+      reason: "no inference service is configured, so the AI tools are unavailable",
+      videoCapable: false,
+    };
+  }
+
+  try {
+    const health = await deps.inference.health();
+    return { available: health.available, reason: health.reason, videoCapable: health.videoCapable };
+  } catch (cause) {
+    // Unreachable is not a 500 for the whole API: annotations still load and save.
+    return {
+      available: false,
+      reason: cause instanceof Error ? cause.message : String(cause),
+      videoCapable: false,
+    };
+  }
+}
+
+function inferenceOf(deps: AppDeps): InferenceClient {
+  if (deps.inference === undefined) {
+    throw new HttpError(
+      503,
+      "inference_unavailable",
+      "no inference service is configured, so the AI tools are unavailable",
+    );
+  }
+  return deps.inference;
+}
+
+/**
+ * Forward an embedding request.
+ *
+ * The browser never holds a model endpoint: the architecture makes the API the only thing that
+ * talks to inference, which is also what keeps one correlation id across all three processes.
+ */
+async function proxyEmbed(deps: AppDeps, request: ApiRequest): Promise<ApiResponse> {
+  const body = parseJsonObject(request.body);
+  const image = body["image"];
+  const model = body["model"];
+  if (typeof image !== "string" || typeof model !== "string") {
+    throw badRequest("an embedding request needs 'image' and 'model' strings");
+  }
+
+  const adjustments = body["adjustments"];
+  if (adjustments !== undefined && (adjustments === null || typeof adjustments !== "object")) {
+    throw badRequest("'adjustments' must be an object of numbers");
+  }
+
+  const correlationId = request.headers["x-correlation-id"] ?? "";
+  return json(
+    200,
+    await inferenceOf(deps).embed(
+      {
+        image,
+        model,
+        ...(adjustments === undefined ? {} : { adjustments: adjustments as Record<string, number> }),
+      },
+      correlationId,
+    ),
+  );
+}
+
+async function proxySegment(deps: AppDeps, request: ApiRequest): Promise<ApiResponse> {
+  const body = parseJsonObject(request.body);
+  const handle = body["handle"];
+  if (typeof handle !== "string") throw badRequest("a segment request needs a 'handle' string");
+
+  const points = body["points"];
+  if (points !== undefined && !Array.isArray(points)) throw badRequest("'points' must be an array");
+
+  const box = body["box"];
+  if (box !== undefined && box !== null) {
+    if (!Array.isArray(box) || box.length !== 4 || !box.every((v) => typeof v === "number")) {
+      throw badRequest("'box' must be four numbers, [x1, y1, x2, y2]");
+    }
+  }
+
+  const correlationId = request.headers["x-correlation-id"] ?? "";
+  return json(
+    200,
+    await inferenceOf(deps).segment(
+      {
+        handle,
+        ...(points === undefined ? {} : { points: points as never }),
+        ...(box === undefined || box === null ? {} : { box: box as [number, number, number, number] }),
+      },
+      correlationId,
+    ),
+  );
 }
 
 /**
@@ -591,6 +721,16 @@ function toHttpError(cause: unknown): HttpError {
   // client asked for a path this store will not serve.
   if (cause instanceof Error && cause.name === "InvalidKeyError") {
     return badRequest(cause.message);
+  }
+  // The service's own status is carried through rather than flattened: it distinguishes a bad
+  // prompt from an expired handle from a model that will not load, and each needs something
+  // different from the caller.
+  if (cause instanceof InferenceError) {
+    return new HttpError(cause.status, cause.code, cause.message);
+  }
+  if (cause instanceof InferenceUnreachableError) {
+    // 503, not 500. The API is fine; the model is not answering, and annotation work continues.
+    return new HttpError(503, "inference_unavailable", cause.message);
   }
   // A file that is not an image the pipeline can read is a bad request about that file, not a
   // broken server; the client shows it against the row rather than as an outage.

@@ -1,0 +1,72 @@
+{
+  "$comment": "The request bodies the API sends to the inference service, and the response shapes it expects back. Read from BOTH sides: the API's test asserts its client produces exactly these, and the inference service's test asserts its routes accept them. A cross-language contract cannot be held by a shared type, so it is held by a shared example.",
+  "requests": [
+    {
+      "name": "embed an image",
+      "path": "/inference/embeddings",
+      "method": "POST",
+      "body": { "image": "frames/frame_012.png", "model": "SAM 2.1 large" }
+    },
+    {
+      "name": "embed with display adjustments",
+      "path": "/inference/embeddings",
+      "method": "POST",
+      "body": {
+        "image": "frames/frame_012.png",
+        "model": "SAM 2.1 large",
+        "adjustments": { "brightness": 40.0, "contrast": 0.0, "gamma": 1.0 }
+      }
+    },
+    {
+      "name": "one positive point",
+      "path": "/inference/segment",
+      "method": "POST",
+      "body": { "handle": "c318c68e9f3b84dec5ca65482b559109", "points": [{ "x": 85, "y": 80, "positive": true }] }
+    },
+    {
+      "name": "positives and negatives",
+      "path": "/inference/segment",
+      "method": "POST",
+      "body": {
+        "handle": "c318c68e9f3b84dec5ca65482b559109",
+        "points": [
+          { "x": 85, "y": 80, "positive": true },
+          { "x": 12, "y": 14, "positive": false }
+        ]
+      }
+    },
+    {
+      "name": "a box",
+      "path": "/inference/segment",
+      "method": "POST",
+      "body": { "handle": "c318c68e9f3b84dec5ca65482b559109", "box": [30, 40, 140, 120] }
+    },
+    {
+      "name": "a box and points together",
+      "path": "/inference/segment",
+      "method": "POST",
+      "body": {
+        "handle": "c318c68e9f3b84dec5ca65482b559109",
+        "points": [{ "x": 85, "y": 80, "positive": true }],
+        "box": [30, 40, 140, 120]
+      }
+    }
+  ],
+  "responses": {
+    "embeddings": { "handle": "c318c68e9f3b84dec5ca65482b559109", "cached": false },
+    "segment": {
+      "mask": { "height": 4, "width": 4, "box": [1, 1, 3, 3], "data": "AQEBAQ==" },
+      "score": 0.9916,
+      "chosen": 2,
+      "alternatives": [0.0678, 0.0855, 0.9916]
+    }
+  },
+  "errorCodes": [
+    "unknown_handle",
+    "invalid_prompt",
+    "image_unreadable",
+    "model_unavailable",
+    "prediction_failed",
+    "inference_unavailable"
+  ]
+}
