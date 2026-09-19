@@ -62,7 +62,10 @@ export const CAPABILITIES: readonly Capability[] = [
     builtIn: "P4, P5",
     webStatus: "pending",
     webPhase: "P4",
-    missing: "the undo stack, which is client state bounded by retained bytes rather than entries",
+    missing:
+      "the operations to record, which arrive with the editing tools in Phase 5. The stack itself "
+      + "is built: bounded by retained bytes, redo cleared on a new action, history cleared when an "
+      + "image loads, and an entry that cannot invert itself cannot be recorded",
   },
   {
     id: "C7",
