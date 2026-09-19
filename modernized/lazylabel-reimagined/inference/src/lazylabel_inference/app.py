@@ -25,6 +25,16 @@ from .availability import Availability, check_availability
 from .capabilities import CAPABILITIES
 from .log import Logger, silent_logger
 from .manifest import CheckpointStatus, ManifestError, ModelEntry, check_checkpoint
+from .prompts import (
+    Box,
+    ImageNotSetError,
+    InferenceError,
+    InvalidPromptError,
+    ModelNotLoadedError,
+    Point,
+    Prompt,
+)
+from .service import ImageUnreadableError, InferenceService, UnknownHandleError, encode_mask
 
 MAX_BODY_BYTES = 64 * 1024 * 1024
 
@@ -65,6 +75,8 @@ class Deps:
     manifest_error: ManifestError | None = None
     """Skip hashing gigabytes on every health probe; the models route still verifies in full."""
     verify_on_health: bool = False
+    """Present once a dataset root is configured; None leaves the prompt routes reporting 503."""
+    service: InferenceService | None = None
 
 
 _PROPAGATION_JOB = re.compile(r"^/inference/propagations/([^/]+)$")
@@ -109,7 +121,12 @@ def _route(deps: Deps, request: Request) -> Response:
     if path == "/models" and method == "GET":
         return _models(deps)
 
-    # Phase 3. The contract is fixed in AI_NATIVE_SPEC.md section 3; the implementation is not here.
+    if path == "/inference/embeddings" and method == "POST":
+        return _embeddings(deps, request)
+    if path == "/inference/segment" and method == "POST":
+        return _segment(deps, request)
+
+    # Still Phase 6. The contract is fixed in AI_NATIVE_SPEC.md section 3.
     not_built = {
         ("/inference/embeddings", "POST"): ("C3", "prepare an image for interactive segmentation"),
         ("/inference/segment", "POST"): ("C3", "one SAM prediction from clicks or a box"),
@@ -132,7 +149,115 @@ def _route(deps: Deps, request: Request) -> Response:
 
 
 def _fixed_methods(path: str) -> set[str]:
-    return {"GET"} if path in ("/health", "/models") else set()
+    if path in ("/health", "/models"):
+        return {"GET"}
+    if path in ("/inference/embeddings", "/inference/segment"):
+        return {"POST"}
+    return set()
+
+
+def _body(request: Request) -> dict[str, Any]:
+    if not request.body:
+        raise HttpError(400, "bad_request", "the request body is empty")
+    try:
+        parsed = json.loads(request.body.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as cause:
+        raise HttpError(400, "bad_request", f"the request body is not JSON: {cause}") from cause
+    if not isinstance(parsed, dict):
+        raise HttpError(400, "bad_request", "the request body must be a JSON object")
+    return parsed
+
+
+def _service(deps: Deps) -> InferenceService:
+    if deps.service is None:
+        raise HttpError(
+            503,
+            "inference_unavailable",
+            "this service has no dataset root configured, so it cannot read images",
+        )
+    return deps.service
+
+
+def _inference_error(cause: InferenceError) -> HttpError:
+    """Map a typed inference failure onto a status a client can act on.
+
+    Every branch is a DIFFERENT status on purpose. Phase 3 exit criterion 4 is not satisfied by
+    replacing legacy's None with a single 500: a bad prompt, an expired handle and a model that
+    will not load need three different things from the caller.
+    """
+    if isinstance(cause, UnknownHandleError):
+        return HttpError(404, "unknown_handle", str(cause))
+    if isinstance(cause, (InvalidPromptError,)):
+        return HttpError(422, "invalid_prompt", str(cause))
+    if isinstance(cause, ImageUnreadableError):
+        return HttpError(422, "image_unreadable", str(cause))
+    if isinstance(cause, ImageNotSetError):
+        return HttpError(409, "image_not_set", str(cause))
+    if isinstance(cause, ModelNotLoadedError):
+        return HttpError(503, "model_unavailable", str(cause))
+    return HttpError(500, "prediction_failed", str(cause))
+
+
+def _embeddings(deps: Deps, request: Request) -> Response:
+    body = _body(request)
+    image = body.get("image")
+    model = body.get("model")
+    if not isinstance(image, str) or not isinstance(model, str):
+        raise HttpError(400, "bad_request", "an embedding request needs 'image' and 'model' strings")
+
+    adjustments = body.get("adjustments")
+    if adjustments is not None and not isinstance(adjustments, dict):
+        raise HttpError(400, "bad_request", "'adjustments' must be an object of numbers")
+
+    try:
+        handle, cached = _service(deps).embed(image, model, adjustments)
+    except InferenceError as cause:
+        raise _inference_error(cause) from cause
+
+    # Saying whether it was cached is not a statistic: a cold encode is seconds, and the client
+    # shows a progress state for it rather than hiding it (RULE-074).
+    return _json(200, {"handle": handle, "cached": cached})
+
+
+def _segment(deps: Deps, request: Request) -> Response:
+    body = _body(request)
+    handle = body.get("handle")
+    if not isinstance(handle, str):
+        raise HttpError(400, "bad_request", "a segment request needs a 'handle' string")
+
+    points: list[Point] = []
+    for raw in body.get("points") or []:
+        if not isinstance(raw, dict) or not isinstance(raw.get("x"), (int, float)) or not isinstance(
+            raw.get("y"), (int, float)
+        ):
+            raise HttpError(400, "bad_request", "each point needs numeric 'x' and 'y'")
+        points.append(Point(float(raw["x"]), float(raw["y"]), bool(raw.get("positive", True))))
+
+    box = None
+    raw_box = body.get("box")
+    if raw_box is not None:
+        if not isinstance(raw_box, list) or len(raw_box) != 4 or not all(
+            isinstance(v, (int, float)) for v in raw_box
+        ):
+            raise HttpError(400, "bad_request", "'box' must be four numbers, [x1, y1, x2, y2]")
+        box = Box(*(float(v) for v in raw_box))
+
+    try:
+        prediction = _service(deps).segment(handle, Prompt(points=tuple(points), box=box))
+    except InferenceError as cause:
+        raise _inference_error(cause) from cause
+
+    return _json(
+        200,
+        {
+            "mask": encode_mask(prediction.mask),
+            "score": prediction.score,
+            # RULE-020 chose one of three. Reporting all three lets a client show that it was close
+            # rather than presenting a marginal mask as a confident one.
+            "chosen": prediction.chosen,
+            "alternatives": list(prediction.alternatives),
+        },
+    )
 
 
 def _pending(capability: str, summary: str) -> HttpError:

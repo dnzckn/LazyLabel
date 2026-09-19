@@ -35,9 +35,17 @@ def test_every_capability_here_exists_in_the_specification() -> None:
 
 
 def test_nothing_is_marked_built_yet() -> None:
-    # Phase 2 scaffolds this service; Phase 3 builds it. If this ever fails, the table is claiming
-    # work that the routes do not do, which is the one direction that matters.
+    # Phase 3 built the SAM 2.1 prompt routes, but C3 also covers SAM 1 and the neighbour prefetch,
+    # so it is not finished. If this ever fails, the table is claiming work the routes do not do,
+    # which is the one direction that matters.
     assert not any(entry.built for entry in CAPABILITIES)
+
+
+def test_c3_records_what_is_left_rather_than_what_it_started_as() -> None:
+    # A "missing" line that never changes is how a table stops being read.
+    missing = capability("C3").missing
+    assert "SAM 1" in missing
+    assert "SAM 2.1 prompts" in missing and "built" in missing
 
 
 def test_the_pending_set_matches_the_table() -> None:

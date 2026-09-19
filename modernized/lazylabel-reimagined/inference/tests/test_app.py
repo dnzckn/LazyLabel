@@ -133,6 +133,42 @@ class TestModels:
         assert status == 503 and body["code"] == "manifest_unreadable"
 
 
+class TestThePromptRoutes:
+    """Built in Phase 3. The model itself is exercised in test_differential_sam2.py, which needs a
+    checkpoint; what is checked here is the envelope around it, which does not."""
+
+    def test_503s_when_no_dataset_root_is_configured(self, tmp_path: Path) -> None:
+        deps = Deps(model_dir=tmp_path, availability=available)
+        status, body = call(deps, "POST", "/inference/embeddings", body=b'{"image":"a.png","model":"m"}')
+        assert status == 503 and body["code"] == "inference_unavailable"
+
+    def test_refuses_an_embedding_request_missing_its_fields(self, tmp_path: Path) -> None:
+        deps = Deps(model_dir=tmp_path, availability=available)
+        for payload in [b"{}", b'{"image":"a.png"}', b'{"model":"m"}', b'{"image":1,"model":"m"}']:
+            status, _ = call(deps, "POST", "/inference/embeddings", body=payload)
+            assert status == 400, payload
+
+    def test_refuses_a_segment_request_with_no_handle(self, tmp_path: Path) -> None:
+        deps = Deps(model_dir=tmp_path, availability=available)
+        status, _ = call(deps, "POST", "/inference/segment", body=b'{"points":[]}')
+        assert status == 400
+
+    def test_refuses_a_malformed_point_or_box(self, tmp_path: Path) -> None:
+        deps = Deps(model_dir=tmp_path, availability=available)
+        for payload in [
+            b'{"handle":"h","points":[{"x":"left","y":2}]}',
+            b'{"handle":"h","box":[1,2,3]}',
+            b'{"handle":"h","box":"everything"}',
+        ]:
+            status, _ = call(deps, "POST", "/inference/segment", body=payload)
+            assert status == 400, payload
+
+    def test_405_rather_than_404_for_the_wrong_method(self, tmp_path: Path) -> None:
+        deps = Deps(model_dir=tmp_path, availability=available)
+        status, _ = call(deps, "GET", "/inference/segment")
+        assert status == 405
+
+
 class TestTheEnvelope:
     def test_returns_a_correlation_id_and_honours_a_supplied_one(self, tmp_path: Path) -> None:
         deps = Deps(model_dir=tmp_path, availability=available)
@@ -190,8 +226,6 @@ class TestNotBuiltYet:
     @pytest.mark.parametrize(
         ("method", "path", "capability"),
         [
-            ("POST", "/inference/embeddings", "C3"),
-            ("POST", "/inference/segment", "C3"),
             ("POST", "/inference/propagations", "C11"),
             ("GET", "/inference/propagations", "C11"),
             ("DELETE", "/inference/propagations/job-1", "C11"),
@@ -208,18 +242,9 @@ class TestNotBuiltYet:
         assert body["detail"]["capability"] == capability
         assert body["detail"]["phase"] in ("P3", "P6")
 
-    # These two are the Python equivalent of the todos the Node packages carry, with one advantage:
-    # strict=True means that when Phase 3 makes them pass, the XPASS FAILS the suite and forces the
-    # marker off. A placeholder that cleans itself up cannot rot into a test nobody notices.
-    @pytest.mark.xfail(
-        strict=True,
-        reason="C3 [P3]: SAM prompts are built in Phase 3. When this passes, delete the marker.",
-    )
-    def test_segment_returns_a_mask(self, tmp_path: Path) -> None:
-        deps = Deps(model_dir=tmp_path, availability=available)
-        status, _ = call(deps, "POST", "/inference/segment", body=b"{}")
-        assert status == 200
-
+    # The placeholder for SAM prompts came off when Phase 3 built them -- which is what
+    # xfail(strict=True) is for: the unexpected pass failed the suite and forced the marker away
+    # rather than leaving a test that quietly asserted something untrue.
     @pytest.mark.xfail(
         strict=True,
         reason="C11 [P6]: propagation is built in Phase 6. When this passes, delete the marker.",

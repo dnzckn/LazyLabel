@@ -27,7 +27,11 @@ CAPABILITIES: list[Capability] = [
         "Segment an object by clicking or boxing it with SAM",
         "P3",
         built=False,
-        missing="the SAM 1 and SAM 2.1 predictors, embedding handles and their cache",
+        missing=(
+            "the SAM 1 backend, and the neighbour prefetch that makes the first click on the next "
+            "image immediate. SAM 2.1 prompts, the embedding handles and the cache are built, and "
+            "the prompts are proven against the legacy Sam2Model"
+        ),
     ),
     Capability(
         "C10",
