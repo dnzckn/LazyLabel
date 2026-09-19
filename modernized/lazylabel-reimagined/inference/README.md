@@ -75,8 +75,8 @@ and a pre-release newer than the minimum is allowed *and said to be* a pre-relea
 | `GET /models` | built — every declared checkpoint, verified in full |
 | `POST /inference/embeddings` | built — encodes an image, returns a stable handle, says whether it was cached |
 | `POST /inference/segment` | built — points and boxes, SAM 2.1, the mask bounded on the wire |
-| `POST`/`GET /inference/propagations`, `DELETE /inference/propagations/{id}` | **501**, C11, Phase 6 |
-| `POST /inference/archetypes` | **501**, C10, Phase 6 |
+| `POST`/`GET /inference/propagations`, `DELETE /inference/propagations/{id}` | **501**, C11, Phase 3 |
+| `POST /inference/archetypes` | **501**, C10, Phase 3 |
 
 For the routes that still answer 501, that is the honest status: the route exists, its contract is
 fixed in `AI_NATIVE_SPEC.md` section 3,
@@ -96,7 +96,7 @@ working, the unexpected **pass** fails the suite and forces the marker off — w
 happened when Phase 3 built the prompt routes, so the placeholder came off because the suite made
 it come off rather than because anyone remembered.
 
-One remains, for propagation in Phase 6.
+One remains, for propagation.
 
 ## What Phase 3 built, and how it is proven
 
@@ -140,4 +140,8 @@ blobs whose box is mostly nothing.
   needs a checkpoint to be written against; none is mirrored yet (`MODEL_MANIFEST.md`).
 - **The neighbour prefetch.** RULE-091 specifies pre-computing the next, next-but-one and previous
   images after a settle. The cache is ready for it; the scheduling is not built.
-- **Find Archetypes** (C10) and **propagation** (C11), which are Phase 6.
+- **Find Archetypes** (C10) and **SAM 2 propagation** (C11). Both are Phase 3 work on the model
+  side: the brief lists `reference_finder_worker.py` in Phase 3's scope, and exit criterion 2
+  requires propagation to meet the per-frame tolerance. Only the timeline UI is Phase 6.
+- **API-to-inference contract tests** (exit criterion 4). The API does not proxy these routes
+  yet, so nothing tests the two services talking to each other.

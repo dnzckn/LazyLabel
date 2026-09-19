@@ -1,5 +1,11 @@
 """The capabilities this service owns, and whether they are built.
 
+Phases here are for THIS service's share. Archetype finding (C10) and propagation (C11) are
+Phase 3 work on the model side - the brief lists `reference_finder_worker.py` in Phase 3's scope,
+and its exit criterion 2 requires propagation to meet tolerance - while the timeline UI that
+drives them is Phase 6. An earlier revision marked both P6 here, which would have let Phase 3
+close without them.
+
 The same table the API and the web app keep, answering the third version of the question: what does
 the INFERENCE service owe each capability, and does it do it yet. Only the four it touches are
 listed; the other ten are somebody else's, and saying so here would be noise.
@@ -36,14 +42,14 @@ CAPABILITIES: list[Capability] = [
     Capability(
         "C10",
         "Build a timeline from an image sequence and mark reference frames",
-        "P6",
+        "P3",
         built=False,
         missing="archetype finding; the timeline itself belongs to the web app",
     ),
     Capability(
         "C11",
         "Propagate labels through a sequence and review them by confidence",
-        "P6",
+        "P3",
         built=False,
         missing="SAM 2 video propagation, chunked jobs, cancellation and staged frame results",
     ),

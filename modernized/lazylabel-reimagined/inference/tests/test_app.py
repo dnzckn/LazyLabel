@@ -247,7 +247,7 @@ class TestNotBuiltYet:
     # rather than leaving a test that quietly asserted something untrue.
     @pytest.mark.xfail(
         strict=True,
-        reason="C11 [P6]: propagation is built in Phase 6. When this passes, delete the marker.",
+        reason="C11 [P3]: propagation is Phase 3 exit criterion 2. When this passes, delete the marker.",
     )
     def test_propagation_starts_a_job(self, tmp_path: Path) -> None:
         deps = Deps(model_dir=tmp_path, availability=available)
