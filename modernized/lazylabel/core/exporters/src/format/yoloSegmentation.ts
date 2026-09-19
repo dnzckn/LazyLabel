@@ -11,7 +11,7 @@
 
 import { approxPolyDP, arcLength, fillPoly } from "../geometry/contours.js";
 import { assertText, buildLabelMap, parseFloatLikePython, toInt32Pixel } from "./labels.js";
-import type { LoadedAnnotations, ExportContext, Segment } from "../types.js";
+import type { LoadedAnnotations, ExportContext, Segment , RenderOptions } from "../types.js";
 import { contourToPolygon, iterObjectContours } from "./objects.js";
 import { pyRepr } from "./pyRepr.js";
 
@@ -24,7 +24,7 @@ const EPSILON_FRACTION = 0.001;
  * Null means "write nothing", which is NOT the same as "delete": a stale `_seg.txt` from an earlier
  * save survives, because exporting never removes files (decision 15f covers warning about that).
  */
-export function renderYoloSegmentation(ctx: ExportContext): string | null {
+export function renderYoloSegmentation(ctx: ExportContext, options?: RenderOptions): string | null {
   const [height, width] = ctx.imageSize;
   if (height <= 0 || width <= 0) return null; // guard is <= 0, not == 0
 
@@ -39,7 +39,7 @@ export function renderYoloSegmentation(ctx: ExportContext): string | null {
     lines.push(`${ctx.classOrder[channel]} ${coords.join(" ")}`);
   }
 
-  if (lines.length === 0) return null;
+  if (lines.length === 0 && options?.writeEmpty !== true) return null;
   return lines.map((line) => `${line}\n`).join("");
 }
 

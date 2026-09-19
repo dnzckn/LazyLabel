@@ -63,6 +63,21 @@ export interface ExportContext {
   readonly instances: readonly InstanceContour[];
 }
 
+export interface RenderOptions {
+  /**
+   * Write a file even when there is nothing to put in it.
+   *
+   * Off by default, which is legacy's behaviour and what every differential proof compares against:
+   * a writer returns null where the legacy exporter writes no file. Turned on by the save path, so
+   * that clearing an image survives a reload -- the architecture review found that "a save with zero
+   * segments writes nothing" lets the next load resurrect deleted work.
+   *
+   * The empty file is not invented. It is exactly what this writer produces with no objects in it,
+   * so it parses back through the same reader to zero segments.
+   */
+  readonly writeEmpty?: boolean;
+}
+
 /** The seven formats, named as the legacy ExportFormat enum names them. */
 export type AnnotationFormat =
   | "NPZ"

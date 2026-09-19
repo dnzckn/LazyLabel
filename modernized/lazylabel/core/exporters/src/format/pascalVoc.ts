@@ -20,10 +20,10 @@ import { boxesToSegments, type ImportedBox } from "./boxes.js";
 import { parseFloatLikePython, toPixel } from "./labels.js";
 import { iterObjectContours } from "./objects.js";
 import { childText, directChildren, escapeXml, readXmlRoot } from "./xml.js";
-import type { ExportContext, LoadedAnnotations } from "../types.js";
+import type { ExportContext, LoadedAnnotations , RenderOptions } from "../types.js";
 
 /** Render the document, or null when there is no object to write. */
-export function renderPascalVoc(ctx: ExportContext): string | null {
+export function renderPascalVoc(ctx: ExportContext, options?: RenderOptions): string | null {
   const [height, width] = ctx.imageSize;
   const objects: string[] = [];
 
@@ -47,7 +47,7 @@ export function renderPascalVoc(ctx: ExportContext): string | null {
       ].join("\n"),
     );
   }
-  if (objects.length === 0) return null;
+  if (objects.length === 0 && options?.writeEmpty !== true) return null;
 
   return [
     "<?xml version='1.0' encoding='utf-8'?>",

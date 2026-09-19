@@ -17,10 +17,10 @@ import { boxesToSegments, type ImportedBox } from "./boxes.js";
 import { parseFloatLikePython, toPixel } from "./labels.js";
 import { iterObjectContours } from "./objects.js";
 import { pyFloat, pythonJsonDumps } from "../util/pythonJson.js";
-import type { ExportContext, LoadedAnnotations } from "../types.js";
+import type { ExportContext, LoadedAnnotations , RenderOptions } from "../types.js";
 
 /** Render the document, or null when there is no object to write. */
-export function renderCreateMl(ctx: ExportContext): string | null {
+export function renderCreateMl(ctx: ExportContext, options?: RenderOptions): string | null {
   const annotations: unknown[] = [];
 
   for (const { channel, contour } of iterObjectContours(ctx)) {
@@ -32,7 +32,7 @@ export function renderCreateMl(ctx: ExportContext): string | null {
       coordinates: { x: pyFloat(x + bw / 2), y: pyFloat(y + bh / 2), width: bw, height: bh },
     });
   }
-  if (annotations.length === 0) return null;
+  if (annotations.length === 0 && options?.writeEmpty !== true) return null;
 
   return pythonJsonDumps([{ image: baseName(ctx.imagePath), annotations }]);
 }

@@ -210,7 +210,7 @@ describe("the API envelope", () => {
       expect(before).not.toBeNull();
     });
 
-    it("says so, rather than pretending, when a format renders nothing", async () => {
+    it("writes an empty file for a cleared image rather than leaving the old one", async () => {
       const response = await app.handle(
         put("/projects/p1/images/a.png/annotations", {
           imageSize: SIZE,
@@ -221,12 +221,13 @@ describe("the API envelope", () => {
 
       expect(response.status).toBe(200);
       const body = JSON.parse(response.body);
-      // Phase 4 builds the empty-save rule. Until then the response is explicit that nothing was
-      // written, rather than reporting a success that leaves the old file in place.
-      expect(body.written).toEqual({});
-      expect(body.skippedEmpty).toEqual(["YOLO_DETECTION"]);
-      expect(body.note).toMatch(/Phase 4/);
-      expect(store.keys()).toEqual([]);
+
+      // "A save with zero segments writes nothing" is what let the next load resurrect deleted
+      // work. Decision 7 forbids deleting the file, so the answer is an empty one.
+      expect(Object.keys(body.written)).toEqual(["YOLO_DETECTION"]);
+      expect(body.skippedEmpty).toEqual([]);
+      expect(store.keys()).toEqual(["a.txt"]);
+      expect(new TextDecoder().decode((await store.read("a.txt"))!)).toBe("");
     });
   });
 

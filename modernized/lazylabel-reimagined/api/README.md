@@ -110,18 +110,24 @@ reported, and the user finds out by pressing it. Same class of silent loss as RU
 fixed and warned about rather than reproduced. (This now lives in `@lazylabel/settings-schema`,
 because the browser needs the same rules locally.)
 
-## Known gap, carried deliberately
+## The empty-save rule, closed in Phase 4
 
-**The empty-save rule is not implemented** (C9, Phase 4). The architecture review found that "a save
-with zero segments writes nothing" lets the next load resurrect deleted work, and adopted "a save
-writes empty files for the selected formats". Implementing it needs a decision per format about what
-an empty file *is* — an empty COCO document is not zero bytes, and an empty NPZ is a valid archive
-with no members — and those are decisions about file content, which belong in the format library
-with the rest of them, not improvised here.
+A save with zero segments now writes an **empty file** for each selected format rather than writing
+nothing. The architecture review found that writing nothing lets the next load resurrect deleted
+work: the user clears an image, saves, and the stale sidecar is still there to be read back.
+Deleting it would also look correct and is the one thing decision 7 rules out, so the answer had to
+be an empty file.
 
-Until then the `PUT` response is explicit: a format that rendered nothing comes back under
-`skippedEmpty` with a note naming Phase 4, rather than being reported as a success that quietly
-left the old file in place.
+What an empty file *is* was the part worth waiting for, and it turned out not to need inventing.
+Every writer already builds its whole document and only short-circuits at the very end when there
+is nothing in it — so the empty form is exactly what that writer produces with no objects. An empty
+COCO file carries its `images` entry with empty `annotations` and `categories`; an empty Pascal VOC
+carries the filename and size with no `<object>`; an empty NPZ is the same three members with zero
+channels. Each one parses back through the *same* reader as zero segments, rather than being a
+special case the reader has to know about.
+
+The option defaults off in the library, so every byte-identity proof against legacy is untouched,
+and on in the save path, which is where the rule applies.
 
 ## One change to Phase 1
 

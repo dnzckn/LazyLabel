@@ -19,14 +19,16 @@
 import { ALIAS_MEMBER, readAliasMember } from "./aliases.js";
 import { decodeNpy, encodeNpy, encodeNpyString } from "../util/npy.js";
 import { readZip, writeZip } from "../util/zip.js";
-import type { BinaryMask, ExportContext, LoadedAnnotations, Segment } from "../types.js";
+import type { BinaryMask, ExportContext, LoadedAnnotations, Segment , RenderOptions } from "../types.js";
 
 /** Render the archive, or null where the legacy exporter writes no file (an empty tensor). */
-export async function renderNpz(ctx: ExportContext): Promise<Uint8Array | null> {
+export async function renderNpz(ctx: ExportContext, options?: RenderOptions): Promise<Uint8Array | null> {
   assertConsistent(ctx);
   const { height, width, data } = ctx.maskTensor;
   const channels = ctx.classOrder.length;
-  if (height * width * channels === 0) return null;
+  // An empty archive is the same three members with no classes: mask is (H, W, 0), class_order
+  // is empty, and the alias table is "{}". It reads back through parseNpz as zero segments.
+  if (height * width * channels === 0 && options?.writeEmpty !== true) return null;
 
   const aliases = Object.fromEntries([...ctx.classAliases].map(([id, name]) => [String(id), name]));
   return writeZip([

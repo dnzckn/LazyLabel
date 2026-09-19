@@ -89,10 +89,7 @@ export const CAPABILITIES: readonly Capability[] = [
     id: "C9",
     summary: "Save annotations in any of the seven formats, choosing which are written",
     builtIn: "P1, P4",
-    apiStatus: "pending",
-    apiPhase: "P4",
-    missing:
-      "the empty-save rule: a save with zero segments must write empty files so clearing an image survives a reload, and what an empty file IS per format is an unmade content decision",
+    apiStatus: "built",
   },
   {
     id: "C10",

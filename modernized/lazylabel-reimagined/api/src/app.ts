@@ -266,8 +266,8 @@ async function putAnnotations(
       ...(result.skippedEmpty.length > 0
         ? {
             note:
-              "a format that rendered nothing was not written. Phase 4 builds the empty-save rule, " +
-              "which writes empty files so clearing an image survives a reload.",
+              "a selected format could not be rendered at all, so no file was written for it. " +
+              "An image with no segments is not this case: it writes an empty file.",
           }
         : {}),
     });

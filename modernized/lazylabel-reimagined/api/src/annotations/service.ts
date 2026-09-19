@@ -33,6 +33,7 @@ import type {
   AnnotationSources,
   ExportContext,
   LoadOutcome,
+  RenderOptions,
 } from "@lazylabel/annotation-formats";
 
 import { RevisionConflictError, type BlobStore } from "../ports/blobStore.js";
@@ -98,6 +99,15 @@ export interface WriteRequest {
   readonly formats: readonly AnnotationFormat[];
   readonly context: ExportContext;
   /**
+   * Write an empty file for a selected format that has nothing to put in it.
+   *
+   * On by default, and that is the point. "A save with zero segments writes nothing" lets the next
+   * load resurrect deleted work: the user clears an image, saves, and the stale sidecar is still
+   * there to be read back. Decision 7 forbids deleting a file without explicit user action, so the
+   * fix has to be writing an empty one rather than removing the old one.
+   */
+  readonly writeEmpty?: boolean;
+  /**
    * Revisions the client last read, by format. A format listed here is written only if its file is
    * still at that revision; map a format to null to require that its file does not yet exist.
    * Formats absent from the map are written unconditionally.
@@ -110,13 +120,10 @@ export interface WriteResult {
   /**
    * Formats the user selected where the library rendered nothing, so no file was written.
    *
-   * This is a KNOWN GAP, not a settled behavior. The architecture review found that "a save with
-   * zero segments writes nothing" lets the next load resurrect deleted work, and adopted "a save
-   * writes empty files for the selected formats". Implementing that needs a decision per format
-   * about what an empty file IS — an empty COCO document is not zero bytes, and an empty NPZ is a
-   * valid archive with no members — and those are content decisions, so they belong in the format
-   * library with the rest, not improvised here. Phase 4 builds it; `capabilities.ts` records it and
-   * an acceptance test holds the place.
+   * With `writeEmpty` on — the default — an empty image is no longer one of these: the library
+   * writes the empty form of each selected format, which reads back through the same reader as zero
+   * segments. What remains here is genuinely unrenderable input, such as an image whose size is
+   * zero or negative, which no amount of emptiness would fix.
    */
   readonly skippedEmpty: readonly AnnotationFormat[];
   /** Sidecars present in formats the user did not select. Reported, never deleted (decision 15f). */
@@ -142,7 +149,9 @@ export async function writeAnnotations(
   const skippedEmpty: AnnotationFormat[] = [];
   for (const format of LOAD_PRIORITY) {
     if (!selected.has(format)) continue;
-    const content = await render(format, request.context);
+    const content = await render(format, request.context, {
+      writeEmpty: request.writeEmpty !== false,
+    });
     if (content === null) skippedEmpty.push(format);
     else rendered.set(format, content);
   }
@@ -178,22 +187,23 @@ export async function writeAnnotations(
 async function render(
   format: AnnotationFormat,
   ctx: ExportContext,
+  options: RenderOptions,
 ): Promise<Uint8Array | null> {
   switch (format) {
     case "NPZ":
-      return renderNpz(ctx);
+      return renderNpz(ctx, options);
     case "NPZ_CLASS_MAP":
-      return renderNpzClassMap(ctx);
+      return renderNpzClassMap(ctx, options);
     case "YOLO_SEGMENTATION":
-      return encodeText(renderYoloSegmentation(ctx));
+      return encodeText(renderYoloSegmentation(ctx, options));
     case "YOLO_DETECTION":
-      return encodeText(renderYoloDetection(ctx));
+      return encodeText(renderYoloDetection(ctx, options));
     case "COCO_JSON":
-      return encodeText(renderCoco(ctx));
+      return encodeText(renderCoco(ctx, options));
     case "PASCAL_VOC":
-      return encodeText(renderPascalVoc(ctx));
+      return encodeText(renderPascalVoc(ctx, options));
     case "CREATEML":
-      return encodeText(renderCreateMl(ctx));
+      return encodeText(renderCreateMl(ctx, options));
   }
 }
 

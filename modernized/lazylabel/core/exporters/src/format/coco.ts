@@ -16,7 +16,7 @@ import { boundingRect, contourArea, fillPoly } from "../geometry/contours.js";
 import { toInt32Pixel, toPixel } from "./labels.js";
 import { contourToPolygon, iterObjectContours } from "./objects.js";
 import { pythonJsonDumps } from "../util/pythonJson.js";
-import type { ExportContext, LoadedAnnotations, Segment } from "../types.js";
+import type { ExportContext, LoadedAnnotations, Segment , RenderOptions } from "../types.js";
 
 /** Split "name.supercategory" dot notation; without a dot the supercategory equals the name. */
 export function parseAlias(alias: string): { name: string; supercategory: string } {
@@ -26,7 +26,7 @@ export function parseAlias(alias: string): { name: string; supercategory: string
 }
 
 /** Render the document, or null when there is no object to write. */
-export function renderCoco(ctx: ExportContext): string | null {
+export function renderCoco(ctx: ExportContext, options?: RenderOptions): string | null {
   const [height, width] = ctx.imageSize;
 
   const categories = ctx.classOrder.map((classId) => {
@@ -50,7 +50,7 @@ export function renderCoco(ctx: ExportContext): string | null {
     });
     annotationId += 1;
   }
-  if (annotations.length === 0) return null;
+  if (annotations.length === 0 && options?.writeEmpty !== true) return null;
 
   return pythonJsonDumps({
     images: [{ id: 1, file_name: baseName(ctx.imagePath), width, height }],

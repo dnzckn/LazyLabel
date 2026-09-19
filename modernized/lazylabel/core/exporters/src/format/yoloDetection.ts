@@ -16,10 +16,10 @@ import { assertText, MalformedAnnotationError, parseFloatLikePython, toPixel } f
 import { boxesToSegments, type ImportedBox } from "./boxes.js";
 import { iterObjectContours } from "./objects.js";
 import { pyRepr } from "./pyRepr.js";
-import type { ExportContext, LoadedAnnotations } from "../types.js";
+import type { ExportContext, LoadedAnnotations , RenderOptions } from "../types.js";
 
 /** Render the file body, or null where the legacy exporter writes no file. */
-export function renderYoloDetection(ctx: ExportContext): string | null {
+export function renderYoloDetection(ctx: ExportContext, options?: RenderOptions): string | null {
   const [height, width] = ctx.imageSize;
   if (height <= 0 || width <= 0) return null;
 
@@ -34,7 +34,7 @@ export function renderYoloDetection(ctx: ExportContext): string | null {
     );
   }
 
-  if (lines.length === 0) return null;
+  if (lines.length === 0 && options?.writeEmpty !== true) return null;
   return lines.map((line) => `${line}\n`).join("");
 }
 

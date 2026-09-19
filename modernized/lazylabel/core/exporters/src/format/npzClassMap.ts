@@ -16,16 +16,16 @@ import { ALIAS_MEMBER, readAliasMember } from "./aliases.js";
 import { assertPixels } from "../limits.js";
 import { decodeNpy, encodeNpy, encodeNpyString } from "../util/npy.js";
 import { readZip, writeZip } from "../util/zip.js";
-import type { ExportContext, LoadedAnnotations, Segment } from "../types.js";
+import type { ExportContext, LoadedAnnotations, Segment , RenderOptions } from "../types.js";
 
 const MAX_CLASS_ID = 0xffff;
 
 /** Render the archive, or null when the tensor is empty or no pixel carries a class. */
-export async function renderNpzClassMap(ctx: ExportContext): Promise<Uint8Array | null> {
+export async function renderNpzClassMap(ctx: ExportContext, options?: RenderOptions): Promise<Uint8Array | null> {
   assertConsistent(ctx);
   const { height, width, data } = ctx.maskTensor;
   const channels = ctx.classOrder.length;
-  if (height * width * channels === 0) return null;
+  if (height * width * channels === 0 && options?.writeEmpty !== true) return null;
 
   // "The first channel wins an overlap" only equals "the lowest class wins" while the order is
   // ascending, which every in-library builder guarantees and a hand-built context might not.
@@ -57,7 +57,7 @@ export async function renderNpzClassMap(ctx: ExportContext): Promise<Uint8Array 
       break;
     }
   }
-  if (!anyActive) return null;
+  if (!anyActive && options?.writeEmpty !== true) return null;
 
   const aliases = Object.fromEntries([...ctx.classAliases].map(([id, name]) => [String(id), name]));
   return writeZip([
