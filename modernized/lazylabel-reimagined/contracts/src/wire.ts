@@ -90,6 +90,33 @@ export interface WireSaveResponse {
   readonly note?: string;
 }
 
+/** One image in a dataset listing, with what it already carries. */
+export interface WireDatasetImage {
+  readonly key: string;
+  readonly name: string;
+  /** Which annotation files exist for this image, by format. */
+  readonly sidecars: Readonly<Record<string, boolean>>;
+  readonly annotated: boolean;
+  /**
+   * Other images that share every sidecar with this one.
+   *
+   * Two images whose base names match have the same seven sidecar paths, so annotating one
+   * overwrites the other's work. Legacy never mentions it; the listing is the first moment a user
+   * could be told.
+   */
+  readonly sharesSidecarsWith: readonly string[];
+}
+
+export interface WireDatasetListing {
+  readonly folder: string;
+  readonly images: readonly WireDatasetImage[];
+  readonly annotatedCount: number;
+  /** Files that are neither a supported image nor a recognized sidecar. Counted, never dropped. */
+  readonly unrecognized: number;
+  /** The status columns to render, in load-priority order. */
+  readonly columns: readonly { readonly format: string; readonly suffix: string }[];
+}
+
 /** A failure, as every route reports one. Never an empty success. */
 export interface WireProblem {
   readonly status: number;

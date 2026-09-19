@@ -25,6 +25,13 @@ function mount(client: Partial<ApiClient>) {
     getSettings: async () => defaultSettings(),
     putSettings: async (settings: unknown) => settings,
     health: async () => HEALTHY,
+    listImages: async () => ({
+      folder: "",
+      images: [],
+      annotatedCount: 0,
+      unrecognized: 0,
+      columns: [],
+    }),
     ...client,
   } as ApiClient;
 

@@ -24,9 +24,7 @@ export const CAPABILITIES: readonly Capability[] = [
     id: "C1",
     summary: "Open a folder of images and see which already carry annotations",
     builtIn: "P4",
-    webStatus: "pending",
-    webPhase: "P4",
-    missing: "the dataset browser and its file list",
+    webStatus: "built",
   },
   {
     id: "C2",

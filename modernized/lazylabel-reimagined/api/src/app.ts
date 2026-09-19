@@ -23,6 +23,7 @@ import {
   readAnnotations,
   writeAnnotations,
 } from "./annotations/service.js";
+import { listDataset, SIDECAR_COLUMNS } from "./dataset/listing.js";
 import { RevisionConflictError, type BlobStore } from "./ports/blobStore.js";
 import type { MetadataStore } from "./ports/metadataStore.js";
 import { silentLogger, type Logger } from "./http/log.js";
@@ -74,6 +75,11 @@ export function createApp(deps: AppDeps): App {
 
   const routes: { method: string; pattern: string; handler: Handler }[] = [
     { method: "GET", pattern: "/health", handler: () => health(deps) },
+    {
+      method: "GET",
+      pattern: "/projects/:projectId/images",
+      handler: (request) => listImages(deps, request),
+    },
     {
       method: "GET",
       pattern: "/projects/:projectId/images/*imagePath/annotations",
@@ -156,6 +162,26 @@ async function health(deps: AppDeps): Promise<ApiResponse> {
     dataset: dataset ? "ok" : "unreadable",
     database: database ? "ok" : "unavailable",
     degraded: database ? [] : ["settings and hotkeys are unavailable; annotation work continues"],
+  });
+}
+
+/**
+ * C1: open a folder of images and see which already carry annotations.
+ *
+ * The folder is a query parameter rather than a path segment because it is a LOCATION inside the
+ * dataset, and an empty one - the dataset root - has no sensible path spelling.
+ */
+async function listImages(deps: AppDeps, request: ApiRequest): Promise<ApiResponse> {
+  const folder = request.query.get("folder") ?? "";
+
+  const listing = await listDataset(deps.blobStore, folder);
+  return json(200, {
+    folder: listing.folder,
+    images: listing.images,
+    annotatedCount: listing.annotatedCount,
+    // Never silently dropped: a folder of .avif files should say so rather than look empty.
+    unrecognized: listing.unrecognized,
+    columns: SIDECAR_COLUMNS,
   });
 }
 

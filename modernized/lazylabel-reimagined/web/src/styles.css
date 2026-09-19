@@ -106,3 +106,50 @@ button {
   color: inherit;
   cursor: pointer;
 }
+
+/* Dataset browser */
+.dataset th[scope="row"] {
+  font-weight: normal;
+}
+
+.dataset button {
+  border: none;
+  padding: 0;
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
+.dataset td {
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.collision {
+  color: var(--warning-ink);
+}
+
+.provisional {
+  color: var(--muted);
+  font-size: 0.85rem;
+  margin-top: 0;
+}
+
+fieldset {
+  border: 1px solid var(--rule);
+  border-radius: 0.25rem;
+  margin: 1.5rem 0;
+}
+
+fieldset label {
+  margin-right: 1rem;
+}
+
+fieldset input {
+  font: inherit;
+  width: 6rem;
+  padding: 0.2rem 0.35rem;
+  border: 1px solid var(--rule);
+  border-radius: 0.2rem;
+  background: transparent;
+  color: inherit;
+}

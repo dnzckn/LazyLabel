@@ -37,9 +37,7 @@ export const CAPABILITIES: readonly Capability[] = [
     id: "C1",
     summary: "Open a folder of images and see which already carry annotations",
     builtIn: "P4",
-    apiStatus: "pending",
-    apiPhase: "P4",
-    missing: "the dataset listing route and its index; the sidecar naming rules it needs are built",
+    apiStatus: "built",
   },
   {
     id: "C2",

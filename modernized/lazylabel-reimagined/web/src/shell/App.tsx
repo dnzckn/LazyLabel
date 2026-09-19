@@ -1,10 +1,9 @@
 /**
  * The application shell.
  *
- * Phase 2's scope for the web app is bootstrap, configuration, logging, and the settings and hotkey
- * schema — not the workspace. So this is a shell that does the things the shell is supposed to do
- * and says plainly what is not built, rather than a mock of an editor that would have to be thrown
- * away in Phase 4.
+ * Phase 2 built the shell itself: configuration, logging, settings and hotkeys. Phase 4 added the
+ * dataset browser. What is still missing is the workspace — the canvas and the tools — so the shell
+ * says plainly what is not built rather than mocking an editor that would be thrown away.
  *
  * What it genuinely exercises: the API client against a real server, the settings provider
  * including its degraded state, the hotkey system end to end, and the capability table.
@@ -13,6 +12,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 
 import { CAPABILITIES } from "../capabilities.js";
+import { DatasetBrowser } from "../dataset/DatasetBrowser.jsx";
 import { useSettings } from "../settings/SettingsProvider.jsx";
 import { useHotkey, useHotkeyContext } from "../hotkeys/HotkeyProvider.jsx";
 import type { ApiClient } from "../api/client.js";
@@ -52,7 +52,7 @@ export function App({ client }: { readonly client: ApiClient }): ReactNode {
     <main className="app">
       <header>
         <h1>LazyLabel</h1>
-        <p className="subtitle">Phase 2 scaffold — the workspace is built in Phase 4</p>
+        <p className="subtitle">The canvas and the drawing tools are built in Phase 5</p>
       </header>
 
       {healthError !== null && (
@@ -101,6 +101,8 @@ export function App({ client }: { readonly client: ApiClient }): ReactNode {
       </section>
 
       {showHotkeys && <HotkeyReference />}
+
+      <DatasetBrowser client={client} projectId="default" />
 
       <section>
         <h2>What is built</h2>

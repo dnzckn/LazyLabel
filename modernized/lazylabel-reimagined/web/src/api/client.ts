@@ -17,6 +17,7 @@
  */
 
 import type {
+  WireDatasetListing,
   WireFailure,
   WireLoadResponse,
   WireProblem,
@@ -68,6 +69,17 @@ export class ApiClient {
     // 503 is a real answer here, not an error: it says the dataset folder is unreadable, which the
     // UI must show as a blocking message naming the path.
     if (response.status === 200 || response.status === 503) return (await response.json()) as never;
+    throw await this.problem(response);
+  }
+
+  /** List a folder of images with what each one already carries. */
+  async listImages(projectId: string, folder = ""): Promise<WireDatasetListing> {
+    const query = folder === "" ? "" : `?folder=${encodeURIComponent(folder)}`;
+    const response = await this.send(
+      "GET",
+      `/projects/${encodeURIComponent(projectId)}/images${query}`,
+    );
+    if (response.status === 200) return (await response.json()) as WireDatasetListing;
     throw await this.problem(response);
   }
 
