@@ -28,7 +28,7 @@ import type { MetadataStore } from "./ports/metadataStore.js";
 import { silentLogger, type Logger } from "./http/log.js";
 import { HttpError, badRequest, notFound, payloadTooLarge, unprocessable } from "./http/problem.js";
 import { matchRoute } from "./http/router.js";
-import { decodeMask, encodeLoadResponse, parseJsonObject, type WireMask } from "./http/wire.js";
+import { decodeMask, decoding, encodeLoadResponse, parseJsonObject, type WireMask } from "./http/wire.js";
 import {
   defaultSettings,
   findConflicts,
@@ -375,7 +375,7 @@ function segmentsFromBody(body: Record<string, unknown>): Segment[] {
     } = { type, classId: classId as number | null };
 
     if (record["mask"] !== undefined && record["mask"] !== null) {
-      segment.mask = decodeMask(record["mask"] as WireMask);
+      segment.mask = decoding(() => decodeMask(record["mask"] as WireMask));
     }
     if (Array.isArray(record["vertices"])) {
       segment.vertices = record["vertices"] as readonly (readonly [number, number])[];

@@ -10,7 +10,7 @@ asserted in a document.
 | Phase | 2 of [`MODERNIZATION_BRIEF.md`](../../../analysis/lazylabel/MODERNIZATION_BRIEF.md) |
 | Specification | [`AI_NATIVE_SPEC.md`](../../../analysis/lazylabel/AI_NATIVE_SPEC.md) |
 | Architecture | [`REIMAGINED_ARCHITECTURE.md`](../../../analysis/lazylabel/REIMAGINED_ARCHITECTURE.md) |
-| Depends on | `@lazylabel/annotation-formats` (Phase 1) |
+| Depends on | `@lazylabel/annotation-formats` (Phase 1), `@lazylabel/contracts`, `@lazylabel/settings-schema` |
 
 ## Running it
 
@@ -66,7 +66,7 @@ dead.
 | Capability | Status |
 |---|---|
 | C2 — load an image's annotations from the best file present | **built**, `test/acceptance/c2.loadAnnotations.test.ts` |
-| C13 — keep settings and hotkeys across sessions | **built**, `test/acceptance/c13.settings.test.ts` |
+| C13 — keep settings and hotkeys across sessions | **built**, `test/acceptance/c13.settings.test.ts`; the schema itself lives in `@lazylabel/settings-schema` |
 | the other twelve | listed in [`src/capabilities.ts`](src/capabilities.ts) with the phase that builds them |
 
 Routes: `GET`/`PUT /projects/{projectId}/images/{imagePath}/annotations`,
@@ -107,7 +107,8 @@ for 16-bit TIFF — which is precisely the case the pipeline exists for.
 **4. A malformed hotkey entry keeps its default binding.** Legacy does
 `keys.get("primary_key", "")`, binding the action to the empty string: it stops working, nothing is
 reported, and the user finds out by pressing it. Same class of silent loss as RULE-088, so it is
-fixed and warned about rather than reproduced.
+fixed and warned about rather than reproduced. (This now lives in `@lazylabel/settings-schema`,
+because the browser needs the same rules locally.)
 
 ## Known gap, carried deliberately
 

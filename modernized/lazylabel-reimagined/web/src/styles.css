@@ -1,0 +1,108 @@
+/* Scaffold styling: legible defaults, nothing the Phase 4 workspace would have to undo. */
+:root {
+  color-scheme: light dark;
+  --ground: #ffffff;
+  --ink: #1a1a1a;
+  --muted: #5a5a5a;
+  --rule: #d8d8d8;
+  --warning-ground: #fff4e0;
+  --warning-ink: #6b4800;
+  --error-ground: #ffe9e6;
+  --error-ink: #8a1c10;
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ground: #1c1c1c;
+    --ink: #ececec;
+    --muted: #a0a0a0;
+    --rule: #3a3a3a;
+    --warning-ground: #3a2d10;
+    --warning-ink: #f0cd8a;
+    --error-ground: #3a1a16;
+    --error-ink: #f5a99c;
+  }
+}
+
+body {
+  margin: 0;
+  background: var(--ground);
+  color: var(--ink);
+}
+
+.app {
+  max-width: 62rem;
+  margin: 0 auto;
+  padding: 2rem 1rem;
+}
+
+h1 {
+  margin: 0;
+  font-size: 1.5rem;
+}
+
+.subtitle {
+  margin: 0.25rem 0 1.5rem;
+  color: var(--muted);
+}
+
+.banner {
+  padding: 0.75rem 1rem;
+  border-radius: 0.375rem;
+  margin: 0 0 1rem;
+}
+
+.banner--warning {
+  background: var(--warning-ground);
+  color: var(--warning-ink);
+}
+
+.banner--error {
+  background: var(--error-ground);
+  color: var(--error-ink);
+}
+
+table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 0.9rem;
+}
+
+th,
+td {
+  text-align: left;
+  padding: 0.375rem 0.5rem;
+  border-bottom: 1px solid var(--rule);
+  font-weight: normal;
+  vertical-align: top;
+}
+
+thead th {
+  font-weight: 600;
+}
+
+.health {
+  display: grid;
+  grid-template-columns: max-content auto;
+  gap: 0.25rem 1rem;
+  margin: 0 0 1.5rem;
+}
+
+.health dt {
+  color: var(--muted);
+}
+
+.health dd {
+  margin: 0;
+}
+
+button {
+  font: inherit;
+  padding: 0.375rem 0.75rem;
+  border: 1px solid var(--rule);
+  border-radius: 0.25rem;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
