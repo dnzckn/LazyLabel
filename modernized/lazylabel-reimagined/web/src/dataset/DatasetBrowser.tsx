@@ -25,6 +25,7 @@ import type {
   WireImageMetadata,
 } from "@lazylabel/contracts";
 
+import { AnnotationCanvas } from "../canvas/AnnotationCanvas.jsx";
 import type { AnnotationsResult, ApiClient } from "../api/client.js";
 
 export interface DatasetBrowserProps {
@@ -197,8 +198,20 @@ function OpenedImage({
             )}
           </p>
           {/* The API re-encodes every image, so what is shown here is the same 8-bit RGB the model
-              is given. A 16-bit file cannot look one way on screen and arrive at SAM another. */}
-          <img className="preview" src={pixelsUrl} alt={image.name} />
+              is given. A 16-bit file cannot look one way on screen and arrive at SAM another.
+
+              Once the annotations are in, the canvas draws them over it; until then a plain image
+              shows the picture rather than an empty box. */}
+          {result?.kind === "loaded" ? (
+            <AnnotationCanvas
+              imageUrl={pixelsUrl}
+              width={metadata.width}
+              height={metadata.height}
+              segments={result.annotations.segments}
+            />
+          ) : (
+            <img className="preview" src={pixelsUrl} alt={image.name} />
+          )}
         </>
       )}
 

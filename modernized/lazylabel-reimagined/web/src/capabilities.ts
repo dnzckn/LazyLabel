@@ -30,9 +30,7 @@ export const CAPABILITIES: readonly Capability[] = [
     id: "C2",
     summary: "Load an image's annotations from the best file present",
     builtIn: "P1 library, P4 wiring",
-    webStatus: "pending",
-    webPhase: "P4",
-    missing: "the canvas that draws them; the typed client that fetches them is built",
+    webStatus: "built",
   },
   {
     id: "C3",
