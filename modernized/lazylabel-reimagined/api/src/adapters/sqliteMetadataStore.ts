@@ -19,7 +19,7 @@
 import { DatabaseSync } from "node:sqlite";
 
 import type { MetadataStore } from "../ports/metadataStore.js";
-import type { StoredSettings } from "../settings/schema.js";
+import type { StoredSettings } from "@lazylabel/settings-schema";
 
 /** Applied in order; `user_version` records how many have run. Never edit one that has shipped. */
 const MIGRATIONS: readonly string[] = [

@@ -39,20 +39,23 @@ export {
   sidecarKeysFor,
 } from "./annotations/sidecars.js";
 
+// The settings schema moved to its own package: the browser needs the same validation locally,
+// and importing this package into a browser bundle would drag node:sqlite along with it.
 export {
   DEFAULT_HOTKEYS,
   DEFAULT_SETTINGS,
   SETTINGS_SCHEMA_VERSION,
   defaultSettings,
+  importLegacySettings,
+  normalizeExportFormats,
+  findConflicts,
+  checkAssignment,
   type HotkeyAction,
   type HotkeyBinding,
   type StoredSettings,
-} from "./settings/schema.js";
-export {
-  importLegacySettings,
   type ImportResult,
   type ImportWarning,
-} from "./settings/importLegacy.js";
+} from "@lazylabel/settings-schema";
 
 export { createLogger, silentLogger, type Logger, type LogLevel } from "./http/log.js";
 export { HttpError, type Problem } from "./http/problem.js";

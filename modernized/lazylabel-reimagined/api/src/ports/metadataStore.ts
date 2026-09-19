@@ -16,7 +16,7 @@
  * with the phases that build them (P4 and P6), and `capabilities.ts` records which.
  */
 
-import type { StoredSettings } from "../settings/schema.js";
+import type { StoredSettings } from "@lazylabel/settings-schema";
 
 export interface MetadataStore {
   /** The user's settings, or null when they have never been saved. */

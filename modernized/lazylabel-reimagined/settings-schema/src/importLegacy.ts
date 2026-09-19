@@ -16,6 +16,8 @@
  * not JSON at all is the only thing that yields defaults wholesale.
  */
 
+import { normalizeExportFormats } from "./exportFormats.js";
+import { findConflicts } from "./hotkeyConflicts.js";
 import {
   DEFAULT_HOTKEYS,
   DEFAULT_SETTINGS,
@@ -26,7 +28,14 @@ import {
 } from "./schema.js";
 
 export interface ImportWarning {
-  readonly kind: "unknown-key" | "wrong-type" | "unparsable" | "unknown-hotkey" | "malformed-hotkey";
+  readonly kind:
+    | "unknown-key"
+    | "wrong-type"
+    | "unparsable"
+    | "unknown-hotkey"
+    | "malformed-hotkey"
+    | "export-formats"
+    | "hotkey-conflict";
   readonly key: string;
   readonly detail: string;
 }
@@ -51,6 +60,26 @@ export function importLegacySettings(
 
   const values = { ...base.values, ...importValues(settingsJson, warnings) };
   const hotkeys = { ...base.hotkeys, ...importHotkeys(hotkeysJson, warnings) };
+
+  // RULE-088's second half. Legacy enforces this in the export widget rather than in the loader, so
+  // a settings file can hold a list the app would never have let the user choose - including an
+  // empty one, which makes a save write no files at all while reporting success.
+  const exportFormats = normalizeExportFormats(values["export_formats"]);
+  values["export_formats"] = exportFormats.formats;
+  for (const detail of exportFormats.warnings) {
+    warnings.push({ kind: "export-formats", key: "export_formats", detail });
+  }
+
+  // RULE-049's edge case, kept deliberately: a hand-edited file is not rejected for holding a
+  // conflict the dialog would have refused, because locking someone out of their configuration
+  // over a rebindable key is worse than the conflict. Unlike legacy, it is reported.
+  for (const conflict of findConflicts(hotkeys)) {
+    warnings.push({
+      kind: "hotkey-conflict",
+      key: conflict.action,
+      detail: `its ${conflict.slot} key ${conflict.key} is already bound to ${conflict.heldBy}; both were kept, and one needs rebinding`,
+    });
+  }
 
   return {
     settings: { schemaVersion: SETTINGS_SCHEMA_VERSION, values, hotkeys },

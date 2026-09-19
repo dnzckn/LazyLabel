@@ -16,7 +16,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@lazylabel/annotation-formats": "file:../../lazylabel/core/exporters"
+    "@lazylabel/annotation-formats": "file:../../lazylabel/core/exporters",
+    "@lazylabel/settings-schema": "file:../settings-schema"
   },
   "devDependencies": {
     "@types/node": "^26.6.1",

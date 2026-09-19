@@ -24,9 +24,11 @@ jobs:
         include:
           - service: annotation format library
             path: modernized/lazylabel/core/exporters
-          # The API depends on the library through a file: dependency, and resolves it to the
-          # library's TypeScript SOURCE via the "development" export condition, so there is no build
-          # ordering between them and no chance of testing against a stale dist.
+          - service: settings schema
+            path: modernized/lazylabel-reimagined/settings-schema
+          # The API depends on both libraries through file: dependencies, and resolves them to their
+          # TypeScript SOURCE via the "development" export condition, so there is no build ordering
+          # between them and no chance of testing against a stale dist.
           - service: api
             path: modernized/lazylabel-reimagined/api
 

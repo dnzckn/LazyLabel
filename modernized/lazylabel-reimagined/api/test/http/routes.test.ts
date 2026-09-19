@@ -230,31 +230,27 @@ describe("the API envelope", () => {
     });
   });
 
+  // The settings BEHAVIOR lives in test/acceptance/c13.settings.test.ts; what belongs here is the
+  // envelope around it.
   describe("settings", () => {
-    it("serves defaults before anything has been saved", async () => {
-      const response = await app.handle(get("/users/me/settings"));
-      expect(response.status).toBe(200);
-      expect(JSON.parse(response.body).values.window_width).toBe(1600);
-    });
-
-    it("round-trips settings, keeping keys the schema does not know", async () => {
-      const saved = await app.handle(
-        put("/users/me/settings", {
-          values: { window_width: 1234, a_key_from_a_newer_build: { nested: true } },
-          hotkeys: { undo: { primary: "Ctrl+Z", secondary: null } },
-        }),
-      );
-      expect(saved.status).toBe(200);
-
-      const response = await app.handle(get("/users/me/settings"));
-      expect(JSON.parse(response.body).values).toEqual({
-        window_width: 1234,
-        a_key_from_a_newer_build: { nested: true },
-      });
-    });
-
     it("refuses a settings body with no values object", async () => {
       expect((await app.handle(put("/users/me/settings", { hotkeys: {} }))).status).toBe(400);
+    });
+
+    it("refuses a settings body with no hotkeys object", async () => {
+      expect((await app.handle(put("/users/me/settings", { values: {} }))).status).toBe(400);
+    });
+
+    it("always stores a usable export format list, even when the request omits one", async () => {
+      const response = await app.handle(
+        put("/users/me/settings", { values: { window_width: 1234 }, hotkeys: {} }),
+      );
+
+      // RULE-088: the list can never be absent or empty, because a save with no formats writes no
+      // files and still reports success.
+      const body = JSON.parse(response.body);
+      expect(body.values.export_formats).toEqual(["NPZ", "YOLO_DETECTION"]);
+      expect(body.values.window_width).toBe(1234);
     });
   });
 });

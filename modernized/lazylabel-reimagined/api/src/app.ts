@@ -29,7 +29,13 @@ import { silentLogger, type Logger } from "./http/log.js";
 import { HttpError, badRequest, notFound, payloadTooLarge, unprocessable } from "./http/problem.js";
 import { matchRoute } from "./http/router.js";
 import { decodeMask, encodeLoadResponse, parseJsonObject, type WireMask } from "./http/wire.js";
-import { defaultSettings, SETTINGS_SCHEMA_VERSION, type StoredSettings } from "./settings/schema.js";
+import {
+  defaultSettings,
+  findConflicts,
+  normalizeExportFormats,
+  SETTINGS_SCHEMA_VERSION,
+  type StoredSettings,
+} from "@lazylabel/settings-schema";
 
 /** Largest request body the API will read. A save of 500 bounded masks stays far below this. */
 export const MAX_BODY_BYTES = 64 * 1024 * 1024;
@@ -264,15 +270,37 @@ async function putSettings(deps: AppDeps, request: ApiRequest): Promise<ApiRespo
     throw badRequest("settings must carry a `hotkeys` object");
   }
 
-  // Unknown keys inside `values` are stored as they arrive. RULE-088's fix is not a validation
+  const bindings = hotkeys as StoredSettings["hotkeys"];
+
+  // RULE-049. The browser refuses a conflicting key in the rebinding dialog, using the same
+  // function from the same package; this refuses it again on arrival, because a client is not a
+  // permission and a hand-written request is a client.
+  const conflicts = findConflicts(bindings);
+  if (conflicts.length > 0) {
+    throw unprocessable("a key is bound to more than one action", { conflicts });
+  }
+
+  // RULE-088's export-format clauses. An empty or unrecognized list would make a save write no
+  // files while reporting success, so it is corrected here rather than stored as given.
+  const corrected = { ...(values as Record<string, unknown>) };
+  const exportFormats = normalizeExportFormats(corrected["export_formats"]);
+  corrected["export_formats"] = exportFormats.formats;
+
+  // Every OTHER unknown key is stored exactly as it arrived. RULE-088's fix is not a validation
   // step to be added later; it is the absence of one here.
   const stored: StoredSettings = {
     schemaVersion: SETTINGS_SCHEMA_VERSION,
-    values: values as Record<string, unknown>,
-    hotkeys: hotkeys as StoredSettings["hotkeys"],
+    values: corrected,
+    hotkeys: bindings,
   };
   await deps.metadataStore.putSettings("me", stored);
-  return json(200, stored);
+
+  return json(200, {
+    ...stored,
+    // Say what was corrected rather than returning the request's own body and letting the client
+    // believe it stored what it sent.
+    ...(exportFormats.warnings.length > 0 ? { corrections: exportFormats.warnings } : {}),
+  });
 }
 
 /**
