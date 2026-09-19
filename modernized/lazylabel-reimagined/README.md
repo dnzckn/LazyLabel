@@ -10,6 +10,7 @@ scaffolds these; phases 3 through 6 fill them in.
 | [`api`](api) | Reads and writes annotation sidecars in place, owns the image pipeline, serves settings, proxies inference | Node |
 | [`web`](web) | The browser app: dataset browser, canvas editor, AI tools, timeline | Browser |
 | [`inference`](inference) | SAM 1 and SAM 2.1 prompts, propagation jobs, archetype finding | Python |
+| [`converter`](converter) | Rewrites a legacy NPZ's pickled class names as JSON, without executing it | Python, run once |
 | [`contracts`](contracts) | The HTTP wire shapes and the mask codec both sides use | Both |
 | [`settings-schema`](settings-schema) | The settings and hotkey schema, its legacy importer, and the validation rules | Both |
 | [`../lazylabel/core/exporters`](../lazylabel/core/exporters) | The seven annotation formats, proven equivalent to the legacy Python (Phase 1) | Both |
@@ -89,6 +90,10 @@ Two capabilities end to end, plus the parts of a third that can be correct befor
   rather than leaving the old one to be read back.
 - **The image pipeline** — one decoder for jpeg, png, webp, tiff, gif and bmp, with RULE-024's
   16-bit conversion applied once, proven pixel-for-pixel against OpenCV.
+- **C12, converting a dataset** — open a folder labelled in one format, choose the formats your
+  pipeline needs, and write them beside the images. Byte-identical to legacy on all twelve goldens.
+- **The alias converter**, which recovers class names from a legacy NPZ's pickled table without
+  executing it.
 - **Checkpoint integrity and AI availability** — the inference service pins every checkpoint by
   SHA-256 and never downloads one, and its version check cannot crash the way legacy's does.
 
