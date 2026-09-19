@@ -22,7 +22,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createApp, type App } from "../../src/app.js";
 import { DirectoryBlobStore } from "../../src/adapters/directoryBlobStore.js";
 import { SqliteMetadataStore } from "../../src/adapters/sqliteMetadataStore.js";
-import { get, put } from "../helpers/request.js";
+import { get, put, jsonBody } from "../helpers/request.js";
 import type { WireLoadResponse } from "../../src/http/wire.js";
 
 const IMAGE = "frames/frame_012.png";
@@ -90,14 +90,14 @@ describe("C9: save annotations in the formats the user chose", () => {
       ...oneObject,
     });
 
-    expect(Object.keys(JSON.parse(response.body).written)).toHaveLength(7);
+    expect(Object.keys(jsonBody(response).written)).toHaveLength(7);
     expect(await readdir(path.join(root, "frames"))).toHaveLength(7);
   });
 
   it("round-trips through the load chain", async () => {
     await save({ formats: ["YOLO_SEGMENTATION"], ...oneObject });
 
-    const loaded = JSON.parse((await app.handle(get(`/projects/p1/images/${IMAGE}/annotations`, SIZE))).body) as WireLoadResponse;
+    const loaded = jsonBody((await app.handle(get(`/projects/p1/images/${IMAGE}/annotations`, SIZE)))) as WireLoadResponse;
     expect(loaded.sourceFormat).toBe("YOLO_SEGMENTATION");
     expect(loaded.segments).toHaveLength(1);
     expect(loaded.segments[0]!.classId).toBe(3);
@@ -112,7 +112,7 @@ describe("C9: save annotations in the formats the user chose", () => {
       // stale sidecar is still there on the next load, and the user's deletion is undone.
       const response = await app.handle(get(`/projects/p1/images/${IMAGE}/annotations`, SIZE));
       expect(response.status).toBe(200);
-      const loaded = JSON.parse(response.body) as WireLoadResponse;
+      const loaded = jsonBody(response) as WireLoadResponse;
       expect(loaded.segments).toEqual([]);
     });
 
@@ -131,7 +131,7 @@ describe("C9: save annotations in the formats the user chose", () => {
         segments: [],
       });
 
-      const body = JSON.parse(response.body);
+      const body = jsonBody(response);
       expect(Object.keys(body.written).sort()).toEqual([
         "COCO_JSON",
         "CREATEML",
@@ -144,7 +144,7 @@ describe("C9: save annotations in the formats the user chose", () => {
       // And the highest-priority one reads back as an empty set, not as a failure.
       const loaded = await app.handle(get(`/projects/p1/images/${IMAGE}/annotations`, SIZE));
       expect(loaded.status).toBe(200);
-      expect((JSON.parse(loaded.body) as WireLoadResponse).segments).toEqual([]);
+      expect((jsonBody(loaded) as WireLoadResponse).segments).toEqual([]);
     });
   });
 
@@ -155,13 +155,13 @@ describe("C9: save annotations in the formats the user chose", () => {
       const response = await save({ formats: ["YOLO_SEGMENTATION"], ...oneObject });
 
       // Decision 15f: warn and offer removal. The client decides; the user acts.
-      expect(JSON.parse(response.body).stale).toEqual(["COCO_JSON"]);
+      expect(jsonBody(response).stale).toEqual(["COCO_JSON"]);
       expect(await store.read("frames/frame_012_coco.json")).not.toBeNull();
     });
 
     it("writes nothing at all when one selected format conflicts", async () => {
       const first = await save({ formats: ["YOLO_SEGMENTATION", "COCO_JSON"], ...oneObject });
-      const revision = JSON.parse(first.body).written["COCO_JSON"] as string;
+      const revision = jsonBody(first).written["COCO_JSON"] as string;
       const segBefore = await store.read("frames/frame_012_seg.txt");
 
       // Somebody else edits the COCO file in between.

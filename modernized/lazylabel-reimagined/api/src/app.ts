@@ -24,6 +24,13 @@ import {
   writeAnnotations,
 } from "./annotations/service.js";
 import { listDataset, SIDECAR_COLUMNS } from "./dataset/listing.js";
+import {
+  decodeImage,
+  readImageMetadata,
+  renderPng,
+  renderThumbnail,
+  UnsupportedImageError,
+} from "./images/pipeline.js";
 import { RevisionConflictError, type BlobStore } from "./ports/blobStore.js";
 import type { MetadataStore } from "./ports/metadataStore.js";
 import { silentLogger, type Logger } from "./http/log.js";
@@ -53,7 +60,8 @@ export interface ApiRequest {
 export interface ApiResponse {
   readonly status: number;
   readonly headers: Readonly<Record<string, string>>;
-  readonly body: string;
+  /** Text for JSON routes, bytes for the image routes. */
+  readonly body: string | Uint8Array;
 }
 
 export interface AppDeps {
@@ -79,6 +87,21 @@ export function createApp(deps: AppDeps): App {
       method: "GET",
       pattern: "/projects/:projectId/images",
       handler: (request) => listImages(deps, request),
+    },
+    {
+      method: "GET",
+      pattern: "/projects/:projectId/images/*imagePath/metadata",
+      handler: (_request, params) => imageMetadata(deps, params),
+    },
+    {
+      method: "GET",
+      pattern: "/projects/:projectId/images/*imagePath/pixels",
+      handler: (_request, params) => imagePixels(deps, params),
+    },
+    {
+      method: "GET",
+      pattern: "/projects/:projectId/images/*imagePath/thumbnail",
+      handler: (request, params) => imageThumbnail(deps, request, params),
     },
     {
       method: "GET",
@@ -183,6 +206,60 @@ async function listImages(deps: AppDeps, request: ApiRequest): Promise<ApiRespon
     unrecognized: listing.unrecognized,
     columns: SIDECAR_COLUMNS,
   });
+}
+
+/** Read an image's bytes, or fail with a status the client can act on. */
+async function imageBytes(deps: AppDeps, key: string): Promise<Uint8Array> {
+  const bytes = await deps.blobStore.read(key);
+  if (bytes === null) throw notFound(`${key} is not in the dataset folder`);
+  return bytes;
+}
+
+/**
+ * An image's size and kind, without decoding its pixels.
+ *
+ * The dataset browser needs the size before it can load annotations, because the text formats store
+ * normalized coordinates. Asking should not cost a full decode of a 100-megapixel TIFF.
+ */
+async function imageMetadata(
+  deps: AppDeps,
+  params: Readonly<Record<string, string>>,
+): Promise<ApiResponse> {
+  const key = params["imagePath"]!;
+  return json(200, await readImageMetadata(await imageBytes(deps, key)));
+}
+
+/**
+ * The image as 8-bit RGB, encoded as PNG.
+ *
+ * Always re-encoded, even for a file the browser could decode itself. That is what one pipeline
+ * means: the pixels on screen are the pixels the model is given, so a 16-bit image cannot look one
+ * way to the user and arrive at SAM another (RULE-024).
+ */
+async function imagePixels(
+  deps: AppDeps,
+  params: Readonly<Record<string, string>>,
+): Promise<ApiResponse> {
+  const key = params["imagePath"]!;
+  const decoded = await decodeImage(await imageBytes(deps, key));
+  return png(await renderPng(decoded), {
+    "x-image-width": String(decoded.width),
+    "x-image-height": String(decoded.height),
+    "x-image-source-depth": String(decoded.sourceDepth),
+  });
+}
+
+async function imageThumbnail(
+  deps: AppDeps,
+  request: ApiRequest,
+  params: Readonly<Record<string, string>>,
+): Promise<ApiResponse> {
+  const key = params["imagePath"]!;
+  const requested = Number(request.query.get("size") ?? 160);
+  if (!Number.isInteger(requested) || requested < 16 || requested > 1024) {
+    throw badRequest("size must be an integer between 16 and 1024");
+  }
+  return png(await renderThumbnail(await imageBytes(deps, key), requested));
 }
 
 async function getAnnotations(
@@ -471,6 +548,20 @@ function isPositiveInteger(value: unknown): value is number {
   return Number.isInteger(value) && (value as number) > 0;
 }
 
+function png(bytes: Uint8Array, extra: Record<string, string> = {}): ApiResponse {
+  return {
+    status: 200,
+    headers: {
+      "content-type": "image/png",
+      // Immutable for a minute: a canvas re-requests the same image constantly while panning, and
+      // the decode is the expensive part. Short enough that replacing a file on disk is still seen.
+      "cache-control": "private, max-age=60",
+      ...extra,
+    },
+    body: bytes,
+  };
+}
+
 function json(status: number, body: unknown): ApiResponse {
   return {
     status,
@@ -500,6 +591,11 @@ function toHttpError(cause: unknown): HttpError {
   // client asked for a path this store will not serve.
   if (cause instanceof Error && cause.name === "InvalidKeyError") {
     return badRequest(cause.message);
+  }
+  // A file that is not an image the pipeline can read is a bad request about that file, not a
+  // broken server; the client shows it against the row rather than as an outage.
+  if (cause instanceof UnsupportedImageError || (cause instanceof Error && cause.name === "BmpDecodeError")) {
+    return new HttpError(422, "unsupported_image", cause.message);
   }
   return new HttpError(
     500,

@@ -27,7 +27,7 @@ import { createApp, type App } from "../../src/app.js";
 import { DirectoryBlobStore } from "../../src/adapters/directoryBlobStore.js";
 import { SqliteMetadataStore } from "../../src/adapters/sqliteMetadataStore.js";
 import { buildContext, squareSegment } from "../helpers/context.js";
-import { get, put } from "../helpers/request.js";
+import { get, put, jsonBody } from "../helpers/request.js";
 import type { WireLoadResponse } from "../../src/http/wire.js";
 
 const IMAGE = "frames/frame_012.png";
@@ -89,7 +89,7 @@ describe("C2: load an image's annotations from the best file present", () => {
     const response = await app.handle(get(`/projects/p1/images/${IMAGE}/annotations`, SIZE));
     expect(response.status).toBe(200);
 
-    const loaded = JSON.parse(response.body) as WireLoadResponse;
+    const loaded = jsonBody(response) as WireLoadResponse;
     expect(loaded.sourceFormat).toBe("YOLO_SEGMENTATION");
     expect(loaded.sourceFile).toBe("frames/frame_012_seg.txt");
     expect(loaded.segments).toHaveLength(1);
@@ -112,7 +112,7 @@ describe("C2: load an image's annotations from the best file present", () => {
     const response = await app.handle(get(`/projects/p1/images/${IMAGE}/annotations`, SIZE));
     expect(response.status).toBe(200);
 
-    const loaded = JSON.parse(response.body) as WireLoadResponse;
+    const loaded = jsonBody(response) as WireLoadResponse;
     expect(loaded.sourceFormat).toBe("COCO_JSON");
     expect(loaded.classAliases).toEqual({ "3": "stop sign" });
     // The non-numeric category is skipped and COUNTED. Without the count the client shows one
@@ -134,7 +134,7 @@ describe("C2: load an image's annotations from the best file present", () => {
     const response = await app.handle(get(`/projects/p1/images/${IMAGE}/annotations`, SIZE));
     expect(response.status).toBe(200);
 
-    const loaded = JSON.parse(response.body) as WireLoadResponse;
+    const loaded = jsonBody(response) as WireLoadResponse;
     expect(loaded.sourceFormat).toBe("YOLO_SEGMENTATION");
     expect(loaded.segments).toHaveLength(1);
 
@@ -155,7 +155,7 @@ describe("C2: load an image's annotations from the best file present", () => {
     // healthy sidecars with it.
     expect(response.status).toBe(409);
 
-    const problem = JSON.parse(response.body) as { code: string; detail: { failures: { format: string }[] } };
+    const problem = jsonBody(response) as { code: string; detail: { failures: { format: string }[] } };
     expect(problem.code).toBe("annotations_unreadable");
     expect(problem.detail.failures.map((failure) => failure.format).sort()).toEqual(["COCO_JSON", "NPZ"]);
   });
@@ -190,12 +190,12 @@ describe("C2: load an image's annotations from the best file present", () => {
       }),
     );
     expect(written.status).toBe(200);
-    expect(Object.keys(JSON.parse(written.body).written).sort()).toEqual(["COCO_JSON", "YOLO_SEGMENTATION"]);
+    expect(Object.keys(jsonBody(written).written).sort()).toEqual(["COCO_JSON", "YOLO_SEGMENTATION"]);
 
     const response = await app.handle(get(`/projects/p1/images/${IMAGE}/annotations`, SIZE));
     expect(response.status).toBe(200);
 
-    const loaded = JSON.parse(response.body) as WireLoadResponse;
+    const loaded = jsonBody(response) as WireLoadResponse;
     expect(loaded.sourceFormat).toBe("YOLO_SEGMENTATION");
     expect(loaded.segments).toHaveLength(1);
     expect(loaded.segments[0]!.classId).toBe(3);

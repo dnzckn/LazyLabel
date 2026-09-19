@@ -59,8 +59,11 @@ function client(overrides: Partial<ApiClient> = {}): ApiClient {
   return {
     listImages: async () => listing(),
     loadAnnotations: async (): Promise<AnnotationsResult> => ({ kind: "none" }),
+    imageMetadata: async () => ({ width: 1920, height: 1080, sourceDepth: 8, sourceFormat: "png" }),
+    pixelsUrl: () => "/api/pixels",
+    thumbnailUrl: () => "/api/thumbnail",
     ...overrides,
-  } as ApiClient;
+  } as unknown as ApiClient;
 }
 
 function show(overrides: Partial<ApiClient> = {}) {
@@ -241,11 +244,42 @@ describe("C1: the dataset browser", () => {
     });
   });
 
-  it("states that the image size is provisional rather than hiding a guess", async () => {
-    show();
-    // A wrong size silently rescales every polygon, so the gap is named until Phase 5's image
-    // pipeline can decode the file and remove it.
-    await waitFor(() => expect(screen.getByText(/Provisional/)).toBeTruthy());
-    expect(screen.getByText(/Phase 5/)).toBeTruthy();
+  it("takes the image size from the API rather than asking for it", async () => {
+    const imageMetadata = vi.fn(async () => ({
+      width: 1920,
+      height: 1080,
+      sourceDepth: 8 as const,
+      sourceFormat: "png",
+    }));
+    const loadAnnotations = vi.fn(async (): Promise<AnnotationsResult> => ({ kind: "none" }));
+
+    show({ imageMetadata, loadAnnotations } as never);
+    await waitFor(() => expect(screen.getByText("a.png")).toBeTruthy());
+    screen.getByRole("button", { name: "a.png" }).click();
+
+    // The size has to be right before annotations are loaded: the text formats store normalized
+    // coordinates, so a wrong one silently rescales every polygon.
+    await waitFor(() =>
+      expect(loadAnnotations).toHaveBeenCalledWith("p1", "frames/a.png", [1080, 1920]),
+    );
+    expect(screen.getByText(/1920 x 1080, png/)).toBeTruthy();
+  });
+
+  it("says when an image was converted from 16-bit, and how", async () => {
+    show({
+      imageMetadata: async () => ({
+        width: 64,
+        height: 48,
+        sourceDepth: 16 as const,
+        sourceFormat: "tiff",
+      }),
+    } as never);
+
+    await waitFor(() => expect(screen.getByText("a.png")).toBeTruthy());
+    screen.getByRole("button", { name: "a.png" }).click();
+
+    // RULE-024 is invisible unless it is said: the pixels on screen are not the pixels in the file.
+    await waitFor(() => expect(screen.getByText(/16-bit/)).toBeTruthy());
+    expect(screen.getByText("value / 256")).toBeTruthy();
   });
 });

@@ -17,8 +17,9 @@
   },
   "dependencies": {
     "@lazylabel/annotation-formats": "file:../../lazylabel/core/exporters",
+    "@lazylabel/contracts": "file:../contracts",
     "@lazylabel/settings-schema": "file:../settings-schema",
-    "@lazylabel/contracts": "file:../contracts"
+    "sharp": "^0.35.4"
   },
   "devDependencies": {
     "@types/node": "^26.6.1",

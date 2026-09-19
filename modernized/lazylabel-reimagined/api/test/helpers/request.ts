@@ -55,3 +55,15 @@ export function request(
     body: options.body ?? EMPTY,
   };
 }
+
+/**
+ * The JSON body of a response.
+ *
+ * `ApiResponse.body` is `string | Uint8Array` since the image routes return PNG bytes, and every
+ * JSON test would otherwise have to narrow it by hand.
+ */
+export function jsonBody<T = any>(response: { body: string | Uint8Array }): T {
+  const text =
+    typeof response.body === "string" ? response.body : new TextDecoder().decode(response.body);
+  return JSON.parse(text) as T;
+}

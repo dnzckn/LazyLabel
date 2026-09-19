@@ -117,6 +117,15 @@ export interface WireDatasetListing {
   readonly columns: readonly { readonly format: string; readonly suffix: string }[];
 }
 
+/** An image's size and kind, read without decoding its pixels. */
+export interface WireImageMetadata {
+  readonly width: number;
+  readonly height: number;
+  /** 8, or 16 when RULE-024's truncating conversion was applied to show it. */
+  readonly sourceDepth: 8 | 16;
+  readonly sourceFormat: string;
+}
+
 /** A failure, as every route reports one. Never an empty success. */
 export interface WireProblem {
   readonly status: number;

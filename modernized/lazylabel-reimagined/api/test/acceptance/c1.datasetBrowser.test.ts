@@ -22,7 +22,7 @@ import { createApp, type App } from "../../src/app.js";
 import { DirectoryBlobStore } from "../../src/adapters/directoryBlobStore.js";
 import { SqliteMetadataStore } from "../../src/adapters/sqliteMetadataStore.js";
 import { buildContext, squareSegment } from "../helpers/context.js";
-import { get } from "../helpers/request.js";
+import { get, jsonBody } from "../helpers/request.js";
 import type { WireLoadResponse } from "../../src/http/wire.js";
 
 const SIZE: [number, number] = [64, 80];
@@ -72,7 +72,7 @@ describe("C1: open a folder of images and see which already carry annotations", 
       body: new Uint8Array(0),
     });
     expect(response.status).toBe(200);
-    return JSON.parse(response.body) as Listing;
+    return jsonBody(response) as Listing;
   }
 
   it("lists the images in a folder and says which are already annotated", async () => {
@@ -230,7 +230,7 @@ describe("C1: open a folder of images and see which already carry annotations", 
     const response = await app.handle(get(`/projects/p1/images/${annotated!.key}/annotations`, SIZE));
     expect(response.status).toBe(200);
 
-    const loaded = JSON.parse(response.body) as WireLoadResponse;
+    const loaded = jsonBody(response) as WireLoadResponse;
     expect(loaded.sourceFormat).toBe("YOLO_SEGMENTATION");
     expect(loaded.segments).toHaveLength(1);
     expect(loaded.segments[0]!.classId).toBe(3);

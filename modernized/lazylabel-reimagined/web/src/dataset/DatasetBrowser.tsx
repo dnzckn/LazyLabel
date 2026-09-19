@@ -12,16 +12,18 @@
  *   - Files that were not recognized. A folder of .avif files otherwise just looks empty, and the
  *     user has no way to tell "no images here" from "none of these count as images".
  *
- * ONE HONEST GAP. Loading annotations needs the image's pixel size, because the text formats store
- * normalized coordinates — and nothing can know it until the API's image pipeline can decode the
- * file, which is Phase 5. So the size is an input here, marked as provisional rather than hidden
- * behind a guess. A wrong size silently rescales every polygon, so guessing would be worse than
- * asking.
+ * The image's pixel size comes from the API rather than from the user, now that the image pipeline
+ * can read it without decoding the whole file. That matters more than convenience: the text formats
+ * store normalized coordinates, so a wrong size silently rescales every polygon.
  */
 
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 
-import type { WireDatasetImage, WireDatasetListing } from "@lazylabel/contracts";
+import type {
+  WireDatasetImage,
+  WireDatasetListing,
+  WireImageMetadata,
+} from "@lazylabel/contracts";
 
 import type { AnnotationsResult, ApiClient } from "../api/client.js";
 
@@ -41,7 +43,7 @@ export function DatasetBrowser({ client, projectId, folder = "" }: DatasetBrowse
   const [selected, setSelected] = useState<WireDatasetImage | null>(null);
   const [opened, setOpened] = useState<AnnotationsResult | null>(null);
   const [openError, setOpenError] = useState<string | null>(null);
-  const [size, setSize] = useState<[number, number]>([1080, 1920]);
+  const [metadata, setMetadata] = useState<WireImageMetadata | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -68,13 +70,19 @@ export function DatasetBrowser({ client, projectId, folder = "" }: DatasetBrowse
       setSelected(image);
       setOpened(null);
       setOpenError(null);
+      setMetadata(null);
 
+      // The size has to come first: the text formats store normalized coordinates, so loading
+      // annotations without it would rescale every polygon.
       client
-        .loadAnnotations(projectId, image.key, size)
-        .then(setOpened)
+        .imageMetadata(projectId, image.key)
+        .then(async (info) => {
+          setMetadata(info);
+          setOpened(await client.loadAnnotations(projectId, image.key, [info.height, info.width]));
+        })
         .catch((cause: unknown) => setOpenError(cause instanceof Error ? cause.message : String(cause)));
     },
-    [client, projectId, size],
+    [client, projectId],
   );
 
   if (state.status === "loading") return <p>Loading the folder…</p>;
@@ -145,33 +153,16 @@ export function DatasetBrowser({ client, projectId, folder = "" }: DatasetBrowse
         </table>
       )}
 
-      <fieldset>
-        <legend>Image size</legend>
-        <p className="provisional">
-          Provisional: the text formats store normalized coordinates, so opening annotations needs
-          the image&rsquo;s pixel size. The API cannot decode the image until the image pipeline
-          lands in Phase 5, so it is stated here rather than guessed — a wrong size silently
-          rescales every polygon.
-        </p>
-        <label>
-          Height{" "}
-          <input
-            type="number"
-            value={size[0]}
-            onChange={(event) => setSize([Number(event.target.value), size[1]])}
-          />
-        </label>
-        <label>
-          Width{" "}
-          <input
-            type="number"
-            value={size[1]}
-            onChange={(event) => setSize([size[0], Number(event.target.value)])}
-          />
-        </label>
-      </fieldset>
 
-      {selected !== null && <OpenedImage image={selected} result={opened} error={openError} />}
+      {selected !== null && (
+        <OpenedImage
+          image={selected}
+          result={opened}
+          error={openError}
+          metadata={metadata}
+          pixelsUrl={client.pixelsUrl(projectId, selected.key)}
+        />
+      )}
     </section>
   );
 }
@@ -180,14 +171,36 @@ function OpenedImage({
   image,
   result,
   error,
+  metadata,
+  pixelsUrl,
 }: {
   readonly image: WireDatasetImage;
   readonly result: AnnotationsResult | null;
   readonly error: string | null;
+  readonly metadata: WireImageMetadata | null;
+  readonly pixelsUrl: string;
 }): ReactNode {
   return (
     <section>
       <h3>{image.name}</h3>
+
+      {metadata !== null && (
+        <>
+          <p className="provisional">
+            {metadata.width} x {metadata.height}, {metadata.sourceFormat}
+            {metadata.sourceDepth === 16 && (
+              <>
+                {" "}
+                &mdash; 16-bit, shown and sent to the model as <code>value / 256</code> truncated
+                (RULE-024)
+              </>
+            )}
+          </p>
+          {/* The API re-encodes every image, so what is shown here is the same 8-bit RGB the model
+              is given. A 16-bit file cannot look one way on screen and arrive at SAM another. */}
+          <img className="preview" src={pixelsUrl} alt={image.name} />
+        </>
+      )}
 
       {error !== null && (
         <p role="alert" className="banner banner--error">

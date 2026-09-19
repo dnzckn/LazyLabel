@@ -19,6 +19,7 @@
 import type {
   WireDatasetListing,
   WireFailure,
+  WireImageMetadata,
   WireLoadResponse,
   WireProblem,
   WireSaveRequest,
@@ -83,6 +84,27 @@ export class ApiClient {
     throw await this.problem(response);
   }
 
+  /** An image's size and kind, without fetching its pixels. */
+  async imageMetadata(projectId: string, imagePath: string): Promise<WireImageMetadata> {
+    const response = await this.send("GET", `${this.imagePath(projectId, imagePath)}/metadata`);
+    if (response.status === 200) return (await response.json()) as WireImageMetadata;
+    throw await this.problem(response);
+  }
+
+  /**
+   * Where to point an <img> at the image's pixels.
+   *
+   * A URL rather than bytes: the browser's own image loading handles caching, progressive display
+   * and memory better than anything done by hand here, and the API sends PNG.
+   */
+  pixelsUrl(projectId: string, imagePath: string): string {
+    return `${this.baseUrl}${this.imagePath(projectId, imagePath)}/pixels`;
+  }
+
+  thumbnailUrl(projectId: string, imagePath: string, size = 160): string {
+    return `${this.baseUrl}${this.imagePath(projectId, imagePath)}/thumbnail?size=${size}`;
+  }
+
   /**
    * Load an image's annotations.
    *
@@ -138,8 +160,12 @@ export class ApiClient {
    * separators too, and the route needs them to see a multi-segment image key.
    */
   private annotationsPath(projectId: string, imagePath: string): string {
+    return `${this.imagePath(projectId, imagePath)}/annotations`;
+  }
+
+  private imagePath(projectId: string, imagePath: string): string {
     const encoded = imagePath.split("/").map(encodeURIComponent).join("/");
-    return `/projects/${encodeURIComponent(projectId)}/images/${encoded}/annotations`;
+    return `/projects/${encodeURIComponent(projectId)}/images/${encoded}`;
   }
 
   private async send(method: string, path: string, body?: unknown): Promise<Response> {

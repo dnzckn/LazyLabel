@@ -10,7 +10,7 @@ import { createApp, MAX_BODY_BYTES, type App } from "../../src/app.js";
 import { MemoryBlobStore } from "../../src/adapters/memoryBlobStore.js";
 import { SqliteMetadataStore } from "../../src/adapters/sqliteMetadataStore.js";
 import { createLogger } from "../../src/http/log.js";
-import { get, put, request } from "../helpers/request.js";
+import { get, put, request, jsonBody } from "../helpers/request.js";
 
 const SIZE: [number, number] = [64, 80];
 
@@ -29,7 +29,7 @@ describe("the API envelope", () => {
   it("answers 404 for an unknown route, as a typed problem rather than an empty body", async () => {
     const response = await app.handle(get("/nope"));
     expect(response.status).toBe(404);
-    expect(JSON.parse(response.body)).toMatchObject({ status: 404, code: "not_found" });
+    expect(jsonBody(response)).toMatchObject({ status: 404, code: "not_found" });
   });
 
   it("answers 405 and names the methods that are allowed", async () => {
@@ -83,7 +83,7 @@ describe("the API envelope", () => {
     it("is ok when the dataset folder and the database both answer", async () => {
       const response = await app.handle(get("/health"));
       expect(response.status).toBe(200);
-      expect(JSON.parse(response.body)).toMatchObject({ status: "ok", dataset: "ok", database: "ok" });
+      expect(jsonBody(response)).toMatchObject({ status: "ok", dataset: "ok", database: "ok" });
     });
 
     it("is degraded, not down, when only the database is unavailable", async () => {
@@ -97,8 +97,8 @@ describe("the API envelope", () => {
       const response = await broken.handle(get("/health"));
 
       expect(response.status).toBe(200);
-      expect(JSON.parse(response.body)).toMatchObject({ status: "degraded", database: "unavailable" });
-      expect(JSON.parse(response.body).degraded).toHaveLength(1);
+      expect(jsonBody(response)).toMatchObject({ status: "degraded", database: "unavailable" });
+      expect(jsonBody(response).degraded).toHaveLength(1);
     });
 
     it("is 503 when the dataset folder cannot be read", async () => {
@@ -110,7 +110,7 @@ describe("the API envelope", () => {
       const response = await broken.handle(get("/health"));
 
       expect(response.status).toBe(503);
-      expect(JSON.parse(response.body)).toMatchObject({ status: "unavailable", dataset: "unreadable" });
+      expect(jsonBody(response)).toMatchObject({ status: "unavailable", dataset: "unreadable" });
     });
   });
 
@@ -118,7 +118,7 @@ describe("the API envelope", () => {
     it("asks for the image size rather than guessing it", async () => {
       const response = await app.handle(get("/projects/p1/images/a.png/annotations"));
       expect(response.status).toBe(400);
-      expect(JSON.parse(response.body).message).toMatch(/height and width/);
+      expect(jsonBody(response).message).toMatch(/height and width/);
     });
 
     it("refuses a path that walks out of the dataset root", async () => {
@@ -172,7 +172,7 @@ describe("the API envelope", () => {
 
       expect(response.status).toBe(200);
       // Decision 15f: warn and offer removal, never delete silently.
-      expect(JSON.parse(response.body).stale).toEqual(["COCO_JSON"]);
+      expect(jsonBody(response).stale).toEqual(["COCO_JSON"]);
       expect(await store.read("a_coco.json")).not.toBeNull();
     });
 
@@ -186,7 +186,7 @@ describe("the API envelope", () => {
           ],
         }),
       );
-      const revision = JSON.parse(first.body).written["YOLO_DETECTION"] as string;
+      const revision = jsonBody(first).written["YOLO_DETECTION"] as string;
       const before = await store.read("a.txt");
 
       // Somebody else saves in between.
@@ -204,7 +204,7 @@ describe("the API envelope", () => {
       );
 
       expect(response.status).toBe(409);
-      expect(JSON.parse(response.body).code).toBe("revision_conflict");
+      expect(jsonBody(response).code).toBe("revision_conflict");
       // The other writer's content survived; ours was not written.
       expect(new TextDecoder().decode((await store.read("a.txt"))!)).toBe("0 0.5 0.5 0.1 0.1\n");
       expect(before).not.toBeNull();
@@ -220,7 +220,7 @@ describe("the API envelope", () => {
       );
 
       expect(response.status).toBe(200);
-      const body = JSON.parse(response.body);
+      const body = jsonBody(response);
 
       // "A save with zero segments writes nothing" is what let the next load resurrect deleted
       // work. Decision 7 forbids deleting the file, so the answer is an empty one.
@@ -249,7 +249,7 @@ describe("the API envelope", () => {
 
       // RULE-088: the list can never be absent or empty, because a save with no formats writes no
       // files and still reports success.
-      const body = JSON.parse(response.body);
+      const body = jsonBody(response);
       expect(body.values.export_formats).toEqual(["NPZ", "YOLO_DETECTION"]);
       expect(body.values.window_width).toBe(1234);
     });

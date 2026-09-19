@@ -1,0 +1,182 @@
+/**
+ * The image pipeline: one decoder, one conversion, one answer about what an image's pixels are.
+ *
+ * The architecture gives this to the API rather than the browser, and the reason is RULE-024 rather
+ * than convenience. A 16-bit image is shown to the user, and sent to SAM, as `value / 256`
+ * TRUNCATED — so display and inference have to agree, and they only can if one place decides. The
+ * browser also cannot decode 16-bit TIFF at all, which settles where that place is.
+ *
+ * TWO DECODERS, ONE RULE. `sharp` handles jpeg, png, webp, tiff, gif and heif; it does not handle
+ * BMP, which decision 9 adds and legacy reads through OpenCV. So BMP has its own decoder in
+ * `bmp.ts`. What neither of them does is the 16-bit conversion: that is applied here, once, to
+ * whichever decoder produced the pixels.
+ *
+ * WHY NOT LET THE LIBRARY DO IT. `sharp` will happily hand back 8-bit pixels for a 16-bit file, and
+ * as it happens its conversion agrees with RULE-024 today. Depending on that would mean the rule
+ * lives inside libvips, where nothing in this repository can see it and a version bump could change
+ * it silently. `toColourspace("rgb16")` gives the true 16-bit values instead, and the divide is
+ * written out below where a test can hold it.
+ */
+
+import sharp from "sharp";
+
+import { decodeBmp, isBmp } from "./bmp.js";
+
+/** The bytes are not an image this service can decode. */
+export class UnsupportedImageError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "UnsupportedImageError";
+  }
+}
+
+export interface DecodedImage {
+  readonly width: number;
+  readonly height: number;
+  /** RGB, 8 bits per channel, row-major, three bytes per pixel. */
+  readonly data: Uint8Array;
+  /** Bit depth of the SOURCE file: 8, or 16 when RULE-024's conversion was applied. */
+  readonly sourceDepth: 8 | 16;
+  readonly sourceFormat: string;
+}
+
+/**
+ * Decode an image to 8-bit RGB.
+ *
+ * Alpha is dropped, which is what `cv2.imread` does by default and therefore what every legacy
+ * pixel comparison assumes.
+ */
+export async function decodeImage(bytes: Uint8Array): Promise<DecodedImage> {
+  if (isBmp(bytes)) {
+    const bitmap = decodeBmp(bytes);
+    return { ...bitmap, sourceDepth: 8, sourceFormat: "bmp" };
+  }
+
+  let metadata;
+  try {
+    metadata = await sharp(bytes).metadata();
+  } catch (cause) {
+    throw new UnsupportedImageError(
+      `these bytes could not be read as an image: ${cause instanceof Error ? cause.message : cause}`,
+    );
+  }
+
+  const { width, height, format } = metadata;
+  if (!width || !height) {
+    throw new UnsupportedImageError(`the image has no usable size (${width}x${height})`);
+  }
+
+  // `depth` describes the source samples. Anything wider than a byte takes the 16-bit path.
+  const isWide = metadata.depth !== undefined && metadata.depth !== "uchar" && metadata.depth !== "char";
+
+  if (!isWide) {
+    const { data } = await sharp(bytes).removeAlpha().toColourspace("srgb").raw().toBuffer({
+      resolveWithObject: true,
+    });
+    return { width, height, data: new Uint8Array(data), sourceDepth: 8, sourceFormat: format ?? "unknown" };
+  }
+
+  const { data } = await sharp(bytes)
+    .removeAlpha()
+    // The true 16-bit samples, rather than whatever the library would reduce them to.
+    .toColourspace("rgb16")
+    .raw({ depth: "ushort" })
+    .toBuffer({ resolveWithObject: true });
+
+  return {
+    width,
+    height,
+    data: to8Bit(new Uint16Array(data.buffer, data.byteOffset, data.byteLength / 2)),
+    sourceDepth: 16,
+    sourceFormat: format ?? "unknown",
+  };
+}
+
+/**
+ * RULE-024's 16-bit to 8-bit conversion: `value / 256`, TRUNCATED.
+ *
+ * Not `value * 255 / 65535`, which is the other obvious scaling and is what most image libraries
+ * do. They differ: 255 truncates to 0 and scales to 1; 511 truncates to 1 and scales to 2. Using
+ * the wrong one would shift every pixel of a 16-bit image by up to one level, which is invisible on
+ * screen and is exactly the kind of difference that makes a SAM mask come out a pixel wider.
+ */
+export function to8Bit(samples: Uint16Array): Uint8Array {
+  const out = new Uint8Array(samples.length);
+  for (let i = 0; i < samples.length; i += 1) out[i] = samples[i]! >>> 8;
+  return out;
+}
+
+export interface ImageMetadata {
+  readonly width: number;
+  readonly height: number;
+  readonly sourceDepth: 8 | 16;
+  readonly sourceFormat: string;
+}
+
+/**
+ * The size and kind of an image, without decoding its pixels.
+ *
+ * The dataset browser needs the size to load annotations, because the text formats store normalized
+ * coordinates — and asking for it should not cost a full decode of a 100-megapixel TIFF.
+ */
+export async function readImageMetadata(bytes: Uint8Array): Promise<ImageMetadata> {
+  if (isBmp(bytes)) {
+    // The BMP header carries the size in its first 26 bytes; no pixels are touched.
+    const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    if (bytes.length < 26) throw new UnsupportedImageError("this BMP is too short to hold a header");
+    return {
+      width: view.getInt32(18, true),
+      height: Math.abs(view.getInt32(22, true)),
+      sourceDepth: 8,
+      sourceFormat: "bmp",
+    };
+  }
+
+  let metadata;
+  try {
+    metadata = await sharp(bytes).metadata();
+  } catch (cause) {
+    throw new UnsupportedImageError(
+      `these bytes could not be read as an image: ${cause instanceof Error ? cause.message : cause}`,
+    );
+  }
+
+  if (!metadata.width || !metadata.height) {
+    throw new UnsupportedImageError("the image has no usable size");
+  }
+  const isWide = metadata.depth !== undefined && metadata.depth !== "uchar" && metadata.depth !== "char";
+  return {
+    width: metadata.width,
+    height: metadata.height,
+    sourceDepth: isWide ? 16 : 8,
+    sourceFormat: metadata.format ?? "unknown",
+  };
+}
+
+/**
+ * Render an image as PNG for the browser to display.
+ *
+ * Always re-encoded rather than passed through, even for a file the browser could decode itself.
+ * That is the point of having one pipeline: what the user looks at is the same 8-bit RGB the model
+ * is given, so a 16-bit image cannot look one way on screen and arrive at SAM another.
+ */
+export async function renderPng(image: DecodedImage): Promise<Uint8Array> {
+  const png = await sharp(Buffer.from(image.data), {
+    raw: { width: image.width, height: image.height, channels: 3 },
+  })
+    .png()
+    .toBuffer();
+  return new Uint8Array(png);
+}
+
+/** A small preview for the dataset browser, longest side `size`, aspect ratio kept. */
+export async function renderThumbnail(bytes: Uint8Array, size = 160): Promise<Uint8Array> {
+  const image = await decodeImage(bytes);
+  const thumbnail = await sharp(Buffer.from(image.data), {
+    raw: { width: image.width, height: image.height, channels: 3 },
+  })
+    .resize(size, size, { fit: "inside", withoutEnlargement: true })
+    .png()
+    .toBuffer();
+  return new Uint8Array(thumbnail);
+}

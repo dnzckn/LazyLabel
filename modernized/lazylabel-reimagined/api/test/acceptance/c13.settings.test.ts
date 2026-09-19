@@ -21,7 +21,7 @@ import { defaultSettings, DEFAULT_EXPORT_FORMATS } from "@lazylabel/settings-sch
 import { createApp, type App } from "../../src/app.js";
 import { MemoryBlobStore } from "../../src/adapters/memoryBlobStore.js";
 import { SqliteMetadataStore } from "../../src/adapters/sqliteMetadataStore.js";
-import { get, put } from "../helpers/request.js";
+import { get, put, jsonBody } from "../helpers/request.js";
 
 describe("C13: keeping settings and hotkeys across sessions", () => {
   let app: App;
@@ -37,7 +37,7 @@ describe("C13: keeping settings and hotkeys across sessions", () => {
     const response = await app.handle(get("/users/me/settings"));
     expect(response.status).toBe(200);
 
-    const body = JSON.parse(response.body);
+    const body = jsonBody(response);
     expect(body.schemaVersion).toBe(1);
     expect(body.values).toEqual(defaultSettings().values);
     expect(body.hotkeys["undo"]).toEqual({ primary: "Ctrl+Z", secondary: null });
@@ -54,7 +54,7 @@ describe("C13: keeping settings and hotkeys across sessions", () => {
 
     // A new app over the SAME database: the process restarted, the file did not go anywhere.
     const restarted = createApp({ blobStore: new MemoryBlobStore(), metadataStore: metadata });
-    const body = JSON.parse((await restarted.handle(get("/users/me/settings"))).body);
+    const body = jsonBody((await restarted.handle(get("/users/me/settings"))));
 
     expect(body.values.window_width).toBe(1234);
     expect(body.values.dark_mode).toBe(false);
@@ -69,7 +69,7 @@ describe("C13: keeping settings and hotkeys across sessions", () => {
       }),
     );
 
-    const body = JSON.parse((await app.handle(get("/users/me/settings"))).body);
+    const body = jsonBody((await app.handle(get("/users/me/settings"))));
     // Legacy would have replaced all 37 preferences with defaults on the next load.
     expect(body.values.a_key_from_a_newer_build).toEqual({ nested: [1, 2] });
     expect(body.values.window_width).toBe(1600);
@@ -83,7 +83,7 @@ describe("C13: keeping settings and hotkeys across sessions", () => {
       );
 
       expect(response.status).toBe(200);
-      const body = JSON.parse(response.body);
+      const body = jsonBody(response);
       // An empty list means a save writes nothing at all while reporting success.
       expect(body.values.export_formats).toEqual([...DEFAULT_EXPORT_FORMATS]);
       expect(body.corrections).toHaveLength(1);
@@ -98,7 +98,7 @@ describe("C13: keeping settings and hotkeys across sessions", () => {
         }),
       );
 
-      const body = JSON.parse(response.body);
+      const body = jsonBody(response);
       expect(body.values.export_formats).toEqual(["NPZ"]);
       expect(body.corrections[0]).toMatch(/PARQUET/);
     });
@@ -112,7 +112,7 @@ describe("C13: keeping settings and hotkeys across sessions", () => {
         }),
       );
 
-      const body = JSON.parse(response.body);
+      const body = jsonBody(response);
       expect(body.values.export_formats).toEqual(["COCO_JSON", "PASCAL_VOC"]);
       expect(body.corrections).toBeUndefined();
     });
@@ -129,7 +129,7 @@ describe("C13: keeping settings and hotkeys across sessions", () => {
       );
 
       expect(response.status).toBe(422);
-      const problem = JSON.parse(response.body);
+      const problem = jsonBody(response);
       expect(problem.detail.conflicts[0]).toMatchObject({ key: "M", heldBy: "delete_segments" });
     });
 
@@ -146,7 +146,7 @@ describe("C13: keeping settings and hotkeys across sessions", () => {
       );
 
       // The refused save must not have taken the settings half with it.
-      const body = JSON.parse((await app.handle(get("/users/me/settings"))).body);
+      const body = jsonBody((await app.handle(get("/users/me/settings"))));
       expect(body.values.window_width).toBe(999);
     });
 
@@ -160,7 +160,7 @@ describe("C13: keeping settings and hotkeys across sessions", () => {
       );
 
       expect(response.status).toBe(200);
-      expect(JSON.parse(response.body).hotkeys.merge_segments.primary).toBe("F19");
+      expect(jsonBody(response).hotkeys.merge_segments.primary).toBe("F19");
     });
   });
 });

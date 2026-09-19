@@ -31,7 +31,7 @@ async function respond(app: App, incoming: IncomingMessage, outgoing: ServerResp
 
     const response = await app.handle(request);
     outgoing.writeHead(response.status, response.headers);
-    outgoing.end(response.body);
+    outgoing.end(typeof response.body === "string" ? response.body : Buffer.from(response.body));
   } catch (cause) {
     // Reaching here means the request could not even be assembled. The app handles everything else.
     const tooLarge = cause instanceof Error && cause.name === "PayloadTooLargeError";

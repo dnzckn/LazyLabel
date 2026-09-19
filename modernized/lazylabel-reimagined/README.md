@@ -39,9 +39,18 @@ it.
 
 ## Running it
 
-Each package is independent: `npm install` then `npm test` inside it. Cross-package dependencies are
-`file:` links resolved to the other package's **TypeScript source** through a `development` export
-condition, so there is no build ordering and no way to test against a stale `dist`.
+Each package is independent: `npm install` then `npm test` inside it. Cross-package dependencies
+are `file:` links resolved to the other package's **TypeScript source** through a `development`
+export condition, so tests and typechecks have no build ordering and no way to read a stale `dist`.
+
+**Running the built API is different, and it is easy to trip over.** At runtime the same imports
+resolve to each library's `dist`, so the libraries must be built before `npm start` — otherwise Node
+reports `ERR_MODULE_NOT_FOUND` for a package that is plainly installed. Build them in dependency
+order:
+
+```bash
+for p in ../lazylabel/core/exporters settings-schema contracts api; do (cd "$p" && npm run build); done
+```
 
 To run the two services together:
 
@@ -73,6 +82,13 @@ Two capabilities end to end, plus the parts of a third that can be correct befor
   damaged file it walked past, and answers 409 rather than an empty canvas when nothing can be read.
 - **C13, settings and hotkeys** — schema, legacy import, conflict and export-format validation, and
   persistence across a restart.
+- **C1, the dataset browser** — a folder listed with per-format annotation status, the two things
+  legacy never told anyone (images that share sidecars, files that were not recognized), and opening
+  one with its annotations loaded.
+- **C9's save path** — the seven formats, atomic per file, and a cleared image writing an empty file
+  rather than leaving the old one to be read back.
+- **The image pipeline** — one decoder for jpeg, png, webp, tiff, gif and bmp, with RULE-024's
+  16-bit conversion applied once, proven pixel-for-pixel against OpenCV.
 - **Checkpoint integrity and AI availability** — the inference service pins every checkpoint by
   SHA-256 and never downloads one, and its version check cannot crash the way legacy's does.
 

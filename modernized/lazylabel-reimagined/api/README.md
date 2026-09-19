@@ -69,8 +69,33 @@ dead.
 | C13 — keep settings and hotkeys across sessions | **built**, `test/acceptance/c13.settings.test.ts`; the schema itself lives in `@lazylabel/settings-schema` |
 | the other twelve | listed in [`src/capabilities.ts`](src/capabilities.ts) with the phase that builds them |
 
-Routes: `GET`/`PUT /projects/{projectId}/images/{imagePath}/annotations`,
+Routes: `GET /projects/{projectId}/images` (the dataset listing),
+`GET`/`PUT /projects/{projectId}/images/{imagePath}/annotations`,
+`GET .../metadata`, `GET .../pixels`, `GET .../thumbnail`,
 `GET`/`PUT /users/me/settings`, `GET /health`.
+
+## The image pipeline
+
+The architecture gives this to the API rather than the browser, and the reason is RULE-024 rather
+than convenience: a 16-bit image is shown to the user, and sent to SAM, as `value / 256` **truncated**
+— so display and inference have to agree, and they only can if one place decides. The browser also
+cannot decode 16-bit TIFF at all, which settles where that place is.
+
+Two decoders, one rule. `sharp` handles jpeg, png, webp, tiff and gif; it does not handle BMP, which
+decision 9 adds and legacy reads through OpenCV, so BMP has its own decoder in `src/images/bmp.ts`.
+Neither of them does the 16-bit conversion — that is applied once, to whichever decoder produced the
+pixels.
+
+`sharp` will happily return 8-bit pixels for a 16-bit file, and its conversion happens to agree with
+RULE-024 today. Depending on that would put the rule inside libvips, where nothing here can see it
+and a version bump could change it silently. `toColourspace("rgb16")` gives the true 16-bit samples
+instead, and the divide is written out where a test can hold it.
+
+**Proven against OpenCV, not asserted.** `tools/generate_image_fixtures.py` writes each fixture
+together with the pixels `cv2.imread` reads from it, BGR reordered and 16-bit truncated the way
+legacy truncates. `test/images/differential.test.ts` decodes the same files through this pipeline
+and compares: exact for PNG, TIFF, 16-bit TIFF and BMP; within two levels for JPEG, where two
+conformant decoders legitimately differ. The conversion itself is checked across all 65,536 values.
 
 The C2 test is the pilot's point. It writes real sidecars into a real temporary folder and proves
 the contract that matters most: a damaged high-priority file does not hide the healthy one beside
