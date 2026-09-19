@@ -16,27 +16,45 @@ import { decodeNpy } from "../util/npy.js";
 export const ALIAS_MEMBER = "class_aliases_json";
 export const LEGACY_ALIAS_MEMBER = "class_aliases";
 
-export function readAliasMember(members: ReadonlyMap<string, Uint8Array>): Map<number, string> {
+export interface AliasTable {
+  readonly aliases: Map<number, string>;
+  /**
+   * The archive carries a class-name table this reader will not read.
+   *
+   * Almost always a legacy NPZ, whose aliases are a pickled Python dict. The masks in such a file
+   * are perfectly readable; only the NAMES are not, and the difference is invisible unless it is
+   * said. A conversion that loses it writes "3" where the original said "stop sign", in formats
+   * that carry names instead of ids, and nothing about the output looks wrong.
+   */
+  readonly unreadable: boolean;
+}
+
+export function readAliasMember(members: ReadonlyMap<string, Uint8Array>): AliasTable {
+  const empty = (unreadable: boolean): AliasTable => ({ aliases: new Map(), unreadable });
+
   const raw = members.get(ALIAS_MEMBER) ?? members.get(LEGACY_ALIAS_MEMBER);
-  if (!raw) return new Map();
+  if (!raw) return empty(false); // no table at all is not the same as one we cannot read
 
   let decoded;
   try {
     decoded = decodeNpy(raw);
   } catch {
-    return new Map(); // a pickled table: treated as absent, never executed
+    return empty(true); // a pickled table: refused, never executed, and reported
   }
-  if (decoded.dtype !== "str" || typeof decoded.data !== "string") return new Map();
+  if (decoded.dtype !== "str" || typeof decoded.data !== "string") return empty(true);
 
   try {
     const parsed: unknown = JSON.parse(decoded.data);
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return new Map();
-    return new Map(
-      Object.entries(parsed as Record<string, unknown>)
-        .filter(([id, name]) => /^-?\d+$/.test(id) && typeof name === "string")
-        .map(([id, name]) => [Number.parseInt(id, 10), name as string]),
-    );
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return empty(true);
+    return {
+      aliases: new Map(
+        Object.entries(parsed as Record<string, unknown>)
+          .filter(([id, name]) => /^-?\d+$/.test(id) && typeof name === "string")
+          .map(([id, name]) => [Number.parseInt(id, 10), name as string]),
+      ),
+      unreadable: false,
+    };
   } catch {
-    return new Map(); // a member that is not the JSON we write is not worth guessing at
+    return empty(true); // a member that is not the JSON we write is not worth guessing at
   }
 }

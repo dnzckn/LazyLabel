@@ -220,6 +220,31 @@ describe("C1: the dataset browser", () => {
       );
     });
 
+    it("warns when the class names are in the old pickled format", async () => {
+      show({
+        loadAnnotations: async () => ({
+          kind: "loaded",
+          annotations: {
+            sourceFormat: "NPZ",
+            sourceFile: "frames/a.npz",
+            revision: "r1",
+            segments: [{ type: "Loaded", classId: 3 }],
+            classAliases: {},
+            rejected: 0,
+            unreadableAliases: true,
+            failures: [],
+          },
+        }),
+      });
+
+      await waitFor(() => expect(screen.getByText("a.png")).toBeTruthy());
+      screen.getByRole("button", { name: "a.png" }).click();
+
+      // The one loss a converted file does not look like it has: the objects are right and the
+      // names are gone, so a Pascal VOC export would say "3" where the original said "stop sign".
+      await waitFor(() => expect(screen.getByText(/class names in the old pickled format/i)).toBeTruthy());
+    });
+
     it("says how many lines a readable file rejected", async () => {
       show({
         loadAnnotations: async () => ({

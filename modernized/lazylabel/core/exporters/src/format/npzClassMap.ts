@@ -117,7 +117,8 @@ export async function parseNpzClassMap(
     .sort(([a], [b]) => a - b) // np.unique returns ascending ids
     .map(([classId, mask]) => ({ type: "Loaded" as const, classId, mask: { height, width, data: mask } }));
 
-  return { segments, classAliases: readAliasMember(members), rejected: 0 };
+  const { aliases: classAliases, unreadable } = readAliasMember(members);
+  return { segments, classAliases, rejected: 0, unreadableAliases: unreadable };
 }
 
 function encodeUint16(data: Uint8Array, height: number, width: number): Uint8Array {

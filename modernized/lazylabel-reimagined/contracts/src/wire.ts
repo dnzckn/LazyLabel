@@ -62,6 +62,13 @@ export interface WireLoadResponse {
   /** How many lines or objects the reader skipped as unreadable. */
   readonly rejected: number;
   /**
+   * The file holds class names this reader will not read: a legacy NPZ's pickled alias table.
+   *
+   * The masks are fine. Saving in another format without converting the names first writes the
+   * class ids where the names should be, and nothing about the result looks wrong.
+   */
+  readonly unreadableAliases?: boolean;
+  /**
    * Higher-priority sidecars that exist but could not be read.
    *
    * Never silently empty: decision 15c continues the chain past a damaged file so the user's work
@@ -146,6 +153,7 @@ export function encodeLoadResponse(
     segments: outcome.segments.map(encodeSegment),
     classAliases: Object.fromEntries([...outcome.classAliases].map(([id, name]) => [String(id), name])),
     rejected: outcome.rejected,
+    ...(outcome.unreadableAliases === true ? { unreadableAliases: true } : {}),
     failures: outcome.failures.map((failure) => ({ format: failure.format, reason: failure.reason })),
   };
 }

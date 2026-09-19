@@ -55,7 +55,7 @@ export async function parseNpz(bytes: Uint8Array): Promise<LoadedAnnotations> {
     members.set(entry.name.replace(/\.npy$/, ""), entry.data);
   }
 
-  const classAliases = readAliasMember(members);
+  const { aliases: classAliases, unreadable } = readAliasMember(members);
   const segments: Segment[] = [];
 
   if (members.has("masks") && members.has("class_ids") && !members.has("mask")) {
@@ -68,11 +68,11 @@ export async function parseNpz(bytes: Uint8Array): Promise<LoadedAnnotations> {
       if (!plane.some((v) => v !== 0)) continue;
       segments.push(loadedSegment(toMask(plane, height, width), idAt(ids.data, i)));
     }
-    return { segments, classAliases, rejected: 0 };
+    return { segments, classAliases, rejected: 0, unreadableAliases: unreadable };
   }
 
   const maskKey = members.has("mask") ? "mask" : members.has("masks") ? "masks" : null;
-  if (!maskKey) return { segments, classAliases, rejected: 0 };
+  if (!maskKey) return { segments, classAliases, rejected: 0, unreadableAliases: unreadable };
 
   const mask = decodeNpy(members.get(maskKey)!);
   const [height = 0, width = 0, channels = 1] = mask.shape; // a 2-D mask is one channel
@@ -95,7 +95,7 @@ export async function parseNpz(bytes: Uint8Array): Promise<LoadedAnnotations> {
     const classId = classOrder && channel < classOrder.length ? classOrder[channel]! : channel;
     segments.push(loadedSegment(toMask(plane, height, width), classId));
   }
-  return { segments, classAliases, rejected: 0 };
+  return { segments, classAliases, rejected: 0, unreadableAliases: unreadable };
 }
 
 function idAt(data: Uint8Array | Float64Array | string, index: number): number {

@@ -111,9 +111,7 @@ export const CAPABILITIES: readonly Capability[] = [
     id: "C12",
     summary: "Convert a dataset from one annotation format to another",
     builtIn: "P1, P4",
-    apiStatus: "pending",
-    apiPhase: "P4",
-    missing: "the batch conversion job; the per-image read and write it composes are built",
+    apiStatus: "built",
   },
   {
     id: "C13",
