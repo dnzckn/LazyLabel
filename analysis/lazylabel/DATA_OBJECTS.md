@@ -1,6 +1,6 @@
 # DATA OBJECTS: `lazylabel`
 
-Core records, entities and file payloads of LazyLabel 2.0.8 (`legacy/lazylabel` at 2a7d5d8), catalogued on 2026-09-17 by the modernize-extract-rules workflow. Rule IDs refer to `analysis/lazylabel/BUSINESS_RULES.md`.
+Core records, entities and file payloads of LazyLabel 2.0.8 (`legacy/lazylabel` at 2a7d5d8), catalogued on 2026-09-19 by the modernize-extract-rules workflow. Rule IDs refer to `analysis/lazylabel/BUSINESS_RULES.md`.
 
 | Data object | Source | Fields | Rules |
 |---|---|---|---|
@@ -63,7 +63,7 @@ Core records, entities and file payloads of LazyLabel 2.0.8 (`legacy/lazylabel` 
 | `views` | `dict[int, {mask, vertices}] \| None` | Optional multi-view payload keyed by viewer index (segment_manager.py:794-803) |
 | `_source_viewer` | `int \| None` | Legacy multi-view marker, stripped before export (save_export_manager.py:372-390) |
 
-**Rules that read or produce it:** RULE-011 (New segments take the active class, otherwise the next free class id (highest + 1)); RULE-017 (Merge selected segments into the lowest selected class); RULE-013 (Reassign class ids from class table order); RULE-015 (Shape rasterization before export (truncated vertices, rounded circles)); RULE-010 (Final per-class mask composition); RULE-009 (Eraser splits segments and drops pieces of 10 pixels or less); RULE-021 (Auto-convert AI masks to polygons); RULE-008 (Detection and polygon exports keep same-class objects separate); RULE-023 (Propagation seeds come only from mask segments on reference frames); RULE-090 (Sequence frame load order and per-class merge); RULE-052 (Undo/redo history scope); RULE-092 (Linked multi-view shape mirroring and class ids)
+**Rules that read or produce it:** RULE-011 (New segments take the active class, otherwise the next free class id (highest + 1)); RULE-019 (Merge selected segments into the lowest selected class); RULE-013 (Reassign class ids from class table order); RULE-015 (Shape rasterization before export (truncated vertices, rounded circles)); RULE-010 (Final per-class mask composition); RULE-009 (Eraser splits segments and drops pieces of 10 pixels or less); RULE-021 (Auto-convert AI masks to polygons); RULE-008 (Detection and polygon exports keep same-class objects separate); RULE-023 (Propagation seeds come only from mask segments on reference frames); RULE-090 (Sequence frame load order and per-class merge); RULE-052 (Undo/redo history scope); RULE-092 (Linked multi-view shape mirroring and class ids)
 
 ## SegmentManager state (per-image class registry)
 
@@ -123,7 +123,7 @@ Core records, entities and file payloads of LazyLabel 2.0.8 (`legacy/lazylabel` 
 | `channel order` | `list[int] class_order` | Built from get_unique_class_ids() (save_export_manager.py:400), i.e. ascending class id — not the Class Order table |
 | `pixel priority` | `applied in place` | Overlapping pixels collapse to argmin/argmax of channel index (segment_manager.py:346-371) |
 
-**Rules that read or produce it:** RULE-010 (Final per-class mask composition); RULE-012 (Pixel priority resolves overlapping classes); RULE-014 (Saved class channel order is ascending class ID, not the Class Order table); RULE-003 (NPZ Class Map export resolves overlaps to lowest class and stores foreground); RULE-016 (Crop is clamped to the image and blanks everything outside it on save, including the last row and column)
+**Rules that read or produce it:** RULE-010 (Final per-class mask composition); RULE-012 (Pixel priority resolves overlapping classes); RULE-014 (Saved class channel order is ascending class ID, not the Class Order table); RULE-003 (NPZ Class Map export resolves overlaps to lowest class and stores foreground); RULE-018 (Crop is clamped to the image and blanks everything outside it on save, including the last row and column)
 
 ## ExportContext
 
@@ -381,7 +381,7 @@ Core records, entities and file payloads of LazyLabel 2.0.8 (`legacy/lazylabel` 
 | `clamping` | `0..w-1 / 0..h-1` | crop_manager.py:131-134; combined with the zeroing at file_manager.py:728-737 the last row and column are always blanked |
 | `crop_mode / crop_rect_item / overlays` | `bool / QGraphicsRectItem / list` | Transient drawing state |
 
-**Rules that read or produce it:** RULE-016 (Crop is clamped to the image and blanks everything outside it on save, including the last row and column); RULE-067 (Crop persistence across image navigation); RULE-045 (Crop coordinate validation and reuse by image size)
+**Rules that read or produce it:** RULE-018 (Crop is clamped to the image and blanks everything outside it on save, including the last row and column); RULE-067 (Crop persistence across image navigation); RULE-045 (Crop coordinate validation and reuse by image size)
 
 ## PropagationState
 
@@ -415,7 +415,7 @@ Core records, entities and file payloads of LazyLabel 2.0.8 (`legacy/lazylabel` 
 | `confidence` | `float` | Compared against state.confidence_threshold at propagation_manager.py:764 and 1096 |
 | `image_path` | `str` |  |
 
-**Rules that read or produce it:** RULE-018 (Propagation confidence score per object); RULE-060 (Propagated frame flagging and commit (Keep Flagged Masks)); RULE-082 (Save All propagated frames eligibility); RULE-035 (Confidence histogram binning)
+**Rules that read or produce it:** RULE-016 (Propagation confidence score per object); RULE-060 (Propagated frame flagging and commit (Keep Flagged Masks)); RULE-082 (Save All propagated frames eligibility); RULE-035 (Confidence histogram binning)
 
 ## ReferenceAnnotation (propagation engine)
 
@@ -530,7 +530,7 @@ Core records, entities and file payloads of LazyLabel 2.0.8 (`legacy/lazylabel` 
 | `scores` | `list[float]` | Per-frame confidence values |
 | `_threshold` | `float` | Draggable Min Conf marker |
 
-**Rules that read or produce it:** RULE-035 (Confidence histogram binning); RULE-018 (Propagation confidence score per object); RULE-060 (Propagated frame flagging and commit (Keep Flagged Masks))
+**Rules that read or produce it:** RULE-035 (Confidence histogram binning); RULE-016 (Propagation confidence score per object); RULE-060 (Propagated frame flagging and commit (Keep Flagged Masks))
 
 ## Image adjustment state
 
@@ -621,7 +621,7 @@ Core records, entities and file payloads of LazyLabel 2.0.8 (`legacy/lazylabel` 
 | `unreadable frame` | `continue` | sam2_model.py:800-802 skips writing without removing the index, so the staged sequence has a numbering gap while video_image_paths still counts it |
 | `already-JPEG frames` | `symlink, copy2 fallback` | sam2_model.py:788-796 |
 
-**Rules that read or produce it:** RULE-019 (SAM 2 frame staging numbering gap); RULE-048 (Reference frames must match the first reference's image size); RULE-071 (First propagation sets up the engine once and marks wrong-size frames Skipped)
+**Rules that read or produce it:** RULE-017 (SAM 2 frame staging numbering gap); RULE-048 (Reference frames must match the first reference's image size); RULE-071 (First propagation sets up the engine once and marks wrong-size frames Skipped)
 
 ## Embedding cache entry
 

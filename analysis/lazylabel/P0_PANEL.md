@@ -1,6 +1,6 @@
 # P0 PANEL RECORD: `lazylabel`
 
-Every card the extractors rated P0 was judged by two independent agents before it could enter the behavior contract (`legacy/lazylabel` at 2a7d5d8, 2026-09-17). Rule IDs refer to `analysis/lazylabel/BUSINESS_RULES.md`. A card folded into another card is listed under the ID it was folded into.
+Every card the extractors rated P0 was judged by two independent agents before it could enter the behavior contract (`legacy/lazylabel` at 2a7d5d8, 2026-09-19). Rule IDs refer to `analysis/lazylabel/BUSINESS_RULES.md`. A card folded into another card is listed under the ID it was folded into.
 
 - **Compliance lens:** would a regulator, auditor, or finance controller care if this behavior changed silently?
 - **Fidelity lens:** re-derive the behavior from the cited code independently. Does the Given/When/Then match what the code does, including rounding, ordering and edge cases?
@@ -47,12 +47,12 @@ Both judges answer two questions: is P0 justified (moves money, enforces a regul
 | NPZ export content (folded) | RULE-014 | P0 yes, faithful yes | P0 yes, faithful yes | kept P0 | P0, High |
 | NPZ one-hot mask export and class channel order (folded) | RULE-014 | P0 yes, faithful yes | P0 yes, faithful yes | kept P0 | P0, High |
 | Shape rasterization before export (truncated vertices, rounded circles) | RULE-015 | P0 no, faithful yes | P0 yes, faithful yes | demoted to P1 | P0, High |
-| Crop is clamped to the image and blanks everything outside it on save, including the last row and column | RULE-016 | P0 no, faithful yes | P0 yes, faithful yes | demoted to P1 | P0, Medium |
-| Crop removes annotations outside the rectangle but keeps full-image coordinates (folded) | RULE-016 | P0 no, faithful yes | P0 yes, faithful yes | demoted to P1 | P0, Medium |
-| Crop zeroes saved annotations outside the crop (last row and column always lost) (folded) | RULE-016 | P0 no, faithful yes | P0 yes, faithful yes | demoted to P1 | P0, Medium |
-| Merge selected segments into the smallest class (folded) | RULE-017 | P0 no, faithful yes | P0 no, faithful yes | demoted to P1 | P1, Medium |
-| SAM 2 propagation confidence score (folded) | RULE-018 | P0 no, faithful yes | P0 yes, faithful yes | demoted to P1 | P1, Medium |
-| SAM 2 frame staging numbering gap | RULE-019 | P0 no, faithful yes | P0 yes, faithful yes | demoted to P1 | P1, Medium |
+| SAM 2 propagation confidence score (folded) | RULE-016 | P0 no, faithful yes | P0 yes, faithful yes | demoted to P1 | P0, High |
+| SAM 2 frame staging numbering gap | RULE-017 | P0 no, faithful yes | P0 yes, faithful yes | demoted to P1 | P0, Medium |
+| Crop is clamped to the image and blanks everything outside it on save, including the last row and column | RULE-018 | P0 no, faithful yes | P0 yes, faithful yes | demoted to P1 | P0, Medium |
+| Crop removes annotations outside the rectangle but keeps full-image coordinates (folded) | RULE-018 | P0 no, faithful yes | P0 yes, faithful yes | demoted to P1 | P0, Medium |
+| Crop zeroes saved annotations outside the crop (last row and column always lost) (folded) | RULE-018 | P0 no, faithful yes | P0 yes, faithful yes | demoted to P1 | P0, Medium |
+| Merge selected segments into the smallest class (folded) | RULE-019 | P0 no, faithful yes | P0 no, faithful yes | demoted to P1 | P1, Medium |
 | Only mask-based segments seed propagation (folded) | RULE-023 | P0 no, faithful yes | P0 no, faithful yes | demoted to P1 | P1, Medium |
 | COCO JSON import with polygon-then-box fallback | RULE-037 | P0 no, faithful yes | P0 yes, faithful yes | demoted to P1 | P0, High |
 | COCO JSON import: categories to aliases, polygon then bbox fallback (folded) | RULE-037 | P0 no, faithful yes | P0 yes, faithful yes | demoted to P1 | P0, High |
@@ -1492,164 +1492,7 @@ Both judges answer two questions: is P0 justified (moves money, enforces a regul
 >
 > No instruction-shaped text was found in the cited ranges.
 
-### RULE-016: Crop is clamped to the image and blanks everything outside it on save, including the last row and column
-
-**Compliance judge:** P0 no, faithful yes
-
-> FAITHFUL: yes (High confidence) — every claim reproduces against the code.
->
-> - Rounding, clamping, ordering: E:\\GitHub\\LazyLabel\\legacy\\lazylabel\\src\\lazylabel\\ui\\managers\\crop_manager.py:127-140 rounds, clamps x to 0..img_width-1 and y to 0..img_height-1, then swaps to enforce x1\<=x2, y1\<=y2. For a 1000x800 image and input (-10,50)-(1200,700): x1=0, x2=min(1200,999)=999, y1=50, y2=700. Stored at crop_manager.py:143-145; the notification f-string at crop_manager.py:152 emits exactly "Crop applied: 0:999, 50:700".
-> - Blanking semantics: E:\\GitHub\\LazyLabel\\legacy\\lazylabel\\src\\lazylabel\\core\\file_manager.py:720-739 copies the tensor, then clears rows [:y1] and [y2:] and, within the kept row band, columns [:x1] and [x2:]. Net kept region is rows y1..y2-1 and columns x1..x2-1 — so rows 50-699 and columns 0-998 in the example. Because x2 is clamped to width-1 and the right-clear branch fires whenever x2 \< w, the crop's right column and bottom row are always cleared; a "crop the whole image" can never retain column 999 or the last row. The card states this correctly.
-> - Save-time application: save_export_manager.py:412-417 applies it to the single-view ExportContext; file_manager.py:48-49 and :90-91 do the same on the other save paths. It runs on a copy, so in-memory segments are untouched.
-> - 5x5 drag minimum: single_view_mouse_handler.py:553 is `rect.width() \> 5 and rect.height() \> 5`, and the rect is built from normalized scene positions (handler lines 170-175, 264-265), so the threshold is image pixels, not screen pixels. Typed coordinates bypass this check entirely — the card correctly scopes the threshold to drawn crops.
-> - "Only the current image" and the "unreachable legacy loader" nuance both check out. The live loader is load_image_by_path (file_navigation_manager.py:254+, used by FastFileManager); it calls _reset_state (line 279), which nulls current_crop_coords at main_window.py:2156, and never restores from crop_coords_by_size. The restore block at file_navigation_manager.py:227-238 sits in load_selected_image, reachable only via right_panel.py:206 (file_tree.doubleClicked -\> image_selected) -\> main_window.py:947, but that QTreeView is hidden at right_panel.py:121-122 ("Hidden, for backward compatibility") because FastFileManager replaced it at right_panel.py:117-118. Effectively dead. crop_manager.get_crop_for_image_size (line 408) has no callers at all.
->
-> Two things the card does not mention, both worth recording separately: crop_manager.py:107 and :88 call _apply_multi_view_crop_coordinates and remove_multi_view_crop_visual, which are defined nowhere in the repository — multi-view crop and clear_crop/reset_state in multi-view will raise AttributeError. No injection-shaped text was found in any cited line; comments read as ordinary developer notes.
->
-> P0 NOT JUSTIFIED. Compliance lens: no regulator, auditor, or finance controller has a stake here. LazyLabel is a desktop image-annotation tool for building ML datasets — the rule moves no money, satisfies no regulatory or reporting requirement, and touches no audit trail, retention window, authorization boundary, or personal/financial data.
->
-> The only candidate P0 pillar is "guards data integrity," and it fails on inspection. The crop is a per-session, user-initiated, fully reversible authoring filter (clear_crop at crop_manager.py:70-100; state nulled on every image load) applied to a copy of the mask tensor at export time. It enforces no invariant over stored records and prevents no corruption — it is a user preference about what to write out, closer to a display/export option than a control.
->
-> Worse, the exact behavior the card would enshrine as the contract is an off-by-one, not a policy. Clamping to width-1/height-1 (crop_manager.py:131-134) combined with exclusive slicing at x2/y2 (file_manager.py:728-737) means the last column and row are unconditionally discarded, while the UI overlays drawn at crop_manager.py:200 and :218 use the same exclusive convention and so hide the loss from the user. Making that a P0 behavior contract would compel the rewrite to prove equivalence against a probable defect and would burn verification budget on reproducing it byte-for-byte.
->
-> Recommendation: demote to P2 (functional-equivalence, user-visible behavior worth a regression test on the clamp/ordering and the kept-region formula), and raise two defect tickets: (1) the inclusive-input / exclusive-output off-by-one that makes a full-image crop lossy, and (2) the missing multi-view crop methods.
-
-**Fidelity judge:** P0 yes, faithful yes
-
-> FAITHFUL — every claim re-derived independently from the cited code; the worked example reproduces exactly.
->
-> Clamp/order (E:\\GitHub\\LazyLabel\\legacy\\lazylabel\\src\\lazylabel\\ui\\managers\\crop_manager.py:127-152): round() -\> x=max(0,min(x,img_width-1)), y=max(0,min(y,img_height-1)) -\> swap if x1\>x2 / y1\>y2 -\> store in current_crop_coords and crop_coords_by_size[(w,h)] -\> notify f"Crop applied: {x1}:{x2}, {y1}:{y2}". For a 1000x800 image and input (-10,50)-(1200,700) I get stored (0,50,999,700) and the literal string "Crop applied: 0:999, 50:700" — matches the card verbatim.
->
-> Mask blanking (...\\legacy\\lazylabel\\src\\lazylabel\\core\\file_manager.py:712-739): top clears rows [0,y1), bottom [y2,h), left cols [0,x1) and right [x2,w) over rows [y1,y2). Net effect is exactly "keep mask[y1:y2, x1:x2], zero the rest". Simulated on a 1000x800 all-ones tensor with (0,50,999,700): kept rows 50-699, kept cols 0-998; column 999 and row 700 are zero. The "always cleared" generalization also holds — because clamping caps x2\<=w-1 and y2\<=h-1 while the slices are end-exclusive, even the maximum crop (0,0,999,799) keeps only rows 0-798 and cols 0-998. The last row and last column can never survive an active crop. That off-by-one is real and correctly stated.
->
-> On save: the crop is applied from crop_manager.current_crop_coords in the foreground export path (...\\ui\\managers\\save_export_manager.py:412-417) and consistently in the other two save paths I checked — ...\\core\\file_manager.py:48-49 (save_npz, which overwrites \<image\>.npz via np.savez_compressed at line 62), :90-91 (save_bb_txt), and ...\\ui\\workers\\save_worker.py:76-79 — so "on save" is not over-broad.
->
-> Per-image scope: confirmed. The live loader ...\\ui\\managers\\file_navigation_manager.py:254-377 (load_image_by_path) calls mw._reset_state() at :279, which nulls current_crop_coords (...\\ui\\main_window.py:2148-2156), and never restores from crop_coords_by_size.
->
-> The card's sharpest claim — "crops are remembered per image size but only the unreachable legacy loader restores them" — checks out, which is the strongest evidence the author actually read the code. The restore block (file_navigation_manager.py:227-238) lives only in load_selected_image, reachable only via right_panel.image_selected, which is emitted only by file_tree.doubleClicked (...\\ui\\right_panel.py:206) on a QTreeView that is constructed hidden "for backward compatibility" (right_panel.py:120-122). The reachable path is FastFileManager.fileSelected -\> image_path_selected -\> _load_image_from_path (main_window.py:1458-1459) -\> load_image_by_path, which resets and never restores. So the size-keyed dict is effectively write-only in the shipping app.
->
-> The 5x5 threshold is correct: ...\\ui\\handlers\\single_view_mouse_handler.py:553 is `if rect.width() \> 5 and rect.height() \> 5` — strictly greater, both dimensions.
->
-> Two precision nits for the card (neither makes the Given/When/Then wrong): (1) "Crop corners are rounded" is literally what crop_manager.py:127 does, but round() is a no-op in practice — the text path already yields ints (border_crop_widget.py:119,126, free-text QLineEdits parsed with int(), no min/max, so the negative/over-max Given is genuinely reachable) and the drag path already truncates with int() at single_view_mouse_handler.py:554-555. A drag ending at x=999.7 becomes 999 by truncation, not rounding; the rewrite should be told "truncate on drag, ints on text entry", not "round". (2) Unstated edge case: a drawn rect \<=5px in either dimension is silently discarded AND the app stays in crop mode (crop_mode is never set False, _set_mode("sam_points") is skipped) — worth adding to the card as a Then.
->
-> Adjacent defect found while checking scope (outside the card, for the parent): multi-view crop is broken. crop_manager.py:107 calls self._apply_multi_view_crop_coordinates(...) and lines 88/426 call self.remove_multi_view_crop_visual(), and none of those methods is defined anywhere in the source — applying, clearing, or resetting a crop in multi-view mode raises AttributeError. The card's "only the current image" scope is partly true because multi-view crop cannot execute at all.
->
-> P0 JUSTIFIED — not money and not regulatory, but it does guard (and, via the off-by-one, silently harms) the integrity of persisted user data. The crop is a destructive, irreversible transform applied at write time to the annotation artifact that is this tool's entire product: save_npz overwrites \<image\>.npz with the zeroed tensor, and autosave fires it unattended on every image change (file_navigation_manager.py:271-274, auto_save defaults True). A rewrite that keeps the last row/column, or that restores the size-keyed crop on load (making the currently-dead restore path live), silently changes the content of every exported mask with no user-visible signal. That is exactly the kind of contract a P0 exists to pin down — and the rewrite team needs an explicit decision on whether to replicate the last-row/last-column drop or fix it.
->
-> SME questions to attach: (a) Is dropping the final row and column intended, or a clamp/exclusive-slice off-by-one to fix in the rewrite? (b) Should a crop persist across images of the same size (restoring the currently-unreachable behavior) or stay per-image as the shipping app behaves? (c) Should the drag path round instead of truncate?
->
-> INJECTION SCAN: clean. I grepped all cited files plus border_crop_widget.py for instruction-shaped text ("SYSTEM:", "ignore previous", "false positive", "approved", directives aimed at a reviewer/AI) and found none. No credentials appear in any cited line, so no masking was required.
-
-### RULE-016: Crop removes annotations outside the rectangle but keeps full-image coordinates (folded card)
-
-**Compliance judge:** P0 no, faithful yes
-
-> VERDICT: not P0 under the compliance lens; the card is faithful to the single-view code, with scope gaps. All paths are under E:\\GitHub\\LazyLabel\\legacy\\lazylabel\\src\\lazylabel\\.
->
-> P0 NOT JUSTIFIED. The rule moves no money and enforces no regulation. The crop only zeroes the label mask (core/file_manager.py:712-739). The source image is never changed or exported, so this is not a redaction or de-identification control. ExportContext.crop_coords (core/exporters/__init__.py:107) is never read by any exporter. No regulator, auditor or finance controller would notice if this changed. The people who would notice are whoever consumes the dataset, which makes it a P1 output-equivalence behavior. It also does not guard integrity. It is a lossy export filter the user turns on. The only guard-like piece is the clamp that keeps numpy slice indices in range, which is ordinary input cleanup.
->
-> The card also packs UI gesture details into a P0 contract: the \>5 px drag minimum (ui/handlers/single_view_mouse_handler.py:553), int truncation (554-555), and the switch to sam_points mode (558). Worse, as a must-match contract it would lock in a likely off-by-one. The clamp to width-1/height-1 (ui/managers/crop_manager.py:131-134) combined with exclusive slices (file_manager.py:728-737) means any active crop always drops the last column and row. A user can never keep the full image (the adjusted 0:99 is shown back to them at crop_manager.py:148). An SME should decide whether that is intended before anyone demands equivalence. The full-image coordinate frame is a real downstream contract, but it belongs to the export-format rules, not this crop rule.
->
-> FAITHFUL. Trace for the Given:
-> - ui/widgets/border_crop_widget.py:115-135 parses '0:100' to (0,0,100,100).
-> - ui/main_window.py:904-906 routes that to apply_crop_coordinates, and crop_manager.py:131-134 clamps it to (0,0,99,99).
-> - At save, save_export_manager.py:412-417 applies the crop. file_manager.py:729 zeroes row 99, and 737 zeroes column 99 for rows 0-98.
-> - create_instance_contours ANDs each segment with the cropped tensor (core/segment_manager.py:297), so every format respects the crop.
-> - cv2.boundingRect then gives (0,0,99,99): YOLO width 0.99 (exporters/yolo_detection.py:27-33), COCO bbox [0,0,99,99] (coco.py:65-72), VOC xmax 99 (pascal_voc.py:46-49).
-> - The tensor keeps its full (h,w) shape and exporters divide by the full w/h, so coordinates stay relative to the full image.
->
-> The drawn-crop path matches too. The rect is normalized (single_view_mouse_handler.py:264), must exceed 5 px on both axes (553), and is truncated (554-555), then rounded, clamped and swapped (crop_manager.py:127-140), then the mode is set to sam_points (558). Rounding and swapping are no-ops on this path.
->
-> CAVEATS THE CARD SHOULD ADD:
-> (1) It only holds in single view. Multi-view apply calls _apply_multi_view_crop_coordinates (crop_manager.py:107), and clear/reset call remove_multi_view_crop_visual (88, 426). Neither is defined anywhere, so those calls raise AttributeError. The multi-view save (save_export_manager.py:497-514) and PropagationSaveWorker (ui/workers/propagation_worker.py) never apply a crop.
-> (2) The crop is saved per image size (crop_manager.py:144-145) and applied again to every later-loaded image with the same dimensions (ui/managers/file_navigation_manager.py:227-235). Saving those images silently zeroes their out-of-crop annotations, and the loss is permanent once saved. This is the most data-loss-relevant behavior, and the card leaves it out.
->
-> No instruction-shaped or injection text in the cited lines, and no credentials.
-
-**Fidelity judge:** P0 yes, faithful yes
-
-> FIDELITY: faithful. I re-traced the example myself in single view. All paths are under E:\\GitHub\\LazyLabel\\legacy\\lazylabel\\src\\lazylabel\\.
-> (1) ui\\widgets\\border_crop_widget.py:115-135 parses '0:100' into (0,0,100,100). ui\\main_window.py:904-905 passes that straight to CropManager.apply_crop_coordinates.
-> (2) ui\\managers\\crop_manager.py:127-145 rounds (no effect on ints), clamps x to [0,w-1] and y to [0,h-1], giving (0,0,99,99), then swaps if reversed. Line 148 rewrites the text fields to 0:99.
-> (3) core\\file_manager.py:728-737 zeroes row 99 ([99:,:,:]) and column 99 ([0:99,99:,:]). The kept region is exactly [y1:y2, x1:x2], with x2/y2 exclusive.
-> (4) The only live save path is ui\\managers\\save_export_manager.py:117 then :412-417. Per-object shapes are intersected with the cropped mask (core\\segment_manager.py:297). cv2.boundingRect of the 99x99 block is (0,0,99,99). So YOLO width is 99/100 = 0.99 (core\\exporters\\yolo_detection.py:31), the COCO box width is 99 and the VOC xmax is 99.
-> (5) No exporter reads ctx.crop_coords; it appears only as a field at core\\exporters\\__init__.py:107. Every exporter divides by the full image width and height, so coordinates stay in the full-image frame.
-> Consequence: x2/y2 can never equal the width/height, so any active crop always loses the last row and column. This is a real off-by-one the contract must pin.
-> Drawn crops: the pixmap is at scene origin and never moved (ui\\photo_viewer.py). The rectangle is .normalized() (ui\\handlers\\single_view_mouse_handler.py:264). The size gate is a strict \>5 on the float rectangle (:553). Edges are cut with int() (:554-555), then rounded, clamped and swapped as above. Mode becomes sam_points, the 'AI' button (ui\\control_panel.py:254-256), at :558.
->
-> GAPS to add during verification (none contradict the card):
-> (a) The \>5 gate checks the drag before clamping. The press must land inside the image (:106-110) but the drag can leave it. Press at x=99.4, release at x=110: the gate passes, yet the crop clamps to x1=x2=99. That zero-width crop wipes every annotation from the export.
-> (b) The mode switch only happens when the gate passes. Otherwise the mode stays 'crop' and any earlier crop is kept.
-> (c) The swap at crop_manager.py:137-140 can never run: the widget already swaps (border_crop_widget.py:129-132), and cutting and clamping never reverse the order. round() never changes a value either.
-> (d) Scope is single and sequence view only. Multi-view saves never apply the crop (main_window.py:6606-6632; save_export_manager.py:497-514). Applying a crop in multi-view calls _apply_multi_view_crop_coordinates (crop_manager.py:107), which is not defined anywhere. The plain-English line does not say this.
-> (e) The crop is stored per image size and restored on navigation (ui\\managers\\file_navigation_manager.py:227-235). It silently applies to every image of the same size.
-> (f) If the crop removes every object, the YOLO/COCO/VOC exporters return None and export_all never deletes files (core\\exporters\\__init__.py:189-206). Old label files stay on disk while the NPZ is rewritten as zeros (npz.py:16-27).
-> (g) ui\\workers\\save_worker.py:76-79 and FileManager.save_npz/save_bb_txt repeat the crop logic but nothing calls them. Do not test against those paths.
->
-> P0: justified as data integrity (it does not move money or enforce regulation). The rule decides which label pixels are saved to the exported training-label files and which coordinate frame they use. A rewrite that keeps the last row/column, treats the bounds as inclusive, or writes crop-relative coordinates would silently change or misalign every exported label file.
->
-> No instruction-like text and no credentials appear in the cited lines.
-
-### RULE-016: Crop zeroes saved annotations outside the crop (last row and column always lost) (folded card)
-
-**Compliance judge:** P0 no, faithful yes
-
-> FAITHFUL: yes. I checked every claim against the code.
-> (1) E:\\GitHub\\LazyLabel\\legacy\\lazylabel\\src\\lazylabel\\core\\file_manager.py:724-737 sets all channels to 0 in rows [:y1] and [y2:], and in columns [:x1] and [x2:] for rows y1..y2-1. So x1 and y1 are kept, and x2 and y2 are exclusive.
-> (2) Single-view save goes from E:\\GitHub\\LazyLabel\\legacy\\lazylabel\\src\\lazylabel\\ui\\managers\\save_export_manager.py:117 to _build_export_context (394-430). The crop is applied at 412-417. image_size is the full pixmap size (397, 421). Per-object contours are intersected with the cropped tensor (E:\\GitHub\\LazyLabel\\legacy\\lazylabel\\src\\lazylabel\\core\\segment_manager.py:297), so YOLO Detection gets the crop.
-> (3) E:\\GitHub\\LazyLabel\\legacy\\lazylabel\\src\\lazylabel\\ui\\managers\\crop_manager.py:131-134 clamps x2 to at most w-1 and y2 to at most h-1. Line 143 is the only place that sets a non-None crop:
-> - The mouse path (E:\\GitHub\\LazyLabel\\legacy\\lazylabel\\src\\lazylabel\\ui\\handlers\\single_view_mouse_handler.py:553-556) goes through this clamp.
-> - The restore on image change (E:\\GitHub\\LazyLabel\\legacy\\lazylabel\\src\\lazylabel\\ui\\managers\\file_navigation_manager.py:229-234) reuses values saved at line 145.
-> - The multi-view branch at crop_manager.py:107 calls _apply_multi_view_crop_coordinates, which is not defined anywhere.
-> So (0,0,639,479) really is the largest crop. While any crop is active, the last column and row are always zeroed.
-> (4) E:\\GitHub\\LazyLabel\\legacy\\lazylabel\\src\\lazylabel\\core\\exporters\\yolo_detection.py:20,27-32 divides by the full image width and height. No exporter reads ctx.crop_coords. cv2.boundingRect over columns 0-638 and rows 0-478 gives (0,0,639,479), so cx=0.49921875, cy=0.4989583, w=0.9984375, h=0.9979167. All four match the card. The test at E:\\GitHub\\LazyLabel\\legacy\\lazylabel\\tests\\unit\\core\\exporters\\test_bbox_roundtrip.py:330-357 also confirms the exclusive x2/y2 convention.
->
-> P0: NOT justified under the compliance lens.
-> - LazyLabel is a desktop image-labeling tool. This rule moves no money and enforces no regulation. No regulator, auditor or finance controller would care where the crop edge falls in ML label files.
-> - It does not guard data integrity either. Zeroing labels outside the crop is something the user asks for, and the screen shows it: the overlays at crop_manager.py:200-223 darken exactly the zeroed area.
-> - On top of that sits an off-by-one bug. Clamping to w-1/h-1 plus exclusive slicing means a crop can never include the last column and row. The loss is at most one row and one column (under 0.4% of a 640x480 frame), and boxes shrink by 1 px only for objects touching the edge.
-> - Making this a P0 equivalence contract would either force the rewrite to copy a data-loss bug or waste verification effort on a 1-px difference.
->
-> RECOMMENDATION: Rate it P1 (output fidelity: labels outside a crop, with exclusive x2/y2, are zeroed; normalization stays full-frame). Add a separate defect card for an expert to decide. Question for the expert: should a crop be able to include the last pixel row and column (clamp x2/y2 to w/h instead of w-1/h-1)? If so, should exports already made with a crop be regenerated?
->
-> SIDE FINDINGS:
-> - SaveWorker (E:\\GitHub\\LazyLabel\\legacy\\lazylabel\\src\\lazylabel\\ui\\workers\\save_worker.py:76-79) is exported but never created anywhere, so it is dead code that repeats the crop logic.
-> - Any crop in multi-view mode would fail with AttributeError, because the method at crop_manager.py:107 is missing.
-> - The cited lines contain no text that looks like instructions aimed at an AI tool.
-
-**Fidelity judge:** P0 yes, faithful yes
-
-> FAITHFUL. I re-derived the behavior from the code and ran the same math in memory with the project venv (OpenCV 4.12.0, numpy 2.2.6, no files written).
->
-> (1) Clamp: E:\\GitHub\\LazyLabel\\legacy\\lazylabel\\src\\lazylabel\\ui\\managers\\crop_manager.py:131-134 limits x2 to width-1 and y2 to height-1. Both ways of setting a crop go through it: the text widget (E:\\GitHub\\LazyLabel\\legacy\\lazylabel\\src\\lazylabel\\ui\\widgets\\border_crop_widget.py:135 -\> main_window.py:904-905) and the mouse drag (E:\\GitHub\\LazyLabel\\legacy\\lazylabel\\src\\lazylabel\\ui\\handlers\\single_view_mouse_handler.py:554-556). The only other place that sets current_crop_coords is E:\\GitHub\\LazyLabel\\legacy\\lazylabel\\src\\lazylabel\\ui\\managers\\file_navigation_manager.py:229-231, which restores values saved at crop_manager.py:145, so they are already clamped. So (0,0,639,479) really is the largest crop on a 640x480 image.
->
-> (2) Zeroing: E:\\GitHub\\LazyLabel\\legacy\\lazylabel\\src\\lazylabel\\core\\file_manager.py:724-737 treats x2/y2 as exclusive (rows y2: and columns x2: are zeroed, in every channel). Because x2\<w and y2\<h always hold, column w-1 and row h-1 are zeroed whenever any crop is active, so 'always lost' is accurate. An interior crop (100,50,300,200) keeps x 100..299 and y 50..199.
->
-> (3) Path to YOLO: E:\\GitHub\\LazyLabel\\legacy\\lazylabel\\src\\lazylabel\\ui\\managers\\save_export_manager.py:92-95 -\> 117 -\> 405-417. The export context keeps image_size=(h,w) at full frame (line 421), and no exporter reads ctx.crop_coords (it is only declared at core\\exporters\\__init__.py:107). YOLO Detection is instance-aware, so its boxes come from E:\\GitHub\\LazyLabel\\legacy\\lazylabel\\src\\lazylabel\\core\\segment_manager.py:297 (each segment ANDed with the cropped tensor) and E:\\GitHub\\LazyLabel\\legacy\\lazylabel\\src\\lazylabel\\core\\exporters\\yolo_detection.py:27-33, which divides by the full w and h. The citation leaves out this link, but the result is the same.
->
-> (4) Simulation: column 639 and row 479 are all zero, boundingRect is (0,0,639,479), and the output line is '0.49921875 0.49895833333333334 0.9984375 0.9979166666666667'. This matches the Then. The rule shortens cy and h to '0.498958...' and '0.997916...'; a byte-exact equivalence test must use the full Python float output.
->
-> Caveats (none contradict the rule): 'single-view' also covers sequence mode, because every mode except 'multi' goes to save_single_view_output. Multi-view save (main_window.py:6606-6632) never applies the crop. crop_manager.py:107 calls _apply_multi_view_crop_coordinates, which is not defined anywhere, so applying a crop in multi-view mode would crash with AttributeError. The 639x479 box relies on OpenCV 3.2 or later not clipping contours that touch the image border. SaveWorker (save_worker.py:76-79) and FileManager.save_npz/save_bb_txt repeat the crop logic but nothing calls them. The on-screen overlay uses the same exclusive edge (crop_manager.py:200, 218), so the darkened area matches what gets dropped.
->
-> P0 JUSTIFIED (data integrity): this rule decides which labeled pixels and boxes are written to every saved annotation file (NPZ, YOLO, COCO, VOC, CreateML). The off-by-one silently drops real labels and shrinks boxes. A rewrite that treats x2 as inclusive or allows x2=width would write different training data, so someone must decide whether to keep or fix it. No instruction-like or injection text was found in the cited lines.
-
-### RULE-017: Merge selected segments into the smallest class (folded card)
-
-**Compliance judge:** P0 no, faithful yes
-
-> FAITHFUL: yes. In E:\\GitHub\\LazyLabel\\legacy\\lazylabel\\src\\lazylabel\\core\\segment_manager.py:70-83 the code collects the class IDs of the selected segments (skipping any with none), picks the smallest, and writes it to every selected segment. active_class_id is never read. With classes {3,1} selected and class 5 active, both segments become class 1. The M key is wired in config/hotkeys.py:82-84 and main_window.py:1006 to ui/managers/keyboard_event_manager.py:236-239. That handler calls main_window._assign_selected_to_class and then right_panel.clear_selections() (right_panel.py:373-376). The unit test at tests/unit/core/test_segment_manager.py:150-167 already pins the smallest-class behavior. The card leaves out some details, but none of them contradict it: (a) if no selected segment has a class ID, the target is next_class_id, which is the highest existing ID + 1, or 0 (segment_manager.py:78-79). (b) "Merge" only rewrites class_id. The segments stay as separate rows with separate shapes. (c) A merge cannot be undone: UndoRedoManager has no merge or assign action type (core/undo_redo_manager.py:65-89). (d) In multi-view mode the same rule runs separately for each viewer that has a selection (main_window.py:1649-1654, 6361-6390), so linked viewers can end up with different target classes. clear_selections() also does not clear the multi-view tables, which are separate widgets (main_window.py:3132-3168). (e) The right-panel merge button (main_window.py:950-952) makes the same change but keeps the selection (segment_table_manager.py:154-160). So "then clears the selection" is true only for the M key, which is what the card describes. The code and its comments disagree: docstrings at keyboard_event_manager.py:237, segment_table_manager.py:54 and main_window.py:6362 say the segments go to the "active class", but the code ignores the active class. The card correctly follows the code. The cited lines contain no text aimed at manipulating automated analysis.
->
-> P0: NOT JUSTIFIED. The rule moves no money and meets no regulatory requirement. It does not guard data integrity either: there is no validation and no invariant. It is only the default choice of target class for a bulk relabel that the user triggers on purpose. A regulator, auditor or finance controller would not care whether merge picks the smallest, the largest or the active class. The change would not be silent either: the new class ID and row color appear in the segment table right away (segment_table_manager.py:123-152), and handle_merge_press does not save, so the user sees the result first. The effect on saved files is real: save_export_manager.py:400 builds class_order from the sorted unique class IDs, so a class that is fully merged away loses its output channel. That effect is set by the export channel-mapping rules (segment_manager.py:212-252), which are the actual integrity contracts to verify. Recommend P1: a functional behavior the rewrite must match, already covered by a unit test. SME question: should merge really use the smallest selected class and ignore the active class, given that three docstrings say it uses the active class, and should it be undoable?
-
-**Fidelity judge:** P0 no, faithful yes
-
-> FIDELITY: the card is accurate. Call path, traced from the code: M is the default hotkey (E:\\GitHub\\LazyLabel\\legacy\\lazylabel\\src\\lazylabel\\config\\hotkeys.py:82-84) and is bound app-wide (E:\\GitHub\\LazyLabel\\legacy\\lazylabel\\src\\lazylabel\\ui\\main_window.py:1044-1047). It goes through main_window.py:2000-2005 to keyboard_event_manager.py:236-239. That handler first calls _assign_selected_to_class() and then right_panel.clear_selections() (right_panel.py:373-376). In single or sequence view (main_window.py:1655-1656) the flow continues to segment_table_manager.py:53-57, then get_selected_segment_indices(). That function reads the stored original indices (right_panel.py:351-359), so an active table filter does not break it. Finally it reaches E:\\GitHub\\LazyLabel\\legacy\\lazylabel\\src\\lazylabel\\core\\segment_manager.py:65-85. There the target is the smallest class_id among the selected segments that have one. active_class_id is never read. Every selected in-range segment gets the target, and next_class_id is recalculated. Worked through: segments with class 3 and class 1 are selected and class 5 is active. The smallest of [3, 1] is 1, so both become class 1 and the active class stays 5. Class IDs are always integers because the loaders convert them with int() (file_manager.py:278, 329, 366, 643). So 'smallest' is a numeric comparison, not a text sort. update_all_lists selects the rows again (segment_table_manager.py:154-160), but clear_selections runs right after, so 'then clears the selection' is true for the hotkey. Code/comment mismatch: the docstrings at keyboard_event_manager.py:237 and segment_table_manager.py:54 say the segments go to the 'active class', but the code does not do that. The card correctly follows the code. The cited lines contain no text that looks like instructions to an AI tool.
->
-> Edge cases the card leaves out (none contradict it): (1) If no selected segment has a class_id, the target is next_class_id (highest existing ID + 1, or 0). In practice this doesn't happen, because add_segment (segment_manager.py:34-39) and every loader always set an integer. (2) An empty selection changes nothing, but the lists still refresh. (3) Merge only changes the class. The segments are not combined and stay as separate rows. Unselected segments of class 3 keep class 3, unlike merge_segments_by_class and reassign_class_ids. (4) In multi-view (main_window.py:1649-1654, 6361-6390), each viewer's selection is merged to the smallest class within that viewer only. A 'Merged N segment(s)' notice appears, and the selection is cleared because the table is rebuilt (setRowCount(0), main_window.py:6139), not by clear_selections. (5) The Merge button in the right panel (right_panel.py:209, connected at main_window.py:950-952) changes the classes the same way but does NOT clear the selection. Only the hotkey clears it. (6) Merge is not recorded for undo: core/undo_redo_manager.py:65-81 has no merge or assign action type, so Ctrl+Z cannot reverse it. (7) Negative indices are not rejected (the check is only i \< len), but the UI never produces them.
->
-> P0: NOT JUSTIFIED. This is a command the user triggers to relabel several segments at once, and the result shows immediately in the table and colours. It moves no money and enforces no regulation. It also doesn't guard data integrity: it validates nothing and doesn't protect stored labels from corruption or loss. It is feature behaviour. Recommend P1, and keep a behaviour test for it. The docstrings contradict the code, so a rewrite that follows them would use the active class and produce different labels. A merge also can't be undone. But it shouldn't take up P0 verification effort.
-
-### RULE-018: SAM 2 propagation confidence score (folded card)
+### RULE-016: SAM 2 propagation confidence score (folded card)
 
 **Compliance judge:** P0 no, faithful yes
 
@@ -1715,7 +1558,7 @@ Both judges answer two questions: is P0 justified (moves money, enforces a regul
 >
 > I found no text in the cited lines that looked like instructions to an AI tool.
 
-### RULE-019: SAM 2 frame staging numbering gap
+### RULE-017: SAM 2 frame staging numbering gap
 
 **Compliance judge:** P0 no, faithful yes
 
@@ -1749,6 +1592,163 @@ Both judges answer two questions: is P0 justified (moves money, enforces a regul
 > P0: Justified on data-integrity grounds. The gap silently attaches a mask computed from one image to a different image's annotation, which corrupts the labeled output. But it is a legacy defect, not behavior to copy. The P0 contract should be the rule "each propagated mask belongs to the image it was computed from, and unreadable frames are either dropped with gap-free renumbering or marked SKIPPED." JPEG quality 95 and symlink/copy are SAM 2 adapter details and should be left out of the P0 equivalence set.
 >
 > No instruction-like text or credentials appear in the cited lines.
+
+### RULE-018: Crop is clamped to the image and blanks everything outside it on save, including the last row and column
+
+**Compliance judge:** P0 no, faithful yes
+
+> FAITHFUL: yes (High confidence) — every claim reproduces against the code.
+>
+> - Rounding, clamping, ordering: E:\\GitHub\\LazyLabel\\legacy\\lazylabel\\src\\lazylabel\\ui\\managers\\crop_manager.py:127-140 rounds, clamps x to 0..img_width-1 and y to 0..img_height-1, then swaps to enforce x1\<=x2, y1\<=y2. For a 1000x800 image and input (-10,50)-(1200,700): x1=0, x2=min(1200,999)=999, y1=50, y2=700. Stored at crop_manager.py:143-145; the notification f-string at crop_manager.py:152 emits exactly "Crop applied: 0:999, 50:700".
+> - Blanking semantics: E:\\GitHub\\LazyLabel\\legacy\\lazylabel\\src\\lazylabel\\core\\file_manager.py:720-739 copies the tensor, then clears rows [:y1] and [y2:] and, within the kept row band, columns [:x1] and [x2:]. Net kept region is rows y1..y2-1 and columns x1..x2-1 — so rows 50-699 and columns 0-998 in the example. Because x2 is clamped to width-1 and the right-clear branch fires whenever x2 \< w, the crop's right column and bottom row are always cleared; a "crop the whole image" can never retain column 999 or the last row. The card states this correctly.
+> - Save-time application: save_export_manager.py:412-417 applies it to the single-view ExportContext; file_manager.py:48-49 and :90-91 do the same on the other save paths. It runs on a copy, so in-memory segments are untouched.
+> - 5x5 drag minimum: single_view_mouse_handler.py:553 is `rect.width() \> 5 and rect.height() \> 5`, and the rect is built from normalized scene positions (handler lines 170-175, 264-265), so the threshold is image pixels, not screen pixels. Typed coordinates bypass this check entirely — the card correctly scopes the threshold to drawn crops.
+> - "Only the current image" and the "unreachable legacy loader" nuance both check out. The live loader is load_image_by_path (file_navigation_manager.py:254+, used by FastFileManager); it calls _reset_state (line 279), which nulls current_crop_coords at main_window.py:2156, and never restores from crop_coords_by_size. The restore block at file_navigation_manager.py:227-238 sits in load_selected_image, reachable only via right_panel.py:206 (file_tree.doubleClicked -\> image_selected) -\> main_window.py:947, but that QTreeView is hidden at right_panel.py:121-122 ("Hidden, for backward compatibility") because FastFileManager replaced it at right_panel.py:117-118. Effectively dead. crop_manager.get_crop_for_image_size (line 408) has no callers at all.
+>
+> Two things the card does not mention, both worth recording separately: crop_manager.py:107 and :88 call _apply_multi_view_crop_coordinates and remove_multi_view_crop_visual, which are defined nowhere in the repository — multi-view crop and clear_crop/reset_state in multi-view will raise AttributeError. No injection-shaped text was found in any cited line; comments read as ordinary developer notes.
+>
+> P0 NOT JUSTIFIED. Compliance lens: no regulator, auditor, or finance controller has a stake here. LazyLabel is a desktop image-annotation tool for building ML datasets — the rule moves no money, satisfies no regulatory or reporting requirement, and touches no audit trail, retention window, authorization boundary, or personal/financial data.
+>
+> The only candidate P0 pillar is "guards data integrity," and it fails on inspection. The crop is a per-session, user-initiated, fully reversible authoring filter (clear_crop at crop_manager.py:70-100; state nulled on every image load) applied to a copy of the mask tensor at export time. It enforces no invariant over stored records and prevents no corruption — it is a user preference about what to write out, closer to a display/export option than a control.
+>
+> Worse, the exact behavior the card would enshrine as the contract is an off-by-one, not a policy. Clamping to width-1/height-1 (crop_manager.py:131-134) combined with exclusive slicing at x2/y2 (file_manager.py:728-737) means the last column and row are unconditionally discarded, while the UI overlays drawn at crop_manager.py:200 and :218 use the same exclusive convention and so hide the loss from the user. Making that a P0 behavior contract would compel the rewrite to prove equivalence against a probable defect and would burn verification budget on reproducing it byte-for-byte.
+>
+> Recommendation: demote to P2 (functional-equivalence, user-visible behavior worth a regression test on the clamp/ordering and the kept-region formula), and raise two defect tickets: (1) the inclusive-input / exclusive-output off-by-one that makes a full-image crop lossy, and (2) the missing multi-view crop methods.
+
+**Fidelity judge:** P0 yes, faithful yes
+
+> FAITHFUL — every claim re-derived independently from the cited code; the worked example reproduces exactly.
+>
+> Clamp/order (E:\\GitHub\\LazyLabel\\legacy\\lazylabel\\src\\lazylabel\\ui\\managers\\crop_manager.py:127-152): round() -\> x=max(0,min(x,img_width-1)), y=max(0,min(y,img_height-1)) -\> swap if x1\>x2 / y1\>y2 -\> store in current_crop_coords and crop_coords_by_size[(w,h)] -\> notify f"Crop applied: {x1}:{x2}, {y1}:{y2}". For a 1000x800 image and input (-10,50)-(1200,700) I get stored (0,50,999,700) and the literal string "Crop applied: 0:999, 50:700" — matches the card verbatim.
+>
+> Mask blanking (...\\legacy\\lazylabel\\src\\lazylabel\\core\\file_manager.py:712-739): top clears rows [0,y1), bottom [y2,h), left cols [0,x1) and right [x2,w) over rows [y1,y2). Net effect is exactly "keep mask[y1:y2, x1:x2], zero the rest". Simulated on a 1000x800 all-ones tensor with (0,50,999,700): kept rows 50-699, kept cols 0-998; column 999 and row 700 are zero. The "always cleared" generalization also holds — because clamping caps x2\<=w-1 and y2\<=h-1 while the slices are end-exclusive, even the maximum crop (0,0,999,799) keeps only rows 0-798 and cols 0-998. The last row and last column can never survive an active crop. That off-by-one is real and correctly stated.
+>
+> On save: the crop is applied from crop_manager.current_crop_coords in the foreground export path (...\\ui\\managers\\save_export_manager.py:412-417) and consistently in the other two save paths I checked — ...\\core\\file_manager.py:48-49 (save_npz, which overwrites \<image\>.npz via np.savez_compressed at line 62), :90-91 (save_bb_txt), and ...\\ui\\workers\\save_worker.py:76-79 — so "on save" is not over-broad.
+>
+> Per-image scope: confirmed. The live loader ...\\ui\\managers\\file_navigation_manager.py:254-377 (load_image_by_path) calls mw._reset_state() at :279, which nulls current_crop_coords (...\\ui\\main_window.py:2148-2156), and never restores from crop_coords_by_size.
+>
+> The card's sharpest claim — "crops are remembered per image size but only the unreachable legacy loader restores them" — checks out, which is the strongest evidence the author actually read the code. The restore block (file_navigation_manager.py:227-238) lives only in load_selected_image, reachable only via right_panel.image_selected, which is emitted only by file_tree.doubleClicked (...\\ui\\right_panel.py:206) on a QTreeView that is constructed hidden "for backward compatibility" (right_panel.py:120-122). The reachable path is FastFileManager.fileSelected -\> image_path_selected -\> _load_image_from_path (main_window.py:1458-1459) -\> load_image_by_path, which resets and never restores. So the size-keyed dict is effectively write-only in the shipping app.
+>
+> The 5x5 threshold is correct: ...\\ui\\handlers\\single_view_mouse_handler.py:553 is `if rect.width() \> 5 and rect.height() \> 5` — strictly greater, both dimensions.
+>
+> Two precision nits for the card (neither makes the Given/When/Then wrong): (1) "Crop corners are rounded" is literally what crop_manager.py:127 does, but round() is a no-op in practice — the text path already yields ints (border_crop_widget.py:119,126, free-text QLineEdits parsed with int(), no min/max, so the negative/over-max Given is genuinely reachable) and the drag path already truncates with int() at single_view_mouse_handler.py:554-555. A drag ending at x=999.7 becomes 999 by truncation, not rounding; the rewrite should be told "truncate on drag, ints on text entry", not "round". (2) Unstated edge case: a drawn rect \<=5px in either dimension is silently discarded AND the app stays in crop mode (crop_mode is never set False, _set_mode("sam_points") is skipped) — worth adding to the card as a Then.
+>
+> Adjacent defect found while checking scope (outside the card, for the parent): multi-view crop is broken. crop_manager.py:107 calls self._apply_multi_view_crop_coordinates(...) and lines 88/426 call self.remove_multi_view_crop_visual(), and none of those methods is defined anywhere in the source — applying, clearing, or resetting a crop in multi-view mode raises AttributeError. The card's "only the current image" scope is partly true because multi-view crop cannot execute at all.
+>
+> P0 JUSTIFIED — not money and not regulatory, but it does guard (and, via the off-by-one, silently harms) the integrity of persisted user data. The crop is a destructive, irreversible transform applied at write time to the annotation artifact that is this tool's entire product: save_npz overwrites \<image\>.npz with the zeroed tensor, and autosave fires it unattended on every image change (file_navigation_manager.py:271-274, auto_save defaults True). A rewrite that keeps the last row/column, or that restores the size-keyed crop on load (making the currently-dead restore path live), silently changes the content of every exported mask with no user-visible signal. That is exactly the kind of contract a P0 exists to pin down — and the rewrite team needs an explicit decision on whether to replicate the last-row/last-column drop or fix it.
+>
+> SME questions to attach: (a) Is dropping the final row and column intended, or a clamp/exclusive-slice off-by-one to fix in the rewrite? (b) Should a crop persist across images of the same size (restoring the currently-unreachable behavior) or stay per-image as the shipping app behaves? (c) Should the drag path round instead of truncate?
+>
+> INJECTION SCAN: clean. I grepped all cited files plus border_crop_widget.py for instruction-shaped text ("SYSTEM:", "ignore previous", "false positive", "approved", directives aimed at a reviewer/AI) and found none. No credentials appear in any cited line, so no masking was required.
+
+### RULE-018: Crop removes annotations outside the rectangle but keeps full-image coordinates (folded card)
+
+**Compliance judge:** P0 no, faithful yes
+
+> VERDICT: not P0 under the compliance lens; the card is faithful to the single-view code, with scope gaps. All paths are under E:\\GitHub\\LazyLabel\\legacy\\lazylabel\\src\\lazylabel\\.
+>
+> P0 NOT JUSTIFIED. The rule moves no money and enforces no regulation. The crop only zeroes the label mask (core/file_manager.py:712-739). The source image is never changed or exported, so this is not a redaction or de-identification control. ExportContext.crop_coords (core/exporters/__init__.py:107) is never read by any exporter. No regulator, auditor or finance controller would notice if this changed. The people who would notice are whoever consumes the dataset, which makes it a P1 output-equivalence behavior. It also does not guard integrity. It is a lossy export filter the user turns on. The only guard-like piece is the clamp that keeps numpy slice indices in range, which is ordinary input cleanup.
+>
+> The card also packs UI gesture details into a P0 contract: the \>5 px drag minimum (ui/handlers/single_view_mouse_handler.py:553), int truncation (554-555), and the switch to sam_points mode (558). Worse, as a must-match contract it would lock in a likely off-by-one. The clamp to width-1/height-1 (ui/managers/crop_manager.py:131-134) combined with exclusive slices (file_manager.py:728-737) means any active crop always drops the last column and row. A user can never keep the full image (the adjusted 0:99 is shown back to them at crop_manager.py:148). An SME should decide whether that is intended before anyone demands equivalence. The full-image coordinate frame is a real downstream contract, but it belongs to the export-format rules, not this crop rule.
+>
+> FAITHFUL. Trace for the Given:
+> - ui/widgets/border_crop_widget.py:115-135 parses '0:100' to (0,0,100,100).
+> - ui/main_window.py:904-906 routes that to apply_crop_coordinates, and crop_manager.py:131-134 clamps it to (0,0,99,99).
+> - At save, save_export_manager.py:412-417 applies the crop. file_manager.py:729 zeroes row 99, and 737 zeroes column 99 for rows 0-98.
+> - create_instance_contours ANDs each segment with the cropped tensor (core/segment_manager.py:297), so every format respects the crop.
+> - cv2.boundingRect then gives (0,0,99,99): YOLO width 0.99 (exporters/yolo_detection.py:27-33), COCO bbox [0,0,99,99] (coco.py:65-72), VOC xmax 99 (pascal_voc.py:46-49).
+> - The tensor keeps its full (h,w) shape and exporters divide by the full w/h, so coordinates stay relative to the full image.
+>
+> The drawn-crop path matches too. The rect is normalized (single_view_mouse_handler.py:264), must exceed 5 px on both axes (553), and is truncated (554-555), then rounded, clamped and swapped (crop_manager.py:127-140), then the mode is set to sam_points (558). Rounding and swapping are no-ops on this path.
+>
+> CAVEATS THE CARD SHOULD ADD:
+> (1) It only holds in single view. Multi-view apply calls _apply_multi_view_crop_coordinates (crop_manager.py:107), and clear/reset call remove_multi_view_crop_visual (88, 426). Neither is defined anywhere, so those calls raise AttributeError. The multi-view save (save_export_manager.py:497-514) and PropagationSaveWorker (ui/workers/propagation_worker.py) never apply a crop.
+> (2) The crop is saved per image size (crop_manager.py:144-145) and applied again to every later-loaded image with the same dimensions (ui/managers/file_navigation_manager.py:227-235). Saving those images silently zeroes their out-of-crop annotations, and the loss is permanent once saved. This is the most data-loss-relevant behavior, and the card leaves it out.
+>
+> No instruction-shaped or injection text in the cited lines, and no credentials.
+
+**Fidelity judge:** P0 yes, faithful yes
+
+> FIDELITY: faithful. I re-traced the example myself in single view. All paths are under E:\\GitHub\\LazyLabel\\legacy\\lazylabel\\src\\lazylabel\\.
+> (1) ui\\widgets\\border_crop_widget.py:115-135 parses '0:100' into (0,0,100,100). ui\\main_window.py:904-905 passes that straight to CropManager.apply_crop_coordinates.
+> (2) ui\\managers\\crop_manager.py:127-145 rounds (no effect on ints), clamps x to [0,w-1] and y to [0,h-1], giving (0,0,99,99), then swaps if reversed. Line 148 rewrites the text fields to 0:99.
+> (3) core\\file_manager.py:728-737 zeroes row 99 ([99:,:,:]) and column 99 ([0:99,99:,:]). The kept region is exactly [y1:y2, x1:x2], with x2/y2 exclusive.
+> (4) The only live save path is ui\\managers\\save_export_manager.py:117 then :412-417. Per-object shapes are intersected with the cropped mask (core\\segment_manager.py:297). cv2.boundingRect of the 99x99 block is (0,0,99,99). So YOLO width is 99/100 = 0.99 (core\\exporters\\yolo_detection.py:31), the COCO box width is 99 and the VOC xmax is 99.
+> (5) No exporter reads ctx.crop_coords; it appears only as a field at core\\exporters\\__init__.py:107. Every exporter divides by the full image width and height, so coordinates stay in the full-image frame.
+> Consequence: x2/y2 can never equal the width/height, so any active crop always loses the last row and column. This is a real off-by-one the contract must pin.
+> Drawn crops: the pixmap is at scene origin and never moved (ui\\photo_viewer.py). The rectangle is .normalized() (ui\\handlers\\single_view_mouse_handler.py:264). The size gate is a strict \>5 on the float rectangle (:553). Edges are cut with int() (:554-555), then rounded, clamped and swapped as above. Mode becomes sam_points, the 'AI' button (ui\\control_panel.py:254-256), at :558.
+>
+> GAPS to add during verification (none contradict the card):
+> (a) The \>5 gate checks the drag before clamping. The press must land inside the image (:106-110) but the drag can leave it. Press at x=99.4, release at x=110: the gate passes, yet the crop clamps to x1=x2=99. That zero-width crop wipes every annotation from the export.
+> (b) The mode switch only happens when the gate passes. Otherwise the mode stays 'crop' and any earlier crop is kept.
+> (c) The swap at crop_manager.py:137-140 can never run: the widget already swaps (border_crop_widget.py:129-132), and cutting and clamping never reverse the order. round() never changes a value either.
+> (d) Scope is single and sequence view only. Multi-view saves never apply the crop (main_window.py:6606-6632; save_export_manager.py:497-514). Applying a crop in multi-view calls _apply_multi_view_crop_coordinates (crop_manager.py:107), which is not defined anywhere. The plain-English line does not say this.
+> (e) The crop is stored per image size and restored on navigation (ui\\managers\\file_navigation_manager.py:227-235). It silently applies to every image of the same size.
+> (f) If the crop removes every object, the YOLO/COCO/VOC exporters return None and export_all never deletes files (core\\exporters\\__init__.py:189-206). Old label files stay on disk while the NPZ is rewritten as zeros (npz.py:16-27).
+> (g) ui\\workers\\save_worker.py:76-79 and FileManager.save_npz/save_bb_txt repeat the crop logic but nothing calls them. Do not test against those paths.
+>
+> P0: justified as data integrity (it does not move money or enforce regulation). The rule decides which label pixels are saved to the exported training-label files and which coordinate frame they use. A rewrite that keeps the last row/column, treats the bounds as inclusive, or writes crop-relative coordinates would silently change or misalign every exported label file.
+>
+> No instruction-like text and no credentials appear in the cited lines.
+
+### RULE-018: Crop zeroes saved annotations outside the crop (last row and column always lost) (folded card)
+
+**Compliance judge:** P0 no, faithful yes
+
+> FAITHFUL: yes. I checked every claim against the code.
+> (1) E:\\GitHub\\LazyLabel\\legacy\\lazylabel\\src\\lazylabel\\core\\file_manager.py:724-737 sets all channels to 0 in rows [:y1] and [y2:], and in columns [:x1] and [x2:] for rows y1..y2-1. So x1 and y1 are kept, and x2 and y2 are exclusive.
+> (2) Single-view save goes from E:\\GitHub\\LazyLabel\\legacy\\lazylabel\\src\\lazylabel\\ui\\managers\\save_export_manager.py:117 to _build_export_context (394-430). The crop is applied at 412-417. image_size is the full pixmap size (397, 421). Per-object contours are intersected with the cropped tensor (E:\\GitHub\\LazyLabel\\legacy\\lazylabel\\src\\lazylabel\\core\\segment_manager.py:297), so YOLO Detection gets the crop.
+> (3) E:\\GitHub\\LazyLabel\\legacy\\lazylabel\\src\\lazylabel\\ui\\managers\\crop_manager.py:131-134 clamps x2 to at most w-1 and y2 to at most h-1. Line 143 is the only place that sets a non-None crop:
+> - The mouse path (E:\\GitHub\\LazyLabel\\legacy\\lazylabel\\src\\lazylabel\\ui\\handlers\\single_view_mouse_handler.py:553-556) goes through this clamp.
+> - The restore on image change (E:\\GitHub\\LazyLabel\\legacy\\lazylabel\\src\\lazylabel\\ui\\managers\\file_navigation_manager.py:229-234) reuses values saved at line 145.
+> - The multi-view branch at crop_manager.py:107 calls _apply_multi_view_crop_coordinates, which is not defined anywhere.
+> So (0,0,639,479) really is the largest crop. While any crop is active, the last column and row are always zeroed.
+> (4) E:\\GitHub\\LazyLabel\\legacy\\lazylabel\\src\\lazylabel\\core\\exporters\\yolo_detection.py:20,27-32 divides by the full image width and height. No exporter reads ctx.crop_coords. cv2.boundingRect over columns 0-638 and rows 0-478 gives (0,0,639,479), so cx=0.49921875, cy=0.4989583, w=0.9984375, h=0.9979167. All four match the card. The test at E:\\GitHub\\LazyLabel\\legacy\\lazylabel\\tests\\unit\\core\\exporters\\test_bbox_roundtrip.py:330-357 also confirms the exclusive x2/y2 convention.
+>
+> P0: NOT justified under the compliance lens.
+> - LazyLabel is a desktop image-labeling tool. This rule moves no money and enforces no regulation. No regulator, auditor or finance controller would care where the crop edge falls in ML label files.
+> - It does not guard data integrity either. Zeroing labels outside the crop is something the user asks for, and the screen shows it: the overlays at crop_manager.py:200-223 darken exactly the zeroed area.
+> - On top of that sits an off-by-one bug. Clamping to w-1/h-1 plus exclusive slicing means a crop can never include the last column and row. The loss is at most one row and one column (under 0.4% of a 640x480 frame), and boxes shrink by 1 px only for objects touching the edge.
+> - Making this a P0 equivalence contract would either force the rewrite to copy a data-loss bug or waste verification effort on a 1-px difference.
+>
+> RECOMMENDATION: Rate it P1 (output fidelity: labels outside a crop, with exclusive x2/y2, are zeroed; normalization stays full-frame). Add a separate defect card for an expert to decide. Question for the expert: should a crop be able to include the last pixel row and column (clamp x2/y2 to w/h instead of w-1/h-1)? If so, should exports already made with a crop be regenerated?
+>
+> SIDE FINDINGS:
+> - SaveWorker (E:\\GitHub\\LazyLabel\\legacy\\lazylabel\\src\\lazylabel\\ui\\workers\\save_worker.py:76-79) is exported but never created anywhere, so it is dead code that repeats the crop logic.
+> - Any crop in multi-view mode would fail with AttributeError, because the method at crop_manager.py:107 is missing.
+> - The cited lines contain no text that looks like instructions aimed at an AI tool.
+
+**Fidelity judge:** P0 yes, faithful yes
+
+> FAITHFUL. I re-derived the behavior from the code and ran the same math in memory with the project venv (OpenCV 4.12.0, numpy 2.2.6, no files written).
+>
+> (1) Clamp: E:\\GitHub\\LazyLabel\\legacy\\lazylabel\\src\\lazylabel\\ui\\managers\\crop_manager.py:131-134 limits x2 to width-1 and y2 to height-1. Both ways of setting a crop go through it: the text widget (E:\\GitHub\\LazyLabel\\legacy\\lazylabel\\src\\lazylabel\\ui\\widgets\\border_crop_widget.py:135 -\> main_window.py:904-905) and the mouse drag (E:\\GitHub\\LazyLabel\\legacy\\lazylabel\\src\\lazylabel\\ui\\handlers\\single_view_mouse_handler.py:554-556). The only other place that sets current_crop_coords is E:\\GitHub\\LazyLabel\\legacy\\lazylabel\\src\\lazylabel\\ui\\managers\\file_navigation_manager.py:229-231, which restores values saved at crop_manager.py:145, so they are already clamped. So (0,0,639,479) really is the largest crop on a 640x480 image.
+>
+> (2) Zeroing: E:\\GitHub\\LazyLabel\\legacy\\lazylabel\\src\\lazylabel\\core\\file_manager.py:724-737 treats x2/y2 as exclusive (rows y2: and columns x2: are zeroed, in every channel). Because x2\<w and y2\<h always hold, column w-1 and row h-1 are zeroed whenever any crop is active, so 'always lost' is accurate. An interior crop (100,50,300,200) keeps x 100..299 and y 50..199.
+>
+> (3) Path to YOLO: E:\\GitHub\\LazyLabel\\legacy\\lazylabel\\src\\lazylabel\\ui\\managers\\save_export_manager.py:92-95 -\> 117 -\> 405-417. The export context keeps image_size=(h,w) at full frame (line 421), and no exporter reads ctx.crop_coords (it is only declared at core\\exporters\\__init__.py:107). YOLO Detection is instance-aware, so its boxes come from E:\\GitHub\\LazyLabel\\legacy\\lazylabel\\src\\lazylabel\\core\\segment_manager.py:297 (each segment ANDed with the cropped tensor) and E:\\GitHub\\LazyLabel\\legacy\\lazylabel\\src\\lazylabel\\core\\exporters\\yolo_detection.py:27-33, which divides by the full w and h. The citation leaves out this link, but the result is the same.
+>
+> (4) Simulation: column 639 and row 479 are all zero, boundingRect is (0,0,639,479), and the output line is '0.49921875 0.49895833333333334 0.9984375 0.9979166666666667'. This matches the Then. The rule shortens cy and h to '0.498958...' and '0.997916...'; a byte-exact equivalence test must use the full Python float output.
+>
+> Caveats (none contradict the rule): 'single-view' also covers sequence mode, because every mode except 'multi' goes to save_single_view_output. Multi-view save (main_window.py:6606-6632) never applies the crop. crop_manager.py:107 calls _apply_multi_view_crop_coordinates, which is not defined anywhere, so applying a crop in multi-view mode would crash with AttributeError. The 639x479 box relies on OpenCV 3.2 or later not clipping contours that touch the image border. SaveWorker (save_worker.py:76-79) and FileManager.save_npz/save_bb_txt repeat the crop logic but nothing calls them. The on-screen overlay uses the same exclusive edge (crop_manager.py:200, 218), so the darkened area matches what gets dropped.
+>
+> P0 JUSTIFIED (data integrity): this rule decides which labeled pixels and boxes are written to every saved annotation file (NPZ, YOLO, COCO, VOC, CreateML). The off-by-one silently drops real labels and shrinks boxes. A rewrite that treats x2 as inclusive or allows x2=width would write different training data, so someone must decide whether to keep or fix it. No instruction-like or injection text was found in the cited lines.
+
+### RULE-019: Merge selected segments into the smallest class (folded card)
+
+**Compliance judge:** P0 no, faithful yes
+
+> FAITHFUL: yes. In E:\\GitHub\\LazyLabel\\legacy\\lazylabel\\src\\lazylabel\\core\\segment_manager.py:70-83 the code collects the class IDs of the selected segments (skipping any with none), picks the smallest, and writes it to every selected segment. active_class_id is never read. With classes {3,1} selected and class 5 active, both segments become class 1. The M key is wired in config/hotkeys.py:82-84 and main_window.py:1006 to ui/managers/keyboard_event_manager.py:236-239. That handler calls main_window._assign_selected_to_class and then right_panel.clear_selections() (right_panel.py:373-376). The unit test at tests/unit/core/test_segment_manager.py:150-167 already pins the smallest-class behavior. The card leaves out some details, but none of them contradict it: (a) if no selected segment has a class ID, the target is next_class_id, which is the highest existing ID + 1, or 0 (segment_manager.py:78-79). (b) "Merge" only rewrites class_id. The segments stay as separate rows with separate shapes. (c) A merge cannot be undone: UndoRedoManager has no merge or assign action type (core/undo_redo_manager.py:65-89). (d) In multi-view mode the same rule runs separately for each viewer that has a selection (main_window.py:1649-1654, 6361-6390), so linked viewers can end up with different target classes. clear_selections() also does not clear the multi-view tables, which are separate widgets (main_window.py:3132-3168). (e) The right-panel merge button (main_window.py:950-952) makes the same change but keeps the selection (segment_table_manager.py:154-160). So "then clears the selection" is true only for the M key, which is what the card describes. The code and its comments disagree: docstrings at keyboard_event_manager.py:237, segment_table_manager.py:54 and main_window.py:6362 say the segments go to the "active class", but the code ignores the active class. The card correctly follows the code. The cited lines contain no text aimed at manipulating automated analysis.
+>
+> P0: NOT JUSTIFIED. The rule moves no money and meets no regulatory requirement. It does not guard data integrity either: there is no validation and no invariant. It is only the default choice of target class for a bulk relabel that the user triggers on purpose. A regulator, auditor or finance controller would not care whether merge picks the smallest, the largest or the active class. The change would not be silent either: the new class ID and row color appear in the segment table right away (segment_table_manager.py:123-152), and handle_merge_press does not save, so the user sees the result first. The effect on saved files is real: save_export_manager.py:400 builds class_order from the sorted unique class IDs, so a class that is fully merged away loses its output channel. That effect is set by the export channel-mapping rules (segment_manager.py:212-252), which are the actual integrity contracts to verify. Recommend P1: a functional behavior the rewrite must match, already covered by a unit test. SME question: should merge really use the smallest selected class and ignore the active class, given that three docstrings say it uses the active class, and should it be undoable?
+
+**Fidelity judge:** P0 no, faithful yes
+
+> FIDELITY: the card is accurate. Call path, traced from the code: M is the default hotkey (E:\\GitHub\\LazyLabel\\legacy\\lazylabel\\src\\lazylabel\\config\\hotkeys.py:82-84) and is bound app-wide (E:\\GitHub\\LazyLabel\\legacy\\lazylabel\\src\\lazylabel\\ui\\main_window.py:1044-1047). It goes through main_window.py:2000-2005 to keyboard_event_manager.py:236-239. That handler first calls _assign_selected_to_class() and then right_panel.clear_selections() (right_panel.py:373-376). In single or sequence view (main_window.py:1655-1656) the flow continues to segment_table_manager.py:53-57, then get_selected_segment_indices(). That function reads the stored original indices (right_panel.py:351-359), so an active table filter does not break it. Finally it reaches E:\\GitHub\\LazyLabel\\legacy\\lazylabel\\src\\lazylabel\\core\\segment_manager.py:65-85. There the target is the smallest class_id among the selected segments that have one. active_class_id is never read. Every selected in-range segment gets the target, and next_class_id is recalculated. Worked through: segments with class 3 and class 1 are selected and class 5 is active. The smallest of [3, 1] is 1, so both become class 1 and the active class stays 5. Class IDs are always integers because the loaders convert them with int() (file_manager.py:278, 329, 366, 643). So 'smallest' is a numeric comparison, not a text sort. update_all_lists selects the rows again (segment_table_manager.py:154-160), but clear_selections runs right after, so 'then clears the selection' is true for the hotkey. Code/comment mismatch: the docstrings at keyboard_event_manager.py:237 and segment_table_manager.py:54 say the segments go to the 'active class', but the code does not do that. The card correctly follows the code. The cited lines contain no text that looks like instructions to an AI tool.
+>
+> Edge cases the card leaves out (none contradict it): (1) If no selected segment has a class_id, the target is next_class_id (highest existing ID + 1, or 0). In practice this doesn't happen, because add_segment (segment_manager.py:34-39) and every loader always set an integer. (2) An empty selection changes nothing, but the lists still refresh. (3) Merge only changes the class. The segments are not combined and stay as separate rows. Unselected segments of class 3 keep class 3, unlike merge_segments_by_class and reassign_class_ids. (4) In multi-view (main_window.py:1649-1654, 6361-6390), each viewer's selection is merged to the smallest class within that viewer only. A 'Merged N segment(s)' notice appears, and the selection is cleared because the table is rebuilt (setRowCount(0), main_window.py:6139), not by clear_selections. (5) The Merge button in the right panel (right_panel.py:209, connected at main_window.py:950-952) changes the classes the same way but does NOT clear the selection. Only the hotkey clears it. (6) Merge is not recorded for undo: core/undo_redo_manager.py:65-81 has no merge or assign action type, so Ctrl+Z cannot reverse it. (7) Negative indices are not rejected (the check is only i \< len), but the UI never produces them.
+>
+> P0: NOT JUSTIFIED. This is a command the user triggers to relabel several segments at once, and the result shows immediately in the table and colours. It moves no money and enforces no regulation. It also doesn't guard data integrity: it validates nothing and doesn't protect stored labels from corruption or loss. It is feature behaviour. Recommend P1, and keep a behaviour test for it. The docstrings contradict the code, so a rewrite that follows them would use the active class and produce different labels. A merge also can't be undone. But it shouldn't take up P0 verification effort.
 
 ### RULE-023: Only mask-based segments seed propagation (folded card)
 

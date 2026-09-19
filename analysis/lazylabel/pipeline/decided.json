@@ -635,7 +635,7 @@
   {
    "name": "SAM 2 frame staging numbering gap",
    "category": "Calculation",
-   "priority": "P1",
+   "priority": "P0",
    "source": "legacy/lazylabel/src/lazylabel/models/sam2_model.py:759-803; legacy/lazylabel/src/lazylabel/ui/managers/propagation_manager.py:778-781",
    "plainEnglish": "Frames are staged as sequentially numbered JPEGs named by list position (00000.jpg, 00001.jpg...), and an unreadable non-JPEG frame is skipped without renumbering.",
    "given": "Frames [a.png, b.png (unreadable), c.png] and no reference size filter",
@@ -646,7 +646,7 @@
     "When the reference size is known, the size filter already drops unreadable frames, reducing exposure"
    ],
    "suspectedDefect": "Masks for every frame after an unreadable image may be attributed to the wrong image.",
-   "smeQuestion": "Does the SAM 2 video loader index frames by sorted list position (making numbering gaps shift frames), or by the number in the file name? Panel: The compliance judge rated this not P0 while the fidelity judge rated it P0. Decide whether it guards annotation data integrity and belongs in the behavior contract. Judges' reasoning: analysis/lazylabel/P0_PANEL.md.",
+   "smeQuestion": "Does the SAM 2 video loader index frames by sorted list position (making numbering gaps shift frames), or by the number in the file name? Judges' reasoning: analysis/lazylabel/P0_PANEL.md.",
    "confidence": "Medium",
    "p0Panel": {
     "compliance": {
@@ -659,7 +659,8 @@
      "p0Justified": true,
      "reason": "FIDELITY: Faithful. I checked each claim against the cited code and against the SAM 2 package installed in E:\\venv\\lazylabel.\n\n(1) Staging names. E:\\GitHub\\LazyLabel\\legacy\\lazylabel\\src\\lazylabel\\models\\sam2_model.py:777-779 names each file f\"{i:05d}.jpg\", where i is the frame's position in the input list. Lines 765-768 delete the old temp dir and create a fresh one, so no leftover file can fill a gap.\n\n(2) Skip without renumbering. A frame that is not in the image cache and does not end in .jpg/.jpeg is read with cv2.imread. If that returns None, lines 800-802 hit `continue`: nothing is written at that position and later frames keep their numbers. For [a.png, b.png (unreadable), c.png] the temp dir holds exactly 00000.jpg and 00002.jpg.\n\n(3) The \"no reference size filter\" condition is correct and necessary. With reference_dimensions set, E:\\GitHub\\LazyLabel\\legacy\\lazylabel\\src\\lazylabel\\ui\\managers\\propagation_manager.py:232-235 drops frames cv2 cannot read, and 253-256 renumbers the rest without gaps. With reference_dimensions=None, lines 263-268 build a plain 1:1 mapping and never check readability.\n\n(4) The Then is confirmed, so the \"if SAM 2 indexes by sorted position\" hedge can be removed. E:\\venv\\lazylabel\\Lib\\site-packages\\sam2\\utils\\misc.py:243-252 lists the .jpg files, sorts them by integer stem and numbers them 0, 1, 2 in that order. E:\\venv\\lazylabel\\Lib\\site-packages\\sam2\\sam2_video_predictor.py:60 then sets num_frames=2, so SAM 2 frame 1 is c.png's pixels. On the LazyLabel side, sam2_model.py:757 saves the full, unfiltered path list before staging. So propagation_manager.py:780-781 gives image_path=b.png, line 736 maps SAM 2 frame 1 to timeline frame 1, and E:\\GitHub\\LazyLabel\\legacy\\lazylabel\\src\\lazylabel\\ui\\main_window.py:4486-4566 saves the mask to timeline frame 1, which is b.png.\n\nParameters match: JPEG quality 95 at sam2_model.py:786 and :803; symlink at :791, falling back to copy2 on OSError at :796.\n\nGAPS IN THE CARD (missing detail, not errors):\n(a) Every frame after a gap is off by one per gap, not just frame 1. c.png's own timeline frame never gets a result: SAM 2 has 2 frames, while total_frames and video_frame_count (sam2_model.py:1104-1106) both say 3.\n(b) If a reference frame comes after the gap (for example SAM 2 index 2), _get_image_feature reads images[2] (sam2_video_predictor.py:713) and raises IndexError. sam2_model.py:913-915 catches and logs it, and propagation_manager.py:655 ignores the return value, so the reference is lost silently.\n(c) Streaming mode has the same gap (propagation_manager.py:1028-1031 and 1104-1108).\n(d) The cache branch (sam2_model.py:782-787) cannot be reached from the UI. _sequence_memory_cache is read at main_window.py:4084 and 4886-4893 but never assigned. So the \"cached frames at quality 95\" parameter is dead in practice, and the implied \"b.png not cached\" condition always holds.\n(e) Corrupt .jpg files are symlinked or copied without a check. They cause no gap, but SAM 2's loader then raises and init_video_state returns False (sam2_model.py:843-849).\n(f) In the UI, the no-filter state only happens when QImageReader cannot read the header size of any reference frame (main_window.py:3863-3875; E:\\GitHub\\LazyLabel\\legacy\\lazylabel\\src\\lazylabel\\ui\\modes\\sequence_view_mode.py:233-235). It is reachable but uncommon.\n(g) \"Initializes the video predictor\" should say init_video_state, which runs lazily when propagation starts (propagation_manager.py:643-646). init_video_predictor is a separate step.\n\nP0: Justified on data-integrity grounds. The gap silently attaches a mask computed from one image to a different image's annotation, which corrupts the labeled output. But it is a legacy defect, not behavior to copy. The P0 contract should be the rule \"each propagated mask belongs to the image it was computed from, and unreadable frames are either dropped with gap-free renumbering or marked SKIPPED.\" JPEG quality 95 and symlink/copy are SAM 2 adapter details and should be left out of the P0 equivalence set.\n\nNo instruction-like text or credentials appear in the cited lines."
     }
-   }
+   },
+   "restoredByDecision": 14
   },
   {
    "name": "Frame status precedence, suggestions and timeline sort",
@@ -2445,7 +2446,7 @@
   {
    "name": "Propagation confidence score per object",
    "category": "Calculation",
-   "priority": "P1",
+   "priority": "P0",
    "source": "legacy/lazylabel/src/lazylabel/models/sam2_model.py:1029-1044; legacy/lazylabel/src/lazylabel/models/sam2_model.py:893-909; legacy/lazylabel/src/lazylabel/models/sam2_model.py:683-690",
    "plainEnglish": "For each object in each frame the mask is the pixels with logit > 0, and confidence = sigmoid(mean of those positive logits); an object with no positive logits scores 0.",
    "given": "An object's positive logits average 4.0 (or 5.0)",
@@ -2457,8 +2458,7 @@
     "Confidence ignores mask size, so tiny confident masks score high",
     "Empty masks are skipped before flagging"
    ],
-   "confidence": "Medium",
-   "smeQuestion": "The compliance judge rated this not P0 while the fidelity judge rated it P0. Decide whether it guards annotation data integrity and belongs in the behavior contract. Judges' reasoning: analysis/lazylabel/P0_PANEL.md.",
+   "confidence": "High",
    "mergedSpecs": [
     {
      "name": "SAM 2 propagation confidence score",
@@ -2484,7 +2484,9 @@
       }
      }
     }
-   ]
+   ],
+   "restoredByDecision": 14,
+   "confidenceNote": "Confidence was lowered only by the P0 panel disagreement that decision 14 settled on 2026-09-17; every judge found the specification faithful."
   },
   {
    "name": "Propagation direction and range",
@@ -5559,7 +5561,7 @@
  "decisionsApplied": {
   "date": "2026-09-17",
   "covers": "Full plan",
-  "restoredToP0": 19,
-  "questionsClosed": 12
+  "restoredToP0": 21,
+  "questionsClosed": 13
  }
 }
