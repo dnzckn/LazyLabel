@@ -1,0 +1,459 @@
+/**
+ * The API's routes, as a transport-free request handler.
+ *
+ * `handle` takes a plain request object and returns a plain response, so the acceptance tests
+ * exercise the real routing, status codes and bodies without a socket, and `server.ts` is a thin
+ * binding onto `node:http`. The point is that the contract can be tested where it is decided.
+ *
+ * What exists here is the Phase 2 pilot: the annotation read and write paths wired to the Phase 1
+ * format library over the blob store port, settings, and health. Everything else is listed in
+ * `capabilities.ts` with the phase that builds it, and the acceptance suite holds a place for each.
+ */
+
+import {
+  applyCrop,
+  createFinalMaskTensor,
+  createInstanceContours,
+  LOAD_PRIORITY,
+} from "@lazylabel/annotation-formats";
+import type { AnnotationFormat, ExportContext, Segment } from "@lazylabel/annotation-formats";
+
+import {
+  AnnotationLoadError,
+  readAnnotations,
+  writeAnnotations,
+} from "./annotations/service.js";
+import { RevisionConflictError, type BlobStore } from "./ports/blobStore.js";
+import type { MetadataStore } from "./ports/metadataStore.js";
+import { silentLogger, type Logger } from "./http/log.js";
+import { HttpError, badRequest, notFound, payloadTooLarge, unprocessable } from "./http/problem.js";
+import { matchRoute } from "./http/router.js";
+import { decodeMask, encodeLoadResponse, parseJsonObject, type WireMask } from "./http/wire.js";
+import { defaultSettings, SETTINGS_SCHEMA_VERSION, type StoredSettings } from "./settings/schema.js";
+
+/** Largest request body the API will read. A save of 500 bounded masks stays far below this. */
+export const MAX_BODY_BYTES = 64 * 1024 * 1024;
+
+export interface ApiRequest {
+  readonly method: string;
+  /** Path only, no query string. Percent-escapes are decoded by the router, once. */
+  readonly path: string;
+  readonly query: URLSearchParams;
+  readonly headers: Readonly<Record<string, string>>;
+  readonly body: Uint8Array;
+}
+
+export interface ApiResponse {
+  readonly status: number;
+  readonly headers: Readonly<Record<string, string>>;
+  readonly body: string;
+}
+
+export interface AppDeps {
+  readonly blobStore: BlobStore;
+  readonly metadataStore: MetadataStore;
+  readonly logger?: Logger;
+  /** Reports whether the dataset root is reachable. Drives the health endpoint. */
+  readonly datasetHealthy?: () => Promise<boolean>;
+}
+
+type Handler = (request: ApiRequest, params: Readonly<Record<string, string>>) => Promise<ApiResponse>;
+
+export interface App {
+  handle(request: ApiRequest): Promise<ApiResponse>;
+}
+
+export function createApp(deps: AppDeps): App {
+  const logger = deps.logger ?? silentLogger;
+
+  const routes: { method: string; pattern: string; handler: Handler }[] = [
+    { method: "GET", pattern: "/health", handler: () => health(deps) },
+    {
+      method: "GET",
+      pattern: "/projects/:projectId/images/*imagePath/annotations",
+      handler: (request, params) => getAnnotations(deps, request, params),
+    },
+    {
+      method: "PUT",
+      pattern: "/projects/:projectId/images/*imagePath/annotations",
+      handler: (request, params) => putAnnotations(deps, request, params),
+    },
+    { method: "GET", pattern: "/users/me/settings", handler: () => getSettings(deps) },
+    { method: "PUT", pattern: "/users/me/settings", handler: (request) => putSettings(deps, request) },
+  ];
+
+  return {
+    async handle(request: ApiRequest): Promise<ApiResponse> {
+      // Every request carries a correlation id through to the inference service and into every log
+      // line (AI_NATIVE_SPEC.md section 4). A client-supplied one is honoured so a trace survives
+      // the hop; otherwise one is minted here.
+      const correlationId = request.headers["x-correlation-id"] ?? newCorrelationId();
+      const scoped = logger.child({ correlationId, method: request.method, path: request.path });
+
+      try {
+        if (request.body.length > MAX_BODY_BYTES) {
+          throw payloadTooLarge(`the request body exceeds ${MAX_BODY_BYTES} bytes`);
+        }
+
+        let allowed: string[] = [];
+        for (const route of routes) {
+          const match = matchRoute(route.pattern, request.path);
+          if (match === null) continue;
+          if (route.method !== request.method) {
+            allowed.push(route.method);
+            continue;
+          }
+          const response = await route.handler(request, match.params);
+          scoped.log("info", "request handled", { status: response.status });
+          return withCorrelation(response, correlationId);
+        }
+
+        if (allowed.length > 0) {
+          scoped.log("warn", "method not allowed", { allowed });
+          return withCorrelation(
+            problemResponse(new HttpError(405, "method_not_allowed", `use ${allowed.join(" or ")} here`), {
+              Allow: allowed.join(", "),
+            }),
+            correlationId,
+          );
+        }
+
+        scoped.log("warn", "no route");
+        return withCorrelation(problemResponse(notFound(`no route for ${request.path}`)), correlationId);
+      } catch (cause) {
+        const error = toHttpError(cause);
+        // 5xx is our fault and gets the stack; 4xx is the request's and does not.
+        scoped.log(error.status >= 500 ? "error" : "warn", "request failed", {
+          status: error.status,
+          code: error.code,
+          reason: error.message,
+          ...(error.status >= 500 ? { cause } : {}),
+        });
+        return withCorrelation(problemResponse(error), correlationId);
+      }
+    },
+  };
+}
+
+async function health(deps: AppDeps): Promise<ApiResponse> {
+  const [dataset, database] = await Promise.all([
+    deps.datasetHealthy?.() ?? Promise.resolve(true),
+    deps.metadataStore.healthy(),
+  ]);
+
+  // The dataset folder is the source of truth, so losing it is fatal; losing the database costs
+  // settings but not annotation work (AI_NATIVE_SPEC.md, failure modes). The status reflects that
+  // difference rather than collapsing both into "unhealthy".
+  const status = dataset ? 200 : 503;
+  return json(status, {
+    status: dataset ? (database ? "ok" : "degraded") : "unavailable",
+    dataset: dataset ? "ok" : "unreadable",
+    database: database ? "ok" : "unavailable",
+    degraded: database ? [] : ["settings and hotkeys are unavailable; annotation work continues"],
+  });
+}
+
+async function getAnnotations(
+  deps: AppDeps,
+  request: ApiRequest,
+  params: Readonly<Record<string, string>>,
+): Promise<ApiResponse> {
+  const imageKey = params["imagePath"]!;
+  const imageSize = imageSizeFromQuery(request.query);
+
+  let read;
+  try {
+    read = await readAnnotations(deps.blobStore, imageKey, imageSize);
+  } catch (cause) {
+    if (cause instanceof AnnotationLoadError) {
+      // 409, never 200-with-nothing. Decision 15d: a damaged sidecar is reported with the formats
+      // still present so the client can offer one, and nothing is deleted on this path.
+      throw new HttpError(409, "annotations_unreadable", cause.message, {
+        failures: cause.failures.map((failure) => ({ format: failure.format, reason: failure.reason })),
+      });
+    }
+    throw cause;
+  }
+
+  // 204, not an empty 200. "This image has no annotation file" and "this image's annotation file is
+  // empty" are different facts, and a client that cannot tell them apart cannot warn about either.
+  if (read === null) return { status: 204, headers: {}, body: "" };
+
+  return json(200, encodeLoadResponse(read.outcome, read.key, read.revision));
+}
+
+async function putAnnotations(
+  deps: AppDeps,
+  request: ApiRequest,
+  params: Readonly<Record<string, string>>,
+): Promise<ApiResponse> {
+  const imageKey = params["imagePath"]!;
+  const body = parseJsonObject(request.body);
+
+  const imageSize = imageSizeFromBody(body);
+  const formats = formatsFromBody(body);
+  const segments = segmentsFromBody(body);
+  const classAliases = aliasesFromBody(body);
+
+  // classOrder is derived, not taken from the client: it is the sorted unique class ids present,
+  // and letting a request name a different order would change which channel each class occupies in
+  // the exported files. That is a content rule, so the client does not get a vote.
+  const classOrder = [
+    ...new Set(segments.map((segment) => segment.classId).filter((id): id is number => id !== null)),
+  ].sort((a, b) => a - b);
+
+  const pixelPriority = pixelPriorityFromBody(body);
+  let maskTensor = createFinalMaskTensor(segments, imageSize, classOrder, pixelPriority);
+
+  const cropCoords = cropFromBody(body);
+  if (cropCoords !== null) maskTensor = applyCrop(maskTensor, cropCoords);
+
+  const context: ExportContext = {
+    imagePath: imageKey,
+    imageSize,
+    classOrder,
+    classLabels: classOrder.map((id) => classAliases.get(id) ?? String(id)),
+    classAliases,
+    maskTensor,
+    cropCoords,
+    instances: createInstanceContours(segments, imageSize, classOrder, maskTensor),
+  };
+
+  try {
+    const result = await writeAnnotations(deps.blobStore, imageKey, {
+      formats,
+      context,
+      ...(expectedRevisionsFromBody(body) ?? {}),
+    });
+
+    return json(200, {
+      written: Object.fromEntries(result.written),
+      // Reported, never deleted (decision 15f). The client offers removal; the user decides.
+      stale: result.stale,
+      skippedEmpty: result.skippedEmpty,
+      ...(result.skippedEmpty.length > 0
+        ? {
+            note:
+              "a format that rendered nothing was not written. Phase 4 builds the empty-save rule, " +
+              "which writes empty files so clearing an image survives a reload.",
+          }
+        : {}),
+    });
+  } catch (cause) {
+    if (cause instanceof RevisionConflictError) {
+      throw new HttpError(409, "revision_conflict", cause.message, { key: cause.key });
+    }
+    throw cause;
+  }
+}
+
+async function getSettings(deps: AppDeps): Promise<ApiResponse> {
+  const stored = (await deps.metadataStore.getSettings("me")) ?? defaultSettings();
+  return json(200, stored);
+}
+
+async function putSettings(deps: AppDeps, request: ApiRequest): Promise<ApiResponse> {
+  const body = parseJsonObject(request.body);
+  const values = body["values"];
+  const hotkeys = body["hotkeys"];
+
+  if (values === undefined || values === null || typeof values !== "object" || Array.isArray(values)) {
+    throw badRequest("settings must carry a `values` object");
+  }
+  if (hotkeys === undefined || hotkeys === null || typeof hotkeys !== "object" || Array.isArray(hotkeys)) {
+    throw badRequest("settings must carry a `hotkeys` object");
+  }
+
+  // Unknown keys inside `values` are stored as they arrive. RULE-088's fix is not a validation
+  // step to be added later; it is the absence of one here.
+  const stored: StoredSettings = {
+    schemaVersion: SETTINGS_SCHEMA_VERSION,
+    values: values as Record<string, unknown>,
+    hotkeys: hotkeys as StoredSettings["hotkeys"],
+  };
+  await deps.metadataStore.putSettings("me", stored);
+  return json(200, stored);
+}
+
+/**
+ * The image's pixel size.
+ *
+ * PROVISIONAL: the text formats store normalized coordinates, so a reader cannot turn them back
+ * into pixels without knowing the image size, and the API cannot know it until the image pipeline
+ * (C8, Phase 5) can decode the file. Until then the client states it. The seam is deliberately
+ * visible rather than hidden behind a half-built decoder that would be wrong for 16-bit TIFF.
+ */
+function imageSizeFromQuery(query: URLSearchParams): [number, number] {
+  const height = Number(query.get("height"));
+  const width = Number(query.get("width"));
+  if (!isPositiveInteger(height) || !isPositiveInteger(width)) {
+    throw badRequest(
+      "height and width query parameters are required until the image pipeline can decode the image itself",
+    );
+  }
+  return [height, width];
+}
+
+function imageSizeFromBody(body: Record<string, unknown>): [number, number] {
+  const size = body["imageSize"];
+  if (!Array.isArray(size) || size.length !== 2) {
+    throw badRequest("imageSize must be [height, width]");
+  }
+  const [height, width] = size as unknown[];
+  if (!isPositiveInteger(height) || !isPositiveInteger(width)) {
+    throw unprocessable("imageSize must be two positive integers, [height, width]");
+  }
+  return [height, width];
+}
+
+function formatsFromBody(body: Record<string, unknown>): AnnotationFormat[] {
+  const formats = body["formats"];
+  if (!Array.isArray(formats) || formats.length === 0) {
+    throw badRequest("formats must be a non-empty array naming which files to write");
+  }
+  const known = new Set<string>(LOAD_PRIORITY);
+  for (const format of formats) {
+    if (typeof format !== "string" || !known.has(format)) {
+      throw unprocessable(`${JSON.stringify(format)} is not one of the seven annotation formats`);
+    }
+  }
+  return formats as AnnotationFormat[];
+}
+
+function segmentsFromBody(body: Record<string, unknown>): Segment[] {
+  const segments = body["segments"];
+  if (!Array.isArray(segments)) throw badRequest("segments must be an array");
+
+  return segments.map((raw, index) => {
+    if (raw === null || typeof raw !== "object" || Array.isArray(raw)) {
+      throw unprocessable(`segment ${index} is not an object`);
+    }
+    const record = raw as Record<string, unknown>;
+    const type = record["type"];
+    if (type !== "AI" && type !== "Loaded" && type !== "Polygon" && type !== "Circle") {
+      throw unprocessable(`segment ${index} has an unknown type ${JSON.stringify(type)}`);
+    }
+
+    const classId = record["classId"];
+    if (classId !== null && !Number.isInteger(classId)) {
+      throw unprocessable(`segment ${index} has a non-integer class id`);
+    }
+
+    const segment: {
+      type: Segment["type"];
+      classId: number | null;
+      mask?: ReturnType<typeof decodeMask>;
+      vertices?: readonly (readonly [number, number])[];
+    } = { type, classId: classId as number | null };
+
+    if (record["mask"] !== undefined && record["mask"] !== null) {
+      segment.mask = decodeMask(record["mask"] as WireMask);
+    }
+    if (Array.isArray(record["vertices"])) {
+      segment.vertices = record["vertices"] as readonly (readonly [number, number])[];
+    }
+    return segment as Segment;
+  });
+}
+
+function aliasesFromBody(body: Record<string, unknown>): Map<number, string> {
+  const aliases = new Map<number, string>();
+  const raw = body["classAliases"];
+  if (raw === undefined || raw === null) return aliases;
+  if (typeof raw !== "object" || Array.isArray(raw)) {
+    throw badRequest("classAliases must be an object keyed by class id");
+  }
+  for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+    const id = Number(key);
+    if (!Number.isInteger(id)) throw unprocessable(`${JSON.stringify(key)} is not a class id`);
+    if (typeof value !== "string") throw unprocessable(`the alias for class ${id} is not a string`);
+    aliases.set(id, value);
+  }
+  return aliases;
+}
+
+function cropFromBody(body: Record<string, unknown>): [number, number, number, number] | null {
+  const crop = body["cropCoords"];
+  if (crop === undefined || crop === null) return null;
+  if (!Array.isArray(crop) || crop.length !== 4 || !crop.every((n) => Number.isInteger(n))) {
+    throw unprocessable("cropCoords must be four integers, [x1, y1, x2, y2]");
+  }
+  return crop as [number, number, number, number];
+}
+
+function pixelPriorityFromBody(body: Record<string, unknown>): { enabled: boolean; ascending: boolean } {
+  const raw = body["pixelPriority"];
+  if (raw === undefined || raw === null) return { enabled: false, ascending: true };
+  if (typeof raw !== "object" || Array.isArray(raw)) throw badRequest("pixelPriority must be an object");
+  const record = raw as Record<string, unknown>;
+  return {
+    enabled: record["enabled"] === true,
+    ascending: record["ascending"] !== false,
+  };
+}
+
+function expectedRevisionsFromBody(
+  body: Record<string, unknown>,
+): { expectedRevisions: Map<AnnotationFormat, string | null> } | null {
+  const raw = body["expectedRevisions"];
+  if (raw === undefined || raw === null) return null;
+  if (typeof raw !== "object" || Array.isArray(raw)) {
+    throw badRequest("expectedRevisions must be an object keyed by format");
+  }
+
+  const known = new Set<string>(LOAD_PRIORITY);
+  const revisions = new Map<AnnotationFormat, string | null>();
+  for (const [format, revision] of Object.entries(raw as Record<string, unknown>)) {
+    if (!known.has(format)) throw unprocessable(`${JSON.stringify(format)} is not an annotation format`);
+    if (revision !== null && typeof revision !== "string") {
+      throw unprocessable(`the expected revision for ${format} is neither a string nor null`);
+    }
+    revisions.set(format as AnnotationFormat, revision);
+  }
+  return { expectedRevisions: revisions };
+}
+
+function isPositiveInteger(value: unknown): value is number {
+  return Number.isInteger(value) && (value as number) > 0;
+}
+
+function json(status: number, body: unknown): ApiResponse {
+  return {
+    status,
+    headers: { "content-type": "application/json; charset=utf-8" },
+    body: JSON.stringify(body),
+  };
+}
+
+function problemResponse(error: HttpError, extraHeaders: Record<string, string> = {}): ApiResponse {
+  const response = json(error.status, error.toProblem());
+  return { ...response, headers: { ...response.headers, ...extraHeaders } };
+}
+
+function withCorrelation(response: ApiResponse, correlationId: string): ApiResponse {
+  return { ...response, headers: { ...response.headers, "x-correlation-id": correlationId } };
+}
+
+function toHttpError(cause: unknown): HttpError {
+  if (cause instanceof HttpError) return cause;
+  if (cause instanceof RevisionConflictError) {
+    return new HttpError(409, "revision_conflict", cause.message, { key: cause.key });
+  }
+  if (cause instanceof AnnotationLoadError) {
+    return new HttpError(409, "annotations_unreadable", cause.message);
+  }
+  // InvalidKeyError and anything else from the store is a bad request, not a server fault: the
+  // client asked for a path this store will not serve.
+  if (cause instanceof Error && cause.name === "InvalidKeyError") {
+    return badRequest(cause.message);
+  }
+  return new HttpError(
+    500,
+    "internal",
+    cause instanceof Error ? cause.message : String(cause),
+  );
+}
+
+function newCorrelationId(): string {
+  return globalThis.crypto.randomUUID();
+}

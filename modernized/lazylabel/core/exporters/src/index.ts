@@ -15,7 +15,10 @@
  */
 
 export * from "./types.js";
-export { outputPathFor } from "./paths.js";
+// `stripExtension` is exported alongside it because the API needs the same `os.path.splitext`
+// semantics to group an image with its sidecars; a second implementation of that rule is exactly
+// the drift this library exists to prevent.
+export { outputPathFor, stripExtension } from "./paths.js";
 
 export { pyRepr } from "./format/pyRepr.js";
 export { MalformedAnnotationError } from "./format/labels.js";

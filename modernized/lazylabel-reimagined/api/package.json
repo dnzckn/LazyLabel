@@ -1,0 +1,26 @@
+{
+  "name": "@lazylabel/api",
+  "version": "0.1.0",
+  "private": true,
+  "description": "LazyLabel web API: reads and writes annotation sidecars in place, owns the image pipeline, serves settings, and proxies inference. Phase 2 scaffold.",
+  "type": "module",
+  "license": "Apache-2.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "node dist/main.js",
+    "build": "tsc -p tsconfig.build.json",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@lazylabel/annotation-formats": "file:../../lazylabel/core/exporters"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.1",
+    "typescript": "^6.0.3",
+    "vitest": "^5.0.0"
+  }
+}

@@ -1,0 +1,88 @@
+/**
+ * Where images and their annotation sidecars live.
+ *
+ * Decision 5, as the owner refined it on 2026-09-18: the mounted dataset directory is the default
+ * and the only adapter built, and this port is what lets a hosted deployment point at object
+ * storage instead without a redesign. `REIMAGINED_ARCHITECTURE.md` section 3.1.
+ *
+ * Two properties are the port's whole point, and an adapter that cannot provide them is not a
+ * conforming adapter:
+ *
+ * 1. `writeAtomic` must be all-or-nothing. A reader must never observe a half-written sidecar, and
+ *    a failed write must leave the previous content intact. The directory adapter gets this from
+ *    write-to-temp-then-rename. Object storage has no rename, so an S3 adapter must reach it by a
+ *    conditional put on the object version; section 3.1 records that as a known cost of that
+ *    adapter rather than a surprise inside it.
+ *
+ * 2. `revision` must change whenever the bytes change. It is what makes the PUT contract's 409
+ *    ("the file changed on disk since it was read; nothing was written") implementable. An adapter
+ *    may use an ETag, a version id, or size and mtime; callers treat it as opaque.
+ *
+ * The port moves bytes and never interprets them. Deciding what a sidecar CONTAINS belongs to the
+ * format library, which is the brief's first binding design rule.
+ */
+
+export interface BlobStat {
+  readonly size: number;
+  /** Opaque token that changes whenever the bytes change. Never parsed by callers. */
+  readonly revision: string;
+}
+
+export interface BlobStore {
+  /** The bytes, or null when the key does not exist. Never throws for absence alone. */
+  read(key: string): Promise<Uint8Array | null>;
+
+  /** Size and revision, or null when the key does not exist. */
+  stat(key: string): Promise<BlobStat | null>;
+
+  /** Keys directly under `prefix`, not recursive, in no guaranteed order. */
+  list(prefix: string): Promise<readonly string[]>;
+
+  /**
+   * Replace the key's content atomically, returning the new revision.
+   *
+   * `expectedRevision` makes the write conditional: pass the revision the caller last read to have
+   * the write refused with {@link RevisionConflictError} if anything changed since, or null to
+   * require that the key does not yet exist. Omit it only when the caller genuinely does not care
+   * what it overwrites.
+   */
+  writeAtomic(
+    key: string,
+    bytes: Uint8Array,
+    expectedRevision?: string | null,
+  ): Promise<BlobStat>;
+
+  /**
+   * Delete the key. Missing is not an error.
+   *
+   * Nothing in the annotation paths calls this. Decision 7 removed delete-on-empty, and decision
+   * 15f says a stale sidecar is reported and offered for removal, never deleted silently, so the
+   * only caller is an explicit user action.
+   */
+  remove(key: string): Promise<void>;
+}
+
+/** The stored bytes are not at the revision the caller expected, so nothing was written. */
+export class RevisionConflictError extends Error {
+  constructor(
+    readonly key: string,
+    readonly expected: string | null,
+    readonly actual: string | null,
+  ) {
+    super(
+      `${key} changed since it was read (expected ${expected ?? "it to be absent"}, found ${actual ?? "it absent"}); nothing was written`,
+    );
+    this.name = "RevisionConflictError";
+  }
+}
+
+/** The key is not one this store will accept: traversal, absolute, or reserved. */
+export class InvalidKeyError extends Error {
+  constructor(
+    readonly key: string,
+    reason: string,
+  ) {
+    super(`refusing the path ${JSON.stringify(key)}: ${reason}`);
+    this.name = "InvalidKeyError";
+  }
+}

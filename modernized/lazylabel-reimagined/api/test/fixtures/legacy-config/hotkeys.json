@@ -1,0 +1,162 @@
+{
+    "load_next_image": {
+        "primary_key": "Right",
+        "secondary_key": null
+    },
+    "load_previous_image": {
+        "primary_key": "Left",
+        "secondary_key": null
+    },
+    "fit_view": {
+        "primary_key": ".",
+        "secondary_key": null
+    },
+    "sam_mode": {
+        "primary_key": "1",
+        "secondary_key": null
+    },
+    "polygon_mode": {
+        "primary_key": "2",
+        "secondary_key": null
+    },
+    "bbox_mode": {
+        "primary_key": "3",
+        "secondary_key": null
+    },
+    "circle_mode": {
+        "primary_key": "4",
+        "secondary_key": null
+    },
+    "selection_mode": {
+        "primary_key": "E",
+        "secondary_key": null
+    },
+    "pan_mode": {
+        "primary_key": "Q",
+        "secondary_key": null
+    },
+    "edit_mode": {
+        "primary_key": "R",
+        "secondary_key": null
+    },
+    "clear_points": {
+        "primary_key": "C",
+        "secondary_key": null
+    },
+    "save_segment": {
+        "primary_key": "Space",
+        "secondary_key": null
+    },
+    "erase_segment": {
+        "primary_key": "Shift+Space",
+        "secondary_key": null
+    },
+    "save_output": {
+        "primary_key": "Return",
+        "secondary_key": null
+    },
+    "save_output_alt": {
+        "primary_key": "Enter",
+        "secondary_key": null
+    },
+    "undo": {
+        "primary_key": "Ctrl+Z",
+        "secondary_key": null
+    },
+    "redo": {
+        "primary_key": "Ctrl+Y",
+        "secondary_key": "Ctrl+Shift+Z"
+    },
+    "escape": {
+        "primary_key": "Escape",
+        "secondary_key": null
+    },
+    "toggle_ai_filter": {
+        "primary_key": "Z",
+        "secondary_key": null
+    },
+    "merge_segments": {
+        "primary_key": "M",
+        "secondary_key": null
+    },
+    "delete_segments": {
+        "primary_key": "V",
+        "secondary_key": null
+    },
+    "delete_segments_alt": {
+        "primary_key": "Backspace",
+        "secondary_key": null
+    },
+    "select_all": {
+        "primary_key": "Ctrl+A",
+        "secondary_key": null
+    },
+    "convert_to_polygons": {
+        "primary_key": "P",
+        "secondary_key": null
+    },
+    "toggle_recent_class": {
+        "primary_key": "X",
+        "secondary_key": null
+    },
+    "zoom_in": {
+        "primary_key": "Ctrl+Plus",
+        "secondary_key": null
+    },
+    "zoom_out": {
+        "primary_key": "Ctrl+Minus",
+        "secondary_key": null
+    },
+    "pan_up": {
+        "primary_key": "W",
+        "secondary_key": null
+    },
+    "pan_down": {
+        "primary_key": "S",
+        "secondary_key": null
+    },
+    "pan_left": {
+        "primary_key": "A",
+        "secondary_key": null
+    },
+    "pan_right": {
+        "primary_key": "D",
+        "secondary_key": null
+    },
+    "add_reference_frame": {
+        "primary_key": "G",
+        "secondary_key": null
+    },
+    "next_flagged_frame": {
+        "primary_key": "N",
+        "secondary_key": null
+    },
+    "prev_flagged_frame": {
+        "primary_key": "Shift+N",
+        "secondary_key": null
+    },
+    "next_reference_frame": {
+        "primary_key": "B",
+        "secondary_key": null
+    },
+    "prev_reference_frame": {
+        "primary_key": "Shift+B",
+        "secondary_key": null
+    },
+    "next_suggested_frame": {
+        "primary_key": "H",
+        "secondary_key": null
+    },
+    "prev_suggested_frame": {
+        "primary_key": "Shift+H",
+        "secondary_key": null
+    },
+    "find_archetypes": {
+        "primary_key": "Ctrl+H",
+        "secondary_key": null
+    },
+    "propagate": {
+        "primary_key": "Ctrl+P",
+        "secondary_key": null
+    }
+}
