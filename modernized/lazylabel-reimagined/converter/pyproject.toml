@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "lazylabel-converter"
+version = "0.1.0"
+description = "Rewrites a legacy LazyLabel NPZ's pickled class-alias table as JSON, without executing it."
+requires-python = ">=3.10"
+# numpy only for the tests, which build legacy-shaped archives to convert. The converter itself
+# reads the .npy header and the pickle directly, so it does not need numpy to run.
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "numpy>=1.24"]
+
+[project.scripts]
+lazylabel-convert-aliases = "lazylabel_converter.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
