@@ -1,0 +1,8 @@
+{
+  "id": "RULE-086",
+  "name": "Active class toggle and recent-class hotkey",
+  "answer": "THE LIVE CODE WINS, and the referee's citation correction is adopted.\n\nThe card is right and half its citation points at code that does the opposite. `SegmentManager.get_class_to_toggle_with_hotkey` documents a HIGHEST-id fallback and is never called; the live handler at `main_window.py:2712-2738` implements a LOWEST-id fallback. The specification follows the live code, because that is what users have been using: X toggles the most recently used or toggled class; with none, the first or last row of the table depending on Pixel Priority and its ascending flag; and with no table, the LOWEST class id.\n\nThe unused method should be deleted rather than ported. Carrying dead code that contradicts the live behaviour into the rewrite is how the wrong branch gets chosen later by someone reading the more plausible-looking one - and it is the more plausible-looking one, which is exactly the hazard.\n\nWHY IT MATTERS BEYOND THE UI. The active class decides which class new segments take (RULE-011), and that is written into every exported file. A hotkey that selects a different class than the user expects produces correctly-formatted annotations with the wrong labels, which is the kind of error a dataset carries silently into training.\n\nPhase 4 owns the class table and the active-class state; Phase 5 binds the key. The shared settings schema already refuses to bind X to two actions (RULE-049), so the hotkey half is in place.",
+  "corrections": [],
+  "unresolved": "",
+  "injectionSuspects": []
+}

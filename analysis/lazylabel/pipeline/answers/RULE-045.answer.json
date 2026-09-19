@@ -1,0 +1,8 @@
+{
+  "id": "RULE-045",
+  "name": "Crop coordinate validation and reuse by image size",
+  "answer": "ANSWERED BY DECISION 9, which the owner approved: per-image-size crop restore does NOT carry over. A crop applies to the current image only.\n\nSo the answer to 'should a crop automatically apply to every later image with the same resolution, and on all navigation paths?' is no to the first half, which makes the second half moot. The inconsistency the card records - that crop persistence works on the legacy file-tree path and not on the visible fast file list - is resolved by removing the persistence rather than by extending it to both paths. See RULE-067, which is the same decision seen from the other side.\n\nRemoving it is the safer direction. A crop silently re-applied to a different image is a save that blanks everything outside a region the user drew for a different picture, and because the crop is applied ON SAVE the loss lands in the file rather than on the screen.\n\nWHAT IS PRESERVED is the validation, which is fidelity rather than preference and is already implemented in Phase 1's `applyCrop`: values are parsed as integer 'start:end' pairs for both axes, rounded, clamped to 0..width-1 and 0..height-1, and swapped when reversed. The off-by-one that blanks the last row and column is preserved deliberately under decision 15h, flagged for a later release that may break byte-identity.\n\nA crop needs an open image, and the rewrite keeps that: it is not a setting, it is an edit to one image's save.",
+  "corrections": [],
+  "unresolved": "",
+  "injectionSuspects": []
+}

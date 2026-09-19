@@ -1,0 +1,8 @@
+{
+  "id": "RULE-067",
+  "name": "Crop persistence across image navigation",
+  "answer": "ANSWERED BY DECISION 9: a crop applies to the current image only. It does NOT carry to other images of the same size.\n\nThis is RULE-045 seen from the other side, and the two must not be answered differently. The card records the inconsistency precisely: `crop_coords_by_size` implies crops carry to same-sized images, and `load_image_by_path` - the path the VISIBLE file list actually uses - never restores it. So the feature exists, is half-wired, and the half that works is the one most users never touch.\n\nThe resolution is to remove the persistence rather than finish it, and the reason is the blast radius. A crop is applied ON SAVE and blanks everything outside it, so a crop silently restored onto a different image is a save that destroys annotations outside a region the user drew for another picture. The user sees nothing wrong at the time; the loss is in the file. Finishing the feature would make that happen reliably instead of occasionally, which is the wrong direction for a defect of this shape.\n\n'Same size' was never a good proxy for 'same framing' either. Two unrelated 1920x1080 images share nothing but their dimensions.\n\nWHAT PHASE 4 BUILDS: crop is per-image state, cleared on navigation, with no size-keyed store at all. A user who wants the same crop on a run of images gets it from a future explicit 'apply to selection' action, which is a feature with a confirmation rather than a memory that acts on its own.",
+  "corrections": [],
+  "unresolved": "",
+  "injectionSuspects": []
+}

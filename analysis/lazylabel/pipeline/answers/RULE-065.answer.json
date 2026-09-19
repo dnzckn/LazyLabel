@@ -1,0 +1,8 @@
+{
+  "id": "RULE-065",
+  "name": "Selecting a file in the Sequence tab jumps to its frame; a file outside the timeline bounces back",
+  "answer": "TWO QUESTIONS, BOTH ANSWERED BY DECISION 7 AND BY WHAT THE COMMENT ALREADY INTENDED.\n\nSHOULD SELECTING A FILE OUTSIDE THE TIMELINE SWITCH TO SINGLE VIEW? Yes. The legacy comment says it does and the code does not, so this is a specification correction rather than a new choice: the intent was recorded and never implemented. Opening an image that is not in the timeline while the Sequence tab is still showing a timeline it does not belong to is a state that means nothing, and the bounce-back the card describes is the symptom.\n\nSHOULD THIS SAVE MARK THE FRAME SAVED AND CLEAR ITS PROPAGATED MASKS? This is the half with teeth, and the answer is that the save must not happen implicitly at all. Under decision 7 there is no silent save on navigation: leaving a frame with unsaved work asks. That removes the case the defect describes, where the single-image loader saves the current frame WITHOUT the sequence bookkeeping and a user's edits on a propagated frame are overwritten by stored masks that were never reconciled.\n\nWhen a save does happen, it is one save path (see RULE-057), so it marks the frame saved and clears its propagated masks exactly as the sequence path does. Two save paths that do different bookkeeping for the same act is the shape of the bug, and the answer is one path rather than matched behaviour in two.\n\nScheduling: the timeline is Phase 6. What Phase 4 owes this rule is the dirty-tracking and the single save path, so Phase 6 has nothing to fork.",
+  "corrections": [],
+  "unresolved": "",
+  "injectionSuspects": []
+}

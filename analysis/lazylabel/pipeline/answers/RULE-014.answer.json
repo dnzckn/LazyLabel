@@ -1,0 +1,8 @@
+{
+  "id": "RULE-014",
+  "name": "Saved class channel order is ascending class ID, not the Class Order table",
+  "answer": "TWO QUESTIONS, TWO ANSWERS, and the second is decision 6.\n\nSHOULD NPZ USE A PROJECT-WIDE CLASS LIST? No. Decision 6, approved: per-image class ids. Channels are the distinct class ids present in THIS image, ascending. Same reasoning as RULE-007 - a project-wide list changes the exported bytes.\n\nSHOULD CHANNEL ORDER FOLLOW THE CLASS TABLE? No, and this half is a specification correction rather than a product choice. The save path sorts the ids ascending and ignores the table entirely; dragging rows changes nothing until 'Reassign Class IDs' is pressed, which actually renumbers the ids. Making the order follow the table would change every NPZ channel order and every exporter's class list, which decision 10's byte-identity requirement forbids.\n\nWHAT IS ACTUALLY WRONG HERE IS THE TOOLTIP. `right_panel.py:181-183` tells the user 'drag to reorder channels for saving', and that is simply false. The rewrite must not carry the sentence over. Dragging reorders the DISPLAY; renumbering is a separate, explicit action with a button, and the UI should say so. Shipping a corrected label is not a behaviour change - the behaviour was always this - it is the removal of a lie about it.\n\nSo: the channel rule is preserved exactly (ascending class id, per image), the table stays a display ordering, and the wording is fixed. Phase 4 owns the wording; Phase 1 already implements the channel rule and proves it byte-identical.",
+  "corrections": [],
+  "unresolved": "",
+  "injectionSuspects": []
+}

@@ -1,0 +1,8 @@
+{
+  "id": "RULE-054",
+  "name": "Closing the application never saves the open image's annotations",
+  "answer": "ANSWERED BY DECISION 7, which the owner approved: do not reproduce the silent loss on close.\n\nThe question was whether closing should auto-save when Auto-Save is on, or prompt about unsaved annotations. The answer is PROMPT, with explicit save and dirty tracking, which is what decision 7 specifies for the whole save path.\n\nNot auto-save-on-close, even with Auto-Save on. Auto-Save in the rewrite means 'save when navigating away from an image', which is a user action with an obvious intent. Closing is not the same act: a user who closes after an experiment they did not want may be closing precisely to discard it. Saving silently on exit would be a different silent behaviour rather than a fix for this one, and it would be harder to undo than the loss it replaced.\n\nSo: the workspace tracks dirty state per image, closing with unsaved work asks, and the question names what would be lost rather than asking a generic 'are you sure'.\n\nPRIORITY: this is already P0 by decision 14, which restored it, and nothing here changes that. The card is the clearest case in the catalogue of the failure mode decision 7 exists to remove: the setting is called Auto-Save, the user reasonably reads that as 'my work is preserved', and the last image they edited before quitting is the one image it never preserves. The gap between what the feature is called and what it does is the defect, not merely the missing save.\n\nThe same reasoning covers the sequence frame and the multi-view pair, which the card names and which lose work the same way.",
+  "corrections": [],
+  "unresolved": "",
+  "injectionSuspects": []
+}
