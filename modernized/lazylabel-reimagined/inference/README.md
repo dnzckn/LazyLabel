@@ -140,8 +140,13 @@ blobs whose box is mostly nothing.
   needs a checkpoint to be written against; none is mirrored yet (`MODEL_MANIFEST.md`).
 - **The neighbour prefetch.** RULE-091 specifies pre-computing the next, next-but-one and previous
   images after a settle. The cache is ready for it; the scheduling is not built.
-- **Find Archetypes** (C10) and **SAM 2 propagation** (C11). Both are Phase 3 work on the model
-  side: the brief lists `reference_finder_worker.py` in Phase 3's scope, and exit criterion 2
-  requires propagation to meet the per-frame tolerance. Only the timeline UI is Phase 6.
+- **Find Archetypes** (C10). Phase 3 work on the model side: the brief lists
+  `reference_finder_worker.py` in Phase 3's scope. Only the timeline UI is Phase 6.
+- **The propagation differential.** Staging, confidence and the error path are built and tested,
+  and `tests/test_propagation_live.py` proves the whole thing against the real SAM 2 video
+  predictor: a 40x40 rectangle sliding 12 pixels a frame is tracked at exactly 1600 pixels on every
+  frame, in the right place, attributed to the right source image. What exit criterion 2 still
+  wants is the comparison against *legacy's* propagation on a recorded sequence, which needs both
+  video states stood up side by side.
 - **API-to-inference contract tests** (exit criterion 4). The API does not proxy these routes
   yet, so nothing tests the two services talking to each other.
