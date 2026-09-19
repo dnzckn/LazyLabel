@@ -22,6 +22,21 @@ import sharp from "sharp";
 
 import { decodeBmp, isBmp } from "./bmp.js";
 
+/**
+ * The container formats this service will decode — SEC-02.
+ *
+ * The assessment's mitigation is to name the decoders rather than let the library pick one from
+ * file content, and the reason is concrete: `sharp` also decodes SVG and HEIF. SVG is not an image
+ * in the sense this application means. It is a document that can reference external resources, and
+ * handing one to librsvg because a file called `photo.png` happened to contain one is a class of
+ * bug this service should not be able to have.
+ *
+ * Content still decides WHICH of these a file is — a .png holding a TIFF decodes as a TIFF, exactly
+ * as `cv2.imread` would. The extension is never trusted; it only decides what is offered in the
+ * listing. This is the second gate: the format the content turns out to be must also be on the list.
+ */
+const DECODABLE: ReadonlySet<string> = new Set(["jpeg", "png", "webp", "tiff", "gif"]);
+
 /** The bytes are not an image this service can decode. */
 export class UnsupportedImageError extends Error {
   constructor(message: string) {
@@ -65,6 +80,7 @@ export async function decodeImage(bytes: Uint8Array): Promise<DecodedImage> {
   if (!width || !height) {
     throw new UnsupportedImageError(`the image has no usable size (${width}x${height})`);
   }
+  assertDecodable(format);
 
   // `depth` describes the source samples. Anything wider than a byte takes the 16-bit path.
   const isWide = metadata.depth !== undefined && metadata.depth !== "uchar" && metadata.depth !== "char";
@@ -106,6 +122,15 @@ export function to8Bit(samples: Uint16Array): Uint8Array {
   return out;
 }
 
+/** SEC-02: refuse a container this service does not mean to decode, whatever it is called. */
+function assertDecodable(format: string | undefined): void {
+  if (format === undefined || !DECODABLE.has(format)) {
+    throw new UnsupportedImageError(
+      `this file decodes as ${format ?? "an unknown format"}, which is not an image type LazyLabel opens`,
+    );
+  }
+}
+
 export interface ImageMetadata {
   readonly width: number;
   readonly height: number;
@@ -144,6 +169,7 @@ export async function readImageMetadata(bytes: Uint8Array): Promise<ImageMetadat
   if (!metadata.width || !metadata.height) {
     throw new UnsupportedImageError("the image has no usable size");
   }
+  assertDecodable(metadata.format);
   const isWide = metadata.depth !== undefined && metadata.depth !== "uchar" && metadata.depth !== "char";
   return {
     width: metadata.width,

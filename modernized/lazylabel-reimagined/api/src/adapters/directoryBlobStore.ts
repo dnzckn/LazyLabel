@@ -44,6 +44,7 @@ export class DirectoryBlobStore implements BlobStore {
 
   async read(key: string): Promise<Uint8Array | null> {
     const full = this.resolve(key);
+    if (!(await isPlainFile(full))) return null;
     try {
       return new Uint8Array(await fs.readFile(full));
     } catch (cause) {
@@ -55,10 +56,13 @@ export class DirectoryBlobStore implements BlobStore {
   async stat(key: string): Promise<BlobStat | null> {
     const full = this.resolve(key);
     try {
-      const info = await fs.stat(full);
+      // lstat, not stat: stat follows a symbolic link and would describe its target.
+      const info = await fs.lstat(full);
+      if (info.isSymbolicLink()) throw new InvalidKeyError(key, "it is a symbolic link");
       if (!info.isFile()) return null;
       return { size: info.size, revision: revisionOf(info.size, info.mtimeMs, info.ino) };
     } catch (cause) {
+      if (cause instanceof InvalidKeyError) throw cause;
       if (isMissing(cause)) return null;
       throw cause;
     }
@@ -74,6 +78,8 @@ export class DirectoryBlobStore implements BlobStore {
       throw cause;
     }
     const base = prefix === "" || prefix === "." ? "" : `${prefix.replace(/\/+$/, "")}/`;
+    // `withFileTypes` reports link entries as links rather than as the files they point at, so a
+    // symbolic link is simply not listed: it is not offered, and it could not be read if it were.
     return entries.filter((entry) => entry.isFile()).map((entry) => `${base}${entry.name}`);
   }
 
@@ -92,6 +98,9 @@ export class DirectoryBlobStore implements BlobStore {
       }
     }
 
+    // SEC-09. A symbolic link left beside an image would otherwise make the rename write
+    // wherever it points, and the rename does not care that the target is outside the dataset.
+    if (await isSymlink(full)) throw new InvalidKeyError(key, "it is a symbolic link");
     await fs.mkdir(path.dirname(full), { recursive: true });
 
     // The temporary name carries a random component so two concurrent writers cannot collide on it,
@@ -180,6 +189,31 @@ export class DirectoryBlobStore implements BlobStore {
       throw new InvalidKeyError(key, "it resolves outside the dataset root");
     }
     return full;
+  }
+}
+
+/**
+ * Whether the path is a symbolic link — SEC-09.
+ *
+ * `lstat` rather than `stat`, because `stat` follows the link and would describe its target. A link
+ * that points nowhere is still a link, and is still refused.
+ */
+async function isSymlink(full: string): Promise<boolean> {
+  try {
+    return (await fs.lstat(full)).isSymbolicLink();
+  } catch (cause) {
+    if (isMissing(cause)) return false; // nothing there at all: a fresh write, which is fine
+    throw cause;
+  }
+}
+
+/** A real file, not a link, a directory or a device. */
+async function isPlainFile(full: string): Promise<boolean> {
+  try {
+    return (await fs.lstat(full)).isFile();
+  } catch (cause) {
+    if (isMissing(cause)) return false;
+    throw cause;
   }
 }
 
