@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "lazylabel-inference"
+version = "0.1.0"
+description = "SAM 1 and SAM 2.1 prompts, propagation jobs and archetype finding for LazyLabel web."
+requires-python = ">=3.10"
+# Deliberately empty. The scaffold runs on the standard library alone, so its tests need neither
+# PyTorch nor a model checkpoint and CI stays measured in seconds. Phase 3 adds the model stack
+# under the [ai] extra below, and nothing outside models/ will import it directly.
+dependencies = []
+
+[project.optional-dependencies]
+# Phase 3. Pinned then, not now: a version pinned before the code exists is a guess that ages.
+ai = [
+    "torch>=2.7.1",
+    "segment-anything",
+]
+dev = ["pytest>=8"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]

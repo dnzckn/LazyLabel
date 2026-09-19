@@ -9,6 +9,7 @@ scaffolds these; phases 3 through 6 fill them in.
 |---|---|---|
 | [`api`](api) | Reads and writes annotation sidecars in place, owns the image pipeline, serves settings, proxies inference | Node |
 | [`web`](web) | The browser app: dataset browser, canvas editor, AI tools, timeline | Browser |
+| [`inference`](inference) | SAM 1 and SAM 2.1 prompts, propagation jobs, archetype finding | Python |
 | [`contracts`](contracts) | The HTTP wire shapes and the mask codec both sides use | Both |
 | [`settings-schema`](settings-schema) | The settings and hotkey schema, its legacy importer, and the validation rules | Both |
 | [`../lazylabel/core/exporters`](../lazylabel/core/exporters) | The seven annotation formats, proven equivalent to the legacy Python (Phase 1) | Both |
@@ -24,10 +25,17 @@ The dependency direction is strictly one way. Shared packages know nothing about
 `node:sqlite` or the DOM, so either side can import them.
 
 ```
-   web  ─┐                          ┌─ contracts ─┐
-         ├─ settings-schema         │             ├─ annotation-formats
-   api  ─┘                          └─────────────┘
+   web  ─┬─ contracts ─── annotation-formats
+         └─ settings-schema
+   api  ─┬─ contracts ─── annotation-formats
+         └─ settings-schema
+
+   inference          (standard library only; Phase 3 adds the model stack)
 ```
+
+The inference service shares nothing with the other two by design: its interface speaks masks and
+scores, never LazyLabel classes or file formats, so nothing about annotation semantics can leak into
+it.
 
 ## Running it
 
@@ -59,12 +67,14 @@ architecture review killed a segment table duplicating the file chain, and it st
 
 ## What works today
 
-Two capabilities, end to end:
+Two capabilities end to end, plus the parts of a third that can be correct before a model loads:
 
 - **C2, loading annotations** — the API reads the highest-priority readable sidecar, reports every
   damaged file it walked past, and answers 409 rather than an empty canvas when nothing can be read.
 - **C13, settings and hotkeys** — schema, legacy import, conflict and export-format validation, and
   persistence across a restart.
+- **Checkpoint integrity and AI availability** — the inference service pins every checkpoint by
+  SHA-256 and never downloads one, and its version check cannot crash the way legacy's does.
 
 Everything else is listed in each package's `capabilities.ts` with the phase that builds it and what
 is missing. A guard test in each package fails if those tables ever disagree with the test suites,
@@ -75,8 +85,9 @@ so nothing can quietly read as built that is not.
 | # | Criterion | State |
 |---|---|---|
 | 1 | Both checkpoints approved, architecture matches the brief | met |
-| 2 | Each scaffold builds and its tests run; unbuilt capabilities tagged with their phase | met for the API and the web app; the inference service is not scaffolded |
+| 2 | Each scaffold builds and its tests run; unbuilt capabilities tagged with their phase | met |
 | 3 | The settings schema imports a legacy `settings.json` and `hotkeys.json`, tolerating unknown keys | met |
-| 4 | CI builds and tests all services on every push to `main-web` | met for what exists |
+| 4 | CI builds and tests all services on every push to `main-web` | met |
 
-The inference service is the remaining scaffold.
+**Phase 2 is complete.** Phase 3 builds the inference service: the SAM 1 and SAM 2.1 predictors, the
+embedding cache, and the model loading that the manifest already guards.

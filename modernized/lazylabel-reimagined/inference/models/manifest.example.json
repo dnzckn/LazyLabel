@@ -1,0 +1,21 @@
+{
+  "$comment": "Example manifest. Copy to manifest.json beside your checkpoints and fill in the real hashes with: python -c \"import hashlib,sys;print(hashlib.sha256(open(sys.argv[1],'rb').read()).hexdigest())\" <file>. Nothing is downloaded at runtime; the build pipeline puts the files here.",
+  "models": [
+    {
+      "name": "SAM 1 huge",
+      "family": "sam1",
+      "size": "vit_h",
+      "filename": "sam_vit_h_4b8939.pth",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "bytes": 2564550879
+    },
+    {
+      "name": "SAM 2.1 large",
+      "family": "sam2",
+      "size": "large",
+      "filename": "sam2.1_hiera_large.pt",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "bytes": 897952466
+    }
+  ]
+}
