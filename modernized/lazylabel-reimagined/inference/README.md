@@ -1,4 +1,4 @@
-# LazyLabel inference service — Phase 2 scaffold
+# LazyLabel inference service
 
 SAM 1 and SAM 2.1 prompts, propagation jobs and archetype finding. Python, per decision 2: the
 legacy model code is proven, SAM 2 video propagation has no browser equivalent, and rewriting either
@@ -26,10 +26,11 @@ LAZYLABEL_TEST_CHECKPOINT=/path/to/sam2.1_hiera_large.pt PYTHONPATH=/path/to/leg
 | `LAZYLABEL_INFERENCE_PORT` | `8788` | |
 | `LAZYLABEL_INFERENCE_HOST` | `127.0.0.1` | Only the API talks to this service. A model endpoint on every interface is not a default to fall into. |
 
-## Zero dependencies, on purpose
+## The model stack is optional, on purpose
 
-The scaffold runs on the standard library alone, so its 89 tests need neither PyTorch nor a
-checkpoint and CI is measured in seconds. The model stack arrives in Phase 3 under the `[ai]` extra.
+PyTorch is imported lazily, inside the functions that need it, and only the `[ai]` extra installs
+it. So 129 of the tests run with neither PyTorch nor a checkpoint, in about two seconds, and CI
+needs neither. The nine that do need a checkpoint skip themselves cleanly without one.
 
 That is not austerity for its own sake. The two things this service must get right *before* a model
 is ever loaded — is this checkpoint the one it claims to be, and can the AI stack run here at all —
@@ -90,10 +91,12 @@ the `reason` into "AI tools disabled, and here is why" rather than a dead button
 
 ## Placeholders that clean themselves up
 
-Two tests carry `@pytest.mark.xfail(strict=True)` for routes Phase 3 will implement. Strict means
-that when the route starts working, the unexpected **pass** fails the suite and forces the marker
-off. A placeholder that cannot rot into a test nobody notices is worth the small oddity of a test
-that asserts something untrue today.
+Unbuilt routes carry `@pytest.mark.xfail(strict=True)`. Strict means that when the route starts
+working, the unexpected **pass** fails the suite and forces the marker off — which is exactly what
+happened when Phase 3 built the prompt routes, so the placeholder came off because the suite made
+it come off rather than because anyone remembered.
+
+One remains, for propagation in Phase 6.
 
 ## What Phase 3 built, and how it is proven
 
