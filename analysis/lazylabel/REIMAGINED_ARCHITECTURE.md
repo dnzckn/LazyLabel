@@ -73,11 +73,39 @@ implementations or none:
 |---|---|
 | React 19 with TypeScript and Vite | The target the owner set; Vite matches the preflight-proven toolchain. |
 | Node.js 22 with TypeScript for the API | Shares the format library with the browser without a second implementation of any file rule. |
-| SQLite | Decision 5. Settings, projects, sequences and jobs are a few thousand rows for one user. A server database would add an operational burden for state that fits in a file. |
-| The mounted dataset folder | Decision 5. Annotations stay where the user put them, which makes the ML engineer's convert-and-reuse flow a no-op rather than an export feature. |
+| SQLite, behind the metadata port | Decision 5. Settings, projects, sequences and jobs are a few thousand rows for one user, so a server database would add operational burden for state that fits in a file. A hosted install with a database nearby points the port at it instead (section 3.1). |
+| The mounted dataset folder, behind the blob port | Decision 5. Annotations stay where the user put them, which makes the ML engineer's convert-and-reuse flow a no-op rather than an export feature. Object storage is an adapter away, with the rename caveat in section 3.1. |
 | Python and PyTorch for inference | Decision 2. SAM 2 video propagation has no browser equivalent, and the legacy model code is proven. |
 | Region-bounded masks in memory | A dense mask on a 100-megapixel image is 100 MB; Phase 1 measured 1,350 MB retained for one realistic editing session. |
 | A local credential or reverse-proxy auth | Decision 3. An external identity provider would put a third party in the critical path of opening your own images on your own machine. |
+
+### 3.1 Storage ports
+
+Decision 5, as refined by the owner on 2026-09-18. Two ports, each with exactly one adapter today.
+The point of naming them now is that the API is being scaffolded against them, so the seam exists
+before there is code to unpick; the point of building only the defaults is that a speculative
+adapter is a liability until a deployment needs it.
+
+| Port | What it stores | Default adapter | What a hosted install could swap in |
+|---|---|---|---|
+| Blob store | Images and their annotation sidecars | The mounted dataset directory | S3-compatible object storage |
+| Metadata store | Settings, hotkeys, projects, sequences, job records, dataset index | SQLite file | PostgreSQL |
+
+The metadata port is the easy one: a few thousand rows of ordinary relational data for one user, so
+a PostgreSQL adapter is a connection string and a dialect.
+
+The blob port carries one constraint worth stating before someone writes the adapter and discovers
+it. A sidecar write is made safe here by writing a temporary file in the same directory and renaming
+it over the target, which is atomic on a filesystem. **Object storage has no rename.** An S3 adapter
+must reach the same guarantee another way, with a conditional put against the object's current
+version, and its tests must prove that a half-written sidecar is never observable and that a
+concurrent write loses rather than interleaves. Until that exists, the filesystem adapter is the one
+that can honour the PUT contract in `AI_NATIVE_SPEC.md` section 3, which promises that a failed save
+writes nothing.
+
+Two things stay true on every adapter. The annotation files in the blob store are the source of
+truth, never a cache of a segment table. And the format library still decides file content, so an
+adapter moves bytes and never interprets them.
 
 ## 4. Data migration
 
@@ -121,10 +149,18 @@ The reimagine command stops here for approval before anything is scaffolded. Rec
 under the owner's blanket approval of the full plan, which the brief's section 8 records as covering
 the full plan.
 
-**One thing genuinely needs the owner's eye rather than a blanket approval:** the container set
-changed after review. The plan the owner approved named PostgreSQL and S3-compatible object storage;
-this document specifies the dataset folder plus SQLite instead, for the reasons in section 7. That
-is a smaller system and a reversal of an answer taken on the owner's behalf, not a detail.
+**The one item held back for the owner's own eye is now settled, and refined.** The container set
+changed after review: the plan the owner approved named PostgreSQL and S3-compatible object storage,
+and this document specifies the dataset folder plus SQLite instead, for the reasons in section 7.
+Because that reversed an answer taken on the owner's behalf rather than a detail, it was flagged
+rather than folded into the blanket approval.
+
+The owner confirmed it on 2026-09-18 on the grounds that LazyLabel works out of a local directory,
+and added the case this document had not covered: a hosted deployment with a SQL database or object
+store nearby should be able to point at it. Section 3.1 is the result. The local directory and
+SQLite are the default and the only adapters built now; both sit behind ports so a hosted install
+configures a different adapter rather than prompting a redesign. What is not configurable is the
+number of sources of truth: on every adapter, the annotation sidecars are the annotations.
 
 Scaffolding order follows the brief's Phase 2 pilot: **the API first**, with one acceptance test
 from the behavior contract wired to the Phase 1 library, before the web app and inference scaffolds.
