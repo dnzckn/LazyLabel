@@ -21,6 +21,7 @@ import { useCallback, useMemo, useState, type ReactNode } from "react";
 import type { WireDatasetImage } from "@lazylabel/contracts";
 
 import { useSettings } from "../settings/SettingsProvider.jsx";
+import { useHotkey } from "../hotkeys/HotkeyProvider.jsx";
 
 import {
   buildTimeline,
@@ -109,6 +110,26 @@ export function TimelinePanel({ images, onOpen, scores = {} }: TimelinePanelProp
     },
     [current, frames, onOpen],
   );
+
+  /*
+   * THE FRAME KEYS, which the reference has listed since Phase 2 with nothing behind them. They
+   * are the ones that make a reviewed sequence quick: jump to the next frame the model was unsure
+   * about, look, jump again.
+   *
+   * Registered by this panel, so they are live only while it is open -- and the reference reports
+   * that honestly rather than promising them always. That is the right scope: they move a cursor
+   * along a timeline, and with no timeline built there is nothing for them to move.
+   *
+   * ABOVE the early returns below, because a hook after a conditional return changes how many
+   * hooks the component runs between renders and React refuses. `navigate` already does nothing
+   * when `step` finds no frame, so an empty timeline needs no guard of its own.
+   */
+  useHotkey("next_flagged_frame", () => navigate("flagged", 1));
+  useHotkey("prev_flagged_frame", () => navigate("flagged", -1));
+  useHotkey("next_reference_frame", () => navigate("reference", 1));
+  useHotkey("prev_reference_frame", () => navigate("reference", -1));
+  useHotkey("next_suggested_frame", () => navigate("suggested", 1));
+  useHotkey("prev_suggested_frame", () => navigate("suggested", -1));
 
   if (images.length === 0) {
     return <p className="panel__missing">A sequence is built from a folder of images.</p>;

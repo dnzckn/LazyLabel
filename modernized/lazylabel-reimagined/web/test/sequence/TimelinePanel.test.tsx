@@ -13,6 +13,7 @@ import type { WireDatasetImage } from "@lazylabel/contracts";
 import { defaultSettings } from "@lazylabel/settings-schema";
 
 import type { ApiClient } from "../../src/api/client.js";
+import { HotkeyProvider } from "../../src/hotkeys/HotkeyProvider.jsx";
 import { SettingsProvider } from "../../src/settings/SettingsProvider.jsx";
 import { TimelinePanel } from "../../src/sequence/TimelinePanel.jsx";
 
@@ -31,7 +32,13 @@ function withSettings(node: React.ReactNode, saved: Record<string, unknown> = {}
       return next;
     },
   } as unknown as ApiClient;
-  return <SettingsProvider client={client}>{node}</SettingsProvider>;
+  // The frame-navigation keys are registered by this panel, and `useHotkey` throws without a
+  // provider by design -- a hook that works without one hides a missing wire.
+  return (
+    <SettingsProvider client={client}>
+      <HotkeyProvider bindings={defaultSettings().hotkeys}>{node}</HotkeyProvider>
+    </SettingsProvider>
+  );
 }
 
 afterEach(cleanup);
@@ -301,5 +308,52 @@ describe("the confidence histogram", () => {
     withScores({});
 
     await waitFor(() => expect(threshold().value).toBe("0.99"));
+  });
+});
+
+describe("the frame keys", () => {
+  const key = (action: string) => defaultSettings().hotkeys[action]!.primary;
+  const press = (action: string) => fireEvent.keyDown(document, { key: key(action) });
+
+  /** Which cell the timeline calls current, by its title. */
+  const current = () =>
+    [...cells()].find((cell) => cell.className.includes("--current"))?.getAttribute("title");
+
+  it("jumps to the next REFERENCE frame", async () => {
+    // f02 and f05 are the annotated ones, so they are the references. Starting at f01, the key
+    // should land on f02 without the user clicking anything.
+    show();
+    build();
+    await waitFor(() => expect(cells().length).toBeGreaterThan(0));
+
+    press("next_reference_frame");
+
+    await waitFor(() => expect(current()).toContain("f02.png"));
+  });
+
+  it("goes backwards too, and wraps as legacy does", async () => {
+    // Wrapping is the part worth pinning: from the first reference, previous goes to the LAST.
+    show();
+    build();
+    await waitFor(() => expect(cells().length).toBeGreaterThan(0));
+    press("next_reference_frame");
+    await waitFor(() => expect(current()).toContain("f02.png"));
+
+    press("prev_reference_frame");
+
+    await waitFor(() => expect(current()).toContain("f05.png"));
+  });
+
+  it("does nothing when there is no frame of that kind", async () => {
+    // No frame is flagged until propagation runs, and a key that throws on an empty timeline is a
+    // key nobody presses twice. `step` returns null and `navigate` stops there.
+    show();
+    build();
+    await waitFor(() => expect(cells().length).toBeGreaterThan(0));
+    const before = current();
+
+    press("next_flagged_frame");
+
+    expect(current()).toBe(before);
   });
 });
