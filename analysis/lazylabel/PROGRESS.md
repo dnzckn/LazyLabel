@@ -323,9 +323,15 @@ needs is already in one store rather than scattered across managers.
 
    **The self-hosted deployment** (`modernized/lazylabel-reimagined/deploy/`) is written: three
    services, one published port on loopback, the dataset as a bind mount, the models read-only,
-   neither service as root. **NOTHING IN IT HAS BEEN BUILT** — Docker is not installed on this
-   machine, so it is reasoned rather than observed, and its README says so first and names the four
-   places a first build is most likely to break.
+   neither service as root.
+
+   It was written on a machine with no Docker, so every line of it was reasoned rather than
+   observed — and rather than leave that as a caveat nobody could retire, **CI now builds the API
+   and web images on every push and validates the compose file against `example.env`**. They either
+   build or the run goes red with the reason. The inference image builds weekly and on demand
+   instead: it installs PyTorch against a CUDA base and a two-line web change should not pull a
+   CUDA runtime. **It builds and does not RUN** — running needs a dataset to mount and, for the AI
+   profile, a GPU and a checkpoint SEC-03 forbids downloading.
 
    **Exit criterion 4's harness is written too.** "Every dataset in the acceptance corpus imports
    and re-exports identically" needs the owner's corpus; what did not need it is the command:

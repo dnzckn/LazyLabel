@@ -23,11 +23,12 @@ runtime. Trigger it from the Actions tab when you need it checked now.
 **Nothing here has been RUN.** CI builds; it does not start the stack, because running it needs a
 dataset to mount and, for the AI profile, a GPU and a checkpoint that SEC-03 forbids downloading.
 The files were also written on a machine with no Docker at all, so before the first CI run every
-line of this was reasoned rather than observed. The
-configuration they describe is checked — the environment variables are the ones the services
-actually read, the API's `/api` default and the nginx proxy match, and the build contexts account
-for the exporters package living outside the rebuild directory — but that is a different claim
-from "this works".
+line of this was reasoned rather than observed.
+
+What was checked by hand, and still is: the environment variables are the ones the services
+actually read, the API's `/api` default and the nginx proxy agree, and the build contexts account
+for the exporters package living outside the rebuild directory. That is a different claim from
+"this works", which is why the build runs in CI rather than resting on it.
 
 A Dockerfile that builds is not a deployment that works. Expect the first real run to need
 changes, and look here first:
