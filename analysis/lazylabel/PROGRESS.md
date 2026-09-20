@@ -7,19 +7,18 @@ Last updated: 2026-09-20.
 
 ## Short answer
 
-**The app cannot be launched on the web yet.** Phases 1–4 have met their exit criteria. Phase 5 is
-implemented in full and has met three of its four exit criteria; the fourth waits on **one
-judgement from the owner** and nothing else. Phase 6 has not started. The pieces that exist are proven against legacy; what is missing is the
+**The app cannot be launched on the web yet.** Phases 1–5 have met their exit criteria. Phase 6
+has not started, and three of its four entry criteria are owner decisions or need the legacy app. The pieces that exist are proven against legacy; what is missing is the
 sequence work and the whole cutover.
 
 By the brief's own weighting of the six phases: **about 74% of the conversion is done** — 6.0,
-5.5, 5.8, 29.4, and about 27 of 27.4.
+5.5, 5.8, 29.4 and 27.4, all complete. The remaining 25.9% is Phase 6.
 
 Phase 4's panels were frames when it exited, because the tools that fill them are Phase 5's by the
 brief's own split. They are filled now: drawing tools, AI tools, adjustments, crop, segments and
 classes are all built and reachable.
 
-The remaining 26% is one owner decision and all of Phase 6.
+The remaining 26% is all of Phase 6.
 
 | Phase | Share | State |
 |---|---|---|
@@ -27,7 +26,7 @@ The remaining 26% is one owner decision and all of Phase 6.
 | P2 — architecture and scaffolds | 5.5% | **complete** |
 | P3 — inference service | 5.8% | **complete** |
 | P4 — workspace, dataset browser, persistence | 29.4% | **complete**; its panels are filled by P5's tools |
-| P5 — tools | 27.4% | implemented; criteria 1–3 met, criterion 4 needs one owner decision |
+| P5 — tools | 27.4% | **complete**; all four exit criteria met |
 | P6 — sequence and cutover | 25.9% | not started |
 
 ## What is done, and what proves it
@@ -221,23 +220,24 @@ needs is already in one store rather than scattered across managers.
       a real folder and reads the bytes. Uncropped, a 2x2 object at the corner of a 40x40 image
       writes 0.975; cropped to (0, 0, 39, 39), only 0.95 remains — the off-by-one, measured.
 
-   **The one open question for the owner.**
+   **Criterion 4's other half: CLAHE now matches OpenCV byte for byte, on all six goldens.**
 
-   CLAHE matches OpenCV byte for byte on five of six golden cases. The sixth — an image whose
-   dimensions do not divide the tile grid — differs on **3 of 660 pixels, each by exactly 1**, and
-   every difference is a rounding tie. Four formulations were tried and the count moved
-   (104 → 4 → 6 → 3) without reaching zero, which places the remainder in how OpenCV's
-   interpolation body formulates its arithmetic rather than in the algorithm.
+   This was the one open question and it is no longer a question. It used to differ on 3 of 660
+   pixels on the uneven-tile case, each by exactly 1, and the note on the test said the residue had
+   to be in how OpenCV's interpolation body formulates its arithmetic rather than in the algorithm.
+   That was right. Reading `CLAHE_Interpolation_Body` named three things, all of which have to be
+   true at once — which is why the previous session's four attempts each moved the count and none
+   could finish:
 
-   Decision 10 sets IoU ≥ 0.98 for MASKS and says nothing about per-pixel intensity, so whether ±1
-   on 0.45% of pixels satisfies criterion 4 is a judgement nobody has made. It needs one:
+   1. **It is `float`, not double.** Every operation rounds to single precision; the port now
+      rounds each step back with `Math.fround`.
+   2. **It multiplies by a reciprocal**, `1.0f / tileWidth` computed once. `x * (1/w)` is not
+      `x / w` in floating point.
+   3. **The weight comes from the unclamped tile index**, which is clamped only afterwards, so the
+      half-tile border uses a real fractional weight rather than 0 or 1.
 
-   - **If ±1 is acceptable**, say so in decision 10 and Phase 5 can exit with this recorded.
-   - **If byte equality is required**, closing it means reading OpenCV's `CLAHE_Interpolation_Body`
-     rather than inferring it, which is a bounded but real piece of work.
-
-   The gap is asserted at its measured size in `test/tools/clahe.differential.test.ts`, so it
-   cannot grow unnoticed and closing it is a visible change to that file.
+   The differential allows nothing now, and prints the coordinate of the first differing pixel
+   rather than only a count.
 
    **Rescale and channel thresholding now run on the server, and have controls — closed.**
 
@@ -288,10 +288,9 @@ needs is already in one store rather than scattered across managers.
 2. **Phase 6 — sequence and cutover** (25.9%). The timeline, propagation review, the split view,
    the hosted deployment and the actual switch-over.
 
-   **It cannot start yet, and two of its four entry criteria need the owner rather than code:**
+   **Two of its four entry criteria are open, and neither is code:**
 
-   1. *Phase 3 and Phase 5 exit criteria are met.* Phase 3 is done; Phase 5 waits on the CLAHE
-      judgement above. **Owner.**
+   1. *Phase 3 and Phase 5 exit criteria are met.* **Both done.**
    2. *Decisions 1 and 8 are ticked.* Decision 1 is the PyPI package and desktop app; decision 8 is
       whether multi-view is rebuilt as a split view, redesigned or removed. **Owner.**
    3. *At least one recorded image sequence has legacy propagation outputs saved as golden data.*
