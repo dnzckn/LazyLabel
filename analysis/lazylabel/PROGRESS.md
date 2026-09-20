@@ -8,9 +8,9 @@ Last updated: 2026-09-20.
 ## Short answer
 
 **The app cannot be launched on the web yet.** Phases 1–5 have met their exit criteria. Phase 6
-has not started, and **three of its four entry criteria are now met** — the fourth needs a recorded
-sequence and the real checkpoints, and the script for it is written. Everything that exists is
-proven against legacy; what is missing is the sequence work and the cutover itself.
+has **started with its pilot slice** — the sequence timeline, built and reachable — and three of
+its four entry criteria are met; the fourth needs a recorded sequence and the real checkpoints,
+and the script for it is written. What is missing is propagation, the split view and the cutover.
 
 By the brief's own weighting of the six phases: **about 74% of the conversion is done** — 6.0,
 5.5, 5.8, 29.4 and 27.4, all complete. The remaining 25.9% is Phase 6.
@@ -26,7 +26,7 @@ classes are all built and reachable.
 | P3 — inference service | 5.8% | **complete** |
 | P4 — workspace, dataset browser, persistence | 29.4% | **complete**; its panels are filled by P5's tools |
 | P5 — tools | 27.4% | **complete**; all four exit criteria met |
-| P6 — sequence and cutover | 25.9% | not started |
+| P6 — sequence and cutover | 25.9% | pilot slice landed; propagation waits on golden data |
 
 ## What is done, and what proves it
 
@@ -284,8 +284,34 @@ needs is already in one store rather than scattered across managers.
      2, 6 MP about 5. Above eight megapixels it is a 413 naming the size and the limit, because a
      minute-long request is indistinguishable from a dead server. Legacy has no limit and freezes
      its window.
-2. **Phase 6 — sequence and cutover** (25.9%). The timeline, propagation review, the split view,
-   the hosted deployment and the actual switch-over.
+2. **Phase 6 — sequence and cutover** (25.9%). Propagation review, the split view, the hosted
+   deployment and the actual switch-over. **The pilot slice is done.**
+
+   **The sequence timeline** (`sequence/timeline.ts`, `sequence/TimelinePanel.tsx`) is the brief's
+   own pilot: build a timeline from a file range, mark references from existing annotations, no
+   propagation. It builds from the folder listing the browser already has — the listing carries
+   each image's key and whether it is annotated, which is exactly the two things the pilot needs —
+   so there is no new endpoint and no second fetch of the same folder.
+
+   The rules and the panel landed together, deliberately. The vertex editor in Phase 5 was built,
+   unit-tested and never rendered by anything, so every test passed while the feature did not
+   exist; a pilot that cannot be looked at has not piloted anything.
+
+   Three things it reproduces that look like defects, and one it does not:
+
+   - **The Sort puts flagged almost last**, below pending (RULE-072). The list is "what is
+     finished", not "what needs attention" — flagged frames have their own navigation.
+   - **Clear Flags resets skipped frames and a new propagation run does not** (RULE-076). A frame
+     skipped for a size mismatch becomes pending again, which is what a user who fixed the
+     offending image expects.
+   - **Navigation wraps**, including the single-flagged-frame case where N returns you to where
+     you are. Non-wrapping looks identical until someone reaches the end of a long sequence.
+   - **What it does not reproduce**: legacy's single status enum. RULE-055's answer is carried into
+     code here — a frame has a ROLE and a STATE, so saving a reference cannot stop it being one.
+     In legacy that is a route to propagation overwriting hand-made ground truth.
+
+   Verified in a browser against a real API: four frames build as pending, annotating one made it a
+   gold reference on the next build, and Sort lifted it to the front.
 
    **Three of its four entry criteria are met. One is open.**
 
