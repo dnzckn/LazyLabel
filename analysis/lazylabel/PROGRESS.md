@@ -597,6 +597,14 @@ Two classes in two channels, the alias table as JSON in a unicode array (decisio
 anywhere), and YOLO detection boxes normalized against the full image. The status bar tracked
 unsaved and back, and undo named what it would undo.
 
+**The conflict path, verified the same way.** Saved once (succeeds), saved again (succeeds — the
+revision refresh works, which is the regression that would have broken the second save of every
+session), then appended a byte to the `.npz` from outside and saved again. Refused with
+`frames/gray.npz changed since you loaded it`, nothing written. Pressed **Save anyway**: written,
+and the file went from 784 corrupted bytes back to 782 bytes of valid NPZ with its mask, class
+order and alias table intact. That last check is the one that matters — it proves the overwrite
+produces a correct FILE rather than just a successful response.
+
 Separately verified the same way: brightness 60 took a pixel from 41 to 101 on the canvas; a Red
 channel marker at 128 took that pixel's red to 0 and left green and blue alone, over the wire; the
 frequency filter changed all 4,096 pixels of a grayscale PNG and returned it grayscale; the render
