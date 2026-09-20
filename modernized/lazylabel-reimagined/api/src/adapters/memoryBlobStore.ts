@@ -48,6 +48,19 @@ export class MemoryBlobStore implements BlobStore {
     );
   }
 
+  async listFolders(prefix: string): Promise<readonly string[]> {
+    const base = prefix === "" ? "" : `${prefix.replace(/\/+$/, "")}/`;
+    const folders = new Set<string>();
+    for (const key of this.blobs.keys()) {
+      if (!key.startsWith(base)) continue;
+      const rest = key.slice(base.length);
+      const slash = rest.indexOf("/");
+      // A key with a slash left in it sits in a subfolder, and its first segment names it.
+      if (slash > 0) folders.add(rest.slice(0, slash));
+    }
+    return [...folders];
+  }
+
   async writeAtomic(
     key: string,
     bytes: Uint8Array,

@@ -39,6 +39,18 @@ export interface BlobStore {
   list(prefix: string): Promise<readonly string[]>;
 
   /**
+   * Folder names directly under `prefix`, not recursive, in no guaranteed order.
+   *
+   * Separate from {@link list}, which returns FILES, because the two answer different questions
+   * and a caller almost always wants one or the other. RULE-051 makes the listing non-recursive,
+   * so without this a dataset organised into subfolders -- which is the ordinary layout -- has no
+   * way to be walked at all: the root lists nothing and nothing names what is below it.
+   *
+   * Names, not keys: "frames", not "frames/". The caller joins them.
+   */
+  listFolders(prefix: string): Promise<readonly string[]>;
+
+  /**
    * Replace the key's content atomically, returning the new revision.
    *
    * `expectedRevision` makes the write conditional: pass the revision the caller last read to have

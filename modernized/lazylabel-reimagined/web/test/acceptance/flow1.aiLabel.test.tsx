@@ -147,6 +147,12 @@ async function readyToPrompt() {
   fireEvent.click(screen.getByText("ai tool"));
   await waitFor(() => expect(screen.getByLabelText("AI tool")).toBeTruthy());
 
+  // Wait for the ENCODE, the way a user does: the banner is on screen until the image is ready,
+  // and a click before then is not sent. Clicking without waiting was a race the test lost about
+  // one run in three, and the product answer to it is the notification in `AiTool`, not a longer
+  // timeout here.
+  await waitFor(() => expect(screen.queryByText(/Preparing this image/)).toBeNull());
+
   return handles;
 }
 

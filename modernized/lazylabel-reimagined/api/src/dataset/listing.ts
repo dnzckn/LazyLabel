@@ -41,6 +41,15 @@ export interface DatasetImage {
 
 export interface DatasetListing {
   readonly folder: string;
+  /**
+   * Folder names directly below this one, so a dataset can be walked.
+   *
+   * RULE-051 makes the listing non-recursive, which is legacy's behaviour and is deliberate --
+   * changing it would change which images a dataset contains. But non-recursive without
+   * navigation is not a restriction, it is a dead end: a dataset whose images live in `frames/`
+   * shows an empty root and no way down.
+   */
+  readonly folders: readonly string[];
   readonly images: readonly DatasetImage[];
   /** How many images carry at least one annotation file. */
   readonly annotatedCount: number;
@@ -60,7 +69,7 @@ export interface DatasetListing {
  * loadable. Legacy does the same, and changing it would change which images a dataset contains.
  */
 export async function listDataset(store: BlobStore, folder: string): Promise<DatasetListing> {
-  const entries = await store.list(folder);
+  const [entries, folders] = await Promise.all([store.list(folder), store.listFolders(folder)]);
 
   // One set for membership, so each image's seven lookups are seven map probes rather than seven
   // filesystem calls.
@@ -104,6 +113,7 @@ export async function listDataset(store: BlobStore, folder: string): Promise<Dat
 
   return {
     folder,
+    folders: [...folders].sort(byLowercased),
     images: rows,
     annotatedCount: rows.filter((row) => row.annotated).length,
     unrecognized,
@@ -123,6 +133,15 @@ export async function listDataset(store: BlobStore, folder: string): Promise<Dat
  * `localeCompare` is deliberately avoided: it would order by the server's locale, so the same
  * folder could list differently on two machines.
  */
+/** The same ordering for folder names, which are plain strings rather than rows. */
+function byLowercased(a: string, b: string): number {
+  const left = a.toLowerCase();
+  const right = b.toLowerCase();
+  if (left < right) return -1;
+  if (left > right) return 1;
+  return a < b ? -1 : a > b ? 1 : 0;
+}
+
 function byLowercasedName(a: DatasetImage, b: DatasetImage): number {
   const left = a.name.toLowerCase();
   const right = b.name.toLowerCase();

@@ -45,6 +45,18 @@ type ListingState =
 
 export function DatasetBrowser({ client, projectId, folder = "" }: DatasetBrowserProps): ReactNode {
   const [state, setState] = useState<ListingState>({ status: "loading" });
+  /*
+   * WHERE IN THE DATASET WE ARE.
+   *
+   * The listing is not recursive -- RULE-051, and deliberate, because making it recursive would
+   * change which images a dataset contains. Without a way to walk down, though, that is not a
+   * restriction but a dead end: a dataset whose images live under `frames/` (the ordinary layout,
+   * and the one this project's own fixtures use) shows an empty root and no way anywhere.
+   *
+   * `folder` is still the prop, and it seeds this. Somewhere to start, not somewhere to stay.
+   */
+  const [here, setHere] = useState(folder);
+  useEffect(() => setHere(folder), [folder]);
   // Opening belongs to the workspace store: the list is one of five things that ask what is open,
   // and whichever one holds the state becomes the owner of a question that is not its own.
   const { open: openState, openImage } = useWorkspace();
@@ -54,7 +66,7 @@ export function DatasetBrowser({ client, projectId, folder = "" }: DatasetBrowse
     setState({ status: "loading" });
 
     client
-      .listImages(projectId, folder)
+      .listImages(projectId, here)
       .then((listing) => {
         if (!cancelled) setState({ status: "ready", listing });
       })
@@ -67,7 +79,7 @@ export function DatasetBrowser({ client, projectId, folder = "" }: DatasetBrowse
     return () => {
       cancelled = true;
     };
-  }, [client, projectId, folder]);
+  }, [client, projectId, here]);
 
   if (state.status === "loading") return <p>Loading the folder…</p>;
   if (state.status === "failed") {
@@ -80,9 +92,47 @@ export function DatasetBrowser({ client, projectId, folder = "" }: DatasetBrowse
 
   const { listing } = state;
 
+  // "a/b/c" as ["a", "b", "c"], each with the path that reaches it, so a crumb can be clicked.
+  const crumbs = here === "" ? [] : here.split("/").filter((part) => part !== "");
+  // Defaulted, because this arrives over the wire. A server that predates the field should leave
+  // the browser working exactly as it did -- no navigation -- rather than blanking the pane with
+  // a TypeError, which is what reading `.length` off an absent field does.
+  const folders = listing.folders ?? [];
+
   return (
     <section>
       <h2>Images</h2>
+
+      <nav className="crumbs" aria-label="Folder">
+        <button type="button" onClick={() => setHere("")} disabled={here === ""}>
+          Dataset
+        </button>
+        {crumbs.map((name, index) => (
+          <span key={`${name}-${index}`}>
+            {" / "}
+            <button
+              type="button"
+              onClick={() => setHere(crumbs.slice(0, index + 1).join("/"))}
+              disabled={index === crumbs.length - 1}
+            >
+              {name}
+            </button>
+          </span>
+        ))}
+      </nav>
+
+      {folders.length > 0 && (
+        <ul className="crumbs__folders">
+          {folders.map((name) => (
+            <li key={name}>
+              <button type="button" onClick={() => setHere(here === "" ? name : `${here}/${name}`)}>
+                {name}/
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+
       <p>
         {listing.images.length} images, {listing.annotatedCount} already annotated
         {listing.unrecognized > 0 && (
@@ -97,7 +147,13 @@ export function DatasetBrowser({ client, projectId, folder = "" }: DatasetBrowse
       </p>
 
       {listing.images.length === 0 ? (
-        <p>This folder has no images LazyLabel can open.</p>
+        <p>
+          {folders.length > 0
+            // A folder holding only folders is the normal shape of a dataset root, and saying
+            // "no images" there reads as a failure rather than as a place to go through.
+            ? "No images in this folder. There are folders below it."
+            : "This folder has no images LazyLabel can open."}
+        </p>
       ) : (
         <table className="dataset">
           <thead>

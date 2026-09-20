@@ -105,6 +105,24 @@ async function settle(): Promise<void> {
 }
 
 describe("preparing the image", () => {
+  it("says a click was not sent, rather than dropping it in silence", async () => {
+    // The banner says the image is being prepared; people click anyway while they wait. Before
+    // this, the click went nowhere with no acknowledgement, so a slow model and a broken one
+    // looked identical -- and the flakiest test in the suite was the one racing this window.
+    //
+    // Not queued for later: a mask appearing seconds after a click the user has moved on from is
+    // worse than one that never appears.
+    let release: (value: { handle: string; cached: boolean }) => void = () => {};
+    mount({ embed: () => new Promise((resolve) => { release = resolve; }) });
+
+    click(10, 10);
+
+    expect(await screen.findByText(/Still preparing this image/)).toBeTruthy();
+
+    release({ handle: "h1", cached: true });
+  });
+
+
   it("encodes ONCE, however many prompts follow", async () => {
     // The expensive half -- seconds for a cold one -- against a fraction of a second per prompt.
     // Encoding per prompt would make the tool unusable while looking like a slow model.

@@ -83,6 +83,23 @@ export class DirectoryBlobStore implements BlobStore {
     return entries.filter((entry) => entry.isFile()).map((entry) => `${base}${entry.name}`);
   }
 
+  async listFolders(prefix: string): Promise<readonly string[]> {
+    const full = this.resolve(prefix === "" ? "." : prefix);
+    let entries;
+    try {
+      entries = await fs.readdir(full, { withFileTypes: true });
+    } catch (cause) {
+      if (isMissing(cause)) return [];
+      throw cause;
+    }
+    return entries
+      .filter((entry) => entry.isDirectory())
+      // The app's own store lives here and is not a folder of images. Hiding it is not cosmetic:
+      // offering it invites a user to open it and find nothing, every time they browse a dataset.
+      .filter((entry) => !entry.name.startsWith("."))
+      .map((entry) => entry.name);
+  }
+
   async writeAtomic(
     key: string,
     bytes: Uint8Array,

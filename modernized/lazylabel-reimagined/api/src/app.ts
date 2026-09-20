@@ -356,6 +356,7 @@ async function listImages(deps: AppDeps, request: ApiRequest): Promise<ApiRespon
   const listing = await listDataset(deps.blobStore, folder);
   return json(200, {
     folder: listing.folder,
+    folders: listing.folders,
     images: listing.images,
     annotatedCount: listing.annotatedCount,
     // Never silently dropped: a folder of .avif files should say so rather than look empty.

@@ -116,6 +116,14 @@ export interface WireDatasetImage {
 
 export interface WireDatasetListing {
   readonly folder: string;
+  /**
+   * Folder names directly below this one, so a dataset can be walked.
+   *
+   * RULE-051 makes the listing non-recursive, which is legacy's behaviour and is deliberate.
+   * Non-recursive WITHOUT navigation is not a restriction though, it is a dead end: a dataset
+   * whose images live under `frames/` shows an empty root and no way down.
+   */
+  readonly folders: readonly string[];
   readonly images: readonly WireDatasetImage[];
   readonly annotatedCount: number;
   /** Files that are neither a supported image nor a recognized sidecar. Counted, never dropped. */

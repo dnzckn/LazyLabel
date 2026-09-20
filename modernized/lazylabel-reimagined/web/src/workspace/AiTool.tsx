@@ -97,7 +97,22 @@ export function AiTool({
 
   const onPrompt = useCallback(
     (prompt: AiPrompt) => {
-      if (handle === null) return;
+      if (handle === null) {
+        // A click that lands while the image is still encoding used to be dropped in silence. The
+        // banner says the image is being prepared, but a user who clicks anyway -- which is what
+        // people do while waiting -- got no mask and no acknowledgement that anything had
+        // happened, and could not tell a slow model from a broken one.
+        //
+        // It is not queued and run later: a mask appearing seconds after a click the user has
+        // moved on from is worse than one that never appears.
+        notify({
+          severity: "info",
+          message: encoding
+            ? "Still preparing this image, so that click was not sent"
+            : "This image is not ready for AI prompts, so that click was not sent",
+        });
+        return;
+      }
 
       latest.current += 1;
       const mine = latest.current;
@@ -134,7 +149,7 @@ export function AiTool({
           });
         });
     },
-    [client, handle, notify],
+    [client, encoding, handle, notify],
   );
 
   const accept = useCallback(
