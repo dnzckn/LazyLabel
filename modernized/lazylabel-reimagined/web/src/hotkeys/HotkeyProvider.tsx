@@ -23,6 +23,7 @@ import {
   useMemo,
   useRef,
   type ReactNode,
+  useState,
 } from "react";
 
 import type { HotkeyBinding } from "@lazylabel/settings-schema";
@@ -37,6 +38,20 @@ export interface HotkeyContextValue {
   /** Which action a key string is bound to, or null. Drives "that key is taken" in the UI. */
   readonly actionFor: (key: string) => string | null;
   readonly bindings: Readonly<Record<string, HotkeyBinding>>;
+  /**
+   * The actions something is actually listening for, right now.
+   *
+   * Exposed so the hotkey reference can stop promising keys that do nothing. FORTY of the
+   * forty-three in the schema had no handler, and the reference listed every one of them with its
+   * key as though pressing it would work -- which is a worse lie than a missing feature, because
+   * the user is told where to find it.
+   *
+   * Runtime truth rather than a hand-kept list, so it cannot go stale: an action wired up
+   * tomorrow stops being marked the moment it is. It is genuinely live state -- a hotkey
+   * registered only while an image is open is listed as unavailable when none is -- and that is
+   * the honest answer to "will this key do something if I press it now".
+   */
+  readonly isLive: (action: string) => boolean;
 }
 
 const HotkeyContext = createContext<HotkeyContextValue | null>(null);
@@ -63,15 +78,29 @@ export function HotkeyProvider({
     return map;
   }, [bindings]);
 
+  // A rendered mirror of `handlers`, which is a ref and therefore invisible to React. The ref
+  // stays the dispatch path -- it must not re-render on every keystroke -- and this exists only so
+  // the reference table can redraw when an action gains or loses its last listener.
+  const [live, setLive] = useState<ReadonlySet<string>>(() => new Set());
+
   const register = useCallback((action: string, handler: HotkeyHandler) => {
     const existing = handlers.current.get(action) ?? new Set<HotkeyHandler>();
     existing.add(handler);
     handlers.current.set(action, existing);
+    setLive((current: ReadonlySet<string>) => (current.has(action) ? current : new Set(current).add(action)));
 
     return () => {
       const current = handlers.current.get(action);
       current?.delete(handler);
-      if (current?.size === 0) handlers.current.delete(action);
+      if (current?.size === 0) {
+        handlers.current.delete(action);
+        setLive((shown: ReadonlySet<string>) => {
+          if (!shown.has(action)) return shown;
+          const next = new Set(shown);
+          next.delete(action);
+          return next;
+        });
+      }
     };
   }, []);
 
@@ -103,8 +132,13 @@ export function HotkeyProvider({
   }, [byKey, target]);
 
   const value = useMemo<HotkeyContextValue>(
-    () => ({ register, actionFor: (key) => byKey.get(key) ?? null, bindings }),
-    [register, byKey, bindings],
+    () => ({
+      register,
+      actionFor: (key) => byKey.get(key) ?? null,
+      bindings,
+      isLive: (action) => live.has(action),
+    }),
+    [register, byKey, bindings, live],
   );
 
   return <HotkeyContext.Provider value={value}>{children}</HotkeyContext.Provider>;

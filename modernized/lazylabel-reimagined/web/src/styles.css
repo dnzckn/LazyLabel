@@ -699,3 +699,10 @@ fieldset input {
   color: var(--muted);
   font-variant-numeric: tabular-nums;
 }
+
+/* A hotkey the dispatcher has no listener for. Muted rather than hidden: the binding is real and
+   a user's remapping of it survives, so the row belongs in the table -- what it must not do is
+   look like a key that works. */
+.hotkeys__pending {
+  color: var(--muted);
+}

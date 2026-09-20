@@ -265,6 +265,28 @@ function ToolPicker(): ReactNode {
     { value: "ai", label: "AI" },
   ];
 
+  /*
+   * THE KEYS, which the hotkey reference has been promising since Phase 2 while nothing listened.
+   * 1/2/3/4 pick a tool directly, E selects, R edits -- legacy's own bindings, imported with the
+   * settings so a user's remapping is honoured.
+   *
+   * SET DIRECTLY, NOT TOGGLED. RULE-070 is a defect card: legacy means Selection and Edit to
+   * toggle back to the previous mode, and the view-model records the mode just left every time, so
+   * E R R E leaves you in selection unable to get back to AI without pressing 1. Reproducing that
+   * would be reproducing the bug -- the card says so -- and a tool key that sometimes does
+   * something else is worse than one that always does the same thing.
+   *
+   * "edit" is not a tool here: the vertex editor appears when exactly one annotation is selected
+   * and no drawing tool is active, so R means "no tool", which is the state that shows the
+   * handles.
+   */
+  useHotkey("sam_mode", () => setActiveTool("ai"));
+  useHotkey("polygon_mode", () => setActiveTool("polygon"));
+  useHotkey("bbox_mode", () => setActiveTool("box"));
+  useHotkey("circle_mode", () => setActiveTool("circle"));
+  useHotkey("selection_mode", () => setActiveTool("select"));
+  useHotkey("edit_mode", () => setActiveTool("none"));
+
   return (
     <fieldset className="tool-picker">
       <legend>Tool</legend>
@@ -293,25 +315,38 @@ function systemPrefersDark(): boolean {
 
 /** The bindings in force, grouped the way the legacy hotkey dialog groups them. */
 function HotkeyReference(): ReactNode {
-  const { bindings } = useHotkeyContext();
+  const { bindings, isLive } = useHotkeyContext();
+  const entries = Object.entries(bindings);
+  const liveCount = entries.filter(([action]) => isLive(action)).length;
 
   return (
     <section>
       <h2>Hotkeys</h2>
+      {/* THE TABLE USED TO PROMISE ALL FORTY-THREE. Forty had no handler anywhere, so it named a
+          key for each and pressing it did nothing -- a worse failure than a missing feature,
+          because the user is told exactly where to find it. The state comes from the dispatcher
+          itself rather than a list someone keeps, so it cannot go stale. */}
+      <p className="panel__missing">
+        {liveCount} of {entries.length} do something today. The rest are the desktop app&rsquo;s
+        bindings, kept so your remapping survives, and marked below until the action behind them is
+        built.
+      </p>
       <table className="hotkeys">
         <thead>
           <tr>
             <th scope="col">Action</th>
             <th scope="col">Key</th>
             <th scope="col">Alternate</th>
+            <th scope="col">Works</th>
           </tr>
         </thead>
         <tbody>
-          {Object.entries(bindings).map(([action, binding]) => (
-            <tr key={action}>
+          {entries.map(([action, binding]) => (
+            <tr key={action} className={isLive(action) ? undefined : "hotkeys__pending"}>
               <th scope="row">{action}</th>
               <td>{binding.primary}</td>
               <td>{binding.secondary ?? ""}</td>
+              <td>{isLive(action) ? "yes" : "not yet"}</td>
             </tr>
           ))}
         </tbody>
