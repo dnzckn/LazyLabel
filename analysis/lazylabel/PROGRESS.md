@@ -406,9 +406,9 @@ needs is already in one store rather than scattered across managers.
 
 ## What running the app found that the tests did not
 
-Seven defects in one session, none of which a unit test could have caught, and it is worth being
-explicit about the shapes because they keep recurring — two of them turned up in Phase 6 work an
-hour after the lesson was written down.
+Eight defects in one session, none of which a unit test could have caught, and it is worth being
+explicit about the shapes because they keep recurring — three of them turned up in Phase 6 work
+after the lesson had been written down.
 
 1. **Vertex editing was unreachable.** `EditLayer` was built, unit-tested and never rendered by
    `OpenImageView`. Every test drove the component directly, so nothing noticed a user had no way
@@ -428,7 +428,13 @@ hour after the lesson was written down.
    on the reasoning — written into the code — that fetching its own would be "a second answer to a
    question the workspace already asks". The workspace asks about ONE image and a split view needs
    TWO, so one side could never be measured. Found one commit after building it.
-7. **Space could be refused over a preview that was on screen.** The keydown listener is registered
+7. **The API never constructed its inference adapter.** `HttpInferenceClient` was written and
+   tested, `AppDeps` accepted an `inference` field, and `main.ts` never passed one — so in every
+   real deployment the AI tools were unreachable and `/health` said "no inference service is
+   configured" whatever you did. There was no configuration variable for the URL either. The same
+   shape at the PROCESS level, and invisible to both component and acceptance tests because both
+   pass through a stubbed client.
+8. **Space could be refused over a preview that was on screen.** The keydown listener is registered
    in an effect, so there is a window where the banner is rendered and the listener still closes
    over the render with no prediction. Found by chasing a test that failed one run in ten — the
    failing DOM contained both "AI preview ready" and "No AI segment preview to accept", which
