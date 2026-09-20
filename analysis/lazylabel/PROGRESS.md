@@ -321,8 +321,13 @@ needs is already in one store rather than scattered across managers.
       2.0.8 and the desktop app stays installable until Phase 6 exit. Decision 8: multi-view is
       rebuilt as a synchronized split view from the linked-operation rules, deleting the
       half-migrated legacy path rather than porting it — with a standing instruction to
-      **reassess at Phase 6 entry if the restored rules prove too thin to specify it**, which is a
-      task for whoever opens the phase.
+      **reassess at Phase 6 entry if the restored rules prove too thin to specify it**. **Done
+      on 2026-09-20**: they are not too thin and the rebuild stands. Four gaps are named in the
+      brief, three of which are decisions rather than missing archaeology — what "the same
+      coordinates" means when the two images differ in size (the biggest), how a pair is chosen,
+      whether a linked operation is one undo entry or two (it should be one; the user performed
+      one action), and the class-id reconciliation RULE-092 already scheduled here. **The last is
+      the owner's.**
    3. *At least one recorded image sequence has legacy propagation outputs saved as golden data.*
       **The script is written**; what is missing is the frames and the checkpoint.
 
