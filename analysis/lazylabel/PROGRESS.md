@@ -276,6 +276,36 @@ needs is already in one store rather than scattered across managers.
 2. **Phase 6 — sequence and cutover** (25.9%). The timeline, propagation review, the split view,
    the hosted deployment and the actual switch-over.
 
+## What running the app found that the tests did not
+
+Five defects in one session, none of which a unit test could have caught, and it is worth being
+explicit about the shapes because they will recur in Phase 6.
+
+1. **Vertex editing was unreachable.** `EditLayer` was built, unit-tested and never rendered by
+   `OpenImageView`. Every test drove the component directly, so nothing noticed a user had no way
+   in. Found by writing persona flow 3 end to end.
+2. **The adjustment sliders wrote to settings nothing read back.** Found by looking at the panel
+   and asking what renders it.
+3. **Annotations drawn on an image with no annotation file were invisible.** The canvas was shown
+   only when the load returned annotations; the first image of every new dataset got a plain
+   `<img>`. Found by reading the view's branches.
+4. **A dataset whose images are not at the root could not be opened.** The listing is non-recursive
+   per RULE-051, and nothing offered a way down — the API had supported `?folder=` the whole time.
+   Found by pointing the app at a folder laid out the way this project's own fixtures are.
+5. **Space could be refused over a preview that was on screen.** The keydown listener is registered
+   in an effect, so there is a window where the banner is rendered and the listener still closes
+   over the render with no prediction. Found by chasing a test that failed one run in ten — the
+   failing DOM contained both "AI preview ready" and "No AI segment preview to accept", which
+   cannot both be true of one state.
+
+The common thread: **a rule can be implemented, tested and correct, and the feature can still not
+exist.** Component tests prove the component; only an end-to-end path proves it is reachable. That
+is what Phase 5's exit criterion 1 is for, and it earned its place twice in one session.
+
+The second thread is about the suite itself. Two flakes turned out to be one real defect (5) and
+one real contention problem (a fresh jsdom per file was two thirds of the run). Neither was a
+reason to raise a timeout, which was the first thing tried both times.
+
 ## Running the live suites
 
 The differential and live suites are the strongest evidence in the project and they **skip
