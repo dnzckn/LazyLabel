@@ -108,8 +108,15 @@ describe("C9: a file that changed underneath", () => {
     const { saveAnnotations } = mount();
     // REJECTED, not thrown synchronously: `saveAnnotations` is async, so the real client always
     // hands back a promise and the component's `.catch` is what sees a 409.
+    // The REAL shape the API sends, trailing clause and all: an earlier version of this test used
+    // a tidier message and so passed while the live banner read "nothing was written" three times.
     (saveAnnotations as unknown as { mockRejectedValue: (v: unknown) => void }).mockRejectedValue(
-      new ApiError(409, "revision_conflict", "frames/a.npz changed since it was read."),
+      new ApiError(
+        409,
+        "revision_conflict",
+        "frames/a.npz changed since it was read (expected aaa, found bbb); nothing was written",
+        { key: "frames/a.npz" },
+      ),
     );
 
     await openImageWithThatClient();
@@ -121,8 +128,17 @@ describe("C9: a file that changed underneath", () => {
     // By TEXT, not by role: jsdom has no 2D canvas, so the canvas reports its own failure as an
     // alert too, and `getByRole("alert")` would find whichever came first.
     const shown = await screen.findByText(/Nothing was written/);
+    expect(shown.textContent).toMatch(/frames\/a\.npz changed since you loaded it/);
     expect(shown.textContent).toMatch(/desktop app, another tab, or a script/);
+    expect(shown.textContent).toMatch(/Your work is still on screen/);
     expect(shown.textContent).toMatch(/Reload the image/);
+
+    // SAID ONCE, which is the whole reason this message is written rather than appended to the
+    // server's. Concatenating put it on screen three times, and only running it showed that.
+    expect(shown.textContent?.match(/[Nn]othing was written/g) ?? []).toHaveLength(1);
+    // And the revision hashes are dropped: they belong in a log, not in front of someone who would
+    // have to compare two base64 strings to learn nothing.
+    expect(shown.textContent).not.toMatch(/expected aaa/);
   });
 });
 

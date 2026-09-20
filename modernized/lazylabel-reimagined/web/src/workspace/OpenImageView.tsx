@@ -526,13 +526,27 @@ function ConvertButton({
         const conflict =
           typeof cause === "object" && cause !== null && "code" in cause
             && (cause as { code?: unknown }).code === "revision_conflict";
+
+        /*
+         * WRITTEN, NOT CONCATENATED. Appending an explanation to the server's message put
+         * "nothing was written" on screen three times -- the banner is prefixed with it, the API's
+         * sentence ends with it, and the explanation said it again. Only running it showed that.
+         *
+         * A conflict gets its own sentence built from the file the server named, so it says each
+         * thing once: what changed, who could have done it, that nothing was lost, and what to do.
+         * The server's revision hashes are dropped deliberately -- they are for a log, and a user
+         * comparing two base64 strings learns nothing from them.
+         */
+        const key =
+          (typeof cause === "object" && cause !== null && "detail" in cause
+            ? ((cause as { detail?: { key?: unknown } }).detail?.key as string | undefined)
+            : undefined) ?? "the annotation file";
+
         setState({
           status: "failed",
-          // Named for what it is. "Conflict" alone sends someone looking for a bug; the actual
-          // situation is that the file changed under them, and the recovery is to reload.
           reason: conflict
-            ? `${reason} Something else wrote this file since it was loaded — the desktop app, `
-              + "another tab, or a script. Nothing was written. Reload the image to see what it "
+            ? `${key} changed since you loaded it — the desktop app, another tab, or a script `
+              + "wrote it. Your work is still on screen. Reload the image to see what the file "
               + "says now."
             : reason,
         });
