@@ -1,9 +1,9 @@
 /**
  * The application shell.
  *
- * Phase 2 built the shell itself: configuration, logging, settings and hotkeys. Phase 4 added the
- * dataset browser. What is still missing is the workspace — the canvas and the tools — so the shell
- * says plainly what is not built rather than mocking an editor that would be thrown away.
+ * Phase 2 built the shell, Phase 4 the dataset browser and the three-pane layout, Phase 5 the
+ * tools that fill the panels. The subtitle used to name the phase the tools were coming in; it
+ * names what the app is for now, because a user is not reading a plan.
  *
  * What it genuinely exercises: the API client against a real server, the settings provider
  * including its degraded state, the hotkey system end to end, and the capability table.
@@ -88,7 +88,7 @@ export function App({ client }: { readonly client: ApiClient }): ReactNode {
 
       <header>
         <h1>LazyLabel</h1>
-        <p className="subtitle">The drawing and AI tools are built in Phase 5</p>
+        <p className="subtitle">Annotate a folder of images, in the browser</p>
       </header>
 
       {healthError !== null && (

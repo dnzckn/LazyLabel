@@ -343,12 +343,22 @@ fieldset input {
   touch-action: none; /* a drag on a touch screen draws, it does not scroll the page */
 }
 
+/*
+ * WRAPS, because the number of tools grew. Six of them in a row overflowed the left panel and
+ * spilled the last three across the canvas -- a row that looked fine when there were three.
+ */
 .tool-picker {
   border: none;
   margin: 0 0 0.5rem;
   padding: 0;
   display: flex;
-  gap: 0.75rem;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.75rem;
+}
+
+/* So a two-word tool name breaks between tools rather than inside one. */
+.tool-picker label {
+  white-space: nowrap;
 }
 
 .tool-picker legend {
