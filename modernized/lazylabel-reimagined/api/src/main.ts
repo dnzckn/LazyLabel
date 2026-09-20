@@ -7,6 +7,7 @@ import * as path from "node:path";
 
 import { createApp } from "./app.js";
 import { DirectoryBlobStore } from "./adapters/directoryBlobStore.js";
+import { HttpInferenceClient } from "./adapters/httpInference.js";
 import { SqliteMetadataStore } from "./adapters/sqliteMetadataStore.js";
 import { loadConfig } from "./config.js";
 import { createLogger } from "./http/log.js";
@@ -28,11 +29,27 @@ async function main(): Promise<void> {
   }
   const metadataStore = new SqliteMetadataStore(config.databasePath);
 
+  /*
+   * THE INFERENCE ADAPTER WAS NEVER CONSTRUCTED HERE, and until this line existed the AI tools
+   * were unreachable in every real deployment however the service was run. The adapter was
+   * written and tested, `AppDeps` accepted it, and no entry point ever passed one -- the same
+   * built-but-unreachable shape this project has found repeatedly, at the process level rather
+   * than the component level.
+   *
+   * Absent stays supported: no URL means the AI routes answer 503 with a reason and everything
+   * else works, which is what a machine with no GPU should do.
+   */
+  const inference =
+    config.inferenceUrl === null
+      ? undefined
+      : new HttpInferenceClient({ baseUrl: config.inferenceUrl });
+
   const app = createApp({
     blobStore,
     metadataStore,
     logger,
     datasetHealthy: () => blobStore.healthy(),
+    ...(inference === undefined ? {} : { inference }),
   });
 
   const server = createServer(app);
@@ -42,6 +59,9 @@ async function main(): Promise<void> {
       port: config.port,
       datasetRoot: config.datasetRoot,
       database: config.databasePath,
+      // Logged either way: "inference: none" at startup is how an operator learns the AI tools
+      // will be unavailable before a user clicks an object and finds out.
+      inference: config.inferenceUrl ?? "none",
     });
   });
 

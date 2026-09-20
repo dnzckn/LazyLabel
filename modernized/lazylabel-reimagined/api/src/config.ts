@@ -15,6 +15,43 @@ export interface Config {
   readonly databasePath: string;
   readonly port: number;
   readonly host: string;
+  /**
+   * Where the inference service listens, or null when there is none.
+   *
+   * ABSENT IS A SUPPORTED DEPLOYMENT, not a broken one. The failure-mode table says everything
+   * except SAM prompts and propagation works without it, so the AI routes answer 503 with a reason
+   * and nothing else changes — which is what a machine with no GPU should do rather than refusing
+   * to start.
+   */
+  readonly inferenceUrl: string | null;
+}
+
+/**
+ * The inference service's address, validated here rather than on the first AI request.
+ *
+ * A typo in this variable used to be discoverable only by clicking an object and getting a
+ * connection error three layers down. Refusing at startup with the value quoted is the whole
+ * difference between "the AI tools are broken" and "this is not a URL".
+ */
+function inferenceUrlFrom(env: NodeJS.ProcessEnv): string | null {
+  const raw = env["LAZYLABEL_INFERENCE_URL"]?.trim();
+  if (raw === undefined || raw === "") return null;
+
+  let parsed;
+  try {
+    parsed = new URL(raw);
+  } catch {
+    throw new ConfigError(
+      `LAZYLABEL_INFERENCE_URL must be a URL like http://127.0.0.1:8788, got ${JSON.stringify(raw)}`,
+    );
+  }
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    throw new ConfigError(
+      `LAZYLABEL_INFERENCE_URL must be http or https, got ${JSON.stringify(parsed.protocol)}`,
+    );
+  }
+  // Trailing slashes removed here so every caller does not have to think about them.
+  return raw.replace(/\/+$/, "");
 }
 
 export class ConfigError extends Error {
@@ -48,5 +85,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     // interface is a choice an operator makes on purpose, behind the reverse proxy that terminates
     // TLS and authenticates, not a default that quietly exposes someone's images to their network.
     host: env["LAZYLABEL_HOST"] ?? "127.0.0.1",
+    inferenceUrl: inferenceUrlFrom(env),
   };
 }
