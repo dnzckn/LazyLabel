@@ -5,7 +5,7 @@
 import { describe, expect, it } from "vitest";
 import type { WireSegment } from "@lazylabel/contracts";
 
-import { classForNewSegment, nextClassId } from "../../src/workspace/classes.js";
+import { classForNewSegment, nextClassId, reassignClassIds } from "../../src/workspace/classes.js";
 
 const of = (...ids: (number | null)[]): WireSegment[] =>
   ids.map((classId) => ({ type: "Polygon", classId }) as WireSegment);
@@ -54,5 +54,70 @@ describe("the class a new annotation takes", () => {
   it("can hand out an id that is already in use, which is the point of an active class", () => {
     // Several objects of the same class is the normal case, not a collision.
     expect(classForNewSegment(of(4, 4, 4), 4)).toBe(4);
+  });
+});
+
+describe("renumbering classes from the table order (RULE-013)", () => {
+  it("works the card's example", () => {
+    // Rows ordered 7, 2, 5 after dragging; aliases {7:'car', 2:'person'}.
+    const result = reassignClassIds(of(7, 2, 5), { "7": "car", "2": "person" }, [7, 2, 5]);
+
+    expect(result.segments.map((s) => s.classId)).toEqual([0, 1, 2]);
+    expect(result.aliases).toEqual({ "0": "car", "1": "person" });
+  });
+
+  it("gives the order's position, not the sorted position", () => {
+    // The whole point: the table's order is what the exported channel order follows.
+    expect(reassignClassIds(of(1, 2, 3), {}, [3, 1, 2]).segments.map((s) => s.classId)).toEqual([1, 2, 0]);
+  });
+
+  it("leaves unclassified segments alone", () => {
+    expect(reassignClassIds(of(null, 5), {}, [5]).segments.map((s) => s.classId)).toEqual([null, 0]);
+  });
+
+  it("KEEPS the old id of a class the order does not mention, and says it collides", () => {
+    // Legacy's silent defect. Class 9 is not in the order, so it keeps id 9; but 9 is also what
+    // the tenth row would have become -- here the order gives out 0 and 1, so no collision. Make
+    // one: class 1 is absent from the order and 1 is handed to the second row.
+    const result = reassignClassIds(of(7, 2, 1), {}, [7, 2]);
+
+    expect(result.segments.map((s) => s.classId)).toEqual([0, 1, 1]);
+    expect(result.collisions).toEqual([1]);
+  });
+
+  it("does not claim a collision when the kept id is free", () => {
+    const result = reassignClassIds(of(7, 2, 9), {}, [7, 2]);
+
+    expect(result.segments.map((s) => s.classId)).toEqual([0, 1, 9]);
+    expect(result.collisions).toEqual([]);
+  });
+
+  it("drops an alias whose class is not in the order, and names it", () => {
+    // A name the user typed disappears because nothing currently carries that class. Legacy does
+    // this without a word.
+    const result = reassignClassIds(of(7), { "7": "car", "4": "bicycle" }, [7]);
+
+    expect(result.aliases).toEqual({ "0": "car" });
+    expect(result.droppedAliases).toEqual(["bicycle"]);
+  });
+
+  it("ignores a repeated id in the order rather than renumbering twice", () => {
+    const result = reassignClassIds(of(5, 8), {}, [5, 5, 8]);
+
+    expect(result.segments.map((s) => s.classId)).toEqual([0, 1]);
+  });
+
+  it("leaves the original segments untouched", () => {
+    const before = of(7, 2);
+    reassignClassIds(before, {}, [7, 2]);
+
+    expect(before.map((s) => s.classId)).toEqual([7, 2]);
+  });
+
+  it("does nothing useful with an empty order, and does not crash", () => {
+    const result = reassignClassIds(of(3, 4), { "3": "a" }, []);
+
+    expect(result.segments.map((s) => s.classId)).toEqual([3, 4]);
+    expect(result.droppedAliases).toEqual(["a"]);
   });
 });
