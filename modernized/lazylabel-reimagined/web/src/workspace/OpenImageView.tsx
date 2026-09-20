@@ -38,6 +38,7 @@ import { classForNewSegment } from "./classes.js";
 import { useNotifications } from "../notifications/NotificationProvider.jsx";
 
 import type { AnnotationsResult, ApiClient } from "../api/client.js";
+import { RESOLUTION_DEFAULT } from "../tools/autoPolygon.js";
 
 /**
  * What a save sends when the image had no annotation file.
@@ -123,6 +124,12 @@ function OpenedImage({
   const adjustments = useMemo(() => adjustmentsFrom(settings.values), [settings.values]);
   const joinThreshold = Number(settings.values["polygon_join_threshold"]);
   const fragmentThreshold = Number(settings.values["fragment_threshold"] ?? 0);
+  // Legacy's Auto-Convert. Read here rather than inside the tool so that the tool takes a value
+  // and the settings are looked up in one place per panel, as every other setting is.
+  const autoPolygon = {
+    enabled: settings.values["auto_polygon_enabled"] === true,
+    resolution: Number(settings.values["polygon_resolution"] ?? RESOLUTION_DEFAULT),
+  };
   // A manifest NAME, not a file path. Empty means none chosen, and the AI tool says so rather
   // than sending a request the service can only refuse.
   const aiModel = String(settings.values["ai_model"] ?? "");
@@ -256,6 +263,7 @@ function OpenedImage({
                       classId={classForNewSegment(segments, activeClassId)}
                       model={aiModel}
                       fragmentThreshold={fragmentThreshold}
+                      autoPolygon={autoPolygon}
                       onAccept={(segment) => addSegment(segment, "Accept AI mask")}
                       // The MASK erases, not its bounding box: an AI mask is rarely a
                       // rectangle, and erasing its box would take out pixels the model never

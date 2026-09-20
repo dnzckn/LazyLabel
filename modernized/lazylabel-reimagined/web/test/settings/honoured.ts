@@ -59,11 +59,11 @@ export const HONOURED: Readonly<Record<string, Honoured>> = {
 
   polygon_join_threshold: read,
   fragment_threshold: read,
-  auto_polygon_enabled: gap(
-    "RULE-047's automatic polygon closing is not built; the user closes a polygon by clicking the "
-      + "first vertex or pressing Space.",
-  ),
-  polygon_resolution: gap("the vertex-count reduction RULE-047 describes is not built."),
+  // Legacy's Auto-Convert, read through `tools/autoPolygon.ts`: an accepted AI mask becomes an
+  // editable polygon. `polygon_resolution` is the 1-100 slider legacy maps to an epsilon factor
+  // for `approxPolyDP` (`control_panel.py:892-899`).
+  auto_polygon_enabled: read,
+  polygon_resolution: read,
 
   brightness: read,
   contrast: read,

@@ -51,4 +51,14 @@ export {
 
 // The geometry the web app's fragment filter needs. Exported rather than reimplemented there:
 // these are proven against OpenCV, and a second contour tracer would be a second thing to prove.
-export { contourArea, fillPoly, findExternalContours } from "./geometry/contours.js";
+export {
+  approxPolyDP,
+  arcLength,
+  contourArea,
+  fillPoly,
+  findExternalContours,
+} from "./geometry/contours.js";
+// `arcLength` and `approxPolyDP` join them for the web app's Auto-Convert, which turns an AI mask
+// into an editable polygon. Same reason as the three above: these are the OpenCV ports proven
+// against goldens legacy wrote, and a second approximation in the browser would be a second answer
+// to a question with one right one.

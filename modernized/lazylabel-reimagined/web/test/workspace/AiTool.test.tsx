@@ -67,6 +67,7 @@ function mount(client: Partial<ApiClient>, props: Partial<Parameters<typeof AiTo
         classId={props.classId ?? 0}
         model="SAM 2.1 large"
         fragmentThreshold={props.fragmentThreshold ?? 0}
+        {...(props.autoPolygon === undefined ? {} : { autoPolygon: props.autoPolygon })}
         onAccept={onAccept}
         onErase={onErase}
       />
@@ -330,5 +331,41 @@ describe("accepting", () => {
     // and the largest is never below itself.
     fireEvent.keyDown(document, { key: " " });
     await waitFor(() => expect(onAccept).toHaveBeenCalledTimes(1));
+  });
+});
+
+describe("Auto-Convert", () => {
+  it("accepts a MASK when the setting is off, which is the default", async () => {
+    // A conversion approximates. Approximating someone's annotation without being asked is the
+    // sort of help that loses a boundary they cared about, so legacy defaults it off and so does
+    // this.
+    const { onAccept } = mount({});
+    await waitFor(() => expect(surface()).toBeTruthy());
+    click(10, 10);
+    await ready();
+
+    fireEvent.keyDown(document, { key: " " });
+
+    await waitFor(() => expect(onAccept).toHaveBeenCalled());
+    const segment = onAccept.mock.calls.at(-1)![0];
+    expect(segment.type).toBe("AI");
+    expect(segment.mask).toBeDefined();
+    expect(segment.vertices).toBeUndefined();
+  });
+
+  it("accepts a POLYGON when it is on, with corners the edit tool can drag", async () => {
+    // The point of the feature: a mask has no corners to drag, a polygon does.
+    const { onAccept } = mount({}, { autoPolygon: { enabled: true, resolution: 80 } });
+    await waitFor(() => expect(surface()).toBeTruthy());
+    click(10, 10);
+    await ready();
+
+    fireEvent.keyDown(document, { key: " " });
+
+    await waitFor(() => expect(onAccept).toHaveBeenCalled());
+    const segment = onAccept.mock.calls.at(-1)![0];
+    expect(segment.type).toBe("Polygon");
+    expect(segment.vertices?.length).toBeGreaterThanOrEqual(3);
+    expect(segment.mask).toBeUndefined();
   });
 });

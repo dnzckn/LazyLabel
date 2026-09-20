@@ -27,6 +27,8 @@ import { filterFragments } from "../tools/fragments.js";
 import { useNotifications } from "../notifications/NotificationProvider.jsx";
 import type { AiPrompt } from "../tools/ai.js";
 import type { ApiClient, WireSegmentResponse } from "../api/client.js";
+import type { BinaryMask } from "@lazylabel/annotation-formats";
+import { epsilonFactorFor, maskToPolygon } from "../tools/autoPolygon.js";
 
 export interface AiToolProps {
   readonly client: ApiClient;
@@ -39,6 +41,18 @@ export interface AiToolProps {
   readonly model: string;
   /** RULE-027's threshold, from settings. */
   readonly fragmentThreshold: number;
+  /**
+   * Legacy's Auto-Convert: turn an accepted mask into an editable POLYGON.
+   *
+   * Worth more than the name suggests. A mask is a field of pixels -- you can erase into it, but
+   * you cannot drag a corner. A polygon has vertices the edit tool can move, so this is the
+   * difference between an AI result you accept or discard and one you can FIX.
+   *
+   * Off when absent, which is legacy's default: a conversion approximates, and approximating
+   * someone's annotation without being asked is the sort of help that loses a boundary they cared
+   * about.
+   */
+  readonly autoPolygon?: { readonly enabled: boolean; readonly resolution: number };
   readonly onAccept: (segment: WireSegment) => void;
   readonly onErase: (mask: WireSegment) => void;
 }
@@ -51,6 +65,7 @@ export function AiTool({
   classId,
   model,
   fragmentThreshold,
+  autoPolygon,
   onAccept,
   onErase,
 }: AiToolProps): ReactNode {
@@ -188,7 +203,7 @@ export function AiTool({
         return;
       }
 
-      const segment: WireSegment = { type: "AI", classId, mask: encodeMask(filtered.mask) };
+      const segment = asPolygonIfAsked(filtered.mask, classId, autoPolygon, notify);
       if (asEraser) onErase(segment);
       else onAccept(segment);
 
@@ -215,7 +230,7 @@ export function AiTool({
     },
     // No `result`: it is read from the ref above, which is the whole point. Leaving it in would
     // put the stale closure back, one render later.
-    [classId, fragmentThreshold, notify, onAccept, onErase],
+    [autoPolygon, classId, fragmentThreshold, notify, onAccept, onErase],
   );
 
   return (
@@ -298,4 +313,48 @@ function Preview({
       height={drawn.height}
     />
   );
+}
+
+/**
+ * The segment an accepted mask becomes: a polygon when Auto-Convert asks for one, else the mask.
+ *
+ * Falls back to the MASK rather than refusing when the conversion cannot produce a polygon. A
+ * setting is a preference about form, not a condition on the work: a user who turned Auto-Convert
+ * on and drew a sliver that approximates to a line wants their annotation, not an error. It says
+ * so, because silently getting a mask when you asked for a polygon is the kind of difference
+ * nobody notices until they try to drag a corner.
+ */
+function asPolygonIfAsked(
+  mask: BinaryMask,
+  classId: number,
+  autoPolygon: { readonly enabled: boolean; readonly resolution: number } | undefined,
+  notify: (notification: { severity: "info" | "warning"; message: string; detail?: string }) => void,
+): WireSegment {
+  const asMask: WireSegment = { type: "AI", classId, mask: encodeMask(mask) };
+  if (autoPolygon?.enabled !== true) return asMask;
+
+  const converted = maskToPolygon(mask, epsilonFactorFor(autoPolygon.resolution));
+  if (converted === null) {
+    notify({
+      severity: "warning",
+      message: "Kept this as a mask",
+      detail:
+        "Auto-Convert could not make a polygon of it -- at this resolution the shape comes out "
+        + "with fewer than three corners. Raise the polygon resolution for more detail.",
+    });
+    return asMask;
+  }
+
+  if (converted.dropped > 0) {
+    // Legacy's behaviour, kept and reported rather than silently improved: it converts the largest
+    // contour only. A user whose mask had two islands gets one polygon, and should know which.
+    notify({
+      severity: "info",
+      message: `Converted the largest piece, dropping ${converted.dropped} smaller one${
+        converted.dropped === 1 ? "" : "s"
+      }`,
+    });
+  }
+
+  return { type: "Polygon", classId, vertices: converted.vertices };
 }
