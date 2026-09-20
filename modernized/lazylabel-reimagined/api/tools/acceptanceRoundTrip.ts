@@ -45,7 +45,7 @@ const TEXT_FORMATS = new Set(["YOLO_DETECTION", "YOLO_SEGMENTATION", "COCO_JSON"
 
 export interface ImageOutcome {
   readonly key: string;
-  readonly status: "identical" | "differs" | "unreadable" | "skipped";
+  readonly status: "identical" | "differs" | "unreadable" | "skipped" | "needs-converter";
   readonly detail: string;
   /** Which formats were compared, and which of them differed. */
   readonly formats: readonly string[];
@@ -82,20 +82,24 @@ export function summarize(outcomes: readonly DatasetOutcome[]): {
   let failed = 0;
 
   for (const dataset of outcomes) {
-    const counts = { identical: 0, differs: 0, unreadable: 0, skipped: 0 };
+    const counts = { identical: 0, differs: 0, unreadable: 0, skipped: 0, "needs-converter": 0 };
     for (const image of dataset.images) counts[image.status] += 1;
-    failed += counts.differs + counts.unreadable;
+    // A file needing the converter is a FAILURE of this criterion, not a warning: the criterion
+    // says pickled files are included, and a corpus that passes only because its pickled datasets
+    // were counted as something else has not been checked.
+    failed += counts.differs + counts.unreadable + counts["needs-converter"];
 
     lines.push(
       `${dataset.folder}: ${counts.identical} identical, ${counts.differs} differ, `
-        + `${counts.unreadable} unreadable, ${counts.skipped} without annotations`,
+        + `${counts["needs-converter"]} need the converter, ${counts.unreadable} unreadable, `
+        + `${counts.skipped} without annotations`,
     );
     // Only the failures are listed. A corpus of two hundred datasets printing every filename is a
     // report nobody reads, and the ones that matter are the ones that are wrong.
     for (const image of dataset.images) {
       if (image.status === "differs") {
         lines.push(`    ${image.key}: ${image.differing.join(", ")} differ`);
-      } else if (image.status === "unreadable") {
+      } else if (image.status === "unreadable" || image.status === "needs-converter") {
         lines.push(`    ${image.key}: ${image.detail}`);
       }
     }
@@ -177,6 +181,27 @@ async function roundTripImage(
   // not, which is worth reporting rather than swallowing: a damaged newest file beside a healthy
   // older one looks like a clean round trip and is not.
   const outcome = read.outcome;
+
+  // PICKLED CLASS NAMES, which the criterion names explicitly: "pickled NPZ files included, via
+  // the converter". The masks load perfectly and the NAMES do not (SEC-01 refuses to unpickle),
+  // so a round trip of this file writes ids where the names belong -- in Pascal VOC and CreateML
+  // especially, which carry names rather than ids, with nothing about the output looking wrong.
+  //
+  // Reported as its own outcome rather than as "differs". The bytes DO differ, and saying only
+  // that sends someone hunting a rounding bug in the exporters when the answer is one command.
+  if (outcome.unreadableAliases === true) {
+    return {
+      key,
+      status: "needs-converter",
+      detail:
+        "its class names are stored in the old pickled format and were not read. Run the "
+        + "converter over this dataset first: "
+        + "`python -m lazylabel_converter <source> <destination>`",
+      formats: [...present],
+      differing: [],
+    };
+  }
+
   const segments = outcome.segments;
   const classAliases = outcome.classAliases;
   const classOrder = [

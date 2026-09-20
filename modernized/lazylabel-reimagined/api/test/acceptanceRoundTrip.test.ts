@@ -114,6 +114,28 @@ describe("the report", () => {
     expect(lines.join("\n")).toContain("the npz is truncated");
   });
 
+  it("FAILS on a file whose class names are pickled, and says which command fixes it", () => {
+    // The criterion says "pickled NPZ files included, via the converter". Such a file's masks load
+    // perfectly and its NAMES do not, so the bytes differ -- and reporting only that sends someone
+    // hunting a rounding bug in the exporters when the answer is one command. A corpus that passed
+    // only because its pickled datasets were counted as something else has not been checked.
+    const { lines, failed } = summarize([
+      {
+        folder: "frames",
+        images: [
+          outcome({
+            status: "needs-converter",
+            detail: "its class names are stored in the old pickled format. Run the converter.",
+          }),
+        ],
+      },
+    ]);
+
+    expect(failed).toBe(1);
+    expect(lines[0]).toContain("1 need the converter");
+    expect(lines.join(" ")).toContain("Run the converter");
+  });
+
   it("does not fail on an image with no annotations at all", () => {
     // Most images in a real dataset have none. They are counted and not listed.
     const { lines, failed } = summarize([
