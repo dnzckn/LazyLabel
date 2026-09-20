@@ -13,6 +13,7 @@ import {
   buildTimeline,
   clearFlags,
   colourOf,
+  markReference,
   markReferences,
   resetForPropagation,
   sortedOrder,
@@ -285,5 +286,41 @@ describe("the colours (RULE-072)", () => {
     expect(colourOf(timeline("saved")[0]!)).toEqual([0, 188, 212]);
     expect(colourOf(timeline("suggested")[0]!)).toEqual([156, 39, 176]);
     expect(colourOf(timeline("skipped")[0]!)).toEqual([139, 69, 19]);
+  });
+});
+
+describe("marking one frame as a reference by hand", () => {
+  const frames = buildTimeline(["a.png", "b.png", "c.png"], 0, 2);
+
+  it("marks the named frame and nothing else", () => {
+    // `markReferences` derives the whole set when a timeline is built, which is the wrong answer
+    // afterwards: a user who has just drawn on a frame wants propagation to run from it, and
+    // nothing re-derives the set while they work.
+    const marked = markReference(frames, 1);
+
+    expect(marked.map((frame) => frame.isReference)).toEqual([false, true, false]);
+  });
+
+  it("leaves the frame's STATE alone", () => {
+    // Role and state are separate: a reference that has been saved is a saved reference.
+    const saved = frames.map((frame) => ({ ...frame, state: "saved" as const }));
+
+    expect(markReference(saved, 1)[1]!.state).toBe("saved");
+  });
+
+  it("ADDS rather than toggles", () => {
+    // Legacy calls it "add reference frame". Removing ground truth should take a deliberate,
+    // differently named act -- propagation then runs from somewhere else and every frame after it
+    // changes.
+    const once = markReference(frames, 1);
+
+    expect(markReference(once, 1)[1]!.isReference).toBe(true);
+  });
+
+  it("returns the SAME array when nothing moved", () => {
+    const once = markReference(frames, 1);
+
+    expect(markReference(once, 1)).toBe(once);
+    expect(markReference(frames, 99)).toBe(frames);
   });
 });

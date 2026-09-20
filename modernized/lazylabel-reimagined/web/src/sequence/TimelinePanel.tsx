@@ -27,6 +27,7 @@ import {
   buildTimeline,
   clearFlags,
   colourOf,
+  markReference,
   markReferences,
   sortedOrder,
   step,
@@ -124,6 +125,14 @@ export function TimelinePanel({ images, onOpen, scores = {} }: TimelinePanelProp
    * hooks the component runs between renders and React refuses. `navigate` already does nothing
    * when `step` finds no frame, so an empty timeline needs no guard of its own.
    */
+  // Marking the frame you are on, which is what a user does after drawing on it: `markReferences`
+  // derives the whole set when the timeline is built and nothing re-derives it while they work.
+  const markCurrent = useCallback(
+    () => setOverrides(markReference(frames, current)),
+    [current, frames],
+  );
+  useHotkey("add_reference_frame", markCurrent);
+
   useHotkey("next_flagged_frame", () => navigate("flagged", 1));
   useHotkey("prev_flagged_frame", () => navigate("flagged", -1));
   useHotkey("next_reference_frame", () => navigate("reference", 1));
@@ -198,6 +207,9 @@ export function TimelinePanel({ images, onOpen, scores = {} }: TimelinePanelProp
         </button>
         <button type="button" onClick={() => navigate("reference", 1)}>
           Next reference
+        </button>
+        <button type="button" onClick={markCurrent}>
+          Mark as reference
         </button>
         <button type="button" onClick={() => setOverrides(clearFlags(frames))}>
           Clear flags

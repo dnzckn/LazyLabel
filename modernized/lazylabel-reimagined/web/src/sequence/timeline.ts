@@ -263,3 +263,24 @@ export function summarize(frames: readonly Frame[]): {
 
   return { total: frames.length, references, byState };
 }
+
+/**
+ * Mark ONE frame as a reference, by hand — legacy's "add reference frame".
+ *
+ * `markReferences` derives the whole set from which images already have annotations, which is the
+ * right answer when a timeline is built and the wrong one afterwards: a user who has just drawn on
+ * a frame wants propagation to run from it, and nothing re-derives the set while they work.
+ *
+ * ADD, not toggle, which is what legacy calls it. Pressing it on a frame that is already a
+ * reference does nothing rather than quietly removing ground truth -- and removing one is the sort
+ * of thing that should take a deliberate, differently named act, because propagation then runs
+ * from somewhere else and every frame after it changes.
+ *
+ * The frame's STATE is untouched. A reference that has been saved is a saved reference; role and
+ * state are separate here for exactly this reason.
+ */
+export function markReference(frames: readonly Frame[], index: number): readonly Frame[] {
+  const at = frames.findIndex((frame) => frame.index === index);
+  if (at < 0 || frames[at]!.isReference) return frames;
+  return frames.map((frame, i) => (i === at ? { ...frame, isReference: true } : frame));
+}

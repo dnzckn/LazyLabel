@@ -27,6 +27,7 @@ import {
   type AiPrompt,
 } from "../tools/ai.js";
 import { useSizing } from "./useSizing.js";
+import { useHotkey } from "../hotkeys/HotkeyProvider.jsx";
 
 export interface AiLayerProps {
   readonly width: number;
@@ -117,6 +118,16 @@ export function AiLayer({
     },
     [boxOf, from, image, onPrompt, onRefused, prompt, to],
   );
+
+  /*
+   * The REMAPPABLE clear, through the dispatcher so the hotkey reference reports it -- it listed
+   * `clear_points` with its key and nothing was listening.
+   *
+   * Escape still clears too, below and unremappable, because it is what every drawing surface in
+   * this app answers to and a user pressing it expects the draft to go. Two ways into one action
+   * is not a conflict; a key in the reference that does nothing is.
+   */
+  useHotkey("clear_points", () => setPrompt(clear()));
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {

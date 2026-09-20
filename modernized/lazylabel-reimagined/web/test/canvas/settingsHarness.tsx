@@ -16,6 +16,7 @@ import type { ReactNode } from "react";
 import { defaultSettings } from "@lazylabel/settings-schema";
 
 import type { ApiClient } from "../../src/api/client.js";
+import { HotkeyProvider } from "../../src/hotkeys/HotkeyProvider.jsx";
 import { SettingsProvider } from "../../src/settings/SettingsProvider.jsx";
 
 export function renderWithSettings(
@@ -28,5 +29,11 @@ export function renderWithSettings(
     putSettings: async (next: unknown) => next,
   } as unknown as ApiClient;
 
-  return render(<SettingsProvider client={client}>{node}</SettingsProvider>);
+  // The hotkey provider comes with the settings one: layers read the drawing-aid sizing AND
+  // register remappable keys, and `useHotkey` throws without a provider by design.
+  return render(
+    <SettingsProvider client={client}>
+      <HotkeyProvider bindings={base.hotkeys}>{node}</HotkeyProvider>
+    </SettingsProvider>,
+  );
 }
