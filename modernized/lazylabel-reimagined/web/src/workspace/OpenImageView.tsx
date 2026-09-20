@@ -483,12 +483,22 @@ function ConvertButton({
         // from -- so what a crop blanks is exactly what the files lose, rather than two
         // implementations of the same rectangle.
         cropCoords: crop === null ? null : [crop.x1, crop.y1, crop.x2, crop.y2],
+        // RULE-012: which class wins a pixel two annotations both cover. The API has accepted this
+        // since Phase 2 and the client never sent it, so the two settings did NOTHING -- a user
+        // whose imported legacy settings turned pixel priority on got masks resolved the other
+        // way, and the difference is invisible until an overlap actually occurs.
+        pixelPriority: {
+          enabled: settings.values["pixel_priority_enabled"] === true,
+          // Ascending unless explicitly false, which matches the server's own default: the lowest
+          // class id wins, as legacy resolves it.
+          ascending: settings.values["pixel_priority_ascending"] !== false,
+        },
       })
       .then((result) => setState({ status: "saved", result }))
       .catch((cause: unknown) =>
         setState({ status: "failed", reason: cause instanceof Error ? cause.message : String(cause) }),
       );
-  }, [classAliases, client, crop, formats, image.key, projectId, segments, size]);
+  }, [classAliases, client, crop, formats, image.key, projectId, segments, settings.values, size]);
 
   return (
     <div>

@@ -63,6 +63,26 @@ describe("C7: classes and names", () => {
     expect(lastSave(saveAnnotations)["classAliases"]).toEqual({});
   });
 
+  it("sends the PIXEL PRIORITY, which decides who wins an overlap (RULE-012)", async () => {
+    // The API has accepted this since Phase 2 and the client never sent it, so both settings did
+    // nothing: a user whose imported legacy settings turned pixel priority on got masks resolved
+    // the other way, and the difference is invisible until an overlap actually occurs.
+    //
+    // Sent explicitly rather than omitted, for the same reason as the crop: a field the client
+    // leaves out is a decision it has silently handed to the server's default.
+    const { saveAnnotations } = await openImage();
+    chooseTool("Polygon");
+    drawTriangle(10, 10);
+
+    fireEvent.click(writeButton());
+
+    await waitFor(() => expect(saveAnnotations).toHaveBeenCalled());
+    expect(lastSave(saveAnnotations)["pixelPriority"]).toEqual({
+      enabled: false,
+      ascending: true,
+    });
+  });
+
   it("does NOT send a channel order on the wire", async () => {
     // RULE-014: the saved channel order is ascending class id, derived on the server from the
     // segments present. It is a content rule, so the client does not get to state it — and the

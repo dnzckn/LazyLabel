@@ -154,6 +154,11 @@ describe("C12: converting a dataset in the browser", () => {
       imageSize: [1080, 1920],
       formats: ["NPZ", "YOLO_DETECTION"],
       cropCoords: null,
+      // RULE-012, and it is sent EXPLICITLY for the same reason the crop is: the server has a
+      // default, and a field the client omits is a decision the client has silently handed over.
+      // Both settings ship off, which matches the server's own default -- but the point is that
+      // they now travel at all, because for a while they did not and the settings did nothing.
+      pixelPriority: { enabled: false, ascending: true },
       segments: LOADED.kind === "loaded" ? LOADED.annotations.segments : [],
       classAliases: { "3": "stop sign" },
     });
