@@ -615,6 +615,7 @@ because a test exercises one side with the other stubbed. Five found:
 | Setting ↔ behaviour | `auto_polygon_enabled` and `polygon_resolution`: legacy's Auto-Convert was not built |
 | CSS ↔ coordinates | the drawing layer's box was not the image's, so every drawn vertex was misplaced |
 | Hotkey ↔ behaviour | 40 of 43 actions had no handler, while the reference listed every one with its key |
+| Rule ↔ navigation | `onNavigateAway` and `onClose` had no caller, so opening another image discarded unsaved work silently |
 
 **A conflict has no recovery yet, and the message says so rather than pretending.** When a save is
 refused because the file moved, the annotations on screen are still the user's — but there is no
@@ -676,6 +677,20 @@ defect card and legacy's toggle-back leaves E R R E stuck in selection. And the 
 which actions have a listener, read from the dispatcher itself rather than a list someone keeps,
 so it cannot drift. The remaining thirty-four are named in the table as "not yet" rather than
 silently promised.
+
+**The eleventh is the one that costs a user their work.** `onNavigateAway` and `onClose` were
+written for decision 7's central case, tested on their own, exposed — and called by nothing. So
+`openImage` cleared the side and clicking any other row in the dataset browser took the
+annotations with it. Legacy loses work here by auto-saving over it; this app lost it by discarding
+it, which is the same loss reached from the other side. The prompt now names the image and the
+count, because "you have unsaved changes" is true of every such prompt ever written and tells a
+user nothing they can weigh.
+
+**Eleven of them now, and the shape has not varied once**: a piece that works, a test that proves
+it works, and nothing calling it. Two things find them — running the app, and asking one question
+of a whole list (every setting, every hotkey, every wire field). Neither is the test suite, and
+that is the point worth carrying: a suite tests the pieces it is given, and this family is about
+the pieces nobody joined.
 
 **The method**: take each pair of components that must agree, and ask what carries the agreement.
 For settings, list the keys and grep for readers. For a wire format, compare the fields the
