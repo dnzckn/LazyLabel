@@ -170,8 +170,27 @@ needs is already in one store rather than scattered across managers.
    - **Display adjustments** (C8), including legacy's negative-brightness fold, reproduced because
      with Operate On View those pixels are what SAM segments.
 
-   Every Phase 5 rule is implemented. What remains is the adjustment *controls* (the sliders that
-   drive C8) and the crop tool, then Phase 5's exit criteria can be checked end to end.
+   - **Image processing** (`tools/imageProcessing.ts`, `tools/adjustments.ts`, `tools/crop.ts`):
+     rescale, channel thresholding, the contrast-stretch and equalization presets, the display
+     adjustments, and crop — RULE-018, a P0 rule whose off-by-one means the last row and column of
+     an image can never be inside a crop.
+
+   **What is left in Phase 5, and why each is left.**
+
+   - **CLAHE** (part of RULE-031). The card gives its parameters — clip 2.0, 8×8 tiles — and not
+     its algorithm. OpenCV interpolates between tiles in a way that is not derivable from a
+     description, so implementing it from the name would produce something plausible that matches
+     nothing. It needs a differential against `cv2.createCLAHE` on golden images first.
+   - **The FFT band filter** (RULE-030). Same reason, plus more of it: a 2-D FFT, radial banding by
+     percentage of the half-diagonal, a min-max stretch and an optional quantize. Its card also
+     records a defect worth designing out rather than porting — the cached spectrum is keyed only
+     by image dimensions, so it is not invalidated when the rescale or channel-threshold settings
+     upstream of it change, and the output can come from a stale input.
+   - **The adjustment controls.** The sliders and panels that drive the rules above. The rules are
+     the part with the equivalence requirement; the controls are ordinary UI over them.
+
+   Once those land, Phase 5's four exit criteria can be checked end to end — three of them need
+   golden-image differentials, which is the same shape of work as Phase 3's.
 2. **Phase 6 — sequence and cutover** (25.9%). The timeline, propagation review, the split view,
    the hosted deployment and the actual switch-over.
 
