@@ -18,7 +18,7 @@
 
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 
-import type { WireDatasetImage } from "@lazylabel/contracts";
+import type { WireDatasetImage, WireSegment } from "@lazylabel/contracts";
 
 import { AnnotationCanvas } from "../canvas/AnnotationCanvas.jsx";
 import { describePair, type ImageSize } from "./linked.js";
@@ -35,10 +35,28 @@ export interface SplitViewProps {
    * view that displayed no pictures at all. Nobody else is asking, so this is not a second answer.
    */
   readonly measure: (key: string) => Promise<ImageSize>;
+  /**
+   * That image's annotations, for showing beside the other's.
+   *
+   * READ-ONLY here, and that is the whole of what this view does with them: comparing two labelled
+   * images is most of why anyone opens a split view, and showing two pictures with no labels on
+   * either was showing the least useful half. Editing them needs the workspace store to hold two
+   * open images, which is the next slice.
+   *
+   * Takes the size because the text formats store NORMALIZED coordinates — a reader cannot recover
+   * pixels without the image's dimensions, which is why this cannot be called until `measure` has
+   * answered.
+   */
+  readonly annotationsFor: (key: string, size: ImageSize) => Promise<readonly WireSegment[]>;
   readonly pixelsUrl: (key: string) => string;
 }
 
-export function SplitView({ images, measure, pixelsUrl }: SplitViewProps): ReactNode {
+export function SplitView({
+  images,
+  measure,
+  annotationsFor,
+  pixelsUrl,
+}: SplitViewProps): ReactNode {
   const [leftIndex, setLeftIndex] = useState(0);
   const [rightIndex, setRightIndex] = useState(1);
   const [linked, setLinked] = useState(true);
@@ -68,6 +86,34 @@ export function SplitView({ images, measure, pixelsUrl }: SplitViewProps): React
       cancelled = true;
     };
   }, [left, right, measure, sizes]);
+
+  // Keyed by image like the sizes, and for the same reason: swapping the sides or coming back to
+  // an image already loaded costs nothing.
+  const [annotations, setAnnotations] = useState<Readonly<Record<string, readonly WireSegment[]>>>({});
+
+  useEffect(() => {
+    let cancelled = false;
+    for (const image of [left, right]) {
+      if (image === undefined || annotations[image.key] !== undefined) continue;
+      const size = sizes[image.key];
+      // Ordered, not raced: the text formats store normalized coordinates, so reading them before
+      // the size is known would rescale every polygon silently. This runs when the size lands.
+      if (size === undefined) continue;
+      void annotationsFor(image.key, size)
+        .then((segments) => {
+          if (!cancelled) setAnnotations((known) => ({ ...known, [image.key]: segments }));
+        })
+        // An image with no annotation file, or one that cannot be read, shows the picture with
+        // nothing over it. The single-image view reports a damaged file properly; repeating that
+        // here would be a second place to keep right about the same thing.
+        .catch(() => {
+          if (!cancelled) setAnnotations((known) => ({ ...known, [image.key]: [] }));
+        });
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, [left, right, sizes, annotations, annotationsFor]);
 
   const sizeOf = (key: string): ImageSize | null => sizes[key] ?? null;
 
@@ -122,7 +168,12 @@ export function SplitView({ images, measure, pixelsUrl }: SplitViewProps): React
         {[left, right].map((image, side) =>
           image === undefined ? null : (
             <figure key={`${side}-${image.key}`} className="split__pane">
-              <Pane image={image} size={sizeOf(image.key)} pixelsUrl={pixelsUrl} />
+              <Pane
+                image={image}
+                size={sizeOf(image.key)}
+                segments={annotations[image.key] ?? []}
+                pixelsUrl={pixelsUrl}
+              />
               <figcaption>{image.name}</figcaption>
             </figure>
           ),
@@ -144,10 +195,12 @@ export function SplitView({ images, measure, pixelsUrl }: SplitViewProps): React
 function Pane({
   image,
   size,
+  segments,
   pixelsUrl,
 }: {
   readonly image: WireDatasetImage;
   readonly size: ImageSize | null;
+  readonly segments: readonly WireSegment[];
   readonly pixelsUrl: (key: string) => string;
 }): ReactNode {
   if (size === null) {
@@ -161,9 +214,9 @@ function Pane({
       imageUrl={pixelsUrl(image.key)}
       width={size.width}
       height={size.height}
-      // No annotations yet: this view compares images, and loading each side's annotations is part
-      // of the two-open-images change rather than something to fake here.
-      segments={[]}
+      // Drawn in their class colours, the same as the single-image view, so two labelled images
+      // can be compared by eye -- which is most of why anyone opens a split view.
+      segments={segments}
     />
   );
 }

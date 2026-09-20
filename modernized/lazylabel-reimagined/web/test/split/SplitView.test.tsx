@@ -35,6 +35,7 @@ function show(images: readonly WireDatasetImage[] = FOLDER) {
     <SplitView
       images={images}
       measure={async (key) => SIZES[key] ?? { width: 1, height: 1 }}
+      annotationsFor={async () => []}
       pixelsUrl={(key) => `/pixels/${key}`}
     />,
   );
@@ -86,14 +87,83 @@ describe("images of different sizes", () => {
 
     fireEvent.change(screen.getByLabelText("Right image"), { target: { value: "2" } });
 
-    await waitFor(() => expect(screen.getByRole("status").textContent).toMatch(/different sizes/));
-    expect(screen.getByRole("status").textContent).toMatch(/same pixel/);
+    // By TEXT rather than by role: the pane may also be announcing that it is measuring, and two
+    // status regions make `getByRole` ambiguous rather than wrong.
+    const note = await screen.findByText(/different sizes/);
+    expect(note.textContent).toMatch(/same pixel/);
   });
 
   it("says nothing when they match", () => {
     show();
 
     expect(screen.queryByText(/different sizes/)).toBeNull();
+  });
+});
+
+describe("the annotations on each side", () => {
+  it("asks for each image's own, and only once the size is known", async () => {
+    // Ordered rather than raced: the text formats store NORMALIZED coordinates, so reading them
+    // before the size has landed rescales every polygon silently.
+    const asked: { key: string; size: { width: number; height: number } }[] = [];
+    render(
+      <SplitView
+        images={FOLDER}
+        measure={async (key) => SIZES[key] ?? { width: 1, height: 1 }}
+        annotationsFor={async (key, size) => {
+          asked.push({ key, size });
+          return [];
+        }}
+        pixelsUrl={(key) => `/pixels/${key}`}
+      />,
+    );
+
+    await waitFor(() => expect(asked).toHaveLength(2));
+    expect(asked.map((a) => a.key).sort()).toEqual(["frames/left.png", "frames/right.png"]);
+    // The size it was given is that image's own, not the other's.
+    expect(asked.find((a) => a.key === "frames/left.png")?.size).toEqual(SIZES["frames/left.png"]);
+  });
+
+  it("draws them, so two labelled images can be compared by eye", async () => {
+    // The whole point of a split view. Two pictures with no labels on either is the least useful
+    // half of it.
+    render(
+      <SplitView
+        images={FOLDER}
+        measure={async (key) => SIZES[key] ?? { width: 1, height: 1 }}
+        annotationsFor={async () => [
+          { type: "Polygon", classId: 0, vertices: [[1, 1], [5, 1], [5, 5]] },
+        ] as never}
+        pixelsUrl={(key) => `/pixels/${key}`}
+      />,
+    );
+
+    await waitFor(() =>
+      expect(
+        [...screen.getAllByRole("img")].map((c) => c.getAttribute("aria-label")),
+      ).toEqual(["1 annotations", "1 annotations"]),
+    );
+  });
+
+  it("shows the picture with nothing over it when they cannot be read", async () => {
+    // The single-image view reports a damaged file properly; repeating that here would be a second
+    // place to keep right about the same thing.
+    render(
+      <SplitView
+        images={FOLDER}
+        measure={async (key) => SIZES[key] ?? { width: 1, height: 1 }}
+        annotationsFor={async () => {
+          throw new Error("the npz is truncated");
+        }}
+        pixelsUrl={(key) => `/pixels/${key}`}
+      />,
+    );
+
+    await waitFor(() =>
+      expect([...screen.getAllByRole("img")].map((c) => c.getAttribute("aria-label"))).toEqual([
+        "0 annotations",
+        "0 annotations",
+      ]),
+    );
   });
 });
 
@@ -142,6 +212,7 @@ describe("measuring before drawing", () => {
       <SplitView
         images={FOLDER}
         measure={() => new Promise(() => undefined)}
+        annotationsFor={async () => []}
         pixelsUrl={(key) => `/pixels/${key}`}
       />,
     );

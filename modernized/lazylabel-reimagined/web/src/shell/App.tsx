@@ -180,6 +180,15 @@ export function App({ client }: { readonly client: ApiClient }): ReactNode {
                   const metadata = await client.imageMetadata("default", key);
                   return { width: metadata.width, height: metadata.height };
                 }}
+                // Read-only, and loaded here rather than through the workspace store for the same
+                // reason the sizes are: the store knows about ONE open image and a pair needs two.
+                annotationsFor={async (key, size) => {
+                  const result = await client.loadAnnotations("default", key, [
+                    size.height,
+                    size.width,
+                  ]);
+                  return result.kind === "loaded" ? result.annotations.segments : [];
+                }}
                 pixelsUrl={(key) => client.pixelsUrl("default", key)}
               />
             </Panel>
