@@ -175,19 +175,37 @@ needs is already in one store rather than scattered across managers.
      adjustments, and crop — RULE-018, a P0 rule whose off-by-one means the last row and column of
      an image can never be inside a crop.
 
+   **One question for the owner, and it is the only blocking one.**
+
+   CLAHE matches OpenCV byte for byte on five of six golden cases. The sixth — an image whose
+   dimensions do not divide the tile grid — differs on **3 of 660 pixels, each by exactly 1**, and
+   every difference is a rounding tie. Four formulations were tried and the count moved
+   (104 → 4 → 6 → 3) without reaching zero, which places the remainder in how OpenCV's
+   interpolation body formulates its arithmetic rather than in the algorithm.
+
+   Phase 5's exit criterion 4 says display adjustments must match legacy "within the decision 10
+   pixel tolerance". Decision 10 sets IoU ≥ 0.98 for MASKS and says nothing about per-pixel
+   intensity, so whether ±1 on 0.45% of pixels satisfies it is a judgement nobody has made. It
+   needs one, because the answer decides whether CLAHE is done or blocked:
+
+   - **If ±1 is acceptable**, say so in decision 10 and Phase 5 can exit with this recorded.
+   - **If byte equality is required**, closing it means reading OpenCV's `CLAHE_Interpolation_Body`
+     rather than inferring it, which is a bounded but real piece of work.
+
+   The gap is asserted at its measured size in `test/tools/clahe.differential.test.ts`, so it
+   cannot grow unnoticed and closing it is a visible change to that file.
+
    **What is left in Phase 5, and why each is left.**
 
-   - **CLAHE** (part of RULE-031). The card gives its parameters — clip 2.0, 8×8 tiles — and not
-     its algorithm. OpenCV interpolates between tiles in a way that is not derivable from a
-     description, so implementing it from the name would produce something plausible that matches
-     nothing. It needs a differential against `cv2.createCLAHE` on golden images first.
-   - **The FFT band filter** (RULE-030). Same reason, plus more of it: a 2-D FFT, radial banding by
-     percentage of the half-diagonal, a min-max stretch and an optional quantize. Its card also
-     records a defect worth designing out rather than porting — the cached spectrum is keyed only
-     by image dimensions, so it is not invalidated when the rescale or channel-threshold settings
-     upstream of it change, and the output can come from a stale input.
-   - **The adjustment controls.** The sliders and panels that drive the rules above. The rules are
-     the part with the equivalence requirement; the controls are ordinary UI over them.
+   - **The adjustment controls.** The sliders and panels that drive the rules above — the last
+     piece of Phase 5's own scope. The rules are the part with the equivalence requirement; the
+     controls are ordinary UI over them.
+   - **The FFT's stale-cache defect**, which is designed out rather than ported: legacy keys its
+     cached spectrum on image dimensions alone, so it is not invalidated when the rescale or
+     channel-threshold settings upstream of it change and the output can come from a stale input.
+     The port computes the transform per call, so it does not have the defect — but it also has no
+     cache, and a full-size image will want one. Whatever cache it gets must be keyed on the
+     upstream settings too.
 
    Once those land, Phase 5's four exit criteria can be checked end to end — three of them need
    golden-image differentials, which is the same shape of work as Phase 3's.
