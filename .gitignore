@@ -60,3 +60,4 @@ test_images/
 node_modules/
 coverage/
 *.onnx
+__pycache__/
