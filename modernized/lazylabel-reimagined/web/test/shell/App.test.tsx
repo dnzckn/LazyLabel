@@ -13,6 +13,7 @@ import { defaultSettings } from "@lazylabel/settings-schema";
 
 import { App } from "../../src/shell/App.jsx";
 import { HotkeyProvider } from "../../src/hotkeys/HotkeyProvider.jsx";
+import { NotificationProvider } from "../../src/notifications/NotificationProvider.jsx";
 import { SettingsProvider } from "../../src/settings/SettingsProvider.jsx";
 import type { ApiClient } from "../../src/api/client.js";
 
@@ -38,12 +39,16 @@ function mount(client: Partial<ApiClient>) {
     ...client,
   } as ApiClient;
 
+  // Same nesting main.tsx uses: notifications outermost, because a failure to LOAD settings is
+  // itself something to report.
   return render(
-    <SettingsProvider client={full}>
-      <HotkeyProvider bindings={defaultSettings().hotkeys}>
-        <App client={full} />
-      </HotkeyProvider>
-    </SettingsProvider>,
+    <NotificationProvider>
+      <SettingsProvider client={full}>
+        <HotkeyProvider bindings={defaultSettings().hotkeys}>
+          <App client={full} />
+        </HotkeyProvider>
+      </SettingsProvider>
+    </NotificationProvider>,
   );
 }
 

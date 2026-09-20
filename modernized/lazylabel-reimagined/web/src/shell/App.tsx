@@ -13,6 +13,7 @@ import { useEffect, useState, type ReactNode } from "react";
 
 import { CAPABILITIES } from "../capabilities.js";
 import { DatasetBrowser } from "../dataset/DatasetBrowser.jsx";
+import { NotificationHost } from "../notifications/NotificationProvider.jsx";
 import { useSettings } from "../settings/SettingsProvider.jsx";
 import { useHotkey, useHotkeyContext } from "../hotkeys/HotkeyProvider.jsx";
 import type { ApiClient } from "../api/client.js";
@@ -50,6 +51,8 @@ export function App({ client }: { readonly client: ApiClient }): ReactNode {
 
   return (
     <main className="app">
+      <NotificationHost />
+
       <header>
         <h1>LazyLabel</h1>
         <p className="subtitle">The canvas and the drawing tools are built in Phase 5</p>

@@ -11,6 +11,7 @@ import { createRoot } from "react-dom/client";
 import { ApiClient } from "./api/client.js";
 import { createLogger } from "./log.js";
 import { HotkeyProvider } from "./hotkeys/HotkeyProvider.jsx";
+import { NotificationProvider } from "./notifications/NotificationProvider.jsx";
 import { SettingsProvider, useSettings } from "./settings/SettingsProvider.jsx";
 import { App } from "./shell/App.jsx";
 
@@ -40,8 +41,11 @@ if (container === null) throw new Error("index.html has no #root element to moun
 
 createRoot(container).render(
   <StrictMode>
-    <SettingsProvider client={client}>
-      <Bound />
-    </SettingsProvider>
+    {/* Outermost, because a failure to LOAD settings is itself something to report. */}
+    <NotificationProvider>
+      <SettingsProvider client={client}>
+        <Bound />
+      </SettingsProvider>
+    </NotificationProvider>
   </StrictMode>,
 );

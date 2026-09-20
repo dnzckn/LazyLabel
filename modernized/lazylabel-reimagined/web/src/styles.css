@@ -63,6 +63,34 @@ h1 {
   color: var(--error-ink);
 }
 
+/* Success and info carry no colour of their own: they are the ordinary case, and giving every
+   notification a loud background is how the loud ones stop reading as loud. */
+.banner--success,
+.banner--info {
+  background: var(--surface, transparent);
+  border: 1px solid var(--muted);
+}
+
+.notifications {
+  list-style: none;
+  margin: 0 0 1rem;
+  padding: 0;
+}
+
+.notifications p {
+  margin: 0;
+}
+
+/* Two class selectors, so it beats `.notifications p` above without reaching for !important. */
+.notifications .notifications__detail {
+  margin-top: 0.35rem;
+  font-size: 0.9em;
+}
+
+.notifications__count {
+  color: var(--muted);
+}
+
 table {
   border-collapse: collapse;
   width: 100%;
