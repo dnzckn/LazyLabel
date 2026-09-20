@@ -176,3 +176,85 @@ describe("what is not built", () => {
     expect(screen.getByText(/waits on a recorded sequence/)).toBeTruthy();
   });
 });
+
+describe("the confidence histogram", () => {
+  /** Frames 0..4 of the folder, with propagation scores on three of them. */
+  function withScores(scores: Record<number, number>) {
+    render(<TimelinePanel images={FOLDER} scores={scores} />);
+    fireEvent.click(screen.getByText("Build timeline"));
+  }
+
+  const threshold = () => screen.getByLabelText("Minimum confidence") as HTMLInputElement;
+  const setThreshold = (value: number) =>
+    fireEvent.change(threshold(), { target: { value: String(value) } });
+
+  it("offers Min Conf at 0.99 as soon as there is a timeline, before any score exists", () => {
+    // REACHABLE before the data is, which is the point of building it now. A histogram nobody can
+    // open until the model lands is a histogram nobody has ever run. It sits with the timeline
+    // rather than above it because there is nothing to threshold without frames.
+    withScores({});
+
+    expect(threshold().value).toBe("0.99");
+    expect(screen.getByText(/No confidence scores yet/)).toBeTruthy();
+  });
+
+  it("says what the threshold will do, rather than drawing an empty chart", () => {
+    withScores({});
+
+    expect(screen.getByText(/flagged for review and left out of Save All/)).toBeTruthy();
+    expect(screen.queryByRole("img")).toBeNull();
+  });
+
+  it("draws the scores and counts which side of the threshold they fall", () => {
+    withScores({ 0: 0.95, 1: 0.97, 2: 0.995 });
+
+    expect(screen.getByRole("img").getAttribute("aria-label")).toBe(
+      "3 frames scored, 2 below 0.99",
+    );
+    expect(screen.getByText(/2 below \(67%\), 1 above/)).toBeTruthy();
+  });
+
+  it("starts the axis below the lowest score, not at zero", () => {
+    // RULE-035. Propagation scores cluster just under 1 and a 0-to-1 axis is one spike.
+    withScores({ 0: 0.95, 1: 0.97, 2: 0.995 });
+
+    expect(screen.getByText("0.93")).toBeTruthy();
+    expect(screen.getByText("1.00")).toBeTruthy();
+  });
+
+  it("MOVES THE TIMELINE when the threshold changes, not just the counts", () => {
+    // The legacy defect: Min Conf recomputes the set Save All uses and leaves the colours alone,
+    // so the user reviews one set of frames and ships another.
+    withScores({ 0: 0.95, 1: 0.97, 2: 0.995 });
+    const flaggedCount = () =>
+      [...cells()].filter((cell) => (cell.getAttribute("title") ?? "").includes("flagged")).length;
+
+    // Two of the three scored frames move. The third is f02.png, which already had annotations
+    // and is therefore a REFERENCE -- ground truth the user drew, which a number changing must
+    // not turn into something the app says needs review.
+    setThreshold(1);
+    expect(flaggedCount()).toBe(2);
+
+    setThreshold(0.9);
+    expect(flaggedCount()).toBe(0);
+  });
+
+  it("never flags a reference frame, however low its score", () => {
+    withScores({ 1: 0.1 });
+    const referenceCell = [...cells()].find((cell) =>
+      (cell.getAttribute("title") ?? "").includes("reference"),
+    );
+
+    setThreshold(1);
+
+    expect(referenceCell?.getAttribute("title")).not.toContain("flagged");
+  });
+
+  it("clamps a threshold outside [0, 1]", () => {
+    withScores({ 0: 0.95 });
+
+    setThreshold(5);
+
+    expect(threshold().value).toBe("1");
+  });
+});

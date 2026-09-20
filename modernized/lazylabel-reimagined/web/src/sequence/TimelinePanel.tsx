@@ -31,19 +31,38 @@ import {
   type Frame,
   type Target,
 } from "./timeline.js";
+import {
+  DEFAULT_THRESHOLD,
+  THRESHOLD_STEP,
+  applyThreshold,
+  clampThreshold,
+  histogram,
+  thresholdPosition,
+} from "./confidence.js";
 
 export interface TimelinePanelProps {
   /** The folder as the browser listed it, in its order. */
   readonly images: readonly WireDatasetImage[];
   /** Opening a frame is the workspace's job, not the timeline's. */
   readonly onOpen?: (key: string) => void;
+  /**
+   * What propagation scored each frame, by timeline index — RULE-060's per-frame confidence.
+   *
+   * A prop rather than state, because propagation produces it and propagation is not built. The
+   * panel below it works on whatever it is given and says so when it is given nothing, which is
+   * the honest shape for a control whose data source is still a slice away: the alternative is a
+   * histogram nobody can reach until the day the model lands, and then a histogram nobody has
+   * ever run.
+   */
+  readonly scores?: Readonly<Record<number, number>>;
 }
 
-export function TimelinePanel({ images, onOpen }: TimelinePanelProps): ReactNode {
+export function TimelinePanel({ images, onOpen, scores = {} }: TimelinePanelProps): ReactNode {
   const [range, setRange] = useState<{ from: number; to: number } | null>(null);
   const [overrides, setOverrides] = useState<readonly Frame[] | null>(null);
   const [sorted, setSorted] = useState(false);
   const [current, setCurrent] = useState(0);
+  const [threshold, setThreshold] = useState(DEFAULT_THRESHOLD);
 
   const keys = useMemo(() => images.map((image) => image.key), [images]);
   const annotated = useMemo(
@@ -156,6 +175,19 @@ export function TimelinePanel({ images, onOpen }: TimelinePanelProps): ReactNode
         </button>
       </div>
 
+      <ConfidencePanel
+        scores={scores}
+        threshold={threshold}
+        onThreshold={(value) => {
+          const next = clampThreshold(value);
+          setThreshold(next);
+          // The TIMELINE moves with the number, not only the set a save would use. Legacy
+          // recomputes one and not the other, so the colours point at one set of frames to review
+          // while Save All skips another -- and nothing says the two disagree.
+          setOverrides(applyThreshold(frames, scores, next));
+        }}
+      />
+
       <p className="panel__missing">
         Propagation is the next slice and is not built. It waits on a recorded sequence with
         legacy's outputs captured as golden data, which is what proves the port agrees frame for
@@ -219,6 +251,100 @@ function RangePicker({
         Frames that already have annotations become references — propagation runs from them rather
         than over them.
       </p>
+    </div>
+  );
+}
+
+/**
+ * The confidence histogram, and the one number that decides what you review — RULE-035, RULE-060.
+ *
+ * Step 5 of the "carry labels through a sequence" flow. Propagation scores cluster just under 1,
+ * which is why the chart does not start at 0: a 0-to-1 axis draws every score in the last bin and
+ * shows the user one spike.
+ *
+ * DRAWN AS AN SVG, not a canvas. It is fifty rectangles and a line; a canvas would need a ref, a
+ * device-pixel-ratio dance and a redraw effect to say the same thing, and none of it would be
+ * readable by a screen reader or a test.
+ */
+function ConfidencePanel({
+  scores,
+  threshold,
+  onThreshold,
+}: {
+  readonly scores: Readonly<Record<number, number>>;
+  readonly threshold: number;
+  readonly onThreshold: (value: number) => void;
+}): ReactNode {
+  const values = Object.values(scores);
+  const view = histogram(values, threshold);
+  const tallest = Math.max(1, ...view.bins);
+  const marker = thresholdPosition(view, threshold);
+
+  return (
+    <div className="confidence">
+      <label className="crop__field">
+        <span>Min Conf</span>
+        <input
+          type="number"
+          min={0}
+          max={1}
+          step={THRESHOLD_STEP}
+          value={threshold}
+          aria-label="Minimum confidence"
+          onChange={(event) => onThreshold(Number(event.target.value))}
+        />
+      </label>
+
+      {values.length === 0 ? (
+        <p className="panel__missing">
+          No confidence scores yet — propagation has not run. The threshold above is still the one
+          it will use, and a frame scoring below it will be flagged for review and left out of Save
+          All.
+        </p>
+      ) : (
+        <>
+          <svg
+            className="confidence__chart"
+            viewBox="0 0 100 30"
+            preserveAspectRatio="none"
+            role="img"
+            aria-label={`${values.length} frames scored, ${view.below} below ${threshold}`}
+          >
+            {view.bins.map((count, bin) => (
+              <rect
+                key={bin}
+                x={(bin / view.bins.length) * 100}
+                y={30 - (count / tallest) * 30}
+                width={100 / view.bins.length}
+                height={(count / tallest) * 30}
+                /* Coloured by which side of the threshold the BIN is, so the split the number
+                   makes is visible without reading the counts underneath. */
+                className={
+                  view.from + ((bin + 1) / view.bins.length) * (view.to - view.from) <= threshold
+                    ? "confidence__bar confidence__bar--below"
+                    : "confidence__bar"
+                }
+              />
+            ))}
+            <line
+              x1={marker * 100}
+              x2={marker * 100}
+              y1={0}
+              y2={30}
+              className="confidence__threshold"
+              vectorEffect="non-scaling-stroke"
+            />
+          </svg>
+
+          <p className="confidence__counts">
+            <span>{view.from.toFixed(2)}</span>
+            <span>
+              {view.below} below ({Math.round(view.belowFraction * 100)}%), {view.above} above
+            </span>
+            <span>1.00</span>
+          </p>
+        </>
+      )}
     </div>
   );
 }
