@@ -143,8 +143,12 @@ needs is already in one store rather than scattered across managers.
    - **Editable annotations in the store**, which is what makes `dirty` real. Every piece of the
      save semantics built in Phase 4 depended on a flag that until now nothing could set.
 
-   Still to build: the canvas interaction that connects them, then the box, circle, selection,
-   erase and merge tools, the AI click and box tools, and the image adjustments.
+   - **The drawing layer** (`canvas/PolygonLayer.tsx`) and the tool picker, so the pilot works as a
+     user performs it: choose the tool, click, close by the threshold or Space, undo, and the
+     polygon lands in the store with the right class and marks the image unsaved.
+
+   The pilot is complete except vertex editing (RULE-046). Still to build: box, circle, selection,
+   erase and merge, the AI click and box tools, and the image adjustments.
 2. **Phase 6 — sequence and cutover** (25.9%). The timeline, propagation review, the split view,
    the hosted deployment and the actual switch-over.
 
