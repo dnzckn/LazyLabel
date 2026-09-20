@@ -13,7 +13,13 @@
 
 import { describe, expect, it } from "vitest";
 
-import { applyProcessing, isEmpty, processingFromQuery } from "../../src/images/processing.js";
+import {
+  MAX_FFT_PIXELS,
+  applyFrequencyFilter,
+  applyProcessing,
+  isEmpty,
+  processingFromQuery,
+} from "../../src/images/processing.js";
 
 /** Interleaved RGB from one value per pixel, which is how a grayscale source arrives. */
 function gray(values: readonly number[], wide = false): Uint8Array | Uint16Array {
@@ -194,5 +200,111 @@ describe("reading the query string", () => {
 
   it("refuses a crop that is not four numbers", () => {
     expect(() => processingFromQuery(new URLSearchParams("crop=1,2,3"))).toThrow(/four whole numbers/);
+  });
+});
+
+describe("the frequency filter, the third step", () => {
+  const grayFrame = (width: number, height: number) => ({ width, height, sourceChannels: 1 });
+
+  /** A small image with structure at more than one frequency, so a band filter has an effect. */
+  function structured(width: number, height: number): Uint8Array {
+    const out = new Uint8Array(width * height * 3);
+    for (let y = 0; y < height; y += 1) {
+      for (let x = 0; x < width; x += 1) {
+        const value = Math.round(128 + 60 * Math.sin((2 * Math.PI * x) / width) + 20 * Math.sin((2 * Math.PI * (x + y)) / 3));
+        const at = (y * width + x) * 3;
+        out[at] = value;
+        out[at + 1] = value;
+        out[at + 2] = value;
+      }
+    }
+    return out;
+  }
+
+  it("does nothing when no cutoffs were asked for", () => {
+    expect(applyFrequencyFilter(structured(8, 8), grayFrame(8, 8), {})).toBeNull();
+  });
+
+  it("returns an EIGHT-BIT buffer even from 16-bit samples", () => {
+    // RULE-030: the filtered plane is min-max stretched to 0..255, so there is no wider result to
+    // keep. Getting this wrong means `to8Bit` runs on bytes and the image comes out black.
+    const wide = new Uint16Array(8 * 8 * 3).fill(30_000);
+    for (let i = 0; i < 8 * 8; i += 1) {
+      const value = i % 2 === 0 ? 10_000 : 50_000;
+      wide[i * 3] = value;
+      wide[i * 3 + 1] = value;
+      wide[i * 3 + 2] = value;
+    }
+
+    const out = applyFrequencyFilter(wide, grayFrame(8, 8), { frequencies: [1000] });
+
+    expect(out).toBeInstanceOf(Uint8Array);
+    expect(out!.length).toBe(8 * 8 * 3);
+  });
+
+  it("writes the same value to all three channels, because the result is one plane", () => {
+    const out = applyFrequencyFilter(structured(8, 8), grayFrame(8, 8), { frequencies: [1000] })!;
+
+    for (let i = 0; i < out.length; i += 3) {
+      expect(out[i + 1]).toBe(out[i]);
+      expect(out[i + 2]).toBe(out[i]);
+    }
+  });
+
+  it("REFUSES an image whose channels differ, which is what makes it colour", () => {
+    // RULE-030 processes "2-D or exactly equal-channel images". A real colour photograph is not
+    // one, and filtering its red channel and painting the answer grey is not what anyone asked.
+    const colour = Uint8Array.from([10, 20, 30, 40, 50, 60]);
+
+    expect(applyFrequencyFilter(colour, grayFrame(2, 1), { frequencies: [1000] })).toBeNull();
+  });
+
+  it("ACCEPTS an RGB buffer whose channels happen to be equal", () => {
+    // A grayscale scan saved as colour, which is extremely common -- and testing `sourceChannels`
+    // instead of the data would refuse exactly the images most likely to want this.
+    const asColour = structured(8, 8);
+
+    const out = applyFrequencyFilter(asColour, { width: 8, height: 8, sourceChannels: 3 }, {
+      frequencies: [1000],
+    });
+
+    expect(out).not.toBeNull();
+  });
+
+  it("refuses an image too large to filter, with the size in the message", () => {
+    // It is a 2-D DFT: measured here, 1 MP takes about 0.7 seconds and 6 MP about 5. A 50-megapixel
+    // scan would hold the request open for the best part of a minute, and a user cannot tell that
+    // from a hung server. Legacy has no limit and simply freezes its window.
+    const width = 4000;
+    const height = Math.ceil(MAX_FFT_PIXELS / width) + 1;
+    const tiny = new Uint8Array(3); // never read: the size check comes first
+
+    expect(() =>
+      applyFrequencyFilter(tiny, { width, height, sourceChannels: 1 }, { frequencies: [1000] }),
+    ).toThrow(/limited to/);
+  });
+});
+
+describe("reading the frequency parameters", () => {
+  it("reads both lists", () => {
+    const processing = processingFromQuery(
+      new URLSearchParams("frequencies=1000,4000&intensities=100"),
+    );
+
+    expect(processing.frequencies).toEqual([1000, 4000]);
+    expect(processing.intensities).toEqual([100]);
+  });
+
+  it("refuses a cutoff outside the slider's range", () => {
+    // The slider is 0..10000 and a value outside it is not a stricter filter, it is a mistake.
+    expect(() => processingFromQuery(new URLSearchParams("frequencies=20000"))).toThrow(/between 0 and 10000/);
+  });
+
+  it("refuses an intensity outside 8 bits", () => {
+    expect(() => processingFromQuery(new URLSearchParams("intensities=300"))).toThrow(/between 0 and 255/);
+  });
+
+  it("counts frequency parameters as something to do", () => {
+    expect(isEmpty(processingFromQuery(new URLSearchParams("frequencies=1000")))).toBe(false);
   });
 });

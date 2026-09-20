@@ -21,6 +21,7 @@
 import { useCallback, useState, type ReactNode } from "react";
 
 import {
+  FREQUENCY_SLIDER_MAX,
   MAX_16_BIT,
   MAX_8_BIT,
   MIN_MARKER_SPACING,
@@ -100,8 +101,19 @@ export function ChannelPanel(): ReactNode {
 
   const reset = useCallback(() => {
     setError(null);
-    setProcessing({ ...processing, rescale: null, markers: {} });
+    setProcessing({ ...processing, rescale: null, markers: {}, frequencies: [], intensities: [] });
   }, [processing, setProcessing]);
+
+  const setCutoff = useCallback(
+    (value: number) => {
+      // ONE cutoff from the slider, which makes it a high-pass: band 0 is weighted 0 and the last
+      // 1, so the frequencies BELOW the cutoff are the ones removed. RULE-030 allows more bands
+      // and legacy's widget offers them; one is what a slider can express honestly, and the extra
+      // bands are a shape of control this panel does not have yet.
+      setProcessing({ ...processing, frequencies: value === 0 ? [] : [value] });
+    },
+    [processing, setProcessing],
+  );
 
   if (metadata === null) {
     return <p className="panel__missing">These need an open image to measure against.</p>;
@@ -220,7 +232,44 @@ export function ChannelPanel(): ReactNode {
         );
       })}
 
-      <button type="button" onClick={reset} disabled={window === null && noMarkers(processing.markers)}>
+      <h4 className="channel__step">3 · Frequency bands</h4>
+
+      {/* Offered whatever the source says, and that is deliberate. RULE-030 runs on "2-D or
+          exactly equal-channel" images, so a grayscale scan SAVED AS COLOUR qualifies -- and only
+          the server can tell, because the answer is in the pixels rather than in the header. The
+          text says who decides rather than the panel guessing and refusing the images most likely
+          to want it. */}
+      <p className="panel__missing">
+            A high-pass: everything closer to the centre of the spectrum than the cutoff is removed,
+        which takes out the broad shading and leaves the detail. The result is always 8-bit,
+        whatever the source was. It only runs on a grayscale image — including a grayscale one
+        saved as colour, which the server decides by looking at the pixels.
+      </p>
+
+      <Slider
+        label="Frequency cutoff"
+        max={FREQUENCY_SLIDER_MAX}
+        value={processing.frequencies[0] ?? 0}
+        onChange={setCutoff}
+      />
+
+      {(processing.frequencies[0] ?? 0) > 0 && (
+            // The number a user can act on. The transform is seconds on a large image, which is
+            // why the server caches it and refuses above a limit rather than appearing to hang.
+        <p role="status" className="panel__missing">
+          Cutoff {(((processing.frequencies[0] ?? 0) / FREQUENCY_SLIDER_MAX) * 100).toFixed(2)}% of
+          the half-diagonal. Large images take a moment the first time; the result is then reused
+          until something above it changes.
+        </p>
+      )}
+
+      <button
+        type="button"
+        onClick={reset}
+        disabled={
+          window === null && noMarkers(processing.markers) && processing.frequencies.length === 0
+        }
+      >
         Reset processing
       </button>
     </div>

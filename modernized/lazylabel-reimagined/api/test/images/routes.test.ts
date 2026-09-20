@@ -107,6 +107,43 @@ describe("the image routes", () => {
     }
   });
 
+  it("serves the same processed bytes from cache the second time", async () => {
+    // And the headers with them, because they are one answer: rebuilding them on a hit means
+    // re-deriving the width and depth without the decode that produced them.
+    const query = { markers_r: "128" };
+    const first = await app.handle(request("GET", at("gradient8.png", "pixels"), { query }));
+    const second = await app.handle(request("GET", at("gradient8.png", "pixels"), { query }));
+
+    expect(first.headers["x-image-cached"]).toBe("miss");
+    expect(second.headers["x-image-cached"]).toBe("hit");
+    expect([...(second.body as Uint8Array)]).toEqual([...(first.body as Uint8Array)]);
+    expect(second.headers["x-image-width"]).toBe("32");
+  });
+
+  it("does NOT serve one set of processing parameters from another", async () => {
+    // RULE-030 records legacy's defect: its cached spectrum is keyed only by image dimensions, so
+    // it is not invalidated when the rescale or threshold settings upstream change. The key here
+    // is the whole query, which makes that structurally impossible rather than a thing to remember
+    // when the next parameter is added.
+    await app.handle(request("GET", at("gradient8.png", "pixels"), { query: { markers_r: "128" } }));
+    const other = await app.handle(
+      request("GET", at("gradient8.png", "pixels"), { query: { markers_r: "64" } }),
+    );
+
+    expect(other.headers["x-image-cached"]).toBe("miss");
+  });
+
+  it("refuses to filter an image too large, rather than holding the request open", async () => {
+    // The fixture is small, so this proves the PARAMETER reaches the filter rather than the limit
+    // itself -- which `processing.test.ts` covers. Here the point is that a frequency request on a
+    // normal image succeeds.
+    const response = await app.handle(
+      request("GET", at("gradient8.png", "pixels"), { query: { frequencies: "1000" } }),
+    );
+
+    expect(response.status).toBe(200);
+  });
+
   it("serves a BMP, which the image library cannot decode on its own", async () => {
     const response = await app.handle(get(at("gradient8.bmp", "pixels")));
     expect(response.status).toBe(200);

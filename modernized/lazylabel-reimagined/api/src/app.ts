@@ -31,7 +31,8 @@ import {
   renderThumbnail,
   UnsupportedImageError,
 } from "./images/pipeline.js";
-import { processingFromQuery } from "./images/processing.js";
+import { ImageTooLargeError, processingFromQuery } from "./images/processing.js";
+import { RenderCache } from "./images/renderCache.js";
 import { RevisionConflictError, type BlobStore } from "./ports/blobStore.js";
 import {
   InferenceError,
@@ -411,15 +412,60 @@ async function imagePixels(
     throw badRequest(cause instanceof Error ? cause.message : String(cause));
   }
 
-  const decoded = await decodeImage(await imageBytes(deps, key), processing);
-  return png(await renderPng(decoded), {
+  // The revision is part of the cache key, so a file edited under the app cannot answer from the
+  // bytes it had before. `stat` is one filesystem call against a decode that can take seconds.
+  const stat = await deps.blobStore.stat(key);
+  const cacheKey = {
+    imageKey: key,
+    revision: stat?.revision ?? "absent",
+    query: request.query.toString(),
+  };
+
+  const cache = cacheFor(deps);
+  const cached = cache.get(cacheKey);
+  if (cached !== undefined) return png(cached.bytes, { ...cached.headers, "x-image-cached": "hit" });
+
+  let decoded;
+  try {
+    decoded = await decodeImage(await imageBytes(deps, key), processing);
+  } catch (cause) {
+    if (cause instanceof ImageTooLargeError) {
+      // 413, not a 500 and not a long wait: the filter refuses rather than holding the request
+      // open for a minute, and the message says how big the image is and what the limit is.
+      throw new HttpError(413, "image_too_large", cause.message);
+    }
+    throw cause;
+  }
+
+  const rendered = await renderPng(decoded);
+  const headers = {
     "x-image-width": String(decoded.width),
     "x-image-height": String(decoded.height),
     "x-image-source-depth": String(decoded.sourceDepth),
     // So a client can tell which controls to offer without decoding the image itself: RULE-032
     // disables rescale for colour, and RULE-029 offers one Gray channel or three separate ones.
     "x-image-source-channels": String(decoded.sourceChannels),
-  });
+  };
+  cache.set(cacheKey, { bytes: rendered, headers });
+
+  return png(rendered, { ...headers, "x-image-cached": "miss" });
+}
+
+/**
+ * The cache belonging to one app.
+ *
+ * Per app rather than per module, so two apps in one process -- which is every test file -- cannot
+ * answer each other's requests. Held in a WeakMap keyed on the deps so `createApp` does not have to
+ * take a cache it has no opinion about, and so it disappears with the app.
+ */
+const caches = new WeakMap<AppDeps, RenderCache>();
+
+function cacheFor(deps: AppDeps): RenderCache {
+  const existing = caches.get(deps);
+  if (existing !== undefined) return existing;
+  const made = new RenderCache();
+  caches.set(deps, made);
+  return made;
 }
 
 async function imageThumbnail(

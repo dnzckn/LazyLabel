@@ -50,9 +50,22 @@ export interface ImageProcessing {
   readonly rescale: { readonly min: number; readonly max: number } | null;
   readonly markers: Readonly<Partial<Record<Channel, readonly number[]>>>;
   readonly crop: Crop | null;
+  /** RULE-030's radial cutoffs, 0..10000. Empty for no frequency filtering. */
+  readonly frequencies: readonly number[];
+  /** RULE-030's posterization of the filtered result, 0..255. */
+  readonly intensities: readonly number[];
 }
 
-export const NO_PROCESSING: ImageProcessing = { rescale: null, markers: {}, crop: null };
+export const NO_PROCESSING: ImageProcessing = {
+  rescale: null,
+  markers: {},
+  crop: null,
+  frequencies: [],
+  intensities: [],
+};
+
+/** The frequency slider's range: 0.01% steps of the half-diagonal (RULE-030). */
+export const FREQUENCY_SLIDER_MAX = 10_000;
 
 /** Which channels a source offers: one Gray for a grayscale image, three for colour (RULE-029). */
 export function channelsFor(sourceChannels: number): readonly Channel[] {
@@ -83,6 +96,16 @@ export function processingQuery(processing: ImageProcessing): string {
     if (markers !== undefined && markers.length > 0) {
       query.set(`markers_${channel}`, [...markers].sort((a, b) => a - b).join(","));
     }
+  }
+
+  if (processing.frequencies.length > 0) {
+    query.set("frequencies", [...processing.frequencies].sort((a, b) => a - b).join(","));
+  }
+  // Sent even with no cutoffs, because RULE-030 treats intensity thresholding as part of the same
+  // step: with no cutoffs it is a plain contrast stretch followed by posterization, which is a
+  // real thing to ask for and not a no-op.
+  if (processing.intensities.length > 0) {
+    query.set("intensities", [...processing.intensities].sort((a, b) => a - b).join(","));
   }
 
   // Sent only when something else is: a crop with no processing to restrict would make the URL

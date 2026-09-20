@@ -24,6 +24,7 @@
  */
 
 import { posterize, rescale, MAX_8_BIT, MAX_16_BIT } from "./imageProcessing.js";
+import { filterFrequencies } from "./fft.js";
 
 /** Markers per channel. `gray` applies to all three at once, as legacy's Gray channel does. */
 export interface ChannelMarkers {
@@ -39,6 +40,29 @@ export interface Processing {
   readonly channels?: ChannelMarkers;
   /** `[x1, y1, x2, y2]`, the same inclusive-clamped corners RULE-018 stores. */
   readonly crop?: readonly [number, number, number, number] | null;
+  /** RULE-030's radial cutoffs, 0..10000. Empty for no frequency filtering. */
+  readonly frequencies?: readonly number[];
+  /** RULE-030's posterization of the filtered result, 0..255. */
+  readonly intensities?: readonly number[];
+}
+
+/**
+ * How many pixels the frequency filter will accept.
+ *
+ * It is a two-dimensional DFT and it is not cheap: measured here, a 1 MP image takes about
+ * 0.7 seconds, 2 MP about 2 and 6 MP about 5. A 50-megapixel scan would hold a request open for
+ * the best part of a minute, and the user would have no way to tell that from a hung server.
+ *
+ * So there is a limit and it REFUSES rather than waiting, with the number in the message. Legacy
+ * has no limit and simply freezes its window.
+ */
+export const MAX_FFT_PIXELS = 8_000_000;
+
+export class ImageTooLargeError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "ImageTooLargeError";
+  }
 }
 
 export interface Frame {
@@ -56,7 +80,66 @@ export function isEmpty(processing: Processing | undefined): boolean {
     (list) => list !== undefined && list.length > 0,
   );
   return (processing.rescale == null || processing.rescale.max <= processing.rescale.min)
-    && !anyMarkers;
+    && !anyMarkers
+    && (processing.frequencies ?? []).length === 0
+    && (processing.intensities ?? []).length === 0;
+}
+
+/**
+ * RULE-030's frequency filter, the third step of RULE-032's order.
+ *
+ * Returns a new 8-BIT interleaved buffer when it ran, or null when it did not. Eight bits whatever
+ * the source was, because the rule says so: the filtered plane is min-max stretched to 0..255, and
+ * there is no wider result to keep.
+ *
+ * GRAYSCALE ONLY, AND THE TEST IS ON THE DATA. The rule card says "2-D or exactly equal-channel
+ * images", so an RGB file whose three channels happen to be identical — a grayscale scan saved as
+ * colour, which is extremely common — IS processed. Testing `sourceChannels` instead would refuse
+ * exactly those, and they are the images most likely to want this.
+ */
+export function applyFrequencyFilter(
+  samples: Uint8Array | Uint16Array,
+  frame: Frame,
+  processing: Processing,
+): Uint8Array | null {
+  const frequencies = processing.frequencies ?? [];
+  const intensities = processing.intensities ?? [];
+  if (frequencies.length === 0 && intensities.length === 0) return null;
+  if (!channelsAreEqual(samples)) return null;
+
+  const pixels = frame.width * frame.height;
+  if (pixels > MAX_FFT_PIXELS) {
+    throw new ImageTooLargeError(
+      `the frequency filter is limited to ${MAX_FFT_PIXELS.toLocaleString()} pixels and this image `
+        + `has ${pixels.toLocaleString()}; it would take about `
+        + `${Math.round(pixels / 1_000_000)} seconds and the request would look like a hang`,
+    );
+  }
+
+  // One plane out of the interleaved buffer. The three are equal, so any of them is the image.
+  const plane = samples instanceof Uint16Array
+    ? new Uint16Array(pixels)
+    : new Uint8Array(pixels);
+  for (let i = 0; i < pixels; i += 1) plane[i] = samples[i * 3]!;
+
+  const filtered = filterFrequencies(plane, frame.height, frame.width, frequencies, intensities);
+
+  const out = new Uint8Array(pixels * 3);
+  for (let i = 0; i < pixels; i += 1) {
+    const value = filtered[i]!;
+    out[i * 3] = value;
+    out[i * 3 + 1] = value;
+    out[i * 3 + 2] = value;
+  }
+  return out;
+}
+
+/** Whether every pixel's three channels agree, which is what makes an RGB buffer a grayscale image. */
+function channelsAreEqual(samples: Uint8Array | Uint16Array): boolean {
+  for (let i = 0; i < samples.length; i += 3) {
+    if (samples[i] !== samples[i + 1] || samples[i] !== samples[i + 2]) return false;
+  }
+  return true;
 }
 
 /**
@@ -161,6 +244,9 @@ export function processingFromQuery(query: URLSearchParams): Processing {
     channels[name] = values;
   }
 
+  const frequencies = numberList(query, "frequencies", 0, 10_000);
+  const intensities = numberList(query, "intensities", 0, 255);
+
   const cropRaw = query.get("crop");
   let crop: readonly [number, number, number, number] | null = null;
   if (cropRaw !== null && cropRaw !== "") {
@@ -175,7 +261,25 @@ export function processingFromQuery(query: URLSearchParams): Processing {
     rescale: rescaleMin === null || rescaleMax === null ? null : { min: rescaleMin, max: rescaleMax },
     channels,
     crop,
+    frequencies,
+    intensities,
   };
+}
+
+/** A comma-separated list of whole numbers within bounds, or [] when the parameter is absent. */
+function numberList(
+  query: URLSearchParams,
+  name: string,
+  low: number,
+  high: number,
+): readonly number[] {
+  const raw = query.get(name);
+  if (raw === null || raw === "") return [];
+  const values = raw.split(",").map((part) => Number.parseInt(part.trim(), 10));
+  if (values.some((value) => !Number.isInteger(value) || value < low || value > high)) {
+    throw new Error(`${name} must be a comma-separated list of whole numbers between ${low} and ${high}`);
+  }
+  return values;
 }
 
 function intOr(query: URLSearchParams, name: string, fallback: number | null): number | null {

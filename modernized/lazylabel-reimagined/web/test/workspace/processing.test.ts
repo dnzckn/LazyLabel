@@ -10,6 +10,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  FREQUENCY_SLIDER_MAX,
   MIN_MARKER_SPACING,
   NO_PROCESSING,
   channelsFor,
@@ -92,5 +93,34 @@ describe("the widget's marker spacing", () => {
   it("accepts a single marker and none at all", () => {
     expect(markersAreLegal([128])).toBe(true);
     expect(markersAreLegal([])).toBe(true);
+  });
+});
+
+describe("the frequency filter's parameters", () => {
+  it("carries a cutoff", () => {
+    expect(processingQuery({ ...NO_PROCESSING, frequencies: [1000] })).toBe("?frequencies=1000");
+  });
+
+  it("sorts several, so the same set is always the same URL", () => {
+    expect(processingQuery({ ...NO_PROCESSING, frequencies: [4000, 1000] })).toBe(
+      "?frequencies=1000%2C4000",
+    );
+  });
+
+  it("carries intensity thresholds on their own", () => {
+    // RULE-030: with no cutoffs this is a plain contrast stretch followed by posterization, which
+    // is a real thing to ask for rather than a no-op.
+    expect(processingQuery({ ...NO_PROCESSING, intensities: [100] })).toBe("?intensities=100");
+  });
+
+  it("reads the slider's own range", () => {
+    // 0.01% steps of the half-diagonal, which is what makes 1000 a ten-percent cutoff.
+    expect(FREQUENCY_SLIDER_MAX).toBe(10_000);
+  });
+
+  it("sends the crop once there is frequency filtering for it to restrict", () => {
+    const crop = { x1: 1, y1: 2, x2: 3, y2: 4 };
+
+    expect(processingQuery({ ...NO_PROCESSING, frequencies: [1000], crop })).toContain("crop=");
   });
 });

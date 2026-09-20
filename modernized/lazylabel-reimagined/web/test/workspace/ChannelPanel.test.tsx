@@ -195,3 +195,60 @@ describe("a crossed rescale window", () => {
     expect(query()).toBe("");
   });
 });
+
+describe("the frequency cutoff", () => {
+  it("is offered whatever the source says it is, because the server decides", async () => {
+    // RULE-030 runs on "2-D or exactly equal-channel" images, so a grayscale scan SAVED AS COLOUR
+    // qualifies -- and only the server can tell, because the answer is in the pixels rather than
+    // in the header. Hiding it for colour would refuse exactly those.
+    await open(COLOUR8);
+
+    expect(screen.getByLabelText("Frequency cutoff")).toBeTruthy();
+  });
+
+  it("asks for nothing at zero, which is the filter being off", async () => {
+    await open(GRAY8);
+
+    expect(query()).toBe("");
+  });
+
+  it("asks for one cutoff, which makes it a high-pass", async () => {
+    // Band 0 is weighted 0 and the last 1, so the frequencies BELOW the cutoff are the ones
+    // removed -- a single threshold is a high-pass, not a low-pass.
+    await open(GRAY8);
+
+    fireEvent.change(screen.getByLabelText("Frequency cutoff"), { target: { value: "1000" } });
+
+    await waitFor(() => expect(query()).toBe("?frequencies=1000"));
+  });
+
+  it("says the cutoff as a percentage of the half-diagonal", async () => {
+    // 1000 of 10000 is ten percent, which is the unit the rule card states and the one a user can
+    // reason about. The raw slider number means nothing on its own.
+    await open(GRAY8);
+
+    fireEvent.change(screen.getByLabelText("Frequency cutoff"), { target: { value: "1000" } });
+
+    expect(await screen.findByText(/10.00% of/)).toBeTruthy();
+  });
+
+  it("turns off again at zero rather than sending an empty list", async () => {
+    await open(GRAY8);
+    fireEvent.change(screen.getByLabelText("Frequency cutoff"), { target: { value: "1000" } });
+    await waitFor(() => expect(query()).toBe("?frequencies=1000"));
+
+    fireEvent.change(screen.getByLabelText("Frequency cutoff"), { target: { value: "0" } });
+
+    await waitFor(() => expect(query()).toBe(""));
+  });
+
+  it("is cleared by the reset", async () => {
+    await open(GRAY8);
+    fireEvent.change(screen.getByLabelText("Frequency cutoff"), { target: { value: "2500" } });
+    await waitFor(() => expect(query()).toContain("frequencies"));
+
+    fireEvent.click(screen.getByText("Reset processing"));
+
+    await waitFor(() => expect(query()).toBe(""));
+  });
+});

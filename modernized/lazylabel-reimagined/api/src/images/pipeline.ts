@@ -21,7 +21,7 @@
 import sharp from "sharp";
 
 import { decodeBmp, isBmp } from "./bmp.js";
-import { applyProcessing, isEmpty, type Processing } from "./processing.js";
+import { applyFrequencyFilter, applyProcessing, isEmpty, type Processing } from "./processing.js";
 
 /**
  * The container formats this service will decode — SEC-02.
@@ -109,11 +109,12 @@ export async function decodeImage(
     const { data } = await sharp(bytes).removeAlpha().toColourspace("srgb").raw().toBuffer({
       resolveWithObject: true,
     });
-    const samples = new Uint8Array(data);
+    let samples: Uint8Array = new Uint8Array(data);
     // 8-bit: the chain runs on these samples directly, since there is no widening step to be
     // before. RULE-032's order is otherwise unchanged.
     if (processing !== undefined && !isEmpty(processing)) {
       applyProcessing(samples, { width, height, sourceChannels }, processing);
+      samples = applyFrequencyFilter(samples, { width, height, sourceChannels }, processing) ?? samples;
     }
     return {
       width,
@@ -137,14 +138,19 @@ export async function decodeImage(
   // BEFORE to8Bit, which is the whole point. RULE-032 puts rescale and channel thresholding ahead
   // of the 16-bit conversion, so they work on the full range: a scan whose data sits between
   // 3,000 and 5,000 stretches across 65,536 levels here and across 8 if it is narrowed first.
+  let filtered: Uint8Array | null = null;
   if (processing !== undefined && !isEmpty(processing)) {
     applyProcessing(wide, { width, height, sourceChannels }, processing);
+    // The frequency filter's output is ALREADY 8-bit -- RULE-030 stretches the filtered plane to
+    // 0..255 and there is no wider result to keep. So when it ran, `to8Bit` must NOT run after it:
+    // shifting those bytes right by eight more would leave a black image.
+    filtered = applyFrequencyFilter(wide, { width, height, sourceChannels }, processing);
   }
 
   return {
     width,
     height,
-    data: to8Bit(wide),
+    data: filtered ?? to8Bit(wide),
     sourceDepth: 16,
     sourceChannels,
     sourceFormat: format ?? "unknown",
@@ -155,12 +161,13 @@ export async function decodeImage(
 function processed(decoded: DecodedImage, processing: Processing | undefined): DecodedImage {
   if (processing === undefined || isEmpty(processing)) return decoded;
   const samples = Uint8Array.from(decoded.data);
-  applyProcessing(
-    samples,
-    { width: decoded.width, height: decoded.height, sourceChannels: decoded.sourceChannels },
-    processing,
-  );
-  return { ...decoded, data: samples };
+  const frame = {
+    width: decoded.width,
+    height: decoded.height,
+    sourceChannels: decoded.sourceChannels,
+  };
+  applyProcessing(samples, frame, processing);
+  return { ...decoded, data: applyFrequencyFilter(samples, frame, processing) ?? samples };
 }
 
 /**
