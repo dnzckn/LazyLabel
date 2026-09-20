@@ -692,6 +692,25 @@ of a whole list (every setting, every hotkey, every wire field). Neither is the 
 that is the point worth carrying: a suite tests the pieces it is given, and this family is about
 the pieces nobody joined.
 
+**The family now has a guard, and it is the general one.** Every instance was the same query —
+which exported FUNCTIONS does no production code call? — so that query is a test
+(`web/test/reach/unreached.ts` and its spec). Thirteen were found, each has a recorded answer, a
+new one fails, and the count is asserted so WIRING one up fails too and prompts the person to
+remove its entry. It subsumes the settings and hotkey guards' shape: ask one question of a whole
+list, and record the answer where the next person will trip over it.
+
+**Its own biggest find is `clahe`.** A byte-exact port of OpenCV's, matched against six goldens
+and one of Phase 5's harder pieces — with no caller, so adaptive equalization is unreachable.
+`stretchWindow` and `equalizeLut` are RULE-031's other two presets and are equally unreached. The
+missing piece is the same for all three: **the processing query cannot ask for a preset**. Stretch
+and equalize slot where the rescale step already runs; CLAHE works on 8-bit and on the crop
+region, so it belongs after `to8Bit` — a different slot, and RULE-032 says the order is the
+contract, so it is written down rather than assumed. That is the next slice, and it is unblocked.
+
+Four of the thirteen were merely superseded and were **deleted** rather than recorded:
+`afterRemoval`, `rescaleAll`, `posterizeAll`, `cssColor`. Dead code with an excuse attached is
+still dead code — the next reader has to work out whether it matters before they can ignore it.
+
 **The method**: take each pair of components that must agree, and ask what carries the agreement.
 For settings, list the keys and grep for readers. For a wire format, compare the fields the
 contract declares against the fields the client sends and the fields it renders. Two of those
