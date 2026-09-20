@@ -4,12 +4,19 @@ SAM 1 and SAM 2.1 prompts, propagation jobs and archetype finding. Python, per d
 legacy model code is proven, SAM 2 video propagation has no browser equivalent, and rewriting either
 would be risk taken for nothing.
 
-Phase 2 scaffolded this service. **Phase 3 has built the SAM 2.1 prompt path** — embeddings,
-point and box prompts, and the cache — and proven it against the legacy `Sam2Model`. SAM 1 and
-propagation remain.
+Phase 2 scaffolded this service and **Phase 3 completed it**, meeting all four of its exit
+criteria: SAM 1 and SAM 2.1 masks match legacy against the real weights, propagation matches frame
+for frame and flags the same frames at the threshold, checkpoints load only through a hash-checked
+manifest, and failures are typed errors rather than `None`.
+
+**The propagation and archetype MODULES are built and proven; their HTTP ROUTES are not.** That
+distinction is the route table below, and it is deliberate rather than an oversight: Phase 3's
+criterion was equivalence with legacy, which `propagation.py` and `archetypes.py` meet. Exposing
+them over HTTP needs a job API with real cancellation, progress and streaming limits, which is
+Phase 6's scope and not a wrapper around a function call.
 
 ```bash
-python -m pytest                                        # 129 tests, no PyTorch needed
+python -m pytest                                        # 232 tests; the live ones skip without checkpoints
 LAZYLABEL_MODEL_DIR=/path/to/checkpoints python -m lazylabel_inference.server
 ```
 
@@ -75,8 +82,8 @@ and a pre-release newer than the minimum is allowed *and said to be* a pre-relea
 | `GET /models` | built — every declared checkpoint, verified in full |
 | `POST /inference/embeddings` | built — encodes an image, returns a stable handle, says whether it was cached |
 | `POST /inference/segment` | built — points and boxes, SAM 2.1, the mask bounded on the wire |
-| `POST`/`GET /inference/propagations`, `DELETE /inference/propagations/{id}` | **501**, C11, Phase 3 |
-| `POST /inference/archetypes` | **501**, C10, Phase 3 |
+| `POST`/`GET /inference/propagations`, `DELETE /inference/propagations/{id}` | **501**, C11, Phase 6 — the module is built and differential-tested; the JOB API is not |
+| `POST /inference/archetypes` | **501**, C10, Phase 6 — same: `archetypes.py` is complete, the route is not |
 
 For the routes that still answer 501, that is the honest status: the route exists, its contract is
 fixed in `AI_NATIVE_SPEC.md` section 3,

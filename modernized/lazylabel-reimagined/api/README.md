@@ -1,13 +1,18 @@
-# LazyLabel API — Phase 2 scaffold
+# LazyLabel API
 
 The Node.js service that reads and writes annotation files in the user's folder, owns the image
-pipeline, serves settings, and proxies inference. This is the **Phase 2 pilot slice**: the first of
-the three scaffolds, taken end to end so the seams are proved by something that runs rather than
-asserted in a document.
+pipeline, serves settings, and proxies inference. It began as Phase 2's pilot slice — the first of
+the three scaffolds, taken end to end so the seams were proved by something that ran — and Phases
+4 and 5 filled it in.
+
+**RULE-032's processing chain lives here, not in the browser**, and that is the one thing about
+this service worth knowing before reading it: rescale, channel thresholds and the FFT belong
+*before* the 16-bit to 8-bit conversion, and the browser only ever receives what comes after it. A
+rescale applied client-side would quantise a 16-bit scan to 256 levels and then stretch those.
 
 | | |
 |---|---|
-| Phase | 2 of [`MODERNIZATION_BRIEF.md`](../../../analysis/lazylabel/MODERNIZATION_BRIEF.md) |
+| Phases | 2, 4 and 5 of [`MODERNIZATION_BRIEF.md`](../../../analysis/lazylabel/MODERNIZATION_BRIEF.md), all complete |
 | Specification | [`AI_NATIVE_SPEC.md`](../../../analysis/lazylabel/AI_NATIVE_SPEC.md) |
 | Architecture | [`REIMAGINED_ARCHITECTURE.md`](../../../analysis/lazylabel/REIMAGINED_ARCHITECTURE.md) |
 | Depends on | `@lazylabel/annotation-formats` (Phase 1), `@lazylabel/contracts`, `@lazylabel/settings-schema` |
@@ -107,7 +112,7 @@ turned an unreadable file into lost work.
 
 Four, each with its reason.
 
-**1. Pending capabilities are `test.todo`, not failing tests.** Phase 2 exit criterion 2 says
+**1. Pending capabilities are `test.todo`, not failing tests.** Phase 2's exit criterion 2 said
 acceptance tests for unbuilt capabilities should "fail". They are todos instead. A permanently red
 suite satisfies the letter of criterion 2 and destroys criterion 4 in the same stroke — CI that is
 always red tells you nothing on the day something actually breaks. The intent is that an unbuilt
@@ -116,18 +121,19 @@ capability is *visible* and never mistaken for a passing one, which todos provid
 the capability table and the acceptance suite ever disagree about what is built. That guard was
 mutation-tested, not merely written.
 
-**2. The wire format is provisional.** Phase 4 builds the real client and the format is its to
-settle. What is fixed now is only what the spec's contracts already promise — a load carries its
+**2. The wire format was provisional, and Phase 4 settled it.** What it fixed is what the spec's
+contracts promise — a load carries its
 source format, the names the file established, the count it rejected, and every failure it walked
 past. Masks travel bounded (a box plus its bytes) rather than as full-image planes, because the
 obvious encoding is what the memory NFR exists to forbid: 500 objects on a 50-megapixel image is
 25 GB of mostly zeros.
 
 **3. `GET` takes the image size as a query parameter.** The text formats store normalized
-coordinates, so a reader cannot recover pixels without the image's dimensions, and the API cannot
-know them until the image pipeline (C8, Phase 5) can decode the file. The client states it until
-then. The seam is left visible rather than hidden behind a half-built decoder that would be wrong
-for 16-bit TIFF — which is precisely the case the pipeline exists for.
+coordinates, so a reader cannot recover pixels without the image's dimensions. The pipeline can
+decode the file now, so the API *could* measure it itself — and it still does not, because the
+client already asks for the metadata to size its canvas and a second decode per load would be the
+same answer bought twice. The parameter stays; what changed is that it is now a choice rather than
+a gap.
 
 **4. A malformed hotkey entry keeps its default binding.** Legacy does
 `keys.get("primary_key", "")`, binding the action to the empty string: it stops working, nothing is

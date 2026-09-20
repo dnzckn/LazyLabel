@@ -1,10 +1,12 @@
-# LazyLabel web app — Phase 2 scaffold
+# LazyLabel web app
 
-React 19, TypeScript, Vite. Phase 2's scope for the browser is bootstrap, configuration, logging,
-and the settings and hotkey schema — **not** the workspace, which Phase 4 builds.
+React 19, TypeScript, Vite. The whole browser side: the dataset browser, the canvas and its drawing
+tools, the AI tools, the image adjustments, the sequence timeline and the split view.
 
-So what is here is a shell that does a shell's job and says plainly what is not built, rather than a
-mock editor that Phase 4 would have to throw away.
+Phases 2, 4 and 5 built it in that order, and the shell's habit from Phase 2 survived all of
+them — **it says plainly what is not built rather than showing a control with nothing behind it.**
+That is not decoration. Three features in this project were implemented, unit-tested and
+unreachable at some point, and a dead control is the same lie told deliberately.
 
 ```bash
 npm install
@@ -42,8 +44,9 @@ It reads `event.code`, the physical key, rather than `event.key`, for three reas
    AZERTY. The physical key keeps the cluster under the user's fingers.
 
 Point 3 is a deliberate trade: an AZERTY user pressing the key labelled Z gets W's binding. Right
-for movement keys, arguably wrong for mnemonic ones like M for Merge. Phase 5 owns the rebinding UI
-and can revisit it; what matters now is that one rule applies everywhere.
+for movement keys, arguably wrong for mnemonic ones like M for Merge. Phase 5 came and went without
+revisiting it, which is the honest status: one rule applies everywhere, no rebinding UI was built,
+and the hotkey reference in the Settings panel is how a user sees the bindings today.
 
 Two behaviours that are cheap to get wrong and expensive to have wrong: a keystroke aimed at a text
 field is not a hotkey (pressing V in a class-name field writes a V, it does not delete segments),
@@ -52,6 +55,15 @@ something nothing handles is how Ctrl+A silently stops selecting text.
 
 ## What is not built
 
-Twelve of the fourteen capabilities. `src/capabilities.ts` lists each with the phase that builds it
-and what is missing; `test/acceptance/pending.test.ts` holds a tagged placeholder for each, and
-`coverage.test.ts` fails if the two ever disagree.
+**Two of the fourteen capabilities**, both Phase 6: **C11**, propagation, and **C14**, drawing into
+a linked pair. The split view compares and links today; drawing into one needs the workspace store
+to hold two open images.
+
+`src/capabilities.ts` lists every capability with its state, `test/acceptance/pending.test.ts`
+holds a tagged placeholder for each unbuilt one, and `coverage.test.ts` fails if those disagree —
+or if a capability is marked built with no acceptance test named for it.
+
+**That guard went stale once and it is worth knowing how.** It kept listing eight built
+capabilities as pending, and every check still passed, because the checks compare the table with
+the placeholders rather than with the app. Keeping the table honest in the same commit as the
+feature is the cheapest defence; the guard then makes you write the acceptance test.
