@@ -5,6 +5,11 @@
   --ink: #1a1a1a;
   --muted: #5a5a5a;
   --rule: #d8d8d8;
+  /* Links, and the border on whatever is current. Used in four places and defined in none until
+     now, so `var(--accent)` fell back to the inherited colour and a breadcrumb looked like plain
+     text -- and `--text`, which one rule used for the timeline's CURRENT-FRAME border, is spelled
+     `--ink` here, so that border rendered as currentColor and the marker showed nothing at all. */
+  --accent: #1a5fb4;
   --warning-ground: #fff4e0;
   --warning-ink: #6b4800;
   --error-ground: #ffe9e6;
@@ -21,6 +26,7 @@
     --ink: #ececec;
     --muted: #a0a0a0;
     --rule: #3a3a3a;
+    --accent: #78aeff;
     --warning-ground: #3a2d10;
     --warning-ink: #f0cd8a;
     --error-ground: #3a1a16;
@@ -35,6 +41,7 @@
   --ink: #ececec;
   --muted: #a0a0a0;
   --rule: #3a3a3a;
+  --accent: #78aeff;
   --warning-ground: #3a2d10;
   --warning-ink: #f0cd8a;
   --error-ground: #3a1a16;
@@ -548,7 +555,7 @@ fieldset input {
 }
 
 .timeline__frame--current {
-  border-color: var(--text);
+  border-color: var(--ink);
 }
 
 .timeline__controls {
@@ -596,4 +603,35 @@ fieldset input {
 .split__pane figcaption {
   font-size: 0.8rem;
   color: var(--muted);
+}
+
+/* Which pane the tools are pointed at. An outline rather than a colour swap, because the panes
+   hold photographs and tinting one changes what the user is comparing. The caption says
+   "editing" too -- an outline alone is a colour-only cue, and this is exactly the distinction a
+   user must not get wrong. */
+.split__pane--active {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.split__pane--active figcaption {
+  color: var(--ink);
+}
+
+/* The editing radios, beside the picker rather than under it. */
+.split__link {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  padding: 0.2rem 0.5rem;
+  font-size: 0.85rem;
+}
+
+.split__link legend {
+  font-size: 0.75rem;
+  color: var(--muted);
+  padding: 0 0.2rem;
 }

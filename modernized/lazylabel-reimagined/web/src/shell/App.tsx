@@ -26,6 +26,7 @@ import { TimelinePanel } from "../sequence/TimelinePanel.jsx";
 import { CropPanel } from "../workspace/CropPanel.jsx";
 import { ModelPicker } from "../workspace/ModelPicker.jsx";
 import { SegmentTable } from "../workspace/SegmentTable.jsx";
+import { processingQuery } from "../workspace/processing.js";
 import { useWorkspace, type Tool } from "../workspace/WorkspaceProvider.jsx";
 import { Panel, Workspace } from "./Panel.jsx";
 import { StatusBar } from "./StatusBar.jsx";
@@ -173,23 +174,14 @@ export function App({ client }: { readonly client: ApiClient }): ReactNode {
             <Panel title="Split view" initiallyCollapsed>
               <SplitView
                 images={listed}
-                // It measures its own two images. The workspace's `open` knows about ONE, which
-                // is never both sides of a pair -- reading from it showed a comparison view with
-                // no pictures in it.
-                measure={async (key) => {
-                  const metadata = await client.imageMetadata("default", key);
-                  return { width: metadata.width, height: metadata.height };
-                }}
-                // Read-only, and loaded here rather than through the workspace store for the same
-                // reason the sizes are: the store knows about ONE open image and a pair needs two.
-                annotationsFor={async (key, size) => {
-                  const result = await client.loadAnnotations("default", key, [
-                    size.height,
-                    size.width,
-                  ]);
-                  return result.kind === "loaded" ? result.annotations.segments : [];
-                }}
-                pixelsUrl={(key) => client.pixelsUrl("default", key)}
+                // Both panes' sizes and annotations now come from the workspace store, which holds
+                // two open images. The measuring and loading that used to happen in the view were
+                // there only because it held one, and they were a second copy of an ordering the
+                // store already gets right: the size has to land before the annotations, or the
+                // normalized coordinates rescale.
+                pixelsUrl={(key, processing) =>
+                  client.pixelsUrl("default", key, processingQuery(processing))
+                }
               />
             </Panel>
 

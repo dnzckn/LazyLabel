@@ -3,127 +3,72 @@
  *
  * Not a port. Legacy's multi-view is half-migrated with fourteen undefined members, and decision 8
  * settled that it is rebuilt from the linked-operation rules instead. `linked.ts` holds those; this
- * is the view, and it lands with them rather than after them, because three features in this
- * project were built, unit-tested and unreachable.
+ * is the view.
  *
- * WHAT IT DOES NOT DO YET, AND SAYS SO. Drawing into a linked pair needs the workspace store to
- * hold TWO open images rather than one, which is a change to the store and not to this file. The
- * viewer compares, links, and reports what a linked operation would do; the drawing surfaces come
- * with that store change. A pair of canvases with dead drawing layers over them would be exactly
- * the defect this session kept finding.
+ * THE LEFT PANE IS THE IMAGE YOU ARE WORKING ON. It is not chosen here: it is whatever the dataset
+ * browser opened, side 0 of the workspace. This panel chooses the SECOND image and opens it into
+ * side 1, and a radio says which of the two the centre view and every tool act on. So annotating a
+ * pair is: open one, pick its partner here, and switch sides — with both on screen, both holding
+ * their own segments, crop and undo.
+ *
+ * That is a narrower view than the one before it, which let you compare any two images without
+ * disturbing what you had open, and the narrowing is deliberate. RULE-092 is about a PAIR being
+ * labelled together, not an arbitrary comparison; making the left pane a second way to choose an
+ * image would put two controls on one question and a second image-loading path beside the store's.
+ * Comparing two images you have not opened now costs one extra click: open one, pick the other.
+ *
+ * WHAT IT STILL DOES NOT DO. A linked operation — one action applying to both images at once, as
+ * one undo entry — is not built. Each side is edited on its own. The note at the bottom says which
+ * of the two you are getting rather than implying the other.
  *
  * TWO VIEWERS, not four. Legacy has a four-view setting and only viewers 0 and 1 exist
  * (RULE-092's edge cases); the setting is a control that does nothing, and it is not carried over.
  */
 
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useMemo, type ReactNode } from "react";
 
 import type { WireDatasetImage, WireSegment } from "@lazylabel/contracts";
 
 import { AnnotationCanvas } from "../canvas/AnnotationCanvas.jsx";
+import type { ImageProcessing } from "../workspace/processing.js";
+import {
+  useWorkspace,
+  type SideIndex,
+  type SideState,
+} from "../workspace/WorkspaceProvider.jsx";
 import { describePair, type ImageSize } from "./linked.js";
 
 export interface SplitViewProps {
+  /** The folder's images, for choosing the second one. */
   readonly images: readonly WireDatasetImage[];
   /**
-   * The pixel size of one image.
+   * Takes the side's PROCESSING as well as its key.
    *
-   * THIS VIEW ASKS FOR ITS OWN, and the first version did not — it read the size off the one image
-   * the workspace had open, on the reasoning that fetching would be "a second answer to a question
-   * the workspace already asks". That reasoning was wrong and running the app showed it in a
-   * second: the workspace asks about ONE image, this needs TWO, and the result was a comparison
-   * view that displayed no pictures at all. Nobody else is asking, so this is not a second answer.
+   * Each side carries its own rescale window, channel thresholds and filters — they are per image
+   * for the same reason the crop is. A pane drawn from the plain URL would show one side adjusted
+   * and the other raw, which in a comparison view is the one thing that must not happen.
    */
-  readonly measure: (key: string) => Promise<ImageSize>;
-  /**
-   * That image's annotations, for showing beside the other's.
-   *
-   * READ-ONLY here, and that is the whole of what this view does with them: comparing two labelled
-   * images is most of why anyone opens a split view, and showing two pictures with no labels on
-   * either was showing the least useful half. Editing them needs the workspace store to hold two
-   * open images, which is the next slice.
-   *
-   * Takes the size because the text formats store NORMALIZED coordinates — a reader cannot recover
-   * pixels without the image's dimensions, which is why this cannot be called until `measure` has
-   * answered.
-   */
-  readonly annotationsFor: (key: string, size: ImageSize) => Promise<readonly WireSegment[]>;
-  readonly pixelsUrl: (key: string) => string;
+  readonly pixelsUrl: (key: string, processing: ImageProcessing) => string;
 }
 
-export function SplitView({
-  images,
-  measure,
-  annotationsFor,
-  pixelsUrl,
-}: SplitViewProps): ReactNode {
-  const [leftIndex, setLeftIndex] = useState(0);
-  const [rightIndex, setRightIndex] = useState(1);
-  const [linked, setLinked] = useState(true);
-
-  const left = images[leftIndex];
-  const right = images[rightIndex];
-
-  // Keyed by image, not by side, so swapping the two sides costs nothing and re-choosing an image
-  // already measured shows it at once.
-  const [sizes, setSizes] = useState<Readonly<Record<string, ImageSize>>>({});
-
-  useEffect(() => {
-    let cancelled = false;
-    for (const image of [left, right]) {
-      if (image === undefined || sizes[image.key] !== undefined) continue;
-      void measure(image.key)
-        .then((size) => {
-          // Guarded on the key rather than on a counter: two measurements are in flight and they
-          // are for different images, so neither supersedes the other.
-          if (!cancelled) setSizes((known) => ({ ...known, [image.key]: size }));
-        })
-        // A size that cannot be read leaves the pane saying "measuring", which is honest -- the
-        // canvas underneath would report the decode failure itself if it were drawn.
-        .catch(() => undefined);
-    }
-    return () => {
-      cancelled = true;
-    };
-  }, [left, right, measure, sizes]);
-
-  // Keyed by image like the sizes, and for the same reason: swapping the sides or coming back to
-  // an image already loaded costs nothing.
-  const [annotations, setAnnotations] = useState<Readonly<Record<string, readonly WireSegment[]>>>({});
-
-  useEffect(() => {
-    let cancelled = false;
-    for (const image of [left, right]) {
-      if (image === undefined || annotations[image.key] !== undefined) continue;
-      const size = sizes[image.key];
-      // Ordered, not raced: the text formats store normalized coordinates, so reading them before
-      // the size is known would rescale every polygon silently. This runs when the size lands.
-      if (size === undefined) continue;
-      void annotationsFor(image.key, size)
-        .then((segments) => {
-          if (!cancelled) setAnnotations((known) => ({ ...known, [image.key]: segments }));
-        })
-        // An image with no annotation file, or one that cannot be read, shows the picture with
-        // nothing over it. The single-image view reports a damaged file properly; repeating that
-        // here would be a second place to keep right about the same thing.
-        .catch(() => {
-          if (!cancelled) setAnnotations((known) => ({ ...known, [image.key]: [] }));
-        });
-    }
-    return () => {
-      cancelled = true;
-    };
-  }, [left, right, sizes, annotations, annotationsFor]);
-
-  const sizeOf = (key: string): ImageSize | null => sizes[key] ?? null;
+export function SplitView({ images, pixelsUrl }: SplitViewProps): ReactNode {
+  const { sides, activeSide, setActiveSide, openImageOn, closeSide } = useWorkspace();
+  const [left, right] = sides;
 
   const note = useMemo(() => {
-    if (left === undefined || right === undefined) return null;
-    const leftSize = sizes[left.key];
-    const rightSize = sizes[right.key];
-    if (leftSize === undefined || rightSize === undefined) return null;
+    const leftSize = sizeOf(left);
+    const rightSize = sizeOf(right);
+    if (leftSize === null || rightSize === null) return null;
     return describePair(leftSize, rightSize);
-  }, [left, right, sizes]);
+  }, [left, right]);
+
+  if (left.open === null) {
+    return (
+      <p className="panel__missing">
+        Open an image first. A split view pairs a second image with the one you are working on.
+      </p>
+    );
+  }
 
   if (images.length < 2) {
     return (
@@ -133,28 +78,68 @@ export function SplitView({
     );
   }
 
+  const rightKey = right.open?.image.key ?? "";
+
   return (
     <div className="split">
       <div className="split__controls">
-        <Picker label="Left image" images={images} value={leftIndex} onChange={setLeftIndex} />
-        <Picker label="Right image" images={images} value={rightIndex} onChange={setRightIndex} />
-        <label className="split__link">
-          <input
-            type="checkbox"
-            checked={linked}
-            aria-label="Link the viewers"
-            onChange={(event) => setLinked(event.target.checked)}
-          />{" "}
-          Linked
+        <label className="crop__field">
+          <span>Second image</span>
+          <select
+            value={rightKey}
+            aria-label="Second image"
+            onChange={(event) => {
+              const chosen = images.find((image) => image.key === event.target.value);
+              if (chosen === undefined) {
+                // Back to one image. The side is emptied rather than left holding an image nobody
+                // can see: a pane off screen still reporting unsaved work is decision 7's silent
+                // loss by another route.
+                setActiveSide(0);
+                closeSide(1);
+                return;
+              }
+              openImageOn(1, chosen);
+            }}
+          >
+            <option value="">None — one image</option>
+            {images.map((image) => (
+              <option key={image.key} value={image.key}>
+                {image.name}
+              </option>
+            ))}
+          </select>
         </label>
+
+        {right.open !== null && (
+          <fieldset className="split__link">
+            {/* Which side everything else acts on. A radio group rather than a pair of toggles,
+                because the sides are exclusive and that says so to a screen reader and to the
+                keyboard without any code of ours. */}
+            <legend>Editing</legend>
+            {([0, 1] as const).map((side) => (
+              <label key={side}>
+                <input
+                  type="radio"
+                  name="split-active"
+                  checked={activeSide === side}
+                  aria-label={side === 0 ? "Edit the left image" : "Edit the right image"}
+                  onChange={() => setActiveSide(side)}
+                />{" "}
+                {sides[side].open?.image.name ?? (side === 0 ? "Left" : "Right")}
+              </label>
+            ))}
+          </fieldset>
+        )}
       </div>
 
-      {leftIndex === rightIndex && (
+      {right.open !== null && left.open.image.key === rightKey && (
         // Allowed, and worth saying: the same image twice is a legitimate way to look at one
-        // picture under two sets of display adjustments, but a user who chose it by accident
-        // would otherwise wonder why both sides move together.
+        // picture under two sets of display adjustments. Worth saying LOUDLY here, though, because
+        // the two sides now hold separate segments -- so edits made on one do not appear on the
+        // other, and the last save wins.
         <p role="status" className="banner banner--warning">
-          Both sides are showing the same image.
+          Both sides are showing the same image. Each side holds its own annotations, so edits made
+          on one will not appear on the other and the later save will win.
         </p>
       )}
 
@@ -165,87 +150,75 @@ export function SplitView({
       )}
 
       <div className="split__panes">
-        {[left, right].map((image, side) =>
-          image === undefined ? null : (
-            <figure key={`${side}-${image.key}`} className="split__pane">
-              <Pane
-                image={image}
-                size={sizeOf(image.key)}
-                segments={annotations[image.key] ?? []}
-                pixelsUrl={pixelsUrl}
-              />
-              <figcaption>{image.name}</figcaption>
+        {([0, 1] as const).map((side) =>
+          sides[side].open === null ? null : (
+            <figure
+              key={side}
+              className={`split__pane${activeSide === side ? " split__pane--active" : ""}`}
+            >
+              <Pane side={sides[side]} pixelsUrl={pixelsUrl} />
+              <figcaption>
+                {sides[side].open.image.name}
+                {activeSide === side && right.open !== null ? " — editing" : ""}
+                {sides[side].dirty ? " (unsaved)" : ""}
+              </figcaption>
             </figure>
           ),
         )}
       </div>
 
       <p className="panel__missing">
-        {linked
-          ? "Linked: an operation would apply to both viewers at the same pixel, and both images "
-            + "would name the object the same class — each keeping its own id for it, which is how "
-            + "per-image class ids work. Drawing into a pair is not built: it needs the workspace "
-            + "to hold two open images, which is the next slice."
-          : "Unlinked: an operation would apply to the active viewer only."}
+        {right.open === null
+          ? "Pick a second image to pair with this one."
+          : "Each side is edited on its own: the tools, the panels and undo all follow the side "
+            + "chosen above, and each side saves separately. A LINKED operation — one action "
+            + "applying to both images at the same pixel, as one undo entry, with both naming the "
+            + "object the same class while each keeps its own id for it — is not built yet."}
       </p>
     </div>
   );
 }
 
+/** The pixel size this side has been measured at, or null while it is still loading. */
+function sizeOf(side: SideState): ImageSize | null {
+  const metadata = side.open?.metadata;
+  if (metadata === undefined || metadata === null) return null;
+  return { width: metadata.width, height: metadata.height };
+}
+
 function Pane({
-  image,
-  size,
-  segments,
+  side,
   pixelsUrl,
 }: {
-  readonly image: WireDatasetImage;
-  readonly size: ImageSize | null;
-  readonly segments: readonly WireSegment[];
-  readonly pixelsUrl: (key: string) => string;
+  readonly side: SideState;
+  readonly pixelsUrl: (key: string, processing: ImageProcessing) => string;
 }): ReactNode {
+  const open = side.open;
+  if (open === null) return null;
+
+  if (open.error !== null) {
+    return (
+      <p role="alert" className="banner banner--error">
+        {open.image.name} could not be opened: {open.error}
+      </p>
+    );
+  }
+
+  const size = sizeOf(side);
   if (size === null) {
     // Measured before drawn. A canvas sized from a guess shows the image at the wrong scale, and
     // every coordinate taken from it would be wrong by the same factor.
-    return <p className="panel__missing">Measuring {image.name}…</p>;
+    return <p className="panel__missing">Measuring {open.image.name}…</p>;
   }
 
   return (
     <AnnotationCanvas
-      imageUrl={pixelsUrl(image.key)}
+      imageUrl={pixelsUrl(open.image.key, side.processing)}
       width={size.width}
       height={size.height}
-      // Drawn in their class colours, the same as the single-image view, so two labelled images
-      // can be compared by eye -- which is most of why anyone opens a split view.
-      segments={segments}
+      // The LIVE segments, straight from the store, so an edit made in the centre view appears
+      // here as it happens rather than at the next reload.
+      segments={side.segments satisfies readonly WireSegment[]}
     />
-  );
-}
-
-function Picker({
-  label,
-  images,
-  value,
-  onChange,
-}: {
-  readonly label: string;
-  readonly images: readonly WireDatasetImage[];
-  readonly value: number;
-  readonly onChange: (index: number) => void;
-}): ReactNode {
-  return (
-    <label className="crop__field">
-      <span>{label}</span>
-      <select
-        value={value}
-        aria-label={label}
-        onChange={(event) => onChange(Number(event.target.value))}
-      >
-        {images.map((image, index) => (
-          <option key={image.key} value={index}>
-            {image.name}
-          </option>
-        ))}
-      </select>
-    </label>
   );
 }

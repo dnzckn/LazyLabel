@@ -1,20 +1,24 @@
 /**
- * The split view on screen — C14's shape, ahead of the slice that makes it drawable.
+ * The split view on screen — C14, now backed by the workspace store.
  *
- * What it claims is narrow and the tests keep it there: two images can be chosen, compared, and
- * linked, and what a linked operation WOULD do is described. Drawing into a pair needs the
- * workspace store to hold two open images, which is a change to the store rather than to this
- * component — so the view says that rather than showing drawing layers with nothing behind them.
+ * The left pane is the image you have open; this panel chooses the second one and opens it into
+ * the store's other side. Both panes read their size, their processing and their live segments
+ * from the store, so the two loading paths this view used to carry are gone — and with them the
+ * ordering rule they had to repeat, that a size must land before annotations or every normalized
+ * coordinate rescales.
  *
- * The capability stays PENDING in the table until it can be drawn into. A comparison view is not
- * "annotate both together".
+ * What it still does not do is a LINKED operation: one action on both images, as one undo entry.
+ * Each side is edited on its own. The tests keep the claim where the code is.
  */
 
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { WireDatasetImage } from "@lazylabel/contracts";
 
+import type { AnnotationsResult, ApiClient } from "../../src/api/client.js";
 import { SplitView } from "../../src/split/SplitView.jsx";
+import { processingQuery } from "../../src/workspace/processing.js";
+import { WorkspaceProvider, useWorkspace } from "../../src/workspace/WorkspaceProvider.jsx";
 
 afterEach(cleanup);
 
@@ -24,199 +28,274 @@ function image(name: string): WireDatasetImage {
 
 const FOLDER = [image("left.png"), image("right.png"), image("third.png")];
 
+/** third.png is narrower, which is what makes a pair worth describing. */
 const SIZES: Record<string, { width: number; height: number }> = {
   "frames/left.png": { width: 100, height: 50 },
   "frames/right.png": { width: 100, height: 50 },
   "frames/third.png": { width: 80, height: 50 },
 };
 
-function show(images: readonly WireDatasetImage[] = FOLDER) {
-  render(
-    <SplitView
-      images={images}
-      measure={async (key) => SIZES[key] ?? { width: 1, height: 1 }}
-      annotationsFor={async () => []}
-      pixelsUrl={(key) => `/pixels/${key}`}
-    />,
+function annotations(count: number): AnnotationsResult {
+  return {
+    kind: "loaded",
+    annotations: {
+      segments: Array.from({ length: count }, () => ({ type: "Polygon", classId: 0 })),
+      classAliases: {},
+      failures: [],
+      rejected: 0,
+      sourceFile: "x.npz",
+      sourceFormat: "NPZ",
+    },
+  } as unknown as AnnotationsResult;
+}
+
+/** Opens the LEFT image the way the dataset browser does, and can draw into whichever side is active. */
+function Opener(): React.ReactNode {
+  const { openImage, addSegment, setProcessing, processing } = useWorkspace();
+  return (
+    <>
+      {FOLDER.map((entry) => (
+        <button key={entry.key} type="button" onClick={() => openImage(entry)}>
+          open {entry.name}
+        </button>
+      ))}
+      <button
+        type="button"
+        onClick={() => addSegment({ type: "Polygon", classId: 0, vertices: [[1, 1]] } as never)}
+      >
+        draw
+      </button>
+      <button
+        type="button"
+        onClick={() => setProcessing({ ...processing, rescale: { min: 10, max: 200 } })}
+      >
+        adjust
+      </button>
+    </>
   );
 }
 
-describe("with fewer than two images", () => {
-  it("says a split view needs two", () => {
-    show([FOLDER[0]!]);
+function mount({
+  images = FOLDER,
+  counts = {} as Record<string, number>,
+  metadata,
+}: {
+  images?: readonly WireDatasetImage[];
+  counts?: Record<string, number>;
+  metadata?: ApiClient["imageMetadata"];
+} = {}) {
+  const pixelsUrl = vi.fn((key: string, processing: Parameters<typeof processingQuery>[0]) => {
+    const query = processingQuery(processing);
+    return query === "" ? `/pixels/${key}` : `/pixels/${key}?${query}`;
+  });
 
-    expect(screen.getByText(/needs two images/)).toBeTruthy();
+  const client = {
+    imageMetadata:
+      metadata ??
+      (async (_project: string, key: string) => ({
+        ...(SIZES[key] ?? { width: 1, height: 1 }),
+        sourceDepth: 8,
+        sourceChannels: 3,
+        sourceFormat: "png",
+      })),
+    loadAnnotations: async (_project: string, key: string) => annotations(counts[key] ?? 0),
+    pixelsUrl: () => "/pixels",
+  } as unknown as ApiClient;
+
+  render(
+    <WorkspaceProvider client={client} projectId="default">
+      <Opener />
+      <SplitView images={images} pixelsUrl={pixelsUrl} />
+    </WorkspaceProvider>,
+  );
+
+  return { pixelsUrl };
+}
+
+/** The captions, not the <option> elements — every name is in the picker too. */
+const panes = () =>
+  screen.getAllByRole("figure").map((pane) => pane.querySelector("figcaption")?.textContent);
+
+const canvases = () =>
+  [...screen.queryAllByRole("img")].map((c) => c.getAttribute("aria-label"));
+
+async function openLeft(name = "left.png"): Promise<void> {
+  fireEvent.click(screen.getByText(`open ${name}`));
+  await waitFor(() => expect(panes().length).toBeGreaterThan(0));
+}
+
+async function pairWith(name: string): Promise<void> {
+  fireEvent.change(screen.getByLabelText("Second image"), {
+    target: { value: `frames/${name}` },
+  });
+  await waitFor(() => expect(panes().length).toBe(2));
+}
+
+describe("before there is anything to pair", () => {
+  it("asks for an image to be opened first", () => {
+    mount();
+
+    expect(screen.getByText(/Open an image first/)).toBeTruthy();
+  });
+
+  it("says a split view needs two images when the folder has one", async () => {
+    mount({ images: [FOLDER[0]!] });
+    // Not `openLeft`: with one image there is no pane to wait for, which is the point.
+    fireEvent.click(screen.getByText("open left.png"));
+
+    await waitFor(() => expect(screen.getByText(/needs two images/)).toBeTruthy());
+  });
+
+  it("shows the open image alone until a second is chosen", async () => {
+    mount();
+    await openLeft();
+
+    expect(panes()).toEqual(["left.png"]);
+    expect(screen.getByText(/Pick a second image/)).toBeTruthy();
   });
 });
 
 describe("choosing the pair", () => {
-  // The captions, not the <option> elements -- every name appears in both pickers as well, so a
-  // plain text query matches three times and proves nothing about what is SHOWN.
-  const shown = () => screen.getAllByRole("figure").map((pane) => pane.querySelector("figcaption")?.textContent);
+  it("opens the chosen image beside the one already open", async () => {
+    mount();
+    await openLeft();
+    await pairWith("right.png");
 
-  it("shows the first two by default", () => {
-    show();
-
-    expect(shown()).toEqual(["left.png", "right.png"]);
+    expect(panes()).toEqual(["left.png — editing", "right.png"]);
   });
 
-  it("lets either side be changed", () => {
-    show();
+  it("does NOT move the editing side to the image it just opened", async () => {
+    // Choosing a partner is not a decision about where the next stroke goes. Moving the user's
+    // hand for them is the sort of helpfulness that draws a polygon into the wrong image.
+    mount();
+    await openLeft();
+    await pairWith("right.png");
 
-    fireEvent.change(screen.getByLabelText("Right image"), { target: { value: "2" } });
-
-    expect(shown()).toEqual(["left.png", "third.png"]);
+    expect((screen.getByLabelText("Edit the left image") as HTMLInputElement).checked).toBe(true);
   });
 
-  it("allows the same image on both sides, and says so", () => {
-    // A legitimate way to look at one picture under two sets of display adjustments. A user who
-    // chose it by accident would otherwise wonder why both sides move together.
-    show();
+  it("goes back to one image, and to editing it, when the pair is cleared", async () => {
+    mount();
+    await openLeft();
+    await pairWith("right.png");
+    fireEvent.click(screen.getByLabelText("Edit the right image"));
 
-    fireEvent.change(screen.getByLabelText("Right image"), { target: { value: "0" } });
+    fireEvent.change(screen.getByLabelText("Second image"), { target: { value: "" } });
+
+    await waitFor(() => expect(panes()).toEqual(["left.png"]));
+    // The editing side comes back with it. A closed side left active would send every tool at an
+    // image that is no longer on screen.
+    expect(screen.queryByLabelText("Edit the right image")).toBeNull();
+  });
+
+  it("allows the same image on both sides, and warns that the two do not share edits", async () => {
+    // Legitimate -- one picture under two sets of display adjustments -- but the sides hold
+    // separate segments, so this is the one arrangement where a user could lose work by saving
+    // the side they did not draw on.
+    mount();
+    await openLeft();
+    await pairWith("left.png");
 
     expect(screen.getByText(/Both sides are showing the same image/)).toBeTruthy();
+    expect(screen.getByText(/the later save will win/)).toBeTruthy();
+  });
+});
+
+describe("what each pane draws", () => {
+  it("draws each image's own annotations, so two labelled images compare by eye", async () => {
+    mount({ counts: { "frames/left.png": 2, "frames/right.png": 5 } });
+    await openLeft();
+    await pairWith("right.png");
+
+    await waitFor(() => expect(canvases()).toEqual(["2 annotations", "5 annotations"]));
+  });
+
+  it("shows an edit as it happens, because the segments are the store's", async () => {
+    // The point of moving the panes onto the store: the left pane is the image being edited, so a
+    // shape drawn in the centre view has to appear here without a reload.
+    mount({ counts: { "frames/left.png": 2, "frames/right.png": 5 } });
+    await openLeft();
+    await pairWith("right.png");
+    await waitFor(() => expect(canvases()).toEqual(["2 annotations", "5 annotations"]));
+
+    fireEvent.click(screen.getByText("draw"));
+
+    await waitFor(() => expect(canvases()).toEqual(["3 annotations", "5 annotations"]));
+    expect(panes()[0]).toContain("(unsaved)");
+  });
+
+  it("draws each side through its OWN processing", async () => {
+    // A pane drawn from the plain URL would show one side adjusted and the other raw, which in a
+    // comparison view is the one thing that must not happen.
+    const { pixelsUrl } = mount();
+    await openLeft();
+    await pairWith("right.png");
+    fireEvent.click(screen.getByText("adjust"));
+
+    // The adjustment went to the ACTIVE side, which is the left one.
+    const queryFor = (key: string) =>
+      pixelsUrl.mock.calls.filter(([k]) => k === key).map(([, p]) => processingQuery(p));
+
+    await waitFor(() => expect(queryFor("frames/left.png").at(-1)).not.toBe(""));
+    expect(queryFor("frames/right.png").at(-1)).toBe("");
+  });
+
+  it("says it is measuring an image whose size has not arrived", async () => {
+    // A canvas sized from a guess shows the image at the wrong scale, and every coordinate taken
+    // from it is wrong by the same factor.
+    mount({ metadata: (() => new Promise(() => {})) as never });
+    fireEvent.click(screen.getByText("open left.png"));
+
+    await waitFor(() => expect(screen.getByText(/Measuring left\.png/)).toBeTruthy());
+    expect(canvases()).toEqual([]);
   });
 });
 
 describe("images of different sizes", () => {
   it("explains what linking will do, without refusing the pair", async () => {
-    // A user comparing a full frame with a crop of it has a real reason to pair them. The smaller
-    // image refuses what falls outside, per operation.
-    show();
+    mount();
+    await openLeft();
+    await pairWith("third.png");
 
-    fireEvent.change(screen.getByLabelText("Right image"), { target: { value: "2" } });
-
-    // By TEXT rather than by role: the pane may also be announcing that it is measuring, and two
-    // status regions make `getByRole` ambiguous rather than wrong.
-    const note = await screen.findByText(/different sizes/);
-    expect(note.textContent).toMatch(/same pixel/);
+    await waitFor(() => expect(screen.getByText(/100x50 and 80x50/)).toBeTruthy());
+    // Still both drawn: a mismatch is a thing to say, not a reason to show nothing.
+    expect(canvases().length).toBe(2);
   });
 
-  it("says nothing when they match", () => {
-    show();
+  it("says nothing when they match", async () => {
+    mount();
+    await openLeft();
+    await pairWith("right.png");
 
+    await waitFor(() => expect(canvases().length).toBe(2));
     expect(screen.queryByText(/different sizes/)).toBeNull();
   });
 });
 
-describe("the annotations on each side", () => {
-  it("asks for each image's own, and only once the size is known", async () => {
-    // Ordered rather than raced: the text formats store NORMALIZED coordinates, so reading them
-    // before the size has landed rescales every polygon silently.
-    const asked: { key: string; size: { width: number; height: number } }[] = [];
-    render(
-      <SplitView
-        images={FOLDER}
-        measure={async (key) => SIZES[key] ?? { width: 1, height: 1 }}
-        annotationsFor={async (key, size) => {
-          asked.push({ key, size });
-          return [];
-        }}
-        pixelsUrl={(key) => `/pixels/${key}`}
-      />,
-    );
+describe("which side the tools act on", () => {
+  it("moves the editing side, and the edit lands there", async () => {
+    mount({ counts: { "frames/left.png": 2, "frames/right.png": 5 } });
+    await openLeft();
+    await pairWith("right.png");
+    await waitFor(() => expect(canvases()).toEqual(["2 annotations", "5 annotations"]));
 
-    await waitFor(() => expect(asked).toHaveLength(2));
-    expect(asked.map((a) => a.key).sort()).toEqual(["frames/left.png", "frames/right.png"]);
-    // The size it was given is that image's own, not the other's.
-    expect(asked.find((a) => a.key === "frames/left.png")?.size).toEqual(SIZES["frames/left.png"]);
-  });
+    fireEvent.click(screen.getByLabelText("Edit the right image"));
+    fireEvent.click(screen.getByText("draw"));
 
-  it("draws them, so two labelled images can be compared by eye", async () => {
-    // The whole point of a split view. Two pictures with no labels on either is the least useful
-    // half of it.
-    render(
-      <SplitView
-        images={FOLDER}
-        measure={async (key) => SIZES[key] ?? { width: 1, height: 1 }}
-        annotationsFor={async () => [
-          { type: "Polygon", classId: 0, vertices: [[1, 1], [5, 1], [5, 5]] },
-        ] as never}
-        pixelsUrl={(key) => `/pixels/${key}`}
-      />,
-    );
-
-    await waitFor(() =>
-      expect(
-        [...screen.getAllByRole("img")].map((c) => c.getAttribute("aria-label")),
-      ).toEqual(["1 annotations", "1 annotations"]),
-    );
-  });
-
-  it("shows the picture with nothing over it when they cannot be read", async () => {
-    // The single-image view reports a damaged file properly; repeating that here would be a second
-    // place to keep right about the same thing.
-    render(
-      <SplitView
-        images={FOLDER}
-        measure={async (key) => SIZES[key] ?? { width: 1, height: 1 }}
-        annotationsFor={async () => {
-          throw new Error("the npz is truncated");
-        }}
-        pixelsUrl={(key) => `/pixels/${key}`}
-      />,
-    );
-
-    await waitFor(() =>
-      expect([...screen.getAllByRole("img")].map((c) => c.getAttribute("aria-label"))).toEqual([
-        "0 annotations",
-        "0 annotations",
-      ]),
-    );
-  });
-});
-
-describe("linking", () => {
-  it("starts linked, which is legacy's default", () => {
-    show();
-
-    expect((screen.getByLabelText("Link the viewers") as HTMLInputElement).checked).toBe(true);
-  });
-
-  it("describes what a linked operation would do to the classes", () => {
-    // The rule that is easy to get wrong and invisible when you do: both images name the object
-    // the same thing, each keeping its own id for it.
-    show();
-
-    expect(screen.getByText(/name the object the same class/)).toBeTruthy();
-  });
-
-  it("describes the unlinked case differently", () => {
-    show();
-
-    fireEvent.click(screen.getByLabelText("Link the viewers"));
-
-    expect(screen.getByText(/active viewer only/)).toBeTruthy();
+    await waitFor(() => expect(canvases()).toEqual(["2 annotations", "6 annotations"]));
+    expect(panes()).toEqual(["left.png", "right.png — editing (unsaved)"]);
   });
 });
 
 describe("what is not built", () => {
-  it("says drawing into a pair is not built, and what it waits on", () => {
-    // Rather than showing drawing layers with nothing behind them, which is the defect this
-    // session found three times.
-    show();
+  it("says a linked operation is not built, and what one would be", async () => {
+    // The claim stays where the code is. A view that implied one action applied to both would be
+    // worse than one that says it does not: the user would find out by saving.
+    mount();
+    await openLeft();
+    await pairWith("right.png");
 
-    expect(screen.getByText(/Drawing into a pair is not built/)).toBeTruthy();
-  });
-});
-
-describe("measuring before drawing", () => {
-  it("says it is measuring an image whose size is not known yet", () => {
-    // A canvas sized from a guess shows the image at the wrong scale, and every coordinate taken
-    // from it is wrong by the same factor.
-    // A measurement that never resolves: the pane says what it is doing rather than drawing from
-    // a guess. A canvas sized wrongly shows the image at the wrong scale, and every coordinate
-    // taken from it is wrong by the same factor.
-    render(
-      <SplitView
-        images={FOLDER}
-        measure={() => new Promise(() => undefined)}
-        annotationsFor={async () => []}
-        pixelsUrl={(key) => `/pixels/${key}`}
-      />,
-    );
-
-    expect(screen.getAllByText(/Measuring/)).toHaveLength(2);
+    expect(screen.getByText(/is not built yet/)).toBeTruthy();
+    expect(screen.getByText(/each side saves separately/)).toBeTruthy();
   });
 });
