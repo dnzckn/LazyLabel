@@ -706,3 +706,9 @@ fieldset input {
 .hotkeys__pending {
   color: var(--muted);
 }
+
+/* The crop preview: what is being REMOVED, dimmed, rather than an outline around what is kept.
+   A crop blanks every mask pixel outside it on save, so showing the removal is showing the save. */
+.crop-layer__surround rect {
+  fill: rgb(0 0 0 / 0.55);
+}

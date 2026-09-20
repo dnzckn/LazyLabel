@@ -40,7 +40,6 @@ export const UNREACHED: Readonly<Record<string, Reason>> = {
   saveableFrames: awaiting("C11: Save All has no propagated frames to write yet"),
 
   // ---- Other rules whose UI is not built. ----
-  cropFromDrag: awaiting("dragging a crop on the canvas; the panel takes numbers only"),
   enterEditMode: awaiting(
     "RULE-070's edit validation -- 'No editable shapes selected!'. The vertex editor appears when "
       + "one annotation is selected and no tool is active, so nothing asks permission to enter",

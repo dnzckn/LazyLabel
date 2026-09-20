@@ -40,6 +40,7 @@ import { useNotifications } from "../notifications/NotificationProvider.jsx";
 import type { AnnotationsResult, ApiClient } from "../api/client.js";
 import { RESOLUTION_DEFAULT } from "../tools/autoPolygon.js";
 import { useHotkey } from "../hotkeys/HotkeyProvider.jsx";
+import { CropLayer } from "../canvas/CropLayer.jsx";
 
 /**
  * What a save sends when the image had no annotation file.
@@ -108,6 +109,9 @@ function OpenedImage({
   const { classAliases } = useWorkspace();
   const { segments, addSegment, updateSegment, activeTool, activeClassId, applySegments, selected, toggleSelected } =
     useWorkspace();
+  // The crop is the store's, not this view's: the SAVE path reads it, so a crop dragged here and
+  // held locally would be one the panel showed and the file never saw.
+  const { crop, setCrop } = useWorkspace();
   const { notify } = useNotifications();
   // Only a context failure falls back to the plain image. A picture that will not DECODE is the
   // canvas's own business -- it reports that and still draws the annotations, which is worth more
@@ -307,6 +311,16 @@ function OpenedImage({
                 // RULE-046's refusals -- a mask with no outline, a shape over the 200-vertex limit
                 // -- go to the notifications rather than being drawn over the image.
                 onNoHandles={(reason) => notify({ severity: "info", message: reason })}
+              />
+            )}
+
+            {activeTool === "crop" && (
+              <CropLayer
+                width={metadata.width}
+                height={metadata.height}
+                crop={crop}
+                onCrop={setCrop}
+                onRefused={refuse}
               />
             )}
 

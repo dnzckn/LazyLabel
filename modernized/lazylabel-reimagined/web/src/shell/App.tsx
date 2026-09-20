@@ -293,6 +293,9 @@ function ToolPicker(): ReactNode {
     { value: "box", label: "Box" },
     { value: "circle", label: "Circle" },
     { value: "ai", label: "AI" },
+    // Not an annotation tool: a crop decides which pixels reach the FILE (RULE-018), and it sits
+    // here because it is chosen and drawn the same way the others are.
+    { value: "crop", label: "Crop" },
   ];
 
   /*
