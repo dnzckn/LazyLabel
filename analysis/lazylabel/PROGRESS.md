@@ -35,6 +35,22 @@ classes are all built and reachable.
 | P5 — tools | 27.4% | **complete**; all four exit criteria met |
 | P6 — sequence and cutover | 25.9% | timeline, multi-view and the confidence histogram built; propagation waits on golden data |
 
+## The suites, as of 2026-09-20
+
+All six green, run together:
+
+| Package | Passing | Note |
+|---|---|---|
+| exporters | 1979 | the seven formats, byte-for-byte against goldens legacy wrote |
+| web | 950 | plus 1 todo: C11's placeholder |
+| api | 332 | plus 4 skipped and 5 todo, all needing a checkpoint or a corpus |
+| inference | 233 | plus 36 skipped: the differentials, which need real checkpoints |
+| settings-schema | 41 | includes the rule-fixed defaults |
+| converter | 30 | the pickled-alias rewrite |
+
+**3565 passing.** The skips are the honest part: they skip themselves when no checkpoint is
+configured, so a green CI run says nothing about them — see `Running the live suites`.
+
 ## What to do next
 
 In order, and each is a slice that can be finished on its own. Everything above the line is
