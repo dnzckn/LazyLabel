@@ -634,12 +634,30 @@ author twice on the first run — `ai_model` was missing from the hand-written l
 names had been read out of a stale build, and the two legacy model keys are RULE-085 decisions
 rather than gaps.
 
-**Twelve read, eight dropped, nineteen gaps.** The counts are asserted rather than reported, so
-closing a gap fails the test and prompts whoever closed it to say so. The gaps worth naming:
-`operate_on_view` (RULE-089, a contract change across three packages — the AI panel says so on
-screen); `point_radius`, `line_thickness` and `annotation_size_multiplier` (RULE-070's sizing);
-`auto_polygon_enabled` and `polygon_resolution` (RULE-047); `file_manager_sort_order` (RULE-036);
-`stream_window_size` (propagation); and the ten column-visibility keys.
+**Fifteen read, eight dropped, sixteen gaps.** The counts are asserted rather than reported, so
+closing a gap fails the test and prompts whoever closed it to say so — which is exactly what
+happened on the first gap closed. The remaining ones worth naming: `operate_on_view` (RULE-089, a
+contract change across three packages — the AI panel says so on screen); `auto_polygon_enabled`
+and `polygon_resolution` (RULE-047); `file_manager_sort_order` (RULE-036); `stream_window_size`
+(propagation); and the ten column-visibility keys.
+
+**The first gap closed was annotation sizing** — `point_radius`, `line_thickness` and
+`annotation_size_multiplier`, none of which reached a pixel. The interesting part is that the
+units are not the same thing. Legacy sizes handles in IMAGE pixels so they grow with zoom; every
+layer here multiplies a screen size by `perPixel` so a handle stays the same size on screen
+however far in you go. That is the better answer and it was already made — a handle you must zoom
+in to grab is one you cannot grab when looking at the whole image, which is when you are choosing
+what to fix.
+
+So the settings arrive as RATIOS against legacy's own defaults rather than as lengths. Read as a
+length, the default 0.3 is not a smaller handle but an invisible one, and every drawing aid would
+vanish for anyone who never opened the panel. As a ratio the defaults draw what was drawn before,
+and doubling `point_radius` doubles the handle either way. Verified live: the new Annotation size
+slider from 1.0x to 2.0x took a drawn vertex from `rx` 4 to 8.
+
+The layer tests now supply a settings provider rather than letting `useSizing` default silently.
+A hook that works without its provider makes a missing wire invisible, which is the defect family
+this project has found nine of.
 
 **The method**: take each pair of components that must agree, and ask what carries the agreement.
 For settings, list the keys and grep for readers. For a wire format, compare the fields the
