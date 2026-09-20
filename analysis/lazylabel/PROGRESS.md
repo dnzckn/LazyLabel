@@ -730,7 +730,18 @@ The guard then fired on its own first real use, one commit after it was written:
 and `equalizeLut` were reached, so their entries were stale and the count had moved. That is
 exactly the mechanism it exists for — an excuse that outlives its gap tells the next reader a
 working feature is still missing. `applyLut` went by deletion rather than wiring, because the
-pipeline applies the table inside the loop it already runs over every pixel. Six remain.
+pipeline applies the table inside the loop it already runs over every pixel.
+
+**`cropFromDrag` followed**, which is RULE-018's other half: a crop could only be TYPED as two
+ranges, which is a fine way to repeat one you know and a poor way to find one. The preview draws
+what is REMOVED — four dimmed bands round the outside rather than an outline round the kept part —
+because the crop blanks every mask pixel outside it on save, and showing the removal is showing
+what the save will do. Verified live.
+
+**Five remain**: two wait on C11 (`frameConfidence`, `saveableFrames`), and three on UI that is
+not built — `enterEditMode` (RULE-070's edit validation), `toggleThreshold` (RULE-027's toggle
+button; the panel has a slider) and `canSave` (which decides in ADVANCE, for a disabled button
+with a reason).
 
 Four of the thirteen were merely superseded and were **deleted** rather than recorded:
 `afterRemoval`, `rescaleAll`, `posterizeAll`, `cssColor`. Dead code with an excuse attached is
