@@ -284,7 +284,10 @@ needs is already in one store rather than scattered across managers.
      2, 6 MP about 5. Above eight megapixels it is a 413 naming the size and the limit, because a
      minute-long request is indistinguishable from a dead server. Legacy has no limit and freezes
      its window.
-2. **Phase 6 — sequence and cutover** (25.9%). Propagation review, the split view, the hosted
+2. **Phase 6 — sequence and cutover** (25.9%). **[CUTOVER.md](CUTOVER.md)** is the checklist for
+   the day the switch is made — what a user actually does, what is lost and gained, and the six
+   things that must be checkable first. It assumes the exit criteria rather than restating them.
+ Propagation review, the split view, the hosted
    deployment and the actual switch-over. **The pilot slice is done, and the split view's core
    logic with it.**
 
