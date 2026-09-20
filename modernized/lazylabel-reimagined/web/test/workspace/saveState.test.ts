@@ -13,6 +13,7 @@ import {
   onClose,
   onNavigateAway,
   provenanceFromLoad,
+  summarize,
   type ImageState,
 } from "../../src/workspace/saveState.js";
 
@@ -217,5 +218,62 @@ group("reading provenance from a load result", () => {
     expect(from("loaded")).toBe("save");
     expect(from("none")).toBe("save");
     expect(from("failed")).toBe("ask");
+  });
+});
+
+
+/**
+ * The line the status bar shows.
+ *
+ * It had no tests, which is worth saying because it is the one piece of continuous state a user
+ * reads without looking for it — and the crop clause below is there precisely because something
+ * destructive was invisible outside a panel that starts collapsed.
+ */
+group("the status line", () => {
+  const state = (over: Partial<ImageState> = {}): ImageState => ({
+    key: "frames/a.png",
+    provenance: "loaded",
+    dirty: false,
+    segmentCount: 3,
+    ...over,
+  });
+
+  it("says nothing is open when nothing is", () => {
+    expect(summarize(null)).toBe("No image open.");
+  });
+
+  it("says an image could not be read, rather than showing it as empty", () => {
+    // The distinction the whole save path rests on: an image with no annotation file and one whose
+    // annotations could not be READ both have zero segments, and only one is safe to write over.
+    expect(summarize(state({ provenance: "failed" }))).toBe("frames/a.png could not be read.");
+  });
+
+  it("counts one segment in the singular", () => {
+    expect(summarize(state({ segmentCount: 1 }))).toBe("frames/a.png — 1 segment, saved.");
+  });
+
+  it("says ZERO out loud rather than smoothing it away", () => {
+    // "0 segments, unsaved" is precisely the state a user needs to see before a save writes empty
+    // files over an image that had annotations.
+    expect(summarize(state({ segmentCount: 0, dirty: true }))).toBe(
+      "frames/a.png — 0 segments, unsaved.",
+    );
+  });
+
+  it("announces a CROP, because it is destructive and its panel starts collapsed", () => {
+    // A crop blanks every mask pixel outside it on the next save, and the exported files keep
+    // their full size, so nothing about them looks cropped afterwards. Legacy shows nothing at
+    // all, which is how one survives an image change and blanks most of the next.
+    expect(summarize(state(), true)).toBe("frames/a.png — 3 segments, saved, cropped on save.");
+  });
+
+  it("announces it whether the image is saved or not", () => {
+    expect(summarize(state({ dirty: true }), true)).toBe(
+      "frames/a.png — 3 segments, unsaved, cropped on save.",
+    );
+  });
+
+  it("says nothing about a crop when there is none", () => {
+    expect(summarize(state(), false)).not.toMatch(/crop/);
   });
 });

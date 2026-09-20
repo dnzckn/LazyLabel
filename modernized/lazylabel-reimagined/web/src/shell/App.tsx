@@ -43,7 +43,7 @@ export function App({ client }: { readonly client: ApiClient }): ReactNode {
   const [healthError, setHealthError] = useState<string | null>(null);
   const [showHotkeys, setShowHotkeys] = useState(false);
   // From the store, not held here: the status bar is one reader of this among several.
-  const { imageState, openImage, open } = useWorkspace();
+  const { imageState, openImage, open, crop } = useWorkspace();
   // The folder as the browser listed it, so the sequence timeline builds from the same answer
   // rather than fetching it again. Two fetches is two answers to one question.
   const [listed, setListed] = useState<readonly WireDatasetImage[]>([]);
@@ -242,6 +242,7 @@ export function App({ client }: { readonly client: ApiClient }): ReactNode {
           status-bar message is a notification now, which is what stops a destructive one expiring. */}
       <StatusBar
         image={imageState}
+        cropped={crop !== null}
         health={health}
         healthError={healthError}
         theme={{ switchesTo, onToggle: toggleTheme }}

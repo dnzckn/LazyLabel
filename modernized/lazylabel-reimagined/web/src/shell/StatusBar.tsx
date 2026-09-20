@@ -34,6 +34,14 @@ export interface Health {
 
 export interface StatusBarProps {
   readonly image: ImageState | null;
+  /**
+   * Whether a crop is in force on the open image.
+   *
+   * Here rather than only in the Crop panel because it is continuous state with a destructive
+   * consequence — a crop blanks everything outside it on save, and the exported files keep their
+   * full size so nothing about them looks cropped afterwards. The panel starts collapsed.
+   */
+  readonly cropped?: boolean;
   /** Null while health is still being fetched. */
   readonly health: Health | null;
   /**
@@ -55,7 +63,13 @@ export interface StatusBarProps {
   readonly theme?: { readonly switchesTo: "dark" | "light"; readonly onToggle: () => void };
 }
 
-export function StatusBar({ image, health, healthError, theme }: StatusBarProps): ReactNode {
+export function StatusBar({
+  image,
+  cropped = false,
+  health,
+  healthError,
+  theme,
+}: StatusBarProps): ReactNode {
   return (
     <footer className="status-bar" aria-label="Status">
       {/* Far left, where legacy puts it. */}
@@ -72,7 +86,7 @@ export function StatusBar({ image, health, healthError, theme }: StatusBarProps)
         </button>
       )}
 
-      <span className="status-bar__image">{summarize(image)}</span>
+      <span className="status-bar__image">{summarize(image, cropped)}</span>
 
       <span className="status-bar__spacer" />
 

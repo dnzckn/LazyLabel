@@ -180,16 +180,31 @@ export function canSave(image: ImageState | null): boolean {
  * to be available to the status bar, to a prompt, and to anything else that needs to say where the
  * work stands — and three places wording this independently is three places to drift.
  */
-export function summarize(image: ImageState | null): string {
+export function summarize(image: ImageState | null, cropped = false): string {
   if (image === null) return "No image open.";
   if (image.provenance === "failed") return `${image.key} could not be read.`;
 
   const segments = image.segmentCount === 1 ? "1 segment" : `${image.segmentCount} segments`;
-  if (!image.dirty) return `${image.key} — ${segments}, saved.`;
+
+  /*
+   * A CROP IS ANNOUNCED HERE, not only in its own panel.
+   *
+   * It is continuous state with a destructive consequence, which is exactly what this bar is for:
+   * a crop blanks every mask pixel outside it on the next save, and the exported files keep their
+   * full size so nothing about them looks cropped afterwards. The Crop panel starts collapsed and
+   * a crop set ten minutes ago is otherwise invisible until it has already taken a row of somebody's
+   * work.
+   *
+   * Legacy shows nothing at all, which is how the same crop survives an image change and blanks
+   * most of the next, narrower one.
+   */
+  const crop = cropped ? ", cropped on save" : "";
+
+  if (!image.dirty) return `${image.key} — ${segments}, saved${crop}.`;
 
   // Zero is said out loud rather than smoothed away. "0 segments, unsaved" is precisely the state
   // a user needs to see before a save writes empty files over an image that had annotations.
-  return `${image.key} — ${segments}, unsaved.`;
+  return `${image.key} — ${segments}, unsaved${crop}.`;
 }
 
 /**
