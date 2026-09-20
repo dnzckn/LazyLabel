@@ -7,12 +7,12 @@ Last updated: 2026-09-19.
 
 ## Short answer
 
-**The app cannot be launched on the web yet.** Phases 1–3 are complete, Phase 4 is about 60%,
+**The app cannot be launched on the web yet.** Phases 1–3 are complete, Phase 4 is about 70%,
 Phases 5 and 6 have not started. The pieces that exist are proven against legacy; what is missing
 is most of the user interface and the whole cutover.
 
 By the brief's own weighting of the six phases: **about a third of the conversion is done** —
-6.0 + 5.5 + 5.8 for the three complete phases, plus about 60% of Phase 4's 29.4, which is 35%.
+6.0 + 5.5 + 5.8 for the three complete phases, plus about 70% of Phase 4's 29.4, which is 38%.
 
 That is lower than the number of finished pieces suggests, and the reason is worth stating: the
 three complete phases are the three smallest, together worth 17.3%. The remaining three are worth
@@ -23,7 +23,7 @@ three complete phases are the three smallest, together worth 17.3%. The remainin
 | P1 — format library | 6.0% | **complete** |
 | P2 — architecture and scaffolds | 5.5% | **complete** |
 | P3 — inference service | 5.8% | **complete** |
-| P4 — workspace, dataset browser, persistence | 29.4% | in progress, ~60% |
+| P4 — workspace, dataset browser, persistence | 29.4% | in progress, ~70% |
 | P5 — tools | 27.4% | not started |
 | P6 — sequence and cutover | 25.9% | not started |
 
@@ -78,7 +78,8 @@ Done: the four exit criteria, the dataset-browser pilot, the canvas in legacy's 
 explicit save path (a cleared image writes an empty file rather than nothing — decision 7), the
 image pipeline proven pixel-for-pixel against OpenCV, dataset conversion byte-identical to legacy
 on every golden, the alias converter, the undo stack with its two recorded defects designed out,
-the save decision logic (`workspace/saveState.ts`), the notification system, and the status bar.
+the save decision logic (`workspace/saveState.ts`), the notification system, the status bar, the
+theme, and the three-pane workspace layout.
 
 Three of those are worth naming because they are where legacy loses work:
 
@@ -92,12 +93,19 @@ Three of those are worth naming because they are where legacy loses work:
   is exactly why the destructive message expires; splitting them is what makes that impossible.
   It also reports the inference server's accelerator, which the browser cannot discover for itself.
 
-Not done: the control and right panels, theming, and pop-out windows. The panels mostly host
-Phase 5's tools, so they stay thin until those exist.
+Not done:
+
+- **The workspace store.** The dataset browser still owns the open image, so it sits whole in the
+  centre pane. Splitting it — file list on the right, image in the middle, as legacy has it — is
+  the next piece, and Phase 5 wants that store anyway.
+- **Pop-out panels.** Legacy detaches its panels into separate windows.
+
+The left and right panes exist and name what they will hold; the tools themselves are Phase 5.
 
 ## What remains
 
-1. **Finish Phase 4** — the control and right panels, theming, pop-outs.
+1. **Finish Phase 4** — the workspace store (lifting the open image out of the browser) and
+   pop-out panels.
 2. **Phase 5 — tools** (27.4%). The largest single block of user-facing behaviour.
 3. **Phase 6 — sequence and cutover** (25.9%). Includes the hosted deployment and the actual
    switch-over.
