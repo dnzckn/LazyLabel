@@ -58,14 +58,14 @@ UNBLOCKED; everything below it needs something only the owner can provide.
 
 **Unblocked, in the order I would take them:**
 
-1. **The remaining hotkeys.** Eighteen of forty-three are live; the reference marks the rest "not
-   yet" from the dispatcher's own registrations, so the list is always current — open the app,
-   press Show hotkeys, and read the rows saying "not yet". The frame-navigation ones
-   (`next_flagged_frame` and its four siblings, `add_reference_frame`) map onto `sequence/
-   timeline.ts`'s `step` and `markReferences`, which are built and reachable from the panel's
-   buttons. `zoom_in`, `zoom_out` and the four `pan_*` keys have no capability behind them: the
-   browser does its own zooming and there is no pan model, so those are a decision rather than a
-   wiring job.
+1. **The remaining hotkeys.** Twenty-four of forty-three are live; the reference marks the rest
+   "not yet" from the dispatcher's own registrations, so the list is always current — open the
+   app, press Show hotkeys, and read the rows saying "not yet". `clear_points` maps onto the AI
+   tool's own clear; `add_reference_frame` needs a way to mark ONE frame, which
+   `sequence/timeline.ts` does not have yet (`markReferences` marks from the annotated set).
+   `zoom_in`, `zoom_out` and the four `pan_*` keys have no capability behind them: the browser
+   does its own zooming and there is no pan model, so those are a decision rather than a wiring
+   job.
 2. **The dataset browser's columns and sort** — eleven settings, the largest remaining group in
    the honoured list. It needs `modified` and `size` on `WireDatasetImage`, and `listing.ts`
    carries an explicit "ONE PASS, NOT SEVEN PER IMAGE" optimisation, so do NOT add a `stat` per
@@ -751,7 +751,15 @@ reference reports `save_output` as inactive when no image is open, which is not 
 point: it answers "will this do something if I press it NOW", and the save keys are registered by
 the opened image.
 
-The remaining twenty-five are named in the table as "not yet" rather than silently promised.
+**A third batch wired the six frame-navigation keys** onto `step` and the timeline's own buttons.
+They register with the timeline PANEL, so they are live only while it is open — and the reference
+reports that rather than promising them always, which is the second time reading the dispatcher's
+live registrations said something true a hand-kept list would have got wrong.
+
+The remaining nineteen are named in the table as "not yet" rather than silently promised. Several
+have no capability behind them at all: `zoom_in`, `zoom_out` and the four `pan_*` keys need a
+zoom and pan model this app does not have, since the browser does its own — those are a decision
+rather than a wiring job. `propagate` and `find_archetypes` are C11.
 
 **The eleventh is the one that costs a user their work.** `onNavigateAway` and `onClose` were
 written for decision 7's central case, tested on their own, exposed — and called by nothing. So
