@@ -738,10 +738,19 @@ what is REMOVED — four dimmed bands round the outside rather than an outline r
 because the crop blanks every mask pixel outside it on save, and showing the removal is showing
 what the save will do. Verified live.
 
-**Five remain**: two wait on C11 (`frameConfidence`, `saveableFrames`), and three on UI that is
-not built — `enterEditMode` (RULE-070's edit validation), `toggleThreshold` (RULE-027's toggle
-button; the panel has a slider) and `canSave` (which decides in ADVANCE, for a disabled button
-with a reason).
+**`toggleThreshold` followed**, and RULE-027 turned out to have neither half reachable:
+`fragment_threshold` was read by the AI tool and settable only by editing the settings file, and
+the toggle was called by nothing. Both are wired, with the memory that makes a toggle worth having
+— off, look, on, at the same value.
+
+That slice found a small one worth remembering: **`<output>` carries an implicit `status` role**,
+so a slider's value is announced as a live region and answers the same role query the app's real
+banners do. It broke a shell test by being found instead of the settings-unavailable message. Both
+sliders use a plain span now.
+
+**Four remain**: two wait on C11 (`frameConfidence`, `saveableFrames`), and two on UI that is not
+built — `enterEditMode` (RULE-070's edit validation) and `canSave` (which decides in ADVANCE, for
+a disabled button with a reason).
 
 Four of the thirteen were merely superseded and were **deleted** rather than recorded:
 `afterRemoval`, `rescaleAll`, `posterizeAll`, `cssColor`. Dead code with an excuse attached is
