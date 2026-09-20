@@ -240,11 +240,23 @@ export function ChannelPanel(): ReactNode {
           text says who decides rather than the panel guessing and refusing the images most likely
           to want it. */}
       <p className="panel__missing">
-            A high-pass: everything closer to the centre of the spectrum than the cutoff is removed,
+        A high-pass: everything closer to the centre of the spectrum than the cutoff is removed,
         which takes out the broad shading and leaves the detail. The result is always 8-bit,
-        whatever the source was. It only runs on a grayscale image — including a grayscale one
-        saved as colour, which the server decides by looking at the pixels.
+        whatever the source was.
       </p>
+
+      {canRescale ? null : (
+        // Said BEFORE the slider is moved, not after nothing happens. RULE-030 runs on "2-D or
+        // exactly equal-channel" images; this file has three channels, and whether they are
+        // identical is a fact about its pixels that only the server can see. A user who sets a
+        // cutoff on a real colour photograph gets no change and would otherwise have no way to
+        // tell that from a broken control.
+        <p role="status" className="banner banner--warning">
+          This image is colour. The filter runs only if its three channels turn out to be
+          identical — a grayscale scan saved as colour, which is common. If they are not, the
+          cutoff below will do nothing and the image will come back unchanged.
+        </p>
+      )}
 
       <Slider
         label="Frequency cutoff"

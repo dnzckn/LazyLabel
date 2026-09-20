@@ -206,6 +206,21 @@ describe("the frequency cutoff", () => {
     expect(screen.getByLabelText("Frequency cutoff")).toBeTruthy();
   });
 
+  it("warns a colour image that the filter may do nothing, BEFORE the slider is moved", async () => {
+    // A user who sets a cutoff on a real colour photograph gets no change, and without this has no
+    // way to tell that from a broken control. Whether the three channels are identical is a fact
+    // about the pixels that only the server can see.
+    await open(COLOUR8);
+
+    expect(screen.getByText(/come back unchanged/)).toBeTruthy();
+  });
+
+  it("does not warn a grayscale image, where it always runs", async () => {
+    await open(GRAY8);
+
+    expect(screen.queryByText(/come back unchanged/)).toBeNull();
+  });
+
   it("asks for nothing at zero, which is the filter being off", async () => {
     await open(GRAY8);
 
