@@ -520,6 +520,24 @@ The common thread, and it turned up **three times** (vertex editing, the adjustm
 and redo): **a rule can be implemented, tested and correct, and the feature can still not exist.**
 Component tests prove the component; only an end-to-end path proves it is reachable.
 
+**The same shape has a wider form, and it is worth hunting deliberately: A WIRE BETWEEN TWO
+CORRECT PIECES.** Both ends built, both tested, and nothing joining them — which no test catches,
+because a test exercises one side with the other stubbed. Five found:
+
+| Where | What was missing |
+|---|---|
+| Component ↔ shell | `EditLayer` built and never rendered; the same for undo/redo |
+| Service ↔ process | `HttpInferenceClient` built and `main.ts` never constructed one |
+| Setting ↔ behaviour | `operate_on_view` read by nothing, while the panel claimed it reached the AI |
+| Client ↔ request | `pixelPriority` never sent, so RULE-012's two settings did nothing |
+| Client ↔ request | `expectedRevisions` never sent, so every save was an unconditional overwrite |
+
+**The method**: take each pair of components that must agree, and ask what carries the agreement.
+For settings, list the keys and grep for readers. For a wire format, compare the fields the
+contract declares against the fields the client sends and the fields it renders. Two of those
+checks found nothing — `skippedEmpty` and `health.database` are both handled — and that is the
+expected hit rate rather than a failure of the method.
+
 **Four READMEs had stopped being true as well**, found by reading them. The package one said
 "Phase 2 is complete" with five phases done; the web one said twelve of fourteen capabilities were
 NOT built when twelve are; the API one called itself a scaffold and its wire format provisional;
