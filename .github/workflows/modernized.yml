@@ -209,14 +209,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Checked on 2026-09-20: setup-buildx is on v4 (4.4.1) and build-push on v7 (7.4.0), so the
+      # versions first written here -- v3 and v6 -- were each a major behind. v7's breaking changes
+      # are a Node 24 runtime (needing Actions Runner 2.327.1+, which hosted runners have), two
+      # deprecated env vars this workflow does not set, and the legacy build-summary tool. None of
+      # `context`, `file`, `push`, `load`, `cache-from` or `cache-to` changed. Buildx is used with
+      # no inputs at all, which is the lowest-risk usage there is.
       - name: Set up Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       # The context is `modernized/`, not the rebuild directory: both Node images depend on the
       # exporters package, which is a SIBLING of the rebuild, and Docker refuses COPY paths outside
       # the context.
       - name: Build the API image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: modernized
           file: modernized/lazylabel-reimagined/deploy/api.Dockerfile
@@ -226,7 +232,7 @@ jobs:
           cache-to: type=gha,mode=max,scope=api
 
       - name: Build the web image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: modernized
           file: modernized/lazylabel-reimagined/deploy/web.Dockerfile
@@ -240,7 +246,7 @@ jobs:
       # every push, so a two-line change to the web app does not pull a CUDA runtime.
       - name: Build the inference image
         if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: modernized
           file: modernized/lazylabel-reimagined/deploy/inference.Dockerfile
