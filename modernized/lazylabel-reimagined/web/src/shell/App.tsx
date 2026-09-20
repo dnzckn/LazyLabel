@@ -36,6 +36,8 @@ import { applyTheme, nextTheme, themeFor } from "./theme.js";
 import { useSettings } from "../settings/SettingsProvider.jsx";
 import { useHotkey, useHotkeyContext } from "../hotkeys/HotkeyProvider.jsx";
 import type { ApiClient, ApiHealth } from "../api/client.js";
+import { enterEditMode } from "../tools/edit.js";
+import { useNotifications } from "../notifications/NotificationProvider.jsx";
 
 /** The client already names this shape; re-declaring it here is how the two drift apart. */
 type Health = ApiHealth;
@@ -286,7 +288,8 @@ export function App({ client }: { readonly client: ApiClient }): ReactNode {
  * click to look at something -- into an annotation.
  */
 function ToolPicker(): ReactNode {
-  const { activeTool, setActiveTool } = useWorkspace();
+  const { activeTool, setActiveTool, segments, selected } = useWorkspace();
+  const { notify } = useNotifications();
 
   const tools: readonly { readonly value: Tool; readonly label: string }[] = [
     { value: "none", label: "None" },
@@ -320,7 +323,23 @@ function ToolPicker(): ReactNode {
   useHotkey("bbox_mode", () => setActiveTool("box"));
   useHotkey("circle_mode", () => setActiveTool("circle"));
   useHotkey("selection_mode", () => setActiveTool("select"));
-  useHotkey("edit_mode", () => setActiveTool("none"));
+  /*
+   * EDIT SAYS WHY IT DID NOTHING. The vertex editor opens when exactly one editable annotation is
+   * selected and no drawing tool is active, so R clears the tool -- and with nothing selected, or
+   * with an AI mask selected, clearing the tool is all that visibly happens. `enterEditMode`
+   * carries legacy's own words for that, and they are the only thing separating "the key is not
+   * bound" from "this shape has no vertices to drag": a user whose selection is a mask will
+   * otherwise press R repeatedly.
+   *
+   * The tool is still cleared on a refusal. The key means "stop drawing and edit"; refusing the
+   * second half is not a reason to ignore the first, and leaving the polygon tool armed would put
+   * the next click into a new shape.
+   */
+  useHotkey("edit_mode", () => {
+    setActiveTool("none");
+    const outcome = enterEditMode(segments, selected);
+    if (outcome.kind === "refused") notify({ severity: "info", message: outcome.reason });
+  });
 
   return (
     <fieldset className="tool-picker">

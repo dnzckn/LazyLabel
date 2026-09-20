@@ -106,6 +106,18 @@ describe("the tool keys", () => {
     await waitFor(() => expect(chosen()).toBe("None"));
   });
 
+  it("edit_mode SAYS WHY when there is nothing to edit", async () => {
+    // The vertex editor opens for one selected editable shape. With nothing selected, clearing the
+    // tool is all that visibly happens -- and legacy's own words are the only thing separating
+    // "the key is not bound" from "this shape has no vertices to drag".
+    mount();
+    await waitFor(() => expect(screen.getByText("Tool")).toBeTruthy());
+
+    fireEvent.keyDown(document, { key: keyFor("edit_mode") });
+
+    await waitFor(() => expect(screen.getByText(/No editable shapes selected/)).toBeTruthy());
+  });
+
   it("SETS the tool rather than toggling back, which is RULE-070's defect", async () => {
     // Legacy means Selection and Edit to toggle back to the previous mode, and records the mode
     // just left every time -- so E R R E leaves you in selection, unable to reach AI without

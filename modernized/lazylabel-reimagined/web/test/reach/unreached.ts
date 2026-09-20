@@ -40,10 +40,6 @@ export const UNREACHED: Readonly<Record<string, Reason>> = {
   saveableFrames: awaiting("C11: Save All has no propagated frames to write yet"),
 
   // ---- Other rules whose UI is not built. ----
-  enterEditMode: awaiting(
-    "RULE-070's edit validation -- 'No editable shapes selected!'. The vertex editor appears when "
-      + "one annotation is selected and no tool is active, so nothing asks permission to enter",
-  ),
   canSave: awaiting(
     "the save button is always offered and reports its own refusals; this decides in ADVANCE, "
       + "which is what a disabled button with a reason would need",
