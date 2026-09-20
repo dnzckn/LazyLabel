@@ -28,6 +28,8 @@ import {
   channelsFor,
   markersAreLegal,
   rescaleApplies,
+  PRESET_DEFAULTS,
+  type Preset,
   type Channel,
 } from "./processing.js";
 import { useWorkspace } from "./WorkspaceProvider.jsx";
@@ -58,7 +60,18 @@ export function ChannelPanel(): ReactNode {
 
   const setWindow = useCallback(
     (min: number, max: number) => {
-      setProcessing({ ...processing, rescale: { min, max } });
+      // RULE-031's edge case, applied here rather than trusted to the caller: "dragging the
+      // rescale handles clears any preset". Leaving both set would send a request the API refuses,
+      // and rightly -- a client carrying both has lost track of which the user chose.
+      setProcessing({ ...processing, preset: null, rescale: { min, max } });
+    },
+    [processing, setProcessing],
+  );
+
+  const setPreset = useCallback(
+    (preset: Preset | null) => {
+      // The other half of the same exclusivity: choosing a preset drops the manual window.
+      setProcessing({ ...processing, preset, rescale: null });
     },
     [processing, setProcessing],
   );
@@ -125,6 +138,49 @@ export function ChannelPanel(): ReactNode {
   return (
     <div className="channel">
       <h4 className="channel__step">1 · Rescale</h4>
+
+      {/* RULE-031's presets. Above the handles rather than below, because they are the fast way to
+          a sensible window and dragging is the fallback -- which is the order legacy's dialog puts
+          them in too. All three were built and proven long before anything could ask for one. */}
+      {canRescale && (
+        <fieldset className="split__link">
+          <legend>Preset</legend>
+          {([
+            ["none", "None"],
+            ["stretch", "Contrast stretch"],
+            ["equalize", "Equalize"],
+            ["clahe", "CLAHE"],
+          ] as const).map(([value, label]) => (
+            <label key={value}>
+              <input
+                type="radio"
+                name="histogram-preset"
+                checked={(processing.preset?.kind ?? "none") === value}
+                aria-label={label}
+                onChange={() =>
+                  setPreset(value === "none" ? null : { ...PRESET_DEFAULTS[value] })
+                }
+              />{" "}
+              {label}
+            </label>
+          ))}
+        </fieldset>
+      )}
+
+      {canRescale && processing.preset !== null && (
+        <p className="panel__missing">
+          {processing.preset.kind === "stretch"
+            ? `The window is set from the image itself, ignoring the brightest and darkest `
+              + `${processing.preset.saturation}% — which is what makes a flat scan readable.`
+            : processing.preset.kind === "equalize"
+              ? "A lookup table spread over the whole image, so every brightness gets an equal "
+                + "share of the range."
+              : `Adaptive: ${processing.preset.tilesX}x${processing.preset.tilesY} tiles, clip `
+                + `${processing.preset.clipLimit}. Equalizes each tile separately, so local detail `
+                + "survives where a whole-image table would flatten it."}
+          {" "}Computed on the crop when one is set. Dragging the handles below clears it.
+        </p>
+      )}
 
       {canRescale ? (
         <>

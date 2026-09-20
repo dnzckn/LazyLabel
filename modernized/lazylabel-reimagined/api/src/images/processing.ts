@@ -23,7 +23,15 @@
  *     makes are both derived from the pixels being processed.
  */
 
-import { posterize, rescale, MAX_8_BIT, MAX_16_BIT } from "./imageProcessing.js";
+import { clahe } from "./clahe.js";
+import {
+  equalizeLut,
+  posterize,
+  rescale,
+  stretchWindow,
+  MAX_8_BIT,
+  MAX_16_BIT,
+} from "./imageProcessing.js";
 import { filterFrequencies } from "./fft.js";
 
 /** Markers per channel. `gray` applies to all three at once, as legacy's Gray channel does. */
@@ -34,7 +42,29 @@ export interface ChannelMarkers {
   readonly b?: readonly number[];
 }
 
+/**
+ * RULE-031's histogram presets — the three ways to choose a rescale other than by hand.
+ *
+ * Mutually exclusive with a manual `rescale` window, which is the rule's own edge case: "dragging
+ * the rescale handles clears any preset". Both at once has no meaning, so the type does not allow
+ * anyone to ask for it.
+ */
+export type Preset =
+  /** min/max at the tail percentiles. `saturation` is a PERCENT, 0..50; 0 uses the data range. */
+  | { readonly kind: "stretch"; readonly saturation: number }
+  /** A CDF lookup table over the whole image. */
+  | { readonly kind: "equalize" }
+  /** Adaptive equalization, per tile, with a clip limit. */
+  | { readonly kind: "clahe"; readonly clipLimit: number; readonly tilesX: number; readonly tilesY: number };
+
 export interface Processing {
+  /**
+   * A histogram preset, or null. GRAYSCALE ONLY, for the same reason the rescale is: these come
+   * from legacy's rescale histogram dialog, which is the grayscale path. An RGB source keeps the
+   * request and ignores it rather than failing, so a preset chosen on a scan does not turn the
+   * next colour image into an error.
+   */
+  readonly preset?: Preset | null;
   /** Null for none. Ignored on an RGB source, which RULE-032 says has no rescale. */
   readonly rescale?: { readonly min: number; readonly max: number } | null;
   readonly channels?: ChannelMarkers;
@@ -80,6 +110,7 @@ export function isEmpty(processing: Processing | undefined): boolean {
     (list) => list !== undefined && list.length > 0,
   );
   return (processing.rescale == null || processing.rescale.max <= processing.rescale.min)
+    && (processing.preset ?? null) === null
     && !anyMarkers
     && (processing.frequencies ?? []).length === 0
     && (processing.intensities ?? []).length === 0;
@@ -158,7 +189,27 @@ export function applyProcessing(
   if (isEmpty(processing)) return;
 
   const maximum = samples instanceof Uint16Array ? MAX_16_BIT : MAX_8_BIT;
-  const window = processing.rescale ?? null;
+  const grayscale = frame.sourceChannels === 1;
+  const preset = grayscale ? (processing.preset ?? null) : null;
+
+  /*
+   * A PRESET IS A WAY OF CHOOSING THE RESCALE, not a step of its own -- RULE-031 comes from the
+   * rescale histogram dialog, and the rule's edge case says dragging the handles clears a preset.
+   * So `stretch` computes the window the manual controls would have been dragged to, and the one
+   * loop below applies it either way. Two separate stages would be two places for RULE-032's order
+   * to be got wrong.
+   *
+   * `equalize` is not a window at all -- it is a lookup table over the whole image -- so it
+   * replaces the rescale rather than choosing one. `clahe` is neither: it works on 8-bit data and
+   * belongs after the conversion, so `pipeline.ts` applies it and this function ignores it.
+   */
+  const stretched =
+    preset?.kind === "stretch" ? stretchWindow(channelValues(samples, frame, processing.crop ?? null), preset.saturation) : null;
+  const lut = preset?.kind === "equalize"
+    ? equalizeLut(channelValues(samples, frame, processing.crop ?? null), maximum)
+    : null;
+
+  const window = stretched ?? processing.rescale ?? null;
   // RULE-032: grayscale only. An RGB image keeps its rescale request and ignores it, rather than
   // failing -- a stored setting from a grayscale image should not make the next image an error.
   const rescaling = frame.sourceChannels === 1 && window !== null && window.max > window.min;
@@ -172,7 +223,7 @@ export function applyProcessing(
       : [markers.r ?? [], markers.g ?? [], markers.b ?? []];
   const thresholding = perChannel.some((list) => list.length > 0);
 
-  if (!rescaling && !thresholding) return;
+  if (!rescaling && !thresholding && lut === null) return;
 
   for (const [x, y] of pixelsIn(frame, processing.crop ?? null)) {
     const at = (y * frame.width + x) * 3;
@@ -180,7 +231,10 @@ export function applyProcessing(
       let value = samples[at + channel]!;
       // The order is the rule. Thresholding first would put the bands at values the rescale is
       // about to move.
-      if (rescaling) value = rescale(value, window!.min, window!.max, maximum);
+      // The equalization table replaces the window rather than following it: both would apply a
+      // contrast change twice, and the table was built from the untouched values.
+      if (lut !== null) value = lut[Math.min(lut.length - 1, Math.max(0, value))]!;
+      else if (rescaling) value = rescale(value, window!.min, window!.max, maximum);
       const list = perChannel[channel]!;
       if (list.length > 0) value = posterize(value, list, maximum);
       samples[at + channel] = value;
@@ -257,13 +311,65 @@ export function processingFromQuery(query: URLSearchParams): Processing {
     crop = [parts[0]!, parts[1]!, parts[2]!, parts[3]!];
   }
 
+  const preset = presetFromQuery(query);
+  if (preset !== null && rescaleMin !== null) {
+    // RULE-031's own edge case, enforced rather than resolved by precedence: dragging the rescale
+    // handles CLEARS a preset, so a request carrying both is a client that has lost track of which
+    // the user chose. Picking one silently would show them a picture neither control describes.
+    throw new Error("a preset and a manual rescale window cannot both be given");
+  }
+
   return {
+    preset,
     rescale: rescaleMin === null || rescaleMax === null ? null : { min: rescaleMin, max: rescaleMax },
     channels,
     crop,
     frequencies,
     intensities,
   };
+}
+
+/**
+ * `preset=stretch:0.4`, `preset=equalize`, `preset=clahe:2:8:8` — RULE-031's three.
+ *
+ * Every number is bounded by the rule's own recorded range and a value outside it is REFUSED, not
+ * clamped. These change what the user sees rather than what is written, so a silently adjusted
+ * clip limit would leave them adjusting a control that had stopped responding.
+ */
+function presetFromQuery(query: URLSearchParams): Preset | null {
+  const raw = query.get("preset");
+  if (raw === null || raw === "") return null;
+
+  const [kind, ...rest] = raw.split(":");
+  if (kind === "equalize") {
+    if (rest.length > 0) throw new Error("preset=equalize takes no parameters");
+    return { kind: "equalize" };
+  }
+
+  if (kind === "stretch") {
+    const saturation = rest.length === 0 ? 0.4 : Number(rest[0]);
+    if (!Number.isFinite(saturation) || saturation < 0 || saturation > 50) {
+      throw new Error("preset=stretch takes a saturation percent from 0 to 50");
+    }
+    return { kind: "stretch", saturation };
+  }
+
+  if (kind === "clahe") {
+    const clipLimit = rest.length > 0 ? Number(rest[0]) : 2;
+    const tilesX = rest.length > 1 ? Number(rest[1]) : 8;
+    const tilesY = rest.length > 2 ? Number(rest[2]) : tilesX;
+    if (!Number.isFinite(clipLimit) || clipLimit < 0.5 || clipLimit > 40) {
+      throw new Error("preset=clahe takes a clip limit from 0.5 to 40");
+    }
+    for (const tiles of [tilesX, tilesY]) {
+      if (!Number.isInteger(tiles) || tiles < 2 || tiles > 32) {
+        throw new Error("preset=clahe takes tile counts from 2 to 32");
+      }
+    }
+    return { kind: "clahe", clipLimit, tilesX, tilesY };
+  }
+
+  throw new Error(`preset must be stretch, equalize or clahe, got ${JSON.stringify(kind)}`);
 }
 
 /** A comma-separated list of whole numbers within bounds, or [] when the parameter is absent. */
@@ -288,4 +394,84 @@ function intOr(query: URLSearchParams, name: string, fallback: number | null): n
   const value = Number.parseInt(raw, 10);
   if (!Number.isInteger(value)) throw new Error(`${name} must be a whole number`);
   return value;
+}
+
+/**
+ * One channel's values over the region a preset is computed from.
+ *
+ * Channel 0, because a preset is grayscale-only and a grayscale source is expanded to three equal
+ * channels by the decoder. The CROP, because RULE-031 says the preset is computed on the crop
+ * region: a stretch over the whole frame would set its window from pixels the user has cropped
+ * away, which is exactly the case a crop exists to exclude.
+ */
+function channelValues(
+  samples: Uint8Array | Uint16Array,
+  frame: Frame,
+  crop: readonly [number, number, number, number] | null,
+): Uint8Array | Uint16Array {
+  const out = samples instanceof Uint16Array ? new Uint16Array(countIn(frame, crop)) : new Uint8Array(countIn(frame, crop));
+  let at = 0;
+  for (const [x, y] of pixelsIn(frame, crop)) out[at++] = samples[(y * frame.width + x) * 3]!;
+  return out.subarray(0, at);
+}
+
+function countIn(frame: Frame, crop: readonly [number, number, number, number] | null): number {
+  if (crop === null) return frame.width * frame.height;
+  const [x1, y1, x2, y2] = crop;
+  return Math.max(0, x2 - x1) * Math.max(0, y2 - y1);
+}
+
+/**
+ * RULE-031's CLAHE, applied to 8-bit data — the last step before display.
+ *
+ * SEPARATE FROM `applyProcessing`, and the separation is the rule rather than tidiness. CLAHE is
+ * defined on 8-bit intensities and RULE-032 fixes the order as rescale, threshold, FFT, then the
+ * 16-bit conversion; adaptive equalization of 16-bit samples would be a different operation
+ * producing different pixels. So it runs where the data is 8-bit, which is after that conversion,
+ * and every path through the pipeline calls it at its own end.
+ *
+ * ON THE CROP REGION, as the rule says. CLAHE is spatial — its tiles are laid over whatever it is
+ * given — so running it over the whole frame and then cropping would equalize against pixels the
+ * user cropped away, and the visible result would change when the crop did for no reason the user
+ * could see.
+ *
+ * Grayscale only, like the other two presets. A colour image keeps the request and ignores it.
+ */
+export function applyClahe(data: Uint8Array, frame: Frame, processing: Processing | undefined): void {
+  const preset = processing?.preset ?? null;
+  if (preset === null || preset.kind !== "clahe" || frame.sourceChannels !== 1) return;
+
+  const crop = processing?.crop ?? null;
+  const x1 = crop === null ? 0 : Math.max(0, crop[0]);
+  const y1 = crop === null ? 0 : Math.max(0, crop[1]);
+  const x2 = crop === null ? frame.width : Math.min(frame.width, crop[2]);
+  const y2 = crop === null ? frame.height : Math.min(frame.height, crop[3]);
+  const width = x2 - x1;
+  const height = y2 - y1;
+  if (width <= 0 || height <= 0) return;
+
+  const plane = new Uint8Array(width * height);
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      plane[y * width + x] = data[((y + y1) * frame.width + (x + x1)) * 3]!;
+    }
+  }
+
+  const equalized = clahe(plane, height, width, {
+    clipLimit: preset.clipLimit,
+    tilesX: preset.tilesX,
+    tilesY: preset.tilesY,
+  });
+
+  // Back into all three channels: the source is grayscale, so the three are equal and a viewer
+  // reading any of them must see the same value.
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const value = equalized[y * width + x]!;
+      const at = ((y + y1) * frame.width + (x + x1)) * 3;
+      data[at] = value;
+      data[at + 1] = value;
+      data[at + 2] = value;
+    }
+  }
 }

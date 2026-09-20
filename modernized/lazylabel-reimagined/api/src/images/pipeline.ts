@@ -21,7 +21,7 @@
 import sharp from "sharp";
 
 import { decodeBmp, isBmp } from "./bmp.js";
-import { applyFrequencyFilter, applyProcessing, isEmpty, type Processing } from "./processing.js";
+import { applyClahe, applyFrequencyFilter, applyProcessing, isEmpty, type Processing } from "./processing.js";
 
 /**
  * The container formats this service will decode — SEC-02.
@@ -115,6 +115,8 @@ export async function decodeImage(
     if (processing !== undefined && !isEmpty(processing)) {
       applyProcessing(samples, { width, height, sourceChannels }, processing);
       samples = applyFrequencyFilter(samples, { width, height, sourceChannels }, processing) ?? samples;
+      // Last, on 8-bit data: RULE-031's CLAHE is defined there and RULE-032 fixes the order.
+      applyClahe(samples, { width, height, sourceChannels }, processing);
     }
     return {
       width,
@@ -147,10 +149,15 @@ export async function decodeImage(
     filtered = applyFrequencyFilter(wide, { width, height, sourceChannels }, processing);
   }
 
+  // The conversion happens here, so CLAHE -- which is defined on 8-bit intensities -- happens
+  // after it. Equalizing 16-bit samples would be a different operation on different numbers.
+  const eightBit = filtered ?? to8Bit(wide);
+  applyClahe(eightBit, { width, height, sourceChannels }, processing);
+
   return {
     width,
     height,
-    data: filtered ?? to8Bit(wide),
+    data: eightBit,
     sourceDepth: 16,
     sourceChannels,
     sourceFormat: format ?? "unknown",
@@ -167,7 +174,9 @@ function processed(decoded: DecodedImage, processing: Processing | undefined): D
     sourceChannels: decoded.sourceChannels,
   };
   applyProcessing(samples, frame, processing);
-  return { ...decoded, data: applyFrequencyFilter(samples, frame, processing) ?? samples };
+  const data = applyFrequencyFilter(samples, frame, processing) ?? samples;
+  applyClahe(data, frame, processing);
+  return { ...decoded, data };
 }
 
 /**

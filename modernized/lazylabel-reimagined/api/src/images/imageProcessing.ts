@@ -150,9 +150,3 @@ export function equalizeLut(
   return lut;
 }
 
-/** Apply a lookup table across a buffer. */
-export function applyLut(values: Uint8Array | Uint16Array, lut: Uint32Array): void {
-  for (let i = 0; i < values.length; i += 1) {
-    values[i] = lut[Math.min(lut.length - 1, Math.max(0, values[i]!))]!;
-  }
-}

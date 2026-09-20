@@ -45,7 +45,27 @@ export function markersAreLegal(markers: readonly number[]): boolean {
 /** A channel a threshold can be set on. `gray` exists only for a grayscale source. */
 export type Channel = "gray" | "r" | "g" | "b";
 
+/**
+ * RULE-031's histogram presets — the three ways to set the rescale other than by hand.
+ *
+ * Mutually exclusive with `rescale`, which is the rule's own edge case: "dragging the rescale
+ * handles clears any preset". `setPreset` and `setRescale` each clear the other rather than
+ * letting both be set, so the API never has to decide which the user meant.
+ */
+export type Preset =
+  | { readonly kind: "stretch"; readonly saturation: number }
+  | { readonly kind: "equalize" }
+  | { readonly kind: "clahe"; readonly clipLimit: number; readonly tilesX: number; readonly tilesY: number };
+
+export const PRESET_DEFAULTS = {
+  stretch: { kind: "stretch", saturation: 0.4 },
+  equalize: { kind: "equalize" },
+  clahe: { kind: "clahe", clipLimit: 2, tilesX: 8, tilesY: 8 },
+} as const satisfies Record<string, Preset>;
+
 export interface ImageProcessing {
+  /** A histogram preset, or null. Grayscale only, like the rescale it replaces. */
+  readonly preset: Preset | null;
   /** Null for none. The server ignores it on a colour image, as RULE-032 says to. */
   readonly rescale: { readonly min: number; readonly max: number } | null;
   readonly markers: Readonly<Partial<Record<Channel, readonly number[]>>>;
@@ -57,6 +77,7 @@ export interface ImageProcessing {
 }
 
 export const NO_PROCESSING: ImageProcessing = {
+  preset: null,
   rescale: null,
   markers: {},
   crop: null,
@@ -86,7 +107,20 @@ export function rescaleApplies(sourceChannels: number): boolean {
 export function processingQuery(processing: ImageProcessing): string {
   const query = new URLSearchParams();
 
-  if (processing.rescale !== null && processing.rescale.max > processing.rescale.min) {
+  // A preset and a manual window are exclusive, and the API refuses a request carrying both --
+  // deliberately, because a client sending both has lost track of which the user chose. Sending
+  // the preset alone when it is set keeps that refusal unreachable from here.
+  const preset = processing.preset;
+  if (preset !== null) {
+    query.set(
+      "preset",
+      preset.kind === "equalize"
+        ? "equalize"
+        : preset.kind === "stretch"
+          ? `stretch:${preset.saturation}`
+          : `clahe:${preset.clipLimit}:${preset.tilesX}:${preset.tilesY}`,
+    );
+  } else if (processing.rescale !== null && processing.rescale.max > processing.rescale.min) {
     query.set("rescaleMin", String(processing.rescale.min));
     query.set("rescaleMax", String(processing.rescale.max));
   }

@@ -10,7 +10,6 @@ import { describe, expect, it } from "vitest";
 
 import {
   MAX_16_BIT,
-  applyLut,
   equalizeLut,
   posterize,
   rescale,
@@ -183,11 +182,4 @@ describe("the equalization preset", () => {
     expect(equalizeLut(new Uint8Array()).every((v) => v === 0)).toBe(true);
   });
 
-  it("applies across a buffer", () => {
-    const values = new Uint8Array([100, 150, 200]);
-    applyLut(values, equalizeLut(values));
-
-    expect(values[0]).toBe(0);
-    expect(values[2]).toBe(255);
-  });
 });

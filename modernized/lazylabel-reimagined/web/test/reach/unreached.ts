@@ -28,18 +28,12 @@ const awaiting = (slice: string): Reason => ({ kind: "awaiting", slice });
 const dead = (instead: string): Reason => ({ kind: "dead", instead });
 
 export const UNREACHED: Readonly<Record<string, Reason>> = {
-  // ---- RULE-031's histogram presets. The biggest single piece of unreachable work here. ----
-  //
-  // `clahe` is a byte-exact port of OpenCV's, matched against six goldens -- and nothing calls it,
-  // so a user cannot reach adaptive equalization at all. `stretchWindow` and `equalizeLut` are the
-  // other two presets of the same rule and are equally unreached. What is missing is the same for
-  // all three: the processing query has no way to ASK for a preset, so the pipeline never applies
-  // one. Stretch and equalize slot where the rescale step already runs; CLAHE operates on 8-bit
-  // and on the crop region, so it belongs after `to8Bit` -- a different slot, and RULE-032 is
-  // explicit that the order is the contract, so it is worth stating rather than assuming.
-  stretchWindow: awaiting("RULE-031's presets: the processing query cannot ask for one"),
-  equalizeLut: awaiting("RULE-031's presets: the processing query cannot ask for one"),
-  applyLut: awaiting("RULE-031's presets: applies `equalizeLut`'s table, which nothing builds yet"),
+  // RULE-031's presets are REACHED now -- `stretchWindow` and `equalizeLut` are applied by the
+  // pipeline and `clahe` by `applyClahe`, all three asked for through `preset=` on the processing
+  // query. Their entries are gone, which is what this list is for: an excuse that outlives the
+  // gap tells the next reader a working feature is still missing. `applyLut` went with them, by
+  // deletion -- the pipeline applies the table inside the loop it already runs over every pixel,
+  // so a second pass over the whole image was the wrong shape.
 
   // ---- Propagation, C11. Blocked on the inference service and a recorded sequence. ----
   frameConfidence: awaiting("C11: nothing produces per-object scores until propagation runs"),
