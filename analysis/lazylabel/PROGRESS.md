@@ -7,19 +7,19 @@ Last updated: 2026-09-20.
 
 ## Short answer
 
-**The app cannot be launched on the web yet.** Phases 1–4 have met their exit criteria. Phase 5
-has met three of its four; the fourth is met apart from one tolerance question for the owner and
-one ported-but-unreachable step (the FFT's own control). Phase 6 has not started. The pieces that exist are proven against legacy; what is missing is the
+**The app cannot be launched on the web yet.** Phases 1–4 have met their exit criteria. Phase 5 is
+implemented in full and has met three of its four exit criteria; the fourth waits on **one
+judgement from the owner** and nothing else. Phase 6 has not started. The pieces that exist are proven against legacy; what is missing is the
 sequence work and the whole cutover.
 
-By the brief's own weighting of the six phases: **about 72% of the conversion is done** — 6.0,
-5.5, 5.8, 29.4, and about 25.5 of 27.4.
+By the brief's own weighting of the six phases: **about 74% of the conversion is done** — 6.0,
+5.5, 5.8, 29.4, and about 27 of 27.4.
 
 Phase 4's panels were frames when it exited, because the tools that fill them are Phase 5's by the
 brief's own split. They are filled now: drawing tools, AI tools, adjustments, crop, segments and
 classes are all built and reachable.
 
-The remaining 28% is the tail of Phase 5 and all of Phase 6.
+The remaining 26% is one owner decision and all of Phase 6.
 
 | Phase | Share | State |
 |---|---|---|
@@ -27,7 +27,7 @@ The remaining 28% is the tail of Phase 5 and all of Phase 6.
 | P2 — architecture and scaffolds | 5.5% | **complete** |
 | P3 — inference service | 5.8% | **complete** |
 | P4 — workspace, dataset browser, persistence | 29.4% | **complete**; its panels are filled by P5's tools |
-| P5 — tools | 27.4% | ~93%; criteria 1–3 met, criterion 4 has one open question |
+| P5 — tools | 27.4% | implemented; criteria 1–3 met, criterion 4 needs one owner decision |
 | P6 — sequence and cutover | 25.9% | not started |
 
 ## What is done, and what proves it
@@ -266,15 +266,43 @@ needs is already in one store rather than scattered across managers.
    - The display adjustments stay in the browser, where they belong — last step, on the rendered
      canvas.
 
-   **The FFT's stale-cache defect** is designed out rather than ported: legacy keys its cached
-   spectrum on image dimensions alone, so it is not invalidated when the rescale or
-   channel-threshold settings upstream of it change and the output can come from a stale input. The
-   port computes the transform per call, so it does not have the defect — but it also has no cache,
-   and a full-size image will want one. Whatever cache it gets must be keyed on the upstream
-   settings too. The FFT has no control yet either; it is the one step of RULE-032's chain that is
-   ported and not reachable.
+   **The frequency filter runs, and its cache is designed against legacy's defect.** RULE-030 is
+   the third step of the chain and it now reaches the image. Four things about it:
+
+   - **Its output is always 8-bit**, whatever the source was, because the rule stretches the
+     filtered plane to 0..255. So when it runs on a 16-bit image, `to8Bit` must NOT run after it —
+     shifting those bytes right by another eight leaves a black image.
+   - **Grayscale is decided by the PIXELS, not the header.** The card says "2-D or exactly
+     equal-channel images", so a grayscale scan saved as colour qualifies — and that is common.
+     The panel warns a colour image that the filter may be skipped, rather than letting a user
+     discover it from a slider that does nothing.
+   - **The cache is keyed on the whole query**, plus the image's revision. Legacy keys its cached
+     spectrum on image DIMENSIONS alone, so moving a rescale handle leaves the FFT answering from
+     the input it had before. Keying on the query as sent makes that structurally impossible rather
+     than a thing to remember when the next parameter is added. It is bounded by bytes, not
+     entries, and least-recently-used.
+   - **An image too large is refused, not waited on.** Measured: 1 MP about 0.7 seconds, 2 MP about
+     2, 6 MP about 5. Above eight megapixels it is a 413 naming the size and the limit, because a
+     minute-long request is indistinguishable from a dead server. Legacy has no limit and freezes
+     its window.
 2. **Phase 6 — sequence and cutover** (25.9%). The timeline, propagation review, the split view,
    the hosted deployment and the actual switch-over.
+
+   **It cannot start yet, and two of its four entry criteria need the owner rather than code:**
+
+   1. *Phase 3 and Phase 5 exit criteria are met.* Phase 3 is done; Phase 5 waits on the CLAHE
+      judgement above. **Owner.**
+   2. *Decisions 1 and 8 are ticked.* Decision 1 is the PyPI package and desktop app; decision 8 is
+      whether multi-view is rebuilt as a split view, redesigned or removed. **Owner.**
+   3. *At least one recorded image sequence has legacy propagation outputs saved as golden data.*
+      This needs the legacy app, the real checkpoints and a sequence someone cares about. It is the
+      longest-lead item and nothing in Phase 6 can be proven equivalent without it — the same
+      shape as Phase 3's differentials, which are the strongest evidence in the project.
+   4. *Every P6 rule is answered.* Not yet reviewed.
+
+   The pilot slice the brief names is "build a timeline from a file range and mark references from
+   existing annotations, without propagation". That part needs no checkpoints, so it is what to
+   start on the moment criteria 1 and 2 are ticked.
 
 ## What running the app found that the tests did not
 
