@@ -557,3 +557,12 @@ fieldset input {
   gap: 0.3rem;
   margin-bottom: 0.5rem;
 }
+
+/* Undo and redo. The label says what would be undone, which no keystroke can. */
+.history {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin: 0.4rem 0;
+  font-size: 0.85rem;
+}

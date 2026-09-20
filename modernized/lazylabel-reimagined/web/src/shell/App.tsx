@@ -19,6 +19,7 @@ import { NotificationHost } from "../notifications/NotificationProvider.jsx";
 import { OpenImageView } from "../workspace/OpenImageView.jsx";
 import { AdjustmentsPanel } from "../workspace/AdjustmentsPanel.jsx";
 import { ClassTable } from "../workspace/ClassTable.jsx";
+import { HistoryControls } from "../workspace/HistoryControls.jsx";
 import { ChannelPanel } from "../workspace/ChannelPanel.jsx";
 import { TimelinePanel } from "../sequence/TimelinePanel.jsx";
 import { CropPanel } from "../workspace/CropPanel.jsx";
@@ -126,6 +127,7 @@ export function App({ client }: { readonly client: ApiClient }): ReactNode {
                 user to press one, and saying where the work stands does not. */}
             <Panel title="Drawing tools">
               <ToolPicker />
+              <HistoryControls />
               {/* Shift-drag erases with whichever shape is active, which is legacy's gesture and
                   is not discoverable by looking at the picker. */}
               <p className="panel__missing">

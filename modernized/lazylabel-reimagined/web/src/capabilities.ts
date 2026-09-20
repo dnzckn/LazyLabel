@@ -48,13 +48,7 @@ export const CAPABILITIES: readonly Capability[] = [
     id: "C4",
     summary: "Draw and edit polygons, boxes and circles by hand",
     builtIn: "P5",
-    webStatus: "pending",
-    webPhase: "P5",
-    missing:
-      "vertex editing. Drawing is built for all three shapes: RULE-047's join threshold proven "
-      + "against legacy's own expression over every click offset, and RULE-043's minimum sizes, "
-      + "with a box stored as a four-corner polygon and a circle as its centre and a 3 o'clock "
-      + "radius point -- not the point the drag was released on",
+    webStatus: "built",
   },
   {
     id: "C5",
@@ -68,12 +62,7 @@ export const CAPABILITIES: readonly Capability[] = [
     id: "C6",
     summary: "Undo and redo editing actions",
     builtIn: "P4, P5",
-    webStatus: "pending",
-    webPhase: "P4",
-    missing:
-      "the operations to record, which arrive with the editing tools in Phase 5. The stack itself "
-      + "is built: bounded by retained bytes, redo cleared on a new action, history cleared when an "
-      + "image loads, and an entry that cannot invert itself cannot be recorded",
+    webStatus: "built",
   },
   {
     id: "C7",

@@ -132,10 +132,16 @@ describe("the application shell", () => {
     // without being gone.
     screen.getByRole("button", { name: /What is built/ }).click();
 
-    // C4 is Phase 5. If the shell ever renders it as available, this catches it.
+    // C4 was the example when it was pending; it is built now, and drawing IS reachable. The
+    // assertion moved to one that is still unbuilt rather than being deleted, because what it
+    // guards is that the table never reads as available for something that is not: C11 is
+    // propagation, which has no controls and no progress socket.
     await waitFor(() =>
-      expect(screen.getByText(/Draw and edit polygons/).closest("tr")?.textContent).toMatch(/P5/),
+      expect(screen.getByText(/Propagate labels through a sequence/).closest("tr")?.textContent)
+        .toMatch(/P6/),
     );
+    // And the built one reads as built, so the table is not simply saying "P6" to everything.
+    expect(screen.getByText(/Draw and edit polygons/).closest("tr")?.textContent).toMatch(/built/);
   });
 
   it("offers every tool panel, with nothing left named as missing", async () => {
