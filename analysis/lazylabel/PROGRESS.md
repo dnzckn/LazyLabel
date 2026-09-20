@@ -406,8 +406,9 @@ needs is already in one store rather than scattered across managers.
 
 ## What running the app found that the tests did not
 
-Six defects in one session, none of which a unit test could have caught, and it is worth being
-explicit about the shapes because they will recur in Phase 6.
+Seven defects in one session, none of which a unit test could have caught, and it is worth being
+explicit about the shapes because they keep recurring — two of them turned up in Phase 6 work an
+hour after the lesson was written down.
 
 1. **Vertex editing was unreachable.** `EditLayer` was built, unit-tested and never rendered by
    `OpenImageView`. Every test drove the component directly, so nothing noticed a user had no way
@@ -423,7 +424,11 @@ explicit about the shapes because they will recur in Phase 6.
 5. **Undo and redo had no caller.** The history has existed since Phase 4 with RULE-052's and
    RULE-053's defects designed out and a full suite over it, and nothing in the app called
    `undo()`. A user could draw, erase and merge and had no way to take any of it back.
-6. **Space could be refused over a preview that was on screen.** The keydown listener is registered
+6. **The split view showed no pictures.** It read its image sizes from the workspace's open image,
+   on the reasoning — written into the code — that fetching its own would be "a second answer to a
+   question the workspace already asks". The workspace asks about ONE image and a split view needs
+   TWO, so one side could never be measured. Found one commit after building it.
+7. **Space could be refused over a preview that was on screen.** The keydown listener is registered
    in an effect, so there is a window where the banner is rendered and the listener still closes
    over the render with no prediction. Found by chasing a test that failed one run in ten — the
    failing DOM contained both "AI preview ready" and "No AI segment preview to accept", which
