@@ -34,9 +34,12 @@ A Dockerfile that builds is not a deployment that works. Expect the first real r
 changes, and look here first:
 
 1. **The inference image.** It installs PyTorch against a CUDA base, which is where container
-   builds usually break. Check that `pip install .[ai]` resolves a CUDA-enabled torch rather than
-   the CPU wheel — on some index configurations it silently picks CPU, and the service then starts,
-   reports no accelerator, and runs at a tenth of the speed with nothing obviously wrong.
+   builds usually break. The CPU-wheel case is now a **build failure** rather than something to
+   check: the Dockerfile asserts `torch.version.cuda` after installing, because on some index
+   configurations pip silently picks the CPU wheel and the service then starts, reports no
+   accelerator, and runs at a tenth of the speed with nothing obviously wrong — which sends a user
+   looking at their GPU configuration instead of at their image. What remains to watch is whether
+   the install resolves at all against the CUDA base.
 2. **`npm install` against `file:` dependencies inside a container.** The API and web images copy
    the local packages in and let npm link them. npm's handling of `file:` paths in a fresh
    container has been known to differ from a warm developer machine.

@@ -32,6 +32,16 @@ COPY lazylabel-reimagined/inference /src/inference
 # thing to be able to do but is not what this image is for.
 RUN pip install --no-cache-dir /src/inference[ai]
 
+# THE CPU WHEEL IS THE FAILURE THIS IMAGE IS MOST LIKELY TO HAVE, and it is silent: on some index
+# configurations pip resolves a CPU-only torch, the service then starts, reports no accelerator,
+# and runs at a tenth of the speed with nothing obviously wrong. A user concludes their GPU is
+# misconfigured and goes looking in the wrong place.
+#
+# `torch.version.cuda` is the right thing to assert at BUILD time. `torch.cuda.is_available()` is
+# False here whatever wheel was installed, because a builder has no GPU — testing that would fail
+# every build and teach everyone to delete the check.
+RUN python -c "import torch, sys; cuda = torch.version.cuda; print(f'torch {torch.__version__}, CUDA {cuda}'); sys.exit(0) if cuda else sys.exit('a CPU-only torch was installed; this image needs a CUDA build')"
+
 # NOT ROOT, and it matters more here than in the API image: this process loads model checkpoints,
 # and RULE-084's weights-only guard is a code-level defence. Running unprivileged means a
 # hypothetical bypass of it is confined.
