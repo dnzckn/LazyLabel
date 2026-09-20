@@ -298,7 +298,20 @@ needs is already in one store rather than scattered across managers.
       This needs the legacy app, the real checkpoints and a sequence someone cares about. It is the
       longest-lead item and nothing in Phase 6 can be proven equivalent without it — the same
       shape as Phase 3's differentials, which are the strongest evidence in the project.
-   4. *Every P6 rule is answered.* Not yet reviewed.
+   4. *Every P6 rule is answered.* **The two that blocked it are answered** (2026-09-20). RULE-060
+      needed a fidelity correction and RULE-055 two behaviour questions; both were re-derived from
+      the source rather than taken from the judges, and both answers are on their cards. What is
+      left on each is the owner's P0-or-P1 call, which decides which suite the rule is tested in
+      rather than whether it is tested. **Owner, but not blocking the work.**
+
+      The two corrections are worth knowing before any Phase 6 code is written, because each would
+      otherwise produce a confidently wrong port:
+
+      - A propagated frame's confidence is the minimum over objects with a **non-empty** mask. An
+        object that leaves the scene comes back with confidence 0.0, and a port that includes it
+        flags and — by default — wipes every frame where that happens.
+      - **Keep Flagged Masks does not keep them on disk.** Save All excludes every flagged frame,
+        so it is a review control. "Keep" reads as "keep in the dataset" to anyone porting it.
 
    The pilot slice the brief names is "build a timeline from a file range and mark references from
    existing annotations, without propagation". That part needs no checkpoints, so it is what to
