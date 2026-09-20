@@ -31,6 +31,8 @@ import { useWorkspace } from "../workspace/WorkspaceProvider.jsx";
 import { ExportFormats } from "./ExportFormats.jsx";
 
 import type { AnnotationsResult, ApiClient } from "../api/client.js";
+import { useSettings } from "../settings/SettingsProvider.jsx";
+import { hideableColumns, visibleColumns } from "./columns.js";
 
 export interface DatasetBrowserProps {
   readonly client: ApiClient;
@@ -73,6 +75,7 @@ export function DatasetBrowser({
   // Opening belongs to the workspace store: the list is one of five things that ask what is open,
   // and whichever one holds the state becomes the owner of a question that is not its own.
   const { open: openState, openImage } = useWorkspace();
+  const { settings, save } = useSettings();
 
   useEffect(() => {
     let cancelled = false;
@@ -170,11 +173,65 @@ export function DatasetBrowser({
             : "This folder has no images LazyLabel can open."}
         </p>
       ) : (
+        <ColumnedTable listing={listing} openState={openState} openImage={openImage} />
+      )}
+
+      <ExportFormats />
+    </section>
+  );
+}
+
+/**
+ * The listing as a table, with only the columns the user has left switched on.
+ *
+ * Its own component because the columns have to be derived from the SETTINGS and the listing
+ * together, and the listing only exists inside the ready branch -- deriving it above would be
+ * reading a variable that is not in scope yet, which is what the first attempt did.
+ */
+function ColumnedTable({
+  listing,
+  openState,
+  openImage,
+}: {
+  readonly listing: WireDatasetListing;
+  readonly openState: { readonly image: { readonly key: string } } | null;
+  readonly openImage: (image: WireDatasetListing["images"][number]) => void;
+}): ReactNode {
+  const { settings, save } = useSettings();
+  // Filtered once: the header and every row must show the same columns, and two filters is two
+  // chances for them to disagree by one.
+  const shown = visibleColumns(listing.columns, settings.values);
+
+  return (
+    <>
+        {/* RULE-036's ten column settings, none of which had a reader -- the table showed every
+            format the API reported and a user could not hide one. On a folder whose images carry
+            two of the seven formats, five columns are a field of dots. */}
+        <details className="dataset__columns">
+          <summary>Columns</summary>
+          {hideableColumns(listing.columns).map((column) => (
+            <label key={column.format}>
+              <input
+                type="checkbox"
+                checked={settings.values[column.setting] !== false}
+                aria-label={`Show the ${column.suffix} column`}
+                onChange={(event) =>
+                  void save({
+                    ...settings,
+                    values: { ...settings.values, [column.setting]: event.target.checked },
+                  })
+                }
+              />{" "}
+              {column.suffix}
+            </label>
+          ))}
+        </details>
+
         <table className="dataset">
           <thead>
             <tr>
               <th scope="col">Image</th>
-              {listing.columns.map((column) => (
+              {shown.map((column) => (
                 <th scope="col" key={column.format} title={column.format}>
                   {column.suffix}
                 </th>
@@ -195,7 +252,7 @@ export function DatasetBrowser({
                     </span>
                   )}
                 </th>
-                {listing.columns.map((column) => (
+                {shown.map((column) => (
                   <td key={column.format}>
                     <span aria-label={image.sidecars[column.format] ? "present" : "absent"}>
                       {image.sidecars[column.format] ? "●" : "·"}
@@ -206,11 +263,6 @@ export function DatasetBrowser({
             ))}
           </tbody>
         </table>
-      )}
-
-
-      <ExportFormats />
-
-    </section>
+    </>
   );
 }

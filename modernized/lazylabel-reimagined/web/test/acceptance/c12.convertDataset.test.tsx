@@ -99,7 +99,12 @@ describe("C12: converting a dataset in the browser", () => {
     show();
     await waitFor(() => expect(screen.getByText("Formats to write")).toBeTruthy());
 
-    const boxes = screen.getAllByRole("checkbox") as HTMLInputElement[];
+    // Scoped to the format chooser: the browser's column switches are checkboxes too, and an
+    // unscoped query counts both. They are told apart by their labels -- a column switch says
+    // "Show the .npz column" -- rather than by their order, which nothing guarantees.
+    const boxes = (screen.getAllByRole("checkbox") as HTMLInputElement[]).filter(
+      (box) => !(box.getAttribute("aria-label") ?? "").startsWith("Show the "),
+    );
     expect(boxes).toHaveLength(7);
 
     // The shipped defaults, from the settings schema.

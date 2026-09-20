@@ -720,3 +720,14 @@ fieldset input {
   color: var(--muted);
   font-size: 0.85rem;
 }
+
+/* The column switches, folded away above the dataset table. A <details> rather than a row of
+   checkboxes: seven switches above a table push the table itself below the fold. */
+.dataset__columns {
+  font-size: 0.85rem;
+  margin-bottom: 0.4rem;
+}
+
+.dataset__columns label {
+  margin-right: 0.75rem;
+}

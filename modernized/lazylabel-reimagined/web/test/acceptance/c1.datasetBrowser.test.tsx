@@ -108,10 +108,12 @@ describe("C1: the dataset browser", () => {
     await waitFor(() => expect(screen.getByText("a.png")).toBeTruthy());
     expect(screen.getByText("b.png")).toBeTruthy();
 
-    // One column per format, in load-priority order, labelled by the suffix a user would
-    // recognize. Scoped to the table: the format chooser shows the same suffixes.
+    // One column per format the user has left switched on, in load-priority order, labelled by
+    // the suffix a user would recognize. RULE-036's ten settings are honoured now, and five of
+    // them default to FALSE in legacy -- so the default view is .npz and .txt, not all seven.
+    // Showing every column regardless was the deviation, not this.
     const headers = screen.getAllByRole("columnheader").map((cell) => cell.textContent);
-    expect(headers).toEqual(["Image", ...COLUMNS.map((column) => column.suffix)]);
+    expect(headers).toEqual(["Image", ".npz", ".txt"]);
   });
 
   it("says how many images are already annotated", async () => {
@@ -123,9 +125,10 @@ describe("C1: the dataset browser", () => {
     show();
     await waitFor(() => expect(screen.getByText("a.png")).toBeTruthy());
 
-    // Seven per row, two rows: one sidecar present in total.
+    // Two VISIBLE columns per row at the default settings, two rows: one sidecar present in
+    // total. The marks follow the columns a user has left on, not every format the API reports.
     expect(screen.getAllByLabelText("present")).toHaveLength(1);
-    expect(screen.getAllByLabelText("absent")).toHaveLength(13);
+    expect(screen.getAllByLabelText("absent")).toHaveLength(3);
   });
 
   it("warns that two images share annotation files (RULE-080)", async () => {

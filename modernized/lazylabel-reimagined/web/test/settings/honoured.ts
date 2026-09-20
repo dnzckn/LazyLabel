@@ -35,10 +35,15 @@ const GEOMETRY = dropped(
     + "restoring pixel widths would fight both.",
 );
 
-/** The dataset browser shows every format column it knows about, always. */
-const COLUMN = gap(
-  "the dataset browser shows a column for every format the API reports, so these cannot hide one. "
-    + "Legacy's defaults differ per column, which is why they are stored rather than assumed.",
+/**
+ * `file_manager_show_name` is deliberately NOT honoured: the Image column holds the button that
+ * opens the image, so hiding it would leave a table nothing can be opened from. Legacy lets you
+ * hide it and it is a trap there -- one of the few places where copying the behaviour would be
+ * copying a defect.
+ */
+const NAME_COLUMN = dropped(
+  "the Image column holds the button that opens the image; hiding it, as legacy allows, leaves a "
+    + "table nothing can be opened from.",
 );
 
 export const HONOURED: Readonly<Record<string, Honoured>> = {
@@ -105,16 +110,20 @@ export const HONOURED: Readonly<Record<string, Honoured>> = {
   pixel_priority_enabled: read,
   pixel_priority_ascending: read,
 
-  file_manager_show_name: COLUMN,
-  file_manager_show_npz: COLUMN,
-  file_manager_show_txt: COLUMN,
-  file_manager_show_seg: COLUMN,
-  file_manager_show_coco: COLUMN,
-  file_manager_show_voc: COLUMN,
-  file_manager_show_cm: COLUMN,
-  file_manager_show_cml: COLUMN,
-  file_manager_show_modified: COLUMN,
-  file_manager_show_size: COLUMN,
+  file_manager_show_name: NAME_COLUMN,
+  file_manager_show_npz: read,
+  file_manager_show_txt: read,
+  file_manager_show_seg: read,
+  file_manager_show_coco: read,
+  file_manager_show_voc: read,
+  file_manager_show_cm: read,
+  file_manager_show_cml: read,
+  // These two need `modified` and `size` on the wire, which the listing does not carry -- and
+  // `listing.ts` has an explicit "ONE PASS, NOT SEVEN PER IMAGE" optimisation, so adding a stat
+  // per image to the default listing would be the wrong fix. A `?details=1` the client asks for
+  // only when a column or a sort needs it is the shape.
+  file_manager_show_modified: gap("needs `modified` on the wire; the listing deliberately does not stat"),
+  file_manager_show_size: gap("needs `size` on the wire; the listing deliberately does not stat"),
   file_manager_sort_order: gap(
     "the dataset browser lists images in the order the API returns them; RULE-036's sort is not "
       + "wired to a control.",
