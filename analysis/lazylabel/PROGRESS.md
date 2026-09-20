@@ -66,15 +66,12 @@ UNBLOCKED; everything below it needs something only the owner can provide.
    buttons. `zoom_in`, `zoom_out` and the four `pan_*` keys have no capability behind them: the
    browser does its own zooming and there is no pan model, so those are a decision rather than a
    wiring job.
-2. **`canSave`.** The last unreached function that is not waiting on C11. It decides in ADVANCE
-   whether a save is safe, which is what a disabled Write button with a reason would need; today
-   the button is always offered and reports its own refusals afterwards.
-3. **The dataset browser's columns and sort** — eleven settings, the largest remaining group in
+2. **The dataset browser's columns and sort** — eleven settings, the largest remaining group in
    the honoured list. It needs `modified` and `size` on `WireDatasetImage`, and `listing.ts`
    carries an explicit "ONE PASS, NOT SEVEN PER IMAGE" optimisation, so do NOT add a `stat` per
    image to the default listing. Add a `?details=1` the client asks for only when a column or sort
    needs it.
-4. **RULE-089, Operate On View.** The largest single rule left unbuilt. The setting is read by
+3. **RULE-089, Operate On View.** The largest single rule left unbuilt. The setting is read by
    nothing and the AI panel says so on screen. Honouring it means the AI request carries the
    ADJUSTED pixels, because the browser applies brightness/contrast/gamma and the model reads the
    file — a contract change across three packages, and the inference half cannot be verified here
@@ -812,9 +809,14 @@ so a slider's value is announced as a live region and answers the same role quer
 banners do. It broke a shell test by being found instead of the settings-unavailable message. Both
 sliders use a plain span now.
 
-**Four remain**: two wait on C11 (`frameConfidence`, `saveableFrames`), and two on UI that is not
-built — `enterEditMode` (RULE-070's edit validation) and `canSave` (which decides in ADVANCE, for
-a disabled button with a reason).
+`enterEditMode` and `canSave` followed, and the second was guarding a real hole: the save button
+was offered for an image whose annotations could not be READ, so pressing it would put an empty
+annotation file over a damaged one — decision 7's central case, with the write unconditional
+because a failed load returns no revision to guard it. The button is disabled with the reason
+beside it now, and the other side is tested with it, since taking the button away from an image
+with NO file is the same defect this view already had once.
+
+**Two remain**, both waiting on C11: `frameConfidence` and `saveableFrames`.
 
 Four of the thirteen were merely superseded and were **deleted** rather than recorded:
 `afterRemoval`, `rescaleAll`, `posterizeAll`, `cssColor`. Dead code with an excuse attached is
