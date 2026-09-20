@@ -18,7 +18,7 @@
  * is what stops an undo reaching into a file that is no longer on screen.
  */
 
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { WireDatasetImage } from "@lazylabel/contracts";
 
@@ -81,7 +81,18 @@ function Harness(): React.ReactNode {
 }
 
 function mount(overrides: Partial<ApiClient> = {}) {
-  const embed = vi.fn(async () => ({ handle: "h1", cached: false }));
+  /*
+   * ONE promise, handed out by the stub and awaited by the test.
+   *
+   * The encode has to have finished before a click is worth making -- a prompt that arrives first
+   * is not sent, which is `AiTool`'s own rule. Waiting for the "Preparing this image" banner to go
+   * looks like the way to know, and is not: `encoding` starts false and the effect sets it, so the
+   * banner is absent at mount and an absence test passes before the encode has even started.
+   *
+   * Awaiting the promise the stub returned, inside `act`, is the signal with no race in it.
+   */
+  const embedded = Promise.resolve({ handle: "h1", cached: false });
+  const embed = vi.fn(() => embedded);
   const segment = vi.fn(async () => response());
   const saveAnnotations = vi.fn(async () => ({ written: {}, stale: [], skippedEmpty: [] }));
 
@@ -121,7 +132,7 @@ function mount(overrides: Partial<ApiClient> = {}) {
     </NotificationProvider>,
   );
 
-  return { embed, segment, saveAnnotations };
+  return { embed, segment, saveAnnotations, embedded };
 }
 
 const shown = (id: string) => screen.getByTestId(id).textContent;
@@ -147,11 +158,11 @@ async function readyToPrompt() {
   fireEvent.click(screen.getByText("ai tool"));
   await waitFor(() => expect(screen.getByLabelText("AI tool")).toBeTruthy());
 
-  // Wait for the ENCODE, the way a user does: the banner is on screen until the image is ready,
-  // and a click before then is not sent. Clicking without waiting was a race the test lost about
-  // one run in three, and the product answer to it is the notification in `AiTool`, not a longer
-  // timeout here.
-  await waitFor(() => expect(screen.queryByText(/Preparing this image/)).toBeNull());
+  // The encode has to be done before clicking: a prompt that lands first is not sent, which is
+  // `AiTool`'s rule and the product answer to the same race this used to lose.
+  await act(async () => {
+    await handles.embedded;
+  });
 
   return handles;
 }
@@ -161,12 +172,10 @@ async function readyToPrompt() {
  *
  * The preview itself cannot be waited on -- jsdom paints no canvas. The READY message can, and it
  * is real UI rather than a test signal: RULE-062 specifies it, and a user whose preview fails to
- * paint needs it for the same reason this does. The timeout is about the RUNNER, not the feature:
- * these files run beside CPU-bound ones and a starved worker can take over a second to deliver a
- * resolved promise.
+ * paint needs it for the same reason this does.
  */
 async function previewReady(): Promise<void> {
-  await screen.findByText(/AI preview ready/, undefined, { timeout: 5000 });
+  await screen.findByText(/AI preview ready/);
 }
 
 describe("flow 1, step by step", () => {

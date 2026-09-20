@@ -38,6 +38,9 @@ function sidecars(...present: string[]): Record<string, boolean> {
 function listing(overrides: Partial<WireDatasetListing> = {}): WireDatasetListing {
   return {
     folder: "frames",
+    // A leaf: this folder holds images and nothing below it. Folder navigation has its own
+    // tests in `test/dataset/folders.test.tsx`.
+    folders: [],
     columns: COLUMNS,
     annotatedCount: 1,
     unrecognized: 0,

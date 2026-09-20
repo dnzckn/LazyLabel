@@ -24,6 +24,9 @@ afterEach(cleanup);
 
 const LISTING: WireDatasetListing = {
   folder: "frames",
+  // A leaf: this folder holds images and nothing below it. Folder navigation has its own
+  // tests in `test/dataset/folders.test.tsx`.
+  folders: [],
   columns: [{ format: "NPZ", suffix: ".npz" }],
   annotatedCount: 1,
   unrecognized: 0,

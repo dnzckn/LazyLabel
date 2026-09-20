@@ -25,5 +25,13 @@ export default defineConfig({
      * because the code is wrong.
      */
     pool: "vmThreads",
+    /*
+     * Longer than `asyncUtilTimeout` in test/setup.ts, and that relationship is the point.
+     *
+     * With both at five seconds, a waitFor that was going to fail consumed the whole test budget
+     * first, so vitest killed the test with "timed out in 5000ms" and the assertion never got to
+     * say what it had actually been waiting for. Every diagnosis had to start by widening this.
+     */
+    testTimeout: 20_000,
   },
 });

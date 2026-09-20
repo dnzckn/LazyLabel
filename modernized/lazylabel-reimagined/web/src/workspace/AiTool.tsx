@@ -62,6 +62,22 @@ export function AiTool({
   /** Rises with every prompt; an answer with a stale number is thrown away. */
   const latest = useRef(0);
 
+  /*
+   * THE PREDICTION, READ THROUGH A REF SO ACCEPTING IT CANNOT USE A STALE ONE.
+   *
+   * Space is handled by a `document` listener that `AiLayer` registers in an effect. Effects run
+   * AFTER the commit, so there is a window in which the preview is on screen and the listener
+   * still closes over the render where there was no prediction -- and a Space in that window was
+   * answered with "No AI segment preview to accept", over a preview the user was looking at.
+   *
+   * The window is short in a browser and the test suite hit it about one run in ten, which is
+   * roughly what "as fast as a person can press a key after seeing something appear" looks like.
+   * Reading the current value instead of the captured one closes it whenever the listener was
+   * registered.
+   */
+  const current = useRef<WireSegmentResponse | null>(null);
+  current.current = result;
+
   // One encode per image. Cleared when the image changes so a handle cannot outlive its pixels.
   useEffect(() => {
     let cancelled = false;
@@ -154,6 +170,7 @@ export function AiTool({
 
   const accept = useCallback(
     (asEraser: boolean) => {
+      const result = current.current;
       if (result === null) {
         notify({ severity: "warning", message: "No AI segment preview to accept" });
         return;
@@ -196,7 +213,9 @@ export function AiTool({
 
       setResult(null);
     },
-    [classId, fragmentThreshold, notify, onAccept, onErase, result],
+    // No `result`: it is read from the ref above, which is the whole point. Leaving it in would
+    // put the stale closure back, one render later.
+    [classId, fragmentThreshold, notify, onAccept, onErase],
   );
 
   return (

@@ -13,7 +13,19 @@
  * This is deliberately the minimum: enough of the interface that the properties a tool reads are
  * real. It is not a PointerEvent implementation, and anything relying on pressure, tilt or
  * coalesced events should be tested in a real browser.
+ *
+ * It also sets ONE timeout for every async assertion in the suite. Testing Library's default is
+ * one second, which is a statement about a browser and not about a test runner executing fifty
+ * files across contended workers; a resolved promise can take longer than that to be delivered
+ * there. The suite lost about one run in ten to it, in a different test each time, which is the
+ * signature of a margin rather than a defect. Raising it does not weaken anything -- what these
+ * assertions claim is that a thing happens, not how fast -- and one number here is better than a
+ * `{ timeout: 5000 }` sprinkled at whichever call site failed most recently.
  */
+
+import { configure } from "@testing-library/react";
+
+configure({ asyncUtilTimeout: 5_000 });
 
 if (typeof globalThis.PointerEvent === "undefined") {
   class PointerEventShim extends MouseEvent {

@@ -93,7 +93,7 @@ async function ready(): Promise<void> {
   // these files run in parallel with CPU-bound ones, and a starved worker can take longer than a
   // second to deliver a resolved promise. Raising it does not weaken the assertion -- what is
   // being asserted is that the preview arrives, not how fast.
-  await screen.findByText(/AI preview ready/, undefined, { timeout: 5000 });
+  await screen.findByText(/AI preview ready/);
 }
 
 /** Let a rejected prediction settle, which produces no message of its own. */
@@ -119,7 +119,11 @@ describe("preparing the image", () => {
 
     expect(await screen.findByText(/Still preparing this image/)).toBeTruthy();
 
+    // Released and WAITED FOR before the test ends. Leaving the encode in flight lets it resolve
+    // after cleanup has unmounted the component, which is a state update on a dead tree -- and it
+    // failed one full-suite run out of several while passing this file every time.
     release({ handle: "h1", cached: true });
+    await waitFor(() => expect(screen.queryByText(/Preparing this image/)).toBeNull());
   });
 
 
