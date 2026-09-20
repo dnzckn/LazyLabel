@@ -33,6 +33,7 @@ import type { AnnotationsResult, ApiClient } from "../api/client.js";
 import { History } from "./history.js";
 import { provenanceFromLoad, type ImageState } from "./saveState.js";
 import { toggle } from "../tools/selection.js";
+import type { Crop } from "../tools/crop.js";
 
 /** Every tool the workspace offers. */
 export type Tool = "none" | "select" | "polygon" | "box" | "circle" | "ai";
@@ -119,6 +120,18 @@ export interface WorkspaceContextValue {
     aliases: Readonly<Record<string, string>>,
     label: string,
   ) => void;
+  /**
+   * The crop in force, or null for none — RULE-018, a P0 rule.
+   *
+   * Held here rather than in the panel because the SAVE path reads it: a crop blanks every mask
+   * pixel outside it on write, so a crop the save request does not carry is a crop that silently
+   * does nothing, and one the panel forgets to clear is work deleted without anyone asking.
+   *
+   * Under decision 9 it does NOT carry over between images. Legacy keeps it, so a crop set on a
+   * wide image and forgotten blanks most of the next, narrow one.
+   */
+  readonly crop: Crop | null;
+  readonly setCrop: (crop: Crop | null) => void;
 }
 
 const WorkspaceContext = createContext<WorkspaceContextValue | null>(null);
@@ -139,6 +152,7 @@ export function WorkspaceProvider({
   const [activeClassId, setActiveClassId] = useState<number | null>(null);
   const [selected, setSelected] = useState<readonly number[]>([]);
   const [classAliases, setClassAliases] = useState<Readonly<Record<string, string>>>({});
+  const [crop, setCrop] = useState<Crop | null>(null);
   // One History for the session, cleared per image: RULE-052 scopes undo to the open image, so an
   // undo after switching must not reach back into the previous one's edits.
   const history = useMemo(() => new History(), []);
@@ -155,6 +169,9 @@ export function WorkspaceProvider({
       setSegments([]);
       setSelected([]);
       setClassAliases({});
+      // Decision 9: a crop does NOT carry over. Legacy keeps it across images, so one set on a wide
+      // image and forgotten blanks most of the next, narrow one on its first save.
+      setCrop(null);
       setDirty(false);
 
       client
@@ -377,6 +394,8 @@ export function WorkspaceProvider({
       classAliases,
       setClassAlias,
       applyClasses,
+      crop,
+      setCrop,
     }),
     [
       activeClassId,
@@ -396,6 +415,7 @@ export function WorkspaceProvider({
       classAliases,
       setClassAlias,
       applyClasses,
+      crop,
     ],
   );
 

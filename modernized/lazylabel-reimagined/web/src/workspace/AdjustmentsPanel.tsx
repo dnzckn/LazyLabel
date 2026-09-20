@@ -13,7 +13,7 @@
 
 import { useCallback, type ReactNode } from "react";
 
-import { NEUTRAL, folds, isNeutral, type Adjustments } from "../tools/adjustments.js";
+import { NEUTRAL, adjustmentsFrom, folds, isNeutral, type Adjustments } from "../tools/adjustments.js";
 import { useSettings } from "../settings/SettingsProvider.jsx";
 
 /** Legacy's slider ranges (`adjustments_widget.py:65-97`). */
@@ -23,12 +23,8 @@ const SATURATION_SLIDER = { min: 0, max: 200, scale: 100 };
 export function AdjustmentsPanel(): ReactNode {
   const { settings, save } = useSettings();
 
-  const current: Adjustments = {
-    brightness: numberOr(settings.values["brightness"], NEUTRAL.brightness),
-    contrast: numberOr(settings.values["contrast"], NEUTRAL.contrast),
-    gamma: numberOr(settings.values["gamma"], NEUTRAL.gamma),
-    saturation: numberOr(settings.values["saturation"], NEUTRAL.saturation),
-  };
+  // The same reader the canvas uses, so the slider position and the picture cannot disagree.
+  const current: Adjustments = adjustmentsFrom(settings.values);
 
   const set = useCallback(
     (key: keyof Adjustments, value: number) => {
@@ -126,9 +122,4 @@ function Slider({
       />
     </label>
   );
-}
-
-/** A settings file can hold anything; a non-number falls back rather than making the image vanish. */
-function numberOr(value: unknown, fallback: number): number {
-  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
 }

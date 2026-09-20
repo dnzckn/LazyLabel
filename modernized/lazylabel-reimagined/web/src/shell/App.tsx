@@ -17,6 +17,7 @@ import { NotificationHost } from "../notifications/NotificationProvider.jsx";
 import { OpenImageView } from "../workspace/OpenImageView.jsx";
 import { AdjustmentsPanel } from "../workspace/AdjustmentsPanel.jsx";
 import { ClassTable } from "../workspace/ClassTable.jsx";
+import { CropPanel } from "../workspace/CropPanel.jsx";
 import { ModelPicker } from "../workspace/ModelPicker.jsx";
 import { SegmentTable } from "../workspace/SegmentTable.jsx";
 import { useWorkspace, type Tool } from "../workspace/WorkspaceProvider.jsx";
@@ -118,20 +119,20 @@ export function App({ client }: { readonly client: ApiClient }): ReactNode {
                 user to press one, and saying where the work stands does not. */}
             <Panel title="Drawing tools">
               <ToolPicker />
-              {/* Named, not mocked: vertex editing is still Phase 5 work, and a dead control
-                  would invite a user to press it. */}
-              <p className="panel__missing">Vertex editing is still to come.</p>
+              {/* Shift-drag erases with whichever shape is active, which is legacy's gesture and
+                  is not discoverable by looking at the picker. */}
+              <p className="panel__missing">
+                Hold Shift while drawing to erase with the shape instead of adding it.
+              </p>
             </Panel>
             <Panel title="AI tools">
               <ModelPicker client={client} />
             </Panel>
             <Panel title="Image adjustments">
               <AdjustmentsPanel />
-              {/* Named, not mocked: the channel-threshold and rescale panels have their rules
-                  implemented and tested, and no controls yet. */}
-              <p className="panel__missing">
-                Channel thresholds, rescale and crop controls are still to come.
-              </p>
+            </Panel>
+            <Panel title="Crop" initiallyCollapsed>
+              <CropPanel />
             </Panel>
 
             <Panel title="Settings">

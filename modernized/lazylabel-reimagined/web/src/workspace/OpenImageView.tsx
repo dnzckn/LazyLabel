@@ -10,7 +10,7 @@
  * other things ask the same question and a prop chain would make this one the owner by accident.
  */
 
-import { useCallback, useState, type ReactNode } from "react";
+import { useCallback, useMemo, useState, type ReactNode } from "react";
 
 import { normalizeExportFormats } from "@lazylabel/settings-schema";
 import type {
@@ -30,6 +30,7 @@ import { SelectLayer } from "../canvas/SelectLayer.jsx";
 import { ShapeLayer } from "../canvas/ShapeLayer.jsx";
 import { rasterizeSegment, type BinaryMask } from "@lazylabel/annotation-formats";
 import { erase } from "../tools/erase.js";
+import { adjustmentsFrom } from "../tools/adjustments.js";
 import type { ImagePoint } from "../canvas/coordinates.js";
 import { classForNewSegment } from "./classes.js";
 import { useNotifications } from "../notifications/NotificationProvider.jsx";
@@ -85,6 +86,20 @@ function OpenedImage({
   const { segments, addSegment, activeTool, activeClassId, applySegments, selected, toggleSelected } =
     useWorkspace();
   const { notify } = useNotifications();
+  // Only a context failure falls back to the plain image. A picture that will not DECODE is the
+  // canvas's own business -- it reports that and still draws the annotations, which is worth more
+  // than a broken-image icon with nothing on it.
+  const [canvasFailed, setCanvasFailed] = useState(false);
+  const onCanvasError = useCallback(
+    (reason: string) => {
+      if (reason.includes("2D canvas")) setCanvasFailed(true);
+      notify({ severity: "warning", message: reason });
+    },
+    [notify],
+  );
+  // RULE-028, read from the same settings the panel writes. Neutral values cost nothing: the
+  // canvas skips the whole read-modify-write when there is no adjustment to make.
+  const adjustments = useMemo(() => adjustmentsFrom(settings.values), [settings.values]);
   const joinThreshold = Number(settings.values["polygon_join_threshold"]);
   const fragmentThreshold = Number(settings.values["fragment_threshold"] ?? 0);
   // A manifest NAME, not a file path. Empty means none chosen, and the AI tool says so rather
@@ -183,17 +198,29 @@ function OpenedImage({
               Once the annotations are in, the canvas draws them over it; until then a plain image
               shows the picture rather than an empty box. */}
           {/* The drawing layer sits OVER whichever of these is showing, so an image with no
-              annotation file can still be annotated -- which is the usual way a dataset starts. */}
+              annotation file can still be annotated -- which is the usual way a dataset starts.
+
+              THE CANVAS DRAWS WHATEVER IS LIVE, not only what a file held. It used to be shown
+              only when the load returned annotations, which meant an image with NO annotation file
+              -- the first image of every new dataset -- showed a plain picture, and every shape
+              drawn on it stayed invisible until the user saved and came back. The canvas with no
+              segments renders exactly what that plain picture did, so there was nothing to gain by
+              the split.
+
+              The `<img>` survives as the fallback for a browser that gives no 2D context, where
+              the canvas can show nothing at all. */}
           <div className="canvas-stack">
-            {result?.kind === "loaded" ? (
+            {canvasFailed ? (
+              <img className="preview" src={pixelsUrl} alt={image.name} />
+            ) : (
               <AnnotationCanvas
                 imageUrl={pixelsUrl}
                 width={metadata.width}
                 height={metadata.height}
                 segments={segments}
+                adjustments={adjustments}
+                onError={onCanvasError}
               />
-            ) : (
-              <img className="preview" src={pixelsUrl} alt={image.name} />
             )}
 
             {activeTool === "ai" &&
@@ -375,7 +402,9 @@ function ConvertButton({
   const { settings } = useSettings();
   // The LIVE names and segments, not the ones the file held. A class renamed or an annotation
   // drawn since loading has to be written as it now stands, or the edit is lost on the next save.
-  const { classAliases, segments } = useWorkspace();
+  // The crop comes from the store for the same reason: it is part of what a save WRITES, and a
+  // crop the request leaves out is a crop the panel showed and the file never saw.
+  const { classAliases, segments, crop } = useWorkspace();
   const [state, setState] = useState<
     | { readonly status: "idle" }
     | { readonly status: "saving" }
@@ -393,12 +422,16 @@ function ConvertButton({
         formats,
         segments,
         classAliases,
+        // RULE-018 is applied on the server, against the same mask tensor the exports are built
+        // from -- so what a crop blanks is exactly what the files lose, rather than two
+        // implementations of the same rectangle.
+        cropCoords: crop === null ? null : [crop.x1, crop.y1, crop.x2, crop.y2],
       })
       .then((result) => setState({ status: "saved", result }))
       .catch((cause: unknown) =>
         setState({ status: "failed", reason: cause instanceof Error ? cause.message : String(cause) }),
       );
-  }, [classAliases, client, formats, image.key, projectId, segments, size]);
+  }, [classAliases, client, crop, formats, image.key, projectId, segments, size]);
 
   return (
     <div>

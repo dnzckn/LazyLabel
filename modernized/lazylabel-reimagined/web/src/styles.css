@@ -432,3 +432,20 @@ fieldset input {
 .adjustment input[type="range"] {
   width: 100%;
 }
+
+/* The crop panel. A destructive control, so its warning has room rather than being a footnote. */
+.crop__field {
+  display: block;
+  margin-bottom: 0.4rem;
+  font-size: 0.85rem;
+}
+
+.crop__field span {
+  display: block;
+  color: var(--muted);
+}
+
+.crop__field input {
+  width: 100%;
+  box-sizing: border-box;
+}

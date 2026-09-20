@@ -17,6 +17,7 @@ import { useEffect, useRef, type ReactNode } from "react";
 
 import { base64ToBytes, type WireSegment } from "@lazylabel/contracts";
 
+import { NEUTRAL, adjustImage, isNeutral, type Adjustments } from "../tools/adjustments.js";
 import { classColor } from "./classColor.js";
 
 export interface AnnotationCanvasProps {
@@ -26,6 +27,15 @@ export interface AnnotationCanvasProps {
   readonly segments: readonly WireSegment[];
   /** 0 hides the overlay, 1 hides the image. Legacy's default is a half-transparent overlay. */
   readonly opacity?: number;
+  /**
+   * RULE-028's display adjustments, applied to the IMAGE only.
+   *
+   * The annotations are drawn afterwards and are never adjusted: their colours come from RULE-034
+   * and are how a user identifies a class. Darkening the image and darkening the overlay with it
+   * would make two classes converge on the same colour, which is the one thing the palette exists
+   * to prevent.
+   */
+  readonly adjustments?: Adjustments;
   readonly onError?: (reason: string) => void;
 }
 
@@ -35,6 +45,7 @@ export function AnnotationCanvas({
   height,
   segments,
   opacity = 0.5,
+  adjustments = NEUTRAL,
   onError,
 }: AnnotationCanvasProps): ReactNode {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -43,27 +54,40 @@ export function AnnotationCanvas({
     const canvas = canvasRef.current;
     if (canvas === null) return;
 
-    const context = canvas.getContext("2d");
-    if (context === null) {
+    // Three ways this fails, and only one of them is the documented one. The spec says null; jsdom
+    // returns UNDEFINED after logging "not implemented"; a browser with canvas disabled by policy
+    // throws. `=== null` catches one of the three, and the other two turn into a TypeError inside
+    // the load handler -- which is to say, a blank view and a stack trace rather than a fallback.
+    let context: CanvasRenderingContext2D | null | undefined;
+    try {
+      context = canvas.getContext("2d");
+    } catch {
+      context = null;
+    }
+    if (!context) {
       onError?.("this browser did not provide a 2D canvas");
       return;
     }
+    const drawingContext = context;
 
     let cancelled = false;
     const image = new Image();
 
     image.onload = () => {
       if (cancelled) return;
-      context.clearRect(0, 0, width, height);
-      context.drawImage(image, 0, 0, width, height);
-      for (const segment of segments) drawSegment(context, segment, opacity);
+      drawingContext.clearRect(0, 0, width, height);
+      drawingContext.drawImage(image, 0, 0, width, height);
+      // Between the image and the overlay, so the adjustments reach the pixels a user is judging
+      // and not the class colours they are navigating by.
+      applyAdjustments(drawingContext, width, height, adjustments, onError);
+      for (const segment of segments) drawSegment(drawingContext, segment, opacity);
     };
     image.onerror = () => {
       if (cancelled) return;
       // The annotations are still worth showing, so the masks are drawn on an empty canvas rather
       // than the whole view failing because one request did.
-      context.clearRect(0, 0, width, height);
-      for (const segment of segments) drawSegment(context, segment, opacity);
+      drawingContext.clearRect(0, 0, width, height);
+      for (const segment of segments) drawSegment(drawingContext, segment, opacity);
       onError?.("the image could not be loaded, so only the annotations are shown");
     };
     image.src = imageUrl;
@@ -71,7 +95,7 @@ export function AnnotationCanvas({
     return () => {
       cancelled = true;
     };
-  }, [imageUrl, width, height, segments, opacity, onError]);
+  }, [imageUrl, width, height, segments, opacity, adjustments, onError]);
 
   return (
     <canvas
@@ -83,6 +107,42 @@ export function AnnotationCanvas({
       aria-label={`${segments.length} annotations`}
     />
   );
+}
+
+/**
+ * Adjust what has been drawn so far, in place.
+ *
+ * Skipped entirely when the adjustments are neutral, which is the common case: reading a whole
+ * image back out of the canvas and writing it again costs four bytes a pixel each way, and doing
+ * it on every redraw to change nothing would be felt on a large image.
+ *
+ * `getImageData` throws on a TAINTED canvas — an image served cross-origin without CORS headers.
+ * The app's images come from its own API so this should not happen, but a misconfigured deployment
+ * would otherwise blank the whole view. Caught, reported, and the unadjusted image is left: seeing
+ * the image without the adjustment is far better than seeing neither.
+ *
+ * Exported for the same reason `segmentPixels` is: jsdom has no real canvas, so the only way to
+ * hold this behaviour in a test is to hand it a context of our own.
+ */
+export function applyAdjustments(
+  context: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+  adjustments: Adjustments,
+  onError?: (reason: string) => void,
+): void {
+  if (isNeutral(adjustments) || width <= 0 || height <= 0) return;
+
+  try {
+    const frame = context.getImageData(0, 0, width, height);
+    adjustImage(frame.data, adjustments);
+    context.putImageData(frame, 0, 0);
+  } catch (cause: unknown) {
+    onError?.(
+      "the image adjustments could not be applied, so the image is shown unadjusted "
+        + `(${cause instanceof Error ? cause.message : String(cause)})`,
+    );
+  }
 }
 
 /**

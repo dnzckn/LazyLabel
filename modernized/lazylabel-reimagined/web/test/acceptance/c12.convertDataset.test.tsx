@@ -143,9 +143,14 @@ describe("C12: converting a dataset in the browser", () => {
     await waitFor(() => expect(screen.getByText(/Wrote NPZ, YOLO_DETECTION beside a\.png/)).toBeTruthy());
 
     // The size comes from the image metadata, and the annotations are the ones just loaded.
+    // `cropCoords: null` is sent EXPLICITLY rather than left out. RULE-018 blanks what falls
+    // outside a crop, so "there is no crop" and "this client never mentioned one" have to be
+    // distinguishable on the wire -- a field the server has to guess at is a field that can be
+    // guessed wrong in the direction that deletes annotations.
     expect(saveAnnotations).toHaveBeenCalledWith("p1", "frames/a.png", {
       imageSize: [1080, 1920],
       formats: ["NPZ", "YOLO_DETECTION"],
+      cropCoords: null,
       segments: LOADED.kind === "loaded" ? LOADED.annotations.segments : [],
       classAliases: { "3": "stop sign" },
     });

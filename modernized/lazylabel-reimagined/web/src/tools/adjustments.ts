@@ -34,6 +34,30 @@ export interface Adjustments {
 
 export const NEUTRAL: Adjustments = { brightness: 0, contrast: 0, gamma: 1, saturation: 1 };
 
+/**
+ * Read the adjustments out of a settings bag.
+ *
+ * ONE reader, used by both the panel that writes these and the canvas that renders them. Two
+ * readers is two chances to disagree about what a settings file means, and the way that shows up
+ * is a slider whose position does not match the picture.
+ *
+ * A settings file can hold anything — it is imported from the desktop app and can be hand-edited.
+ * A non-number falls back to neutral rather than reaching the arithmetic: a NaN gamma blanks every
+ * pixel of the image, which looks like a decode failure rather than a bad setting.
+ */
+export function adjustmentsFrom(values: Readonly<Record<string, unknown>>): Adjustments {
+  return {
+    brightness: numberOr(values["brightness"], NEUTRAL.brightness),
+    contrast: numberOr(values["contrast"], NEUTRAL.contrast),
+    gamma: numberOr(values["gamma"], NEUTRAL.gamma),
+    saturation: numberOr(values["saturation"], NEUTRAL.saturation),
+  };
+}
+
+function numberOr(value: unknown, fallback: number): number {
+  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+}
+
 /** BT.601 luma, which is what legacy's greyscale blend uses. */
 const LUMA_R = 0.299;
 const LUMA_G = 0.587;

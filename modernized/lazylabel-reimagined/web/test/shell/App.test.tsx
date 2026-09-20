@@ -138,10 +138,11 @@ describe("the application shell", () => {
     );
   });
 
-  it("offers the tools it has, and names what is still missing", async () => {
-    // This used to assert a "Phase 5" marker in the tools pane. Those panels are built now, so
-    // the marker is gone -- and what replaced it is the honest version: the tools are there, and
-    // the specific things still to come are named in words rather than by a phase label.
+  it("offers every tool panel, with nothing left named as missing", async () => {
+    // This assertion has been rewritten twice as the panels landed: first it looked for a "Phase
+    // 5" marker, then for a "still to come" line. Both are gone now because there is nothing left
+    // in this pane to name -- which is the outcome the marker existed to make visible. What it
+    // checks now is that each panel is actually there.
     mount({});
     await waitFor(() => expect(screen.getByLabelText("Tools")).toBeTruthy());
 
@@ -149,7 +150,8 @@ describe("the application shell", () => {
     expect(tools.textContent).toMatch(/Drawing tools/);
     expect(tools.textContent).toMatch(/AI tools/);
     expect(tools.textContent).toMatch(/Image adjustments/);
-    expect(tools.textContent).toMatch(/still to come/);
+    expect(tools.textContent).toMatch(/Crop/);
+    expect(tools.textContent).not.toMatch(/still to come/);
   });
 
   it("puts the image in the main landmark and the dataset beside it", async () => {
