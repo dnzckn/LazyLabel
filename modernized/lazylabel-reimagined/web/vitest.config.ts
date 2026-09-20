@@ -8,6 +8,9 @@ export default defineConfig({
   },
   test: {
     environment: "jsdom",
+    // Fills jsdom's PointerEvent gap; see test/setup.ts for why that is a shim rather than a
+    // change of API in the components.
+    setupFiles: ["./test/setup.ts"],
     include: ["test/**/*.test.ts", "test/**/*.test.tsx"],
   },
 });
