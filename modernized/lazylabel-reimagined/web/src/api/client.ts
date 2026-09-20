@@ -21,6 +21,7 @@ import type {
   WireFailure,
   WireImageMetadata,
   WireLoadResponse,
+  WireMask,
   WireProblem,
   WireSaveRequest,
   WireSaveResponse,
@@ -64,6 +65,33 @@ export interface ApiHealth {
     /** A GPU's name, "CPU", or "unknown". The server's device, which the browser cannot see. */
     readonly accelerator: string;
   };
+}
+
+export interface WireEmbedRequest {
+  readonly image: string;
+  /** A manifest model NAME, never a file path -- the service will not load anything unlisted. */
+  readonly model: string;
+  readonly adjustments?: Readonly<Record<string, number>>;
+}
+
+export interface WireEmbedResponse {
+  readonly handle: string;
+  /** False for a cold encode, which takes seconds; true when the service already had it. */
+  readonly cached: boolean;
+}
+
+export interface WireSegmentRequest {
+  readonly handle: string;
+  readonly points?: readonly { readonly x: number; readonly y: number; readonly positive: boolean }[];
+  readonly box?: readonly [number, number, number, number];
+}
+
+export interface WireSegmentResponse {
+  readonly mask: WireMask;
+  readonly score: number;
+  /** Which candidate won, and every candidate's score (RULE-020). */
+  readonly chosen: number;
+  readonly alternatives: readonly number[];
 }
 
 export interface ApiClientOptions {
@@ -159,6 +187,26 @@ export class ApiClient {
   ): Promise<WireSaveResponse> {
     const response = await this.send("PUT", this.annotationsPath(projectId, imagePath), request);
     if (response.status === 200) return (await response.json()) as WireSaveResponse;
+    throw await this.problem(response);
+  }
+
+  /**
+   * Encode an image so prompts against it are fast, returning a handle.
+   *
+   * The expensive half: seconds for a cold encode, immediate when the service already has it.
+   * `cached` says which, so the UI can show progress for the first and nothing for the rest --
+   * a spinner that flashes on every click is worse than no spinner.
+   */
+  async embed(request: WireEmbedRequest): Promise<WireEmbedResponse> {
+    const response = await this.send("POST", "/inference/embeddings", request);
+    if (response.status === 200) return (await response.json()) as WireEmbedResponse;
+    throw await this.problem(response);
+  }
+
+  /** One prompt against an encoded image. The handle comes from `embed`. */
+  async segment(request: WireSegmentRequest): Promise<WireSegmentResponse> {
+    const response = await this.send("POST", "/inference/segment", request);
+    if (response.status === 200) return (await response.json()) as WireSegmentResponse;
     throw await this.problem(response);
   }
 

@@ -173,3 +173,67 @@ describe("the client envelope", () => {
     expect(calls[0]!.url).toBe("http://api.test/projects/p/images/a.png/annotations?height=1&width=1");
   });
 });
+
+describe("the inference calls", () => {
+  it("asks for an encode by model NAME, never a path", () => {
+    // The service refuses anything not in its manifest, so a path here would be a request it can
+    // only reject -- and the manifest is what makes "a checkpoint that is not listed is not
+    // loadable" true.
+    const { fetch, calls } = stubFetch({
+      "/api/inference/embeddings": { status: 200, body: { handle: "h1", cached: false } },
+    });
+    const client = new ApiClient({ baseUrl: "/api", fetch });
+
+    void client.embed({ image: "frames/a.png", model: "SAM 2.1 large" });
+
+    expect(JSON.parse(String(calls[0]?.init?.body))).toEqual({
+      image: "frames/a.png",
+      model: "SAM 2.1 large",
+    });
+  });
+
+  it("says whether the encode was already cached", async () => {
+    // A cold encode is seconds and a cached one is immediate. A spinner that flashes on every
+    // click is worse than no spinner, so the caller needs to know which it got.
+    const { fetch } = stubFetch({
+      "/api/inference/embeddings": { status: 200, body: { handle: "h1", cached: true } },
+    });
+    const client = new ApiClient({ baseUrl: "/api", fetch });
+
+    expect((await client.embed({ image: "a.png", model: "m" })).cached).toBe(true);
+  });
+
+  it("sends a prompt against the handle", async () => {
+    const { fetch, calls } = stubFetch({
+      "/api/inference/segment": {
+        status: 200,
+        body: { mask: { height: 2, width: 2, box: null, data: "" }, score: 0.9, chosen: 1, alternatives: [0.1, 0.9, 0.5] },
+      },
+    });
+    const client = new ApiClient({ baseUrl: "/api", fetch });
+
+    const result = await client.segment({
+      handle: "h1",
+      points: [{ x: 5, y: 6, positive: true }],
+    });
+
+    expect(JSON.parse(String(calls[0]?.init?.body)).handle).toBe("h1");
+    // RULE-020: every candidate's score travels back, so a client can show that the choice was
+    // close rather than presenting one mask as the only answer.
+    expect(result.alternatives).toEqual([0.1, 0.9, 0.5]);
+    expect(result.chosen).toBe(1);
+  });
+
+  it("raises the service's reason rather than a bare failure", async () => {
+    // "AI unavailable" tells a user to give up; the reason tells them what to do.
+    const { fetch } = stubFetch({
+      "/api/inference/segment": {
+        status: 503,
+        body: { code: "inference_unavailable", message: "PyTorch is not installed" },
+      },
+    });
+    const client = new ApiClient({ baseUrl: "/api", fetch });
+
+    await expect(client.segment({ handle: "h1" })).rejects.toThrow(/PyTorch is not installed/);
+  });
+});
