@@ -416,6 +416,31 @@ needs is already in one store rather than scattered across managers.
    CUDA runtime. **It builds and does not RUN** — running needs a dataset to mount and, for the AI
    profile, a GPU and a checkpoint SEC-03 forbids downloading.
 
+   **Phase 6 exit criterion 3 is MET.** "Multi-view is delivered, redesigned or removed per
+   decision 8" -- delivered, rebuilt from RULE-092's rules rather than ported, with linked adds.
+
+   **Exit criterion 1 is partly built, and the unblocked part is done.** Persona flow 2 is "carry
+   labels through an image sequence", six steps. Steps 1 and 2 (build the timeline, mark
+   references) were the pilot. Steps 3, 4 and 6 are propagation and wait on the inference service.
+   **Step 5, tuning the confidence threshold from the histogram, needed no model** -- RULE-035's
+   binning and RULE-060's flagging are arithmetic over `{frame: score}` -- and is built:
+   `sequence/confidence.ts` with the panel in the timeline.
+
+   RULE-035 to its worked example (50 bins, `max(0, min(threshold, lowest) - 0.02)` to 1.0,
+   strictly-below counted as Below) and RULE-060's edges each pinned: the minimum over non-empty
+   objects, an empty object dropped rather than counted as zero, a frame of all-empty objects
+   reporting nothing rather than zero, strict `<` so exactly 0.99 is not flagged at the default,
+   and the threshold held to four decimals so a float step cannot land just above it.
+
+   **Another legacy defect designed out**, from its own card: changing Min Conf after propagation
+   recomputes the flagged set Save All uses but NOT the timeline's statuses, so the user reviews
+   the frames the colours point at and ships the ones the save skipped. One threshold, one
+   derivation. A reference frame is never flagged however low its score.
+
+   The panel is **reachable today** rather than waiting on the data: it renders with the timeline
+   and says propagation has not run, which is what a user sees now, and the chart branch is
+   exercised with real scores in tests rather than sitting on a shelf.
+
    **Exit criterion 4's harness is written too.** "Every dataset in the acceptance corpus imports
    and re-exports identically" needs the owner's corpus; what did not need it is the command:
 
@@ -617,9 +642,10 @@ and nobody was prompted to write their acceptance tests. Keeping that table hone
 the cheapest defence against this whole class, and is worth doing in the same commit as the
 feature.
 
-**The table is honest again as of 2026-09-20.** Twelve capabilities are marked built and each has
-an acceptance test named for it, driving the real `App` with only the HTTP client stubbed. Two
-remain pending and genuinely are: C11 (propagation) and C14 (the split view).
+**The table is honest again as of 2026-09-20.** Thirteen capabilities are marked built and each
+has an acceptance test named for it, driving the real `App` with only the HTTP client stubbed. One
+remains pending and genuinely is: C11, propagation, which needs the inference service and a
+recorded sequence. C14 joined the built list the same day -- see the linked-operation slice above.
 
 Writing those tests found a sixth defect of the same family: **an image with no annotation file had
 no save button.** `ConvertButton` lived inside the `result.kind === "loaded"` branch, so the first
