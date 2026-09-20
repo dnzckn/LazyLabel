@@ -39,7 +39,7 @@ import type { WireDatasetImage, WireImageMetadata, WireSegment } from "@lazylabe
 
 import type { AnnotationsResult, ApiClient } from "../api/client.js";
 import { History } from "./history.js";
-import { provenanceFromLoad, type ImageState } from "./saveState.js";
+import { onNavigateAway, provenanceFromLoad, type ImageState } from "./saveState.js";
 import { toggle } from "../tools/selection.js";
 import type { Crop } from "../tools/crop.js";
 import { NO_PROCESSING, type ImageProcessing } from "./processing.js";
@@ -255,10 +255,20 @@ export function WorkspaceProvider({
   client,
   projectId,
   children,
+  confirmNavigation = (summary) => window.confirm(summary),
 }: {
   readonly client: ApiClient;
   readonly projectId: string;
   readonly children: ReactNode;
+  /**
+   * Asked before unsaved work would be discarded. Returns whether to go ahead.
+   *
+   * Injectable so a test can answer it without a browser dialog, and so a future in-page prompt
+   * can replace the blunt one without touching this file. A `window.confirm` because it BLOCKS:
+   * decision 7 wants an explicit act, and a banner the user can scroll past while the annotations
+   * are already gone is not one.
+   */
+  readonly confirmNavigation?: (summary: string) => boolean;
 }): ReactNode {
   const [sides, setSides] = useState<readonly [SideState, SideState]>([EMPTY_SIDE, EMPTY_SIDE]);
   const [activeSide, setActiveSide] = useState<SideIndex>(0);
@@ -287,6 +297,24 @@ export function WorkspaceProvider({
 
   const openImageOn = useCallback(
     (side: SideIndex, image: WireDatasetImage) => {
+      /*
+       * WHAT IS ON THIS SIDE IS ABOUT TO BE THROWN AWAY, and until now nothing asked.
+       *
+       * Decision 7's whole subject: legacy auto-saves on navigation, which is how it deletes every
+       * sidecar for an image whose segments happen to be empty, so this app does not save -- and
+       * then discarded the work instead, silently, which is the same loss by the other route. Both
+       * `onNavigateAway` and `onClose` were written for exactly this, tested, and called by
+       * nothing.
+       *
+       * `saveOnNavigate: false` is not a setting read: `auto_save` is dropped under decision 7 and
+       * the honoured list records why. Passing it explicitly keeps the rule visible here rather
+       * than hiding it behind an absent key.
+       */
+      const decision = onNavigateAway(stateOf(sides[side]), { saveOnNavigate: false });
+      if (decision.kind === "ask" && !confirmNavigation(`${decision.summary} Open ${image.name} anyway?`)) {
+        return;
+      }
+
       // Cleared first, so a slow open cannot leave the previous image's annotations on screen
       // under the new image's name -- which is the shape of legacy's most expensive bug, where the
       // current path is committed before the decode succeeds.
@@ -331,7 +359,7 @@ export function WorkspaceProvider({
           );
         });
     },
-    [client, history, projectId, updateSide],
+    [client, confirmNavigation, history, projectId, sides, updateSide],
   );
 
   const openImage = useCallback(

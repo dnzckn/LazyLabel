@@ -71,7 +71,7 @@ function mount(client: Partial<ApiClient>) {
   } as unknown as ApiClient;
 
   render(
-    <WorkspaceProvider client={full} projectId="p1">
+    <WorkspaceProvider client={full} projectId="p1" confirmNavigation={() => true}>
       <Probe />
     </WorkspaceProvider>,
   );

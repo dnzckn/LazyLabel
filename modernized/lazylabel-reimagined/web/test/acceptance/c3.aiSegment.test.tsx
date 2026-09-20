@@ -128,7 +128,10 @@ function mount(overrides: Partial<ApiClient> = {}) {
   render(
     <NotificationProvider>
       <SettingsProvider client={api}>
-        <WorkspaceProvider client={api} projectId="p1">
+        {/* Unsaved work is no longer discarded silently when another image opens -- decision 7.
+            These tests navigate deliberately, so they answer the prompt; the prompt itself is
+            covered in `test/workspace/navigateAway.test.tsx`. */}
+        <WorkspaceProvider client={api} projectId="p1" confirmNavigation={() => true}>
           <Harness />
           <ModelPicker client={api} />
           <NotificationHost />

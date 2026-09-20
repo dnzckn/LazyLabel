@@ -86,7 +86,7 @@ export function mount(loaded: AnnotationsResult = { kind: "none" }) {
     <NotificationProvider>
       <SettingsProvider client={client}>
         <HotkeyProvider bindings={defaultSettings().hotkeys}>
-          <WorkspaceProvider client={client} projectId="default">
+          <WorkspaceProvider client={client} projectId="default" confirmNavigation={() => true}>
             <App client={client} />
           </WorkspaceProvider>
         </HotkeyProvider>
