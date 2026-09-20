@@ -6,10 +6,11 @@
  * that decides the shape rather than the moves along the way.
  */
 
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ShapeLayer, type ShapeKind } from "../../src/canvas/ShapeLayer.jsx";
+import { renderWithSettings } from "./settingsHarness.jsx";
 
 afterEach(cleanup);
 
@@ -28,7 +29,7 @@ function layer(kind: ShapeKind, props: Partial<Parameters<typeof ShapeLayer>[0]>
   const onErase = vi.fn(props.onErase);
   const onRefused = vi.fn(props.onRefused);
 
-  render(
+  renderWithSettings(
     <ShapeLayer
       kind={kind}
       width={IMAGE.width}

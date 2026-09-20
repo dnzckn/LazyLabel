@@ -14,6 +14,7 @@ import type { WireSegment } from "@lazylabel/contracts";
 import type { ApiClient, WireSegmentResponse } from "../../src/api/client.js";
 import { NotificationHost, NotificationProvider } from "../../src/notifications/NotificationProvider.jsx";
 import { AiTool } from "../../src/workspace/AiTool.jsx";
+import { renderWithSettings } from "../canvas/settingsHarness.jsx";
 
 afterEach(cleanup);
 
@@ -53,7 +54,9 @@ function mount(client: Partial<ApiClient>, props: Partial<Parameters<typeof AiTo
     ...client,
   } as unknown as ApiClient;
 
-  render(
+  // The AI layer reads the drawing-aid sizing, which comes from the settings. `useSettings` throws
+  // without a provider by design -- a hook that quietly defaults makes a missing wire invisible.
+  renderWithSettings(
     <NotificationProvider>
       <NotificationHost />
       <AiTool

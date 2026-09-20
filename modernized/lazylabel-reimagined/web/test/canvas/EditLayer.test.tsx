@@ -6,11 +6,12 @@
  * recording one history entry per frame instead of one per drag.
  */
 
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { WireSegment } from "@lazylabel/contracts";
 
 import { EditLayer } from "../../src/canvas/EditLayer.jsx";
+import { renderWithSettings } from "./settingsHarness.jsx";
 
 afterEach(cleanup);
 
@@ -36,7 +37,7 @@ function layer(segment: WireSegment) {
   const onChange = vi.fn();
   const onNoHandles = vi.fn();
 
-  render(
+  renderWithSettings(
     <EditLayer
       width={IMAGE.width}
       height={IMAGE.height}

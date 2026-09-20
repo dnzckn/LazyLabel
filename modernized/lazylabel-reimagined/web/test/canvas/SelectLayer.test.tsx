@@ -6,11 +6,12 @@
  * arithmetic: a click on empty space does not clear the selection.
  */
 
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { WireSegment } from "@lazylabel/contracts";
 
 import { SelectLayer } from "../../src/canvas/SelectLayer.jsx";
+import { renderWithSettings } from "./settingsHarness.jsx";
 
 afterEach(cleanup);
 
@@ -41,7 +42,7 @@ function layer(selected: readonly number[] = []) {
   const onToggle = vi.fn();
   const onMiss = vi.fn();
 
-  render(
+  renderWithSettings(
     <SelectLayer
       width={IMAGE.width}
       height={IMAGE.height}
@@ -136,7 +137,7 @@ describe("showing what is selected", () => {
 
   it("draws nothing for a selected mask, which has no outline to draw", () => {
     const onToggle = vi.fn();
-    render(
+    renderWithSettings(
       <SelectLayer
         width={IMAGE.width}
         height={IMAGE.height}

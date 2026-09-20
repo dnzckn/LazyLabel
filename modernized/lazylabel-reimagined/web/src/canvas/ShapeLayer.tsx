@@ -19,6 +19,7 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
 import { classColor } from "./classColor.js";
 import { locate, scale, type DisplayBox, type ImagePoint } from "./coordinates.js";
 import { boxFrom, circleFrom, radiusOf } from "../tools/shapes.js";
+import { useSizing } from "./useSizing.js";
 
 export type ShapeKind = "box" | "circle";
 
@@ -49,6 +50,7 @@ export function ShapeLayer({
   onErase,
   onRefused,
 }: ShapeLayerProps): ReactNode {
+  const sizing = useSizing();
   const surfaceRef = useRef<SVGSVGElement>(null);
   const [drag, setDrag] = useState<Drag | null>(null);
 
@@ -139,7 +141,7 @@ export function ShapeLayer({
   const stroke = `rgb(${colour.r}, ${colour.g}, ${colour.b})`;
   const fill = `rgba(${colour.r}, ${colour.g}, ${colour.b}, 0.25)`;
   const perPixel = box === null ? { x: 1, y: 1 } : scale(box, image);
-  const strokeWidth = Math.max(perPixel.x, perPixel.y);
+  const strokeWidth = Math.max(perPixel.x, perPixel.y) * sizing.line;
 
   return (
     <svg

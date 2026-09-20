@@ -1,0 +1,32 @@
+/**
+ * A settings context for the drawing layers.
+ *
+ * The layers read `point_radius`, `line_thickness` and `annotation_size_multiplier` through
+ * `useSizing`, which uses `useSettings` — and that throws without a provider, deliberately. A hook
+ * that quietly returns a default when its provider is missing makes a wiring mistake undetectable,
+ * which is the defect family this project has found eight of.
+ *
+ * So the tests supply one. `values` overrides individual keys, which is how the sizing tests ask
+ * for a bigger handle without restating the whole schema.
+ */
+
+import { render } from "@testing-library/react";
+import type { ReactNode } from "react";
+
+import { defaultSettings } from "@lazylabel/settings-schema";
+
+import type { ApiClient } from "../../src/api/client.js";
+import { SettingsProvider } from "../../src/settings/SettingsProvider.jsx";
+
+export function renderWithSettings(
+  node: ReactNode,
+  values: Readonly<Record<string, unknown>> = {},
+): ReturnType<typeof render> {
+  const base = defaultSettings();
+  const client = {
+    getSettings: async () => ({ ...base, values: { ...base.values, ...values } }),
+    putSettings: async (next: unknown) => next,
+  } as unknown as ApiClient;
+
+  return render(<SettingsProvider client={client}>{node}</SettingsProvider>);
+}

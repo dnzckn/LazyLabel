@@ -6,10 +6,11 @@
  * preview, and Space accepting rather than committing on every click.
  */
 
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AiLayer } from "../../src/canvas/AiLayer.jsx";
+import { renderWithSettings } from "./settingsHarness.jsx";
 
 afterEach(cleanup);
 
@@ -28,7 +29,7 @@ function layer(props: Partial<Parameters<typeof AiLayer>[0]> = {}) {
   const onAccept = vi.fn(props.onAccept);
   const onRefused = vi.fn(props.onRefused);
 
-  render(
+  renderWithSettings(
     <AiLayer
       width={IMAGE.width}
       height={IMAGE.height}

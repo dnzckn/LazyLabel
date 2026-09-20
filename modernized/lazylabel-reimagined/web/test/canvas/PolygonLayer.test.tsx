@@ -7,10 +7,11 @@
  * Space finishing a polygon while the user is typing a class name.
  */
 
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { PolygonLayer } from "../../src/canvas/PolygonLayer.jsx";
+import { renderWithSettings } from "./settingsHarness.jsx";
 
 afterEach(cleanup);
 
@@ -29,14 +30,17 @@ beforeEach(() => {
   } as DOMRect);
 });
 
-function layer(props: Partial<Parameters<typeof PolygonLayer>[0]> = {}) {
+function layer(
+  props: Partial<Parameters<typeof PolygonLayer>[0]> = {},
+  settings: Readonly<Record<string, unknown>> = {},
+) {
   // Typed as mocks rather than as the prop signatures, so `.mock.calls` is available: the argument
   // a callback received is half of what these tests are checking.
   const onComplete = vi.fn(props.onComplete);
   const onErase = vi.fn(props.onErase);
   const onRefused = vi.fn(props.onRefused);
 
-  render(
+  renderWithSettings(
     <PolygonLayer
       width={IMAGE.width}
       height={IMAGE.height}
@@ -46,6 +50,7 @@ function layer(props: Partial<Parameters<typeof PolygonLayer>[0]> = {}) {
       onErase={onErase}
       onRefused={onRefused}
     />,
+    settings,
   );
 
   return { onComplete, onErase, onRefused, surface: screen.getByLabelText("Polygon tool") };
@@ -263,5 +268,57 @@ describe("the close-range hint", () => {
     });
 
     expect(vertexAt(0)?.getAttribute("rx")).toBe(before);
+  });
+});
+
+describe("how big the drawing aids are", () => {
+  /** The radius of the first drawn vertex, which is what `point_radius` has to reach. */
+  const vertexRadius = () => {
+    const ellipse = document.querySelector("ellipse");
+    return ellipse === null ? null : Number(ellipse.getAttribute("rx"));
+  };
+
+  it("draws a vertex at the default size when nothing is set", () => {
+    const { surface } = layer();
+    clickAt(surface, 10, 10);
+
+    expect(vertexRadius()).toBeGreaterThan(0);
+  });
+
+  it("DOUBLES the vertex when point_radius is doubled", async () => {
+    // The wire this project keeps finding broken: a setting that is stored, shown, and reaches no
+    // pixel. Asserting the ratio rather than the number, because the number is a screen radius
+    // converted into image units and the conversion is not what this is about.
+    const plain = layer();
+    clickAt(plain.surface, 10, 10);
+    const before = vertexRadius();
+
+    cleanup();
+
+    const bigger = layer({}, { point_radius: 0.6 });
+    clickAt(bigger.surface, 10, 10);
+
+    // Awaited: the settings arrive from the client, so the first paint is still the defaults.
+    await waitFor(() => expect(vertexRadius()).toBeCloseTo((before ?? 0) * 2, 10));
+  });
+
+  it("thickens the outline when line_thickness is raised", async () => {
+    const plain = layer();
+    clickAt(plain.surface, 10, 10);
+    clickAt(plain.surface, 30, 10);
+    const before = Number(document.querySelector("polyline")?.getAttribute("stroke-width"));
+
+    cleanup();
+
+    const thicker = layer({}, { line_thickness: 1.5 });
+    clickAt(thicker.surface, 10, 10);
+    clickAt(thicker.surface, 30, 10);
+
+    await waitFor(() =>
+      expect(Number(document.querySelector("polyline")?.getAttribute("stroke-width"))).toBeCloseTo(
+        before * 3,
+        10,
+      ),
+    );
   });
 });

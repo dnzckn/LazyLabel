@@ -47,11 +47,14 @@ export const HONOURED: Readonly<Record<string, Honoured>> = {
   left_panel_width: GEOMETRY,
   right_panel_width: GEOMETRY,
 
-  point_radius: gap("the canvas draws vertices at a fixed radius; RULE-070's sizing is not wired."),
-  line_thickness: gap("the canvas draws outlines at a fixed width; RULE-070's sizing is not wired."),
-  annotation_size_multiplier: gap(
-    "RULE-070 scales both of the above together; nothing applies it.",
-  ),
+  // All three read through `canvas/sizing.ts`, which is where the unit change lives: legacy sizes
+  // handles in IMAGE pixels so they grow with zoom, and this app sizes them on SCREEN so they stay
+  // grabbable when you are looking at the whole image. The settings therefore arrive as ratios
+  // against legacy's own defaults rather than as lengths -- 0.3 read as a screen length is not a
+  // smaller handle, it is an invisible one.
+  point_radius: read,
+  line_thickness: read,
+  annotation_size_multiplier: read,
   pan_multiplier: gap("the canvas pans with the browser's own scrolling, which has no multiplier."),
 
   polygon_join_threshold: read,

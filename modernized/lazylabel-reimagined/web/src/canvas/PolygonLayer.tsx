@@ -32,6 +32,7 @@ import {
   wouldClose,
   type PolygonDraft,
 } from "../tools/polygon.js";
+import { useSizing } from "./useSizing.js";
 
 export interface PolygonLayerProps {
   readonly width: number;
@@ -60,6 +61,7 @@ export function PolygonLayer({
   onErase,
   onRefused,
 }: PolygonLayerProps): ReactNode {
+  const sizing = useSizing();
   const surfaceRef = useRef<SVGSVGElement>(null);
   const [draft, setDraft] = useState<PolygonDraft>(EMPTY_DRAFT);
   const [pointer, setPointer] = useState<ImagePoint | null>(null);
@@ -182,7 +184,7 @@ export function PolygonLayer({
           points={draft.vertices.map((v) => `${v.x},${v.y}`).join(" ")}
           fill="none"
           stroke={stroke}
-          strokeWidth={Math.max(perPixel.x, perPixel.y)}
+          strokeWidth={Math.max(perPixel.x, perPixel.y) * sizing.line}
         />
       )}
 
@@ -194,7 +196,7 @@ export function PolygonLayer({
           x2={draft.vertices[0]!.x}
           y2={draft.vertices[0]!.y}
           stroke={stroke}
-          strokeWidth={Math.max(perPixel.x, perPixel.y)}
+          strokeWidth={Math.max(perPixel.x, perPixel.y) * sizing.line}
           strokeDasharray={`${perPixel.x * 4} ${perPixel.x * 4}`}
         />
       )}
@@ -205,11 +207,11 @@ export function PolygonLayer({
           data-testid={`vertex-${index}`}
           cx={vertex.x}
           cy={vertex.y}
-          rx={(index === 0 && closing ? CLOSE_HINT_RADIUS : VERTEX_RADIUS) * perPixel.x}
-          ry={(index === 0 && closing ? CLOSE_HINT_RADIUS : VERTEX_RADIUS) * perPixel.y}
+          rx={(index === 0 && closing ? CLOSE_HINT_RADIUS : VERTEX_RADIUS) * perPixel.x * sizing.point}
+          ry={(index === 0 && closing ? CLOSE_HINT_RADIUS : VERTEX_RADIUS) * perPixel.y * sizing.point}
           fill={index === 0 && closing ? stroke : "none"}
           stroke={stroke}
-          strokeWidth={Math.max(perPixel.x, perPixel.y)}
+          strokeWidth={Math.max(perPixel.x, perPixel.y) * sizing.line}
         />
       ))}
     </svg>

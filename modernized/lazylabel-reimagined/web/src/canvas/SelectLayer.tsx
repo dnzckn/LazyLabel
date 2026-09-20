@@ -17,6 +17,7 @@ import type { WireSegment } from "@lazylabel/contracts";
 import { classColor } from "./classColor.js";
 import { locate, scale, type DisplayBox } from "./coordinates.js";
 import { hitTest } from "../tools/selection.js";
+import { useSizing } from "./useSizing.js";
 
 export interface SelectLayerProps {
   readonly width: number;
@@ -36,6 +37,7 @@ export function SelectLayer({
   onToggle,
   onMiss,
 }: SelectLayerProps): ReactNode {
+  const sizing = useSizing();
   const surfaceRef = useRef<SVGSVGElement>(null);
   const image = { width, height };
 
@@ -90,7 +92,7 @@ export function SelectLayer({
             points={segment.vertices.map(([x, y]) => `${x},${y}`).join(" ")}
             fill="none"
             stroke={`rgb(${r}, ${g}, ${b})`}
-            strokeWidth={Math.max(perPixel.x, perPixel.y) * 2}
+            strokeWidth={Math.max(perPixel.x, perPixel.y) * 2 * sizing.line}
             strokeDasharray={`${perPixel.x * 5} ${perPixel.x * 3}`}
           />
         );

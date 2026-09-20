@@ -26,6 +26,7 @@ import {
   undoLast,
   type AiPrompt,
 } from "../tools/ai.js";
+import { useSizing } from "./useSizing.js";
 
 export interface AiLayerProps {
   readonly width: number;
@@ -52,6 +53,7 @@ export function AiLayer({
   onRefused,
   preview,
 }: AiLayerProps): ReactNode {
+  const sizing = useSizing();
   const surfaceRef = useRef<SVGSVGElement>(null);
   const [prompt, setPrompt] = useState<AiPrompt>(EMPTY_PROMPT);
   const [from, setFrom] = useState<ImagePoint | null>(null);
@@ -182,7 +184,7 @@ export function AiLayer({
           height={Math.abs(prompt.box[1].y - prompt.box[0].y)}
           fill="none"
           stroke={`rgb(${r}, ${g}, ${b})`}
-          strokeWidth={Math.max(perPixel.x, perPixel.y)}
+          strokeWidth={Math.max(perPixel.x, perPixel.y) * sizing.line}
         />
       )}
 
@@ -196,7 +198,7 @@ export function AiLayer({
           fill="none"
           stroke={`rgb(${r}, ${g}, ${b})`}
           strokeDasharray={`${perPixel.x * 3} ${perPixel.x * 3}`}
-          strokeWidth={Math.max(perPixel.x, perPixel.y)}
+          strokeWidth={Math.max(perPixel.x, perPixel.y) * sizing.line}
         />
       )}
 
@@ -206,13 +208,13 @@ export function AiLayer({
           data-testid={point.positive ? `ai-positive-${index}` : `ai-negative-${index}`}
           cx={point.x}
           cy={point.y}
-          rx={POINT_RADIUS * perPixel.x}
-          ry={POINT_RADIUS * perPixel.y}
+          rx={POINT_RADIUS * perPixel.x * sizing.point}
+          ry={POINT_RADIUS * perPixel.y * sizing.point}
           // Green for include, red for exclude: the two mean opposite things, and a shape or size
           // difference alone is a distinction nobody reads at a glance.
           fill={point.positive ? "rgb(60, 200, 90)" : "rgb(230, 70, 70)"}
           stroke="rgba(0, 0, 0, 0.6)"
-          strokeWidth={Math.max(perPixel.x, perPixel.y)}
+          strokeWidth={Math.max(perPixel.x, perPixel.y) * sizing.line}
         />
       ))}
     </svg>

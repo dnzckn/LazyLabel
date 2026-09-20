@@ -22,6 +22,7 @@ import type { WireSegment } from "@lazylabel/contracts";
 import { classColor } from "./classColor.js";
 import { locate, scale, type DisplayBox, type ImagePoint } from "./coordinates.js";
 import { handlesFor, moveVertex } from "../tools/edit.js";
+import { useSizing } from "./useSizing.js";
 
 export interface EditLayerProps {
   readonly width: number;
@@ -45,6 +46,7 @@ export function EditLayer({
   onChange,
   onNoHandles,
 }: EditLayerProps): ReactNode {
+  const sizing = useSizing();
   const surfaceRef = useRef<SVGSVGElement>(null);
   const [dragging, setDragging] = useState<number | null>(null);
   /** The shape as it looks mid-drag. Null when no drag is in progress. */
@@ -152,11 +154,11 @@ export function EditLayer({
             data-testid={`handle-${handle}`}
             cx={vertex.x}
             cy={vertex.y}
-            rx={HANDLE_RADIUS * perPixel.x}
-            ry={HANDLE_RADIUS * perPixel.y}
+            rx={HANDLE_RADIUS * perPixel.x * sizing.point}
+            ry={HANDLE_RADIUS * perPixel.y * sizing.point}
             fill={dragging === handle ? stroke : "none"}
             stroke={stroke}
-            strokeWidth={Math.max(perPixel.x, perPixel.y)}
+            strokeWidth={Math.max(perPixel.x, perPixel.y) * sizing.line}
             onPointerDown={(event) => onPointerDown(event, handle)}
             style={{ cursor: "grab" }}
           />

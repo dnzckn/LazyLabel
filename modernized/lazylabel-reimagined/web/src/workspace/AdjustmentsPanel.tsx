@@ -19,6 +19,8 @@ import { useSettings } from "../settings/SettingsProvider.jsx";
 /** Legacy's slider ranges (`adjustments_widget.py:65-97`). */
 const GAMMA_SLIDER = { min: 1, max: 200, scale: 100 };
 const SATURATION_SLIDER = { min: 0, max: 200, scale: 100 };
+/** Legacy's annotation-size slider is `value / 10`, so its 10 is a multiplier of 1.0. */
+const ANNOTATION_SLIDER = { min: 1, max: 50, scale: 10 };
 
 export function AdjustmentsPanel(): ReactNode {
   const { settings, save } = useSettings();
@@ -28,6 +30,24 @@ export function AdjustmentsPanel(): ReactNode {
 
   const set = useCallback(
     (key: keyof Adjustments, value: number) => {
+      void save({ ...settings, values: { ...settings.values, [key]: value } });
+    },
+    [save, settings],
+  );
+
+  /*
+   * Not one of RULE-028's adjustments, so it does not go through `set`: that writes a key of
+   * `Adjustments` and this is not one. Sizing changes what is DRAWN OVER the picture rather than
+   * the picture, which is also why Reset above leaves it alone -- a user resetting the image does
+   * not mean they want smaller handles.
+   */
+  // The MULTIPLIER itself, not `sizingFrom(...).point` -- that folds `point_radius` in, so the
+  // slider would show a combined figure and writing it back would multiply the ratio a second
+  // time. Every drag would make the handles grow.
+  const rawSize = Number(settings.values["annotation_size_multiplier"]);
+  const annotationSize = Number.isFinite(rawSize) && rawSize > 0 ? rawSize : 1;
+  const setValue = useCallback(
+    (key: string, value: number) => {
       void save({ ...settings, values: { ...settings.values, [key]: value } });
     },
     [save, settings],
@@ -69,6 +89,23 @@ export function AdjustmentsPanel(): ReactNode {
         display={current.saturation.toFixed(2)}
         onChange={(v) => set("saturation", v / SATURATION_SLIDER.scale)}
       />
+
+      {/* The drawing aids rather than the picture, which is why it sits below the reset above and
+          carries its own note. Legacy's slider is `value / 10`, so its 10 is this app's 1.0. */}
+      <Slider
+        label="Annotation size"
+        min={ANNOTATION_SLIDER.min}
+        max={ANNOTATION_SLIDER.max}
+        value={Math.round(annotationSize * ANNOTATION_SLIDER.scale)}
+        display={`${annotationSize.toFixed(1)}x`}
+        onChange={(v) => setValue("annotation_size_multiplier", v / ANNOTATION_SLIDER.scale)}
+      />
+      <p className="panel__missing">
+        How big the vertex handles and outlines are drawn — not the annotations themselves, which
+        are the pixels you drew and do not change. Unlike the desktop app these stay the same size
+        on screen as you zoom, so a handle you can grab when looking at the whole image is still
+        grabbable when you are in close.
+      </p>
 
       {folds(current) && (
         // The thing legacy never says. cv2.convertScaleAbs takes the absolute value, so darkening
