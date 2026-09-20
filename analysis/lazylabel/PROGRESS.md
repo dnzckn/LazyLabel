@@ -360,20 +360,49 @@ needs is already in one store rather than scattered across managers.
    longer possible from that panel, because RULE-092 is about a PAIR being labelled together and a
    second image picker would put two controls on one question. It costs one extra click.
 
-   **The next slice is the LINKED operation** -- one action applying to both images at the same
-   pixel, as ONE undo entry. `split/linked.ts` holds the rules and `history.record` already takes a
-   scope naming both sides, so what is missing is the call path: a linked variant of `addSegment`
-   and `applySegments` that writes both sides and records one inverse. **C14 stays pending** until
-   then: two editable panes is not "one action on both", and marking it built would put the
-   capability table back to lying.
+   **C14 IS BUILT.** One shape drawn in either image lands in BOTH at the same pixel, under the
+   same class NAME with each image keeping its own id, as ONE undo entry that takes back both. The
+   decision lives in the store's `addSegment`, which is why it cost so little: every tool, the AI
+   prompt and the hotkeys already reach the store through that one function, so none of them had
+   to learn that a pair exists. `split/linkedAdd.ts` is pure and separate because the interesting
+   part is the refusals -- a shape outside the smaller image is refused THERE rather than moved, a
+   mask is refused between images of different sizes since "the same pixel" has no answer when the
+   grids differ, and an unclassified annotation has nothing to agree about.
 
-   Two decisions were settled before the slice and held:
+   It is **OFF by default**, reversing this view's first "starts linked, as legacy does". Legacy's
+   default does not bind: decision 8 rebuilt multi-view from the rules rather than porting a
+   half-migrated feature, and an annotation appearing in an image the user was not looking at is
+   precisely what decision 7 says must follow an explicit act.
 
-   - **One undo entry per linked operation**, not two. A user performed one action.
-   - **Linked classes agree on the NAME**, each image keeping its own id (RULE-092's answer, and
-     `split/linked.ts` implements it). Whether a pair whose images already assign different ids to
-     one alias should have its IDS reconciled as well **stays the owner's**; name agreement is well
-     defined either way, so the slice does not block on it.
+   Both settled decisions held. One undo entry per linked operation, not two -- a user performed
+   one action. And linked classes agree on the NAME: the acceptance test pins the case that
+   matters, where the second image already calls class 0 something else, so the arriving class
+   becomes id 1 there while staying 0 in the first. Copying the number across would produce two
+   files that both say "class 0" and mean different things, which is worse than a visible mismatch
+   because every export then looks consistent. Whether a pair should have its IDS reconciled as
+   well **stays the owner's**; name agreement is well defined either way.
+
+   **Not linked, and named rather than implied:** the two sides SAVE separately, and a linked EDIT
+   or DELETE is not built. Adding is.
+
+   **Thirteen of fourteen capabilities are built.** C11, propagation, is the one that is not, and
+   it needs the inference service and a recorded sequence.
+
+   **One serious defect was found on the way, by measuring the running app.** Every drawing layer
+   is `inset: 0` inside `.canvas-stack` and turns a click into an image pixel by scaling its own
+   rect against the image size -- so that box has to BE the picture, and it was not. The canvas's
+   margin grew the shrink-wrapping stack without growing the picture, and its 1px border sat
+   inside the scaled box. Measured on a real 32x24 image: canvas at y=215 height 26, layer at
+   y=207 height 50. **Every vertex drawn by every tool was misplaced**, vertically squashed by
+   about half and shifted up by 8px.
+
+   **No unit test could have caught it**, which is the part worth carrying forward. jsdom does no
+   layout, so the acceptance harness mocks `getBoundingClientRect` on `Element.prototype` and
+   returns ONE rect for every element -- making the layer and the canvas identical by
+   construction, which is exactly the thing that was wrong. A harness that mocks a measurement
+   cannot fail on a measurement. The guard is therefore a CSS test asserting the invariant where
+   it lives. Verified afterwards live: a triangle clicked at pixels (4,4) (20,4) (20,18) saved as
+   a box spanning edges 4.0..21.0 by 4.0..19.0, the correct inclusive-pixel extent.
 
    **The self-hosted deployment** (`modernized/lazylabel-reimagined/deploy/`) is written: three
    services, one published port on loopback, the dataset as a bind mount, the models read-only,
