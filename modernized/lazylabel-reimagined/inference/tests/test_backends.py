@@ -49,8 +49,24 @@ class TestConfigs:
 
 class TestLoadFailures:
     def test_refuses_a_family_it_has_no_backend_for(self, tmp_path: Path) -> None:
-        with pytest.raises(ModelNotLoadedError, match="SAM 1 arrives later"):
-            load_backend(entry(family="sam1", size="vit_h"), tmp_path)
+        # The manifest parser already refuses an unknown family, so reaching here means something
+        # built a ModelEntry by hand. Still an error rather than a guess.
+        from dataclasses import replace
+
+        rogue = replace(entry(), family="sam3")
+        (tmp_path / rogue.filename).write_bytes(b"not a checkpoint")
+
+        with pytest.raises(ModelNotLoadedError, match="no backend for family"):
+            load_backend(rogue, tmp_path)
+
+    def test_refuses_a_sam1_variant_that_does_not_exist(self, tmp_path: Path) -> None:
+        from dataclasses import replace
+
+        rogue = replace(entry(family="sam1", size="vit_h"), size="vit_enormous")
+        (tmp_path / rogue.filename).write_bytes(b"not a checkpoint")
+
+        with pytest.raises(ModelNotLoadedError, match="not a SAM 1 variant"):
+            load_backend(rogue, tmp_path)
 
     def test_refuses_a_checkpoint_that_is_not_there(self, tmp_path: Path) -> None:
         # A typed error naming the file, not a None the caller has to interpret.

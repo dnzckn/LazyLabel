@@ -32,6 +32,14 @@ from .prompts import (
     Prompt,
 )
 
+SAM1_VARIANTS: frozenset[str] = frozenset({"vit_b", "vit_l", "vit_h"})
+"""SAM 1's sizes, which are also the keys of `segment_anything.sam_model_registry`.
+
+There is no config file: the variant selects a builder in code. That is the whole difference
+between the two families at load time -- after which both predictors expose the same `set_image`
+and `predict`, so one backend serves both.
+"""
+
 # The config each SAM 2 size needs, from the configs shipped inside the installed sam2 package.
 # Recorded here rather than derived from the file name, which is the whole of RULE-085.
 SAM2_CONFIGS: dict[str, str] = {
@@ -56,8 +64,14 @@ class Backend(Protocol):
 
 
 @dataclass
-class Sam2Backend:
-    """SAM 2.1 through the `sam2` package."""
+class PredictorBackend:
+    """A loaded SAM model, of either family.
+
+    `SamPredictor` and `SAM2ImagePredictor` expose the same two methods with the same arguments and
+    the same three return values, and legacy's two wrappers build the same call from the same
+    prompt. So this is one class rather than two that would have to be kept in step -- the family
+    is a property of the manifest entry, not of the code path.
+    """
 
     _entry: ModelEntry
     _predictor: Any
@@ -69,7 +83,7 @@ class Sam2Backend:
 
     def set_image(self, image: Any) -> None:
         if self._predictor is None:
-            raise ModelNotLoadedError("no SAM 2 predictor is loaded")
+            raise ModelNotLoadedError("no predictor is loaded")
         if getattr(image, "ndim", 0) != 3 or image.shape[2] != 3:
             raise InvalidPromptError(
                 f"an image must be (height, width, 3) RGB; got shape {getattr(image, 'shape', None)}"
@@ -132,35 +146,77 @@ def load_backend(entry: ModelEntry, model_dir: Path, *, device: str | None = Non
     the version minimum is doing security work beyond feature availability, and
     `assert_weights_only_loading` below is what keeps that true rather than assumed.
     """
-    if entry.family != "sam2":
-        raise ModelNotLoadedError(
-            f"no backend for family {entry.family!r} yet; SAM 1 arrives later in Phase 3"
-        )
-
-    config = SAM2_CONFIGS.get(entry.size)
-    if config is None:
-        raise ModelNotLoadedError(f"no SAM 2 config is known for size {entry.size!r}")
-
     checkpoint = model_dir / entry.filename
     if not checkpoint.is_file():
         raise ModelNotLoadedError(f"{entry.filename} is not in {model_dir}")
 
     try:
         import torch
-        from sam2.build_sam import build_sam2
-        from sam2.sam2_image_predictor import SAM2ImagePredictor
     except ImportError as cause:
         raise ModelNotLoadedError(
-            f"the AI stack is not installed: {cause}. Install the AI extra: pip install lazylabel-inference[ai]"
+            f"the AI stack is not installed: {cause}. "
+            "Install the AI extra: pip install lazylabel-inference[ai]"
         ) from cause
 
     resolved = device or ("cuda" if torch.cuda.is_available() else "cpu")
-    try:
-        model = build_sam2(config, str(checkpoint), device=resolved)
-    except Exception as cause:
-        raise ModelNotLoadedError(f"{entry.name} could not be loaded from {entry.filename}: {cause}") from cause
 
-    return Sam2Backend(_entry=entry, _predictor=SAM2ImagePredictor(model))
+    if entry.family == "sam1":
+        return PredictorBackend(_entry=entry, _predictor=_load_sam1(entry, checkpoint, resolved))
+    if entry.family == "sam2":
+        return PredictorBackend(_entry=entry, _predictor=_load_sam2(entry, checkpoint, resolved))
+
+    raise ModelNotLoadedError(f"no backend for family {entry.family!r}")
+
+
+def _load_sam1(entry: ModelEntry, checkpoint: Path, device: str) -> Any:
+    """Build a SAM 1 predictor.
+
+    No config file: the variant names a builder in `sam_model_registry`. Note that
+    `segment_anything.build_sam` calls plain `torch.load(f)` with no `weights_only`, so this is safe
+    only because PyTorch 2.6 changed that default and RULE-084 floors us at 2.7.1 --
+    `assert_weights_only_loading` is what keeps that true rather than assumed.
+    """
+    if entry.size not in SAM1_VARIANTS:
+        raise ModelNotLoadedError(
+            f"{entry.size!r} is not a SAM 1 variant ({', '.join(sorted(SAM1_VARIANTS))})"
+        )
+
+    try:
+        from segment_anything import SamPredictor, sam_model_registry
+    except ImportError as cause:
+        raise ModelNotLoadedError(f"segment-anything is not installed: {cause}") from cause
+
+    try:
+        model = sam_model_registry[entry.size](checkpoint=str(checkpoint))
+        model.to(device)
+    except Exception as cause:
+        raise ModelNotLoadedError(
+            f"{entry.name} could not be loaded from {entry.filename}: {cause}"
+        ) from cause
+
+    return SamPredictor(model)
+
+
+def _load_sam2(entry: ModelEntry, checkpoint: Path, device: str) -> Any:
+    """Build a SAM 2 predictor. The size selects a config that ships inside the `sam2` package."""
+    config = SAM2_CONFIGS.get(entry.size)
+    if config is None:
+        raise ModelNotLoadedError(f"no SAM 2 config is known for size {entry.size!r}")
+
+    try:
+        from sam2.build_sam import build_sam2
+        from sam2.sam2_image_predictor import SAM2ImagePredictor
+    except ImportError as cause:
+        raise ModelNotLoadedError(f"the sam2 package is not installed: {cause}") from cause
+
+    try:
+        model = build_sam2(config, str(checkpoint), device=device)
+    except Exception as cause:
+        raise ModelNotLoadedError(
+            f"{entry.name} could not be loaded from {entry.filename}: {cause}"
+        ) from cause
+
+    return SAM2ImagePredictor(model)
 
 
 def assert_weights_only_loading() -> None:
@@ -188,3 +244,7 @@ def assert_weights_only_loading() -> None:
         "this PyTorch loads checkpoints without weights_only, so a checkpoint can execute code. "
         "RULE-084 sets the minimum at 2.7.1 partly for this reason."
     )
+
+
+# The class was called Sam2Backend when SAM 2 was the only family it served.
+Sam2Backend = PredictorBackend

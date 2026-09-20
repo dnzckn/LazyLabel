@@ -73,12 +73,13 @@ propagation is requested.
 
 ## SHA-256 values
 
-**This is the part of the gate that is not yet met, and it is honest to say so rather than fill the
-table with plausible-looking digests.**
+**Partly met: the two checkpoints the pilot actually runs are verified, the rest are not, and it is
+honest to say which is which rather than fill the table with plausible-looking digests.**
 
 | Checkpoint | SHA-256 | State |
 |---|---|---|
 | `sam2.1_hiera_large.pt` | `2647878d5dfa5098f2f8649825738a9345572bae2d4350a2468587ece47dd318` | **verified**, computed from the copy on the maintainer's machine (898,083,611 bytes) |
+| `sam_vit_h_4b8939.pth` | `a7bf3b02f3ebf1267aba913ff637d9a2d5c33d3173bb679e46d9f338c26f262e` | **verified**, computed from the copy on the maintainer's machine (2,564,550,879 bytes) |
 | every other row above | — | **not yet mirrored** |
 
 A digest may only be entered here after the file has been downloaded from the source URL above and
@@ -86,10 +87,15 @@ hashed locally. Copying a digest from a third-party page would defeat the point 
 manifest is supposed to say "these are the bytes we verified", not "these are the bytes someone
 said to expect".
 
-The one verified entry is enough to take the Phase 3 pilot end to end, because SAM 2.1 does
-single-image prediction as well as propagation. Phase 3 therefore starts against SAM 2.1 large
-rather than the SAM 1 checkpoint the brief's pilot slice names; that substitution is recorded in
-the phase notes rather than left as a silent deviation.
+Phase 3 started against SAM 2.1 large alone, because it was the only mirrored checkpoint and it
+does single-image prediction as well as propagation; that substitution for the SAM 1 checkpoint the
+brief's pilot slice names was recorded in the phase notes rather than left as a silent deviation.
+The SAM 1 checkpoint has since been supplied by the maintainer and verified, so the substitution no
+longer stands: Phase 3 exit criterion 1 requires parity with legacy's `SamModel` **and**
+`Sam2Model`, and both halves are now proven against the real weights
+(`inference/tests/test_differential_sam1.py` and `test_differential_sam2.py`). Both suites skip
+themselves when no checkpoint is configured, so CI stays green on a machine with no 2.4 GB file —
+which also means a green CI run is not evidence they ran. They are run locally, deliberately.
 
 To add a digest:
 
