@@ -32,6 +32,7 @@ import type { WireDatasetImage, WireImageMetadata, WireSegment } from "@lazylabe
 import type { AnnotationsResult, ApiClient } from "../api/client.js";
 import { History } from "./history.js";
 import { provenanceFromLoad, type ImageState } from "./saveState.js";
+import { toggle } from "../tools/selection.js";
 
 /** The manual drawing tools. The AI and editing tools arrive later in Phase 5. */
 export type Tool = "none" | "polygon" | "box" | "circle";
@@ -84,6 +85,24 @@ export interface WorkspaceContextValue {
   /** The class new annotations take, or null to use the next free id. */
   readonly activeClassId: number | null;
   readonly setActiveClassId: (classId: number | null) => void;
+  /**
+   * Which annotations are selected, by POSITION in `segments`.
+   *
+   * Positions rather than identities because that is what legacy uses and what every operation on
+   * a selection takes. The cost is that any change to the list can invalidate it, which is why
+   * `applySegments` clears it rather than letting a stale index reach a merge or a delete.
+   */
+  readonly selected: readonly number[];
+  readonly toggleSelected: (index: number) => void;
+  readonly clearSelection: () => void;
+  /**
+   * Replace the whole annotation list in one recorded step.
+   *
+   * Merge, erase and delete each touch several entries at once, and inverting them individually is
+   * far more delicate than restoring the list that was there. A snapshot's cost is one array of
+   * references -- the segments themselves are shared, not copied.
+   */
+  readonly applySegments: (next: readonly WireSegment[], label: string) => void;
 }
 
 const WorkspaceContext = createContext<WorkspaceContextValue | null>(null);
@@ -102,6 +121,7 @@ export function WorkspaceProvider({
   const [dirty, setDirty] = useState(false);
   const [activeTool, setActiveTool] = useState<Tool>("none");
   const [activeClassId, setActiveClassId] = useState<number | null>(null);
+  const [selected, setSelected] = useState<readonly number[]>([]);
   // One History for the session, cleared per image: RULE-052 scopes undo to the open image, so an
   // undo after switching must not reach back into the previous one's edits.
   const history = useMemo(() => new History(), []);
@@ -116,6 +136,7 @@ export function WorkspaceProvider({
       // image's edits would apply them to annotations that are not on screen.
       history.clear();
       setSegments([]);
+      setSelected([]);
       setDirty(false);
 
       client
@@ -218,6 +239,42 @@ export function WorkspaceProvider({
     [history, segments],
   );
 
+  const toggleSelected = useCallback(
+    (index: number) => setSelected((current) => toggle(current, index)),
+    [],
+  );
+
+  const clearSelection = useCallback(() => setSelected([]), []);
+
+  const applySegments = useCallback(
+    (next: readonly WireSegment[], label: string) => {
+      const previous = segments;
+      if (next === previous) return;
+
+      const apply = (value: readonly WireSegment[]) => {
+        setSegments(value);
+        setDirty(true);
+        // Cleared rather than remapped. Merge keeps positions, erase does not, and delete shifts
+        // them -- one rule that is always safe beats three that each have to be right.
+        setSelected([]);
+      };
+
+      apply(next);
+      history.record({
+        label,
+        // Only what this step introduced: the segments it shares with the previous list are not
+        // retained by it, and counting them would shrink the usable history for no reason.
+        bytes: next.reduce(
+          (total, segment) => total + (previous.includes(segment) ? 0 : estimateBytes(segment)),
+          0,
+        ),
+        undo: () => apply(previous),
+        redo: () => apply(next),
+      });
+    },
+    [history, segments],
+  );
+
   const markSaved = useCallback(() => setDirty(false), []);
 
   const value = useMemo(
@@ -234,6 +291,10 @@ export function WorkspaceProvider({
       setActiveTool,
       activeClassId,
       setActiveClassId,
+      selected,
+      toggleSelected,
+      clearSelection,
+      applySegments,
     }),
     [
       activeClassId,
@@ -246,6 +307,10 @@ export function WorkspaceProvider({
       open,
       openImage,
       segments,
+      selected,
+      toggleSelected,
+      clearSelection,
+      applySegments,
     ],
   );
 

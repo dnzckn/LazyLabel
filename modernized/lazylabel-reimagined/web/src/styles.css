@@ -354,3 +354,32 @@ fieldset input {
 .tool-picker legend {
   padding: 0;
 }
+
+.segments {
+  font-size: 0.85rem;
+}
+
+.segments__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.swatch {
+  display: inline-block;
+  width: 0.7rem;
+  height: 0.7rem;
+  border-radius: 0.15rem;
+  vertical-align: -1px;
+}
+
+/* Present to a screen reader, absent on screen: a column of checkboxes needs a header, and the
+   word "Selected" over it would be noise for everyone who can see the boxes. */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}

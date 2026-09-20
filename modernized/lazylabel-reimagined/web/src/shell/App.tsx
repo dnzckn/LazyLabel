@@ -15,6 +15,7 @@ import { CAPABILITIES } from "../capabilities.js";
 import { DatasetBrowser } from "../dataset/DatasetBrowser.jsx";
 import { NotificationHost } from "../notifications/NotificationProvider.jsx";
 import { OpenImageView } from "../workspace/OpenImageView.jsx";
+import { SegmentTable } from "../workspace/SegmentTable.jsx";
 import { useWorkspace, type Tool } from "../workspace/WorkspaceProvider.jsx";
 import { Panel, Workspace } from "./Panel.jsx";
 import { StatusBar } from "./StatusBar.jsx";
@@ -149,10 +150,9 @@ export function App({ client }: { readonly client: ApiClient }): ReactNode {
           <>
             <DatasetBrowser client={client} projectId="default" />
 
-            <Panel
-              title="Segments"
-              pending={{ phase: "Phase 5", summary: "the segment table, with merge, delete and reclass" }}
-            />
+            <Panel title="Segments">
+              <SegmentTable />
+            </Panel>
             <Panel
               title="Classes"
               pending={{ phase: "Phase 5", summary: "the class table and its ordering controls" }}
