@@ -63,6 +63,13 @@ export interface WorkspaceContextValue {
   readonly segments: readonly WireSegment[];
   /** Add an annotation, recording it so it can be undone and marking the image unsaved. */
   readonly addSegment: (segment: WireSegment, label?: string) => void;
+  /**
+   * Replace one annotation in place, recording it.
+   *
+   * Separate from `addSegment` because an edit has to restore the PREVIOUS value on undo, not
+   * remove the entry -- undoing a moved vertex must put the vertex back, not delete the shape.
+   */
+  readonly updateSegment: (index: number, segment: WireSegment, label?: string) => void;
   readonly history: History;
   /** Cleared on a successful save; that is what makes `dirty` mean "differs from the file". */
   readonly markSaved: () => void;
@@ -187,6 +194,30 @@ export function WorkspaceProvider({
     [history, segments.length],
   );
 
+  const updateSegment = useCallback(
+    (index: number, segment: WireSegment, label = "Edit annotation") => {
+      const previous = segments[index];
+      if (previous === undefined) return;
+      // Nothing changed: recording it would put an entry on the stack whose undo is invisible,
+      // and a user pressing undo would think the key had stopped working.
+      if (previous === segment) return;
+
+      const replace = (value: WireSegment) => {
+        setSegments((live) => live.map((entry, at) => (at === index ? value : entry)));
+        setDirty(true);
+      };
+
+      replace(segment);
+      history.record({
+        label,
+        bytes: estimateBytes(segment),
+        undo: () => replace(previous),
+        redo: () => replace(segment),
+      });
+    },
+    [history, segments],
+  );
+
   const markSaved = useCallback(() => setDirty(false), []);
 
   const value = useMemo(
@@ -196,6 +227,7 @@ export function WorkspaceProvider({
       imageState,
       segments,
       addSegment,
+      updateSegment,
       history,
       markSaved,
       activeTool,
@@ -207,6 +239,7 @@ export function WorkspaceProvider({
       activeClassId,
       activeTool,
       addSegment,
+      updateSegment,
       history,
       imageState,
       markSaved,
