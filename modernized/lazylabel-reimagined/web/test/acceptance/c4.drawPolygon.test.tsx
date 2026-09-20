@@ -54,6 +54,7 @@ function Harness(): React.ReactNode {
       <p data-testid="count">{segments.length}</p>
       <p data-testid="class">{segments.map((s) => s.classId).join(",")}</p>
       <p data-testid="vertices">{JSON.stringify(segments.at(-1)?.vertices ?? null)}</p>
+      <p data-testid="types">{segments.map((s) => s.type).join(",")}</p>
       <p data-testid="dirty">{imageState?.dirty === true ? "dirty" : "clean"}</p>
     </>
   );
@@ -100,6 +101,43 @@ async function readyToDraw() {
   fireEvent.click(screen.getByText("polygon tool"));
   await waitFor(() => expect(screen.getByLabelText("Polygon tool")).toBeTruthy());
 }
+
+describe("C5: erasing with a shape", () => {
+  it("cuts the drawn shape out of the annotations under it", async () => {
+    await readyToDraw();
+
+    // A big polygon covering most of the image...
+    clickCanvas(2, 2);
+    clickCanvas(150, 2);
+    clickCanvas(150, 90);
+    clickCanvas(2, 90);
+    fireEvent.keyDown(document, { key: " " });
+    await waitFor(() => expect(shown("count")).toBe("1"));
+
+    // ...and a shift-finished polygon over part of it erases rather than adds.
+    clickCanvas(60, 20);
+    clickCanvas(100, 20);
+    clickCanvas(100, 70);
+    fireEvent.keyDown(document, { key: " ", shiftKey: true });
+
+    // The original is replaced by what is left of it, as a mask.
+    await waitFor(() => expect(shown("types")).toBe("AI"));
+  });
+
+  it("says when there was nothing to erase, rather than looking inert", async () => {
+    // Legacy says "No segments to erase"; saying nothing would leave a user wondering whether the
+    // gesture registered at all.
+    await readyToDraw();
+
+    clickCanvas(10, 10);
+    clickCanvas(50, 10);
+    clickCanvas(50, 50);
+    fireEvent.keyDown(document, { key: " ", shiftKey: true });
+
+    expect(await screen.findByText(/No annotations to erase/)).toBeTruthy();
+    expect(shown("count")).toBe("0");
+  });
+});
 
 describe("C4: drawing a polygon by hand", () => {
   it("offers no drawing surface until a tool is chosen", async () => {

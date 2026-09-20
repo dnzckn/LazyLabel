@@ -25,6 +25,8 @@ import { useSettings } from "../settings/SettingsProvider.jsx";
 import { useWorkspace } from "./WorkspaceProvider.jsx";
 import { PolygonLayer, toWireVertices } from "../canvas/PolygonLayer.jsx";
 import { ShapeLayer } from "../canvas/ShapeLayer.jsx";
+import { rasterizeSegment } from "@lazylabel/annotation-formats";
+import { erase } from "../tools/erase.js";
 import type { ImagePoint } from "../canvas/coordinates.js";
 import { classForNewSegment } from "./classes.js";
 import { useNotifications } from "../notifications/NotificationProvider.jsx";
@@ -74,7 +76,7 @@ function OpenedImage({
   readonly pixelsUrl: string;
 }): ReactNode {
   const { settings } = useSettings();
-  const { segments, addSegment, activeTool, activeClassId } = useWorkspace();
+  const { segments, addSegment, activeTool, activeClassId, applySegments } = useWorkspace();
   const { notify } = useNotifications();
   const joinThreshold = Number(settings.values["polygon_join_threshold"]);
 
@@ -93,6 +95,52 @@ function OpenedImage({
   const refuse = useCallback(
     (reason: string) => notify({ severity: "warning", message: reason }),
     [notify],
+  );
+
+  /**
+   * Cut the drawn shape out of every annotation it overlaps.
+   *
+   * The erase shape is rasterized through the same path a saved annotation takes, so what the
+   * eraser removes is exactly what would have been written -- the alternative is an eraser that
+   * agrees with the outline on screen and disagrees with the file.
+   */
+  const applyErase = useCallback(
+    (type: "Polygon" | "Circle", vertices: readonly ImagePoint[], size: { width: number; height: number }) => {
+      const mask = rasterizeSegment(
+        { type, classId: null, vertices: vertices.map((v) => [v.x, v.y] as const) },
+        size.height,
+        size.width,
+      );
+      if (mask === null) {
+        notify({ severity: "warning", message: "that shape covers no pixels, so nothing was erased" });
+        return;
+      }
+
+      const result = erase(segments, mask, size);
+
+      if (result.erased.length === 0) {
+        // Legacy says "No segments to erase" here, and saying nothing at all would leave a user
+        // wondering whether the gesture registered.
+        notify({ severity: "info", message: "No annotations to erase" });
+        return;
+      }
+
+      applySegments(result.segments, `Erase from ${result.erased.length} annotation${result.erased.length === 1 ? "" : "s"}`);
+
+      if (result.vanished.length > 0) {
+        // RULE-009 discards every remaining piece of ten pixels or fewer, so an annotation can
+        // disappear entirely. Legacy does this silently; a deletion nobody is told about is the
+        // shape of defect decision 7 exists to remove.
+        notify({
+          severity: "warning",
+          message:
+            `${result.vanished.length} annotation${result.vanished.length === 1 ? " was" : "s were"} removed completely`,
+          detail: "What remained of them was smaller than the 10-pixel minimum, so nothing was kept.",
+          irreversible: false,
+        });
+      }
+    },
+    [applySegments, notify, segments],
   );
 
   return (
@@ -137,6 +185,7 @@ function OpenedImage({
                 joinThreshold={joinThreshold}
                 classId={classForNewSegment(segments, activeClassId)}
                 onComplete={(vertices) => commit("Polygon", vertices, "Add polygon")}
+                onErase={(vertices) => applyErase("Polygon", vertices, metadata)}
                 onRefused={refuse}
               />
             )}
@@ -156,6 +205,9 @@ function OpenedImage({
                     vertices,
                     activeTool === "box" ? "Add box" : "Add circle",
                   )
+                }
+                onErase={(vertices) =>
+                  applyErase(activeTool === "box" ? "Polygon" : "Circle", vertices, metadata)
                 }
                 onRefused={refuse}
               />
