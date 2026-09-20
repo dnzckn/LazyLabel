@@ -318,6 +318,18 @@ needs is already in one store rather than scattered across managers.
    reconciliation question stays the owner's; this specifies name agreement, which is well defined
    either way.
 
+   **The self-hosted deployment** (`modernized/lazylabel-reimagined/deploy/`) is written: three
+   services, one published port on loopback, the dataset as a bind mount, the models read-only,
+   neither service as root. **NOTHING IN IT HAS BEEN BUILT** — Docker is not installed on this
+   machine, so it is reasoned rather than observed, and its README says so first and names the four
+   places a first build is most likely to break.
+
+   Writing it found that **the API never constructed its inference adapter**, which is the eighth
+   defect below and the only one at the process level. Checking the configuration also settled the
+   design: the web app already defaults to `/api` and the dev server already proxies that to the
+   API with the prefix stripped, so production does the same through nginx rather than compiling an
+   absolute URL into a static bundle.
+
    **The sequence timeline** (`sequence/timeline.ts`, `sequence/TimelinePanel.tsx`) is the brief's
    own pilot: build a timeline from a file range, mark references from existing annotations, no
    propagation. It builds from the folder listing the browser already has — the listing carries
