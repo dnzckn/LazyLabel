@@ -3,32 +3,31 @@
 Where the conversion stands, on branch `main-web`. `MODERNIZATION_BRIEF.md` is the plan and does
 not change as work lands; this file is the log against it, and is the one to read first.
 
-Last updated: 2026-09-19.
+Last updated: 2026-09-20.
 
 ## Short answer
 
-**The app cannot be launched on the web yet.** Phases 1–4 have met their exit criteria and
-Phase 5 has started,
-Phases 5 and 6 have not started. The pieces that exist are proven against legacy; what is missing
-is most of the user interface and the whole cutover.
+**The app cannot be launched on the web yet.** Phases 1–4 have met their exit criteria. Phase 5
+has met three of its four and the fourth is met apart from one recorded tolerance question; Phase
+6 has not started. The pieces that exist are proven against legacy; what is missing is the
+sequence work and the whole cutover.
 
-By the brief's own weighting of the six phases: **about 63% of the conversion is done** — 6.0,
-5.5, 5.8, most of 29.4, and about 85% of 27.4.
+By the brief's own weighting of the six phases: **about 71% of the conversion is done** — 6.0,
+5.5, 5.8, 29.4, and about 24 of 27.4.
 
-Phase 4 has met all four of its exit criteria, but calling it finished would overstate things: its
-left and right panels exist as frames and the tools that fill them are Phase 5's by the brief's own
-split. What is genuinely done is everything those tools will stand on — the store, the save
-semantics, the layout, the undo stack.
+Phase 4's panels were frames when it exited, because the tools that fill them are Phase 5's by the
+brief's own split. They are filled now: drawing tools, AI tools, adjustments, crop, segments and
+classes are all built and reachable.
 
-The remaining 37% is the tail of Phase 5 and all of Phase 6.
+The remaining 29% is the tail of Phase 5 and all of Phase 6.
 
 | Phase | Share | State |
 |---|---|---|
 | P1 — format library | 6.0% | **complete** |
 | P2 — architecture and scaffolds | 5.5% | **complete** |
 | P3 — inference service | 5.8% | **complete** |
-| P4 — workspace, dataset browser, persistence | 29.4% | **exit criteria met**; tool-hosting panels wait on P5 |
-| P5 — tools | 27.4% | in progress, ~85%; every tool rule is implemented |
+| P4 — workspace, dataset browser, persistence | 29.4% | **complete**; its panels are filled by P5's tools |
+| P5 — tools | 27.4% | ~88%; criteria 1–3 met, criterion 4 has one open question |
 | P6 — sequence and cutover | 25.9% | not started |
 
 ## What is done, and what proves it
@@ -76,7 +75,7 @@ the allocation arithmetic RULE-022 specifies to the frame.
 255 tests. The live suites skip without a checkpoint, so **a green CI run is not evidence they
 ran** — see "Running the live suites" below.
 
-### Phase 4 — workspace (in progress)
+### Phase 4 — workspace (complete)
 
 Done: the four exit criteria, the dataset-browser pilot, the canvas in legacy's class colours, the
 explicit save path (a cleared image writes an empty file rather than nothing — decision 7), the
@@ -96,8 +95,6 @@ Three of those are worth naming because they are where legacy loses work:
 - **The status bar** shows continuous state only. Legacy's is *also* its notification system, which
   is exactly why the destructive message expires; splitting them is what makes that impossible.
   It also reports the inference server's accelerator, which the browser cannot discover for itself.
-
-Not done:
 
 All four exit criteria are met:
 
@@ -130,9 +127,12 @@ needs is already in one store rather than scattered across managers.
 
 1. **Phase 5 — tools** (27.4%). The largest single block of user-facing behaviour. Its three entry
    criteria are met: Phases 3 and 4 exited, decision 9 is ticked, and all 37 P5 rules are answered
-   (29 needed no decision, 5 were settled earlier, 3 were answered this session).
+   (29 needed no decision, 5 were settled earlier, 3 were answered in an earlier session).
 
-   Built so far, all pure logic with tests:
+   Three of its four exit criteria are met; the fourth has one open question for the owner and one
+   gap that belongs on the server. Both are set out below the build list.
+
+   Built, each with the tests that hold it:
    - **The polygon tool** (`tools/polygon.ts`), Phase 5's pilot slice. RULE-047's close rule,
      including a differential against legacy's own expression over 5,290 click offsets — the part
      a rule card cannot pin, since `<=` instead of `<` is right at the card's example and wrong on
@@ -152,7 +152,9 @@ needs is already in one store rather than scattered across managers.
      the drag was released on — the difference is invisible to any test whose drag is horizontal.
 
    - **Vertex editing** (`tools/edit.ts`, `canvas/EditLayer.tsx`), RULE-046/069. A circle's two
-     vertices are a centre and a radius point, so dragging them means different things.
+     vertices are a centre and a radius point, so dragging them means different things. Reachable
+     on the state that already means it: no drawing tool active and exactly one annotation
+     selected, rather than a mode to enter and forget to leave.
    - **Selection** (`tools/selection.ts`, `canvas/SelectLayer.tsx`). Hit-testing goes through the
      rasterizer, so the shape you can click is the shape that gets saved.
    - **Merge** (`tools/merge.ts`), RULE-019, implementing the answer recorded this session.
@@ -175,7 +177,51 @@ needs is already in one store rather than scattered across managers.
      adjustments, and crop — RULE-018, a P0 rule whose off-by-one means the last row and column of
      an image can never be inside a crop.
 
-   **One question for the owner, and it is the only blocking one.**
+   - **The adjustment controls** (`workspace/AdjustmentsPanel.tsx`), in legacy's slider units, and
+     the canvas that renders them. The sliders were built first and wrote to settings that nothing
+     read back, which made the panel the dead control the rest of this codebase refuses to ship;
+     the canvas applies them between the image and the overlay, so the image is adjusted and the
+     class colours are not.
+   - **The crop panel** (`workspace/CropPanel.tsx`), RULE-018 wired end to end: the store holds it,
+     the save request carries it, the server applies it to the same mask tensor the exports are
+     built from. It counts the pixels a save will blank before anyone presses it, and clears the
+     crop when another image opens (decision 9). Legacy does neither.
+
+   **The four exit criteria.**
+
+   1. **Persona flows 1 and 3 pass end-to-end browser tests — met.**
+      `test/acceptance/flow1.aiLabel.test.tsx` and `flow3.traceByHand.test.tsx` walk the steps
+      `topology.json` records, through the real components with only the HTTP client stubbed.
+
+      Flow 3 found that **vertex editing was unreachable**: `EditLayer` had been built and
+      unit-tested for some time and `OpenImageView` never rendered it, so every test it had drove
+      the component directly and nothing noticed that a user had no way in. The rule was
+      implemented, the component was correct, its tests passed, and the feature did not exist.
+      That is what these tests are for, and it is worth expecting more of the same in Phase 6.
+
+   2. **Editing rules pass tests ported from legacy characterization — met.** The join threshold
+      has a differential over 5,290 click offsets; vertex limits, erase, merge and class assignment
+      have rule tests; RULE-053's undo-of-erase is in `c6.undoRedo`.
+
+   3. **Accepted AI masks match legacy after fragment filtering — met.** Phase 3 proves the mask
+      against the real checkpoints; `test/tools/fragments.differential.test.ts` proves what the
+      accept path does to it, against the bytes OpenCV produces.
+
+      The fixture found a mistake **in itself**, which is worth recording. Written from the rule
+      card, it concluded that a single-pixel mask survives (minimum area 0, `area >= 0` holds).
+      The port disagreed. `save_export_manager.py` settled it: there is an explicit
+      `if max_area == 0: return None` above the comparison, so the whole mask is dropped. The port
+      was right and the transcription had paraphrased the card's own edge-case line away. Golden
+      generators are transcribed line for line for exactly this reason.
+
+   4. **Display adjustments and thresholds match legacy, and crop changes exports exactly as in
+      legacy — the crop half is met; the thresholds half has one open question and one gap.**
+
+      The crop half: `api/test/acceptance/cropExports.test.ts` saves through the real handler onto
+      a real folder and reads the bytes. Uncropped, a 2x2 object at the corner of a 40x40 image
+      writes 0.975; cropped to (0, 0, 39, 39), only 0.95 remains — the off-by-one, measured.
+
+   **The one open question for the owner.**
 
    CLAHE matches OpenCV byte for byte on five of six golden cases. The sixth — an image whose
    dimensions do not divide the tile grid — differs on **3 of 660 pixels, each by exactly 1**, and
@@ -183,10 +229,8 @@ needs is already in one store rather than scattered across managers.
    (104 → 4 → 6 → 3) without reaching zero, which places the remainder in how OpenCV's
    interpolation body formulates its arithmetic rather than in the algorithm.
 
-   Phase 5's exit criterion 4 says display adjustments must match legacy "within the decision 10
-   pixel tolerance". Decision 10 sets IoU ≥ 0.98 for MASKS and says nothing about per-pixel
-   intensity, so whether ±1 on 0.45% of pixels satisfies it is a judgement nobody has made. It
-   needs one, because the answer decides whether CLAHE is done or blocked:
+   Decision 10 sets IoU ≥ 0.98 for MASKS and says nothing about per-pixel intensity, so whether ±1
+   on 0.45% of pixels satisfies criterion 4 is a judgement nobody has made. It needs one:
 
    - **If ±1 is acceptable**, say so in decision 10 and Phase 5 can exit with this recorded.
    - **If byte equality is required**, closing it means reading OpenCV's `CLAHE_Interpolation_Body`
@@ -195,20 +239,36 @@ needs is already in one store rather than scattered across managers.
    The gap is asserted at its measured size in `test/tools/clahe.differential.test.ts`, so it
    cannot grow unnoticed and closing it is a visible change to that file.
 
-   **What is left in Phase 5, and why each is left.**
+   **The one remaining gap: rescale and channel thresholding have no controls, and cannot have
+   correct ones in the browser.**
 
-   - **The adjustment controls.** The sliders and panels that drive the rules above — the last
-     piece of Phase 5's own scope. The rules are the part with the equivalence requirement; the
-     controls are ordinary UI over them.
-   - **The FFT's stale-cache defect**, which is designed out rather than ported: legacy keys its
-     cached spectrum on image dimensions alone, so it is not invalidated when the rescale or
-     channel-threshold settings upstream of it change and the output can come from a stale input.
-     The port computes the transform per call, so it does not have the defect — but it also has no
-     cache, and a full-size image will want one. Whatever cache it gets must be keyed on the
-     upstream settings too.
+   The rules are implemented and tested (`tools/imageProcessing.ts`). What is missing is where they
+   RUN. RULE-032 fixes the order as rescale → channel threshold → FFT → 16-bit to 8-bit → display
+   adjustments, and the browser only ever receives the output of the fourth step: the API decodes
+   every image to 8-bit RGB before sending it. Applying a rescale in the browser would quantise a
+   16-bit image to 256 levels first and then stretch those, which is not what the rule says and is
+   visibly worse on the images that need it most.
 
-   Once those land, Phase 5's four exit criteria can be checked end to end — three of them need
-   golden-image differentials, which is the same shape of work as Phase 3's.
+   So these three belong on the server, and the work is bounded:
+
+   - `decodeImage` takes an optional processing argument and applies it to the wide samples before
+     `to8Bit`, rather than after.
+   - The image metadata reports whether the source was grayscale. RULE-032 disables rescale for RGB
+     and RULE-029 thresholds only the enabled channels, and neither question can be answered from
+     what is on the wire today.
+   - `/pixels` takes the parameters; the browser builds the URL.
+   - Both rules restrict themselves to the crop region when a crop is active, which the store
+     already holds.
+
+   The display adjustments stay in the browser, and correctly so: they are the last step and they
+   apply to the rendered canvas.
+
+   **The FFT's stale-cache defect** is designed out rather than ported: legacy keys its cached
+   spectrum on image dimensions alone, so it is not invalidated when the rescale or
+   channel-threshold settings upstream of it change and the output can come from a stale input. The
+   port computes the transform per call, so it does not have the defect — but it also has no cache,
+   and a full-size image will want one. Whatever cache it gets must be keyed on the upstream
+   settings too. It moves to the server with the two rules above, for the same reason.
 2. **Phase 6 — sequence and cutover** (25.9%). The timeline, propagation review, the split view,
    the hosted deployment and the actual switch-over.
 
