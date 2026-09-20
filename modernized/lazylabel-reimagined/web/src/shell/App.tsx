@@ -173,14 +173,13 @@ export function App({ client }: { readonly client: ApiClient }): ReactNode {
             <Panel title="Split view" initiallyCollapsed>
               <SplitView
                 images={listed}
-                // Sizes arrive with each image's metadata, which the split view does not fetch:
-                // it shows what is known and says "measuring" for what is not. Fetching here
-                // would be a second answer to a question the workspace already asks.
-                sizeOf={(key) =>
-                  open?.image.key === key && open.metadata !== null
-                    ? { width: open.metadata.width, height: open.metadata.height }
-                    : null
-                }
+                // It measures its own two images. The workspace's `open` knows about ONE, which
+                // is never both sides of a pair -- reading from it showed a comparison view with
+                // no pictures in it.
+                measure={async (key) => {
+                  const metadata = await client.imageMetadata("default", key);
+                  return { width: metadata.width, height: metadata.height };
+                }}
                 pixelsUrl={(key) => client.pixelsUrl("default", key)}
               />
             </Panel>

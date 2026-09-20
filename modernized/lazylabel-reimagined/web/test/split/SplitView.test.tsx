@@ -10,7 +10,7 @@
  * "annotate both together".
  */
 
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 import type { WireDatasetImage } from "@lazylabel/contracts";
 
@@ -34,7 +34,7 @@ function show(images: readonly WireDatasetImage[] = FOLDER) {
   render(
     <SplitView
       images={images}
-      sizeOf={(key) => SIZES[key] ?? null}
+      measure={async (key) => SIZES[key] ?? { width: 1, height: 1 }}
       pixelsUrl={(key) => `/pixels/${key}`}
     />,
   );
@@ -79,16 +79,15 @@ describe("choosing the pair", () => {
 });
 
 describe("images of different sizes", () => {
-  it("explains what linking will do, without refusing the pair", () => {
+  it("explains what linking will do, without refusing the pair", async () => {
     // A user comparing a full frame with a crop of it has a real reason to pair them. The smaller
     // image refuses what falls outside, per operation.
     show();
 
     fireEvent.change(screen.getByLabelText("Right image"), { target: { value: "2" } });
 
-    const note = screen.getByRole("status").textContent ?? "";
-    expect(note).toMatch(/different sizes/);
-    expect(note).toMatch(/same pixel/);
+    await waitFor(() => expect(screen.getByRole("status").textContent).toMatch(/different sizes/));
+    expect(screen.getByRole("status").textContent).toMatch(/same pixel/);
   });
 
   it("says nothing when they match", () => {
@@ -136,8 +135,15 @@ describe("measuring before drawing", () => {
   it("says it is measuring an image whose size is not known yet", () => {
     // A canvas sized from a guess shows the image at the wrong scale, and every coordinate taken
     // from it is wrong by the same factor.
+    // A measurement that never resolves: the pane says what it is doing rather than drawing from
+    // a guess. A canvas sized wrongly shows the image at the wrong scale, and every coordinate
+    // taken from it is wrong by the same factor.
     render(
-      <SplitView images={FOLDER} sizeOf={() => null} pixelsUrl={(key) => `/pixels/${key}`} />,
+      <SplitView
+        images={FOLDER}
+        measure={() => new Promise(() => undefined)}
+        pixelsUrl={(key) => `/pixels/${key}`}
+      />,
     );
 
     expect(screen.getAllByText(/Measuring/)).toHaveLength(2);

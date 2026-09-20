@@ -16,7 +16,7 @@
  * (RULE-092's edge cases); the setting is a control that does nothing, and it is not carried over.
  */
 
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 
 import type { WireDatasetImage } from "@lazylabel/contracts";
 
@@ -25,12 +25,20 @@ import { describePair, type ImageSize } from "./linked.js";
 
 export interface SplitViewProps {
   readonly images: readonly WireDatasetImage[];
-  /** Each image's pixel size, when known. Null while the metadata is still arriving. */
-  readonly sizeOf: (key: string) => ImageSize | null;
+  /**
+   * The pixel size of one image.
+   *
+   * THIS VIEW ASKS FOR ITS OWN, and the first version did not — it read the size off the one image
+   * the workspace had open, on the reasoning that fetching would be "a second answer to a question
+   * the workspace already asks". That reasoning was wrong and running the app showed it in a
+   * second: the workspace asks about ONE image, this needs TWO, and the result was a comparison
+   * view that displayed no pictures at all. Nobody else is asking, so this is not a second answer.
+   */
+  readonly measure: (key: string) => Promise<ImageSize>;
   readonly pixelsUrl: (key: string) => string;
 }
 
-export function SplitView({ images, sizeOf, pixelsUrl }: SplitViewProps): ReactNode {
+export function SplitView({ images, measure, pixelsUrl }: SplitViewProps): ReactNode {
   const [leftIndex, setLeftIndex] = useState(0);
   const [rightIndex, setRightIndex] = useState(1);
   const [linked, setLinked] = useState(true);
@@ -38,13 +46,38 @@ export function SplitView({ images, sizeOf, pixelsUrl }: SplitViewProps): ReactN
   const left = images[leftIndex];
   const right = images[rightIndex];
 
+  // Keyed by image, not by side, so swapping the two sides costs nothing and re-choosing an image
+  // already measured shows it at once.
+  const [sizes, setSizes] = useState<Readonly<Record<string, ImageSize>>>({});
+
+  useEffect(() => {
+    let cancelled = false;
+    for (const image of [left, right]) {
+      if (image === undefined || sizes[image.key] !== undefined) continue;
+      void measure(image.key)
+        .then((size) => {
+          // Guarded on the key rather than on a counter: two measurements are in flight and they
+          // are for different images, so neither supersedes the other.
+          if (!cancelled) setSizes((known) => ({ ...known, [image.key]: size }));
+        })
+        // A size that cannot be read leaves the pane saying "measuring", which is honest -- the
+        // canvas underneath would report the decode failure itself if it were drawn.
+        .catch(() => undefined);
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, [left, right, measure, sizes]);
+
+  const sizeOf = (key: string): ImageSize | null => sizes[key] ?? null;
+
   const note = useMemo(() => {
     if (left === undefined || right === undefined) return null;
-    const leftSize = sizeOf(left.key);
-    const rightSize = sizeOf(right.key);
-    if (leftSize === null || rightSize === null) return null;
+    const leftSize = sizes[left.key];
+    const rightSize = sizes[right.key];
+    if (leftSize === undefined || rightSize === undefined) return null;
     return describePair(leftSize, rightSize);
-  }, [left, right, sizeOf]);
+  }, [left, right, sizes]);
 
   if (images.length < 2) {
     return (
