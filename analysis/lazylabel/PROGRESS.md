@@ -7,23 +7,26 @@ Last updated: 2026-09-19.
 
 ## Short answer
 
-**The app cannot be launched on the web yet.** Phases 1–3 are complete, Phase 4 is about 70%,
+**The app cannot be launched on the web yet.** Phases 1–4 have met their exit criteria,
 Phases 5 and 6 have not started. The pieces that exist are proven against legacy; what is missing
 is most of the user interface and the whole cutover.
 
-By the brief's own weighting of the six phases: **about a third of the conversion is done** —
-6.0 + 5.5 + 5.8 for the three complete phases, plus about 70% of Phase 4's 29.4, which is 38%.
+By the brief's own weighting of the six phases: **about 42% of the conversion is done** — 6.0,
+5.5, 5.8 and most of 29.4.
 
-That is lower than the number of finished pieces suggests, and the reason is worth stating: the
-three complete phases are the three smallest, together worth 17.3%. The remaining three are worth
-82.7%, and they are the ones a user actually sees.
+Phase 4 has met all four of its exit criteria, but calling it finished would overstate things: its
+left and right panels exist as frames and the tools that fill them are Phase 5's by the brief's own
+split. What is genuinely done is everything those tools will stand on — the store, the save
+semantics, the layout, the undo stack.
+
+The remaining 53% is Phases 5 and 6, and it is the part a user actually sees.
 
 | Phase | Share | State |
 |---|---|---|
 | P1 — format library | 6.0% | **complete** |
 | P2 — architecture and scaffolds | 5.5% | **complete** |
 | P3 — inference service | 5.8% | **complete** |
-| P4 — workspace, dataset browser, persistence | 29.4% | in progress, ~70% |
+| P4 — workspace, dataset browser, persistence | 29.4% | **exit criteria met**; tool-hosting panels wait on P5 |
 | P5 — tools | 27.4% | not started |
 | P6 — sequence and cutover | 25.9% | not started |
 
@@ -95,20 +98,41 @@ Three of those are worth naming because they are where legacy loses work:
 
 Not done:
 
-- **The workspace store.** The dataset browser still owns the open image, so it sits whole in the
-  centre pane. Splitting it — file list on the right, image in the middle, as legacy has it — is
-  the next piece, and Phase 5 wants that store anyway.
-- **Pop-out panels.** Legacy detaches its panels into separate windows.
+All four exit criteria are met:
 
-The left and right panes exist and name what they will hold; the tools themselves are Phase 5.
+1. Persona flow 4 passes an end-to-end browser test, and the exported files are byte-identical to
+   legacy's on every golden.
+2. Saving follows decision 7 — nothing is deleted without an explicit user action, and a damaged or
+   foreign file never hides or deletes a valid one.
+3. Legacy `settings.json` and `hotkeys.json` import correctly.
+4. Upload limits and content allow-lists are enforced. SEC-02, SEC-06 and SEC-09 were already
+   proven; SEC-07 was argued in a comment and tested nowhere until this session.
+
+**Pop-out panels are deliberately not built.** Legacy detaches its left and right panels into
+separate windows (`panel_popout_manager.py`). Four reasons for leaving it out rather than porting
+it, recorded here so nobody re-opens it as an oversight:
+
+- No business rule covers it. It does not appear anywhere in `BUSINESS_RULES.md`, so there is no
+  extracted behaviour to preserve and no priority attached to it.
+- Everything it would detach — the drawing tools, the segment table, the class table — is Phase 5.
+  Popping out an empty panel is not a feature.
+- It solves a problem Qt has and the browser does not. Legacy's panels are docked in a fixed
+  window; a browser window is already resizable and the layout reflows, and a second view is a
+  second tab.
+- Doing it properly means sharing the workspace store across windows. That is real machinery, and
+  it should be designed once the panels have contents worth detaching — not before.
+
+If it is wanted later, the place it attaches is the `Panel` component's header, and the state it
+needs is already in one store rather than scattered across managers.
 
 ## What remains
 
-1. **Finish Phase 4** — the workspace store (lifting the open image out of the browser) and
-   pop-out panels.
-2. **Phase 5 — tools** (27.4%). The largest single block of user-facing behaviour.
-3. **Phase 6 — sequence and cutover** (25.9%). Includes the hosted deployment and the actual
-   switch-over.
+1. **Phase 5 — tools** (27.4%). The largest single block of user-facing behaviour: the drawing
+   tools, the AI tools, segment and class editing, and the image adjustments. The panels that hold
+   them, the store they read, the undo stack they record into and the save path they end at are all
+   built and waiting.
+2. **Phase 6 — sequence and cutover** (25.9%). The timeline, propagation review, the split view,
+   the hosted deployment and the actual switch-over.
 
 ## Running the live suites
 
