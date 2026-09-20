@@ -675,8 +675,22 @@ on the first press, because the user is told exactly where to find it.
 The tool keys are now wired (1/2/3/4, E, R), set directly rather than toggled: RULE-070 is a
 defect card and legacy's toggle-back leaves E R R E stuck in selection. And the reference reports
 which actions have a listener, read from the dispatcher itself rather than a list someone keeps,
-so it cannot drift. The remaining thirty-four are named in the table as "not yet" rather than
-silently promised.
+so it cannot drift.
+
+**Eighteen of the forty-three are live now.** A second batch wired next/previous image, save,
+merge, delete, select-all and escape — none of which needed a new capability, since every action
+already existed and had a button. Next/previous walks the same array the dataset browser rendered,
+so the key and a click move through one order, and clamps at the ends as legacy does. Save is
+bound to **Return**, not Ctrl+S, which is worth knowing before assuming otherwise.
+
+Two things the work corrected. The table's hooks first went BELOW its "no annotations yet" early
+return, which changes how many hooks run between renders — React refuses and five test files
+failed at once; they belong above it, and the keys are right to stay alive there. And the
+reference reports `save_output` as inactive when no image is open, which is not a bug but the
+point: it answers "will this do something if I press it NOW", and the save keys are registered by
+the opened image.
+
+The remaining twenty-five are named in the table as "not yet" rather than silently promised.
 
 **The eleventh is the one that costs a user their work.** `onNavigateAway` and `onClose` were
 written for decision 7's central case, tested on their own, exposed — and called by nothing. So
