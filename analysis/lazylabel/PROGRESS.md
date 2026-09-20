@@ -338,6 +338,13 @@ needs is already in one store rather than scattered across managers.
    rather than a skip, because a run that passed over what it could not open would report success
    loudest for the datasets most likely to be broken.
 
+   A dataset whose class names are **pickled** is reported as needing the converter, with the
+   command, rather than as a byte difference — the criterion names that case explicitly. Such a
+   file loads its masks perfectly and its names not at all (SEC-01 refuses to unpickle), so the
+   round trip writes ids where names belong; saying only "NPZ differs" sends someone hunting a
+   rounding bug in the exporters. It counts as a FAILURE, because a corpus that passed only by
+   filing its pickled datasets under something else has not been checked.
+
    Putting `tools/` into the typecheck found three wrong assumptions in that script, which had
    compiled cleanly while reading fields off types that do not have them. **A script outside the
    typecheck is one whose mistakes are found by running it against somebody's real data.**
