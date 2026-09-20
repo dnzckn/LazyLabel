@@ -619,6 +619,28 @@ for a conflict. It sends no expected revisions at all, which is an unconditional
 the conditional write exists to prevent, and exactly the explicit act decision 7 asks for. A
 standing setting would be one somebody turns on once and forgets, which is the opposite.
 
+**The same method, run again on the settings, found a fifth.** The question is "does anything read
+this?", and asking it of all thirty-nine keys turned up `propagation_confidence_threshold` — stored,
+shown in a panel, read by nothing. Worse, its DEFAULT was 0.5 against RULE-060's recorded 0.99,
+which legacy uses in all five places it appears. 0.5 is not a milder setting; it is the one that
+turns the feature off, because propagation scores cluster just under 1 and essentially nothing is
+ever flagged. A user reviews nothing and ships the model's unsure guesses.
+
+**That question is now a test** (`web/test/settings/honoured.ts` and its spec). Every key is
+classified READ, DROPPED (a decision, with the decision) or GAP (work, with what is missing), and
+the test checks the classification against the source of both packages in both directions: a READ
+key must appear, a DROPPED or GAP key must not, and an unclassified key fails. It corrected its
+author twice on the first run — `ai_model` was missing from the hand-written list because the key
+names had been read out of a stale build, and the two legacy model keys are RULE-085 decisions
+rather than gaps.
+
+**Twelve read, eight dropped, nineteen gaps.** The counts are asserted rather than reported, so
+closing a gap fails the test and prompts whoever closed it to say so. The gaps worth naming:
+`operate_on_view` (RULE-089, a contract change across three packages — the AI panel says so on
+screen); `point_radius`, `line_thickness` and `annotation_size_multiplier` (RULE-070's sizing);
+`auto_polygon_enabled` and `polygon_resolution` (RULE-047); `file_manager_sort_order` (RULE-036);
+`stream_window_size` (propagation); and the ten column-visibility keys.
+
 **The method**: take each pair of components that must agree, and ask what carries the agreement.
 For settings, list the keys and grep for readers. For a wire format, compare the fields the
 contract declares against the fields the client sends and the fields it renders. Two of those
