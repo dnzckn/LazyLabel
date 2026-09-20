@@ -18,6 +18,7 @@ import { WorkspaceProvider } from "../../src/workspace/WorkspaceProvider.jsx";
 import { NotificationProvider } from "../../src/notifications/NotificationProvider.jsx";
 import { SettingsProvider } from "../../src/settings/SettingsProvider.jsx";
 import type { AnnotationsResult, ApiClient } from "../../src/api/client.js";
+import { HotkeyProvider } from "../../src/hotkeys/HotkeyProvider.jsx";
 
 afterEach(cleanup);
 
@@ -86,11 +87,15 @@ function show(overrides: Partial<ApiClient> = {}) {
     <NotificationProvider>
       <SettingsProvider client={api}>
         {/* The list and the opened image are two components now, one per pane. Mounting both is
-            mounting what the app mounts -- the capability spans them. */}
-        <WorkspaceProvider client={api} projectId="p1">
-          <DatasetBrowser client={api} projectId="p1" folder="frames" />
-          <OpenImageView client={api} projectId="p1" />
-        </WorkspaceProvider>
+            mounting what the app mounts -- the capability spans them. The hotkey provider comes
+            with them because the save keys live on the opened image, and `useHotkey` throws
+            without one by design: a hook that works without its provider hides a missing wire. */}
+        <HotkeyProvider bindings={defaultSettings().hotkeys}>
+          <WorkspaceProvider client={api} projectId="p1" confirmNavigation={() => true}>
+            <DatasetBrowser client={api} projectId="p1" folder="frames" />
+            <OpenImageView client={api} projectId="p1" />
+          </WorkspaceProvider>
+        </HotkeyProvider>
       </SettingsProvider>
     </NotificationProvider>,
   );

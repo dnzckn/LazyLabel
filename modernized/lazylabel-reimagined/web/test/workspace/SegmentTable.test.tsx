@@ -13,6 +13,8 @@ import type { WireDatasetImage, WireSegment } from "@lazylabel/contracts";
 import type { AnnotationsResult, ApiClient } from "../../src/api/client.js";
 import { SegmentTable } from "../../src/workspace/SegmentTable.jsx";
 import { WorkspaceProvider, useWorkspace } from "../../src/workspace/WorkspaceProvider.jsx";
+import { defaultSettings } from "@lazylabel/settings-schema";
+import { HotkeyProvider } from "../../src/hotkeys/HotkeyProvider.jsx";
 
 afterEach(cleanup);
 
@@ -60,11 +62,16 @@ async function mount(segments: readonly WireSegment[]) {
     pixelsUrl: () => "/pixels",
   } as unknown as ApiClient;
 
+  // `useHotkey` throws without a provider by design -- a hook that quietly works without one
+  // hides a missing wire, which is this project's longest-running defect family. The table's
+  // selection keys live in the component under test, so this supplies it.
   render(
-    <WorkspaceProvider client={api} projectId="p1">
-      <Probe />
-      <SegmentTable />
-    </WorkspaceProvider>,
+    <HotkeyProvider bindings={defaultSettings().hotkeys}>
+      <WorkspaceProvider client={api} projectId="p1">
+        <Probe />
+        <SegmentTable />
+      </WorkspaceProvider>
+    </HotkeyProvider>,
   );
 
   fireEvent.click(screen.getByText("open"));

@@ -29,6 +29,7 @@ import { SettingsProvider } from "../../src/settings/SettingsProvider.jsx";
 import { ClassTable } from "../../src/workspace/ClassTable.jsx";
 import { OpenImageView } from "../../src/workspace/OpenImageView.jsx";
 import { WorkspaceProvider, useWorkspace, type Tool } from "../../src/workspace/WorkspaceProvider.jsx";
+import { HotkeyProvider } from "../../src/hotkeys/HotkeyProvider.jsx";
 
 afterEach(cleanup);
 
@@ -91,12 +92,17 @@ function mount() {
   render(
     <NotificationProvider>
       <SettingsProvider client={api}>
-        <WorkspaceProvider client={api} projectId="p1">
+        {/* `useHotkey` throws without a provider by design -- a hook that quietly works without
+            one hides a missing wire, which is this project's longest-running defect family. The
+            save and selection keys live in these components, so the tests supply it. */}
+        <HotkeyProvider bindings={defaultSettings().hotkeys}>
+          <WorkspaceProvider client={api} projectId="p1">
           <Harness />
           <ClassTable />
           <NotificationHost />
           <OpenImageView client={api} projectId="p1" />
         </WorkspaceProvider>
+      </HotkeyProvider>
       </SettingsProvider>
     </NotificationProvider>,
   );

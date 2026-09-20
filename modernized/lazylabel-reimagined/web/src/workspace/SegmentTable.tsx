@@ -21,9 +21,11 @@ import type { WireSegment } from "@lazylabel/contracts";
 import { classColor } from "../canvas/classColor.js";
 import { merge, mergeTarget } from "../tools/merge.js";
 import { useWorkspace } from "./WorkspaceProvider.jsx";
+import { useHotkey } from "../hotkeys/HotkeyProvider.jsx";
 
 export function SegmentTable(): ReactNode {
-  const { segments, selected, toggleSelected, clearSelection, applySegments } = useWorkspace();
+  const { segments, selected, toggleSelected, setSelection, clearSelection, applySegments } =
+    useWorkspace();
 
   const onMerge = useCallback(() => {
     applySegments(merge(segments, selected).segments, "Merge");
@@ -37,9 +39,38 @@ export function SegmentTable(): ReactNode {
     );
   }, [applySegments, segments, selected]);
 
+  /*
+   * THE KEYS THE TABLE'S BUTTONS ALREADY HAD LABELS FOR. Every one of these actions worked; none
+   * of them had a key, while the hotkey reference listed all three with their bindings.
+   *
+   * Each guards itself exactly as its button does -- merge needs two, delete needs one - rather
+   * than trusting the key to be pressed at a sensible moment. A hotkey that throws on an empty
+   * selection is a hotkey nobody presses twice.
+   */
+  useHotkey("merge_segments", () => {
+    if (selected.length >= 2) onMerge();
+  });
+  useHotkey("delete_segments", () => {
+    if (selected.length > 0) onDelete();
+  });
+  useHotkey("delete_segments_alt", () => {
+    if (selected.length > 0) onDelete();
+  });
+  useHotkey("select_all", () => {
+    // Legacy selects every annotation on the image. Toggling would make one key mean two things
+    // depending on state, which is the shape RULE-070 is a defect card about.
+    setSelection(segments.map((_, index) => index));
+  });
+  useHotkey("escape", clearSelection);
+
+  // AFTER the hooks, never before: an early return above a `useHotkey` changes how many hooks this
+  // component runs between renders, and React refuses -- "Rendered more hooks than during the
+  // previous render". The keys are also right to keep alive here: with no annotations they simply
+  // find nothing to act on, which is what their own guards already say.
   if (segments.length === 0) {
     return <p className="panel__missing">No annotations on this image yet.</p>;
   }
+
 
   const target = selected.length > 0 ? mergeTarget(segments, selected) : null;
 

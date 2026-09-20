@@ -92,6 +92,36 @@ export function App({ client }: { readonly client: ApiClient }): ReactNode {
   // The shell's own hotkey, and the proof the dispatcher works end to end.
   useHotkey("fit_view", () => setShowHotkeys((open) => !open));
 
+  /*
+   * NEXT AND PREVIOUS IMAGE -- the keys an annotator presses more than any other, and the second
+   * step of persona flow 1: label it, move on. They were dead while the reference promised them.
+   *
+   * The shell owns them because the shell is what knows the FOLDER: the store holds what is open,
+   * the dataset browser holds the list, and this is where the two already meet. Stepping is done
+   * over `listed`, the same array the browser rendered, so the key and a click move through the
+   * same order -- a second source for "what is next" would eventually disagree with the one the
+   * user can see.
+   *
+   * Unsaved work is still guarded: `openImage` asks before discarding it, whatever route asked for
+   * the change. A hotkey that bypassed the prompt would be the fastest possible way to lose a
+   * whole image, because it is the key you hold down.
+   */
+  const step = useCallback(
+    (by: 1 | -1) => {
+      if (open === null || listed.length === 0) return;
+      const at = listed.findIndex((image) => image.key === open.image.key);
+      if (at < 0) return;
+      // Clamped, not wrapping. Legacy stops at the ends, and a folder that silently restarts is
+      // how a user re-labels the first image believing it is the last.
+      const next = listed[Math.min(listed.length - 1, Math.max(0, at + by))];
+      if (next !== undefined && next.key !== open.image.key) openImage(next);
+    },
+    [listed, open, openImage],
+  );
+
+  useHotkey("load_next_image", () => step(1));
+  useHotkey("load_previous_image", () => step(-1));
+
   return (
     <main className="app">
       <NotificationHost />

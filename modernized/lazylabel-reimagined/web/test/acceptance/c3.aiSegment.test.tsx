@@ -36,6 +36,7 @@ import { SettingsProvider } from "../../src/settings/SettingsProvider.jsx";
 import { ModelPicker } from "../../src/workspace/ModelPicker.jsx";
 import { OpenImageView } from "../../src/workspace/OpenImageView.jsx";
 import { WorkspaceProvider, useWorkspace } from "../../src/workspace/WorkspaceProvider.jsx";
+import { HotkeyProvider } from "../../src/hotkeys/HotkeyProvider.jsx";
 
 afterEach(cleanup);
 
@@ -131,12 +132,17 @@ function mount(overrides: Partial<ApiClient> = {}) {
         {/* Unsaved work is no longer discarded silently when another image opens -- decision 7.
             These tests navigate deliberately, so they answer the prompt; the prompt itself is
             covered in `test/workspace/navigateAway.test.tsx`. */}
-        <WorkspaceProvider client={api} projectId="p1" confirmNavigation={() => true}>
+        {/* `useHotkey` throws without a provider by design -- a hook that quietly works without
+            one hides a missing wire, which is this project's longest-running defect family. The
+            save and selection keys live in these components, so the tests supply it. */}
+        <HotkeyProvider bindings={defaultSettings().hotkeys}>
+          <WorkspaceProvider client={api} projectId="p1" confirmNavigation={() => true}>
           <Harness />
           <ModelPicker client={api} />
           <NotificationHost />
           <OpenImageView client={api} projectId="p1" />
         </WorkspaceProvider>
+      </HotkeyProvider>
       </SettingsProvider>
     </NotificationProvider>,
   );

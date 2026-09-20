@@ -39,6 +39,7 @@ import { useNotifications } from "../notifications/NotificationProvider.jsx";
 
 import type { AnnotationsResult, ApiClient } from "../api/client.js";
 import { RESOLUTION_DEFAULT } from "../tools/autoPolygon.js";
+import { useHotkey } from "../hotkeys/HotkeyProvider.jsx";
 
 /**
  * What a save sends when the image had no annotation file.
@@ -621,6 +622,21 @@ function ConvertButton({
     settings.values,
     size,
   ]);
+
+  /*
+   * SAVE, from the keyboard. Ctrl+S and its alternate were in the reference with nothing behind
+   * them, which for a save key is the worst one to get wrong: it is the shortcut people press
+   * reflexively before closing something, and believing it worked is the belief that loses work.
+   *
+   * Guarded on `saving` exactly as the button is disabled. Holding the key down would otherwise
+   * queue a write per repeat against a revision each one invalidates, so every press after the
+   * first would come back a conflict.
+   */
+  const saveNow = () => {
+    if (state.status !== "saving") convert(revisions);
+  };
+  useHotkey("save_output", saveNow);
+  useHotkey("save_output_alt", saveNow);
 
   return (
     <div>

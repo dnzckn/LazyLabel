@@ -128,6 +128,20 @@ describe("the tool keys", () => {
   });
 });
 
+/**
+ * The row for one action, matched on its header cell exactly.
+ *
+ * By cell rather than by accessible name, which folds in the key and the state -- and `save_output`
+ * is a prefix of `save_output_alt`, so a substring match finds two rows.
+ */
+function rowFor(table: HTMLElement, action: string): HTMLElement {
+  const row = within(table)
+    .getAllByRole("row")
+    .find((candidate) => candidate.querySelector("th")?.textContent === action);
+  expect(row, `no row for ${action}`).toBeTruthy();
+  return row!;
+}
+
 describe("the hotkey reference", () => {
   async function openReference(): Promise<HTMLElement> {
     mount();
@@ -154,6 +168,40 @@ describe("the hotkey reference", () => {
     const row = within(table).getByRole("row", { name: /polygon_mode/ });
 
     expect(row.textContent).toContain("yes");
+  });
+
+  it("marks the shell's new keys as working", async () => {
+    // Next and previous image are registered by the shell, so they are live from the first render.
+    const table = await openReference();
+
+    for (const action of ["load_next_image", "load_previous_image"]) {
+      const row = within(table).getByRole("row", { name: new RegExp(action) });
+      expect(row.textContent, action).toContain("yes");
+    }
+  });
+
+  it("reports a key as inactive while the component that owns it is not mounted", async () => {
+    // The save keys are registered by the OPENED IMAGE, and this fixture has none. Reporting them
+    // as working would be the same lie in miniature: a key listed as live that nothing is
+    // listening for. The table answers "will this do something if I press it now", which is the
+    // question a user is actually asking.
+    const table = await openReference();
+
+    for (const action of ["save_output", "save_output_alt"]) {
+      expect(rowFor(table, action).textContent, action).toContain("not yet");
+    }
+  });
+
+  it("reports the segment table's keys as working, because that panel is always mounted", async () => {
+    // Their handlers register above the table's early return, so they are listening even with
+    // nothing on the image -- where each does nothing, exactly as its button sits disabled. "Live"
+    // here means a handler exists, not that every press will have an effect; the alternative is
+    // duplicating each action's enablement into the reference, where it would drift.
+    const table = await openReference();
+
+    for (const action of ["merge_segments", "delete_segments", "select_all", "escape"]) {
+      expect(rowFor(table, action).textContent, action).toContain("yes");
+    }
   });
 
   it("marks an unbuilt action as not yet", async () => {

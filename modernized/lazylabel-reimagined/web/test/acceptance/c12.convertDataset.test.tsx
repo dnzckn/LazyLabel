@@ -19,6 +19,7 @@ import { WorkspaceProvider } from "../../src/workspace/WorkspaceProvider.jsx";
 import { NotificationProvider } from "../../src/notifications/NotificationProvider.jsx";
 import { SettingsProvider } from "../../src/settings/SettingsProvider.jsx";
 import type { AnnotationsResult, ApiClient } from "../../src/api/client.js";
+import { HotkeyProvider } from "../../src/hotkeys/HotkeyProvider.jsx";
 
 afterEach(cleanup);
 
@@ -72,10 +73,15 @@ function show(overrides: Record<string, unknown> = {}) {
       <SettingsProvider client={api}>
         {/* The list and the opened image are two components now, one per pane. Mounting both is
             mounting what the app mounts -- the capability spans them. */}
-        <WorkspaceProvider client={api} projectId="p1">
+        {/* `useHotkey` throws without a provider by design -- a hook that quietly works without
+            one hides a missing wire, which is this project's longest-running defect family. The
+            save and selection keys live in these components, so the tests supply it. */}
+        <HotkeyProvider bindings={defaultSettings().hotkeys}>
+          <WorkspaceProvider client={api} projectId="p1">
           <DatasetBrowser client={api} projectId="p1" folder="frames" />
           <OpenImageView client={api} projectId="p1" />
         </WorkspaceProvider>
+      </HotkeyProvider>
       </SettingsProvider>
     </NotificationProvider>,
   );

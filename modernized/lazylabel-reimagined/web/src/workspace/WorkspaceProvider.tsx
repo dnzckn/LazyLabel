@@ -208,6 +208,13 @@ export interface WorkspaceContextValue {
   readonly setActiveClassId: (classId: number | null) => void;
   readonly selected: readonly number[];
   readonly toggleSelected: (index: number) => void;
+  /**
+   * Replace the whole selection — what Select All needs.
+   *
+   * Not recorded in history, like the other two: legacy does not make a selection undoable and a
+   * user pressing undo after selecting everything means to undo their last EDIT, not the click.
+   */
+  readonly setSelection: (indices: readonly number[]) => void;
   readonly clearSelection: () => void;
   /**
    * Replace the whole annotation list in one recorded step.
@@ -512,6 +519,12 @@ export function WorkspaceProvider({
     [activeSide, updateSide],
   );
 
+  const setSelection = useCallback(
+    (indices: readonly number[]) =>
+      updateSide(activeSide, (current) => ({ ...current, selected: indices })),
+    [activeSide, updateSide],
+  );
+
   const clearSelection = useCallback(
     () => updateSide(activeSide, (current) => ({ ...current, selected: [] })),
     [activeSide, updateSide],
@@ -667,6 +680,7 @@ export function WorkspaceProvider({
       setActiveClassId,
       selected,
       toggleSelected,
+      setSelection,
       clearSelection,
       applySegments,
       classAliases,
@@ -704,6 +718,7 @@ export function WorkspaceProvider({
       setClassAlias,
       setCrop,
       setProcessing,
+      setSelection,
       sides,
       toggleSelected,
       updateSegment,
