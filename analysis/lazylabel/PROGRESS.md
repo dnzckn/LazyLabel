@@ -306,8 +306,11 @@ needs is already in one store rather than scattered across managers.
    - A point outside the other image is reported, not clamped; a shape is refused as a unit.
      Different sizes do not prevent pairing — the smaller image refuses what falls outside it.
 
-   **The viewer is built** (`split/SplitView.tsx`) and compares, links and describes what a linked
-   operation would do. It does NOT draw into a pair, and says so: that needs the workspace store to
+   **The viewer is built** (`split/SplitView.tsx`). It compares two images **with their
+   annotations drawn**, links them, and describes what a linked operation would do. Each pane loads
+   its own image's annotations read-only, and only once that image's size has landed — the text
+   formats store normalized coordinates, so reading them at the other side's size would rescale one
+   image of a mismatched pair silently. It does NOT draw into a pair, and says so: that needs the workspace store to
    hold two open images, which is a change to the store rather than to the view. **C14 stays
    pending in the capability table** — a comparison view is not "annotate both together", and
    marking it built would put the table back to lying a day after it stopped.
