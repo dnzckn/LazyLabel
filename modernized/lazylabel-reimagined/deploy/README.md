@@ -9,17 +9,28 @@ Then open <http://127.0.0.1:5173>.
 
 For the AI tools, set `MODEL_DIR` and `LAZYLABEL_INFERENCE_URL` in `.env` and add `--profile ai`.
 
-## None of this has been built
+## What has been built, and what has not
 
-**Every file in this folder is reasoned, not observed.** Docker is not installed on the machine
-they were written on, so no image here has been built and no container has been run. The
+**CI builds the API and web images on every push**, and validates the compose file against
+`example.env` — which also checks the example stays complete, since a committed example missing a
+variable the compose file demands is a first-run failure for everyone who copies it. So those two
+either build or the run goes red with the reason.
+
+**The inference image builds weekly and on demand**, not on every push: it installs PyTorch against
+a CUDA base and is multi-gigabyte, and a two-line change to the web app should not pull a CUDA
+runtime. Trigger it from the Actions tab when you need it checked now.
+
+**Nothing here has been RUN.** CI builds; it does not start the stack, because running it needs a
+dataset to mount and, for the AI profile, a GPU and a checkpoint that SEC-03 forbids downloading.
+The files were also written on a machine with no Docker at all, so before the first CI run every
+line of this was reasoned rather than observed. The
 configuration they describe is checked — the environment variables are the ones the services
 actually read, the API's `/api` default and the nginx proxy match, and the build contexts account
 for the exporters package living outside the rebuild directory — but that is a different claim
 from "this works".
 
-A Dockerfile that has not been built is a plan. Treat it as one until someone builds it, and
-expect the first attempt to need changes. The likely places, roughly in order:
+A Dockerfile that builds is not a deployment that works. Expect the first real run to need
+changes, and look here first:
 
 1. **The inference image.** It installs PyTorch against a CUDA base, which is where container
    builds usually break. Check that `pip install .[ai]` resolves a CUDA-enabled torch rather than
@@ -35,7 +46,8 @@ expect the first attempt to need changes. The likely places, roughly in order:
    strips `/api` before forwarding. Getting that wrong 404s every route, and it is the kind of
    thing that looks right until you try it.
 
-When it is built and run, the honest thing is to replace this section with what actually happened.
+When it has been run against a real dataset, the honest thing is to replace this section with what
+actually happened.
 
 ## The choices, and why
 

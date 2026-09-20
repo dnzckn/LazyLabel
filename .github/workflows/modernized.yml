@@ -10,6 +10,12 @@ on:
     branches: [main-web]
   pull_request:
     branches: [main-web]
+  # So the inference image -- a CUDA build too heavy for every push -- can be exercised
+  # deliberately, and weekly so a base-image or dependency change is found before a deployment
+  # needs it rather than during one.
+  workflow_dispatch:
+  schedule:
+    - cron: "0 5 * * 1"
 
 permissions:
   contents: read
@@ -187,3 +193,65 @@ jobs:
         env:
           PYTHONPATH: ${{ github.workspace }}/legacy/lazylabel/src
         run: python tools/compare_readers.py .differential/read
+
+  # Phase 6's deployment. Everything under `deploy/` was written on a machine with no Docker, so it
+  # was reasoned rather than observed -- and an unbuilt Dockerfile is a plan. This job is what turns
+  # that into a fact on every push: a runner here HAS Docker, so the images either build or CI goes
+  # red with the reason.
+  #
+  # It BUILDS and does not RUN. Running the stack needs a dataset to mount and, for the AI profile,
+  # a GPU and a multi-gigabyte checkpoint that SEC-03 forbids downloading. Building is the half that
+  # can be honest here, and it is the half that catches a bad COPY path, a missing base image or a
+  # dependency that will not resolve.
+  deployment:
+    name: deployment images
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # The context is `modernized/`, not the rebuild directory: both Node images depend on the
+      # exporters package, which is a SIBLING of the rebuild, and Docker refuses COPY paths outside
+      # the context.
+      - name: Build the API image
+        uses: docker/build-push-action@v6
+        with:
+          context: modernized
+          file: modernized/lazylabel-reimagined/deploy/api.Dockerfile
+          push: false
+          load: false
+          cache-from: type=gha,scope=api
+          cache-to: type=gha,mode=max,scope=api
+
+      - name: Build the web image
+        uses: docker/build-push-action@v6
+        with:
+          context: modernized
+          file: modernized/lazylabel-reimagined/deploy/web.Dockerfile
+          push: false
+          load: false
+          cache-from: type=gha,scope=web
+          cache-to: type=gha,mode=max,scope=web
+
+      # The inference image is the one most likely to break -- it installs PyTorch against a CUDA
+      # base -- and it is also multi-gigabyte. Built on a schedule and on demand rather than on
+      # every push, so a two-line change to the web app does not pull a CUDA runtime.
+      - name: Build the inference image
+        if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
+        uses: docker/build-push-action@v6
+        with:
+          context: modernized
+          file: modernized/lazylabel-reimagined/deploy/inference.Dockerfile
+          push: false
+          load: false
+
+      # A compose file that parses is not a compose file that works, but one that does NOT parse is
+      # a certainty, and this catches it in a second.
+      # `example.env` supplies the two required variables, so this also checks that the example
+      # stays complete -- a committed example missing a variable the compose file demands is a
+      # first-run failure for everyone who copies it.
+      - name: Validate the compose file
+        working-directory: modernized/lazylabel-reimagined/deploy
+        run: docker compose --env-file example.env config --quiet
