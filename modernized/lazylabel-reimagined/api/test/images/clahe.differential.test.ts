@@ -48,21 +48,26 @@ describe("against OpenCV's own output", () => {
   });
 
   /**
-   * The uneven-tile case is a KNOWN, MEASURED GAP, not a passing test in disguise.
+   * BYTE FOR BYTE ON EVERY CASE, INCLUDING THE UNEVEN GRID.
    *
-   * Five of the six cases match OpenCV byte for byte. The sixth -- a 22x30 image on an 8x8 grid,
-   * so the grid does not divide it -- differs on 3 of 660 pixels, each by exactly 1. Every
-   * difference is a rounding tie, and successive attempts moved the count (104 with Math.round,
-   * 4 with round-half-to-even, 6 emulating float32, 3 grouping the blend x-first) without
-   * reaching zero, which says the remaining difference is in how OpenCV's interpolation body
-   * formulates its arithmetic rather than in the algorithm.
+   * This used to allow a measured gap of three pixels on the 22x30-on-8x8 case, each off by one,
+   * with a note saying the residue had to be in how OpenCV's interpolation body formulates its
+   * arithmetic rather than in the algorithm. That turned out to be exactly right, and reading
+   * `CLAHE_Interpolation_Body` named three things a from-description port gets wrong:
    *
-   * It is asserted at its current magnitude rather than skipped, so it cannot get worse unnoticed
-   * and closing it is a visible change to this file.
+   *   1. **It is `float`, not double.** `float res = ...`, with float weights throughout. Every
+   *      operation rounds to single precision, and a double-precision version of the identical
+   *      formula lands on the other side of a rounding tie often enough to shift a few pixels.
+   *   2. **It multiplies by a reciprocal.** `inv_tw = 1.0f / tileSize.width` computed once, then
+   *      `x * inv_tw`. `x * (1/w)` and `x / w` are different numbers in floating point.
+   *   3. **The weight comes from the UNCLAMPED tile index.** `tx1 = cvFloor(txf)` gives the
+   *      weight, and only then is it clamped into range — so the half-tile border uses a real
+   *      fractional weight rather than 0 or 1.
+   *
+   * With all three, the count went from three to zero. Nothing is allowed now, so any drift shows
+   * up immediately rather than hiding under a tolerance.
    */
-  const KNOWN_GAP: Readonly<Record<string, number>> = { "uneven-tiles": 3 };
-
-  it("matches on every case, or differs by exactly the known amount", () => {
+  it("matches OpenCV byte for byte on every case", () => {
     const failures: string[] = [];
 
     for (const testCase of cases) {
@@ -74,18 +79,20 @@ describe("against OpenCV's own output", () => {
 
       let wrong = 0;
       let worst = 0;
+      let firstAt = -1;
       for (let i = 0; i < result.length; i += 1) {
         const difference = Math.abs(result[i]! - testCase.expected[i]!);
         if (difference > 0) {
+          if (firstAt < 0) firstAt = i;
           wrong += 1;
           if (difference > worst) worst = difference;
         }
       }
 
-      const allowed = KNOWN_GAP[testCase.label] ?? 0;
-      if (wrong !== allowed || worst > 1) {
+      if (wrong > 0) {
         failures.push(
-          `${testCase.label}: ${wrong} of ${result.length} bytes differ (allowed ${allowed}), worst by ${worst}`,
+          `${testCase.label}: ${wrong} of ${result.length} bytes differ, worst by ${worst}, `
+            + `first at (${firstAt % testCase.width}, ${Math.floor(firstAt / testCase.width)})`,
         );
       }
     }

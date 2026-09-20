@@ -179,19 +179,36 @@ function interpolate(
 ): Uint8Array {
   const out = new Uint8Array(padded.data.length);
 
+  /*
+   * EVERY STEP IS SINGLE PRECISION, because OpenCV's is: `float res = ...` in
+   * `CLAHE_Interpolation_Body::operator()`, with float weights throughout. JavaScript has only
+   * doubles, so each operation is rounded back to float with `Math.fround`. That is not pedantry
+   * -- a double-precision version of the identical formula lands on the other side of a rounding
+   * tie often enough to differ on a handful of pixels, which is exactly the residue this port had.
+   *
+   * The reciprocal is also OpenCV's: it computes `1.0f / tileWidth` ONCE and multiplies, where the
+   * obvious port divides. `x * (1/w)` and `x / w` are different numbers in floating point.
+   */
+  const invTileWidth = Math.fround(1 / tileWidth);
+  const invTileHeight = Math.fround(1 / tileHeight);
+
   for (let y = 0; y < padded.height; y += 1) {
-    const yf = y / tileHeight - 0.5;
+    const yf = Math.fround(Math.fround(y * invTileHeight) - 0.5);
     const y1raw = Math.floor(yf);
-    const ya = yf - y1raw;
+    // The weight comes from the UNCLAMPED index, and the index is clamped afterwards. Clamping
+    // first would make the half-tile border weights 0 or 1 instead of what OpenCV uses there.
+    const ya = Math.fround(yf - y1raw);
+    const ya1 = Math.fround(1 - ya);
     const y1 = Math.min(Math.max(y1raw, 0), tilesY - 1);
-    const y2 = Math.min(y1raw + 1, tilesY - 1);
+    const y2 = Math.min(Math.max(y1raw + 1, 0), tilesY - 1);
 
     for (let x = 0; x < padded.width; x += 1) {
-      const xf = x / tileWidth - 0.5;
+      const xf = Math.fround(Math.fround(x * invTileWidth) - 0.5);
       const x1raw = Math.floor(xf);
-      const xa = xf - x1raw;
+      const xa = Math.fround(xf - x1raw);
+      const xa1 = Math.fround(1 - xa);
       const x1 = Math.min(Math.max(x1raw, 0), tilesX - 1);
-      const x2 = Math.min(x1raw + 1, tilesX - 1);
+      const x2 = Math.min(Math.max(x1raw + 1, 0), tilesX - 1);
 
       const value = padded.data[y * padded.width + x]!;
 
@@ -203,10 +220,11 @@ function interpolate(
       // Grouped X FIRST, then Y, which is OpenCV's order. Summing the four weighted corners
       // instead is algebraically identical and rounds differently, which shows up as a handful of
       // pixels off by one on the uneven-tile golden.
-      const top = topLeft * (1 - xa) + topRight * xa;
-      const bottom = bottomLeft * (1 - xa) + bottomRight * xa;
-      const blended = top * (1 - ya) + bottom * ya;
+      const top = Math.fround(Math.fround(topLeft * xa1) + Math.fround(topRight * xa));
+      const bottom = Math.fround(Math.fround(bottomLeft * xa1) + Math.fround(bottomRight * xa));
+      const blended = Math.fround(Math.fround(top * ya1) + Math.fround(bottom * ya));
 
+      // `saturate_cast<uchar>` is cvRound then clamp, and cvRound is round-half-to-EVEN.
       out[y * padded.width + x] = Math.min(255, Math.max(0, roundHalfToEven(blended)));
     }
   }
