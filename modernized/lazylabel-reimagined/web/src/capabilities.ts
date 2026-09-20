@@ -48,9 +48,7 @@ export const CAPABILITIES: readonly Capability[] = [
     id: "C5",
     summary: "Erase, merge, split and reclass segments",
     builtIn: "P1 library, P5 interface",
-    webStatus: "pending",
-    webPhase: "P5",
-    missing: "the editing interface; the rules themselves belong to the format library",
+    webStatus: "built",
   },
   {
     id: "C6",
@@ -62,9 +60,7 @@ export const CAPABILITIES: readonly Capability[] = [
     id: "C7",
     summary: "Assign classes and names, and decide which class wins an overlapping pixel",
     builtIn: "P1, P5",
-    webStatus: "pending",
-    webPhase: "P5",
-    missing: "the class table and its ordering controls",
+    webStatus: "built",
   },
   {
     id: "C8",
@@ -76,15 +72,7 @@ export const CAPABILITIES: readonly Capability[] = [
     id: "C9",
     summary: "Save annotations in any of the seven formats, choosing which are written",
     builtIn: "P1, P4",
-    webStatus: "pending",
-    webPhase: "P5",
-    missing:
-      "the edits that make an image dirty, which arrive with the drawing tools in Phase 5, and the "
-      + "prompt those edits make reachable. The save SEMANTICS are built and tested: which formats "
-      + "are written, what a save reports, and the decision in `workspace/saveState.ts` about "
-      + "whether navigating away saves, asks or proceeds -- including that an empty image writes "
-      + "empty files rather than having its annotations deleted, and that an image whose "
-      + "annotations could not be read is never written back over them",
+    webStatus: "built",
   },
   {
     id: "C10",
