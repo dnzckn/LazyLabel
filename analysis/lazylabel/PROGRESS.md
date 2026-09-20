@@ -319,10 +319,30 @@ needs is already in one store rather than scattered across managers.
    the same image on both sides allowed and announced; an unmeasured image says "measuring" rather
    than being drawn from a guess.
 
-   Still to build: the two-open-images store change, and the undo decision (one entry per linked
-   operation, which the reassessment argues for and nothing has implemented). The class-id
-   reconciliation question stays the owner's; this specifies name agreement, which is well defined
-   either way.
+   **The next slice, scoped.** Drawing into a linked pair needs the workspace store to hold TWO
+   open images. That is the one substantial unblocked piece left, and it is a change to the centre
+   of the app rather than to a leaf, so it is worth knowing what it touches before starting.
+
+   **Eight components call `useWorkspace()`**: `DatasetBrowser`, `App`, `ChannelPanel`,
+   `ClassTable`, `CropPanel`, `HistoryControls`, `OpenImageView` and `SegmentTable`. Everything
+   per-image lives in the store as a single value — `open`, `segments`, `classAliases`, `dirty`,
+   `selected`, `crop`, `processing` — so "two open images" means either two of each or one record
+   with an active side.
+
+   **The shape that keeps the blast radius small** is an ACTIVE SIDE: the store gains a second
+   slot and a pointer to which one the single-image components act on, so those eight keep reading
+   what they read today and only the split view asks for both. The alternative — threading a side
+   through every call — changes every signature to serve one view.
+
+   Two decisions are already settled and should not be re-derived:
+
+   - **One undo entry per linked operation**, not two. A user performed one action. Decision 8's
+     reassessment argues it and nothing has implemented it; `history.record` takes a label and an
+     inverse, so a linked operation records the pair's restore rather than each side's.
+   - **Linked classes agree on the NAME**, each image keeping its own id (RULE-092's answer, and
+     `split/linked.ts` implements it). Whether a pair whose images already assign different ids to
+     one alias should have its IDS reconciled as well **stays the owner's**; name agreement is well
+     defined either way, so the slice does not block on it.
 
    **The self-hosted deployment** (`modernized/lazylabel-reimagined/deploy/`) is written: three
    services, one published port on loopback, the dataset as a bind mount, the models read-only,
