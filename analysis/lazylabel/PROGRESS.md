@@ -7,13 +7,20 @@ Last updated: 2026-09-20.
 
 ## Short answer
 
-**The app cannot be launched on the web yet.** Phases 1–5 have met their exit criteria. Phase 6
-has **started with its pilot slice** — the sequence timeline, built and reachable — and three of
-its four entry criteria are met; the fourth needs a recorded sequence and the real checkpoints,
-and the script for it is written. What is missing is propagation, the split view and the cutover.
+**The app runs, and is not finished.** Phases 1–5 have met their exit criteria. Phase 6 is
+part-built: **thirteen of the fourteen capabilities are done**, and the one that is not is C11,
+propagating an annotation along a sequence — which needs the inference service, a recorded
+sequence, and legacy's outputs captured as golden data. That is the largest single piece left and
+it is blocked on things only the owner can supply.
 
-By the brief's own weighting of the six phases: **about 74% of the conversion is done** — 6.0,
-5.5, 5.8, 29.4 and 27.4, all complete. The remaining 25.9% is Phase 6.
+Of Phase 6's five exit criteria: **criterion 3 is met** (multi-view delivered per decision 8, with
+linked operations); criteria 2 and 4 have their harnesses written and wait on the owner's data;
+criterion 5's checklist is written (`CUTOVER.md`); criterion 1 is part-built — persona flow 2's
+steps 1, 2 and 5 are done and 3, 4 and 6 are propagation.
+
+By the brief's weighting: **roughly 85% of the conversion is done** — the first five phases are
+6.0, 5.5, 5.8, 29.4 and 27.4, all complete, and Phase 6's 25.9% is perhaps half met. That last
+figure is a judgement rather than a measurement, and propagation is most of what it excludes.
 
 Phase 4's panels were frames when it exited, because the tools that fill them are Phase 5's by the
 brief's own split. They are filled now: drawing tools, AI tools, adjustments, crop, segments and
@@ -26,7 +33,48 @@ classes are all built and reachable.
 | P3 — inference service | 5.8% | **complete** |
 | P4 — workspace, dataset browser, persistence | 29.4% | **complete**; its panels are filled by P5's tools |
 | P5 — tools | 27.4% | **complete**; all four exit criteria met |
-| P6 — sequence and cutover | 25.9% | pilot slice landed; propagation waits on golden data |
+| P6 — sequence and cutover | 25.9% | timeline, multi-view and the confidence histogram built; propagation waits on golden data |
+
+## What to do next
+
+In order, and each is a slice that can be finished on its own. Everything above the line is
+UNBLOCKED; everything below it needs something only the owner can provide.
+
+**Unblocked, in the order I would take them:**
+
+1. **The remaining hotkeys.** Eighteen of forty-three are live; the reference marks the rest "not
+   yet" from the dispatcher's own registrations, so the list is always current — open the app,
+   press Show hotkeys, and read the rows saying "not yet". The frame-navigation ones
+   (`next_flagged_frame` and its four siblings, `add_reference_frame`) map onto `sequence/
+   timeline.ts`'s `step` and `markReferences`, which are built and reachable from the panel's
+   buttons. `zoom_in`, `zoom_out` and the four `pan_*` keys have no capability behind them: the
+   browser does its own zooming and there is no pan model, so those are a decision rather than a
+   wiring job.
+2. **`canSave`.** The last unreached function that is not waiting on C11. It decides in ADVANCE
+   whether a save is safe, which is what a disabled Write button with a reason would need; today
+   the button is always offered and reports its own refusals afterwards.
+3. **The dataset browser's columns and sort** — eleven settings, the largest remaining group in
+   the honoured list. It needs `modified` and `size` on `WireDatasetImage`, and `listing.ts`
+   carries an explicit "ONE PASS, NOT SEVEN PER IMAGE" optimisation, so do NOT add a `stat` per
+   image to the default listing. Add a `?details=1` the client asks for only when a column or sort
+   needs it.
+4. **RULE-089, Operate On View.** The largest single rule left unbuilt. The setting is read by
+   nothing and the AI panel says so on screen. Honouring it means the AI request carries the
+   ADJUSTED pixels, because the browser applies brightness/contrast/gamma and the model reads the
+   file — a contract change across three packages, and the inference half cannot be verified here
+   without a running service.
+
+**Blocked on the owner:**
+
+- **C11, propagation** — needs the inference service running, a recorded image sequence, and
+  legacy's outputs captured as golden data. `inference/tests/fixtures/capture_propagation_goldens.py`
+  is written and waiting. This unblocks Phase 6 exit criteria 1 and 2 and the last two unreached
+  functions.
+- **Exit criterion 4** — `npm run acceptance -- <corpus>` over the real datasets.
+- **The live differential suites** — they skip themselves with no checkpoint, so a green CI run
+  says nothing about them.
+- **P0-or-P1 tier calls** on RULE-055 and RULE-060, and whether a linked pair reconciles class IDS
+  as well as names.
 
 ## What is done, and what proves it
 
