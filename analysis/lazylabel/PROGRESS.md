@@ -705,7 +705,18 @@ and one of Phase 5's harder pieces — with no caller, so adaptive equalization 
 missing piece is the same for all three: **the processing query cannot ask for a preset**. Stretch
 and equalize slot where the rescale step already runs; CLAHE works on 8-bit and on the crop
 region, so it belongs after `to8Bit` — a different slot, and RULE-032 says the order is the
-contract, so it is written down rather than assumed. That is the next slice, and it is unblocked.
+contract, so it is written down rather than assumed. **That slice is now built** — `preset=` on
+the processing query, with the rule's own defaults and ranges, a value outside them refused rather
+than clamped, and the exclusivity with a manual window enforced rather than resolved by
+precedence. Verified against the running API on a real 16-bit image: plain, stretch, equalize and
+two CLAHE settings each return different pixels, and choosing CLAHE in the panel fires
+`?preset=clahe:2:8:8`.
+
+The guard then fired on its own first real use, one commit after it was written: `stretchWindow`
+and `equalizeLut` were reached, so their entries were stale and the count had moved. That is
+exactly the mechanism it exists for — an excuse that outlives its gap tells the next reader a
+working feature is still missing. `applyLut` went by deletion rather than wiring, because the
+pipeline applies the table inside the loop it already runs over every pixel. Six remain.
 
 Four of the thirteen were merely superseded and were **deleted** rather than recorded:
 `afterRemoval`, `rescaleAll`, `posterizeAll`, `cssColor`. Dead code with an excuse attached is
