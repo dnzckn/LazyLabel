@@ -479,7 +479,7 @@ function ConvertButton({
   // drawn since loading has to be written as it now stands, or the edit is lost on the next save.
   // The crop comes from the store for the same reason: it is part of what a save WRITES, and a
   // crop the request leaves out is a crop the panel showed and the file never saw.
-  const { classAliases, segments, crop } = useWorkspace();
+  const { classAliases, segments, crop, activeSide, markSavedOn } = useWorkspace();
   const [state, setState] = useState<
     | { readonly status: "idle" }
     | { readonly status: "saving" }
@@ -516,6 +516,8 @@ function ConvertButton({
    * does and shown only after a refusal.
    */
   const convert = useCallback((expected: Readonly<Record<string, string | null>>) => {
+    // Captured now, not read in the callback below: see `markSavedOn` there.
+    const side = activeSide;
     setState({ status: "saving" });
     client
       .saveAnnotations(projectId, image.key, {
@@ -543,6 +545,18 @@ function ConvertButton({
       })
       .then((result) => {
         setState({ status: "saved", result });
+        /*
+         * THE IMAGE IS NO LONGER UNSAVED, and nothing said so until now. `markSaved` existed on
+         * the store, was covered by its own test, was exposed on the context -- and had no caller
+         * anywhere in the app, so `dirty` never cleared once anything was drawn. The status bar
+         * and the split view's captions read "unsaved" for the rest of the session, which is the
+         * one thing a user checks before closing a tab.
+         *
+         * BY SIDE, captured when the write started rather than read when it finishes. A save is a
+         * round trip and the user can switch panes during it; marking whichever side happens to be
+         * active on return would tell them the image they just moved to is saved when it is not.
+         */
+        markSavedOn(side);
         // The revisions this write produced become the ones the NEXT write is conditional on.
         // Without this, saving twice would compare against the load's revision the second time and
         // conflict with the app's own previous save.
@@ -594,11 +608,13 @@ function ConvertButton({
         });
       });
   }, [
+    activeSide,
     classAliases,
     client,
     crop,
     formats,
     image.key,
+    markSavedOn,
     projectId,
     revisions,
     segments,

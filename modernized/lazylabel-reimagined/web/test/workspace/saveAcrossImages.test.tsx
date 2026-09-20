@@ -54,9 +54,16 @@ function at(revision: string): AnnotationsResult {
 }
 
 function Opener(): React.ReactNode {
-  const { openImage } = useWorkspace();
+  const { openImage, addSegment, imageState } = useWorkspace();
   return (
     <>
+      <button
+        type="button"
+        onClick={() => addSegment({ type: "Polygon", classId: 0, vertices: [[1, 1]] } as never)}
+      >
+        draw
+      </button>
+      <p data-testid="dirty">{imageState?.dirty === true ? "unsaved" : "saved"}</p>
       {["frames/a.png", "frames/b.png"].map((key) => (
         <button key={key} type="button" onClick={() => openImage(datasetImage(key))}>
           go {key}
@@ -157,5 +164,38 @@ describe("saving after switching images", () => {
     await open("frames/b.png");
 
     expect(screen.queryByText(/^Wrote /)).toBeNull();
+  });
+});
+
+describe("after a save succeeds", () => {
+  it("stops calling the image unsaved", async () => {
+    // `markSaved` existed on the store, had its own test, was exposed on the context -- and had no
+    // caller anywhere in the app. So `dirty` never cleared once anything was drawn, and the status
+    // bar read "unsaved" for the rest of the session. That is the one thing a user checks before
+    // closing a tab, and it is the defect family this project has now found nine of: a function
+    // that works, is tested, and nothing calls.
+    const { saveAnnotations } = mount();
+    await open("frames/a.png");
+    fireEvent.click(screen.getByText("draw"));
+    await waitFor(() => expect(screen.getByTestId("dirty").textContent).toBe("unsaved"));
+
+    fireEvent.click(writeButton());
+
+    await waitFor(() => expect(saveAnnotations).toHaveBeenCalled());
+    await waitFor(() => expect(screen.getByTestId("dirty").textContent).toBe("saved"));
+  });
+
+  it("stays unsaved when the write was REFUSED", async () => {
+    // The other half, and the one that would hurt: telling a user their work is safe after a save
+    // that wrote nothing is worse than never clearing the flag at all.
+    const { saveAnnotations } = mount();
+    saveAnnotations.mockRejectedValue(new Error("the disk is full"));
+    await open("frames/a.png");
+    fireEvent.click(screen.getByText("draw"));
+
+    fireEvent.click(writeButton());
+
+    await waitFor(() => expect(screen.getByText(/Nothing was written/)).toBeTruthy());
+    expect(screen.getByTestId("dirty").textContent).toBe("unsaved");
   });
 });
