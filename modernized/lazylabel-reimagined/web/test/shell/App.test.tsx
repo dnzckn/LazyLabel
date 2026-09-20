@@ -138,15 +138,18 @@ describe("the application shell", () => {
     );
   });
 
-  it("names the tools that are not built rather than showing dead controls", async () => {
-    // A row of disabled buttons that look like the real thing invites a user to press one.
+  it("offers the tools it has, and names what is still missing", async () => {
+    // This used to assert a "Phase 5" marker in the tools pane. Those panels are built now, so
+    // the marker is gone -- and what replaced it is the honest version: the tools are there, and
+    // the specific things still to come are named in words rather than by a phase label.
     mount({});
     await waitFor(() => expect(screen.getByLabelText("Tools")).toBeTruthy());
 
     const tools = screen.getByLabelText("Tools");
     expect(tools.textContent).toMatch(/Drawing tools/);
     expect(tools.textContent).toMatch(/AI tools/);
-    expect(tools.textContent).toMatch(/Phase 5/);
+    expect(tools.textContent).toMatch(/Image adjustments/);
+    expect(tools.textContent).toMatch(/still to come/);
   });
 
   it("puts the image in the main landmark and the dataset beside it", async () => {

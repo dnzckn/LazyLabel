@@ -413,3 +413,22 @@ fieldset input {
 .classes__to {
   color: var(--warning-ink);
 }
+
+.adjustment {
+  display: block;
+  margin-bottom: 0.4rem;
+  font-size: 0.85rem;
+}
+
+.adjustment__label {
+  display: flex;
+  justify-content: space-between;
+}
+
+.adjustment__value {
+  color: var(--muted);
+}
+
+.adjustment input[type="range"] {
+  width: 100%;
+}

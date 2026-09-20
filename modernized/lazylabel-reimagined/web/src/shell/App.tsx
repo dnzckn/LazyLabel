@@ -15,6 +15,7 @@ import { CAPABILITIES } from "../capabilities.js";
 import { DatasetBrowser } from "../dataset/DatasetBrowser.jsx";
 import { NotificationHost } from "../notifications/NotificationProvider.jsx";
 import { OpenImageView } from "../workspace/OpenImageView.jsx";
+import { AdjustmentsPanel } from "../workspace/AdjustmentsPanel.jsx";
 import { ClassTable } from "../workspace/ClassTable.jsx";
 import { ModelPicker } from "../workspace/ModelPicker.jsx";
 import { SegmentTable } from "../workspace/SegmentTable.jsx";
@@ -124,10 +125,14 @@ export function App({ client }: { readonly client: ApiClient }): ReactNode {
             <Panel title="AI tools">
               <ModelPicker client={client} />
             </Panel>
-            <Panel
-              title="Image adjustments"
-              pending={{ phase: "Phase 5", summary: "brightness, contrast, channel thresholds and crop" }}
-            />
+            <Panel title="Image adjustments">
+              <AdjustmentsPanel />
+              {/* Named, not mocked: the channel-threshold and rescale panels have their rules
+                  implemented and tested, and no controls yet. */}
+              <p className="panel__missing">
+                Channel thresholds, rescale and crop controls are still to come.
+              </p>
+            </Panel>
 
             <Panel title="Settings">
               {state.status === "loading" ? (
