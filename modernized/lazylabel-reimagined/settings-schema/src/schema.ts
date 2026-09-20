@@ -89,8 +89,17 @@ export const DEFAULT_SETTINGS: Readonly<Record<string, unknown>> = Object.freeze
   file_manager_show_size: true,
   file_manager_sort_order: 0,
 
-  // Sequence propagation. Decision 9 persists this; legacy held it only in memory.
-  propagation_confidence_threshold: 0.5,
+  /*
+   * Sequence propagation's Min Conf. Decision 9 persists it; legacy held it only in memory.
+   *
+   * 0.99, WHICH IS RULE-060's RECORDED PARAMETER and legacy's own default in all five places it
+   * appears (`propagation_manager.py:94`, `:283`, `sequence_view_mode.py:90`, `:727`, and its
+   * integration test). It was 0.5 here, which nothing chose on purpose -- and 0.5 is not a milder
+   * setting, it is the one that turns the feature off. Propagation scores cluster just under 1, so
+   * at 0.5 essentially nothing is ever flagged: the user reviews nothing and ships the model's
+   * unsure guesses, which is the exact failure RULE-060 exists to prevent.
+   */
+  propagation_confidence_threshold: 0.99,
 });
 
 export interface HotkeyBinding {

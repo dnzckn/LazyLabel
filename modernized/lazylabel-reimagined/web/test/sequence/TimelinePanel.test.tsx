@@ -10,7 +10,29 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { WireDatasetImage } from "@lazylabel/contracts";
 
+import { defaultSettings } from "@lazylabel/settings-schema";
+
+import type { ApiClient } from "../../src/api/client.js";
+import { SettingsProvider } from "../../src/settings/SettingsProvider.jsx";
 import { TimelinePanel } from "../../src/sequence/TimelinePanel.jsx";
+
+/**
+ * Min Conf is a PERSISTED setting, so the panel needs the settings context above it.
+ *
+ * `saved` records what was written, which is how the tests below can tell "the control moved" from
+ * "the number was remembered" -- two different claims that a local `useState` would have made
+ * look identical.
+ */
+function withSettings(node: React.ReactNode, saved: Record<string, unknown> = {}) {
+  const client = {
+    getSettings: async () => defaultSettings(),
+    putSettings: async (next: { values: Record<string, unknown> }) => {
+      Object.assign(saved, next.values);
+      return next;
+    },
+  } as unknown as ApiClient;
+  return <SettingsProvider client={client}>{node}</SettingsProvider>;
+}
 
 afterEach(cleanup);
 
@@ -28,7 +50,7 @@ const FOLDER = [
 
 function show(images: readonly WireDatasetImage[] = FOLDER) {
   const onOpen = vi.fn();
-  render(<TimelinePanel images={images} onOpen={onOpen} />);
+  render(withSettings(<TimelinePanel images={images} onOpen={onOpen} />));
   return { onOpen };
 }
 
@@ -180,8 +202,10 @@ describe("what is not built", () => {
 describe("the confidence histogram", () => {
   /** Frames 0..4 of the folder, with propagation scores on three of them. */
   function withScores(scores: Record<number, number>) {
-    render(<TimelinePanel images={FOLDER} scores={scores} />);
+    const saved: Record<string, unknown> = {};
+    render(withSettings(<TimelinePanel images={FOLDER} scores={scores} />, saved));
     fireEvent.click(screen.getByText("Build timeline"));
+    return saved;
   }
 
   const threshold = () => screen.getByLabelText("Minimum confidence") as HTMLInputElement;
@@ -250,11 +274,32 @@ describe("the confidence histogram", () => {
     expect(referenceCell?.getAttribute("title")).not.toContain("flagged");
   });
 
-  it("clamps a threshold outside [0, 1]", () => {
+  it("clamps a threshold outside [0, 1]", async () => {
     withScores({ 0: 0.95 });
 
     setThreshold(5);
 
-    expect(threshold().value).toBe("1");
+    // Awaited, because the value comes back through the SETTINGS rather than from panel state --
+    // which is the point: Min Conf decides which frames get saved, so it has to survive a reload.
+    await waitFor(() => expect(threshold().value).toBe("1"));
+  });
+
+  it("REMEMBERS the threshold, because it decides what gets saved", async () => {
+    // A stored setting nothing reads is a control that lies about having remembered anything.
+    // `propagation_confidence_threshold` had no reader at all until this panel gained one.
+    const saved = withScores({ 0: 0.95 });
+
+    setThreshold(0.8);
+
+    await waitFor(() => expect(saved["propagation_confidence_threshold"]).toBe(0.8));
+  });
+
+  it("starts at RULE-060's 0.99, which is legacy's default", async () => {
+    // It was 0.5 in the schema, which nothing chose on purpose. 0.5 is not a milder setting:
+    // propagation scores cluster just under 1, so almost nothing is ever flagged and the user
+    // reviews nothing.
+    withScores({});
+
+    await waitFor(() => expect(threshold().value).toBe("0.99"));
   });
 });

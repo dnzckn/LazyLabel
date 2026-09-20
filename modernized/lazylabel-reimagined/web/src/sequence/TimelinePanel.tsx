@@ -20,6 +20,8 @@ import { useCallback, useMemo, useState, type ReactNode } from "react";
 
 import type { WireDatasetImage } from "@lazylabel/contracts";
 
+import { useSettings } from "../settings/SettingsProvider.jsx";
+
 import {
   buildTimeline,
   clearFlags,
@@ -62,7 +64,16 @@ export function TimelinePanel({ images, onOpen, scores = {} }: TimelinePanelProp
   const [overrides, setOverrides] = useState<readonly Frame[] | null>(null);
   const [sorted, setSorted] = useState(false);
   const [current, setCurrent] = useState(0);
-  const [threshold, setThreshold] = useState(DEFAULT_THRESHOLD);
+  /*
+   * MIN CONF IS A PERSISTED SETTING, not panel state -- `propagation_confidence_threshold`, which
+   * decision 9 keeps with the rest. It was local state for one commit and that was wrong twice
+   * over: the number decides which frames get SAVED, so it has to survive a reload, and a stored
+   * setting nothing reads is a control that lies to the user about having remembered anything.
+   */
+  const { settings, save } = useSettings();
+  const threshold = clampThreshold(
+    Number(settings.values["propagation_confidence_threshold"] ?? DEFAULT_THRESHOLD),
+  );
 
   const keys = useMemo(() => images.map((image) => image.key), [images]);
   const annotated = useMemo(
@@ -180,7 +191,7 @@ export function TimelinePanel({ images, onOpen, scores = {} }: TimelinePanelProp
         threshold={threshold}
         onThreshold={(value) => {
           const next = clampThreshold(value);
-          setThreshold(next);
+          void save({ ...settings, values: { ...settings.values, propagation_confidence_threshold: next } });
           // The TIMELINE moves with the number, not only the set a save would use. Legacy
           // recomputes one and not the other, so the colours point at one set of frames to review
           // while Save All skips another -- and nothing says the two disagree.
