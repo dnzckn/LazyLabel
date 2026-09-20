@@ -1,0 +1,98 @@
+# A self-hosted LazyLabel: the web app, the API, and optionally the inference service.
+#
+# Decision 3 is SINGLE-USER SELF-HOSTED — one trusted user per deployment, no tenant isolation —
+# and every choice below follows from that rather than from what a multi-tenant service would do.
+#
+#   docker compose --env-file .env up --build
+#
+# Copy `example.env` to `.env` first and point DATASET_ROOT at your folder of images. Nothing else
+# is required; the AI profile is opt-in because it needs a GPU and a checkpoint.
+#
+# WHY THE DATASET IS A BIND MOUNT AND NOT A VOLUME. Decision 5 makes the annotation sidecars beside
+# your images the source of truth. A named volume would put them inside Docker, where you cannot
+# copy, diff or back them up without the daemon — which is exactly the property the desktop app had
+# and that this rebuild is not allowed to give up.
+#
+# WHY ONE PORT, ON LOOPBACK. Only the web container is published, and only to 127.0.0.1. It
+# proxies /api to the api service over the compose network, which is what the app's own `/api`
+# default expects and what keeps the two on one origin -- no CORS, no address compiled into the
+# bundle. There is no authentication in this app by design (decision 3), so every port that does
+# not need to exist is one that cannot be reached.
+#
+# NOTHING HERE HAS BEEN BUILT. Docker is not installed on the machine this was written on. See
+# `README.md` in this folder for what to check first.
+
+name: lazylabel
+
+services:
+  api:
+    build:
+      # `modernized/`, not `modernized/lazylabel-reimagined/`: the API and the web app both depend
+      # on the exporters package, which is a sibling of the rebuild rather than inside it, and
+      # Docker refuses COPY paths outside the context.
+      context: ../..
+      dockerfile: lazylabel-reimagined/deploy/api.Dockerfile
+    environment:
+      # Fixed inside the container. What varies is where the bind mount comes FROM.
+      LAZYLABEL_DATASET_ROOT: /data
+      LAZYLABEL_PORT: "8787"
+      # Containers must bind every interface to be reachable from the compose network at all; the
+      # loopback binding that protects you is on the PUBLISHED port below, not on this one.
+      LAZYLABEL_HOST: 0.0.0.0
+      # Empty means no inference service, which is a supported deployment: everything except SAM
+      # prompts and propagation works without it. The `ai` profile sets it.
+      LAZYLABEL_INFERENCE_URL: ${LAZYLABEL_INFERENCE_URL:-}
+    volumes:
+      - ${DATASET_ROOT:?set DATASET_ROOT in .env to the folder holding your images}:/data
+    # NOT PUBLISHED. The web container proxies /api to it over the compose network, so the app and
+    # its API are one origin -- which is what the app's own `/api` default expects. A published
+    # API port would be an unauthenticated service holding your files, reachable for no reason.
+    expose:
+      - "8787"
+    restart: unless-stopped
+
+  web:
+    build:
+      context: ../..
+      dockerfile: lazylabel-reimagined/deploy/web.Dockerfile
+    # The only published port. 127.0.0.1, because there is no authentication in this app by design
+    # (decision 3: a single local credential, or whatever reverse proxy you put in front). Putting
+    # a proxy in front is a deliberate act; leaking onto your network by default is not.
+    ports:
+      - "127.0.0.1:5173:80"
+    depends_on:
+      - api
+    restart: unless-stopped
+
+  # OPT-IN, because it needs a GPU and a checkpoint, and because a deployment without it is a
+  # working install rather than a broken one:
+  #
+  #   docker compose --profile ai up --build
+  #
+  # It needs MODEL_DIR pointing at the checkpoints, and LAZYLABEL_INFERENCE_URL set so the api
+  # service knows to use it. Both are in example.env.
+  inference:
+    profiles: ["ai"]
+    build:
+      context: ../..
+      dockerfile: lazylabel-reimagined/deploy/inference.Dockerfile
+    environment:
+      LAZYLABEL_MODEL_DIR: /models
+      LAZYLABEL_INFERENCE_PORT: "8788"
+      LAZYLABEL_INFERENCE_HOST: 0.0.0.0
+    volumes:
+      # READ-ONLY. Nothing in this service writes a checkpoint, and SEC-03 says nothing downloads
+      # one at runtime — so a writable mount could only ever be a way for something to go wrong.
+      - ${MODEL_DIR:?set MODEL_DIR in .env to the folder holding your checkpoints}:/models:ro
+    # Not published at all. Only the api service talks to it, over the compose network, and an
+    # inference service reachable from outside is a way to spend someone else's GPU.
+    expose:
+      - "8788"
+    restart: unless-stopped
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: ["gpu"]

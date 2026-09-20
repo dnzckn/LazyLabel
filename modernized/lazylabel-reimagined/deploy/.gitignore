@@ -1,0 +1,4 @@
+# The operator's own paths, and a file that will grow credentials the moment a deployment needs a
+# reverse proxy or a remote store. `example.env` is the one that is committed.
+.env
+*.local.env
