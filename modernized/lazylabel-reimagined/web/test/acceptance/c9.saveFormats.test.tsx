@@ -32,6 +32,14 @@ const FORMATS = [
 ];
 
 describe("C9: choosing the formats", () => {
+  it("does not offer to overwrite until something has been refused", async () => {
+    // A standing "save anyway" is a setting somebody turns on once and forgets, which is the
+    // opposite of the explicit act decision 7 asks for.
+    await openImage();
+
+    expect(screen.queryByRole("button", { name: /Save anyway/ })).toBeNull();
+  });
+
   it("offers all seven", async () => {
     await openImage();
 
@@ -137,6 +145,23 @@ describe("C9: a file that changed underneath", () => {
     // the one that KEEPS the work.
     expect(shown.textContent).toMatch(/WOULD replace them/);
     expect(shown.textContent).not.toMatch(/^.*Reload the image to see/);
+
+    // The recovery, offered only AFTER a refusal: an unconditional write is the thing the
+    // conditional write exists to prevent, so it is a deliberate second press rather than a retry
+    // that happens on its own or a setting somebody turns on once and forgets.
+    const anyway = screen.getByRole("button", { name: /Save anyway/ });
+    expect(anyway).toBeTruthy();
+
+    (saveAnnotations as unknown as { mockResolvedValue: (v: unknown) => void }).mockResolvedValue({
+      written: { NPZ: "r9" },
+      stale: [],
+      skippedEmpty: [],
+    });
+    fireEvent.click(anyway);
+
+    await waitFor(() => expect(screen.getByText(/Wrote NPZ beside/)).toBeTruthy());
+    // UNCONDITIONAL: no expected revisions, which is what "overwrite what is there now" means.
+    expect(lastSave(saveAnnotations)["expectedRevisions"]).toEqual({});
 
     // SAID ONCE, which is the whole reason this message is written rather than appended to the
     // server's. Concatenating put it on screen three times, and only running it showed that.

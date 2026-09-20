@@ -466,7 +466,7 @@ function ConvertButton({
     | { readonly status: "idle" }
     | { readonly status: "saving" }
     | { readonly status: "saved"; readonly result: WireSaveResponse }
-    | { readonly status: "failed"; readonly reason: string }
+    | { readonly status: "failed"; readonly reason: string; readonly conflicted?: boolean }
   >({ status: "idle" });
 
   /*
@@ -488,7 +488,16 @@ function ConvertButton({
 
   const formats = normalizeExportFormats(settings.values["export_formats"]).formats;
 
-  const convert = useCallback(() => {
+  /*
+   * `expected` is what the write is conditional on. The button passes the revisions this client
+   * read; the recovery below passes `{}`, which is an UNCONDITIONAL write — "overwrite whatever is
+   * there now".
+   *
+   * That is not a hole in the safety, it is the shape decision 7 asks for: nothing is lost without
+   * an explicit act, and this is the explicit act, behind its own button, labelled with what it
+   * does and shown only after a refusal.
+   */
+  const convert = useCallback((expected: Readonly<Record<string, string | null>>) => {
     setState({ status: "saving" });
     client
       .saveAnnotations(projectId, image.key, {
@@ -506,7 +515,7 @@ function ConvertButton({
         // way, and the difference is invisible until an overlap actually occurs.
         // Empty for an image that had no annotation file: there is nothing to be out of date
         // with, and demanding absence would refuse a second save of a file this app just wrote.
-        expectedRevisions: revisions,
+        expectedRevisions: expected,
         pixelPriority: {
           enabled: settings.values["pixel_priority_enabled"] === true,
           // Ascending unless explicitly false, which matches the server's own default: the lowest
@@ -544,6 +553,10 @@ function ConvertButton({
 
         setState({
           status: "failed",
+          // What decides whether the overwrite recovery is offered. A failure that is NOT a
+          // conflict has nothing to overwrite past, so offering it there would be a button that
+          // retried the same broken thing.
+          conflicted: conflict,
           /*
            * THE ADVICE HAS TO BE COMPATIBLE WITH THE REASSURANCE, and the first version was not:
            * it said the work was still on screen and then told the user to reload — which calls
@@ -577,14 +590,29 @@ function ConvertButton({
 
   return (
     <div>
-      <button type="button" onClick={convert} disabled={state.status === "saving"}>
+      <button
+        type="button"
+        onClick={() => convert(revisions)}
+        disabled={state.status === "saving"}
+      >
         {state.status === "saving" ? "Writing…" : `Write ${formats.length} format${formats.length === 1 ? "" : "s"}`}
       </button>
 
       {state.status === "failed" && (
-        <p role="alert" className="banner banner--error">
-          Nothing was written: {state.reason}
-        </p>
+        <>
+          <p role="alert" className="banner banner--error">
+            Nothing was written: {state.reason}
+          </p>
+
+          {/* Offered only after a refusal, and only for a conflict: an unconditional write is the
+              thing the conditional write exists to prevent, so it is a deliberate second press
+              rather than a setting or a retry that happens on its own. */}
+          {state.conflicted === true && (
+            <button type="button" onClick={() => convert({})}>
+              Save anyway, overwriting what is there now
+            </button>
+          )}
+        </>
       )}
 
       {state.status === "saved" && (

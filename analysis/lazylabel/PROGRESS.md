@@ -536,9 +536,10 @@ because a test exercises one side with the other stubbed. Five found:
 refused because the file moved, the annotations on screen are still the user's — but there is no
 force-overwrite, and reloading the image calls `openImage`, which clears them. So the instruction
 is the one that KEEPS the work: check the file another way, and do not reload until the
-annotations are somewhere else. A "save anyway" button is the obvious next step and is not built;
-it would need the request to carry the revisions the server actually has rather than the ones the
-client read.
+annotations are somewhere else. **"Save anyway, overwriting what is there now" is built**, offered only after a refusal and only
+for a conflict. It sends no expected revisions at all, which is an unconditional write — the thing
+the conditional write exists to prevent, and exactly the explicit act decision 7 asks for. A
+standing setting would be one somebody turns on once and forgets, which is the opposite.
 
 **The method**: take each pair of components that must agree, and ask what carries the agreement.
 For settings, list the keys and grep for readers. For a wire format, compare the fields the
