@@ -11,6 +11,8 @@
 
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 
+import type { WireDatasetImage } from "@lazylabel/contracts";
+
 import { CAPABILITIES } from "../capabilities.js";
 import { DatasetBrowser } from "../dataset/DatasetBrowser.jsx";
 import { NotificationHost } from "../notifications/NotificationProvider.jsx";
@@ -18,6 +20,7 @@ import { OpenImageView } from "../workspace/OpenImageView.jsx";
 import { AdjustmentsPanel } from "../workspace/AdjustmentsPanel.jsx";
 import { ClassTable } from "../workspace/ClassTable.jsx";
 import { ChannelPanel } from "../workspace/ChannelPanel.jsx";
+import { TimelinePanel } from "../sequence/TimelinePanel.jsx";
 import { CropPanel } from "../workspace/CropPanel.jsx";
 import { ModelPicker } from "../workspace/ModelPicker.jsx";
 import { SegmentTable } from "../workspace/SegmentTable.jsx";
@@ -38,7 +41,10 @@ export function App({ client }: { readonly client: ApiClient }): ReactNode {
   const [healthError, setHealthError] = useState<string | null>(null);
   const [showHotkeys, setShowHotkeys] = useState(false);
   // From the store, not held here: the status bar is one reader of this among several.
-  const { imageState } = useWorkspace();
+  const { imageState, openImage } = useWorkspace();
+  // The folder as the browser listed it, so the sequence timeline builds from the same answer
+  // rather than fetching it again. Two fetches is two answers to one question.
+  const [listed, setListed] = useState<readonly WireDatasetImage[]>([]);
 
   // A preference the user chose wins; a default they never chose yields to the operating system.
   // That matters most when settings are UNREACHABLE: dark_mode defaults to true, so honouring the
@@ -159,7 +165,17 @@ export function App({ client }: { readonly client: ApiClient }): ReactNode {
         centre={<OpenImageView client={client} projectId="default" />}
         right={
           <>
-            <DatasetBrowser client={client} projectId="default" />
+            <DatasetBrowser client={client} projectId="default" onListed={setListed} />
+
+            <Panel title="Sequence" initiallyCollapsed>
+              <TimelinePanel
+                images={listed}
+                onOpen={(key) => {
+                  const image = listed.find((entry) => entry.key === key);
+                  if (image !== undefined) openImage(image);
+                }}
+              />
+            </Panel>
 
             <Panel title="Segments">
               <SegmentTable />

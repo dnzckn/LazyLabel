@@ -36,6 +36,14 @@ export interface DatasetBrowserProps {
   readonly client: ApiClient;
   readonly projectId: string;
   readonly folder?: string;
+  /**
+   * The folder as it was listed, for anything else that needs it.
+   *
+   * The sequence timeline builds from exactly this -- a file range and which frames are annotated
+   * -- and fetching the same folder twice would be two answers to one question, which is how two
+   * views of the same dataset come to disagree.
+   */
+  readonly onListed?: (images: readonly WireDatasetImage[]) => void;
 }
 
 type ListingState =
@@ -43,7 +51,12 @@ type ListingState =
   | { readonly status: "ready"; readonly listing: WireDatasetListing }
   | { readonly status: "failed"; readonly reason: string };
 
-export function DatasetBrowser({ client, projectId, folder = "" }: DatasetBrowserProps): ReactNode {
+export function DatasetBrowser({
+  client,
+  projectId,
+  folder = "",
+  onListed,
+}: DatasetBrowserProps): ReactNode {
   const [state, setState] = useState<ListingState>({ status: "loading" });
   /*
    * WHERE IN THE DATASET WE ARE.
@@ -68,7 +81,9 @@ export function DatasetBrowser({ client, projectId, folder = "" }: DatasetBrowse
     client
       .listImages(projectId, here)
       .then((listing) => {
-        if (!cancelled) setState({ status: "ready", listing });
+        if (cancelled) return;
+        setState({ status: "ready", listing });
+        onListed?.(listing.images);
       })
       .catch((cause: unknown) => {
         if (!cancelled) {
@@ -79,7 +94,7 @@ export function DatasetBrowser({ client, projectId, folder = "" }: DatasetBrowse
     return () => {
       cancelled = true;
     };
-  }, [client, projectId, here]);
+  }, [client, projectId, here, onListed]);
 
   if (state.status === "loading") return <p>Loading the folder…</p>;
   if (state.status === "failed") {

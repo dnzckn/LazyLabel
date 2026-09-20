@@ -523,3 +523,37 @@ fieldset input {
   cursor: pointer;
   font: inherit;
 }
+
+/* The sequence timeline. Colour is how it is read at a glance; every cell is also named. */
+.timeline__counts {
+  font-size: 0.85rem;
+  margin: 0 0 0.4rem;
+}
+
+.timeline__frames {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  list-style: none;
+  margin: 0 0 0.5rem;
+  padding: 0;
+}
+
+.timeline__frame {
+  width: 14px;
+  height: 22px;
+  border: 1px solid transparent;
+  padding: 0;
+  cursor: pointer;
+}
+
+.timeline__frame--current {
+  border-color: var(--text);
+}
+
+.timeline__controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin-bottom: 0.5rem;
+}
