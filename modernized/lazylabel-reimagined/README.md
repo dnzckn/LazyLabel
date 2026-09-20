@@ -1,7 +1,11 @@
 # LazyLabel, reimagined
 
-The web rebuild. Phase 2 of [`MODERNIZATION_BRIEF.md`](../../analysis/lazylabel/MODERNIZATION_BRIEF.md)
-scaffolds these; phases 3 through 6 fill them in.
+The web rebuild. **Phases 1 to 5 of
+[`MODERNIZATION_BRIEF.md`](../../analysis/lazylabel/MODERNIZATION_BRIEF.md) have met their exit
+criteria; Phase 6 is in progress.** [`PROGRESS.md`](../../analysis/lazylabel/PROGRESS.md) is the
+log against the plan and is the one to read first;
+[`CUTOVER.md`](../../analysis/lazylabel/CUTOVER.md) is what to read when the question is whether
+to switch.
 
 ## The packages
 
@@ -31,7 +35,7 @@ The dependency direction is strictly one way. Shared packages know nothing about
    api  ─┬─ contracts ─── annotation-formats
          └─ settings-schema
 
-   inference          (standard library only; Phase 3 adds the model stack)
+   inference          (its own stack: torch, segment-anything, scikit-learn)
 ```
 
 The inference service shares nothing with the other two by design: its interface speaks masks and
@@ -65,6 +69,24 @@ cd api && LAZYLABEL_DATASET_ROOT=/path/to/your/images npm start
 cd web && npm run dev
 ```
 
+That is the whole app except the AI tools, and running without them is a supported deployment
+rather than a broken one: everything but SAM prompts and propagation works. To add them, start the
+inference service and **tell the API where it is** — without that variable the API does not look
+for one, and `/health` says so:
+
+```bash
+# terminal 3 — the inference service
+cd inference && LAZYLABEL_MODEL_DIR=/path/to/checkpoints python -m lazylabel_inference.server
+```
+
+```bash
+# and restart the API with
+cd api && LAZYLABEL_DATASET_ROOT=/path/to/your/images   LAZYLABEL_INFERENCE_URL=http://127.0.0.1:8788 npm start
+```
+
+The address is logged at startup either way, so `"inference":"none"` in the first line tells you
+the AI tools will be unavailable before a user clicks an object and finds out.
+
 ## Storage
 
 The owner settled this on 2026-09-18: **the local directory is the default**, and the ports exist so
@@ -75,40 +97,49 @@ adapters are built — the mounted dataset folder, and a SQLite file.
 What is not configurable, on any adapter: **the annotation sidecars are the source of truth**. The
 architecture review killed a segment table duplicating the file chain, and it stays dead.
 
+## Deploying it
+
+[`deploy/`](deploy) holds a compose file for a self-hosted install: the web app, the API, and an
+opt-in inference service. **Nothing in it has been built** — Docker is not installed on the machine
+it was written on — and its README says so first and names what to check.
+
 ## What works today
 
-Two capabilities end to end, plus the parts of a third that can be correct before a model loads:
+Twelve of the fourteen capabilities are built, each with an acceptance test named for it. The two
+that are not are **C11**, propagation, and **C14**, drawing into a linked pair — both Phase 6.
 
-- **C2, loading annotations** — the API reads the highest-priority readable sidecar, reports every
-  damaged file it walked past, and answers 409 rather than an empty canvas when nothing can be read.
-- **C13, settings and hotkeys** — schema, legacy import, conflict and export-format validation, and
-  persistence across a restart.
-- **C1, the dataset browser** — a folder listed with per-format annotation status, the two things
-  legacy never told anyone (images that share sidecars, files that were not recognized), and opening
-  one with its annotations loaded.
-- **C9's save path** — the seven formats, atomic per file, and a cleared image writing an empty file
-  rather than leaving the old one to be read back.
-- **The image pipeline** — one decoder for jpeg, png, webp, tiff, gif and bmp, with RULE-024's
-  16-bit conversion applied once, proven pixel-for-pixel against OpenCV.
-- **C12, converting a dataset** — open a folder labelled in one format, choose the formats your
-  pipeline needs, and write them beside the images. Byte-identical to legacy on all twelve goldens.
-- **The alias converter**, which recovers class names from a legacy NPZ's pickled table without
-  executing it.
-- **Checkpoint integrity and AI availability** — the inference service pins every checkpoint by
-  SHA-256 and never downloads one, and its version check cannot crash the way legacy's does.
+Every package's `capabilities.ts` lists the rest with the phase that builds it and what is missing,
+and a guard test fails if those tables disagree with the test suites. That guard is worth knowing
+about: it went stale once, listing eight built capabilities as pending, and nothing was prompted to
+notice because a table nobody updates still passes its own shape checks.
 
-Everything else is listed in each package's `capabilities.ts` with the phase that builds it and what
-is missing. A guard test in each package fails if those tables ever disagree with the test suites,
-so nothing can quietly read as built that is not.
+Some of it is worth naming because the behaviour is not what you would assume:
 
-## Phase 2 exit criteria
+- **The annotation formats** are byte-identical to legacy on every golden, after EOL
+  normalisation — including the off-by-one that makes a crop lose the image's last row and column.
+- **The image-processing chain runs on the SERVER**, because RULE-032 puts rescale, channel
+  thresholds and the FFT *before* the 16-bit to 8-bit conversion and the browser only ever receives
+  what comes after it. Only the display adjustments are the browser's.
+- **CLAHE matches OpenCV byte for byte**, which took matching three things at once: single
+  precision, multiplying by a precomputed reciprocal, and taking the interpolation weight from the
+  unclamped tile index.
+- **Masks and propagation match legacy** against the real checkpoints, frame for frame, and flag
+  the same frames at the confidence threshold. Those suites **skip themselves without a
+  checkpoint**, so a green CI run says nothing about them — `PROGRESS.md` has the command.
+- **The sequence timeline** is built; propagation is not, and the timeline says so rather than
+  offering a button with nothing behind it.
 
-| # | Criterion | State |
+## Phase exit criteria
+
+| Phase | What it was | State |
 |---|---|---|
-| 1 | Both checkpoints approved, architecture matches the brief | met |
-| 2 | Each scaffold builds and its tests run; unbuilt capabilities tagged with their phase | met |
-| 3 | The settings schema imports a legacy `settings.json` and `hotkeys.json`, tolerating unknown keys | met |
-| 4 | CI builds and tests all services on every push to `main-web` | met |
+| 1 | The seven annotation formats | complete |
+| 2 | Architecture and scaffolds | complete |
+| 3 | The inference service | complete |
+| 4 | Workspace, dataset browser, persistence | complete |
+| 5 | The drawing, AI and image tools | complete |
+| 6 | Sequence propagation, split view, cutover | in progress |
 
-**Phase 2 is complete.** Phase 3 builds the inference service: the SAM 1 and SAM 2.1 predictors, the
-embedding cache, and the model loading that the manifest already guards.
+Phase 6's remaining work and its one open entry criterion — a recorded sequence with legacy's
+propagation outputs captured as golden data — are in
+[`PROGRESS.md`](../../analysis/lazylabel/PROGRESS.md).
