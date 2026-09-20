@@ -285,7 +285,27 @@ needs is already in one store rather than scattered across managers.
      minute-long request is indistinguishable from a dead server. Legacy has no limit and freezes
      its window.
 2. **Phase 6 — sequence and cutover** (25.9%). Propagation review, the split view, the hosted
-   deployment and the actual switch-over. **The pilot slice is done.**
+   deployment and the actual switch-over. **The pilot slice is done, and the split view's core
+   logic with it.**
+
+   **Linked operations** (`split/linked.ts`) answer the first of the four gaps decision 8's
+   reassessment named, and make RULE-092's recorded class answer executable:
+
+   - **The class invariant is the NAME, not the number.** Decision 6 keeps ids per image, so
+     copying the number across a pair produces matching numbers that mean different things — worse
+     than a visible mismatch, because every export then looks consistent. A linked operation
+     resolves the alias and lets each image keep or allocate its own id. Where a class has no
+     alias the id IS the name, so the two must share it.
+   - **"The same coordinates" means the same PIXEL.** RULE-092 is silent on size because in legacy
+     each viewer kept its own point list and the question never arose. A split view pairs two
+     images of one subject, and a relative mapping would stretch a shape exactly when the sizes
+     differ.
+   - A point outside the other image is reported, not clamped; a shape is refused as a unit.
+     Different sizes do not prevent pairing — the smaller image refuses what falls outside it.
+
+   Still to build: the viewer itself, and the undo decision (one entry per linked operation, which
+   the reassessment argues for and nothing has implemented yet). The class-id reconciliation
+   question stays the owner's; this specifies name agreement, which is well defined either way.
 
    **The sequence timeline** (`sequence/timeline.ts`, `sequence/TimelinePanel.tsx`) is the brief's
    own pilot: build a timeline from a file range, mark references from existing annotations, no
