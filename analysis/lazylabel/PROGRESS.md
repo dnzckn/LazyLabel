@@ -303,9 +303,20 @@ needs is already in one store rather than scattered across managers.
    - A point outside the other image is reported, not clamped; a shape is refused as a unit.
      Different sizes do not prevent pairing — the smaller image refuses what falls outside it.
 
-   Still to build: the viewer itself, and the undo decision (one entry per linked operation, which
-   the reassessment argues for and nothing has implemented yet). The class-id reconciliation
-   question stays the owner's; this specifies name agreement, which is well defined either way.
+   **The viewer is built** (`split/SplitView.tsx`) and compares, links and describes what a linked
+   operation would do. It does NOT draw into a pair, and says so: that needs the workspace store to
+   hold two open images, which is a change to the store rather than to the view. **C14 stays
+   pending in the capability table** — a comparison view is not "annotate both together", and
+   marking it built would put the table back to lying a day after it stopped.
+
+   Three smaller decisions taken with it: two viewers rather than legacy's dead four-view setting;
+   the same image on both sides allowed and announced; an unmeasured image says "measuring" rather
+   than being drawn from a guess.
+
+   Still to build: the two-open-images store change, and the undo decision (one entry per linked
+   operation, which the reassessment argues for and nothing has implemented). The class-id
+   reconciliation question stays the owner's; this specifies name agreement, which is well defined
+   either way.
 
    **The sequence timeline** (`sequence/timeline.ts`, `sequence/TimelinePanel.tsx`) is the brief's
    own pilot: build a timeline from a file range, mark references from existing annotations, no
