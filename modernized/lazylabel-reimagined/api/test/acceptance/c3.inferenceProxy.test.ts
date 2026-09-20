@@ -328,4 +328,47 @@ describe("C3: the API's inference proxy", () => {
       }
     });
   });
+
+  describe("listing the models the service could load", () => {
+    it("passes them through, including one that is present and fails its hash", async () => {
+      // Not filtered to the usable ones. An operator setting the app up most needs to see a
+      // checkpoint that IS there and does not verify, and a list of only-the-good-ones hides exactly
+      // that -- the file looks absent when it is corrupt.
+      const service = fakeService(() =>
+        jsonResponse(200, {
+          models: [
+            { name: "SAM 2.1 large", family: "sam2", size: "large", videoCapable: true, present: true, verified: true, detail: null },
+            { name: "SAM 1 huge", family: "sam1", size: "vit_h", videoCapable: false, present: true, verified: false, detail: "sha256 does not match the manifest" },
+            { name: "SAM 2.1 tiny", family: "sam2", size: "tiny", videoCapable: true, present: false, verified: false, detail: "not in the model directory" },
+          ],
+        }),
+      );
+
+      const body = jsonBody(await appWith(service).handle(get("/inference/models")));
+
+      expect(body.models).toHaveLength(3);
+      expect(body.models[1]).toMatchObject({ present: true, verified: false });
+      expect(body.models[1].detail).toContain("does not match");
+    });
+
+    it("reports an unreadable manifest rather than an empty list", async () => {
+      // Empty means "the manifest is fine and lists nothing usable". Unreadable means the operator
+      // has a different problem, and collapsing them would send them looking for missing files.
+      const service = fakeService(() =>
+        jsonResponse(503, { code: "manifest_unreadable", message: "models.json is not valid JSON" }),
+      );
+
+      const response = await appWith(service).handle(get("/inference/models"));
+
+      expect(response.status).toBe(503);
+      expect(jsonBody(response).message).toContain("not valid JSON");
+    });
+
+    it("is 503 when no inference service is configured at all", async () => {
+      const bare = createApp({ blobStore: new MemoryBlobStore(), metadataStore: metadata });
+
+      expect((await bare.handle(get("/inference/models"))).status).toBe(503);
+    });
+  });
+
 });

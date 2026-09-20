@@ -21,6 +21,7 @@ import {
   type EmbedResult,
   type InferenceClient,
   type InferenceHealth,
+  type ModelStatus,
   type SegmentRequest,
   type SegmentResult,
 } from "../ports/inference.js";
@@ -65,6 +66,19 @@ export class HttpInferenceClient implements InferenceClient {
       // An older service that does not report it is "unknown", not a guess at "CPU".
       accelerator: body.ai?.accelerator ?? "unknown",
     };
+  }
+
+  async models(): Promise<readonly ModelStatus[]> {
+    const response = await this.send("GET", "/models", undefined, "models");
+
+    // Unlike `/health`, a non-200 here is a real failure. 503 means the MANIFEST is unreadable,
+    // which is a different problem from "the manifest is fine and lists nothing usable" -- and
+    // reading the error body as an absent `models` key would report the two identically, sending
+    // an operator to look for missing files that are not the issue.
+    if (response.status !== 200) throw await this.failure(response);
+
+    const body = (await this.json(response)) as { models?: readonly ModelStatus[] };
+    return body.models ?? [];
   }
 
   async embed(request: EmbedRequest, correlationId: string): Promise<EmbedResult> {

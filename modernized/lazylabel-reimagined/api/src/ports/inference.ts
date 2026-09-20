@@ -87,8 +87,27 @@ export class InferenceUnreachableError extends Error {
   }
 }
 
+/**
+ * One checkpoint as the manifest declares it, with whether it is actually usable.
+ *
+ * `present` and `verified` are separate answers: a file can be there and have the wrong hash,
+ * which is the case an operator most needs to see, and the one a single "ok" would hide.
+ */
+export interface ModelStatus {
+  readonly name: string;
+  readonly family: string;
+  readonly size: string;
+  readonly videoCapable: boolean;
+  readonly present: boolean;
+  readonly verified: boolean;
+  /** Why it is not usable, when it is not. */
+  readonly detail: string | null;
+}
+
 export interface InferenceClient {
   health(): Promise<InferenceHealth>;
+  /** What the service could load. A checkpoint that is not listed is not loadable. */
+  models(): Promise<readonly ModelStatus[]>;
   embed(request: EmbedRequest, correlationId: string): Promise<EmbedResult>;
   segment(request: SegmentRequest, correlationId: string): Promise<SegmentResult>;
 }

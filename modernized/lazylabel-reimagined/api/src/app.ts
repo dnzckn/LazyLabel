@@ -127,6 +127,11 @@ export function createApp(deps: AppDeps): App {
       handler: (request, params) => putAnnotations(deps, request, params),
     },
     {
+      method: "GET",
+      pattern: "/inference/models",
+      handler: () => proxyModels(deps),
+    },
+    {
       method: "POST",
       pattern: "/inference/embeddings",
       handler: (request) => proxyEmbed(deps, request),
@@ -217,6 +222,18 @@ async function health(deps: AppDeps): Promise<ApiResponse> {
       ...(ai.available ? [] : [ai.reason ?? "AI tools are unavailable"]),
     ],
   });
+}
+
+/**
+ * What the inference service could load.
+ *
+ * Passed through rather than filtered to the usable ones: an operator setting the app up needs to
+ * see a checkpoint that is PRESENT and fails its hash, and a list of only-the-good-ones hides
+ * exactly that. The browser decides what to offer; the API does not decide for it.
+ */
+async function proxyModels(deps: AppDeps): Promise<ApiResponse> {
+  const models = await inferenceOf(deps).models();
+  return json(200, { models });
 }
 
 async function inferenceHealth(deps: AppDeps): Promise<{
