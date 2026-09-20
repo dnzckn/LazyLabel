@@ -64,12 +64,13 @@ UNBLOCKED; everything below it needs something only the owner can provide.
    six need a zoom and pan model this app does not have (the browser does its own); three are
    mouse bindings rather than keys; two are C11. What is genuinely wireable is down to a handful,
    so this is no longer the first thing to pick up.
-2. **The dataset browser's SORT** — `file_manager_sort_order`, the last of that group. Its six
-   orders are name ascending/descending, modified ascending/descending and size
-   ascending/descending, so four of them need `modified` and `size` on `WireDatasetImage`, which
-   the listing does not carry. `listing.ts` has an explicit "ONE PASS, NOT SEVEN PER IMAGE"
+2. **The wire's `modified` and `size`.** Four of the sort's six orders need them, and so do the
+   last two column settings — `file_manager_show_modified` and `file_manager_show_size`, the only
+   gaps left in that group. `listing.ts` has an explicit "ONE PASS, NOT SEVEN PER IMAGE"
    optimisation, so do NOT add a stat per image to the default listing: add a `?details=1` the
-   client asks for only when a column or a sort needs it. The ten column switches are done.
+   client asks for only when a column or a sort needs it. Everything else in the browser is done,
+   and the unsupported orders are disabled in the control and named in a banner rather than
+   silently falling through.
 
 3. **RULE-089, Operate On View.** The largest single rule left unbuilt. The setting is read by
    nothing and the AI panel says so on screen. Honouring it means the AI request carries the
