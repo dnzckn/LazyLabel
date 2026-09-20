@@ -163,6 +163,21 @@ class TestThePromptRoutes:
             status, _ = call(deps, "POST", "/inference/segment", body=payload)
             assert status == 400, payload
 
+    def test_405_names_the_method_for_a_BUILT_route_too(self, tmp_path: Path) -> None:
+        """The allowed methods come from `_fixed_methods`, not from the not-built table.
+
+        C3's two routes were once listed in that table as well. Those entries were dead -- the
+        handlers above return first -- and they would have resurrected as a 501 on a BUILT endpoint
+        the moment a route was reordered. Removing them must not cost the 405, and the message has
+        to still name the method, so this pins both.
+        """
+        deps = Deps(model_dir=tmp_path, availability=available)
+
+        status, body = call(deps, "GET", "/inference/segment")
+
+        assert status == 405
+        assert "POST" in body["message"]
+
     def test_405_rather_than_404_for_the_wrong_method(self, tmp_path: Path) -> None:
         deps = Deps(model_dir=tmp_path, availability=available)
         status, _ = call(deps, "GET", "/inference/segment")

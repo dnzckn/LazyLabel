@@ -129,10 +129,16 @@ def _route(deps: Deps, request: Request) -> Response:
     if path == "/inference/segment" and method == "POST":
         return _segment(deps, request)
 
-    # Still Phase 6. The contract is fixed in AI_NATIVE_SPEC.md section 3.
+    # Not built, and each one is Phase 6's job API rather than unfinished Phase 3 work: the
+    # propagation and archetype MODULES are complete and differential-tested against legacy, and
+    # what is missing is a job API with real cancellation, progress and streaming limits. The
+    # contract is fixed in AI_NATIVE_SPEC.md section 3.
+    #
+    # C3's two routes used to be listed here and are built. They were dead entries -- the handlers
+    # above return first -- and `_fixed_methods` already names POST for both, so they were not even
+    # carrying the 405. What they WERE doing is waiting to resurrect: move a handler, or add a
+    # route before its early return, and a built endpoint starts answering "not built yet".
     not_built = {
-        ("/inference/embeddings", "POST"): ("C3", "prepare an image for interactive segmentation"),
-        ("/inference/segment", "POST"): ("C3", "one SAM prediction from clicks or a box"),
         ("/inference/propagations", "POST"): ("C11", "start a propagation job over a sequence"),
         ("/inference/propagations", "GET"): ("C11", "job state and per-frame results"),
         ("/inference/archetypes", "POST"): ("C10", "find archetype frames in a sequence"),
