@@ -215,6 +215,7 @@ function ToolPicker(): ReactNode {
     { value: "polygon", label: "Polygon" },
     { value: "box", label: "Box" },
     { value: "circle", label: "Circle" },
+    { value: "ai", label: "AI" },
   ];
 
   return (

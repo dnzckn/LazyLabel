@@ -38,7 +38,11 @@ export const CAPABILITIES: readonly Capability[] = [
     builtIn: "P3, P5",
     webStatus: "pending",
     webPhase: "P5",
-    missing: "the AI tool interface: clicks, boxes and the prompt round trip",
+    missing:
+      "choosing WHICH model, which needs the manifest listed through the API. The tool itself is "
+      + "built: clicks and boxes through RULE-062's thresholds, the prompt round trip, the "
+      + "fragment filter on accept, and out-of-order answers discarded so a preview cannot move "
+      + "backwards. It is offered once `ai_model` names a manifest entry",
   },
   {
     id: "C4",

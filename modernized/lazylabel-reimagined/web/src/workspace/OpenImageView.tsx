@@ -24,9 +24,11 @@ import { AnnotationCanvas } from "../canvas/AnnotationCanvas.jsx";
 import { useSettings } from "../settings/SettingsProvider.jsx";
 import { useWorkspace } from "./WorkspaceProvider.jsx";
 import { PolygonLayer, toWireVertices } from "../canvas/PolygonLayer.jsx";
+import { decodeMask } from "@lazylabel/contracts";
+import { AiTool } from "./AiTool.jsx";
 import { SelectLayer } from "../canvas/SelectLayer.jsx";
 import { ShapeLayer } from "../canvas/ShapeLayer.jsx";
-import { rasterizeSegment } from "@lazylabel/annotation-formats";
+import { rasterizeSegment, type BinaryMask } from "@lazylabel/annotation-formats";
 import { erase } from "../tools/erase.js";
 import type { ImagePoint } from "../canvas/coordinates.js";
 import { classForNewSegment } from "./classes.js";
@@ -81,6 +83,10 @@ function OpenedImage({
     useWorkspace();
   const { notify } = useNotifications();
   const joinThreshold = Number(settings.values["polygon_join_threshold"]);
+  const fragmentThreshold = Number(settings.values["fragment_threshold"] ?? 0);
+  // A manifest NAME, not a file path. Empty means none chosen, and the AI tool says so rather
+  // than sending a request the service can only refuse.
+  const aiModel = String(settings.values["ai_model"] ?? "");
 
   // One commit path for every manual tool. Three copies of "work out the class, wrap the vertices,
   // record it" is three places for them to disagree about which class the shape takes.
@@ -106,18 +112,8 @@ function OpenedImage({
    * eraser removes is exactly what would have been written -- the alternative is an eraser that
    * agrees with the outline on screen and disagrees with the file.
    */
-  const applyErase = useCallback(
-    (type: "Polygon" | "Circle", vertices: readonly ImagePoint[], size: { width: number; height: number }) => {
-      const mask = rasterizeSegment(
-        { type, classId: null, vertices: vertices.map((v) => [v.x, v.y] as const) },
-        size.height,
-        size.width,
-      );
-      if (mask === null) {
-        notify({ severity: "warning", message: "that shape covers no pixels, so nothing was erased" });
-        return;
-      }
-
+  const eraseWithMask = useCallback(
+    (mask: BinaryMask, size: { width: number; height: number }) => {
       const result = erase(segments, mask, size);
 
       if (result.erased.length === 0) {
@@ -143,6 +139,23 @@ function OpenedImage({
       }
     },
     [applySegments, notify, segments],
+  );
+
+  /** A drawn shape erases by being rasterized first -- the same path a saved annotation takes. */
+  const applyErase = useCallback(
+    (type: "Polygon" | "Circle", vertices: readonly ImagePoint[], size: { width: number; height: number }) => {
+      const mask = rasterizeSegment(
+        { type, classId: null, vertices: vertices.map((v) => [v.x, v.y] as const) },
+        size.height,
+        size.width,
+      );
+      if (mask === null) {
+        notify({ severity: "warning", message: "that shape covers no pixels, so nothing was erased" });
+        return;
+      }
+      eraseWithMask(mask, size);
+    },
+    [eraseWithMask, notify],
   );
 
   return (
@@ -179,6 +192,30 @@ function OpenedImage({
             ) : (
               <img className="preview" src={pixelsUrl} alt={image.name} />
             )}
+
+            {activeTool === "ai" &&
+              (aiModel === ""
+                ? null
+                : (
+                    <AiTool
+                      client={client}
+                      imageKey={image.key}
+                      width={metadata.width}
+                      height={metadata.height}
+                      classId={classForNewSegment(segments, activeClassId)}
+                      model={aiModel}
+                      fragmentThreshold={fragmentThreshold}
+                      onAccept={(segment) => addSegment(segment, "Accept AI mask")}
+                      // The MASK erases, not its bounding box: an AI mask is rarely a
+                      // rectangle, and erasing its box would take out pixels the model never
+                      // selected.
+                      onErase={(segment) =>
+                        segment.mask === undefined
+                          ? undefined
+                          : eraseWithMask(decodeMask(segment.mask), metadata)
+                      }
+                    />
+                  ))}
 
             {activeTool === "select" && (
               <SelectLayer

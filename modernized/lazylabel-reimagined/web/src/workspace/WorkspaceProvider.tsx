@@ -34,8 +34,8 @@ import { History } from "./history.js";
 import { provenanceFromLoad, type ImageState } from "./saveState.js";
 import { toggle } from "../tools/selection.js";
 
-/** The manual tools. The AI tools arrive later in Phase 5. */
-export type Tool = "none" | "select" | "polygon" | "box" | "circle";
+/** Every tool the workspace offers. */
+export type Tool = "none" | "select" | "polygon" | "box" | "circle" | "ai";
 
 export interface OpenImage {
   readonly image: WireDatasetImage;

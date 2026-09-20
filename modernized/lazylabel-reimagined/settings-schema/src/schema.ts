@@ -43,6 +43,15 @@ export const DEFAULT_SETTINGS: Readonly<Record<string, unknown>> = Object.freeze
   saturation: 1.0,
 
   // Model
+  //
+  // The legacy two are kept so an imported settings.json round-trips, but nothing READS them: they
+  // are the file-name-based selection RULE-085 rules out, where renaming a checkpoint changes how
+  // the software interprets its contents. `ai_model` replaces them with a manifest NAME, which is
+  // a statement by whoever put the file there rather than a guess from its spelling.
+  //
+  // Empty means no model chosen. The AI tools are offered only once it is set, because a wrong
+  // guess here is a request the service can only refuse.
+  ai_model: "",
   default_model_type: "vit_h",
   default_model_filename: "sam_vit_h_4b8939.pth",
   operate_on_view: false,
