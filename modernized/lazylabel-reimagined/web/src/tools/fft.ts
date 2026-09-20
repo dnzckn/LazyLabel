@@ -11,6 +11,9 @@
  * distinguish legacy's `fftshift`-instead-of-`ifftshift` from the correct inverse.
  */
 
+import { dft2d, fftShift2d } from "./dft.js";
+import { posterize } from "./imageProcessing.js";
+
 /** The slider's range: 0..10000, giving 0.01% steps (`fft_threshold_widget.py:283-330`). */
 export const FREQUENCY_SLIDER_MAX = 10000;
 
@@ -113,4 +116,54 @@ export function normalizeToByte(values: Float64Array): Uint8Array {
   }
 
   return out;
+}
+
+/**
+ * The whole filter — RULE-030, end to end.
+ *
+ * Forward transform, shift, weight by band, shift AGAIN (not unshift — see below), inverse
+ * transform, take the real part, normalize to bytes, then optionally quantize by intensity.
+ *
+ * THE SECOND SHIFT IS `fftshift`, NOT `ifftshift`, WHICH IS LEGACY'S AND IS WRONG. The inverse of
+ * `fftshift` is `ifftshift`; they agree for even lengths and differ by a pixel for odd ones. So an
+ * odd-sized image comes out shifted. It is reproduced because Phase 5's exit criterion is
+ * equivalence on golden images, and `test/fixtures/legacy-fft.json` carries two odd cases that a
+ * "corrected" port fails while passing every even one.
+ */
+export function filterFrequencies(
+  pixels: Uint8Array | Uint16Array,
+  height: number,
+  width: number,
+  frequencyThresholds: readonly number[],
+  intensityThresholds: readonly number[] = [],
+): Uint8Array {
+  const re = Float64Array.from(pixels);
+  const im = new Float64Array(re.length);
+
+  dft2d(re, im, height, width, false);
+
+  const shiftedRe = fftShift2d(re, height, width);
+  const shiftedIm = fftShift2d(im, height, width);
+
+  const weights = bandWeights(frequencyDistance(height, width), frequencyThresholds);
+  for (let i = 0; i < shiftedRe.length; i += 1) {
+    shiftedRe[i] = shiftedRe[i]! * weights[i]!;
+    shiftedIm[i] = shiftedIm[i]! * weights[i]!;
+  }
+
+  // fftshift again, as legacy does.
+  const backRe = fftShift2d(shiftedRe, height, width);
+  const backIm = fftShift2d(shiftedIm, height, width);
+
+  dft2d(backRe, backIm, height, width, true);
+
+  const bytes = normalizeToByte(backRe);
+
+  // The intensity levels use the same banding as a channel threshold: N thresholds make N+1
+  // levels, `<=` for the first and `>` for the rest, each mapped to `level / N x 255` truncated.
+  if (intensityThresholds.length > 0) {
+    for (let i = 0; i < bytes.length; i += 1) bytes[i] = posterize(bytes[i]!, intensityThresholds);
+  }
+
+  return bytes;
 }
