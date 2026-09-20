@@ -609,6 +609,11 @@ because a test exercises one side with the other stubbed. Five found:
 | Setting ↔ behaviour | `operate_on_view` read by nothing, while the panel claimed it reached the AI |
 | Client ↔ request | `pixelPriority` never sent, so RULE-012's two settings did nothing |
 | Client ↔ request | `expectedRevisions` never sent, so every save was an unconditional overwrite |
+| Store ↔ save path | `markSaved` had no caller, so `dirty` never cleared and the app read "unsaved" after every successful save |
+| Setting ↔ behaviour | `propagation_confidence_threshold` read by nothing, AND defaulted to 0.5 against RULE-060's 0.99 |
+| Setting ↔ pixel | `point_radius`, `line_thickness`, `annotation_size_multiplier` reached no drawing aid |
+| Setting ↔ behaviour | `auto_polygon_enabled` and `polygon_resolution`: legacy's Auto-Convert was not built |
+| CSS ↔ coordinates | the drawing layer's box was not the image's, so every drawn vertex was misplaced |
 
 **A conflict has no recovery yet, and the message says so rather than pretending.** When a save is
 refused because the file moved, the annotations on screen are still the user's — but there is no
@@ -696,6 +701,20 @@ be saved to", and treating them as one cost this view twice.
 The second thread is about the suite itself. Two flakes turned out to be one real defect (5) and
 one real contention problem (a fresh jsdom per file was two thirds of the run). Neither was a
 reason to raise a timeout, which was the first thing tried both times.
+
+**C14 was verified on disk on 2026-09-20.** One polygon drawn once into a linked pair wrote
+`gradient8.txt` and `gradient16.txt` with the identical box — `0 0.390625 0.4791666666666667
+0.53125 0.625`, the same pixels in both images, from one action. The two images are the same size,
+which is when a linked mask is allowed; a different-sized pair refuses the mask and says to draw a
+polygon instead.
+
+**That run found the ninth defect of the family**, and it is the clearest example yet.
+`markSaved` was defined on the store, covered by the store's own test, exposed on the context —
+and called by nothing. `dirty` never cleared, so the status bar read "unsaved" after every
+successful save, for the whole session. The existing test passed because it tested the STORE
+function rather than the wire to it, which is exactly how this family survives: every piece works,
+and nothing joins them. The fix marks the side captured when the write STARTED, because a save is
+a round trip and the user can change panes during it.
 
 ## The round trip, end to end, in a real browser
 
