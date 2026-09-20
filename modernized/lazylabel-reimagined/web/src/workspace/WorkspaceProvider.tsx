@@ -103,6 +103,22 @@ export interface WorkspaceContextValue {
    * references -- the segments themselves are shared, not copied.
    */
   readonly applySegments: (next: readonly WireSegment[], label: string) => void;
+  /**
+   * Class names by id, as the open image's file holds them.
+   *
+   * Owned here for the same reason the segments are: once a user renames a class, the loaded file
+   * is no longer what the app should be showing. Under decision 6 these are PER IMAGE, so the
+   * same name can be a different id in the next file.
+   */
+  readonly classAliases: Readonly<Record<string, string>>;
+  /** Rename one class, or clear the name with an empty string. Recorded, and marks the image unsaved. */
+  readonly setClassAlias: (classId: number, name: string) => void;
+  /** Renumber classes and rename them together, as RULE-013's reassign does. */
+  readonly applyClasses: (
+    segments: readonly WireSegment[],
+    aliases: Readonly<Record<string, string>>,
+    label: string,
+  ) => void;
 }
 
 const WorkspaceContext = createContext<WorkspaceContextValue | null>(null);
@@ -122,6 +138,7 @@ export function WorkspaceProvider({
   const [activeTool, setActiveTool] = useState<Tool>("none");
   const [activeClassId, setActiveClassId] = useState<number | null>(null);
   const [selected, setSelected] = useState<readonly number[]>([]);
+  const [classAliases, setClassAliases] = useState<Readonly<Record<string, string>>>({});
   // One History for the session, cleared per image: RULE-052 scopes undo to the open image, so an
   // undo after switching must not reach back into the previous one's edits.
   const history = useMemo(() => new History(), []);
@@ -137,6 +154,7 @@ export function WorkspaceProvider({
       history.clear();
       setSegments([]);
       setSelected([]);
+      setClassAliases({});
       setDirty(false);
 
       client
@@ -153,6 +171,7 @@ export function WorkspaceProvider({
             // Seeded here rather than in an effect on `open`, so the segments and the result they
             // came from can never be one render out of step.
             setSegments(result.kind === "loaded" ? result.annotations.segments : []);
+            setClassAliases(result.kind === "loaded" ? result.annotations.classAliases : {});
             return { ...current, metadata, result };
           });
         })
@@ -275,6 +294,66 @@ export function WorkspaceProvider({
     [history, segments],
   );
 
+  const setClassAlias = useCallback(
+    (classId: number, name: string) => {
+      const key = String(classId);
+      const previous = classAliases;
+      const trimmed = name.trim();
+
+      // An empty name CLEARS the entry rather than storing "". A blank alias would export as a
+      // class literally named nothing, which is worse than falling back to the id.
+      const next = { ...previous };
+      if (trimmed === "") delete next[key];
+      else next[key] = trimmed;
+
+      if (previous[key] === next[key]) return;
+
+      const apply = (value: Readonly<Record<string, string>>) => {
+        setClassAliases(value);
+        setDirty(true);
+      };
+
+      apply(next);
+      history.record({
+        label: trimmed === "" ? `Clear the name of class ${classId}` : `Rename class ${classId}`,
+        bytes: 64,
+        undo: () => apply(previous),
+        redo: () => apply(next),
+      });
+    },
+    [classAliases, history],
+  );
+
+  const applyClasses = useCallback(
+    (
+      nextSegments: readonly WireSegment[],
+      nextAliases: Readonly<Record<string, string>>,
+      label: string,
+    ) => {
+      const previousSegments = segments;
+      const previousAliases = classAliases;
+
+      const apply = (
+        theSegments: readonly WireSegment[],
+        theAliases: Readonly<Record<string, string>>,
+      ) => {
+        setSegments(theSegments);
+        setClassAliases(theAliases);
+        setDirty(true);
+        setSelected([]);
+      };
+
+      apply(nextSegments, nextAliases);
+      history.record({
+        label,
+        bytes: 64,
+        undo: () => apply(previousSegments, previousAliases),
+        redo: () => apply(nextSegments, nextAliases),
+      });
+    },
+    [classAliases, history, segments],
+  );
+
   const markSaved = useCallback(() => setDirty(false), []);
 
   const value = useMemo(
@@ -295,6 +374,9 @@ export function WorkspaceProvider({
       toggleSelected,
       clearSelection,
       applySegments,
+      classAliases,
+      setClassAlias,
+      applyClasses,
     }),
     [
       activeClassId,
@@ -311,6 +393,9 @@ export function WorkspaceProvider({
       toggleSelected,
       clearSelection,
       applySegments,
+      classAliases,
+      setClassAlias,
+      applyClasses,
     ],
   );
 

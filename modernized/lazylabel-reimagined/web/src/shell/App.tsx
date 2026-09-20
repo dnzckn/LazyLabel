@@ -15,6 +15,7 @@ import { CAPABILITIES } from "../capabilities.js";
 import { DatasetBrowser } from "../dataset/DatasetBrowser.jsx";
 import { NotificationHost } from "../notifications/NotificationProvider.jsx";
 import { OpenImageView } from "../workspace/OpenImageView.jsx";
+import { ClassTable } from "../workspace/ClassTable.jsx";
 import { ModelPicker } from "../workspace/ModelPicker.jsx";
 import { SegmentTable } from "../workspace/SegmentTable.jsx";
 import { useWorkspace, type Tool } from "../workspace/WorkspaceProvider.jsx";
@@ -153,10 +154,9 @@ export function App({ client }: { readonly client: ApiClient }): ReactNode {
             <Panel title="Segments">
               <SegmentTable />
             </Panel>
-            <Panel
-              title="Classes"
-              pending={{ phase: "Phase 5", summary: "the class table and its ordering controls" }}
-            />
+            <Panel title="Classes">
+              <ClassTable />
+            </Panel>
 
             <Panel title="What is built" initiallyCollapsed>
         <table className="capabilities">

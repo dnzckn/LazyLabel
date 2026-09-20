@@ -400,3 +400,16 @@ fieldset input {
   color: var(--warning-ink);
   font-size: 0.8rem;
 }
+
+.classes {
+  font-size: 0.85rem;
+}
+
+.classes input[type="text"] {
+  width: 100%;
+  font: inherit;
+}
+
+.classes__to {
+  color: var(--warning-ink);
+}

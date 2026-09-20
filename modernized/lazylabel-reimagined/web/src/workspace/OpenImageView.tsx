@@ -79,6 +79,9 @@ function OpenedImage({
   readonly pixelsUrl: string;
 }): ReactNode {
   const { settings } = useSettings();
+  // The LIVE names, not the ones the file held: a class renamed since loading must be written
+  // with its new name, or the rename is lost on the next save.
+  const { classAliases } = useWorkspace();
   const { segments, addSegment, activeTool, activeClassId, applySegments, selected, toggleSelected } =
     useWorkspace();
   const { notify } = useNotifications();
@@ -370,6 +373,9 @@ function ConvertButton({
   readonly size: readonly [number, number];
 }): ReactNode {
   const { settings } = useSettings();
+  // The LIVE names and segments, not the ones the file held. A class renamed or an annotation
+  // drawn since loading has to be written as it now stands, or the edit is lost on the next save.
+  const { classAliases, segments } = useWorkspace();
   const [state, setState] = useState<
     | { readonly status: "idle" }
     | { readonly status: "saving" }
@@ -385,14 +391,14 @@ function ConvertButton({
       .saveAnnotations(projectId, image.key, {
         imageSize: size,
         formats,
-        segments: annotations.segments,
-        classAliases: annotations.classAliases,
+        segments,
+        classAliases,
       })
       .then((result) => setState({ status: "saved", result }))
       .catch((cause: unknown) =>
         setState({ status: "failed", reason: cause instanceof Error ? cause.message : String(cause) }),
       );
-  }, [annotations, client, formats, image.key, projectId, size]);
+  }, [classAliases, client, formats, image.key, projectId, segments, size]);
 
   return (
     <div>
