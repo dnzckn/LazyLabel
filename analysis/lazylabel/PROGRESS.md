@@ -938,6 +938,16 @@ Crop; the split view pairing two images of different sizes and saying so.
 inference service is configured, which is a supported deployment and says so. Every other request
 is 200 or 204.
 
+**The sort was checked the same way afterwards.** Name A–Z is what arrives from the API and Z–A
+is its exact reverse; the four orders that need file dates or sizes are disabled in the control
+and labelled. Setting one of them anyway — which an imported legacy settings file can carry —
+leaves the list in name order and raises a banner naming the order it could not do: "Size (largest
+first) is not available yet".
+
+A small trap in checking it, worth knowing for the next person: the disabled OPTION labels carry
+the same "not available yet" phrase as the banner, so a plain text search over the page finds an
+option first and reads back the wrong order. Match the banner by its class or role.
+
 The hotkey summary read "19 of 43" there, with an image open and the sequence panel closed. That
 number MOVES with what is mounted and is meant to: the six frame keys register with the timeline
 panel and the save keys with the opened image, so the table answers "will this do something if I
