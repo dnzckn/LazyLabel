@@ -375,7 +375,7 @@ needs is already in one store rather than scattered across managers.
 
 ## What running the app found that the tests did not
 
-Five defects in one session, none of which a unit test could have caught, and it is worth being
+Six defects in one session, none of which a unit test could have caught, and it is worth being
 explicit about the shapes because they will recur in Phase 6.
 
 1. **Vertex editing was unreachable.** `EditLayer` was built, unit-tested and never rendered by
@@ -389,15 +389,29 @@ explicit about the shapes because they will recur in Phase 6.
 4. **A dataset whose images are not at the root could not be opened.** The listing is non-recursive
    per RULE-051, and nothing offered a way down — the API had supported `?folder=` the whole time.
    Found by pointing the app at a folder laid out the way this project's own fixtures are.
-5. **Space could be refused over a preview that was on screen.** The keydown listener is registered
+5. **Undo and redo had no caller.** The history has existed since Phase 4 with RULE-052's and
+   RULE-053's defects designed out and a full suite over it, and nothing in the app called
+   `undo()`. A user could draw, erase and merge and had no way to take any of it back.
+6. **Space could be refused over a preview that was on screen.** The keydown listener is registered
    in an effect, so there is a window where the banner is rendered and the listener still closes
    over the render with no prediction. Found by chasing a test that failed one run in ten — the
    failing DOM contained both "AI preview ready" and "No AI segment preview to accept", which
    cannot both be true of one state.
 
-The common thread: **a rule can be implemented, tested and correct, and the feature can still not
-exist.** Component tests prove the component; only an end-to-end path proves it is reachable. That
-is what Phase 5's exit criterion 1 is for, and it earned its place twice in one session.
+The common thread, and it turned up **three times** (vertex editing, the adjustment sliders, undo
+and redo): **a rule can be implemented, tested and correct, and the feature can still not exist.**
+Component tests prove the component; only an end-to-end path proves it is reachable.
+
+**There is already a guard for this and it had gone stale.** `capabilities.ts` says what is built,
+`coverage.test.ts` refuses to let a capability be marked built without an acceptance test named for
+it, and the shell renders the table so a user can see it. The machinery is sound — what failed is
+that the table was not updated as things landed, so it listed eight built capabilities as pending
+and nobody was prompted to write their acceptance tests. Keeping that table honest as work lands is
+the cheapest defence against this whole class, and is worth doing in the same commit as the
+feature.
+
+As of now C4 and C6 are marked built; C3, C5, C7, C8, C9 and C10 are built in the app and still
+need acceptance tests before the table can say so.
 
 The second thread is about the suite itself. Two flakes turned out to be one real defect (5) and
 one real contention problem (a fresh jsdom per file was two thirds of the run). Neither was a
