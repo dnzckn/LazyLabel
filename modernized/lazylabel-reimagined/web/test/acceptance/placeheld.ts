@@ -6,5 +6,5 @@
  */
 
 export const PLACEHELD = [
-  "C3", "C5", "C7", "C8", "C9", "C10", "C11", "C14",
+  "C5", "C7", "C9", "C11", "C14",
 ] as const;

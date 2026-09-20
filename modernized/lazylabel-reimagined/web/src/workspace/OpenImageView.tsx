@@ -39,6 +39,22 @@ import { useNotifications } from "../notifications/NotificationProvider.jsx";
 
 import type { AnnotationsResult, ApiClient } from "../api/client.js";
 
+/**
+ * What a save sends when the image had no annotation file.
+ *
+ * Not null and not a special case: the save path takes the file's PREVIOUS contents only to report
+ * on them, and "there was nothing" is a perfectly good answer. Making the button conditional on a
+ * file existing is what hid it from every new dataset.
+ */
+const EMPTY_ANNOTATIONS = {
+  segments: [],
+  classAliases: {},
+  failures: [],
+  rejected: 0,
+  sourceFile: "",
+  sourceFormat: "",
+} as unknown as WireLoadResponse;
+
 /** Reads the store and hands the parts to the presentation below. */
 export function OpenImageView({
   client,
@@ -323,6 +339,31 @@ function OpenedImage({
         </>
       )}
 
+      {/* OUTSIDE the "loaded" block, deliberately.
+
+          It used to live inside it, which meant an image with NO annotation file -- the first
+          image of every new dataset -- had no save button at all. A user could draw as much as
+          they liked and had no way to write any of it. That is the same branch, and the same
+          mistake, that once made those drawings invisible: "has a file" is not "can be saved to".
+
+          `annotations` is what the file HELD, which is nothing here. The live segments and class
+          names come from the store, as they have to -- anything drawn or renamed since loading
+          would otherwise be dropped on save. */}
+      {metadata !== null && (
+        <ConvertButton
+          client={client}
+          projectId={projectId}
+          image={image}
+          annotations={
+            result?.kind === "loaded"
+              ? result.annotations
+              : EMPTY_ANNOTATIONS
+          }
+          size={[metadata.height, metadata.width]}
+        />
+      )}
+
+
       {error !== null && (
         <p role="alert" className="banner banner--error">
           {image.name} could not be opened: {error}
@@ -384,15 +425,6 @@ function OpenedImage({
             </p>
           )}
 
-          {metadata !== null && (
-            <ConvertButton
-              client={client}
-              projectId={projectId}
-              image={image}
-              annotations={result.annotations}
-              size={[metadata.height, metadata.width]}
-            />
-          )}
         </>
       )}
     </section>

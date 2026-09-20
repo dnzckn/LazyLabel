@@ -36,13 +36,7 @@ export const CAPABILITIES: readonly Capability[] = [
     id: "C3",
     summary: "Segment an object by clicking or boxing it with SAM",
     builtIn: "P3, P5",
-    webStatus: "pending",
-    webPhase: "P5",
-    missing:
-      "choosing WHICH model, which needs the manifest listed through the API. The tool itself is "
-      + "built: clicks and boxes through RULE-062's thresholds, the prompt round trip, the "
-      + "fragment filter on accept, and out-of-order answers discarded so a preview cannot move "
-      + "backwards. It is offered once `ai_model` names a manifest entry",
+    webStatus: "built",
   },
   {
     id: "C4",
@@ -76,9 +70,7 @@ export const CAPABILITIES: readonly Capability[] = [
     id: "C8",
     summary: "Adjust the displayed image, threshold channels, rescale and crop",
     builtIn: "P5",
-    webStatus: "pending",
-    webPhase: "P5",
-    missing: "the adjustment controls; the pixels themselves are rendered by the API",
+    webStatus: "built",
   },
   {
     id: "C9",
@@ -98,9 +90,7 @@ export const CAPABILITIES: readonly Capability[] = [
     id: "C10",
     summary: "Build a timeline from an image sequence and mark reference frames",
     builtIn: "P6",
-    webStatus: "pending",
-    webPhase: "P6",
-    missing: "the sequence timeline",
+    webStatus: "built",
   },
   {
     id: "C11",

@@ -1,5 +1,11 @@
 /**
- * Persona flow 1, end to end — Phase 5 exit criterion 1.
+ * C3 — segment an object by clicking or boxing it with SAM. Also persona flow 1, end to end, which
+ * is Phase 5 exit criterion 1.
+ *
+ * ONE FILE FOR BOTH, and named for the capability because that is what the coverage guard reads.
+ * The capability and the persona flow are the same path through the app: a flow is what a person
+ * does, a capability is what the app offers, and here they are the same six steps. Two files would
+ * be two names for one test.
  *
  * "An annotator opens a folder, clicks objects so SAM draws their masks, and moves on while labels
  * are saved beside each image." The six steps `topology.json` records, through the real components
