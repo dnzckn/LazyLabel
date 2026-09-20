@@ -12,15 +12,15 @@ Phase 5 has started,
 Phases 5 and 6 have not started. The pieces that exist are proven against legacy; what is missing
 is most of the user interface and the whole cutover.
 
-By the brief's own weighting of the six phases: **about 53% of the conversion is done** — 6.0,
-5.5, 5.8, most of 29.4, and about half of 27.4.
+By the brief's own weighting of the six phases: **about 63% of the conversion is done** — 6.0,
+5.5, 5.8, most of 29.4, and about 85% of 27.4.
 
 Phase 4 has met all four of its exit criteria, but calling it finished would overstate things: its
 left and right panels exist as frames and the tools that fill them are Phase 5's by the brief's own
 split. What is genuinely done is everything those tools will stand on — the store, the save
 semantics, the layout, the undo stack.
 
-The remaining 47% is the rest of Phase 5 and all of Phase 6.
+The remaining 37% is the tail of Phase 5 and all of Phase 6.
 
 | Phase | Share | State |
 |---|---|---|
@@ -28,7 +28,7 @@ The remaining 47% is the rest of Phase 5 and all of Phase 6.
 | P2 — architecture and scaffolds | 5.5% | **complete** |
 | P3 — inference service | 5.8% | **complete** |
 | P4 — workspace, dataset browser, persistence | 29.4% | **exit criteria met**; tool-hosting panels wait on P5 |
-| P5 — tools | 27.4% | in progress; every manual tool is built, AI tools remain |
+| P5 — tools | 27.4% | in progress, ~85%; every tool rule is implemented |
 | P6 — sequence and cutover | 25.9% | not started |
 
 ## What is done, and what proves it
@@ -162,8 +162,16 @@ needs is already in one store rather than scattered across managers.
    Everything a user does by hand now works: draw a polygon, box or circle, select shapes, edit
    their vertices, merge, delete, and erase with any shape by holding shift.
 
-   Still to build: the AI click and box tools (C3), the class table (C7), and the image
-   adjustments (C8).
+   - **The AI tools** (C3), end to end: the interaction state machine, the canvas layer, the
+     `embed`/`segment` round trip, the fragment filter on accept, and a model picker over the
+     manifest — so a checkpoint is chosen by NAME rather than by legacy's file-name substring
+     matching, which loads `sam2_hiera_large_tuned.pt` as *tiny*.
+   - **The class table** (C7), where the order decides the exported channel order.
+   - **Display adjustments** (C8), including legacy's negative-brightness fold, reproduced because
+     with Operate On View those pixels are what SAM segments.
+
+   Every Phase 5 rule is implemented. What remains is the adjustment *controls* (the sliders that
+   drive C8) and the crop tool, then Phase 5's exit criteria can be checked end to end.
 2. **Phase 6 — sequence and cutover** (25.9%). The timeline, propagation review, the split view,
    the hosted deployment and the actual switch-over.
 
