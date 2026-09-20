@@ -13,7 +13,7 @@ Phases 5 and 6 have not started. The pieces that exist are proven against legacy
 is most of the user interface and the whole cutover.
 
 By the brief's own weighting of the six phases: **about 45% of the conversion is done** — 6.0,
-5.5, 5.8, most of 29.4, and the beginning of 27.4.
+5.5, 5.8, most of 29.4, and a slice of 27.4.
 
 Phase 4 has met all four of its exit criteria, but calling it finished would overstate things: its
 left and right panels exist as frames and the tools that fill them are Phase 5's by the brief's own
@@ -28,7 +28,7 @@ The remaining 53% is Phases 5 and 6, and it is the part a user actually sees.
 | P2 — architecture and scaffolds | 5.5% | **complete** |
 | P3 — inference service | 5.8% | **complete** |
 | P4 — workspace, dataset browser, persistence | 29.4% | **exit criteria met**; tool-hosting panels wait on P5 |
-| P5 — tools | 27.4% | entry criteria met; pilot slice under way |
+| P5 — tools | 27.4% | in progress; the three manual drawing tools are built |
 | P6 — sequence and cutover | 25.9% | not started |
 
 ## What is done, and what proves it
@@ -147,8 +147,12 @@ needs is already in one store rather than scattered across managers.
      user performs it: choose the tool, click, close by the threshold or Space, undo, and the
      polygon lands in the store with the right class and marks the image unsaved.
 
-   The pilot is complete except vertex editing (RULE-046). Still to build: box, circle, selection,
-   erase and merge, the AI click and box tools, and the image adjustments.
+   - **Boxes and circles** (`tools/shapes.ts`, `canvas/ShapeLayer.tsx`), RULE-043. A box is stored
+     as a four-corner polygon; a circle as its centre and a 3 o'clock radius point, *not* the point
+     the drag was released on — the difference is invisible to any test whose drag is horizontal.
+
+   All three manual drawing tools work end to end. Still to build: vertex editing (RULE-046),
+   selection, erase and merge, the AI click and box tools, and the image adjustments.
 2. **Phase 6 — sequence and cutover** (25.9%). The timeline, propagation review, the split view,
    the hosted deployment and the actual switch-over.
 
