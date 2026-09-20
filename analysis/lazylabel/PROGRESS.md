@@ -324,7 +324,25 @@ needs is already in one store rather than scattered across managers.
    machine, so it is reasoned rather than observed, and its README says so first and names the four
    places a first build is most likely to break.
 
-   Writing it found that **the API never constructed its inference adapter**, which is the eighth
+   **Exit criterion 4's harness is written too.** "Every dataset in the acceptance corpus imports
+   and re-exports identically" needs the owner's corpus; what did not need it is the command:
+
+   ```bash
+   cd modernized/lazylabel-reimagined/api && npm run acceptance -- /path/to/corpus
+   ```
+
+   It reads each annotation file as the app does, rebuilds the export context, writes back the
+   formats that image actually had, and compares the bytes — text after decision 10's EOL
+   normalisation, binary exactly. Nothing is written into the corpus; every write goes to a scratch
+   directory, and a test asserts the given folder is unchanged. An unreadable file is a FAILURE
+   rather than a skip, because a run that passed over what it could not open would report success
+   loudest for the datasets most likely to be broken.
+
+   Putting `tools/` into the typecheck found three wrong assumptions in that script, which had
+   compiled cleanly while reading fields off types that do not have them. **A script outside the
+   typecheck is one whose mistakes are found by running it against somebody's real data.**
+
+   Writing the deployment found that **the API never constructed its inference adapter**, which is the eighth
    defect below and the only one at the process level. Checking the configuration also settled the
    design: the web app already defaults to `/api` and the dev server already proxies that to the
    API with the prefix stripped, so production does the same through nginx rather than compiling an
