@@ -107,8 +107,11 @@ export const CAPABILITIES: readonly Capability[] = [
     webStatus: "pending",
     webPhase: "P6",
     missing:
-      "drawing into a linked pair; the comparison view and the linked-operation rules are built, "
-      + "and what is left is a workspace store that holds two open images",
+      "a LINKED operation -- one action applying to both images at the same pixel, as one undo "
+      + "entry. Both panes are editable now and each side holds its own segments, crop and undo, "
+      + "but every action still goes to one side: the store, the comparison view and the "
+      + "linked-operation rules are built, and what is left is the call path that writes both "
+      + "sides and records one inverse",
   },
 ];
 

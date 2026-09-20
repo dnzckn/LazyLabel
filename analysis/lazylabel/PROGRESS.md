@@ -314,38 +314,62 @@ needs is already in one store rather than scattered across managers.
      Different sizes do not prevent pairing — the smaller image refuses what falls outside it.
 
    **The viewer is built** (`split/SplitView.tsx`). It compares two images **with their
-   annotations drawn**, links them, and describes what a linked operation would do. Each pane loads
-   its own image's annotations read-only, and only once that image's size has landed — the text
-   formats store normalized coordinates, so reading them at the other side's size would rescale one
-   image of a mismatched pair silently. It does NOT draw into a pair, and says so: that needs the workspace store to
-   hold two open images, which is a change to the store rather than to the view. **C14 stays
-   pending in the capability table** — a comparison view is not "annotate both together", and
-   marking it built would put the table back to lying a day after it stopped.
+   annotations drawn**, links them, and describes what a linked operation would do. It did NOT
+   draw into a pair when it landed, for want of a store that could hold two open images — the
+   slice below built that and rewired the view onto it, so both panes are now editable and each
+   pane's size, processing and live segments come from the store rather than from a second loading
+   path of its own. **C14 stays pending in the capability table** either way: two editable panes
+   is not one action applying to both, and marking it built would put the table back to lying.
 
    Three smaller decisions taken with it: two viewers rather than legacy's dead four-view setting;
    the same image on both sides allowed and announced; an unmeasured image says "measuring" rather
    than being drawn from a guess.
 
-   **The next slice, scoped.** Drawing into a linked pair needs the workspace store to hold TWO
-   open images. That is the one substantial unblocked piece left, and it is a change to the centre
-   of the app rather than to a leaf, so it is worth knowing what it touches before starting.
+   **The store now holds two open images, and the split view is those two sides.** Everything
+   per-image -- `open`, `segments`, `classAliases`, `dirty`, `selected`, `crop`, `processing` --
+   moved into a `SideState`; the store holds two of them and a pointer to the ACTIVE side; and the
+   eight components that call `useWorkspace()` read exactly what they read before, because the
+   context still exposes those as flat values resolved from the active side. Threading a side
+   through every signature to serve one view would have made every caller state something only one
+   of them has an opinion about.
 
-   **Eight components call `useWorkspace()`**: `DatasetBrowser`, `App`, `ChannelPanel`,
-   `ClassTable`, `CropPanel`, `HistoryControls`, `OpenImageView` and `SegmentTable`. Everything
-   per-image lives in the store as a single value — `open`, `segments`, `classAliases`, `dirty`,
-   `selected`, `crop`, `processing` — so "two open images" means either two of each or one record
-   with an active side.
+   Two things stopped being rules someone had to remember. The crop lives in both the side's
+   `crop` and its `processing` -- the save path reads one, RULE-029 and RULE-032 restrict the
+   other to the same region -- and as two `useState` calls that agreement had no enforcement; it
+   is one assignment now. Decision 9's "a crop does not carry over" is likewise one assignment,
+   because opening replaces the whole side.
 
-   **The shape that keeps the blast radius small** is an ACTIVE SIDE: the store gains a second
-   slot and a pointer to which one the single-image components act on, so those eight keep reading
-   what they read today and only the split view asks for both. The alternative — threading a side
-   through every call — changes every signature to serve one view.
+   **History is the part that could not stay as it was.** RULE-052 clears history when an image
+   loads, which with one open image an unscoped clear says exactly; with two it says far too much,
+   since opening into the right pane would throw away everything drawn in the left. Entries now
+   declare an opaque scope and `History.clear` takes one. Dropping from the middle of the stack is
+   safe because each entry touches only its own side -- there is a test asserting it rather than a
+   comment, because a linked operation touching both sides is what would end it. An entry that
+   declares NO scope is dropped by every clear: it has not said what it touches, so it cannot be
+   shown safe to keep. And an undo captures the side it was recorded on; reading it back when the
+   undo runs would take the user's shape off whichever image they happened to be looking at.
 
-   Two decisions are already settled and should not be re-derived:
+   **The split view is now those two sides**, verified against a running API: switching the
+   editing side moved the canvas, the save button, the segment table, the class table and the
+   status bar to the other image, and switching back found the first image's two objects and its
+   class name where they were left. Two loading paths went away with it -- the view used to
+   measure and load annotations itself, a second copy of the ordering that a size must land before
+   annotations or every normalized coordinate rescales.
 
-   - **One undo entry per linked operation**, not two. A user performed one action. Decision 8's
-     reassessment argues it and nothing has implemented it; `history.record` takes a label and an
-     inverse, so a linked operation records the pair's restore rather than each side's.
+   One capability was deliberately narrowed: comparing two images neither of which is open is no
+   longer possible from that panel, because RULE-092 is about a PAIR being labelled together and a
+   second image picker would put two controls on one question. It costs one extra click.
+
+   **The next slice is the LINKED operation** -- one action applying to both images at the same
+   pixel, as ONE undo entry. `split/linked.ts` holds the rules and `history.record` already takes a
+   scope naming both sides, so what is missing is the call path: a linked variant of `addSegment`
+   and `applySegments` that writes both sides and records one inverse. **C14 stays pending** until
+   then: two editable panes is not "one action on both", and marking it built would put the
+   capability table back to lying.
+
+   Two decisions were settled before the slice and held:
+
+   - **One undo entry per linked operation**, not two. A user performed one action.
    - **Linked classes agree on the NAME**, each image keeping its own id (RULE-092's answer, and
      `split/linked.ts` implements it). Whether a pair whose images already assign different ids to
      one alias should have its IDS reconciled as well **stays the owner's**; name agreement is well

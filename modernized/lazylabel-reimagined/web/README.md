@@ -55,9 +55,10 @@ something nothing handles is how Ctrl+A silently stops selecting text.
 
 ## What is not built
 
-**Two of the fourteen capabilities**, both Phase 6: **C11**, propagation, and **C14**, drawing into
-a linked pair. The split view compares and links today; drawing into one needs the workspace store
-to hold two open images.
+**Two of the fourteen capabilities**, both Phase 6: **C11**, propagation, and **C14**, a LINKED
+operation. The split view holds two open images and both panes are editable -- each side has its
+own segments, crop, processing and undo, and a radio says which one the tools act on. What is
+missing is one action applying to BOTH at the same pixel, as one undo entry.
 
 `src/capabilities.ts` lists every capability with its state, `test/acceptance/pending.test.ts`
 holds a tagged placeholder for each unbuilt one, and `coverage.test.ts` fails if those disagree —
