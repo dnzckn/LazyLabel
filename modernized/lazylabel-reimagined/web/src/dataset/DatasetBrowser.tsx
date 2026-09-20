@@ -27,11 +27,8 @@ import type {
   WireSaveResponse,
 } from "@lazylabel/contracts";
 
-import { AnnotationCanvas } from "../canvas/AnnotationCanvas.jsx";
-import { provenanceFromLoad, type ImageState } from "../workspace/saveState.js";
+import { useWorkspace } from "../workspace/WorkspaceProvider.jsx";
 import { ExportFormats } from "./ExportFormats.jsx";
-import { useSettings } from "../settings/SettingsProvider.jsx";
-import { normalizeExportFormats } from "@lazylabel/settings-schema";
 
 import type { AnnotationsResult, ApiClient } from "../api/client.js";
 
@@ -39,15 +36,6 @@ export interface DatasetBrowserProps {
   readonly client: ApiClient;
   readonly projectId: string;
   readonly folder?: string;
-  /**
-   * Reports which image is open and what state it is in, so the shell can show it.
-   *
-   * A callback rather than lifting the state itself: the browser owns opening an image, and moving
-   * that upward would put the fetch in one component and the thing it fetched in another. What the
-   * shell needs is the derived answer -- what is open, is it saved, can it be saved -- not the
-   * machinery.
-   */
-  readonly onImageState?: (image: ImageState | null) => void;
 }
 
 type ListingState =
@@ -55,17 +43,11 @@ type ListingState =
   | { readonly status: "ready"; readonly listing: WireDatasetListing }
   | { readonly status: "failed"; readonly reason: string };
 
-export function DatasetBrowser({
-  client,
-  projectId,
-  folder = "",
-  onImageState,
-}: DatasetBrowserProps): ReactNode {
+export function DatasetBrowser({ client, projectId, folder = "" }: DatasetBrowserProps): ReactNode {
   const [state, setState] = useState<ListingState>({ status: "loading" });
-  const [selected, setSelected] = useState<WireDatasetImage | null>(null);
-  const [opened, setOpened] = useState<AnnotationsResult | null>(null);
-  const [openError, setOpenError] = useState<string | null>(null);
-  const [metadata, setMetadata] = useState<WireImageMetadata | null>(null);
+  // Opening belongs to the workspace store: the list is one of five things that ask what is open,
+  // and whichever one holds the state becomes the owner of a question that is not its own.
+  const { open: openState, openImage } = useWorkspace();
 
   useEffect(() => {
     let cancelled = false;
@@ -86,52 +68,6 @@ export function DatasetBrowser({
       cancelled = true;
     };
   }, [client, projectId, folder]);
-
-  // Derived rather than tracked separately, so the reported state cannot disagree with what is on
-  // screen. `dirty` is always false for now: nothing can edit an image until the drawing tools
-  // arrive in Phase 5, and a dirty flag that nothing can set would be a claim, not a fact.
-  useEffect(() => {
-    if (onImageState === undefined) return;
-
-    if (selected === null) {
-      onImageState(null);
-      return;
-    }
-
-    if (openError !== null) {
-      onImageState({ key: selected.key, provenance: "failed", dirty: false, segmentCount: 0 });
-      return;
-    }
-
-    if (opened === null) return; // still opening; the last reported state stands
-
-    onImageState({
-      key: selected.key,
-      provenance: provenanceFromLoad(opened.kind),
-      dirty: false,
-      segmentCount: opened.kind === "loaded" ? opened.annotations.segments.length : 0,
-    });
-  }, [onImageState, opened, openError, selected]);
-
-  const open = useCallback(
-    (image: WireDatasetImage) => {
-      setSelected(image);
-      setOpened(null);
-      setOpenError(null);
-      setMetadata(null);
-
-      // The size has to come first: the text formats store normalized coordinates, so loading
-      // annotations without it would rescale every polygon.
-      client
-        .imageMetadata(projectId, image.key)
-        .then(async (info) => {
-          setMetadata(info);
-          setOpened(await client.loadAnnotations(projectId, image.key, [info.height, info.width]));
-        })
-        .catch((cause: unknown) => setOpenError(cause instanceof Error ? cause.message : String(cause)));
-    },
-    [client, projectId],
-  );
 
   if (state.status === "loading") return <p>Loading the folder…</p>;
   if (state.status === "failed") {
@@ -176,9 +112,9 @@ export function DatasetBrowser({
           </thead>
           <tbody>
             {listing.images.map((image) => (
-              <tr key={image.key} aria-selected={selected?.key === image.key}>
+              <tr key={image.key} aria-selected={openState?.image.key === image.key}>
                 <th scope="row">
-                  <button type="button" onClick={() => open(image)}>
+                  <button type="button" onClick={() => openImage(image)}>
                     {image.name}
                   </button>
                   {image.sharesSidecarsWith.length > 0 && (
@@ -204,232 +140,6 @@ export function DatasetBrowser({
 
       <ExportFormats />
 
-      {selected !== null && (
-        <OpenedImage
-          client={client}
-          projectId={projectId}
-          image={selected}
-          result={opened}
-          error={openError}
-          metadata={metadata}
-          pixelsUrl={client.pixelsUrl(projectId, selected.key)}
-        />
-      )}
     </section>
-  );
-}
-
-function OpenedImage({
-  client,
-  projectId,
-  image,
-  result,
-  error,
-  metadata,
-  pixelsUrl,
-}: {
-  readonly client: ApiClient;
-  readonly projectId: string;
-  readonly image: WireDatasetImage;
-  readonly result: AnnotationsResult | null;
-  readonly error: string | null;
-  readonly metadata: WireImageMetadata | null;
-  readonly pixelsUrl: string;
-}): ReactNode {
-  return (
-    <section>
-      <h3>{image.name}</h3>
-
-      {metadata !== null && (
-        <>
-          <p className="provisional">
-            {metadata.width} x {metadata.height}, {metadata.sourceFormat}
-            {metadata.sourceDepth === 16 && (
-              <>
-                {" "}
-                &mdash; 16-bit, shown and sent to the model as <code>value / 256</code> truncated
-                (RULE-024)
-              </>
-            )}
-          </p>
-          {/* The API re-encodes every image, so what is shown here is the same 8-bit RGB the model
-              is given. A 16-bit file cannot look one way on screen and arrive at SAM another.
-
-              Once the annotations are in, the canvas draws them over it; until then a plain image
-              shows the picture rather than an empty box. */}
-          {result?.kind === "loaded" ? (
-            <AnnotationCanvas
-              imageUrl={pixelsUrl}
-              width={metadata.width}
-              height={metadata.height}
-              segments={result.annotations.segments}
-            />
-          ) : (
-            <img className="preview" src={pixelsUrl} alt={image.name} />
-          )}
-        </>
-      )}
-
-      {error !== null && (
-        <p role="alert" className="banner banner--error">
-          {image.name} could not be opened: {error}
-        </p>
-      )}
-
-      {result === null && error === null && <p>Opening…</p>}
-
-      {/* Three different answers, never collapsed into one. Decision 15d. */}
-      {result?.kind === "none" && <p>This image has no annotation file.</p>}
-
-      {result?.kind === "failed" && (
-        <p role="alert" className="banner banner--error">
-          Annotations exist for {image.name} but none could be read: {result.message}. Nothing has
-          been deleted.
-        </p>
-      )}
-
-      {result?.kind === "loaded" && (
-        <>
-          <p>
-            {result.annotations.segments.length} objects, read from{" "}
-            <code>{result.annotations.sourceFile}</code> ({result.annotations.sourceFormat}).
-          </p>
-
-          {/* The architecture's migration gap, made visible: masks convert perfectly and names
-              do not, and a Pascal VOC or CreateML file written now would say "3" where the
-              original said "stop sign" without looking wrong. */}
-          {result.annotations.unreadableAliases === true && (
-            <p role="status" className="banner banner--warning">
-              This file stores its class names in the old pickled format, which is not read for
-              safety. The objects and their class ids are correct; the NAMES are missing. Saving to
-              Pascal VOC or CreateML now would write the ids where the names belong.
-            </p>
-          )}
-
-          {result.annotations.rejected > 0 && (
-            <p role="status" className="banner banner--warning">
-              {result.annotations.rejected} lines or objects in that file could not be read and were
-              skipped.
-            </p>
-          )}
-
-          {/* A recovery the user is not told about is what decision 15c forbids. */}
-          {result.annotations.failures.length > 0 && (
-            <p role="status" className="banner banner--warning">
-              A higher-priority annotation file could not be read, so these annotations came from{" "}
-              {result.annotations.sourceFormat} instead:{" "}
-              {result.annotations.failures.map((f) => `${f.format} (${f.reason})`).join("; ")}
-            </p>
-          )}
-
-          {Object.keys(result.annotations.classAliases).length > 0 && (
-            <p>
-              Class names from that file:{" "}
-              {Object.entries(result.annotations.classAliases)
-                .map(([id, name]) => `${id} = ${name}`)
-                .join(", ")}
-            </p>
-          )}
-
-          {metadata !== null && (
-            <ConvertButton
-              client={client}
-              projectId={projectId}
-              image={image}
-              annotations={result.annotations}
-              size={[metadata.height, metadata.width]}
-            />
-          )}
-        </>
-      )}
-    </section>
-  );
-}
-
-/**
- * Persona flow 4's last step: write the chosen formats beside the image.
- *
- * Three things the response says that the button has to pass on rather than swallow, because each
- * of them is a way a save can be less than it looks:
- *
- *   - `stale`, sidecars in formats that were NOT selected and are still on disk. Decision 15f says
- *     report and offer removal, never delete; the offer is Phase 5's, the report is now.
- *   - `skippedEmpty`, a selected format that could not be rendered at all.
- *   - a save that wrote nothing because the class names were missing would look like success, so
- *     the warning above it stays on screen.
- */
-function ConvertButton({
-  client,
-  projectId,
-  image,
-  annotations,
-  size,
-}: {
-  readonly client: ApiClient;
-  readonly projectId: string;
-  readonly image: WireDatasetImage;
-  readonly annotations: WireLoadResponse;
-  readonly size: readonly [number, number];
-}): ReactNode {
-  const { settings } = useSettings();
-  const [state, setState] = useState<
-    | { readonly status: "idle" }
-    | { readonly status: "saving" }
-    | { readonly status: "saved"; readonly result: WireSaveResponse }
-    | { readonly status: "failed"; readonly reason: string }
-  >({ status: "idle" });
-
-  const formats = normalizeExportFormats(settings.values["export_formats"]).formats;
-
-  const convert = useCallback(() => {
-    setState({ status: "saving" });
-    client
-      .saveAnnotations(projectId, image.key, {
-        imageSize: size,
-        formats,
-        segments: annotations.segments,
-        classAliases: annotations.classAliases,
-      })
-      .then((result) => setState({ status: "saved", result }))
-      .catch((cause: unknown) =>
-        setState({ status: "failed", reason: cause instanceof Error ? cause.message : String(cause) }),
-      );
-  }, [annotations, client, formats, image.key, projectId, size]);
-
-  return (
-    <div>
-      <button type="button" onClick={convert} disabled={state.status === "saving"}>
-        {state.status === "saving" ? "Writing…" : `Write ${formats.length} format${formats.length === 1 ? "" : "s"}`}
-      </button>
-
-      {state.status === "failed" && (
-        <p role="alert" className="banner banner--error">
-          Nothing was written: {state.reason}
-        </p>
-      )}
-
-      {state.status === "saved" && (
-        <>
-          <p role="status">
-            Wrote {Object.keys(state.result.written).join(", ")} beside {image.name}.
-          </p>
-
-          {state.result.stale.length > 0 && (
-            <p role="status" className="banner banner--warning">
-              {state.result.stale.join(", ")} {state.result.stale.length === 1 ? "is" : "are"} still
-              on disk for this image and {state.result.stale.length === 1 ? "was" : "were"} not
-              rewritten, so {state.result.stale.length === 1 ? "it" : "they"} may now disagree with
-              what you just saved. Nothing has been deleted.
-            </p>
-          )}
-
-          {state.result.skippedEmpty.length > 0 && (
-            <p role="status" className="banner banner--warning">
-              {state.result.skippedEmpty.join(", ")} could not be written: {state.result.note}
-            </p>
-          )}
-        </>
-      )}
-    </div>
   );
 }

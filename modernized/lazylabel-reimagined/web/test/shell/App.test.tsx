@@ -14,6 +14,7 @@ import { defaultSettings } from "@lazylabel/settings-schema";
 import { App } from "../../src/shell/App.jsx";
 import { HotkeyProvider } from "../../src/hotkeys/HotkeyProvider.jsx";
 import { NotificationProvider } from "../../src/notifications/NotificationProvider.jsx";
+import { WorkspaceProvider } from "../../src/workspace/WorkspaceProvider.jsx";
 import { SettingsProvider } from "../../src/settings/SettingsProvider.jsx";
 import type { ApiClient } from "../../src/api/client.js";
 
@@ -58,7 +59,9 @@ function mount(client: Partial<ApiClient>) {
     <NotificationProvider>
       <SettingsProvider client={full}>
         <HotkeyProvider bindings={defaultSettings().hotkeys}>
-          <App client={full} />
+          <WorkspaceProvider client={full} projectId="default">
+            <App client={full} />
+          </WorkspaceProvider>
         </HotkeyProvider>
       </SettingsProvider>
     </NotificationProvider>,

@@ -14,6 +14,8 @@ import { defaultSettings } from "@lazylabel/settings-schema";
 import type { WireDatasetListing } from "@lazylabel/contracts";
 
 import { DatasetBrowser } from "../../src/dataset/DatasetBrowser.jsx";
+import { OpenImageView } from "../../src/workspace/OpenImageView.jsx";
+import { WorkspaceProvider } from "../../src/workspace/WorkspaceProvider.jsx";
 import { SettingsProvider } from "../../src/settings/SettingsProvider.jsx";
 import type { AnnotationsResult, ApiClient } from "../../src/api/client.js";
 
@@ -63,7 +65,12 @@ function show(overrides: Record<string, unknown> = {}) {
 
   return render(
     <SettingsProvider client={api}>
-      <DatasetBrowser client={api} projectId="p1" folder="frames" />
+      {/* The list and the opened image are two components now, one per pane. Mounting both is
+          mounting what the app mounts -- the capability spans them. */}
+      <WorkspaceProvider client={api} projectId="p1">
+        <DatasetBrowser client={api} projectId="p1" folder="frames" />
+        <OpenImageView client={api} projectId="p1" />
+      </WorkspaceProvider>
     </SettingsProvider>,
   );
 }

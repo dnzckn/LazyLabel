@@ -14,10 +14,11 @@ import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { CAPABILITIES } from "../capabilities.js";
 import { DatasetBrowser } from "../dataset/DatasetBrowser.jsx";
 import { NotificationHost } from "../notifications/NotificationProvider.jsx";
+import { OpenImageView } from "../workspace/OpenImageView.jsx";
+import { useWorkspace } from "../workspace/WorkspaceProvider.jsx";
 import { Panel, Workspace } from "./Panel.jsx";
 import { StatusBar } from "./StatusBar.jsx";
 import { applyTheme, nextTheme, themeFor } from "./theme.js";
-import type { ImageState } from "../workspace/saveState.js";
 import { useSettings } from "../settings/SettingsProvider.jsx";
 import { useHotkey, useHotkeyContext } from "../hotkeys/HotkeyProvider.jsx";
 import type { ApiClient, ApiHealth } from "../api/client.js";
@@ -30,7 +31,8 @@ export function App({ client }: { readonly client: ApiClient }): ReactNode {
   const [health, setHealth] = useState<Health | null>(null);
   const [healthError, setHealthError] = useState<string | null>(null);
   const [showHotkeys, setShowHotkeys] = useState(false);
-  const [openImage, setOpenImage] = useState<ImageState | null>(null);
+  // From the store, not held here: the status bar is one reader of this among several.
+  const { imageState } = useWorkspace();
 
   // A preference the user chose wins; a default they never chose yields to the operating system.
   // That matters most when settings are UNREACHABLE: dark_mode defaults to true, so honouring the
@@ -140,15 +142,11 @@ export function App({ client }: { readonly client: ApiClient }): ReactNode {
             </Panel>
           </>
         }
-        centre={
-          /* The browser holds both the file list and the opened image, so for now it sits whole in
-             the centre. Splitting it -- list on the right, image here, as legacy has it -- means
-             lifting the open-image state into a workspace store, which is the next piece rather
-             than something to half-do inside a layout change. */
-          <DatasetBrowser client={client} projectId="default" onImageState={setOpenImage} />
-        }
+        centre={<OpenImageView client={client} projectId="default" />}
         right={
           <>
+            <DatasetBrowser client={client} projectId="default" />
+
             <Panel
               title="Segments"
               pending={{ phase: "Phase 5", summary: "the segment table, with merge, delete and reclass" }}
@@ -189,7 +187,7 @@ export function App({ client }: { readonly client: ApiClient }): ReactNode {
       {/* Last, and outside the scrolling content: continuous state, never events. What used to be a
           status-bar message is a notification now, which is what stops a destructive one expiring. */}
       <StatusBar
-        image={openImage}
+        image={imageState}
         health={health}
         healthError={healthError}
         theme={{ switchesTo, onToggle: toggleTheme }}

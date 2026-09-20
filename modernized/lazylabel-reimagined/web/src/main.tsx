@@ -13,6 +13,7 @@ import { createLogger } from "./log.js";
 import { HotkeyProvider } from "./hotkeys/HotkeyProvider.jsx";
 import { NotificationProvider } from "./notifications/NotificationProvider.jsx";
 import { SettingsProvider, useSettings } from "./settings/SettingsProvider.jsx";
+import { WorkspaceProvider } from "./workspace/WorkspaceProvider.jsx";
 import { App } from "./shell/App.jsx";
 
 import "./styles.css";
@@ -31,7 +32,11 @@ function Bound(): ReactNode {
   const { settings } = useSettings();
   return (
     <HotkeyProvider bindings={settings.hotkeys}>
-      <App client={client} />
+      {/* Inside the hotkey provider, because Phase 5's tools will act on the open image FROM a
+          keystroke, and a store the hotkey handlers cannot reach is a store they would duplicate. */}
+      <WorkspaceProvider client={client} projectId="default">
+        <App client={client} />
+      </WorkspaceProvider>
     </HotkeyProvider>
   );
 }
