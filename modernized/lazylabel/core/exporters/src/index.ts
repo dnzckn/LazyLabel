@@ -48,3 +48,7 @@ export {
   applyPixelPriority,
   rasterizeSegment,
 } from "./mask/tensor.js";
+
+// The geometry the web app's fragment filter needs. Exported rather than reimplemented there:
+// these are proven against OpenCV, and a second contour tracer would be a second thing to prove.
+export { contourArea, fillPoly, findExternalContours } from "./geometry/contours.js";
