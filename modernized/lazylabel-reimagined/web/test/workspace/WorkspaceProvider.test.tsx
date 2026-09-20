@@ -35,9 +35,18 @@ function loaded(segments: number): AnnotationsResult {
 
 /** Shows the store's answers as text, so the tests read what a component would see. */
 function Probe(): React.ReactNode {
-  const { open, openImage, imageState } = useWorkspace();
+  const { open, openImage, imageState, segments, addSegment, history, markSaved } = useWorkspace();
   return (
     <>
+      <button type="button" onClick={() => addSegment({ type: "Polygon", classId: 1, vertices: [[1, 1], [5, 1], [5, 5]] })}>
+        draw
+      </button>
+      <button type="button" onClick={() => history.undo()}>undo</button>
+      <button type="button" onClick={() => history.redo()}>redo</button>
+      <button type="button" onClick={markSaved}>saved</button>
+      <p data-testid="segments">{segments.length}</p>
+      <p data-testid="dirty">{imageState?.dirty === true ? "dirty" : "clean"}</p>
+      <p data-testid="canUndo">{history.state.canUndo ? "yes" : "no"}</p>
       <button type="button" onClick={() => openImage(datasetImage("a.png"))}>
         open a
       </button>
@@ -220,5 +229,86 @@ describe("using the store outside its provider", () => {
     }
 
     expect(() => render(<Orphan />)).toThrow(/WorkspaceProvider/);
+  });
+});
+
+describe("drawing into the open image", () => {
+  async function opened() {
+    mount({});
+    fireEvent.click(screen.getByText("open a"));
+    await waitFor(() => expect(shown("state")).toBe("a.png:loaded:3"));
+  }
+
+  it("starts from what the file held", async () => {
+    await opened();
+    expect(shown("segments")).toBe("3");
+    expect(shown("dirty")).toBe("clean");
+  });
+
+  it("adds an annotation and marks the image unsaved", async () => {
+    await opened();
+    fireEvent.click(screen.getByText("draw"));
+
+    expect(shown("segments")).toBe("4");
+    expect(shown("dirty")).toBe("dirty");
+    // The count the save prompt shows comes from the live segments, not from the file.
+    expect(shown("state")).toBe("a.png:loaded:4");
+  });
+
+  it("records exactly one undo entry per annotation", async () => {
+    // Recording inside a state updater would push two for one polygon -- React may invoke an
+    // updater more than once, and StrictMode does it deliberately -- so the first undo would
+    // appear to do nothing.
+    await opened();
+    fireEvent.click(screen.getByText("draw"));
+    fireEvent.click(screen.getByText("undo"));
+
+    await waitFor(() => expect(shown("segments")).toBe("3"));
+    expect(shown("canUndo")).toBe("no");
+  });
+
+  it("redoes what it undid", async () => {
+    await opened();
+    fireEvent.click(screen.getByText("draw"));
+    fireEvent.click(screen.getByText("undo"));
+    await waitFor(() => expect(shown("segments")).toBe("3"));
+
+    fireEvent.click(screen.getByText("redo"));
+    await waitFor(() => expect(shown("segments")).toBe("4"));
+  });
+
+  it("clears the history when another image opens", async () => {
+    // RULE-052 scopes undo to the open image. An undo reaching into the previous image's edits
+    // would apply them to annotations that are not on screen.
+    await opened();
+    fireEvent.click(screen.getByText("draw"));
+    expect(shown("canUndo")).toBe("yes");
+
+    fireEvent.click(screen.getByText("open b"));
+
+    await waitFor(() => expect(shown("canUndo")).toBe("no"));
+    expect(shown("dirty")).toBe("clean");
+  });
+
+  it("becomes clean again once saved, and dirty again after the next edit", async () => {
+    await opened();
+    fireEvent.click(screen.getByText("draw"));
+    fireEvent.click(screen.getByText("saved"));
+    expect(shown("dirty")).toBe("clean");
+
+    fireEvent.click(screen.getByText("draw"));
+    expect(shown("dirty")).toBe("dirty");
+  });
+
+  it("counts an undo as a change, because it also differs from the file", async () => {
+    // Undoing back to the file's contents still leaves the image dirty. That is deliberate: the
+    // alternative is tracking equality against the loaded annotations, and a save of identical
+    // content costs nothing while a MISSED save costs the user their work.
+    await opened();
+    fireEvent.click(screen.getByText("draw"));
+    fireEvent.click(screen.getByText("undo"));
+
+    await waitFor(() => expect(shown("segments")).toBe("3"));
+    expect(shown("dirty")).toBe("dirty");
   });
 });

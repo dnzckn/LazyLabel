@@ -27,9 +27,10 @@ import {
   type ReactNode,
 } from "react";
 
-import type { WireDatasetImage, WireImageMetadata } from "@lazylabel/contracts";
+import type { WireDatasetImage, WireImageMetadata, WireSegment } from "@lazylabel/contracts";
 
 import type { AnnotationsResult, ApiClient } from "../api/client.js";
+import { History } from "./history.js";
 import { provenanceFromLoad, type ImageState } from "./saveState.js";
 
 export interface OpenImage {
@@ -50,6 +51,18 @@ export interface WorkspaceContextValue {
    * safe to write. Null while nothing is open or the open image is still loading.
    */
   readonly imageState: ImageState | null;
+  /**
+   * The annotations as they stand now, which is not what the file said once anything is drawn.
+   *
+   * Seeded from the load and then owned here. Reading them back off `open.result` instead would
+   * make the loaded file the source of truth for something the user has since changed.
+   */
+  readonly segments: readonly WireSegment[];
+  /** Add an annotation, recording it so it can be undone and marking the image unsaved. */
+  readonly addSegment: (segment: WireSegment, label?: string) => void;
+  readonly history: History;
+  /** Cleared on a successful save; that is what makes `dirty` mean "differs from the file". */
+  readonly markSaved: () => void;
 }
 
 const WorkspaceContext = createContext<WorkspaceContextValue | null>(null);
@@ -64,6 +77,11 @@ export function WorkspaceProvider({
   readonly children: ReactNode;
 }): ReactNode {
   const [open, setOpen] = useState<OpenImage | null>(null);
+  const [segments, setSegments] = useState<readonly WireSegment[]>([]);
+  const [dirty, setDirty] = useState(false);
+  // One History for the session, cleared per image: RULE-052 scopes undo to the open image, so an
+  // undo after switching must not reach back into the previous one's edits.
+  const history = useMemo(() => new History(), []);
 
   const openImage = useCallback(
     (image: WireDatasetImage) => {
@@ -71,6 +89,11 @@ export function WorkspaceProvider({
       // under the new image's name -- which is the shape of legacy's most expensive bug, where the
       // current path is committed before the decode succeeds.
       setOpen({ image, metadata: null, result: null, error: null });
+      // RULE-052: history is cleared when an image loads. An undo that reached into the previous
+      // image's edits would apply them to annotations that are not on screen.
+      history.clear();
+      setSegments([]);
+      setDirty(false);
 
       client
         .imageMetadata(projectId, image.key)
@@ -81,9 +104,13 @@ export function WorkspaceProvider({
           ]);
           // Keyed on the image, so a slow open that finishes after the user moved on is discarded
           // rather than applied to whatever is now in front of them.
-          setOpen((current) =>
-            current?.image.key === image.key ? { ...current, metadata, result } : current,
-          );
+          setOpen((current) => {
+            if (current?.image.key !== image.key) return current;
+            // Seeded here rather than in an effect on `open`, so the segments and the result they
+            // came from can never be one render out of step.
+            setSegments(result.kind === "loaded" ? result.annotations.segments : []);
+            return { ...current, metadata, result };
+          });
         })
         .catch((cause: unknown) => {
           const error = cause instanceof Error ? cause.message : String(cause);
@@ -107,14 +134,49 @@ export function WorkspaceProvider({
     return {
       key: open.image.key,
       provenance: provenanceFromLoad(open.result.kind),
-      // Always false for now. Nothing can edit an image until the drawing tools arrive in Phase 5,
-      // and a dirty flag nothing can set would be a claim rather than a fact.
-      dirty: false,
-      segmentCount: open.result.kind === "loaded" ? open.result.annotations.segments.length : 0,
+      dirty,
+      // From the live segments, not from the file: once something is drawn they differ, and the
+      // count is what the save prompt shows the user before they decide.
+      segmentCount: segments.length,
     };
-  }, [open]);
+  }, [dirty, open, segments]);
 
-  const value = useMemo(() => ({ open, openImage, imageState }), [imageState, open, openImage]);
+  const addSegment = useCallback(
+    (segment: WireSegment, label = "Add annotation") => {
+      // Recorded OUTSIDE the state updater. React may invoke an updater more than once for one
+      // call -- StrictMode does it deliberately -- and recording inside would push two history
+      // entries for one drawn polygon, so the first undo would appear to do nothing.
+      const index = segments.length;
+
+      setSegments((current) => [...current, segment]);
+      setDirty(true);
+
+      // Keyed on the index it lands at, which is what legacy records too
+      // (`polygon_drawing_manager.py:205-211`). Safe against later edits shifting it because
+      // RULE-052 clears the redo stack on any new action: between an undo and its redo, the only
+      // possible operations are other undos, which unwind in order.
+      history.record({
+        label,
+        bytes: estimateBytes(segment),
+        undo: () => {
+          setSegments((live) => live.filter((_, i) => i !== index));
+          setDirty(true);
+        },
+        redo: () => {
+          setSegments((live) => [...live.slice(0, index), segment, ...live.slice(index)]);
+          setDirty(true);
+        },
+      });
+    },
+    [history, segments.length],
+  );
+
+  const markSaved = useCallback(() => setDirty(false), []);
+
+  const value = useMemo(
+    () => ({ open, openImage, imageState, segments, addSegment, history, markSaved }),
+    [addSegment, history, imageState, markSaved, open, openImage, segments],
+  );
 
   return <WorkspaceContext.Provider value={value}>{children}</WorkspaceContext.Provider>;
 }
@@ -123,4 +185,17 @@ export function useWorkspace(): WorkspaceContextValue {
   const value = useContext(WorkspaceContext);
   if (value === null) throw new Error("useWorkspace needs a WorkspaceProvider above it");
   return value;
+}
+
+/**
+ * Roughly what an annotation retains, so the undo stack can bound itself.
+ *
+ * A mask dominates when there is one; vertices are two numbers each. It does not need to be exact
+ * -- the stack's limit is 256 MB and the point is that a thousand mask edits cannot sit in memory
+ * unnoticed -- but it must never be zero, or a stack of them would never trim.
+ */
+function estimateBytes(segment: WireSegment): number {
+  const mask = segment.mask === undefined ? 0 : segment.mask.data.length;
+  const vertices = (segment.vertices?.length ?? 0) * 16;
+  return 64 + mask + vertices;
 }
