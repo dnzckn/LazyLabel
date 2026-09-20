@@ -47,6 +47,10 @@ describe("the image routes", () => {
       width: 32,
       height: 24,
       sourceDepth: 8,
+      // 3 rather than 1: the fixture is a colour PNG. The field exists because RULE-032 disables
+      // rescale for colour and RULE-029 offers one Gray channel or three separate ones, and
+      // neither question is answerable once the decoder has turned everything into RGB.
+      sourceChannels: 3,
       sourceFormat: "png",
     });
   });
@@ -71,6 +75,36 @@ describe("the image routes", () => {
     // A real PNG, not a JSON error with the wrong content type.
     const bytes = response.body as Uint8Array;
     expect([...bytes.subarray(0, 8)]).toEqual([137, 80, 78, 71, 13, 10, 26, 10]);
+  });
+
+  it("says how many channels the SOURCE had, so a client knows which controls to offer", async () => {
+    // RULE-032 disables rescale for colour and RULE-029 offers one Gray channel or three separate
+    // ones. The decoder turns everything into RGB, so this header is the only place the answer
+    // survives the pipeline.
+    const response = await app.handle(get(at("gradient8.png", "pixels")));
+
+    expect(response.headers["x-image-source-channels"]).toBe("3");
+  });
+
+  it("applies RULE-032's chain when the query asks for it", async () => {
+    // The pixels differ. Not a strong claim on its own -- the chain's arithmetic is proven in
+    // `processing.test.ts` -- but it is the join: a parameter the endpoint drops would leave these
+    // two responses identical, and nothing else would notice.
+    const plain = await app.handle(get(at("gradient8.png", "pixels")));
+    const thresholded = await app.handle(
+      request("GET", at("gradient8.png", "pixels"), { query: { markers_r: "128" } }),
+    );
+
+    expect(thresholded.status).toBe(200);
+    expect([...(thresholded.body as Uint8Array)]).not.toEqual([...(plain.body as Uint8Array)]);
+  });
+
+  it("refuses a malformed processing parameter rather than ignoring it", async () => {
+    // An ignored parameter is an image that looks untouched for a reason nobody can see.
+    for (const query of [{ rescaleMin: "50" }, { markers_g: "50,x" }, { crop: "1,2,3" }]) {
+      const response = await app.handle(request("GET", at("gradient8.png", "pixels"), { query }));
+      expect(response.status, JSON.stringify(query)).toBe(400);
+    }
   });
 
   it("serves a BMP, which the image library cannot decode on its own", async () => {

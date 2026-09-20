@@ -12,14 +12,12 @@ import {
   MAX_16_BIT,
   applyLut,
   equalizeLut,
-  MIN_MARKER_SPACING,
-  markersAreLegal,
   posterize,
   posterizeAll,
   rescale,
   rescaleAll,
   stretchWindow,
-} from "../../src/tools/imageProcessing.js";
+} from "../../src/images/imageProcessing.js";
 
 describe("rescaling", () => {
   it("works the card's example", () => {
@@ -118,24 +116,6 @@ describe("posterizing", () => {
     posterizeAll(values, [50, 150]);
 
     expect([...values]).toEqual([0, 0, 127, 255, 255]);
-  });
-});
-
-describe("marker spacing", () => {
-  it("refuses markers closer together than the minimum", () => {
-    expect(markersAreLegal([50, 59])).toBe(false);
-    expect(markersAreLegal([50, 60])).toBe(true);
-    expect(MIN_MARKER_SPACING).toBe(10);
-  });
-
-  it("checks the sorted order, not the given one", () => {
-    expect(markersAreLegal([60, 50])).toBe(true);
-    expect(markersAreLegal([59, 50])).toBe(false);
-  });
-
-  it("accepts a single marker and none at all", () => {
-    expect(markersAreLegal([128])).toBe(true);
-    expect(markersAreLegal([])).toBe(true);
   });
 });
 

@@ -13,7 +13,7 @@ import {
   bandWeights,
   frequencyDistance,
   normalizeToByte,
-} from "../../src/tools/fft.js";
+} from "../../src/images/fft.js";
 
 const at = (d: Float64Array, width: number, y: number, x: number) => d[y * width + x]!;
 

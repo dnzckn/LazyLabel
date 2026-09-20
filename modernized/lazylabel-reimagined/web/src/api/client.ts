@@ -158,8 +158,16 @@ export class ApiClient {
    * A URL rather than bytes: the browser's own image loading handles caching, progressive display
    * and memory better than anything done by hand here, and the API sends PNG.
    */
-  pixelsUrl(projectId: string, imagePath: string): string {
-    return `${this.baseUrl}${this.imagePath(projectId, imagePath)}/pixels`;
+  /**
+   * The URL for an image's pixels, optionally asking the server to process them first.
+   *
+   * `query` comes from `workspace/processing.ts` and is "" when there is nothing to ask for, so
+   * an unprocessed image keeps the URL it has always had -- which is what lets the browser's own
+   * cache serve it. RULE-032's chain runs on the server because it belongs before the 16-bit to
+   * 8-bit conversion, and this is all the browser needs to say about it.
+   */
+  pixelsUrl(projectId: string, imagePath: string, query = ""): string {
+    return `${this.baseUrl}${this.imagePath(projectId, imagePath)}/pixels${query}`;
   }
 
   thumbnailUrl(projectId: string, imagePath: string, size = 160): string {

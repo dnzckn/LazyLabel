@@ -9,7 +9,7 @@
  * MATCHED AGAINST OPENCV, NOT AGAINST A DESCRIPTION. The rule card names the parameters (clip 2.0,
  * 8x8 tiles) and not the algorithm, and three of its steps are choices no description pins down:
  * how the clipped histogram mass is redistributed, how tile tables are interpolated between, and
- * what happens where the grid does not divide the image. `test/fixtures/legacy-clahe.json` holds
+ * what happens where the grid does not divide the image. `test/fixtures/goldens/legacy-clahe.json` holds
  * the bytes `cv2.createCLAHE` actually produces.
  */
 

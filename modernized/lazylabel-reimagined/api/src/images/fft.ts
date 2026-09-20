@@ -7,7 +7,7 @@
  * when the transform lands it has a verified frame to sit in rather than one being written at the
  * same time.
  *
- * `test/fixtures/legacy-fft.json` holds the end-to-end goldens, including two odd-sized cases that
+ * `test/fixtures/goldens/legacy-fft.json` holds the end-to-end goldens, including two odd-sized cases that
  * distinguish legacy's `fftshift`-instead-of-`ifftshift` from the correct inverse.
  */
 
@@ -127,7 +127,7 @@ export function normalizeToByte(values: Float64Array): Uint8Array {
  * THE SECOND SHIFT IS `fftshift`, NOT `ifftshift`, WHICH IS LEGACY'S AND IS WRONG. The inverse of
  * `fftshift` is `ifftshift`; they agree for even lengths and differ by a pixel for odd ones. So an
  * odd-sized image comes out shifted. It is reproduced because Phase 5's exit criterion is
- * equivalence on golden images, and `test/fixtures/legacy-fft.json` carries two odd cases that a
+ * equivalence on golden images, and `test/fixtures/goldens/legacy-fft.json` carries two odd cases that a
  * "corrected" port fails while passing every even one.
  */
 export function filterFrequencies(

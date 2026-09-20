@@ -79,22 +79,6 @@ export function posterizeAll(
   for (let i = 0; i < values.length; i += 1) values[i] = posterize(values[i]!, markers, maximum);
 }
 
-/** `channel_threshold_widget.py`: markers closer together than this are not allowed. */
-export const MIN_MARKER_SPACING = 10;
-
-/**
- * Whether a set of markers is legal.
- *
- * The spacing rule keeps a user from making bands they cannot see or aim at. It is stated in
- * absolute units, so on a 16-bit image ten units is a two-thousandth of the range and effectively
- * no constraint — which the rule card notes and which is worth knowing before someone treats the
- * limit as meaningful there.
- */
-export function markersAreLegal(markers: readonly number[]): boolean {
-  const sorted = [...markers].sort((a, b) => a - b);
-  return sorted.every((marker, index) => index === 0 || marker - sorted[index - 1]! >= MIN_MARKER_SPACING);
-}
-
 /**
  * The window a contrast stretch would use — RULE-031's first preset.
  *

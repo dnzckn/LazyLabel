@@ -32,6 +32,7 @@ import { EditLayer } from "../canvas/EditLayer.jsx";
 import { rasterizeSegment, type BinaryMask } from "@lazylabel/annotation-formats";
 import { erase } from "../tools/erase.js";
 import { adjustmentsFrom } from "../tools/adjustments.js";
+import { processingQuery } from "./processing.js";
 import type { ImagePoint } from "../canvas/coordinates.js";
 import { classForNewSegment } from "./classes.js";
 import { useNotifications } from "../notifications/NotificationProvider.jsx";
@@ -46,7 +47,7 @@ export function OpenImageView({
   readonly client: ApiClient;
   readonly projectId: string;
 }): ReactNode {
-  const { open } = useWorkspace();
+  const { open, processing } = useWorkspace();
 
   if (open === null) return <p className="open-image__empty">Choose an image to open it.</p>;
 
@@ -58,7 +59,10 @@ export function OpenImageView({
       result={open.result}
       error={open.error}
       metadata={open.metadata}
-      pixelsUrl={client.pixelsUrl(projectId, open.image.key)}
+      // RULE-029 and RULE-032 run on the SERVER, because they belong before the 16-bit to 8-bit
+      // conversion and the browser only ever receives what comes after it. The query is "" when
+      // nothing is asked for, so an unprocessed image keeps the URL the browser has cached.
+      pixelsUrl={client.pixelsUrl(projectId, open.image.key, processingQuery(processing))}
     />
   );
 }

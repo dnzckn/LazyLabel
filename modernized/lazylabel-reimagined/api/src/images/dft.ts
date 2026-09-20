@@ -7,7 +7,7 @@
  * non-power-of-two lengths go through Bluestein's algorithm, which expresses a DFT of any length
  * as a convolution that a radix-2 transform can do.
  *
- * Nothing here is LazyLabel-specific; it is the transform `tools/fft.ts` bands. It lives in its own
+ * Nothing here is LazyLabel-specific; it is the transform `fft.ts` bands. It lives in its own
  * file for that reason — a bug in a Fourier transform and a bug in a band boundary want different
  * kinds of test, and mixing them makes both harder to trust.
  */

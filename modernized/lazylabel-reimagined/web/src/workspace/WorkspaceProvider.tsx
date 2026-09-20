@@ -34,6 +34,7 @@ import { History } from "./history.js";
 import { provenanceFromLoad, type ImageState } from "./saveState.js";
 import { toggle } from "../tools/selection.js";
 import type { Crop } from "../tools/crop.js";
+import { NO_PROCESSING, type ImageProcessing } from "./processing.js";
 
 /** Every tool the workspace offers. */
 export type Tool = "none" | "select" | "polygon" | "box" | "circle" | "ai";
@@ -132,6 +133,15 @@ export interface WorkspaceContextValue {
    */
   readonly crop: Crop | null;
   readonly setCrop: (crop: Crop | null) => void;
+  /**
+   * What the server should do to the image before sending it — RULE-029 and RULE-032.
+   *
+   * Held here rather than in the panel because the CANVAS reads it: these rules run before the
+   * 16-bit to 8-bit conversion, so the browser cannot apply them and can only ask. Per image, like
+   * the crop: a rescale window that suits one scan blanks the next.
+   */
+  readonly processing: ImageProcessing;
+  readonly setProcessing: (processing: ImageProcessing) => void;
 }
 
 const WorkspaceContext = createContext<WorkspaceContextValue | null>(null);
@@ -152,7 +162,21 @@ export function WorkspaceProvider({
   const [activeClassId, setActiveClassId] = useState<number | null>(null);
   const [selected, setSelected] = useState<readonly number[]>([]);
   const [classAliases, setClassAliases] = useState<Readonly<Record<string, string>>>({});
-  const [crop, setCrop] = useState<Crop | null>(null);
+  const [crop, setCropState] = useState<Crop | null>(null);
+  const [processing, setProcessingState] = useState<ImageProcessing>(NO_PROCESSING);
+
+  // The crop is held in BOTH, and deliberately: the save path reads `crop`, and the processing
+  // chain is restricted to the same region (RULE-029 and RULE-032 both say so). Keeping them in
+  // step here rather than at each reader is what stops the view being processed over one
+  // rectangle while the save blanks another.
+  const setCrop = useCallback((next: Crop | null) => {
+    setCropState(next);
+    setProcessingState((current) => ({ ...current, crop: next }));
+  }, []);
+  const setProcessing = useCallback((next: ImageProcessing) => {
+    setProcessingState({ ...next, crop: next.crop });
+    setCropState(next.crop);
+  }, []);
   // One History for the session, cleared per image: RULE-052 scopes undo to the open image, so an
   // undo after switching must not reach back into the previous one's edits.
   const history = useMemo(() => new History(), []);
@@ -171,7 +195,10 @@ export function WorkspaceProvider({
       setClassAliases({});
       // Decision 9: a crop does NOT carry over. Legacy keeps it across images, so one set on a wide
       // image and forgotten blanks most of the next, narrow one on its first save.
-      setCrop(null);
+      setCropState(null);
+      // Per image for the same reason the crop is: a rescale window that suits one scan makes the
+      // next one black, and a threshold set on a grayscale image means nothing on a colour one.
+      setProcessingState(NO_PROCESSING);
       setDirty(false);
 
       client
@@ -396,6 +423,8 @@ export function WorkspaceProvider({
       applyClasses,
       crop,
       setCrop,
+      processing,
+      setProcessing,
     }),
     [
       activeClassId,
@@ -416,6 +445,9 @@ export function WorkspaceProvider({
       setClassAlias,
       applyClasses,
       crop,
+      processing,
+      setCrop,
+      setProcessing,
     ],
   );
 

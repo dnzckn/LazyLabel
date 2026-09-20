@@ -130,6 +130,15 @@ export interface WireImageMetadata {
   readonly height: number;
   /** 8, or 16 when RULE-024's truncating conversion was applied to show it. */
   readonly sourceDepth: 8 | 16;
+  /**
+   * Channels in the SOURCE file: 1 for grayscale, 3 for colour.
+   *
+   * The pixels always arrive as RGB, so this is the only place the distinction survives the
+   * pipeline — and two rules turn on it. RULE-032 disables rescale for a colour image, and
+   * RULE-029 offers a single Gray channel for a grayscale one against three separate ones for
+   * colour. A client that guesses will offer controls the server then ignores.
+   */
+  readonly sourceChannels: number;
   readonly sourceFormat: string;
 }
 

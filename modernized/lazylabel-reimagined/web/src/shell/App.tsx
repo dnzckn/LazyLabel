@@ -17,6 +17,7 @@ import { NotificationHost } from "../notifications/NotificationProvider.jsx";
 import { OpenImageView } from "../workspace/OpenImageView.jsx";
 import { AdjustmentsPanel } from "../workspace/AdjustmentsPanel.jsx";
 import { ClassTable } from "../workspace/ClassTable.jsx";
+import { ChannelPanel } from "../workspace/ChannelPanel.jsx";
 import { CropPanel } from "../workspace/CropPanel.jsx";
 import { ModelPicker } from "../workspace/ModelPicker.jsx";
 import { SegmentTable } from "../workspace/SegmentTable.jsx";
@@ -130,6 +131,9 @@ export function App({ client }: { readonly client: ApiClient }): ReactNode {
             </Panel>
             <Panel title="Image adjustments">
               <AdjustmentsPanel />
+            </Panel>
+            <Panel title="Rescale and thresholds" initiallyCollapsed>
+              <ChannelPanel />
             </Panel>
             <Panel title="Crop" initiallyCollapsed>
               <CropPanel />

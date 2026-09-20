@@ -449,3 +449,31 @@ fieldset input {
   width: 100%;
   box-sizing: border-box;
 }
+
+/* Rescale and channel thresholds. Numbered steps, because RULE-032 fixes their order. */
+.channel__step {
+  margin: 0.8rem 0 0.3rem;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+.channel__add {
+  display: flex;
+  gap: 0.4rem;
+  align-items: flex-end;
+}
+
+.channel__markers {
+  list-style: none;
+  margin: 0.4rem 0;
+  padding: 0;
+  font-size: 0.85rem;
+}
+
+.channel__markers li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}

@@ -1,7 +1,7 @@
 /**
  * CLAHE matches OpenCV, byte for byte.
  *
- * `test/fixtures/legacy-clahe.json` holds what `cv2.createCLAHE` actually produces. The cases
+ * `test/fixtures/goldens/legacy-clahe.json` holds what `cv2.createCLAHE` actually produces. The cases
  * exercise the three things no description of the algorithm pins down: how clipped histogram mass
  * is redistributed, how tile tables are blended, and what happens where the grid does not divide
  * the image.
@@ -13,12 +13,13 @@ import { fileURLToPath } from "node:url";
 
 import { beforeAll, describe, expect, it } from "vitest";
 
-import { clahe } from "../../src/tools/clahe.js";
+import { clahe } from "../../src/images/clahe.js";
 
 const FIXTURE = path.join(
   path.dirname(fileURLToPath(import.meta.url)),
   "..",
   "fixtures",
+  "goldens",
   "legacy-clahe.json",
 );
 

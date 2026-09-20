@@ -1,0 +1,187 @@
+/**
+ * The image-processing chain, in RULE-032's order.
+ *
+ * WHY THIS IS ON THE SERVER AND NOT IN THE BROWSER. RULE-032 fixes the order as rescale, then
+ * channel threshold, then FFT, then 16-bit to 8-bit, then the display adjustments — and the
+ * browser only ever receives the output of the fourth step, because the API decodes every image to
+ * 8-bit RGB before sending it. A rescale applied client-side would quantise a 16-bit image to 256
+ * levels and then stretch those, which is not the rule and is worst on exactly the images that
+ * need a rescale: a 16-bit scan whose data occupies a narrow band.
+ *
+ * So these three run here, on the source samples, and only the display adjustments stay in the
+ * browser — where they belong, because they are the last step and they apply to the rendered
+ * canvas.
+ *
+ * TWO CONSTRAINTS COME FROM THE RULE CARDS AND ARE EASY TO MISS:
+ *
+ *   - **Rescale is for grayscale images only** (RULE-032). On an RGB image legacy disables the
+ *     control, and applying it anyway would shift the channels independently and change the hue of
+ *     every pixel.
+ *   - **Both are restricted to the crop region when a crop is active** (RULE-029 and RULE-032).
+ *     Pixels outside the crop are left exactly as they were rather than processed and then
+ *     discarded — which matters because the window a stretch computes and the bands a threshold
+ *     makes are both derived from the pixels being processed.
+ */
+
+import { posterize, rescale, MAX_8_BIT, MAX_16_BIT } from "./imageProcessing.js";
+
+/** Markers per channel. `gray` applies to all three at once, as legacy's Gray channel does. */
+export interface ChannelMarkers {
+  readonly gray?: readonly number[];
+  readonly r?: readonly number[];
+  readonly g?: readonly number[];
+  readonly b?: readonly number[];
+}
+
+export interface Processing {
+  /** Null for none. Ignored on an RGB source, which RULE-032 says has no rescale. */
+  readonly rescale?: { readonly min: number; readonly max: number } | null;
+  readonly channels?: ChannelMarkers;
+  /** `[x1, y1, x2, y2]`, the same inclusive-clamped corners RULE-018 stores. */
+  readonly crop?: readonly [number, number, number, number] | null;
+}
+
+export interface Frame {
+  readonly width: number;
+  readonly height: number;
+  /** 1 for a grayscale source, 3 for colour. Decides whether rescale runs at all. */
+  readonly sourceChannels: number;
+}
+
+/** Whether a processing request would change anything, so the decoder can skip the whole chain. */
+export function isEmpty(processing: Processing | undefined): boolean {
+  if (processing === undefined) return true;
+  const markers = processing.channels ?? {};
+  const anyMarkers = [markers.gray, markers.r, markers.g, markers.b].some(
+    (list) => list !== undefined && list.length > 0,
+  );
+  return (processing.rescale == null || processing.rescale.max <= processing.rescale.min)
+    && !anyMarkers;
+}
+
+/**
+ * Apply the chain to interleaved RGB samples, in place.
+ *
+ * `samples` is three values per pixel whatever the source was: a grayscale image arrives with its
+ * value repeated across the three, which is what the decoder produces and what keeps one code path
+ * here. `maximum` is 255 or 65535 and is what the arithmetic scales to — passing the wrong one
+ * quantises a 16-bit image without anything failing.
+ */
+export function applyProcessing(
+  samples: Uint8Array | Uint16Array,
+  frame: Frame,
+  processing: Processing,
+): void {
+  if (isEmpty(processing)) return;
+
+  const maximum = samples instanceof Uint16Array ? MAX_16_BIT : MAX_8_BIT;
+  const window = processing.rescale ?? null;
+  // RULE-032: grayscale only. An RGB image keeps its rescale request and ignores it, rather than
+  // failing -- a stored setting from a grayscale image should not make the next image an error.
+  const rescaling = frame.sourceChannels === 1 && window !== null && window.max > window.min;
+
+  const markers = processing.channels ?? {};
+  // A grayscale source has one channel and legacy calls it Gray, so `gray` drives all three. On an
+  // RGB source the per-channel lists drive their own, and `gray` is not offered.
+  const perChannel: readonly (readonly number[])[] =
+    frame.sourceChannels === 1
+      ? [markers.gray ?? [], markers.gray ?? [], markers.gray ?? []]
+      : [markers.r ?? [], markers.g ?? [], markers.b ?? []];
+  const thresholding = perChannel.some((list) => list.length > 0);
+
+  if (!rescaling && !thresholding) return;
+
+  for (const [x, y] of pixelsIn(frame, processing.crop ?? null)) {
+    const at = (y * frame.width + x) * 3;
+    for (let channel = 0; channel < 3; channel += 1) {
+      let value = samples[at + channel]!;
+      // The order is the rule. Thresholding first would put the bands at values the rescale is
+      // about to move.
+      if (rescaling) value = rescale(value, window!.min, window!.max, maximum);
+      const list = perChannel[channel]!;
+      if (list.length > 0) value = posterize(value, list, maximum);
+      samples[at + channel] = value;
+    }
+  }
+}
+
+/**
+ * The pixels a crop lets through, or all of them when there is none.
+ *
+ * The kept region is `x1..x2 - 1` by `y1..y2 - 1`, exclusive of the far edge — the same off-by-one
+ * RULE-018 applies when a crop blanks a mask. Using an inclusive bound here would process one more
+ * row and column than the crop keeps, so the strip about to be blanked would come out processed
+ * and the two halves of the same crop would disagree.
+ */
+function* pixelsIn(
+  frame: Frame,
+  crop: readonly [number, number, number, number] | null,
+): Generator<readonly [number, number]> {
+  const [x1, y1, x2, y2] =
+    crop === null ? [0, 0, frame.width, frame.height] : crop;
+
+  const left = Math.max(0, Math.min(frame.width, x1));
+  const top = Math.max(0, Math.min(frame.height, y1));
+  const right = Math.max(left, Math.min(frame.width, x2));
+  const bottom = Math.max(top, Math.min(frame.height, y2));
+
+  for (let y = top; y < bottom; y += 1) {
+    for (let x = left; x < right; x += 1) yield [x, y];
+  }
+}
+
+/**
+ * Read a processing request off a URL's query string.
+ *
+ * Every parameter is optional and a malformed one is REFUSED rather than ignored, because the
+ * failure mode of ignoring it is an image that looks untouched for a reason nobody can see. The
+ * caller turns the thrown message into a 400.
+ */
+export function processingFromQuery(query: URLSearchParams): Processing {
+  const rescaleMin = intOr(query, "rescaleMin", null);
+  const rescaleMax = intOr(query, "rescaleMax", null);
+
+  if ((rescaleMin === null) !== (rescaleMax === null)) {
+    throw new Error("rescaleMin and rescaleMax must be given together");
+  }
+
+  const channels: {
+    gray?: readonly number[];
+    r?: readonly number[];
+    g?: readonly number[];
+    b?: readonly number[];
+  } = {};
+  for (const name of ["gray", "r", "g", "b"] as const) {
+    const raw = query.get(`markers_${name}`);
+    if (raw === null || raw === "") continue;
+    const values = raw.split(",").map((part) => Number.parseInt(part.trim(), 10));
+    if (values.some((value) => !Number.isInteger(value))) {
+      throw new Error(`markers_${name} must be a comma-separated list of whole numbers`);
+    }
+    channels[name] = values;
+  }
+
+  const cropRaw = query.get("crop");
+  let crop: readonly [number, number, number, number] | null = null;
+  if (cropRaw !== null && cropRaw !== "") {
+    const parts = cropRaw.split(",").map((part) => Number.parseInt(part.trim(), 10));
+    if (parts.length !== 4 || parts.some((value) => !Number.isInteger(value))) {
+      throw new Error("crop must be four whole numbers, x1,y1,x2,y2");
+    }
+    crop = [parts[0]!, parts[1]!, parts[2]!, parts[3]!];
+  }
+
+  return {
+    rescale: rescaleMin === null || rescaleMax === null ? null : { min: rescaleMin, max: rescaleMax },
+    channels,
+    crop,
+  };
+}
+
+function intOr(query: URLSearchParams, name: string, fallback: number | null): number | null {
+  const raw = query.get(name);
+  if (raw === null || raw === "") return fallback;
+  const value = Number.parseInt(raw, 10);
+  if (!Number.isInteger(value)) throw new Error(`${name} must be a whole number`);
+  return value;
+}

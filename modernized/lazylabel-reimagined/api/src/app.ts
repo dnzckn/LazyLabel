@@ -31,6 +31,7 @@ import {
   renderThumbnail,
   UnsupportedImageError,
 } from "./images/pipeline.js";
+import { processingFromQuery } from "./images/processing.js";
 import { RevisionConflictError, type BlobStore } from "./ports/blobStore.js";
 import {
   InferenceError,
@@ -109,7 +110,7 @@ export function createApp(deps: AppDeps): App {
     {
       method: "GET",
       pattern: "/projects/:projectId/images/*imagePath/pixels",
-      handler: (_request, params) => imagePixels(deps, params),
+      handler: (request, params) => imagePixels(deps, request, params),
     },
     {
       method: "GET",
@@ -393,14 +394,30 @@ async function imageMetadata(
  */
 async function imagePixels(
   deps: AppDeps,
+  request: ApiRequest,
   params: Readonly<Record<string, string>>,
 ): Promise<ApiResponse> {
   const key = params["imagePath"]!;
-  const decoded = await decodeImage(await imageBytes(deps, key));
+
+  // RULE-032's chain runs HERE rather than in the browser, because it belongs before the 16-bit to
+  // 8-bit conversion and the browser only ever receives what comes after it. A malformed parameter
+  // is a 400 rather than an ignored one: an image that looks untouched for a reason nobody can see
+  // is worse than an error.
+  let processing;
+  try {
+    processing = processingFromQuery(request.query);
+  } catch (cause) {
+    throw badRequest(cause instanceof Error ? cause.message : String(cause));
+  }
+
+  const decoded = await decodeImage(await imageBytes(deps, key), processing);
   return png(await renderPng(decoded), {
     "x-image-width": String(decoded.width),
     "x-image-height": String(decoded.height),
     "x-image-source-depth": String(decoded.sourceDepth),
+    // So a client can tell which controls to offer without decoding the image itself: RULE-032
+    // disables rescale for colour, and RULE-029 offers one Gray channel or three separate ones.
+    "x-image-source-channels": String(decoded.sourceChannels),
   });
 }
 
