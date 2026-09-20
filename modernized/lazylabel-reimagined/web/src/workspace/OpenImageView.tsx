@@ -28,6 +28,7 @@ import { decodeMask } from "@lazylabel/contracts";
 import { AiTool } from "./AiTool.jsx";
 import { SelectLayer } from "../canvas/SelectLayer.jsx";
 import { ShapeLayer } from "../canvas/ShapeLayer.jsx";
+import { EditLayer } from "../canvas/EditLayer.jsx";
 import { rasterizeSegment, type BinaryMask } from "@lazylabel/annotation-formats";
 import { erase } from "../tools/erase.js";
 import { adjustmentsFrom } from "../tools/adjustments.js";
@@ -83,7 +84,7 @@ function OpenedImage({
   // The LIVE names, not the ones the file held: a class renamed since loading must be written
   // with its new name, or the rename is lost on the next save.
   const { classAliases } = useWorkspace();
-  const { segments, addSegment, activeTool, activeClassId, applySegments, selected, toggleSelected } =
+  const { segments, addSegment, updateSegment, activeTool, activeClassId, applySegments, selected, toggleSelected } =
     useWorkspace();
   const { notify } = useNotifications();
   // Only a context failure falls back to the plain image. A picture that will not DECODE is the
@@ -257,6 +258,26 @@ function OpenedImage({
                 onMiss={() =>
                   notify({ severity: "info", message: "Nothing there to select" })
                 }
+              />
+            )}
+
+            {/* RULE-069: editing is what you get when no DRAWING tool is active and exactly one
+                annotation is selected. Legacy has an explicit Edit mode button; here the state
+                already says it -- a user who has selected one shape and put the drawing tools down
+                is editing it, and a mode to say so again would be a mode to forget to leave.
+
+                Exactly one, because the handles belong to a shape. With two selected there is no
+                answer to which vertex a drag moves, and legacy refuses the same case. */}
+            {activeTool === "none" && selected.length === 1 && segments[selected[0]!] !== undefined && (
+              <EditLayer
+                width={metadata.width}
+                height={metadata.height}
+                index={selected[0]!}
+                segment={segments[selected[0]!]!}
+                onChange={(index, segment) => updateSegment(index, segment, "Move vertex")}
+                // RULE-046's refusals -- a mask with no outline, a shape over the 200-vertex limit
+                // -- go to the notifications rather than being drawn over the image.
+                onNoHandles={(reason) => notify({ severity: "info", message: reason })}
               />
             )}
 
