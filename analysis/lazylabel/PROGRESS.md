@@ -7,7 +7,7 @@ Last updated: 2026-09-19.
 
 ## Short answer
 
-**The app cannot be launched on the web yet.** Phases 1–3 are complete, Phase 4 is roughly half,
+**The app cannot be launched on the web yet.** Phases 1–3 are complete, Phase 4 is about 60%,
 Phases 5 and 6 have not started. The pieces that exist are proven against legacy; what is missing
 is most of the user interface and the whole cutover.
 
@@ -69,7 +69,7 @@ every adapter, so a dataset stays readable by the desktop app and by hand.
 Find Archetypes is complete: MobileNetV3-small embedding, HDBSCAN clustering, medoid selection, and
 the allocation arithmetic RULE-022 specifies to the frame.
 
-249 tests. The live suites skip without a checkpoint, so **a green CI run is not evidence they
+255 tests. The live suites skip without a checkpoint, so **a green CI run is not evidence they
 ran** — see "Running the live suites" below.
 
 ### Phase 4 — workspace (in progress)
@@ -97,7 +97,7 @@ Phase 5's tools, so they stay thin until those exist.
 
 ## What remains
 
-1. **Finish Phase 4** — the panels, status bar, theme, notifications, pop-outs.
+1. **Finish Phase 4** — the control and right panels, theming, pop-outs.
 2. **Phase 5 — tools** (27.4%). The largest single block of user-facing behaviour.
 3. **Phase 6 — sequence and cutover** (25.9%). Includes the hosted deployment and the actual
    switch-over.
@@ -112,7 +112,7 @@ about them. Run them locally, deliberately:
 cd modernized/lazylabel-reimagined/inference && LAZYLABEL_TEST_SAM1_CHECKPOINT=/path/to/sam_vit_h_4b8939.pth LAZYLABEL_TEST_CHECKPOINT=/path/to/sam2.1_hiera_large.pt LAZYLABEL_TEST_EMBEDDER=/path/to/mobilenetv3_small_tv.pth PYTHONPATH=/path/to/legacy/lazylabel/src python -m pytest tests/ -q
 ```
 
-With all three set, the expected result is **249 passed, 1 xfailed, 0 skipped**. Any `skipped`
+With all three set, the expected result is **255 passed, 1 xfailed, 0 skipped**. Any `skipped`
 count above zero means a checkpoint was not found and that suite did not actually run.
 
 `MODEL_MANIFEST.md` lists the checkpoints and their verified hashes.
