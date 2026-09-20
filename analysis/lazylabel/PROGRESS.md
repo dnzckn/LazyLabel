@@ -12,7 +12,7 @@ Phases 5 and 6 have not started. The pieces that exist are proven against legacy
 is most of the user interface and the whole cutover.
 
 By the brief's own weighting of the six phases: **about a third of the conversion is done** —
-6.0 + 5.5 + 5.8 for the three complete phases, plus roughly half of Phase 4's 29.4, which is 32%.
+6.0 + 5.5 + 5.8 for the three complete phases, plus about 60% of Phase 4's 29.4, which is 35%.
 
 That is lower than the number of finished pieces suggests, and the reason is worth stating: the
 three complete phases are the three smallest, together worth 17.3%. The remaining three are worth
@@ -23,7 +23,7 @@ three complete phases are the three smallest, together worth 17.3%. The remainin
 | P1 — format library | 6.0% | **complete** |
 | P2 — architecture and scaffolds | 5.5% | **complete** |
 | P3 — inference service | 5.8% | **complete** |
-| P4 — workspace, dataset browser, persistence | 29.4% | in progress, ~50% |
+| P4 — workspace, dataset browser, persistence | 29.4% | in progress, ~60% |
 | P5 — tools | 27.4% | not started |
 | P6 — sequence and cutover | 25.9% | not started |
 
@@ -77,10 +77,23 @@ ran** — see "Running the live suites" below.
 Done: the four exit criteria, the dataset-browser pilot, the canvas in legacy's class colours, the
 explicit save path (a cleared image writes an empty file rather than nothing — decision 7), the
 image pipeline proven pixel-for-pixel against OpenCV, dataset conversion byte-identical to legacy
-on every golden, the alias converter, and the undo stack with its two recorded defects designed out.
+on every golden, the alias converter, the undo stack with its two recorded defects designed out,
+the save decision logic (`workspace/saveState.ts`), the notification system, and the status bar.
 
-Not done: workspace panels, the control and right panels, the status bar, theming, notifications,
-and pop-out windows.
+Three of those are worth naming because they are where legacy loses work:
+
+- **`saveState.ts`** decides whether navigating away saves, asks or proceeds. An empty image writes
+  empty files rather than having its annotations deleted; an image whose annotations could not be
+  READ is never written back over them; closing asks and names what would be lost.
+- **Notifications** separate severity from tone. Legacy announces deleting every annotation file
+  for an image — no prompt, no undo — as a neutral notice on a five-second timer, identical in
+  appearance to "Saved". Here anything irreversible or failed stays until dismissed.
+- **The status bar** shows continuous state only. Legacy's is *also* its notification system, which
+  is exactly why the destructive message expires; splitting them is what makes that impossible.
+  It also reports the inference server's accelerator, which the browser cannot discover for itself.
+
+Not done: the control and right panels, theming, and pop-out windows. The panels mostly host
+Phase 5's tools, so they stay thin until those exist.
 
 ## What remains
 
