@@ -33,6 +33,9 @@ import type { AnnotationsResult, ApiClient } from "../api/client.js";
 import { History } from "./history.js";
 import { provenanceFromLoad, type ImageState } from "./saveState.js";
 
+/** The drawing tools. Only the polygon exists yet; the rest arrive later in Phase 5. */
+export type Tool = "none" | "polygon";
+
 export interface OpenImage {
   readonly image: WireDatasetImage;
   /** Null until the metadata arrives. */
@@ -63,6 +66,17 @@ export interface WorkspaceContextValue {
   readonly history: History;
   /** Cleared on a successful save; that is what makes `dirty` mean "differs from the file". */
   readonly markSaved: () => void;
+  /**
+   * Which drawing tool is in force. Only the polygon exists yet; the rest arrive later in Phase 5.
+   *
+   * "none" rather than defaulting to a tool, because a canvas that starts in a drawing mode turns
+   * the first click of a session -- often a click to look at something -- into an annotation.
+   */
+  readonly activeTool: Tool;
+  readonly setActiveTool: (tool: Tool) => void;
+  /** The class new annotations take, or null to use the next free id. */
+  readonly activeClassId: number | null;
+  readonly setActiveClassId: (classId: number | null) => void;
 }
 
 const WorkspaceContext = createContext<WorkspaceContextValue | null>(null);
@@ -79,6 +93,8 @@ export function WorkspaceProvider({
   const [open, setOpen] = useState<OpenImage | null>(null);
   const [segments, setSegments] = useState<readonly WireSegment[]>([]);
   const [dirty, setDirty] = useState(false);
+  const [activeTool, setActiveTool] = useState<Tool>("none");
+  const [activeClassId, setActiveClassId] = useState<number | null>(null);
   // One History for the session, cleared per image: RULE-052 scopes undo to the open image, so an
   // undo after switching must not reach back into the previous one's edits.
   const history = useMemo(() => new History(), []);
@@ -174,8 +190,30 @@ export function WorkspaceProvider({
   const markSaved = useCallback(() => setDirty(false), []);
 
   const value = useMemo(
-    () => ({ open, openImage, imageState, segments, addSegment, history, markSaved }),
-    [addSegment, history, imageState, markSaved, open, openImage, segments],
+    () => ({
+      open,
+      openImage,
+      imageState,
+      segments,
+      addSegment,
+      history,
+      markSaved,
+      activeTool,
+      setActiveTool,
+      activeClassId,
+      setActiveClassId,
+    }),
+    [
+      activeClassId,
+      activeTool,
+      addSegment,
+      history,
+      imageState,
+      markSaved,
+      open,
+      openImage,
+      segments,
+    ],
   );
 
   return <WorkspaceContext.Provider value={value}>{children}</WorkspaceContext.Provider>;

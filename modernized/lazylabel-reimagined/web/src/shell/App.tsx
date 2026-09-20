@@ -15,7 +15,7 @@ import { CAPABILITIES } from "../capabilities.js";
 import { DatasetBrowser } from "../dataset/DatasetBrowser.jsx";
 import { NotificationHost } from "../notifications/NotificationProvider.jsx";
 import { OpenImageView } from "../workspace/OpenImageView.jsx";
-import { useWorkspace } from "../workspace/WorkspaceProvider.jsx";
+import { useWorkspace, type Tool } from "../workspace/WorkspaceProvider.jsx";
 import { Panel, Workspace } from "./Panel.jsx";
 import { StatusBar } from "./StatusBar.jsx";
 import { applyTheme, nextTheme, themeFor } from "./theme.js";
@@ -112,10 +112,14 @@ export function App({ client }: { readonly client: ApiClient }): ReactNode {
             {/* Legacy's mode buttons live here: SAM, polygon, bbox, circle, selection, edit. They
                 are named rather than mocked -- a row of disabled buttons that look real invites a
                 user to press one, and saying where the work stands does not. */}
-            <Panel
-              title="Drawing tools"
-              pending={{ phase: "Phase 5", summary: "polygons, boxes, circles and vertex editing" }}
-            />
+            <Panel title="Drawing tools">
+              <ToolPicker />
+              {/* Named, not mocked: the rest of the drawing tools are still Phase 5 work, and a row
+                  of dead buttons would invite a user to press one. */}
+              <p className="panel__missing">
+                Boxes, circles and vertex editing are still to come.
+              </p>
+            </Panel>
             <Panel
               title="AI tools"
               pending={{ phase: "Phase 5", summary: "click and box prompts through the SAM service" }}
@@ -193,6 +197,40 @@ export function App({ client }: { readonly client: ApiClient }): ReactNode {
         theme={{ switchesTo, onToggle: toggleTheme }}
       />
     </main>
+  );
+}
+
+/**
+ * Choosing a drawing tool.
+ *
+ * Radio buttons rather than toggle buttons, because the tools are exclusive and a radio group says
+ * so to a screen reader and to the keyboard without any code. "None" is a real option and the
+ * default: a canvas that starts in a drawing mode turns the first click of a session -- often a
+ * click to look at something -- into an annotation.
+ */
+function ToolPicker(): ReactNode {
+  const { activeTool, setActiveTool } = useWorkspace();
+
+  const tools: readonly { readonly value: Tool; readonly label: string }[] = [
+    { value: "none", label: "None" },
+    { value: "polygon", label: "Polygon" },
+  ];
+
+  return (
+    <fieldset className="tool-picker">
+      <legend>Tool</legend>
+      {tools.map((tool) => (
+        <label key={tool.value}>
+          <input
+            type="radio"
+            name="tool"
+            checked={activeTool === tool.value}
+            onChange={() => setActiveTool(tool.value)}
+          />{" "}
+          {tool.label}
+        </label>
+      ))}
+    </fieldset>
   );
 }
 

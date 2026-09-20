@@ -46,7 +46,10 @@ export const CAPABILITIES: readonly Capability[] = [
     builtIn: "P5",
     webStatus: "pending",
     webPhase: "P5",
-    missing: "the drawing tools and vertex editing",
+    missing:
+      "boxes, circles and vertex editing. The POLYGON is built: RULE-047's join threshold proven "
+      + "against legacy's own expression over every click offset, Space and Enter to finish, "
+      + "shift to erase, undo a vertex at a time while drawing and the whole shape once it exists",
   },
   {
     id: "C5",

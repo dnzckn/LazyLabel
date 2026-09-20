@@ -23,6 +23,9 @@ import type {
 import { AnnotationCanvas } from "../canvas/AnnotationCanvas.jsx";
 import { useSettings } from "../settings/SettingsProvider.jsx";
 import { useWorkspace } from "./WorkspaceProvider.jsx";
+import { PolygonLayer, toWireVertices } from "../canvas/PolygonLayer.jsx";
+import { classForNewSegment } from "./classes.js";
+import { useNotifications } from "../notifications/NotificationProvider.jsx";
 
 import type { AnnotationsResult, ApiClient } from "../api/client.js";
 
@@ -68,6 +71,11 @@ function OpenedImage({
   readonly metadata: WireImageMetadata | null;
   readonly pixelsUrl: string;
 }): ReactNode {
+  const { settings } = useSettings();
+  const { segments, addSegment, activeTool, activeClassId } = useWorkspace();
+  const { notify } = useNotifications();
+  const joinThreshold = Number(settings.values["polygon_join_threshold"]);
+
   return (
     <section>
       <h3>{image.name}</h3>
@@ -89,16 +97,40 @@ function OpenedImage({
 
               Once the annotations are in, the canvas draws them over it; until then a plain image
               shows the picture rather than an empty box. */}
-          {result?.kind === "loaded" ? (
-            <AnnotationCanvas
-              imageUrl={pixelsUrl}
-              width={metadata.width}
-              height={metadata.height}
-              segments={result.annotations.segments}
-            />
-          ) : (
-            <img className="preview" src={pixelsUrl} alt={image.name} />
-          )}
+          {/* The drawing layer sits OVER whichever of these is showing, so an image with no
+              annotation file can still be annotated -- which is the usual way a dataset starts. */}
+          <div className="canvas-stack">
+            {result?.kind === "loaded" ? (
+              <AnnotationCanvas
+                imageUrl={pixelsUrl}
+                width={metadata.width}
+                height={metadata.height}
+                segments={segments}
+              />
+            ) : (
+              <img className="preview" src={pixelsUrl} alt={image.name} />
+            )}
+
+            {activeTool === "polygon" && (
+              <PolygonLayer
+                width={metadata.width}
+                height={metadata.height}
+                joinThreshold={joinThreshold}
+                classId={classForNewSegment(segments, activeClassId)}
+                onComplete={(vertices) =>
+                  addSegment(
+                    {
+                      type: "Polygon",
+                      classId: classForNewSegment(segments, activeClassId),
+                      vertices: toWireVertices(vertices),
+                    },
+                    "Add polygon",
+                  )
+                }
+                onRefused={(reason) => notify({ severity: "warning", message: reason })}
+              />
+            )}
+          </div>
         </>
       )}
 

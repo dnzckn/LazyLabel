@@ -16,6 +16,7 @@ import type { WireDatasetListing } from "@lazylabel/contracts";
 import { DatasetBrowser } from "../../src/dataset/DatasetBrowser.jsx";
 import { OpenImageView } from "../../src/workspace/OpenImageView.jsx";
 import { WorkspaceProvider } from "../../src/workspace/WorkspaceProvider.jsx";
+import { NotificationProvider } from "../../src/notifications/NotificationProvider.jsx";
 import { SettingsProvider } from "../../src/settings/SettingsProvider.jsx";
 import type { AnnotationsResult, ApiClient } from "../../src/api/client.js";
 
@@ -64,14 +65,16 @@ function show(overrides: Record<string, unknown> = {}) {
   } as unknown as ApiClient;
 
   return render(
-    <SettingsProvider client={api}>
-      {/* The list and the opened image are two components now, one per pane. Mounting both is
-          mounting what the app mounts -- the capability spans them. */}
-      <WorkspaceProvider client={api} projectId="p1">
-        <DatasetBrowser client={api} projectId="p1" folder="frames" />
-        <OpenImageView client={api} projectId="p1" />
-      </WorkspaceProvider>
-    </SettingsProvider>,
+    <NotificationProvider>
+      <SettingsProvider client={api}>
+        {/* The list and the opened image are two components now, one per pane. Mounting both is
+            mounting what the app mounts -- the capability spans them. */}
+        <WorkspaceProvider client={api} projectId="p1">
+          <DatasetBrowser client={api} projectId="p1" folder="frames" />
+          <OpenImageView client={api} projectId="p1" />
+        </WorkspaceProvider>
+      </SettingsProvider>
+    </NotificationProvider>,
   );
 }
 
