@@ -460,6 +460,32 @@ The second thread is about the suite itself. Two flakes turned out to be one rea
 one real contention problem (a fresh jsdom per file was two thirds of the run). Neither was a
 reason to raise a timeout, which was the first thing tried both times.
 
+## The round trip, end to end, in a real browser
+
+Run on 2026-09-20 against a real API over a real folder, because everything above is a test and
+this is the thing itself.
+
+Opened a folder, walked into `frames/`, opened an image that already carried one annotation, chose
+the polygon tool, drew a triangle, undid it, redid it, and pressed Write. What landed on disk:
+
+```
+mask (64, 64, 2)   classes [0, 1]   aliases {"0":"thing"}
+per-channel pixels [351, 740]
+gray.txt:  0 0.28125 0.28125 0.40625 0.40625
+           1 0.453125 0.390625 0.625 0.5625
+```
+
+Two classes in two channels, the alias table as JSON in a unicode array (decision 4, no pickle
+anywhere), and YOLO detection boxes normalized against the full image. The status bar tracked
+unsaved and back, and undo named what it would undo.
+
+Separately verified the same way: brightness 60 took a pixel from 41 to 101 on the canvas; a Red
+channel marker at 128 took that pixel's red to 0 and left green and blue alone, over the wire; the
+frequency filter changed all 4,096 pixels of a grayscale PNG and returned it grayscale; the render
+cache answered a repeat request from cache and a changed cutoff from a fresh render; the dataset
+browser walked into a subfolder; the timeline marked an annotated frame as a gold reference and
+Sort lifted it to the front; and the split view drew both panes and explained a size mismatch.
+
 ## Running the live suites
 
 The differential and live suites are the strongest evidence in the project and they **skip
