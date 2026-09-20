@@ -293,9 +293,25 @@ needs is already in one store rather than scattered across managers.
    2. *Decisions 1 and 8 are ticked.* Decision 1 is the PyPI package and desktop app; decision 8 is
       whether multi-view is rebuilt as a split view, redesigned or removed. **Owner.**
    3. *At least one recorded image sequence has legacy propagation outputs saved as golden data.*
-      This needs the legacy app, the real checkpoints and a sequence someone cares about. It is the
-      longest-lead item and nothing in Phase 6 can be proven equivalent without it — the same
-      shape as Phase 3's differentials, which are the strongest evidence in the project.
+      **The script is written**; what is missing is the frames and the checkpoint.
+
+      ```bash
+      PYTHONPATH=E:/GitHub/LazyLabel/legacy/lazylabel/src E:/venv/lazylabel/Scripts/python.exe         modernized/lazylabel-reimagined/inference/tests/fixtures/capture_propagation_goldens.py         --frames <a folder of frames> --seed 0:1:<x>,<y>         --checkpoint <sam2.1_hiera_large.pt> --out <name>.npz
+      ```
+
+      It captures every frame's mask, its confidence, and whether legacy would flag it — the flags
+      as much as the masks, because RULE-060 decides which frames a user is told to check by hand,
+      and a port that tracks perfectly while flagging a different set has changed the feature in
+      the way a user would notice. Masks are packed bits: a 2-megapixel frame is 2 MB as JSON
+      digits and 250 KB packed, and a sequence has hundreds.
+
+      It says so when nothing was flagged, because a golden where nothing is flagged cannot prove
+      the flagging rule — valid capture, just not one that exercises RULE-060.
+
+      This is still the longest-lead item, and it needs a sequence someone cares about rather than
+      a synthetic one: `test_differential_propagation.py` already compares the port against legacy
+      live on generated frames, and what that cannot give Phase 6 is something to build against
+      without a GPU and a legacy install. **Owner: the frames.**
    4. *Every P6 rule is answered.* **The two that blocked it are answered** (2026-09-20). RULE-060
       needed a fidelity correction and RULE-055 two behaviour questions; both were re-derived from
       the source rather than taken from the judges, and both answers are on their cards. What is
