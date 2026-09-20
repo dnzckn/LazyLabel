@@ -51,6 +51,14 @@ export interface InferenceHealth {
   /** Why the AI tools are unavailable, in words a user can act on. Null when they are available. */
   readonly reason: string | null;
   readonly videoCapable: boolean;
+  /**
+   * Which device the model runs on: a GPU's name, "CPU", or "unknown".
+   *
+   * Worth carrying all the way to the browser. On the desktop a user could infer it from their own
+   * machine; here the model is on a server they cannot see, so "why is every click slow" has no
+   * answer available to them unless the service provides one.
+   */
+  readonly accelerator: string;
 }
 
 /**

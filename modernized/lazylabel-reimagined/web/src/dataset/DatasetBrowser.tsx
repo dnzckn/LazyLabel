@@ -28,6 +28,7 @@ import type {
 } from "@lazylabel/contracts";
 
 import { AnnotationCanvas } from "../canvas/AnnotationCanvas.jsx";
+import { provenanceFromLoad, type ImageState } from "../workspace/saveState.js";
 import { ExportFormats } from "./ExportFormats.jsx";
 import { useSettings } from "../settings/SettingsProvider.jsx";
 import { normalizeExportFormats } from "@lazylabel/settings-schema";
@@ -38,6 +39,15 @@ export interface DatasetBrowserProps {
   readonly client: ApiClient;
   readonly projectId: string;
   readonly folder?: string;
+  /**
+   * Reports which image is open and what state it is in, so the shell can show it.
+   *
+   * A callback rather than lifting the state itself: the browser owns opening an image, and moving
+   * that upward would put the fetch in one component and the thing it fetched in another. What the
+   * shell needs is the derived answer -- what is open, is it saved, can it be saved -- not the
+   * machinery.
+   */
+  readonly onImageState?: (image: ImageState | null) => void;
 }
 
 type ListingState =
@@ -45,7 +55,12 @@ type ListingState =
   | { readonly status: "ready"; readonly listing: WireDatasetListing }
   | { readonly status: "failed"; readonly reason: string };
 
-export function DatasetBrowser({ client, projectId, folder = "" }: DatasetBrowserProps): ReactNode {
+export function DatasetBrowser({
+  client,
+  projectId,
+  folder = "",
+  onImageState,
+}: DatasetBrowserProps): ReactNode {
   const [state, setState] = useState<ListingState>({ status: "loading" });
   const [selected, setSelected] = useState<WireDatasetImage | null>(null);
   const [opened, setOpened] = useState<AnnotationsResult | null>(null);
@@ -71,6 +86,32 @@ export function DatasetBrowser({ client, projectId, folder = "" }: DatasetBrowse
       cancelled = true;
     };
   }, [client, projectId, folder]);
+
+  // Derived rather than tracked separately, so the reported state cannot disagree with what is on
+  // screen. `dirty` is always false for now: nothing can edit an image until the drawing tools
+  // arrive in Phase 5, and a dirty flag that nothing can set would be a claim, not a fact.
+  useEffect(() => {
+    if (onImageState === undefined) return;
+
+    if (selected === null) {
+      onImageState(null);
+      return;
+    }
+
+    if (openError !== null) {
+      onImageState({ key: selected.key, provenance: "failed", dirty: false, segmentCount: 0 });
+      return;
+    }
+
+    if (opened === null) return; // still opening; the last reported state stands
+
+    onImageState({
+      key: selected.key,
+      provenance: provenanceFromLoad(opened.kind),
+      dirty: false,
+      segmentCount: opened.kind === "loaded" ? opened.annotations.segments.length : 0,
+    });
+  }, [onImageState, opened, openError, selected]);
 
   const open = useCallback(
     (image: WireDatasetImage) => {

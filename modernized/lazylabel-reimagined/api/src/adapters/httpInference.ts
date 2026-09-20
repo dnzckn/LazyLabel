@@ -51,7 +51,7 @@ export class HttpInferenceClient implements InferenceClient {
     const response = await this.send("GET", "/health", undefined, "health");
     const body = (await this.json(response)) as {
       status?: string;
-      ai?: { available?: boolean; videoCapable?: boolean };
+      ai?: { available?: boolean; videoCapable?: boolean; accelerator?: string };
       reason?: string | null;
     };
 
@@ -62,6 +62,8 @@ export class HttpInferenceClient implements InferenceClient {
       available: body.ai?.available === true,
       reason: body.status === "ok" ? null : (body.reason ?? "the inference service is not ready"),
       videoCapable: body.ai?.videoCapable === true,
+      // An older service that does not report it is "unknown", not a guess at "CPU".
+      accelerator: body.ai?.accelerator ?? "unknown",
     };
   }
 

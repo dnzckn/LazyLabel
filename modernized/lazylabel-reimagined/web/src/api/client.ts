@@ -45,6 +45,27 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * What `/health` reports.
+ *
+ * The AI block is three independent facts, kept apart rather than collapsed: whether the model can
+ * run, WHY not when it cannot, and what it runs on. A deployment with SAM 1 only is a working
+ * install with no propagation, so `videoCapable` is not implied by `available`.
+ */
+export interface ApiHealth {
+  readonly status: string;
+  readonly dataset: string;
+  readonly database: string;
+  readonly degraded: string[];
+  readonly ai: {
+    readonly available: boolean;
+    readonly reason: string | null;
+    readonly videoCapable: boolean;
+    /** A GPU's name, "CPU", or "unknown". The server's device, which the browser cannot see. */
+    readonly accelerator: string;
+  };
+}
+
 export interface ApiClientOptions {
   /** Where the API lives. Defaults to "/api", which the dev server proxies and production serves. */
   readonly baseUrl?: string;
@@ -65,7 +86,7 @@ export class ApiClient {
     this.onCorrelationId = options.onCorrelationId;
   }
 
-  async health(): Promise<{ status: string; dataset: string; database: string; degraded: string[] }> {
+  async health(): Promise<ApiHealth> {
     const response = await this.send("GET", "/health");
     // 503 is a real answer here, not an error: it says the dataset folder is unreadable, which the
     // UI must show as a blocking message naming the path.

@@ -174,6 +174,25 @@ export function canSave(image: ImageState | null): boolean {
 }
 
 /**
+ * One line of continuous state: what is open and whether it is saved.
+ *
+ * Belongs beside the rules rather than in the component that shows it, because the SAME words have
+ * to be available to the status bar, to a prompt, and to anything else that needs to say where the
+ * work stands — and three places wording this independently is three places to drift.
+ */
+export function summarize(image: ImageState | null): string {
+  if (image === null) return "No image open.";
+  if (image.provenance === "failed") return `${image.key} could not be read.`;
+
+  const segments = image.segmentCount === 1 ? "1 segment" : `${image.segmentCount} segments`;
+  if (!image.dirty) return `${image.key} — ${segments}, saved.`;
+
+  // Zero is said out loud rather than smoothed away. "0 segments, unsaved" is precisely the state
+  // a user needs to see before a save writes empty files over an image that had annotations.
+  return `${image.key} — ${segments}, unsaved.`;
+}
+
+/**
  * Turn a load result into provenance.
  *
  * Takes the bare discriminant rather than the API client's type, so this module stays independent

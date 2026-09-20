@@ -25,7 +25,12 @@ import { get, jsonBody, post } from "../helpers/request.js";
 
 const HEALTHY_INFERENCE = {
   status: "ok",
-  ai: { available: true, reason: "PyTorch 2.7.1 and segment-anything are available.", videoCapable: true },
+  ai: {
+    available: true,
+    reason: "PyTorch 2.7.1 and segment-anything are available.",
+    videoCapable: true,
+    accelerator: "NVIDIA GeForce RTX 4090",
+  },
   models: { declared: 1, usable: 1, manifestError: null },
   reason: null,
 };
@@ -206,8 +211,31 @@ describe("C3: the API's inference proxy", () => {
     const service = fakeService(() => jsonResponse(200, HEALTHY_INFERENCE));
     const body = jsonBody(await appWith(service).handle(get("/health")));
 
-    expect(body.ai).toEqual({ available: true, reason: null, videoCapable: true });
+    expect(body.ai).toEqual({
+      available: true,
+      reason: null,
+      videoCapable: true,
+      // The browser cannot find this out for itself: the model is on a server it cannot see.
+      accelerator: "NVIDIA GeForce RTX 4090",
+    });
     expect(body.degraded).toEqual([]);
+  });
+
+  it("says the device is unknown rather than guessing when the service does not report it", async () => {
+    // "CPU" would be a wrong answer rather than a vague one, and a user told their server has no
+    // GPU when it has one has been given a reason to stop waiting for something that works.
+    const service = fakeService(() =>
+      jsonResponse(200, {
+        status: "ok",
+        ai: { available: true, reason: null, videoCapable: true },
+        models: { declared: 1, usable: 1, manifestError: null },
+        reason: null,
+      }),
+    );
+
+    const body = jsonBody(await appWith(service).handle(get("/health")));
+
+    expect((body.ai as { accelerator: string }).accelerator).toBe("unknown");
   });
 
   it("relays why the AI tools are unavailable, so the browser is not left with a dead button", async () => {

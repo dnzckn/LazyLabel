@@ -1,0 +1,89 @@
+/**
+ * Continuous state: what is open, whether it is saved, and what the server can do.
+ *
+ * THE SPLIT FROM NOTIFICATIONS IS THE POINT. Legacy's status bar is both things at once — it shows
+ * the device and the ready message, and it is also where `show_message`, `show_error_message` and
+ * `show_success_message` put transient notices on 5-, 8- and 3-second timers. That is why the most
+ * destructive act in the application announces itself in a widget designed to forget: the
+ * announcement and the state share a label, so the announcement inherits the label's habits.
+ *
+ * Here they are two things. Events go to the notification system and the consequential ones stay
+ * until dismissed. State lives here and never expires, because state is not an event — an image is
+ * either saved or it is not, and a timer has no opinion about that.
+ *
+ * THE DEVICE IS THE SERVER'S. Legacy asks `torch.cuda.is_available()` in the same process as the
+ * window, so its answer is about the machine the user is sitting at. Here the model runs somewhere
+ * the user cannot see, which makes the question more worth answering, not less: "why does every
+ * click take four seconds" is otherwise unanswerable to the person experiencing it.
+ */
+
+import type { ReactNode } from "react";
+
+import { summarize, type ImageState } from "../workspace/saveState.js";
+
+export interface Health {
+  readonly dataset: string;
+  readonly database: string;
+  readonly ai: {
+    readonly available: boolean;
+    readonly reason: string | null;
+    readonly videoCapable: boolean;
+    readonly accelerator: string;
+  };
+}
+
+export interface StatusBarProps {
+  readonly image: ImageState | null;
+  /** Null while health is still being fetched, or when the API could not be reached at all. */
+  readonly health: Health | null;
+}
+
+export function StatusBar({ image, health }: StatusBarProps): ReactNode {
+  return (
+    <footer className="status-bar" aria-label="Status">
+      <span className="status-bar__image">{summarize(image)}</span>
+
+      <span className="status-bar__spacer" />
+
+      {health === null ? (
+        <span className="status-bar__item">Checking the server…</span>
+      ) : (
+        <>
+          {/* Only mentioned when it is a problem. A status bar that always says "dataset: ok"
+              trains the eye to skip the place the word "unreadable" would appear. */}
+          {health.dataset !== "ok" && (
+            <span className="status-bar__item status-bar__item--error">
+              Dataset folder unreadable
+            </span>
+          )}
+
+          {health.database !== "ok" && (
+            <span className="status-bar__item status-bar__item--warning">
+              Settings not saved this session
+            </span>
+          )}
+
+          <span className="status-bar__item">{describeAi(health.ai)}</span>
+        </>
+      )}
+    </footer>
+  );
+}
+
+/**
+ * What the AI half of the status bar says.
+ *
+ * Three facts, and they fail independently: whether the model can run at all, what it runs on, and
+ * whether it can propagate through a sequence. A deployment with SAM 1 only is a working install
+ * with no propagation, and saying "AI ready" there would promise a feature that is not coming.
+ */
+export function describeAi(ai: Health["ai"]): string {
+  if (!ai.available) {
+    // The reason travels from the inference service through the API to here, unflattened, because
+    // "AI unavailable" tells a user to give up and "PyTorch is not installed" tells them what to do.
+    return ai.reason ?? "AI tools unavailable";
+  }
+
+  const device = ai.accelerator === "unknown" ? "device unknown" : ai.accelerator;
+  return ai.videoCapable ? `AI ready on ${device}` : `AI ready on ${device}, no propagation`;
+}

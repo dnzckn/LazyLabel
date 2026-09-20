@@ -14,22 +14,21 @@ import { useEffect, useState, type ReactNode } from "react";
 import { CAPABILITIES } from "../capabilities.js";
 import { DatasetBrowser } from "../dataset/DatasetBrowser.jsx";
 import { NotificationHost } from "../notifications/NotificationProvider.jsx";
+import { StatusBar } from "./StatusBar.jsx";
+import type { ImageState } from "../workspace/saveState.js";
 import { useSettings } from "../settings/SettingsProvider.jsx";
 import { useHotkey, useHotkeyContext } from "../hotkeys/HotkeyProvider.jsx";
-import type { ApiClient } from "../api/client.js";
+import type { ApiClient, ApiHealth } from "../api/client.js";
 
-interface Health {
-  readonly status: string;
-  readonly dataset: string;
-  readonly database: string;
-  readonly degraded: readonly string[];
-}
+/** The client already names this shape; re-declaring it here is how the two drift apart. */
+type Health = ApiHealth;
 
 export function App({ client }: { readonly client: ApiClient }): ReactNode {
   const { state } = useSettings();
   const [health, setHealth] = useState<Health | null>(null);
   const [healthError, setHealthError] = useState<string | null>(null);
   const [showHotkeys, setShowHotkeys] = useState(false);
+  const [openImage, setOpenImage] = useState<ImageState | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -105,7 +104,7 @@ export function App({ client }: { readonly client: ApiClient }): ReactNode {
 
       {showHotkeys && <HotkeyReference />}
 
-      <DatasetBrowser client={client} projectId="default" />
+      <DatasetBrowser client={client} projectId="default" onImageState={setOpenImage} />
 
       <section>
         <h2>What is built</h2>
@@ -132,6 +131,10 @@ export function App({ client }: { readonly client: ApiClient }): ReactNode {
           </tbody>
         </table>
       </section>
+
+      {/* Last, and outside the scrolling content: continuous state, never events. What used to be a
+          status-bar message is a notification now, which is what stops a destructive one expiring. */}
+      <StatusBar image={openImage} health={health} />
     </main>
   );
 }

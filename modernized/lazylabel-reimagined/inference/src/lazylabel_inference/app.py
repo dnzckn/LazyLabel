@@ -21,7 +21,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
 
-from .availability import Availability, check_availability
+from .availability import Accelerator, Availability, check_availability, describe_accelerator
 from .capabilities import CAPABILITIES
 from .log import Logger, silent_logger
 from .manifest import CheckpointStatus, ManifestError, ModelEntry, check_checkpoint
@@ -72,6 +72,9 @@ class Deps:
     model_dir: Path = Path(".")
     logger: Logger = field(default_factory=lambda: silent_logger)
     availability: Callable[[], Availability] = check_availability
+    """Which device inference runs on. Separate from availability: a machine can have a GPU and no
+    PyTorch, or PyTorch and no GPU, and one failing must not make the other unanswerable."""
+    accelerator: Callable[[], Accelerator] = describe_accelerator
     manifest_error: ManifestError | None = None
     """Skip hashing gigabytes on every health probe; the models route still verifies in full."""
     verify_on_health: bool = False
@@ -289,6 +292,10 @@ def _health(deps: Deps) -> Response:
                 "reason": availability.reason,
                 "torchVersion": availability.torch_version,
                 "videoCapable": availability.video_capable,
+                # Which device the model runs on. The browser cannot find this out for itself --
+                # the model is on a server it cannot see -- and it is the answer to "why is every
+                # click slow", which is otherwise unanswerable to the person experiencing it.
+                "accelerator": deps.accelerator().summary,
             },
             "models": {
                 "declared": len(deps.models),

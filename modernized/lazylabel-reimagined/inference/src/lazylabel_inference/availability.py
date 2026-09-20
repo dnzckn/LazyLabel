@@ -149,3 +149,66 @@ def _installed_torch_version() -> str | None:
             return None
     except Exception:  # pragma: no cover - importlib.metadata is stdlib and should not fail
         return None
+
+
+@dataclass(frozen=True)
+class Accelerator:
+    """What the model actually runs on.
+
+    A separate question from `Availability`, and deliberately not folded into it: a machine can have
+    a GPU and no PyTorch, or PyTorch and no GPU, and collapsing the two would make one unanswerable
+    whenever the other fails.
+
+    This matters MORE in a hosted deployment than it did on the desktop, not less. Legacy shows
+    "GPU: ..." or "CPU Only" in its status bar, where the user could have guessed it from their own
+    machine anyway. Here the model runs on a server the user cannot see, so "why does every click
+    take four seconds" has no answer available to them unless the service says so.
+    """
+
+    kind: str
+    """"cuda", "cpu", or "unknown" when PyTorch is not installed to ask."""
+    name: str | None
+    """The device's own name, when there is one to report."""
+
+    @property
+    def summary(self) -> str:
+        if self.kind == "cuda":
+            return self.name or "GPU"
+        if self.kind == "cpu":
+            return "CPU"
+        return "unknown"
+
+
+def describe_accelerator(
+    *, cuda: bool | Any = _LOOK_IT_UP, name: str | None | Any = _LOOK_IT_UP
+) -> Accelerator:
+    """Which device inference would use, reported rather than assumed.
+
+    Injectable for the same reason `check_availability` is: the interesting cases are a CUDA machine
+    and a CPU-only one, and a test suite runs on whichever it runs on.
+
+    Importing torch is slow and asking it about CUDA is slower, so this is called from the health
+    route rather than on every request. Anything that raises is reported as unknown -- a status bar
+    that cannot say which device is in use is a small loss, and one that takes the service down
+    trying to find out is a large one.
+    """
+    if cuda is _LOOK_IT_UP:
+        try:
+            import torch
+
+            cuda = bool(torch.cuda.is_available())
+        except Exception:
+            return Accelerator("unknown", None)
+
+    if not cuda:
+        return Accelerator("cpu", None)
+
+    if name is _LOOK_IT_UP:
+        try:
+            import torch
+
+            name = torch.cuda.get_device_name(0)
+        except Exception:
+            name = None
+
+    return Accelerator("cuda", name)

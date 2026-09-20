@@ -216,3 +216,28 @@ fieldset input {
 .formats code {
   color: var(--muted);
 }
+
+/* Continuous state, pinned below the content. Events belong in .notifications, which is the split
+   legacy's status bar does not make -- and why its "Deleted: ..." notice expires. */
+.status-bar {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-top: 2rem;
+  padding: 0.4rem 0.75rem;
+  border-top: 1px solid var(--muted);
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.status-bar__spacer {
+  flex: 1;
+}
+
+.status-bar__item--warning {
+  color: var(--warning-ink);
+}
+
+.status-bar__item--error {
+  color: var(--error-ink);
+}

@@ -223,24 +223,32 @@ async function inferenceHealth(deps: AppDeps): Promise<{
   available: boolean;
   reason: string | null;
   videoCapable: boolean;
+  accelerator: string;
 }> {
   if (deps.inference === undefined) {
     return {
       available: false,
       reason: "no inference service is configured, so the AI tools are unavailable",
       videoCapable: false,
+      accelerator: "unknown",
     };
   }
 
   try {
     const health = await deps.inference.health();
-    return { available: health.available, reason: health.reason, videoCapable: health.videoCapable };
+    return {
+      available: health.available,
+      reason: health.reason,
+      videoCapable: health.videoCapable,
+      accelerator: health.accelerator,
+    };
   } catch (cause) {
     // Unreachable is not a 500 for the whole API: annotations still load and save.
     return {
       available: false,
       reason: cause instanceof Error ? cause.message : String(cause),
       videoCapable: false,
+      accelerator: "unknown",
     };
   }
 }

@@ -19,7 +19,20 @@ import type { ApiClient } from "../../src/api/client.js";
 
 afterEach(cleanup);
 
-const HEALTHY = { status: "ok", dataset: "ok", database: "ok", degraded: [] as string[] };
+const AI_READY = {
+  available: true,
+  reason: null,
+  videoCapable: true,
+  accelerator: "NVIDIA RTX 4090",
+};
+
+const HEALTHY = {
+  status: "ok",
+  dataset: "ok",
+  database: "ok",
+  degraded: [] as string[],
+  ai: AI_READY,
+};
 
 function mount(client: Partial<ApiClient>) {
   const full = {
@@ -61,7 +74,13 @@ describe("the application shell", () => {
 
   it("blocks with an alert when the dataset folder cannot be read", async () => {
     mount({
-      health: async () => ({ status: "unavailable", dataset: "unreadable", database: "ok", degraded: [] }),
+      health: async () => ({
+        status: "unavailable",
+        dataset: "unreadable",
+        database: "ok",
+        degraded: [],
+        ai: AI_READY,
+      }),
     });
 
     // The folder is the source of truth, so this is fatal and says so, rather than showing an empty

@@ -11,11 +11,14 @@ without installing the build that produces it, which is the point of injecting i
 
 from __future__ import annotations
 
+import importlib.util
+
 import pytest
 
 from lazylabel_inference.availability import (
     MIN_TORCH_VERSION,
     check_availability,
+    describe_accelerator,
     parse_version,
 )
 
@@ -97,3 +100,66 @@ class TestCheckAvailability:
     def test_carries_an_install_hint_for_the_user(self) -> None:
         result = check_availability(torch_version=None, has_sam=False)
         assert "pip install" in result.install_hint
+
+
+class TestAccelerator:
+    """Which device inference runs on — a separate question from whether it can run at all."""
+
+    def test_reports_a_named_gpu(self) -> None:
+        accelerator = describe_accelerator(cuda=True, name="NVIDIA GeForce RTX 4090")
+
+        assert accelerator.kind == "cuda"
+        assert accelerator.summary == "NVIDIA GeForce RTX 4090"
+
+    def test_reports_a_gpu_it_cannot_name(self) -> None:
+        # The device is still a GPU even when asking its name failed, and saying "GPU" is better
+        # than falling back to "CPU", which would be a wrong answer rather than a vague one.
+        assert describe_accelerator(cuda=True, name=None).summary == "GPU"
+
+    def test_reports_the_cpu(self) -> None:
+        accelerator = describe_accelerator(cuda=False)
+
+        assert accelerator.kind == "cpu"
+        assert accelerator.summary == "CPU"
+        assert accelerator.name is None
+
+    @pytest.mark.skipif(importlib.util.find_spec("torch") is None, reason="needs torch")
+    def test_reports_unknown_rather_than_failing_when_torch_cannot_be_asked(self, monkeypatch) -> None:
+        """A status bar that cannot name the device is a small loss; a health route that dies
+        trying to find out is a large one.
+
+        `torch.cuda.is_available()` really does raise on a broken driver install, so this patches
+        the actual call rather than injecting a stand-in -- the guarantee is about the LOOKUP path,
+        and injecting a value skips exactly the code being claimed safe.
+        """
+        import torch
+
+        def explode() -> bool:
+            raise RuntimeError("the CUDA driver is not loaded")
+
+        monkeypatch.setattr(torch.cuda, "is_available", explode)
+
+        accelerator = describe_accelerator()
+
+        assert accelerator.kind == "unknown"
+        assert accelerator.summary == "unknown"
+
+    @pytest.mark.skipif(importlib.util.find_spec("torch") is None, reason="needs torch")
+    def test_falls_back_to_GPU_when_only_the_NAME_lookup_fails(self, monkeypatch) -> None:
+        import torch
+
+        monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
+        monkeypatch.setattr(
+            torch.cuda, "get_device_name", lambda _index: (_ for _ in ()).throw(RuntimeError("no"))
+        )
+
+        accelerator = describe_accelerator()
+
+        assert accelerator.kind == "cuda"
+        assert accelerator.summary == "GPU"
+
+    def test_is_independent_of_whether_the_ai_stack_is_usable(self) -> None:
+        # A machine can have a GPU and no PyTorch, or PyTorch and no GPU. Folding these into one
+        # answer makes whichever failed unanswerable.
+        assert describe_accelerator(cuda=True, name="A100").kind == "cuda"
+        assert check_availability(torch_version=None).available is False
