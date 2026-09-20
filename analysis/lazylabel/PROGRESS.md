@@ -8,18 +8,18 @@ Last updated: 2026-09-20.
 ## Short answer
 
 **The app cannot be launched on the web yet.** Phases 1–4 have met their exit criteria. Phase 5
-has met three of its four and the fourth is met apart from one recorded tolerance question; Phase
-6 has not started. The pieces that exist are proven against legacy; what is missing is the
+has met three of its four; the fourth is met apart from one tolerance question for the owner and
+one ported-but-unreachable step (the FFT's own control). Phase 6 has not started. The pieces that exist are proven against legacy; what is missing is the
 sequence work and the whole cutover.
 
-By the brief's own weighting of the six phases: **about 71% of the conversion is done** — 6.0,
-5.5, 5.8, 29.4, and about 24 of 27.4.
+By the brief's own weighting of the six phases: **about 72% of the conversion is done** — 6.0,
+5.5, 5.8, 29.4, and about 25.5 of 27.4.
 
 Phase 4's panels were frames when it exited, because the tools that fill them are Phase 5's by the
 brief's own split. They are filled now: drawing tools, AI tools, adjustments, crop, segments and
 classes are all built and reachable.
 
-The remaining 29% is the tail of Phase 5 and all of Phase 6.
+The remaining 28% is the tail of Phase 5 and all of Phase 6.
 
 | Phase | Share | State |
 |---|---|---|
@@ -27,7 +27,7 @@ The remaining 29% is the tail of Phase 5 and all of Phase 6.
 | P2 — architecture and scaffolds | 5.5% | **complete** |
 | P3 — inference service | 5.8% | **complete** |
 | P4 — workspace, dataset browser, persistence | 29.4% | **complete**; its panels are filled by P5's tools |
-| P5 — tools | 27.4% | ~88%; criteria 1–3 met, criterion 4 has one open question |
+| P5 — tools | 27.4% | ~93%; criteria 1–3 met, criterion 4 has one open question |
 | P6 — sequence and cutover | 25.9% | not started |
 
 ## What is done, and what proves it
@@ -239,36 +239,40 @@ needs is already in one store rather than scattered across managers.
    The gap is asserted at its measured size in `test/tools/clahe.differential.test.ts`, so it
    cannot grow unnoticed and closing it is a visible change to that file.
 
-   **The one remaining gap: rescale and channel thresholding have no controls, and cannot have
-   correct ones in the browser.**
+   **Rescale and channel thresholding now run on the server, and have controls — closed.**
 
-   The rules are implemented and tested (`tools/imageProcessing.ts`). What is missing is where they
-   RUN. RULE-032 fixes the order as rescale → channel threshold → FFT → 16-bit to 8-bit → display
-   adjustments, and the browser only ever receives the output of the fourth step: the API decodes
-   every image to 8-bit RGB before sending it. Applying a rescale in the browser would quantise a
-   16-bit image to 256 levels first and then stretch those, which is not what the rule says and is
-   visibly worse on the images that need it most.
+   This was recorded as a UI gap and was not one. RULE-032 fixes the order as rescale → channel
+   threshold → FFT → 16-bit to 8-bit → display adjustments, and the browser only ever receives the
+   output of the fourth step: the API decodes every image to 8-bit RGB before sending it. A
+   rescale applied client-side would quantise a 16-bit image to 256 levels and then stretch those,
+   which is worst on exactly the images a rescale exists for — a scan whose data sits between
+   3,000 and 5,000 gets 65,536 levels on the server and 8 in the browser.
 
-   So these three belong on the server, and the work is bounded:
+   The symptom was visible the whole time and looked like nothing: four modules of correct,
+   well-tested code that nothing imported, because there was no correct place to call them from.
 
-   - `decodeImage` takes an optional processing argument and applies it to the wide samples before
-     `to8Bit`, rather than after.
-   - The image metadata reports whether the source was grayscale. RULE-032 disables rescale for RGB
-     and RULE-029 thresholds only the enabled channels, and neither question can be answered from
-     what is on the wire today.
-   - `/pixels` takes the parameters; the browser builds the URL.
-   - Both rules restrict themselves to the crop region when a crop is active, which the store
-     already holds.
+   What changed:
 
-   The display adjustments stay in the browser, and correctly so: they are the last step and they
-   apply to the rendered canvas.
+   - `imageProcessing`, `fft`, `dft` and `clahe` moved to `api/src/images/` with their tests and
+     golden fixtures. `decodeImage` takes an optional processing argument and applies it to the
+     wide samples **before** `to8Bit`; `/pixels` takes the parameters.
+   - The image metadata carries `sourceChannels`. RULE-032 disables rescale for colour and
+     RULE-029 offers one Gray channel or three separate ones, and the decoder turns everything
+     into RGB — so without this the question is unanswerable and the panel would offer controls
+     the server ignores. It names the refusal rather than greying a slider.
+   - The marker-spacing limit went the other way, into the browser: it is a widget rule, not
+     arithmetic. It is refused with its reason rather than snapped to the minimum as legacy does,
+     which silently moves a band boundary the user did not move.
+   - The display adjustments stay in the browser, where they belong — last step, on the rendered
+     canvas.
 
    **The FFT's stale-cache defect** is designed out rather than ported: legacy keys its cached
    spectrum on image dimensions alone, so it is not invalidated when the rescale or
    channel-threshold settings upstream of it change and the output can come from a stale input. The
    port computes the transform per call, so it does not have the defect — but it also has no cache,
    and a full-size image will want one. Whatever cache it gets must be keyed on the upstream
-   settings too. It moves to the server with the two rules above, for the same reason.
+   settings too. The FFT has no control yet either; it is the one step of RULE-032's chain that is
+   ported and not reachable.
 2. **Phase 6 — sequence and cutover** (25.9%). The timeline, propagation review, the split view,
    the hosted deployment and the actual switch-over.
 
