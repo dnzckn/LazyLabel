@@ -211,6 +211,7 @@ function ToolPicker(): ReactNode {
 
   const tools: readonly { readonly value: Tool; readonly label: string }[] = [
     { value: "none", label: "None" },
+    { value: "select", label: "Select" },
     { value: "polygon", label: "Polygon" },
     { value: "box", label: "Box" },
     { value: "circle", label: "Circle" },

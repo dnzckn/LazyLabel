@@ -24,6 +24,7 @@ import { AnnotationCanvas } from "../canvas/AnnotationCanvas.jsx";
 import { useSettings } from "../settings/SettingsProvider.jsx";
 import { useWorkspace } from "./WorkspaceProvider.jsx";
 import { PolygonLayer, toWireVertices } from "../canvas/PolygonLayer.jsx";
+import { SelectLayer } from "../canvas/SelectLayer.jsx";
 import { ShapeLayer } from "../canvas/ShapeLayer.jsx";
 import { rasterizeSegment } from "@lazylabel/annotation-formats";
 import { erase } from "../tools/erase.js";
@@ -76,7 +77,8 @@ function OpenedImage({
   readonly pixelsUrl: string;
 }): ReactNode {
   const { settings } = useSettings();
-  const { segments, addSegment, activeTool, activeClassId, applySegments } = useWorkspace();
+  const { segments, addSegment, activeTool, activeClassId, applySegments, selected, toggleSelected } =
+    useWorkspace();
   const { notify } = useNotifications();
   const joinThreshold = Number(settings.values["polygon_join_threshold"]);
 
@@ -176,6 +178,19 @@ function OpenedImage({
               />
             ) : (
               <img className="preview" src={pixelsUrl} alt={image.name} />
+            )}
+
+            {activeTool === "select" && (
+              <SelectLayer
+                width={metadata.width}
+                height={metadata.height}
+                segments={segments}
+                selected={selected}
+                onToggle={toggleSelected}
+                onMiss={() =>
+                  notify({ severity: "info", message: "Nothing there to select" })
+                }
+              />
             )}
 
             {activeTool === "polygon" && (
