@@ -351,6 +351,16 @@ function OpenedImage({
           would otherwise be dropped on save. */}
       {metadata !== null && (
         <ConvertButton
+          /* KEYED ON THE IMAGE, so everything this button remembers is forgotten when a different
+             one opens: the revision its next write is conditional on, and the outcome of the last.
+             Both belong to one image and neither is re-derived.
+
+             It already behaved this way, but by accident -- the button renders behind
+             `metadata !== null` and opening an image clears the side before fetching, so it
+             unmounts for as long as the load is in flight. A conditional write should not depend
+             on a loading gap nobody wrote down; removing the flicker would silently turn every
+             save after a switch into a refusal citing a file that had not changed. */
+          key={image.key}
           client={client}
           projectId={projectId}
           image={image}
