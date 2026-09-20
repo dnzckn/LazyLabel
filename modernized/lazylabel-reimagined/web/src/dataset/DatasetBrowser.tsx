@@ -33,6 +33,7 @@ import { ExportFormats } from "./ExportFormats.jsx";
 import type { AnnotationsResult, ApiClient } from "../api/client.js";
 import { useSettings } from "../settings/SettingsProvider.jsx";
 import { hideableColumns, visibleColumns } from "./columns.js";
+import { SORT_ORDERS, isSupported, labelFor, sortImages } from "./sorting.js";
 
 export interface DatasetBrowserProps {
   readonly client: ApiClient;
@@ -202,11 +203,45 @@ function ColumnedTable({
   // chances for them to disagree by one.
   const shown = visibleColumns(listing.columns, settings.values);
 
+  const rawOrder = Number(settings.values["file_manager_sort_order"]);
+  const order = Number.isInteger(rawOrder) ? rawOrder : 0;
+  const rows = sortImages(listing.images, order);
+
   return (
     <>
         {/* RULE-036's ten column settings, none of which had a reader -- the table showed every
             format the API reported and a user could not hide one. On a folder whose images carry
             two of the seven formats, five columns are a field of dots. */}
+        <label className="crop__field dataset__sort">
+          <span>Order</span>
+          <select
+            value={order}
+            aria-label="Sort order"
+            onChange={(event) =>
+              void save({
+                ...settings,
+                values: { ...settings.values, file_manager_sort_order: Number(event.target.value) },
+              })
+            }
+          >
+            {SORT_ORDERS.map((entry) => (
+              <option key={entry.value} value={entry.value} disabled={!entry.supported}>
+                {entry.label}
+                {entry.supported ? "" : " — not available yet"}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        {!isSupported(order) && (
+          // An imported legacy settings file can carry one of the four this app cannot perform.
+          // Saying so beats showing a list sorted by name that claims to be sorted by size.
+          <p role="status" className="banner banner--warning">
+            {labelFor(order)} is not available yet — the listing does not carry each file&rsquo;s
+            date or size. Showing name order instead.
+          </p>
+        )}
+
         <details className="dataset__columns">
           <summary>Columns</summary>
           {hideableColumns(listing.columns).map((column) => (
@@ -239,7 +274,7 @@ function ColumnedTable({
             </tr>
           </thead>
           <tbody>
-            {listing.images.map((image) => (
+            {rows.map((image) => (
               <tr key={image.key} aria-selected={openState?.image.key === image.key}>
                 <th scope="row">
                   <button type="button" onClick={() => openImage(image)}>

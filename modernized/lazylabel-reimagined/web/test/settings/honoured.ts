@@ -124,10 +124,10 @@ export const HONOURED: Readonly<Record<string, Honoured>> = {
   // only when a column or a sort needs it is the shape.
   file_manager_show_modified: gap("needs `modified` on the wire; the listing deliberately does not stat"),
   file_manager_show_size: gap("needs `size` on the wire; the listing deliberately does not stat"),
-  file_manager_sort_order: gap(
-    "the dataset browser lists images in the order the API returns them; RULE-036's sort is not "
-      + "wired to a control.",
-  ),
+  // Read, and honest about its limits: only the two NAME orders can be performed, because the
+  // listing carries no `modified` and no `size`. The other four fall back to name and the browser
+  // says so, rather than showing a list sorted by name that claims to be sorted by size.
+  file_manager_sort_order: read,
 
   propagation_confidence_threshold: read,
 };
