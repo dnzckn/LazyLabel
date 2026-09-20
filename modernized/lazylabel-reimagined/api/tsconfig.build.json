@@ -6,7 +6,10 @@
     "declarationMap": true,
     "sourceMap": true,
     "outDir": "dist",
-    "rootDir": "src"
+    "rootDir": "."
   },
-  "include": ["src"]
+  // `tools` ships with the build so `npm run acceptance` runs compiled JS. Node's
+  // type stripping does not rewrite a relative `.js` import to the `.ts` beside it,
+  // and every import in this package is written `.js` as ESM requires.
+  "include": ["src", "tools"]
 }

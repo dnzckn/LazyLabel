@@ -9,11 +9,12 @@
     "node": ">=22"
   },
   "scripts": {
-    "start": "node dist/main.js",
+    "start": "node dist/src/main.js",
     "build": "tsc -p tsconfig.build.json",
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "acceptance": "npm run build && node dist/tools/acceptanceRoundTrip.js"
   },
   "dependencies": {
     "@lazylabel/annotation-formats": "file:../../lazylabel/core/exporters",

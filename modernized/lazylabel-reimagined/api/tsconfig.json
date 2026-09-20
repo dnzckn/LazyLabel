@@ -16,5 +16,7 @@
     "skipLibCheck": true,
     "noEmit": true
   },
-  "include": ["src", "test"]
+  // `tools` is in here deliberately: a script excluded from the typecheck is a script
+  // whose mistakes are found by running it against somebody's real data.
+  "include": ["src", "test", "tools"]
 }

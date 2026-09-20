@@ -46,4 +46,6 @@ EXPOSE 8787
 
 # Exec form, so the process is PID 1 and `docker stop` reaches it as SIGTERM rather than having a
 # shell swallow it.
-CMD ["node", "dist/main.js"]
+# `dist/src/main.js`, not `dist/main.js`: the build's rootDir is the package root so that
+# `tools/` compiles alongside `src/`, which is what makes `npm run acceptance` runnable.
+CMD ["node", "dist/src/main.js"]
