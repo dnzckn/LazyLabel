@@ -614,6 +614,7 @@ because a test exercises one side with the other stubbed. Five found:
 | Setting ↔ pixel | `point_radius`, `line_thickness`, `annotation_size_multiplier` reached no drawing aid |
 | Setting ↔ behaviour | `auto_polygon_enabled` and `polygon_resolution`: legacy's Auto-Convert was not built |
 | CSS ↔ coordinates | the drawing layer's box was not the image's, so every drawn vertex was misplaced |
+| Hotkey ↔ behaviour | 40 of 43 actions had no handler, while the reference listed every one with its key |
 
 **A conflict has no recovery yet, and the message says so rather than pretending.** When a save is
 refused because the file moved, the annotations on screen are still the user's — but there is no
@@ -663,6 +664,18 @@ slider from 1.0x to 2.0x took a drawn vertex from `rx` 4 to 8.
 The layer tests now supply a settings provider rather than letting `useSizing` default silently.
 A hook that works without its provider makes a missing wire invisible, which is the defect family
 this project has found nine of.
+
+**The same question, asked of the HOTKEYS, was the worst answer yet.** Forty of the forty-three
+actions in the schema had no handler anywhere — only undo, redo and fit_view did anything — while
+the reference table listed every one with its key as though pressing it would work. A setting that
+changes nothing is invisible; a hotkey that does nothing is a promise made in writing and broken
+on the first press, because the user is told exactly where to find it.
+
+The tool keys are now wired (1/2/3/4, E, R), set directly rather than toggled: RULE-070 is a
+defect card and legacy's toggle-back leaves E R R E stuck in selection. And the reference reports
+which actions have a listener, read from the dispatcher itself rather than a list someone keeps,
+so it cannot drift. The remaining thirty-four are named in the table as "not yet" rather than
+silently promised.
 
 **The method**: take each pair of components that must agree, and ask what carries the agreement.
 For settings, list the keys and grep for readers. For a wire format, compare the fields the
