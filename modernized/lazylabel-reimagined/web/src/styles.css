@@ -12,8 +12,11 @@
   font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
 }
 
+/* The dark values, written once and applied from two places below. */
 @media (prefers-color-scheme: dark) {
-  :root {
+  /* The system's preference, but only while the user has not chosen otherwise. Without the
+     :not(), a user who picked light on a dark desktop would get dark anyway. */
+  :root:not([data-theme="light"]) {
     --ground: #1c1c1c;
     --ink: #ececec;
     --muted: #a0a0a0;
@@ -23,6 +26,29 @@
     --error-ground: #3a1a16;
     --error-ink: #f5a99c;
   }
+}
+
+/* An explicit choice, which must also win on a light desktop -- so it cannot live inside the
+   media query above. */
+:root[data-theme="dark"] {
+  --ground: #1c1c1c;
+  --ink: #ececec;
+  --muted: #a0a0a0;
+  --rule: #3a3a3a;
+  --warning-ground: #3a2d10;
+  --warning-ink: #f0cd8a;
+  --error-ground: #3a1a16;
+  --error-ink: #f5a99c;
+}
+
+.theme-toggle {
+  background: none;
+  border: 1px solid var(--rule);
+  border-radius: 0.25rem;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  padding: 0.1rem 0.5rem;
 }
 
 body {

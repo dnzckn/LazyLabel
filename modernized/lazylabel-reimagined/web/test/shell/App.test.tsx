@@ -138,3 +138,41 @@ describe("the application shell", () => {
     expect(screen.getByText("merge_segments")).toBeTruthy();
   });
 });
+
+describe("the theme", () => {
+  // The document outlives cleanup(), so a theme left behind would leak into the next test.
+  afterEach(() => {
+    delete document.documentElement.dataset["theme"];
+  });
+
+  it("applies the stored preference to the document", async () => {
+    mount({});
+
+    // Waited for rather than asserted straight away: the attribute is absent BEFORE settings load
+    // too, so a bare assertion here would pass on the state this test exists to distinguish from.
+    await waitFor(() => expect(document.documentElement.dataset["theme"]).toBe("dark"));
+  });
+
+  it("falls back to the system when settings could not be read", async () => {
+    // The case the design turns on: honouring the default here would hand someone a dark app on a
+    // light desktop with no way out, because the toggle writes to the store that is down.
+    mount({ getSettings: async () => { throw new Error("the database is locked"); } });
+
+    // Wait for the app to KNOW settings failed, so "no attribute" means the fallback rather than
+    // "settings have not loaded yet" -- which looks identical.
+    await waitFor(() => expect(screen.getByText(/Settings are unavailable/)).toBeTruthy());
+    expect(document.documentElement.dataset["theme"]).toBeUndefined();
+  });
+
+  it("writes the new preference when toggled, rather than only changing the screen", async () => {
+    // A theme that resets on reload is a theme the user has to set every session.
+    const saved: unknown[] = [];
+    mount({ putSettings: async (settings: unknown) => { saved.push(settings); return settings as never; } });
+    await waitFor(() => expect(document.documentElement.dataset["theme"]).toBe("dark"));
+
+    screen.getByRole("button", { name: /Switch to light theme/ }).click();
+
+    await waitFor(() => expect(saved).toHaveLength(1));
+    expect((saved[0] as { values: Record<string, unknown> }).values["dark_mode"]).toBe(false);
+  });
+});

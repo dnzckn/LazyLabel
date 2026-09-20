@@ -36,11 +36,34 @@ export interface StatusBarProps {
   readonly image: ImageState | null;
   /** Null while health is still being fetched, or when the API could not be reached at all. */
   readonly health: Health | null;
+  /**
+   * What pressing the toggle would switch to, and how to do it. Omitted where there is nothing to
+   * change.
+   *
+   * The TARGET rather than the current theme, because "system" has no answer to "what does this
+   * button do" without knowing the operating system's preference — and that belongs with the
+   * theme logic, not in a status bar.
+   */
+  readonly theme?: { readonly switchesTo: "dark" | "light"; readonly onToggle: () => void };
 }
 
-export function StatusBar({ image, health }: StatusBarProps): ReactNode {
+export function StatusBar({ image, health, theme }: StatusBarProps): ReactNode {
   return (
     <footer className="status-bar" aria-label="Status">
+      {/* Far left, where legacy puts it. */}
+      {theme !== undefined && (
+        <button
+          type="button"
+          className="theme-toggle"
+          onClick={theme.onToggle}
+          // The label says what pressing it DOES, not what is currently showing. "Dark mode" on a
+          // button is ambiguous about which way it goes, and a screen-reader user cannot glance.
+          aria-label={`Switch to ${theme.switchesTo} theme`}
+        >
+          {theme.switchesTo === "light" ? "☀" : "☾"}
+        </button>
+      )}
+
       <span className="status-bar__image">{summarize(image)}</span>
 
       <span className="status-bar__spacer" />
