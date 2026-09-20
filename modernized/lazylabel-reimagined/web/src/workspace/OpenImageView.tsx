@@ -469,6 +469,23 @@ function ConvertButton({
     | { readonly status: "failed"; readonly reason: string }
   >({ status: "idle" });
 
+  /*
+   * THE REVISION OF THE FILE THESE ANNOTATIONS CAME FROM, so the write can be CONDITIONAL.
+   *
+   * The API has supported conditional writes since Phase 2 and the client never sent one, so every
+   * save was an unconditional overwrite. That matters most in exactly the arrangement the cutover
+   * plan describes: the desktop app stays installed and reads the same folder, so a user can have
+   * both open on one image. Without this, whichever writes last wins and the other's work is gone
+   * with nothing said.
+   *
+   * ONLY THE SOURCE FORMAT IS PROTECTED, and that is honest rather than lazy: it is the one file
+   * whose contents the user is editing, and it is the only revision the client has. Claiming to
+   * guard the other six would need revisions the load never returned.
+   */
+  const [revisions, setRevisions] = useState<Readonly<Record<string, string | null>>>(() =>
+    annotations.sourceFormat === "" ? {} : { [annotations.sourceFormat]: annotations.revision },
+  );
+
   const formats = normalizeExportFormats(settings.values["export_formats"]).formats;
 
   const convert = useCallback(() => {
@@ -487,6 +504,9 @@ function ConvertButton({
         // since Phase 2 and the client never sent it, so the two settings did NOTHING -- a user
         // whose imported legacy settings turned pixel priority on got masks resolved the other
         // way, and the difference is invisible until an overlap actually occurs.
+        // Empty for an image that had no annotation file: there is nothing to be out of date
+        // with, and demanding absence would refuse a second save of a file this app just wrote.
+        expectedRevisions: revisions,
         pixelPriority: {
           enabled: settings.values["pixel_priority_enabled"] === true,
           // Ascending unless explicitly false, which matches the server's own default: the lowest
@@ -494,11 +514,41 @@ function ConvertButton({
           ascending: settings.values["pixel_priority_ascending"] !== false,
         },
       })
-      .then((result) => setState({ status: "saved", result }))
-      .catch((cause: unknown) =>
-        setState({ status: "failed", reason: cause instanceof Error ? cause.message : String(cause) }),
-      );
-  }, [classAliases, client, crop, formats, image.key, projectId, segments, settings.values, size]);
+      .then((result) => {
+        setState({ status: "saved", result });
+        // The revisions this write produced become the ones the NEXT write is conditional on.
+        // Without this, saving twice would compare against the load's revision the second time and
+        // conflict with the app's own previous save.
+        setRevisions((current) => ({ ...current, ...result.written }));
+      })
+      .catch((cause: unknown) => {
+        const reason = cause instanceof Error ? cause.message : String(cause);
+        const conflict =
+          typeof cause === "object" && cause !== null && "code" in cause
+            && (cause as { code?: unknown }).code === "revision_conflict";
+        setState({
+          status: "failed",
+          // Named for what it is. "Conflict" alone sends someone looking for a bug; the actual
+          // situation is that the file changed under them, and the recovery is to reload.
+          reason: conflict
+            ? `${reason} Something else wrote this file since it was loaded — the desktop app, `
+              + "another tab, or a script. Nothing was written. Reload the image to see what it "
+              + "says now."
+            : reason,
+        });
+      });
+  }, [
+    classAliases,
+    client,
+    crop,
+    formats,
+    image.key,
+    projectId,
+    revisions,
+    segments,
+    settings.values,
+    size,
+  ]);
 
   return (
     <div>

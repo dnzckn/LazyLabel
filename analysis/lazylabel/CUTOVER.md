@@ -17,6 +17,13 @@ That is the whole of the package decision, and it is deliberately the least disr
 user who does not want to move does not have to, and a user who tries the web app and dislikes it
 has the desktop one still working on the same folder of files.
 
+**Both apps can be open on the same image, and the web one now notices.** Saves are conditional on
+the revision of the file the annotations were read from, so if the desktop app — or another tab, or
+a script — wrote it in between, the web app refuses, writes nothing, and says so. Before that it
+overwrote silently, which is the failure this whole arrangement would otherwise invite. Only the
+file being edited is guarded; the other six sidecars are still written unconditionally, because the
+load returns one revision and claiming to guard the rest would be a claim the client cannot make.
+
 **The two can read each other's work.** That is not a coincidence, it is decision 5 — the
 annotation sidecars beside your images are the source of truth in both. The web app writes the
 same seven formats byte-for-byte identically to legacy (Phase 1, proven against goldens legacy

@@ -154,6 +154,11 @@ describe("C12: converting a dataset in the browser", () => {
       imageSize: [1080, 1920],
       formats: ["NPZ", "YOLO_DETECTION"],
       cropCoords: null,
+      // The revision of the file these annotations came FROM, so the write is conditional on it.
+      // Every save was an unconditional overwrite until this shipped, which matters most in the
+      // arrangement the cutover plan describes: the desktop app stays installed and reads the same
+      // folder, so whichever wrote last used to win silently.
+      expectedRevisions: { NPZ: "r1" },
       // RULE-012, and it is sent EXPLICITLY for the same reason the crop is: the server has a
       // default, and a field the client omits is a decision the client has silently handed over.
       // Both settings ship off, which matches the server's own default -- but the point is that

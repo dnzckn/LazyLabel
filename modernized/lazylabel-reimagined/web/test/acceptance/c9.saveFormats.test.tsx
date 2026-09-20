@@ -16,7 +16,8 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import { defaultSettings } from "@lazylabel/settings-schema";
 
-import { chooseTool, drawTriangle, lastSave, openImage, writeButton } from "./harness.jsx";
+import { ApiError } from "../../src/api/client.js";
+import { chooseTool, drawTriangle, lastSave, mount, openImage, writeButton } from "./harness.jsx";
 
 afterEach(cleanup);
 
@@ -93,3 +94,41 @@ describe("C9: reporting what happened", () => {
     expect(await screen.findByText(/a\.xml/)).toBeTruthy();
   });
 });
+
+describe("C9: a file that changed underneath", () => {
+  it("says what happened and that NOTHING was written", async () => {
+    /*
+     * The case the cutover plan makes likely rather than exotic: the desktop app stays installed
+     * and reads the same folder, so a user can have both open on one image. Before saves became
+     * conditional, whichever wrote last won and the other's work was gone with nothing said.
+     *
+     * "Conflict" on its own sends someone looking for a bug. What they need is that the file moved
+     * under them, that their work is still on screen, and what to do next.
+     */
+    const { saveAnnotations } = mount();
+    // REJECTED, not thrown synchronously: `saveAnnotations` is async, so the real client always
+    // hands back a promise and the component's `.catch` is what sees a 409.
+    (saveAnnotations as unknown as { mockRejectedValue: (v: unknown) => void }).mockRejectedValue(
+      new ApiError(409, "revision_conflict", "frames/a.npz changed since it was read."),
+    );
+
+    await openImageWithThatClient();
+    chooseTool("Polygon");
+    drawTriangle(10, 10);
+
+    fireEvent.click(writeButton());
+
+    // By TEXT, not by role: jsdom has no 2D canvas, so the canvas reports its own failure as an
+    // alert too, and `getByRole("alert")` would find whichever came first.
+    const shown = await screen.findByText(/Nothing was written/);
+    expect(shown.textContent).toMatch(/desktop app, another tab, or a script/);
+    expect(shown.textContent).toMatch(/Reload the image/);
+  });
+});
+
+/** The harness mounts and opens in one step; this reuses the mount already made above. */
+async function openImageWithThatClient(): Promise<void> {
+  await waitFor(() => expect(screen.getByRole("button", { name: "a.png" })).toBeTruthy());
+  fireEvent.click(screen.getByRole("button", { name: "a.png" }));
+  await waitFor(() => expect(screen.getByLabelText("Status").textContent).toMatch(/a\.png/));
+}
