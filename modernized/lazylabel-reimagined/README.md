@@ -105,10 +105,9 @@ it was written on — and its README says so first and names what to check.
 
 ## What works today
 
-Twelve of the fourteen capabilities are built, each with an acceptance test named for it. The two
-that are not are **C11**, propagation, and **C14**, a linked operation — both Phase 6. The split
-view now holds two open images and both panes are editable; what is missing is one action applying
-to both at once.
+Thirteen of the fourteen capabilities are built, each with an acceptance test named for it. The one
+that is not is **C11**, propagating an annotation along a sequence, which needs the inference
+service and a recorded sequence to be proven against.
 
 Every package's `capabilities.ts` lists the rest with the phase that builds it and what is missing,
 and a guard test fails if those tables disagree with the test suites. That guard is worth knowing

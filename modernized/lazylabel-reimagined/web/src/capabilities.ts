@@ -104,14 +104,12 @@ export const CAPABILITIES: readonly Capability[] = [
     id: "C14",
     summary: "Compare two images side by side and annotate both together",
     builtIn: "P6, per decision 8",
-    webStatus: "pending",
-    webPhase: "P6",
-    missing:
-      "a LINKED operation -- one action applying to both images at the same pixel, as one undo "
-      + "entry. Both panes are editable now and each side holds its own segments, crop and undo, "
-      + "but every action still goes to one side: the store, the comparison view and the "
-      + "linked-operation rules are built, and what is left is the call path that writes both "
-      + "sides and records one inverse",
+    webStatus: "built",
+    // Built means both halves: two images compared with their own annotations, classes, crop and
+    // undo, AND one annotation drawn once landing in both -- same pixel, same class NAME with each
+    // image keeping its own id, one undo entry. What is NOT linked is deliberate and recorded in
+    // `split/SplitView.tsx`: the two sides SAVE separately, and a linked EDIT or DELETE is not
+    // built. Adding is the capability; the rest are refinements with their own slice.
   },
 ];
 

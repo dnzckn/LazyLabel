@@ -5,4 +5,4 @@
  * tests twice, which the API package learned the hard way.
  */
 
-export const PLACEHELD = ["C11", "C14"] as const;
+export const PLACEHELD = ["C11"] as const;

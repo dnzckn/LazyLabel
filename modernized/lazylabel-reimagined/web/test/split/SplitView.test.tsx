@@ -51,7 +51,7 @@ function annotations(count: number): AnnotationsResult {
 
 /** Opens the LEFT image the way the dataset browser does, and can draw into whichever side is active. */
 function Opener(): React.ReactNode {
-  const { openImage, addSegment, setProcessing, processing } = useWorkspace();
+  const { openImage, addSegment, setProcessing, processing, history } = useWorkspace();
   return (
     <>
       {FOLDER.map((entry) => (
@@ -64,6 +64,21 @@ function Opener(): React.ReactNode {
         onClick={() => addSegment({ type: "Polygon", classId: 0, vertices: [[1, 1]] } as never)}
       >
         draw
+      </button>
+      <button type="button" onClick={() => history.undo()}>
+        undo
+      </button>
+      <button
+        type="button"
+        onClick={() =>
+          addSegment({
+            type: "AI",
+            classId: 0,
+            mask: { width: 100, height: 50, data: "m" },
+          } as never)
+        }
+      >
+        draw mask
       </button>
       <button
         type="button"
@@ -287,15 +302,106 @@ describe("which side the tools act on", () => {
   });
 });
 
-describe("what is not built", () => {
-  it("says a linked operation is not built, and what one would be", async () => {
-    // The claim stays where the code is. A view that implied one action applied to both would be
-    // worse than one that says it does not: the user would find out by saving.
+describe("saying which of the two you are getting", () => {
+  it("says the sides are independent while unlinked", async () => {
     mount();
     await openLeft();
     await pairWith("right.png");
 
-    expect(screen.getByText(/is not built yet/)).toBeTruthy();
-    expect(screen.getByText(/each side saves separately/)).toBeTruthy();
+    expect(screen.getByText(/^Unlinked:/)).toBeTruthy();
+    expect(screen.getByText(/Tick Linked to draw into both at once/)).toBeTruthy();
+  });
+
+  it("says what linking does, and what it still does not, once linked", async () => {
+    // The claim stays where the code is. Adding is linked; saving is not, and an EDIT or a DELETE
+    // is not -- a view that implied otherwise would be found out at export.
+    mount();
+    await openLeft();
+    await pairWith("right.png");
+    fireEvent.click(screen.getByLabelText("Link the two images"));
+
+    expect(screen.getByText(/^Linked:/)).toBeTruthy();
+    expect(screen.getByText(/Each side still SAVES separately/)).toBeTruthy();
+  });
+});
+
+describe("drawing into both at once", () => {
+  /** Turn linking on for a settled pair, then draw. */
+  async function linkedPair(second = "right.png"): Promise<void> {
+    await openLeft();
+    await pairWith(second);
+    await waitFor(() => expect(canvases().length).toBe(2));
+    fireEvent.click(screen.getByLabelText("Link the two images"));
+  }
+
+  it("is OFF until asked for, so a stroke cannot reach an image by surprise", async () => {
+    mount({ counts: { "frames/left.png": 1, "frames/right.png": 1 } });
+    await openLeft();
+    await pairWith("right.png");
+    await waitFor(() => expect(canvases()).toEqual(["1 annotations", "1 annotations"]));
+
+    fireEvent.click(screen.getByText("draw"));
+
+    await waitFor(() => expect(canvases()).toEqual(["2 annotations", "1 annotations"]));
+    expect((screen.getByLabelText("Link the two images") as HTMLInputElement).checked).toBe(false);
+  });
+
+  it("puts one drawn annotation into BOTH images", async () => {
+    mount({ counts: { "frames/left.png": 1, "frames/right.png": 1 } });
+    await linkedPair();
+
+    fireEvent.click(screen.getByText("draw"));
+
+    await waitFor(() => expect(canvases()).toEqual(["2 annotations", "2 annotations"]));
+    expect(panes()).toEqual([
+      "left.png — editing (unsaved)",
+      "right.png (unsaved)",
+    ]);
+  });
+
+  it("takes both back with ONE undo, because the user performed one action", async () => {
+    mount({ counts: { "frames/left.png": 1, "frames/right.png": 1 } });
+    await linkedPair();
+    fireEvent.click(screen.getByText("draw"));
+    await waitFor(() => expect(canvases()).toEqual(["2 annotations", "2 annotations"]));
+
+    fireEvent.click(screen.getByText("undo"));
+
+    await waitFor(() => expect(canvases()).toEqual(["1 annotations", "1 annotations"]));
+  });
+
+  it("says which class the other image used", async () => {
+    mount({ counts: { "frames/left.png": 1, "frames/right.png": 1 } });
+    await linkedPair();
+
+    fireEvent.click(screen.getByText("draw"));
+
+    await waitFor(() => expect(screen.getByText(/Added to both images/)).toBeTruthy());
+  });
+
+  it("refuses the other image rather than moving the shape, and says so", async () => {
+    // third.png is narrower. The drawn triangle sits at x=1 so it FITS; the point of this test is
+    // the mask case, which cannot be mirrored between images of different sizes at all.
+    mount();
+    await openLeft();
+    await pairWith("third.png");
+    await waitFor(() => expect(canvases().length).toBe(2));
+    fireEvent.click(screen.getByLabelText("Link the two images"));
+
+    fireEvent.click(screen.getByText("draw mask"));
+
+    await waitFor(() => expect(screen.getByText(/Added to this image only/)).toBeTruthy());
+    // The active side still got it: a refusal is about the OTHER image, not about the stroke.
+    await waitFor(() => expect(canvases()).toEqual(["1 annotations", "0 annotations"]));
+  });
+
+  it("does nothing different when there is no second image", async () => {
+    mount();
+    await openLeft();
+
+    fireEvent.click(screen.getByText("draw"));
+
+    await waitFor(() => expect(canvases()).toEqual(["1 annotations"]));
+    expect(screen.queryByText(/Added to both images/)).toBeNull();
   });
 });

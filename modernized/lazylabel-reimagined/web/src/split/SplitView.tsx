@@ -17,9 +17,21 @@
  * image would put two controls on one question and a second image-loading path beside the store's.
  * Comparing two images you have not opened now costs one extra click: open one, pick the other.
  *
- * WHAT IT STILL DOES NOT DO. A linked operation — one action applying to both images at once, as
- * one undo entry — is not built. Each side is edited on its own. The note at the bottom says which
- * of the two you are getting rather than implying the other.
+ * LINKED, one annotation drawn once lands in BOTH at the same pixel, as ONE undo entry, with the
+ * two images agreeing on the class NAME while each keeps its own id for it. The decision lives in
+ * the store's `addSegment` rather than here, which is why it cost so little: every tool, the AI
+ * prompt and the hotkeys already reach the store through that one function, so none of them has to
+ * know a pair exists. This panel owns the switch and shows what the last one did — including the
+ * refusals, which is the part worth surfacing: a shape that falls outside the other image is
+ * refused there rather than moved, and the user is looking at the first image when they draw.
+ *
+ * It is OFF by default, reversing this view's first "starts linked, as legacy does". Legacy's
+ * default does not bind: decision 8 rebuilt multi-view from the rules rather than porting a
+ * half-migrated feature, and an annotation appearing in an image the user was not looking at is
+ * precisely what decision 7 says must follow an explicit act.
+ *
+ * WHAT IT STILL DOES NOT DO: the two sides SAVE separately, and a linked EDIT or DELETE is not
+ * built — only adding. The note at the bottom says which of the two you are getting.
  *
  * TWO VIEWERS, not four. Legacy has a four-view setting and only viewers 0 and 1 exist
  * (RULE-092's edge cases); the setting is a control that does nothing, and it is not carried over.
@@ -52,7 +64,8 @@ export interface SplitViewProps {
 }
 
 export function SplitView({ images, pixelsUrl }: SplitViewProps): ReactNode {
-  const { sides, activeSide, setActiveSide, openImageOn, closeSide } = useWorkspace();
+  const { sides, activeSide, setActiveSide, openImageOn, closeSide, linked, setLinked, linkReport } =
+    useWorkspace();
   const [left, right] = sides;
 
   const note = useMemo(() => {
@@ -111,6 +124,18 @@ export function SplitView({ images, pixelsUrl }: SplitViewProps): ReactNode {
         </label>
 
         {right.open !== null && (
+          <label className="split__link">
+            <input
+              type="checkbox"
+              checked={linked}
+              aria-label="Link the two images"
+              onChange={(event) => setLinked(event.target.checked)}
+            />{" "}
+            Linked
+          </label>
+        )}
+
+        {right.open !== null && (
           <fieldset className="split__link">
             {/* Which side everything else acts on. A radio group rather than a pair of toggles,
                 because the sides are exclusive and that says so to a screen reader and to the
@@ -149,6 +174,23 @@ export function SplitView({ images, pixelsUrl }: SplitViewProps): ReactNode {
         </p>
       )}
 
+      {/* What the last linked action actually did. Beside the panes rather than in the page's
+          notification list, because a refusal is about the pair the user is looking at. */}
+      {linkReport !== null && linkReport.kind === "refused" && (
+        <p role="alert" className="banner banner--warning">
+          Added to this image only: {linkReport.reason}
+        </p>
+      )}
+      {linkReport !== null && linkReport.kind === "linked" && (
+        <p role="status" className="panel__missing">
+          Added to both images
+          {linkReport.allocated
+            ? `, as a new class ${linkReport.classId} in ${linkReport.image}`
+            : `, as class ${linkReport.classId} in ${linkReport.image}`}
+          .
+        </p>
+      )}
+
       <div className="split__panes">
         {([0, 1] as const).map((side) =>
           sides[side].open === null ? null : (
@@ -170,10 +212,14 @@ export function SplitView({ images, pixelsUrl }: SplitViewProps): ReactNode {
       <p className="panel__missing">
         {right.open === null
           ? "Pick a second image to pair with this one."
-          : "Each side is edited on its own: the tools, the panels and undo all follow the side "
-            + "chosen above, and each side saves separately. A LINKED operation — one action "
-            + "applying to both images at the same pixel, as one undo entry, with both naming the "
-            + "object the same class while each keeps its own id for it — is not built yet."}
+          : linked
+            ? "Linked: one annotation drawn in either image lands in BOTH, at the same pixel and "
+              + "under the same class NAME — each image keeping its own id for it, which is how "
+              + "per-image class ids work. One press of undo takes back both. A shape that falls "
+              + "outside the other image is refused there rather than moved, and said so above. "
+              + "Each side still SAVES separately."
+            : "Unlinked: the tools, the panels and undo all follow the side chosen above, and "
+              + "each side saves separately. Tick Linked to draw into both at once."}
       </p>
     </div>
   );

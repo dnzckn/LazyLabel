@@ -43,6 +43,8 @@ import { provenanceFromLoad, type ImageState } from "./saveState.js";
 import { toggle } from "../tools/selection.js";
 import type { Crop } from "../tools/crop.js";
 import { NO_PROCESSING, type ImageProcessing } from "./processing.js";
+import { linkedAdd, type LinkedAdd } from "../split/linkedAdd.js";
+import type { ImageSize } from "../split/linked.js";
 
 /** Every tool the workspace offers. */
 export type Tool = "none" | "select" | "polygon" | "box" | "circle" | "ai";
@@ -124,9 +126,33 @@ export function sideScope(side: SideIndex): string {
   return `side:${side}`;
 }
 
+/**
+ * What the last linked-capable action did, for the split view to show.
+ *
+ * Held here rather than pushed to the notification system on purpose. A refusal is about the pair
+ * the user is looking at -- "that shape does not fit the other image" -- and belongs beside the
+ * two panes, not in a list at the top of the page competing with save failures.
+ */
+export type LinkReport =
+  | { readonly kind: "linked"; readonly classId: number; readonly allocated: boolean; readonly image: string }
+  | { readonly kind: "refused"; readonly reason: string };
+
 export interface WorkspaceContextValue {
   /** Both slots, for the split view. Everything below resolves from `sides[activeSide]`. */
   readonly sides: readonly [SideState, SideState];
+  /**
+   * Whether one annotation drawn in either image should land in BOTH — C14, RULE-092.
+   *
+   * OFF by default, which reverses the first split view's "starts linked, as legacy does".
+   * Legacy's default does not bind here: decision 8 rebuilt multi-view from the rules rather than
+   * porting a half-migrated feature, and this app's rule is that nothing reaches a file the user
+   * did not act on. An annotation appearing in an image they were not looking at is exactly that.
+   * Turning it on is one click, in the panel that made the pair.
+   */
+  readonly linked: boolean;
+  readonly setLinked: (linked: boolean) => void;
+  /** What the last linked-capable action did, or null when nothing has been tried. */
+  readonly linkReport: LinkReport | null;
   /** Which side the single-image components act on. */
   readonly activeSide: SideIndex;
   readonly setActiveSide: (side: SideIndex) => void;
@@ -238,6 +264,8 @@ export function WorkspaceProvider({
   const [activeSide, setActiveSide] = useState<SideIndex>(0);
   const [activeTool, setActiveTool] = useState<Tool>("none");
   const [activeClassId, setActiveClassId] = useState<number | null>(null);
+  const [linked, setLinked] = useState(false);
+  const [linkReport, setLinkReport] = useState<LinkReport | null>(null);
 
   // One History for the session, scoped per side: RULE-052 scopes undo to the open image, so an
   // undo after switching must not reach back into the previous one's edits. With two sides that
@@ -333,23 +361,70 @@ export function WorkspaceProvider({
       // Recorded OUTSIDE the state updater. React may invoke an updater more than once for one
       // call -- StrictMode does it deliberately -- and recording inside would push two history
       // entries for one drawn polygon, so the first undo would appear to do nothing.
-      const index = segments.length;
       const at = activeSide;
+      const other = (at === 0 ? 1 : 0) as SideIndex;
+      const source = sides[at];
+      const target = sides[other];
+      const index = source.segments.length;
 
-      const insert = () =>
+      /*
+       * THE LINKED HALF -- C14, RULE-092. One annotation drawn once, landing in both images.
+       *
+       * Decided here rather than in the drawing tools, and that is the whole reason this is cheap:
+       * every tool, the AI prompt and the hotkeys all reach the store through this one function,
+       * so none of them has to know a pair exists. `linkedAdd` holds the rules and the refusals.
+       */
+      const sourceSize = sizeOf(source);
+      const targetSize = sizeOf(target);
+      const plan =
+        linked && target.open !== null && sourceSize !== null && targetSize !== null
+          ? linkedAdd(
+              { segment, aliases: source.classAliases, size: sourceSize },
+              { segments: target.segments, aliases: target.classAliases, size: targetSize },
+            )
+          : null;
+      const mirrored = plan !== null && plan.kind === "linked" ? plan : null;
+      const targetIndex = target.segments.length;
+      const targetAliasesBefore = target.classAliases;
+
+      const insert = () => {
         updateSide(at, (current) => ({
           ...current,
           segments: [...current.segments.slice(0, index), segment, ...current.segments.slice(index)],
           dirty: true,
         }));
-      const remove = () =>
+        if (mirrored === null) return;
+        updateSide(other, (current) => ({
+          ...current,
+          segments: [
+            ...current.segments.slice(0, targetIndex),
+            mirrored.segment,
+            ...current.segments.slice(targetIndex),
+          ],
+          classAliases: mirrored.aliases,
+          dirty: true,
+        }));
+      };
+      const remove = () => {
         updateSide(at, (current) => ({
           ...current,
           segments: current.segments.filter((_, i) => i !== index),
           dirty: true,
         }));
+        if (mirrored === null) return;
+        updateSide(other, (current) => ({
+          ...current,
+          segments: current.segments.filter((_, i) => i !== targetIndex),
+          // The alias table as it was, not merely the one name removed: linking may have written
+          // nothing at all, and deleting a name the other image already had would take a class
+          // name away from annotations that were there before this stroke.
+          classAliases: targetAliasesBefore,
+          dirty: true,
+        }));
+      };
 
       insert();
+      setLinkReport(reportFor(plan, mirrored, target.open?.image.name ?? ""));
 
       // Keyed on the index it lands at, which is what legacy records too
       // (`polygon_drawing_manager.py:205-211`). Safe against later edits shifting it because
@@ -358,15 +433,21 @@ export function WorkspaceProvider({
       //
       // The SIDE is captured as a value, not read back when the undo runs. An undo puts the shape
       // back where it was drawn, not wherever the user happens to be looking.
+      //
+      // ONE ENTRY FOR A LINKED PAIR, scoped to both sides. The user performed one action, so one
+      // press of undo takes it back everywhere -- and clearing either side drops the entry,
+      // because half of its inverse would be restoring a shape into an image that has closed.
       history.record({
-        label,
-        bytes: estimateBytes(segment),
-        scope: [sideScope(at)],
+        label: mirrored === null ? label : `${label} (both images)`,
+        // Not doubled for a link: the mirrored segment shares the source's mask by reference, so
+        // the only new bytes are the segment wrapper itself.
+        bytes: estimateBytes(segment) + (mirrored === null ? 0 : 64),
+        scope: mirrored === null ? [sideScope(at)] : [sideScope(at), sideScope(other)],
         undo: remove,
         redo: insert,
       });
     },
-    [activeSide, history, segments.length, updateSide],
+    [activeSide, history, linked, sides, updateSide],
   );
 
   const updateSegment = useCallback(
@@ -535,6 +616,9 @@ export function WorkspaceProvider({
   const value = useMemo(
     () => ({
       sides,
+      linked,
+      setLinked,
+      linkReport,
       activeSide,
       setActiveSide,
       open,
@@ -579,6 +663,8 @@ export function WorkspaceProvider({
       history,
       imageState,
       imageStates,
+      linkReport,
+      linked,
       markSaved,
       markSavedOn,
       open,
@@ -603,6 +689,26 @@ export function useWorkspace(): WorkspaceContextValue {
   const value = useContext(WorkspaceContext);
   if (value === null) throw new Error("useWorkspace needs a WorkspaceProvider above it");
   return value;
+}
+
+/** The pixel size this side has been measured at, or null while it is still loading. */
+function sizeOf(side: SideState): ImageSize | null {
+  const metadata = side.open?.metadata;
+  if (metadata === undefined || metadata === null) return null;
+  return { width: metadata.width, height: metadata.height };
+}
+
+/** Turn what `linkedAdd` decided into what the split view should say about it. */
+function reportFor(
+  plan: LinkedAdd | null,
+  mirrored: Extract<LinkedAdd, { kind: "linked" }> | null,
+  image: string,
+): LinkReport | null {
+  // Not linking at all is not a report. Clearing it here is what stops a refusal from an earlier
+  // pair sitting under a drawing that had nothing to do with it.
+  if (plan === null) return null;
+  if (mirrored === null) return plan as Extract<LinkedAdd, { kind: "refused" }>;
+  return { kind: "linked", classId: mirrored.classId, allocated: mirrored.allocated, image };
 }
 
 /** What the save path and the status bar need to know about one side. */

@@ -55,10 +55,13 @@ something nothing handles is how Ctrl+A silently stops selecting text.
 
 ## What is not built
 
-**Two of the fourteen capabilities**, both Phase 6: **C11**, propagation, and **C14**, a LINKED
-operation. The split view holds two open images and both panes are editable -- each side has its
-own segments, crop, processing and undo, and a radio says which one the tools act on. What is
-missing is one action applying to BOTH at the same pixel, as one undo entry.
+**One of the fourteen capabilities**: **C11**, propagating an annotation along a sequence, which
+needs the inference service and a recorded sequence to be proven against.
+
+Inside the thirteen that are built, two refinements are named rather than implied. A linked pair
+(**C14**) saves each side separately, and a linked EDIT or DELETE is not built -- adding is. And
+**RULE-089**'s Operate On View, which would send the adjusted pixels to the model rather than the
+decoded ones, is a setting nothing reads.
 
 `src/capabilities.ts` lists every capability with its state, `test/acceptance/pending.test.ts`
 holds a tagged placeholder for each unbuilt one, and `coverage.test.ts` fails if those disagree —
