@@ -484,6 +484,15 @@ The common thread, and it turned up **three times** (vertex editing, the adjustm
 and redo): **a rule can be implemented, tested and correct, and the feature can still not exist.**
 Component tests prove the component; only an end-to-end path proves it is reachable.
 
+**Four READMEs had stopped being true as well**, found by reading them. The package one said
+"Phase 2 is complete" with five phases done; the web one said twelve of fourteen capabilities were
+NOT built when twelve are; the API one called itself a scaffold and its wire format provisional;
+the inference one said "SAM 1 and propagation remain" when both are proven — what actually remains
+there is that their HTTP ROUTES answer 501, which is Phase 6's job API rather than Phase 3's work.
+
+Documentation drifts the same way code does and nothing fails when it happens. A file nobody
+updates passes every check it has, because it has none.
+
 **There is already a guard for this and it had gone stale.** `capabilities.ts` says what is built,
 `coverage.test.ts` refuses to let a capability be marked built without an acceptance test named for
 it, and the shell renders the table so a user can see it. The machinery is sound — what failed is
