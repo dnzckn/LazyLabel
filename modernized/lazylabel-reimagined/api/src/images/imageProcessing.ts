@@ -32,15 +32,6 @@ export function rescale(value: number, min: number, max: number, outputMax = MAX
   return Math.trunc(((clipped - min) / (max - min)) * outputMax);
 }
 
-export function rescaleAll(
-  values: Uint8Array | Uint16Array,
-  min: number,
-  max: number,
-  outputMax = MAX_8_BIT,
-): void {
-  if (max <= min) return;
-  for (let i = 0; i < values.length; i += 1) values[i] = rescale(values[i]!, min, max, outputMax);
-}
 
 /**
  * Posterize a channel into bands — RULE-029.
@@ -70,14 +61,6 @@ export function posterize(value: number, markers: readonly number[], maximum = M
   return Math.trunc((band / bands) * maximum);
 }
 
-export function posterizeAll(
-  values: Uint8Array | Uint16Array,
-  markers: readonly number[],
-  maximum = MAX_8_BIT,
-): void {
-  if (markers.length === 0) return;
-  for (let i = 0; i < values.length; i += 1) values[i] = posterize(values[i]!, markers, maximum);
-}
 
 /**
  * The window a contrast stretch would use — RULE-031's first preset.

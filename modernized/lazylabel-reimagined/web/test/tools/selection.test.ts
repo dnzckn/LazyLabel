@@ -11,7 +11,7 @@ import { rasterizeSegment } from "@lazylabel/annotation-formats";
 import { describe, expect, it } from "vitest";
 import type { WireSegment } from "@lazylabel/contracts";
 
-import { afterRemoval, hitTest, toggle } from "../../src/tools/selection.js";
+import { hitTest, toggle } from "../../src/tools/selection.js";
 
 const IMAGE = { width: 60, height: 40 };
 
@@ -154,18 +154,3 @@ describe("toggling a selection", () => {
   });
 });
 
-describe("keeping a selection valid after a removal", () => {
-  it("drops the removed index and shifts the ones after it", () => {
-    // The selection is a list of POSITIONS. Undoing an add removes an entry and everything after
-    // moves down by one; without this, a merge or a delete would act on the wrong shapes.
-    expect(afterRemoval([0, 2, 4], 2)).toEqual([0, 3]);
-  });
-
-  it("leaves earlier indices alone", () => {
-    expect(afterRemoval([0, 1], 5)).toEqual([0, 1]);
-  });
-
-  it("copes with an empty selection", () => {
-    expect(afterRemoval([], 0)).toEqual([]);
-  });
-});

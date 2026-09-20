@@ -13,9 +13,7 @@ import {
   applyLut,
   equalizeLut,
   posterize,
-  posterizeAll,
   rescale,
-  rescaleAll,
   stretchWindow,
 } from "../../src/images/imageProcessing.js";
 
@@ -54,19 +52,7 @@ describe("rescaling", () => {
     expect(rescale(40000, 30000, 50000, MAX_16_BIT)).toBe(32767);
   });
 
-  it("applies across a buffer", () => {
-    const values = new Uint8Array([30, 50, 125, 200, 250]);
-    rescaleAll(values, 50, 200);
 
-    expect([...values]).toEqual([0, 0, 127, 255, 255]);
-  });
-
-  it("leaves a buffer untouched when the handles cross", () => {
-    const values = new Uint8Array([1, 2, 3]);
-    rescaleAll(values, 200, 50);
-
-    expect([...values]).toEqual([1, 2, 3]);
-  });
 });
 
 describe("posterizing", () => {
@@ -111,12 +97,6 @@ describe("posterizing", () => {
     expect(posterize(60000, [20000, 50000], MAX_16_BIT)).toBe(MAX_16_BIT);
   });
 
-  it("applies across a buffer", () => {
-    const values = new Uint8Array([10, 49, 50, 150, 255]);
-    posterizeAll(values, [50, 150]);
-
-    expect([...values]).toEqual([0, 0, 127, 255, 255]);
-  });
 });
 
 describe("the contrast stretch preset", () => {

@@ -39,10 +39,6 @@ export function classColor(classId: number | null): Rgb {
   return hsvToRgb(hue < 0 ? hue + 360 : hue, SATURATION, VALUE);
 }
 
-export function cssColor(classId: number | null, alpha = 1): string {
-  const { r, g, b } = classColor(classId);
-  return alpha === 1 ? `rgb(${r} ${g} ${b})` : `rgb(${r} ${g} ${b} / ${alpha})`;
-}
 
 /**
  * HSV to RGB, on Qt's scales: hue in 0..359, saturation and value in 0..255.

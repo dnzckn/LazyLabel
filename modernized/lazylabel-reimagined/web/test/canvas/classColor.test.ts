@@ -7,7 +7,7 @@
 
 import { describe, expect, it } from "vitest";
 
-import { UNCLASSED, classColor, cssColor, hsvToRgb } from "../../src/canvas/classColor.js";
+import { UNCLASSED, classColor, hsvToRgb } from "../../src/canvas/classColor.js";
 
 /** The hue the rule produces, recovered from the RGB the function returns. */
 function hueOf(rgb: { r: number; g: number; b: number }): number {
@@ -80,13 +80,6 @@ describe("classColor", () => {
     }
   });
 
-  it("renders as CSS, with and without alpha", () => {
-    expect(cssColor(null)).toBe("rgb(128 128 128)");
-    expect(cssColor(null, 0.5)).toBe("rgb(128 128 128 / 0.5)");
-  });
-});
-
-describe("hsvToRgb on Qt's scales", () => {
   it("reads saturation and value as 0..255, not 0..1", () => {
     // The trap: most implementations take 0..1, and treating 220 as 220.0 gives white for
     // everything. Saturation 220 of 255 is strong but not full, so no channel reaches 0.

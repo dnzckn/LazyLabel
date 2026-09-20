@@ -154,8 +154,3 @@ function even(value: number): number {
   return 2 * Math.floor(value / 2);
 }
 
-export function afterRemoval(selected: readonly number[], removed: number): readonly number[] {
-  return selected
-    .filter((index) => index !== removed)
-    .map((index) => (index > removed ? index - 1 : index));
-}
