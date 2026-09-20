@@ -114,11 +114,9 @@ export function App({ client }: { readonly client: ApiClient }): ReactNode {
                 user to press one, and saying where the work stands does not. */}
             <Panel title="Drawing tools">
               <ToolPicker />
-              {/* Named, not mocked: the rest of the drawing tools are still Phase 5 work, and a row
-                  of dead buttons would invite a user to press one. */}
-              <p className="panel__missing">
-                Boxes, circles and vertex editing are still to come.
-              </p>
+              {/* Named, not mocked: vertex editing is still Phase 5 work, and a dead control
+                  would invite a user to press it. */}
+              <p className="panel__missing">Vertex editing is still to come.</p>
             </Panel>
             <Panel
               title="AI tools"
@@ -214,6 +212,8 @@ function ToolPicker(): ReactNode {
   const tools: readonly { readonly value: Tool; readonly label: string }[] = [
     { value: "none", label: "None" },
     { value: "polygon", label: "Polygon" },
+    { value: "box", label: "Box" },
+    { value: "circle", label: "Circle" },
   ];
 
   return (

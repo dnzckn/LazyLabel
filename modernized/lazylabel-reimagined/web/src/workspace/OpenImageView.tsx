@@ -24,6 +24,8 @@ import { AnnotationCanvas } from "../canvas/AnnotationCanvas.jsx";
 import { useSettings } from "../settings/SettingsProvider.jsx";
 import { useWorkspace } from "./WorkspaceProvider.jsx";
 import { PolygonLayer, toWireVertices } from "../canvas/PolygonLayer.jsx";
+import { ShapeLayer } from "../canvas/ShapeLayer.jsx";
+import type { ImagePoint } from "../canvas/coordinates.js";
 import { classForNewSegment } from "./classes.js";
 import { useNotifications } from "../notifications/NotificationProvider.jsx";
 
@@ -76,6 +78,23 @@ function OpenedImage({
   const { notify } = useNotifications();
   const joinThreshold = Number(settings.values["polygon_join_threshold"]);
 
+  // One commit path for every manual tool. Three copies of "work out the class, wrap the vertices,
+  // record it" is three places for them to disagree about which class the shape takes.
+  const commit = useCallback(
+    (type: "Polygon" | "Circle", vertices: readonly ImagePoint[], label: string) => {
+      addSegment(
+        { type, classId: classForNewSegment(segments, activeClassId), vertices: toWireVertices(vertices) },
+        label,
+      );
+    },
+    [activeClassId, addSegment, segments],
+  );
+
+  const refuse = useCallback(
+    (reason: string) => notify({ severity: "warning", message: reason }),
+    [notify],
+  );
+
   return (
     <section>
       <h3>{image.name}</h3>
@@ -117,17 +136,28 @@ function OpenedImage({
                 height={metadata.height}
                 joinThreshold={joinThreshold}
                 classId={classForNewSegment(segments, activeClassId)}
+                onComplete={(vertices) => commit("Polygon", vertices, "Add polygon")}
+                onRefused={refuse}
+              />
+            )}
+
+            {(activeTool === "box" || activeTool === "circle") && (
+              <ShapeLayer
+                kind={activeTool}
+                width={metadata.width}
+                height={metadata.height}
+                classId={classForNewSegment(segments, activeClassId)}
                 onComplete={(vertices) =>
-                  addSegment(
-                    {
-                      type: "Polygon",
-                      classId: classForNewSegment(segments, activeClassId),
-                      vertices: toWireVertices(vertices),
-                    },
-                    "Add polygon",
+                  // A box is stored as a four-corner POLYGON -- nothing downstream knows it was
+                  // drawn as a box. A circle keeps its own type, because its two vertices are a
+                  // centre and a radius point rather than an outline.
+                  commit(
+                    activeTool === "box" ? "Polygon" : "Circle",
+                    vertices,
+                    activeTool === "box" ? "Add box" : "Add circle",
                   )
                 }
-                onRefused={(reason) => notify({ severity: "warning", message: reason })}
+                onRefused={refuse}
               />
             )}
           </div>

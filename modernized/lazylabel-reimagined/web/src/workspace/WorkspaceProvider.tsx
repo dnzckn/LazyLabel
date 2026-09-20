@@ -33,8 +33,8 @@ import type { AnnotationsResult, ApiClient } from "../api/client.js";
 import { History } from "./history.js";
 import { provenanceFromLoad, type ImageState } from "./saveState.js";
 
-/** The drawing tools. Only the polygon exists yet; the rest arrive later in Phase 5. */
-export type Tool = "none" | "polygon";
+/** The manual drawing tools. The AI and editing tools arrive later in Phase 5. */
+export type Tool = "none" | "polygon" | "box" | "circle";
 
 export interface OpenImage {
   readonly image: WireDatasetImage;
@@ -67,7 +67,7 @@ export interface WorkspaceContextValue {
   /** Cleared on a successful save; that is what makes `dirty` mean "differs from the file". */
   readonly markSaved: () => void;
   /**
-   * Which drawing tool is in force. Only the polygon exists yet; the rest arrive later in Phase 5.
+   * Which drawing tool is in force.
    *
    * "none" rather than defaulting to a tool, because a canvas that starts in a drawing mode turns
    * the first click of a session -- often a click to look at something -- into an annotation.

@@ -47,9 +47,10 @@ export const CAPABILITIES: readonly Capability[] = [
     webStatus: "pending",
     webPhase: "P5",
     missing:
-      "boxes, circles and vertex editing. The POLYGON is built: RULE-047's join threshold proven "
-      + "against legacy's own expression over every click offset, Space and Enter to finish, "
-      + "shift to erase, undo a vertex at a time while drawing and the whole shape once it exists",
+      "vertex editing. Drawing is built for all three shapes: RULE-047's join threshold proven "
+      + "against legacy's own expression over every click offset, and RULE-043's minimum sizes, "
+      + "with a box stored as a four-corner polygon and a circle as its centre and a 3 o'clock "
+      + "radius point -- not the point the drag was released on",
   },
   {
     id: "C5",
