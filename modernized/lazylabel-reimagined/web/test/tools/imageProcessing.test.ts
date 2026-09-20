@@ -10,12 +10,15 @@ import { describe, expect, it } from "vitest";
 
 import {
   MAX_16_BIT,
+  applyLut,
+  equalizeLut,
   MIN_MARKER_SPACING,
   markersAreLegal,
   posterize,
   posterizeAll,
   rescale,
   rescaleAll,
+  stretchWindow,
 } from "../../src/tools/imageProcessing.js";
 
 describe("rescaling", () => {
@@ -133,5 +136,98 @@ describe("marker spacing", () => {
   it("accepts a single marker and none at all", () => {
     expect(markersAreLegal([128])).toBe(true);
     expect(markersAreLegal([])).toBe(true);
+  });
+});
+
+describe("the contrast stretch preset", () => {
+  it("sacrifices the tails, which is the point of it", () => {
+    // A gradient from 100 to 149, plus one dead pixel and one hot one. Without the stretch those
+    // two outliers hold the whole range hostage and every real value sits in a fifth of it.
+    const values = new Uint8Array([0, ...Array.from({ length: 98 }, (_, i) => 100 + (i % 50)), 255]);
+
+    const { min, max } = stretchWindow(values, 1);
+
+    expect(min).toBe(100);
+    expect(max).toBe(149);
+  });
+
+  it("counts PIXELS rather than indexing by a fraction of the length", () => {
+    // The question the preset answers is "how many pixels am I willing to sacrifice", so on a
+    // hundred-pixel image 1% has to mean one pixel. Indexing by fraction x (length - 1) rounds
+    // that to none, and the outlier survives.
+    const values = new Uint8Array([0, ...Array(99).fill(200)]);
+
+    expect(stretchWindow(values, 1).min).toBe(200);
+  });
+
+  it("uses the actual data range at 0%", () => {
+    const values = new Uint8Array([10, 50, 250]);
+
+    expect(stretchWindow(values, 0)).toEqual({ min: 10, max: 250 });
+  });
+
+  it("never returns a window the image does not occupy", () => {
+    // Clamped to the data range, so a percentile landing outside it cannot widen the window past
+    // the pixels that are actually there.
+    const values = new Uint8Array([100, 100, 100]);
+
+    expect(stretchWindow(values, 0.4)).toEqual({ min: 100, max: 100 });
+  });
+
+  it("copes with an empty buffer", () => {
+    expect(stretchWindow(new Uint8Array(), 0.4)).toEqual({ min: 0, max: 0 });
+  });
+
+  it("caps the saturation at 50% per tail", () => {
+    // Beyond that the two tails would cross, and legacy's slider stops there.
+    const values = new Uint8Array([0, 50, 100, 150, 200]);
+
+    expect(() => stretchWindow(values, 90)).not.toThrow();
+  });
+});
+
+describe("the equalization preset", () => {
+  it("maps the darkest occupied level to black", () => {
+    // cdfMin is the FIRST NON-ZERO cumulative count, not the count at level zero. Using the latter
+    // leaves the darkest level somewhere above black on any image with no true black pixel -- the
+    // result is washed out, subtly, and only on some images.
+    const values = new Uint8Array([100, 100, 150, 200]);
+    const lut = equalizeLut(values);
+
+    expect(lut[100]).toBe(0);
+  });
+
+  it("maps the brightest occupied level to the maximum", () => {
+    const values = new Uint8Array([100, 150, 200]);
+    const lut = equalizeLut(values);
+
+    expect(lut[200]).toBe(255);
+  });
+
+  it("spreads clustered values apart", () => {
+    // Three tight clusters become three widely separated ones, which is what the preset is for.
+    const values = new Uint8Array([...Array(10).fill(10), ...Array(10).fill(11), ...Array(10).fill(12)]);
+    const lut = equalizeLut(values);
+
+    expect(lut[12]! - lut[10]!).toBeGreaterThan(200);
+  });
+
+  it("does not divide by zero on a single-valued image", () => {
+    // N equals cdfMin here, so legacy's max(1, ...) is what keeps the denominator positive.
+    const lut = equalizeLut(new Uint8Array([42, 42, 42]));
+
+    expect(Number.isFinite(lut[42])).toBe(true);
+  });
+
+  it("returns an empty table for an empty buffer", () => {
+    expect(equalizeLut(new Uint8Array()).every((v) => v === 0)).toBe(true);
+  });
+
+  it("applies across a buffer", () => {
+    const values = new Uint8Array([100, 150, 200]);
+    applyLut(values, equalizeLut(values));
+
+    expect(values[0]).toBe(0);
+    expect(values[2]).toBe(255);
   });
 });
