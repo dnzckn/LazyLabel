@@ -85,8 +85,10 @@ export function AdjustmentsPanel(): ReactNode {
       </button>
 
       <p className="panel__missing">
-        These change what is DISPLAYED. With Operate On View on, they also change what the AI
-        segments.
+        These change what is DISPLAYED, and nothing else. They do not reach the file, and — unlike
+        the desktop app — they do not yet reach the AI either: legacy&rsquo;s Operate On View
+        (RULE-089) would send these adjusted pixels to SAM, and it is not built. The setting exists
+        and nothing reads it, so a model prompted here sees the image as it was decoded.
       </p>
     </>
   );

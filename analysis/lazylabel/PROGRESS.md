@@ -168,7 +168,14 @@ needs is already in one store rather than scattered across managers.
      matching, which loads `sam2_hiera_large_tuned.pt` as *tiny*.
    - **The class table** (C7), where the order decides the exported channel order.
    - **Display adjustments** (C8), including legacy's negative-brightness fold, reproduced because
-     with Operate On View those pixels are what SAM segments.
+     in legacy those pixels are what SAM segments with Operate On View on.
+
+     **Operate On View itself is NOT built**, and the panel now says so rather than repeating
+     legacy's sentence. `operate_on_view` exists in the settings schema and nothing reads it, so a
+     model prompted here sees the image as it was decoded. Building it means the embed request
+     carrying the processing parameters so the inference service encodes the same pixels the user
+     is looking at — a wire change and an API change, not a setting to honour. Claiming otherwise
+     would have a user adjust the contrast to help SAM and wonder why the mask did not move.
 
    - **Image processing** (`tools/imageProcessing.ts`, `tools/adjustments.ts`, `tools/crop.ts`):
      rescale, channel thresholding, the contrast-stretch and equalization presets, the display
