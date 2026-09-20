@@ -7,12 +7,13 @@ Last updated: 2026-09-19.
 
 ## Short answer
 
-**The app cannot be launched on the web yet.** Phases 1–4 have met their exit criteria,
+**The app cannot be launched on the web yet.** Phases 1–4 have met their exit criteria and
+Phase 5 has started,
 Phases 5 and 6 have not started. The pieces that exist are proven against legacy; what is missing
 is most of the user interface and the whole cutover.
 
-By the brief's own weighting of the six phases: **about 42% of the conversion is done** — 6.0,
-5.5, 5.8 and most of 29.4.
+By the brief's own weighting of the six phases: **about 45% of the conversion is done** — 6.0,
+5.5, 5.8, most of 29.4, and the beginning of 27.4.
 
 Phase 4 has met all four of its exit criteria, but calling it finished would overstate things: its
 left and right panels exist as frames and the tools that fill them are Phase 5's by the brief's own
@@ -27,7 +28,7 @@ The remaining 53% is Phases 5 and 6, and it is the part a user actually sees.
 | P2 — architecture and scaffolds | 5.5% | **complete** |
 | P3 — inference service | 5.8% | **complete** |
 | P4 — workspace, dataset browser, persistence | 29.4% | **exit criteria met**; tool-hosting panels wait on P5 |
-| P5 — tools | 27.4% | not started |
+| P5 — tools | 27.4% | entry criteria met; pilot slice under way |
 | P6 — sequence and cutover | 25.9% | not started |
 
 ## What is done, and what proves it
@@ -127,10 +128,23 @@ needs is already in one store rather than scattered across managers.
 
 ## What remains
 
-1. **Phase 5 — tools** (27.4%). The largest single block of user-facing behaviour: the drawing
-   tools, the AI tools, segment and class editing, and the image adjustments. The panels that hold
-   them, the store they read, the undo stack they record into and the save path they end at are all
-   built and waiting.
+1. **Phase 5 — tools** (27.4%). The largest single block of user-facing behaviour. Its three entry
+   criteria are met: Phases 3 and 4 exited, decision 9 is ticked, and all 37 P5 rules are answered
+   (29 needed no decision, 5 were settled earlier, 3 were answered this session).
+
+   Built so far, all pure logic with tests:
+   - **The polygon tool** (`tools/polygon.ts`), Phase 5's pilot slice. RULE-047's close rule,
+     including a differential against legacy's own expression over 5,290 click offsets — the part
+     a rule card cannot pin, since `<=` instead of `<` is right at the card's example and wrong on
+     a ring around it.
+   - **Click-to-image coordinates** (`canvas/coordinates.ts`). Fractional, because rounding at
+     click time changes the exported polygon and breaks the join threshold; a click outside the
+     image is reported rather than clamped onto an edge the user did not click.
+   - **Editable annotations in the store**, which is what makes `dirty` real. Every piece of the
+     save semantics built in Phase 4 depended on a flag that until now nothing could set.
+
+   Still to build: the canvas interaction that connects them, then the box, circle, selection,
+   erase and merge tools, the AI click and box tools, and the image adjustments.
 2. **Phase 6 — sequence and cutover** (25.9%). The timeline, propagation review, the split view,
    the hosted deployment and the actual switch-over.
 
