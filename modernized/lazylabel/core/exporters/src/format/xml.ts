@@ -2,7 +2,7 @@
  * The slice of XML reading Pascal VOC needs, without an XML parser.
  *
  * This is a deliberate choice, not a shortcut. Section 2 of the brief requires that XML parsing
- * reject document type definitions (SEC-09); a scanner that never resolves entities cannot be made
+ * reject document type definitions (SEC-07); a scanner that never resolves entities cannot be made
  * to fetch a URL or expand a billion-laughs bomb, so the class of attack is designed out rather
  * than configured off. Replacing this with a general XML parser reintroduces it.
  *
@@ -94,15 +94,44 @@ export function childText(content: string, tag: string): string | null {
   return children.length === 0 ? null : unescapeXml(children[0]!);
 }
 
+/**
+ * The five standard entities and numeric character references, and nothing else.
+ *
+ * An unknown entity is left as literal text. That is the SEC-07 guarantee in one line: a reader
+ * with no way to look an entity up has no way to be made to expand a bomb or fetch a URL, so the
+ * class of attack is absent rather than switched off.
+ */
 export function unescapeXml(text: string): string {
   return text
     .replace(/&lt;/g, "<")
     .replace(/&gt;/g, ">")
     .replace(/&quot;/g, '"')
     .replace(/&apos;/g, "'")
-    .replace(/&#x([0-9a-fA-F]+);/g, (_, code: string) => String.fromCodePoint(Number.parseInt(code, 16)))
-    .replace(/&#(\d+);/g, (_, code: string) => String.fromCodePoint(Number(code)))
+    .replace(/&#x([0-9a-fA-F]+);/g, (_, code: string) => codePoint(Number.parseInt(code, 16)))
+    .replace(/&#(\d+);/g, (_, code: string) => codePoint(Number(code)))
     .replace(/&amp;/g, "&");
+}
+
+/**
+ * One numeric character reference, refusing what is not a character.
+ *
+ * ElementTree raises `ParseError: reference to invalid character number` for both a value past the
+ * last code point and a lone surrogate, so refusing them is legacy's behaviour rather than a new
+ * rule. It also has to be OUR error: `String.fromCodePoint` throws a bare `RangeError`, and the
+ * load chain decides whether to try the next annotation format on exactly the distinction between
+ * "this file is bad" and "the reader is broken". A built-in error from a malformed file makes that
+ * undecidable.
+ *
+ * Surrogates are refused rather than passed through even though JavaScript tolerates them: a lone
+ * surrogate cannot be encoded as UTF-8, so a class name carrying one could not be written back out
+ * -- which decision 10's byte-identical requirement would fail on, one export later and far from
+ * the file that caused it.
+ */
+function codePoint(value: number): string {
+  if (!Number.isInteger(value) || value < 0 || value > 0x10ffff || (value >= 0xd800 && value <= 0xdfff)) {
+    throw new MalformedXmlError(`reference to invalid character number ${value}`);
+  }
+  return String.fromCodePoint(value);
 }
 
 export function escapeXml(text: string): string {
