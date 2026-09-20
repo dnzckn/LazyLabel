@@ -88,8 +88,14 @@ export const CAPABILITIES: readonly Capability[] = [
     summary: "Save annotations in any of the seven formats, choosing which are written",
     builtIn: "P1, P4",
     webStatus: "pending",
-    webPhase: "P4",
-    missing: "the save interface and dirty tracking; the client call is built",
+    webPhase: "P5",
+    missing:
+      "the edits that make an image dirty, which arrive with the drawing tools in Phase 5, and the "
+      + "prompt those edits make reachable. The save SEMANTICS are built and tested: which formats "
+      + "are written, what a save reports, and the decision in `workspace/saveState.ts` about "
+      + "whether navigating away saves, asks or proceeds -- including that an empty image writes "
+      + "empty files rather than having its annotations deleted, and that an image whose "
+      + "annotations could not be read is never written back over them",
   },
   {
     id: "C10",
