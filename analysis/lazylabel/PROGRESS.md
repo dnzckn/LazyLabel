@@ -8,8 +8,9 @@ Last updated: 2026-09-20.
 ## Short answer
 
 **The app cannot be launched on the web yet.** Phases 1–5 have met their exit criteria. Phase 6
-has not started, and three of its four entry criteria are owner decisions or need the legacy app. The pieces that exist are proven against legacy; what is missing is the
-sequence work and the whole cutover.
+has not started; two of its four entry criteria are owner decisions and a third needs the legacy
+app and the real checkpoints. Everything that exists is proven against legacy — what is missing is
+the sequence work and the cutover itself.
 
 By the brief's own weighting of the six phases: **about 74% of the conversion is done** — 6.0,
 5.5, 5.8, 29.4 and 27.4, all complete. The remaining 25.9% is Phase 6.
@@ -17,8 +18,6 @@ By the brief's own weighting of the six phases: **about 74% of the conversion is
 Phase 4's panels were frames when it exited, because the tools that fill them are Phase 5's by the
 brief's own split. They are filled now: drawing tools, AI tools, adjustments, crop, segments and
 classes are all built and reachable.
-
-The remaining 26% is all of Phase 6.
 
 | Phase | Share | State |
 |---|---|---|
