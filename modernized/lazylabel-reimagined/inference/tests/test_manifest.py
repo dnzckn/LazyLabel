@@ -59,7 +59,7 @@ class TestParseManifest:
         [
             ({"sha256": "abc"}, "64 hex"),
             ({"sha256": "z" * 64}, "64 hex"),
-            ({"family": "sam3"}, "expected sam1 or sam2"),
+            ({"family": "sam3"}, "expected one of embedder, sam1, sam2"),
             ({"size": "enormous"}, "not a sam1 size"),
             ({"size": "large"}, "not a sam1 size"),  # a sam2 size on a sam1 entry
             ({"bytes": 0}, "non-positive"),

@@ -71,6 +71,29 @@ Only SAM 2 can propagate through a sequence. A deployment with SAM 1 checkpoints
 install with no propagation, and `/health` reports `videoCapable: false` rather than failing when a
 propagation is requested.
 
+### Embedder — `torchvision`
+
+Find Archetypes needs a feature extractor rather than a segmenter, and it goes through this same
+manifest rather than a second mechanism, because the guarantee wanted from it is identical: a
+checkpoint that is not listed is not loadable, and one that is listed is hash-checked before it is
+read.
+
+| Name | family | size | Filename | Config | Source |
+|---|---|---|---|---|---|
+| MobileNetV3 small | `embedder` | `mobilenet_v3_small` | `mobilenetv3_small_tv.pth` | built in | `torchvision`'s `MobileNet_V3_Small_Weights.IMAGENET1K_V1`, saved as a state dict |
+
+This is the one checkpoint with no public URL of its own: it is torchvision's ImageNet weights,
+which legacy obtains by calling `mobilenet_v3_small(weights=…)` — **a download at runtime**, on the
+user's first Find Archetypes, with a hand-download instruction as the fallback. That is exactly the
+runtime fetch SEC-03, SEC-05 and SEC-17 rule out, so the port does not do it: `weights=None` builds
+the architecture and reads only the manifest's bytes. Legacy also *deletes* its cached copy and
+re-downloads when the load fails, which would silently discard a file a user deliberately put
+there; the port reports the failure instead.
+
+The weights are 576-dimensional once the classifier head is replaced with an identity. That width
+is asserted at load and again per batch, because a checkpoint of a different width is a different
+model, and the symptom would otherwise be clustering that is merely somewhat worse.
+
 ## SHA-256 values
 
 **Partly met: the two checkpoints the pilot actually runs are verified, the rest are not, and it is
@@ -80,6 +103,7 @@ honest to say which is which rather than fill the table with plausible-looking d
 |---|---|---|
 | `sam2.1_hiera_large.pt` | `2647878d5dfa5098f2f8649825738a9345572bae2d4350a2468587ece47dd318` | **verified**, computed from the copy on the maintainer's machine (898,083,611 bytes) |
 | `sam_vit_h_4b8939.pth` | `a7bf3b02f3ebf1267aba913ff637d9a2d5c33d3173bb679e46d9f338c26f262e` | **verified**, computed from the copy on the maintainer's machine (2,564,550,879 bytes) |
+| `mobilenetv3_small_tv.pth` | `23581817e8e9f35d7c155d24a68d62dadd8bc96e5649304638e1193412baa0e2` | **verified**, computed from the copy on the maintainer's machine (10,305,097 bytes) |
 | every other row above | — | **not yet mirrored** |
 
 A digest may only be entered here after the file has been downloaded from the source URL above and

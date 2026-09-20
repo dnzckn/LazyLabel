@@ -39,8 +39,8 @@ class ModelEntry:
     """One checkpoint, as the manifest declares it."""
 
     name: str
-    family: str  # "sam1" or "sam2"
-    size: str  # sam1: vit_b/vit_l/vit_h; sam2: tiny/small/base_plus/large
+    family: str  # "sam1", "sam2" or "embedder"
+    size: str  # sam1: vit_b/vit_l/vit_h; sam2: tiny/small/base_plus/large; embedder: the net
     filename: str
     sha256: str
     bytes: int
@@ -50,10 +50,21 @@ class ModelEntry:
         """Only SAM 2 can propagate through a sequence; SAM 1 has no video predictor."""
         return self.family == "sam2"
 
+    @property
+    def is_segmenter(self) -> bool:
+        """SAM 1 and SAM 2 answer prompts. An embedder does not; it has no decoder at all."""
+        return self.family in ("sam1", "sam2")
+
 
 _FAMILIES = {
     "sam1": {"vit_b", "vit_l", "vit_h"},
     "sam2": {"tiny", "small", "base_plus", "large"},
+    # Find Archetypes needs a feature extractor, not a segmenter. It goes through the SAME manifest
+    # rather than a second mechanism, because the guarantee we want from it is identical: a
+    # checkpoint that is not listed is not loadable, and one that is listed is hash-checked before
+    # it is read. Legacy instead DOWNLOADED these weights from torchvision on first use, which is
+    # the exact runtime fetch SEC-03, SEC-05 and SEC-17 rule out.
+    "embedder": {"mobilenet_v3_small"},
 }
 
 
@@ -85,7 +96,11 @@ def parse_manifest(text: str) -> list[ModelEntry]:
 
         family = raw["family"]
         if family not in _FAMILIES:
-            raise ManifestError(f"{where} has family {family!r}; expected sam1 or sam2")
+            # Built from _FAMILIES rather than written out, so adding a family cannot leave the
+            # error message describing a world that no longer exists.
+            raise ManifestError(
+                f"{where} has family {family!r}; expected one of {', '.join(sorted(_FAMILIES))}"
+            )
         if raw["size"] not in _FAMILIES[family]:
             raise ManifestError(
                 f"{where} has size {raw['size']!r}, which is not a {family} size "
