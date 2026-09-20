@@ -57,7 +57,9 @@ export function AutoPolygonPanel(): ReactNode {
             aria-label="Polygon resolution"
             onChange={(event) => set("polygon_resolution", Number(event.target.value))}
           />
-          <output>{resolution}</output>
+          {/* A span rather than an <output>, whose implicit `status` role would announce this as a
+              live region beside the app's real status messages. */}
+          <span className="field__value">{resolution}</span>
         </label>
       )}
 

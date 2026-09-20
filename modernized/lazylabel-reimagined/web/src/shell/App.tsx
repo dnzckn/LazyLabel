@@ -26,6 +26,7 @@ import { TimelinePanel } from "../sequence/TimelinePanel.jsx";
 import { CropPanel } from "../workspace/CropPanel.jsx";
 import { ModelPicker } from "../workspace/ModelPicker.jsx";
 import { AutoPolygonPanel } from "../workspace/AutoPolygonPanel.jsx";
+import { FragmentPanel } from "../workspace/FragmentPanel.jsx";
 import { SegmentTable } from "../workspace/SegmentTable.jsx";
 import { processingQuery } from "../workspace/processing.js";
 import { useWorkspace, type Tool } from "../workspace/WorkspaceProvider.jsx";
@@ -170,6 +171,7 @@ export function App({ client }: { readonly client: ApiClient }): ReactNode {
             <Panel title="AI tools">
               <ModelPicker client={client} />
               <AutoPolygonPanel />
+              <FragmentPanel />
             </Panel>
             <Panel title="Image adjustments">
               <AdjustmentsPanel />

@@ -44,7 +44,6 @@ export const UNREACHED: Readonly<Record<string, Reason>> = {
     "RULE-070's edit validation -- 'No editable shapes selected!'. The vertex editor appears when "
       + "one annotation is selected and no tool is active, so nothing asks permission to enter",
   ),
-  toggleThreshold: awaiting("RULE-027's fragment-threshold toggle button; the panel has a slider"),
   canSave: awaiting(
     "the save button is always offered and reports its own refusals; this decides in ADVANCE, "
       + "which is what a disabled button with a reason would need",

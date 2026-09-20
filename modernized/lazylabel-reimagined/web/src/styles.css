@@ -712,3 +712,11 @@ fieldset input {
 .crop-layer__surround rect {
   fill: rgb(0 0 0 / 0.55);
 }
+
+/* A slider's current value beside it. A plain span rather than <output>, whose implicit `status`
+   role would announce every drag as a live region competing with the app's real messages. */
+.field__value {
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
