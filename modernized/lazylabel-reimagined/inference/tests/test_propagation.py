@@ -18,7 +18,9 @@ from lazylabel_inference.propagation import (
     StagedFrame,
     StagedSequence,
     confidence_of,
+    initialise_state,
     propagate,
+    seed_points,
     stage_sequence,
 )
 from lazylabel_inference.prompts import InvalidPromptError, ModelNotLoadedError
@@ -184,3 +186,129 @@ class TestPropagating:
         # not a mask to attribute to whichever image happens to be at that position.
         with pytest.raises(PropagationError, match="outside"):
             list(propagate(predictor, object(), self.staged()))
+
+
+class FakeSeeder:
+    """A video predictor that records how it was called when a prompt is added."""
+
+    def __init__(self, object_ids=(1,), logits=None, raises: Exception | None = None):
+        import torch
+
+        self.object_ids = list(object_ids)
+        self.logits = torch.full((len(self.object_ids), 1, 4, 4), 3.0) if logits is None else logits
+        self.raises = raises
+        self.calls: list[dict] = []
+
+    def add_new_points_or_box(self, **kwargs):
+        if self.raises is not None:
+            raise self.raises
+        self.calls.append(kwargs)
+        return kwargs["frame_idx"], self.object_ids, self.logits
+
+
+@pytest.mark.skipif(pytest.importorskip("torch", reason="needs torch") is None, reason="needs torch")
+class TestSeeding:
+    def staged(self) -> StagedSequence:
+        return StagedSequence(
+            directory=pathlib.Path("."),
+            frames=[StagedFrame(0, "a.png"), StagedFrame(1, "b.png")],
+        )
+
+    def seed(self, predictor, **overrides):
+        import numpy as np
+
+        arguments = {
+            "frame_index": 0,
+            "object_id": 1,
+            "points": np.array([[2, 2]], dtype=np.float32),
+            "labels": np.array([1], dtype=np.int32),
+        }
+        arguments.update(overrides)
+        return seed_points(predictor, object(), self.staged(), **arguments)
+
+    def test_the_seed_names_the_image_rather_than_a_frame_number(self) -> None:
+        # The same resolution `propagate` does. A seed result that said "frame 0" would be the one
+        # place a caller had to map an index back to an image itself.
+        assert self.seed(FakeSeeder()).source == "a.png"
+
+    def test_it_clears_previous_points_as_legacy_does(self) -> None:
+        # Without it, a second click on the same frame ADDS to the first rather than replacing it,
+        # and the user's correction becomes a refinement of the thing they were correcting.
+        predictor = FakeSeeder()
+        self.seed(predictor)
+
+        assert predictor.calls[0]["clear_old_points"] is True
+
+    def test_it_picks_the_logits_belonging_to_the_object_asked_for(self) -> None:
+        import torch
+
+        logits = torch.stack(
+            [torch.full((1, 4, 4), -5.0), torch.full((1, 4, 4), 5.0)]  # object 7 is the second
+        )
+        predictor = FakeSeeder(object_ids=(3, 7), logits=logits)
+
+        result = self.seed(predictor, object_id=7)
+
+        assert result.mask.sum() == 16  # all positive: the second object's logits, not the first's
+        assert result.object_id == 7
+
+    def test_an_empty_selection_scores_zero_not_a_half(self) -> None:
+        """Legacy says 0.5 here and 0.0 for the same condition during propagation.
+
+        0.5 is the worse of the two. A click that selected nothing is not a middling result, and a
+        user shown 0.5 has been told something false about a mask that does not exist.
+        """
+        import torch
+
+        predictor = FakeSeeder(logits=torch.full((1, 1, 4, 4), -3.0))
+
+        assert self.seed(predictor).confidence == 0.0
+
+    def test_a_refused_prompt_is_an_error_not_a_none(self) -> None:
+        predictor = FakeSeeder(raises=RuntimeError("out of memory"))
+
+        with pytest.raises(PropagationError, match="out of memory"):
+            self.seed(predictor)
+
+    def test_refuses_to_seed_without_a_predictor(self) -> None:
+        import numpy as np
+
+        with pytest.raises(ModelNotLoadedError):
+            seed_points(
+                None,
+                None,
+                self.staged(),
+                frame_index=0,
+                object_id=1,
+                points=np.array([[2, 2]], dtype=np.float32),
+                labels=np.array([1], dtype=np.int32),
+            )
+
+
+class TestInitialisingState:
+    def test_refuses_without_a_predictor(self) -> None:
+        with pytest.raises(ModelNotLoadedError):
+            initialise_state(None, StagedSequence(directory=pathlib.Path(".")))
+
+    def test_offloads_video_to_the_cpu_by_default(self) -> None:
+        """The flag SAM 2 defaults to False and legacy sets to True, with a reason on both counts.
+
+        A thousand frames of decoded video in VRAM alongside the weights is how a propagation turns
+        into an out-of-memory error on a hosted GPU. It also moves the fifth decimal of a
+        confidence, so a caller taking the default disagreed with legacy for a reason that had
+        nothing to do with propagation -- which is why this is not left to callers at all.
+        """
+        recorded: dict = {}
+
+        class Recorder:
+            device = "cpu"
+
+            def init_state(self, **kwargs):
+                recorded.update(kwargs)
+                return "state"
+
+        state = initialise_state(Recorder(), StagedSequence(directory=pathlib.Path("staged")))
+
+        assert state == "state"
+        assert recorded["offload_video_to_cpu"] is True
+        assert recorded["offload_state_to_cpu"] is False

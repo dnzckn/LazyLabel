@@ -132,6 +132,125 @@ def confidence_of(logits: Any) -> float:
     return float(torch.sigmoid(positive.mean()).item())
 
 
+def initialise_state(predictor: Any, staged: StagedSequence, *, offload_video_to_cpu: bool = True) -> Any:
+    """Build SAM 2's inference state over a staged sequence, with legacy's memory posture.
+
+    This exists because the flags are a real decision and not a default worth inheriting. SAM 2's
+    own default is `offload_video_to_cpu=False`, which keeps every decoded frame on the GPU; legacy
+    passes True (`sam2_model.py:831-835`) and is right to -- a long sequence is exactly the case
+    this feature is for, and holding a thousand frames of video in VRAM alongside the weights is
+    how a propagation turns into an out-of-memory error on the hosted deployment.
+
+    It also removes a way for callers to drift apart. The flag changes where tensors live, which
+    under bfloat16 autocast changes the fifth decimal of a confidence -- so a caller taking the
+    default here and legacy taking True disagree slightly for a reason that has nothing to do with
+    propagation. Better one place with the reason attached than the same choice made twice.
+
+    `offload_state_to_cpu` stays False, as in legacy: it is the setting that trades speed for memory
+    on the state rather than the frames, and nothing has shown it is needed.
+    """
+    if predictor is None:
+        raise ModelNotLoadedError("no SAM 2 video predictor is initialised")
+
+    import torch
+
+    try:
+        with torch.inference_mode(), torch.autocast(_autocast_device(predictor), dtype=torch.bfloat16):
+            return predictor.init_state(
+                video_path=str(staged.directory),
+                offload_video_to_cpu=offload_video_to_cpu,
+                offload_state_to_cpu=False,
+            )
+    except Exception as cause:
+        raise PropagationError(
+            f"the staged sequence could not be loaded for propagation: {cause}", completed=0
+        ) from cause
+
+
+def seed_points(
+    predictor: Any,
+    state: Any,
+    staged: StagedSequence,
+    *,
+    frame_index: int,
+    object_id: int,
+    points: Any,
+    labels: Any,
+) -> FrameResult:
+    """Put the reference prompt on one frame, under the same autocast the propagation runs in.
+
+    The third thing the port owns rather than leaving to callers, and the one that actually bit.
+    Legacy wraps this call in `inference_mode` and `autocast(bfloat16)` exactly as it wraps
+    propagation (`sam2_model.py:938-956`). A caller that seeds OUTSIDE autocast computes the
+    reference frame's logits in float32, and since every later frame is conditioned on that
+    reference, the whole sequence then differs from legacy by a small, systematic amount -- which is
+    precisely what this port did before, disagreeing in the fifth decimal for a reason that had
+    nothing to do with propagation. It is not a tolerance problem; it is a missing context manager.
+
+    One deliberate difference from legacy: when the prompt selects nothing, legacy reports
+    confidence 0.5 here while reporting 0.0 for the same condition during propagation
+    (`sam2_model.py:905` against `:1037`). 0.5 is the worse of the two -- a click that selected
+    nothing is not a middling result, and a user shown 0.5 has been told something false. This uses
+    `confidence_of`, so both paths say 0.0.
+    """
+    if predictor is None or state is None:
+        raise ModelNotLoadedError("no SAM 2 video predictor is initialised")
+
+    import torch
+
+    try:
+        with torch.inference_mode(), torch.autocast(_autocast_device(predictor), dtype=torch.bfloat16):
+            _frame, object_ids, mask_logits = predictor.add_new_points_or_box(
+                inference_state=state,
+                frame_idx=frame_index,
+                obj_id=object_id,
+                points=points,
+                labels=labels,
+                clear_old_points=True,
+            )
+    except Exception as cause:
+        raise PropagationError(
+            f"the reference prompt was refused on frame {frame_index}: {cause}", completed=0
+        ) from cause
+
+    if mask_logits is None or len(mask_logits) == 0:
+        raise PropagationError(
+            f"the reference prompt on frame {frame_index} produced no mask", completed=0
+        )
+
+    ids = [int(candidate) for candidate in object_ids]
+    position = ids.index(object_id) if object_id in ids else 0
+    logits = mask_logits[position]
+
+    return FrameResult(
+        # Resolved through the map, exactly as in `propagate`. A seed result that named its frame by
+        # number would be the one place in this module where a caller had to do the lookup itself,
+        # which is the lookup the whole design exists to remove.
+        source=staged.source_of(frame_index),
+        object_id=object_id,
+        mask=(logits > 0).cpu().numpy().squeeze().astype("uint8"),
+        confidence=confidence_of(logits),
+    )
+
+
+def _autocast_device(predictor: Any) -> str:
+    """Which device type to autocast for: the one the MODEL is on, not the best one available.
+
+    Legacy reads `str(self.device)`, the device it loaded onto. Asking `torch.cuda.is_available()`
+    instead -- which this did at first -- is a different question with a usually-identical answer,
+    and the case where they differ is a model deliberately loaded on the CPU of a machine that has
+    a GPU. Autocasting cuda around cpu tensors there does nothing useful and is not what legacy
+    does, so the comparison would drift for a reason having nothing to do with propagation.
+    """
+    device = getattr(predictor, "device", None)
+    if device is None:
+        import torch
+
+        return "cuda" if torch.cuda.is_available() else "cpu"
+    # torch.device -> its type ("cuda", "cpu"); a plain string like "cuda:0" -> "cuda".
+    return str(getattr(device, "type", device)).split(":")[0]
+
+
 def propagate(
     predictor: Any,
     state: Any,
@@ -153,7 +272,7 @@ def propagate(
 
     completed = 0
     try:
-        with torch.inference_mode(), torch.autocast("cuda" if torch.cuda.is_available() else "cpu", dtype=torch.bfloat16):
+        with torch.inference_mode(), torch.autocast(_autocast_device(predictor), dtype=torch.bfloat16):
             for frame_index, object_ids, mask_logits in predictor.propagate_in_video(
                 inference_state=state,
                 start_frame_idx=start_frame,

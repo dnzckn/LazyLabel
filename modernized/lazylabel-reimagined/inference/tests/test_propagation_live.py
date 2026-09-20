@@ -59,22 +59,34 @@ def propagated(sequence, tmp_path_factory):
     import torch
     from sam2.build_sam import build_sam2_video_predictor
 
+    from conftest import ensure_sam2_hydra
+
     from lazylabel_inference.backends import SAM2_CONFIGS
-    from lazylabel_inference.propagation import propagate, stage_sequence
+    from lazylabel_inference.propagation import (
+        initialise_state,
+        propagate,
+        seed_points,
+        stage_sequence,
+    )
+
+    # The differential file may have run a legacy Sam2Model first, which clears global Hydra.
+    ensure_sam2_hydra()
 
     staged = stage_sequence(sequence, tmp_path_factory.mktemp("staged"))
 
     predictor = build_sam2_video_predictor(
         SAM2_CONFIGS[SIZE], CHECKPOINT, device="cuda" if torch.cuda.is_available() else "cpu"
     )
-    state = predictor.init_state(video_path=str(staged.directory))
+    state = initialise_state(predictor, staged)
     predictor.reset_state(state)
 
     # One click in the middle of the rectangle on the first frame.
-    predictor.add_new_points_or_box(
-        inference_state=state,
-        frame_idx=0,
-        obj_id=1,
+    seed_points(
+        predictor,
+        state,
+        staged,
+        frame_index=0,
+        object_id=1,
         points=np.array([[30, 50]], dtype=np.float32),
         labels=np.array([1], dtype=np.int32),
     )
