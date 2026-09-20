@@ -922,6 +922,26 @@ cache answered a repeat request from cache and a changed cutoff from a fresh ren
 browser walked into a subfolder; the timeline marked an annotated frame as a gold reference and
 Sort lifted it to the front; and the split view drew both panes and explained a size mismatch.
 
+## A smoke test of the whole app, 2026-09-20
+
+Run against a real API over a real folder after a day of changes, because the thing that has found
+the most defects in this project is opening it.
+
+Everything landed that day was present and worked together: the column switches (default `.npz`
+and `.txt`, turning `_coco.json` back on inserts it in the API's load-priority order rather than
+appending it); all four histogram presets, with Contrast stretch firing `?preset=stretch:0.4`;
+Auto-Convert, the fragment-threshold slider and the annotation-size slider; seven tools including
+Crop; the split view pairing two images of different sizes and saying so.
+
+**No console errors.** The API log's only failures are two 503s for `/inference/models` — no
+inference service is configured, which is a supported deployment and says so. Every other request
+is 200 or 204.
+
+The hotkey summary read "19 of 43" there, with an image open and the sequence panel closed. That
+number MOVES with what is mounted and is meant to: the six frame keys register with the timeline
+panel and the save keys with the opened image, so the table answers "will this do something if I
+press it now" rather than "does a handler exist somewhere".
+
 ## Running the live suites
 
 The differential and live suites are the strongest evidence in the project and they **skip
