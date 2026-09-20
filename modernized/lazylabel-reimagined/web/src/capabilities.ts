@@ -106,7 +106,9 @@ export const CAPABILITIES: readonly Capability[] = [
     builtIn: "P6, per decision 8",
     webStatus: "pending",
     webPhase: "P6",
-    missing: "deliberately unmodelled until Phase 6 entry, per decision 8",
+    missing:
+      "drawing into a linked pair; the comparison view and the linked-operation rules are built, "
+      + "and what is left is a workspace store that holds two open images",
   },
 ];
 

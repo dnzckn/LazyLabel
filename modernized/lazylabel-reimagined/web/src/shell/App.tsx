@@ -21,6 +21,7 @@ import { AdjustmentsPanel } from "../workspace/AdjustmentsPanel.jsx";
 import { ClassTable } from "../workspace/ClassTable.jsx";
 import { HistoryControls } from "../workspace/HistoryControls.jsx";
 import { ChannelPanel } from "../workspace/ChannelPanel.jsx";
+import { SplitView } from "../split/SplitView.jsx";
 import { TimelinePanel } from "../sequence/TimelinePanel.jsx";
 import { CropPanel } from "../workspace/CropPanel.jsx";
 import { ModelPicker } from "../workspace/ModelPicker.jsx";
@@ -42,7 +43,7 @@ export function App({ client }: { readonly client: ApiClient }): ReactNode {
   const [healthError, setHealthError] = useState<string | null>(null);
   const [showHotkeys, setShowHotkeys] = useState(false);
   // From the store, not held here: the status bar is one reader of this among several.
-  const { imageState, openImage } = useWorkspace();
+  const { imageState, openImage, open } = useWorkspace();
   // The folder as the browser listed it, so the sequence timeline builds from the same answer
   // rather than fetching it again. Two fetches is two answers to one question.
   const [listed, setListed] = useState<readonly WireDatasetImage[]>([]);
@@ -168,6 +169,21 @@ export function App({ client }: { readonly client: ApiClient }): ReactNode {
         right={
           <>
             <DatasetBrowser client={client} projectId="default" onListed={setListed} />
+
+            <Panel title="Split view" initiallyCollapsed>
+              <SplitView
+                images={listed}
+                // Sizes arrive with each image's metadata, which the split view does not fetch:
+                // it shows what is known and says "measuring" for what is not. Fetching here
+                // would be a second answer to a question the workspace already asks.
+                sizeOf={(key) =>
+                  open?.image.key === key && open.metadata !== null
+                    ? { width: open.metadata.width, height: open.metadata.height }
+                    : null
+                }
+                pixelsUrl={(key) => client.pixelsUrl("default", key)}
+              />
+            </Panel>
 
             <Panel title="Sequence" initiallyCollapsed>
               <TimelinePanel

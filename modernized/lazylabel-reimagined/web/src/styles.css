@@ -566,3 +566,34 @@ fieldset input {
   margin: 0.4rem 0;
   font-size: 0.85rem;
 }
+
+/* The split view: two images side by side. */
+.split__controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: flex-end;
+  margin-bottom: 0.4rem;
+}
+
+.split__panes {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.4rem;
+}
+
+.split__pane {
+  margin: 0;
+  min-width: 0;
+}
+
+.split__pane canvas,
+.split__pane img {
+  max-width: 100%;
+  height: auto;
+}
+
+.split__pane figcaption {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
