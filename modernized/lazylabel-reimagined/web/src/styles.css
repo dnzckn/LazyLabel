@@ -334,11 +334,37 @@ fieldset input {
   margin: 0;
 }
 
-/* The drawing layer sits over the image, in the same box. */
+/* The drawing layer sits over the image, in the same box.
+ *
+ * "THE SAME BOX" IS LOAD-BEARING AND IT WAS NOT TRUE. Every drawing layer is `inset: 0` of this
+ * element and turns a click into an image pixel by scaling against its OWN rect -- so any
+ * difference between this box and the canvas inside it misplaces every vertex, silently. The
+ * canvas's own `margin: 0.5rem 0 1rem` made this element 24px taller than the picture, which on a
+ * 32x24 image put the y scale out by a factor of two and shifted every point up by 8px. Drawn
+ * shapes came out squashed and offset, in every tool, and nothing failed: the test harness mocks
+ * `getBoundingClientRect` on Element.prototype, so the layer and the canvas report the SAME rect
+ * and the difference cannot exist there.
+ *
+ * The margin moves out here, where it does not change the relationship. A canvas outside a stack
+ * keeps it. */
 .canvas-stack {
   position: relative;
   display: inline-block;
   line-height: 0;
+  margin: 0.5rem 0 1rem;
+  /* The border belongs to the STACK, not to the canvas inside it. An absolutely positioned child
+   * with `inset: 0` is placed against its container's PADDING box, which excludes the border -- so
+   * with the border out here the drawing surface is exactly the picture, and with it on the canvas
+   * the surface was 2px wider and taller than the image it was being scaled against. On a 32-pixel
+   * image that stretched every coordinate by 6%. */
+  border: 1px solid var(--rule);
+  border-radius: 0.25rem;
+}
+
+.canvas-stack .canvas {
+  margin: 0;
+  border: none;
+  border-radius: 0;
 }
 
 .polygon-layer {
