@@ -35,6 +35,14 @@ export interface HistoryOperation {
   readonly label: string;
   /** Roughly how much memory this entry retains. Used to bound the stack. */
   readonly bytes: number;
+  /**
+   * Opaque names for what this entry's undo would touch, so `clear(scope)` can drop it.
+   *
+   * Deliberately opaque: this class knows nothing about images or sides, and giving it a workspace
+   * concept to reason about would be the first of many. An entry that touches two things declares
+   * both, and clearing EITHER drops it -- a linked edit cannot be half undone.
+   */
+  readonly scope?: readonly string[];
   undo(): void;
   redo(): void;
 }
@@ -122,12 +130,41 @@ export class History {
    *
    * Not merely tidiness: an entry undoes an edit to a PARTICULAR image, and replaying one against
    * a different image would corrupt it silently.
+   *
+   * With a `scope`, forget only the entries that declared it. That is the same rule once the
+   * workspace can hold more than one image at a time: loading into one side must forget that
+   * side's edits and leave the other side's alone, which an unscoped clear would destroy.
+   *
+   * AN ENTRY THAT DECLARED NO SCOPE IS DROPPED BY EVERY CLEAR, scoped or not. It has not said what
+   * it touches, so there is no way to prove it safe to keep -- and a surviving entry that turns out
+   * to edit the image just closed is exactly the silent corruption above.
+   *
+   * Dropping from the middle is safe because the entries left behind are independent of the ones
+   * removed: each undoes its own side, so unwinding them in their own order still reaches the
+   * state each expects. That is a property of the caller's scopes, not of this class, which is why
+   * scope is the caller's word rather than an index this class invents.
    */
-  clear(): void {
-    this.undoStack = [];
-    this.redoStack = [];
-    this.retained = 0;
-    this.droppedCount = 0;
+  clear(scope?: string): void {
+    if (scope === undefined) {
+      this.undoStack = [];
+      this.redoStack = [];
+      this.retained = 0;
+      this.droppedCount = 0;
+      this.announce();
+      return;
+    }
+
+    const survives = (operation: HistoryOperation): boolean =>
+      operation.scope !== undefined && !operation.scope.includes(scope);
+
+    this.undoStack = this.undoStack.filter(survives);
+    this.redoStack = this.redoStack.filter(survives);
+    // Recomputed rather than subtracted: a sum maintained across two filters is one arithmetic
+    // slip away from a stack that trims forever or never.
+    this.retained = this.undoStack.reduce((total, operation) => total + operation.bytes, 0);
+    // `droppedCount` is untouched on purpose. It means "history you can no longer reach because
+    // the stack was full", which is a thing to warn about; forgetting a closed image's edits is
+    // the rule working, and counting it would raise that warning on every image change.
     this.announce();
   }
 
