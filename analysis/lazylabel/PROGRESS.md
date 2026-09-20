@@ -410,8 +410,15 @@ and nobody was prompted to write their acceptance tests. Keeping that table hone
 the cheapest defence against this whole class, and is worth doing in the same commit as the
 feature.
 
-As of now C4 and C6 are marked built; C3, C5, C7, C8, C9 and C10 are built in the app and still
-need acceptance tests before the table can say so.
+**The table is honest again as of 2026-09-20.** Twelve capabilities are marked built and each has
+an acceptance test named for it, driving the real `App` with only the HTTP client stubbed. Two
+remain pending and genuinely are: C11 (propagation) and C14 (the split view).
+
+Writing those tests found a sixth defect of the same family: **an image with no annotation file had
+no save button.** `ConvertButton` lived inside the `result.kind === "loaded"` branch, so the first
+image of every new dataset could be drawn on and never written. That is the same branch, and the
+same mistake, that made those drawings invisible earlier the same day — "has a file" is not "can
+be saved to", and treating them as one cost this view twice.
 
 The second thread is about the suite itself. Two flakes turned out to be one real defect (5) and
 one real contention problem (a fresh jsdom per file was two thirds of the run). Neither was a
