@@ -89,7 +89,11 @@ function click(x: number, y: number, button = 0) {
  * user on a machine where the preview fails to paint needs it for the same reason this does.
  */
 async function ready(): Promise<void> {
-  await screen.findByText(/AI preview ready/);
+  // A longer wait than the 1s default, and it is about the TEST RUNNER rather than the feature:
+  // these files run in parallel with CPU-bound ones, and a starved worker can take longer than a
+  // second to deliver a resolved promise. Raising it does not weaken the assertion -- what is
+  // being asserted is that the preview arrives, not how fast.
+  await screen.findByText(/AI preview ready/, undefined, { timeout: 5000 });
 }
 
 /** Let a rejected prediction settle, which produces no message of its own. */
