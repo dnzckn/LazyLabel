@@ -200,6 +200,15 @@ export function AiTool({
           Preparing this image for the AI tools…
         </p>
       )}
+
+      {/* RULE-062's message, which legacy shows for a box preview and not for a point one. Shown
+          for both here: the user needs to know a prediction is waiting whichever way they asked
+          for it, and the canvas cannot say so on a machine where the preview fails to paint. */}
+      {result !== null && (
+        <p role="status" className="banner">
+          AI preview ready — press Space to accept it
+        </p>
+      )}
     </>
   );
 }

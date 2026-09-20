@@ -80,6 +80,18 @@ export interface WireEmbedResponse {
   readonly cached: boolean;
 }
 
+export interface WireModelStatus {
+  readonly name: string;
+  readonly family: string;
+  readonly size: string;
+  readonly videoCapable: boolean;
+  /** The file is in the model directory. */
+  readonly present: boolean;
+  /** Its SHA-256 matches the manifest. Present and unverified is the case worth showing. */
+  readonly verified: boolean;
+  readonly detail: string | null;
+}
+
 export interface WireSegmentRequest {
   readonly handle: string;
   readonly points?: readonly { readonly x: number; readonly y: number; readonly positive: boolean }[];
@@ -200,6 +212,21 @@ export class ApiClient {
   async embed(request: WireEmbedRequest): Promise<WireEmbedResponse> {
     const response = await this.send("POST", "/inference/embeddings", request);
     if (response.status === 200) return (await response.json()) as WireEmbedResponse;
+    throw await this.problem(response);
+  }
+
+  /**
+   * What the inference service could load.
+   *
+   * Includes checkpoints that are missing or fail their hash, with the reason. A picker that only
+   * listed the working ones would make a corrupt file indistinguishable from an absent one, which
+   * is the difference between "re-download it" and "go and find it".
+   */
+  async models(): Promise<readonly WireModelStatus[]> {
+    const response = await this.send("GET", "/inference/models");
+    if (response.status === 200) {
+      return ((await response.json()) as { models: readonly WireModelStatus[] }).models;
+    }
     throw await this.problem(response);
   }
 

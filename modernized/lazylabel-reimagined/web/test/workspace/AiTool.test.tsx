@@ -82,12 +82,17 @@ function click(x: number, y: number, button = 0) {
 }
 
 /**
- * Let a resolved prediction reach state.
+ * Wait for a prediction to have landed.
  *
- * The preview itself cannot be waited on: jsdom has no canvas, so `getContext` returns null and
- * the preview renders nothing. Flushing the microtask queue is what makes "the answer has
- * arrived" observable here without the component growing a test-only signal.
+ * The preview image cannot be waited on: jsdom has no canvas, so it paints nothing. The READY
+ * message can, and it is real UI rather than a test-only signal — RULE-062 specifies it, and a
+ * user on a machine where the preview fails to paint needs it for the same reason this does.
  */
+async function ready(): Promise<void> {
+  await screen.findByText(/AI preview ready/);
+}
+
+/** Let a rejected prediction settle, which produces no message of its own. */
 async function settle(): Promise<void> {
   await act(async () => {
     await Promise.resolve();
@@ -189,7 +194,7 @@ describe("prompting", () => {
     await waitFor(() => expect(segment).toHaveBeenCalledTimes(2));
 
     releaseFirst(response({ score: 0.99 }));
-    await settle();
+    await ready();
 
     // The stale answer did not replace the fresh one: accepting still commits, and exactly once.
     fireEvent.keyDown(document, { key: " " });
@@ -213,6 +218,7 @@ describe("prompting", () => {
 
     rejectFirst(new Error("the model raised"));
     await settle();
+    await ready();
     expect(screen.queryByText(/the model raised/)).toBeNull();
 
     fireEvent.keyDown(document, { key: " " });
@@ -231,8 +237,7 @@ describe("prompting", () => {
     await waitFor(() => expect(surface()).toBeTruthy());
 
     click(10, 10);
-    await waitFor(() => expect(segment).toHaveBeenCalledTimes(1));
-    await settle();
+    await ready();
     click(12, 12);
 
     expect(await screen.findByText(/the model raised/)).toBeTruthy();
@@ -249,7 +254,7 @@ describe("accepting", () => {
     await waitFor(() => expect(surface()).toBeTruthy());
 
     click(10, 10);
-    await settle();
+    await ready();
 
     fireEvent.keyDown(document, { key: " " });
 
@@ -264,7 +269,7 @@ describe("accepting", () => {
     await waitFor(() => expect(surface()).toBeTruthy());
 
     click(10, 10);
-    await settle();
+    await ready();
 
     fireEvent.keyDown(document, { key: " ", shiftKey: true });
 
@@ -277,7 +282,7 @@ describe("accepting", () => {
     await waitFor(() => expect(surface()).toBeTruthy());
 
     click(10, 10);
-    await settle();
+    await ready();
     fireEvent.keyDown(document, { key: " " });
 
     await waitFor(() => expect((onAccept.mock.calls[0]?.[0] as WireSegment).classId).toBe(7));

@@ -15,6 +15,7 @@ import { CAPABILITIES } from "../capabilities.js";
 import { DatasetBrowser } from "../dataset/DatasetBrowser.jsx";
 import { NotificationHost } from "../notifications/NotificationProvider.jsx";
 import { OpenImageView } from "../workspace/OpenImageView.jsx";
+import { ModelPicker } from "../workspace/ModelPicker.jsx";
 import { SegmentTable } from "../workspace/SegmentTable.jsx";
 import { useWorkspace, type Tool } from "../workspace/WorkspaceProvider.jsx";
 import { Panel, Workspace } from "./Panel.jsx";
@@ -119,10 +120,9 @@ export function App({ client }: { readonly client: ApiClient }): ReactNode {
                   would invite a user to press it. */}
               <p className="panel__missing">Vertex editing is still to come.</p>
             </Panel>
-            <Panel
-              title="AI tools"
-              pending={{ phase: "Phase 5", summary: "click and box prompts through the SAM service" }}
-            />
+            <Panel title="AI tools">
+              <ModelPicker client={client} />
+            </Panel>
             <Panel
               title="Image adjustments"
               pending={{ phase: "Phase 5", summary: "brightness, contrast, channel thresholds and crop" }}

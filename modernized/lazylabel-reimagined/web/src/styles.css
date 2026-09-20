@@ -383,3 +383,20 @@ fieldset input {
   clip-path: inset(50%);
   white-space: nowrap;
 }
+
+.models {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-size: 0.85rem;
+}
+
+.models__detail {
+  color: var(--muted);
+}
+
+.models__why {
+  margin: 0 0 0.5rem 1.4rem;
+  color: var(--warning-ink);
+  font-size: 0.8rem;
+}
