@@ -8,9 +8,9 @@ Last updated: 2026-09-20.
 ## Short answer
 
 **The app cannot be launched on the web yet.** Phases 1–5 have met their exit criteria. Phase 6
-has not started; two of its four entry criteria are owner decisions and a third needs the legacy
-app and the real checkpoints. Everything that exists is proven against legacy — what is missing is
-the sequence work and the cutover itself.
+has not started, and **three of its four entry criteria are now met** — the fourth needs a recorded
+sequence and the real checkpoints, and the script for it is written. Everything that exists is
+proven against legacy; what is missing is the sequence work and the cutover itself.
 
 By the brief's own weighting of the six phases: **about 74% of the conversion is done** — 6.0,
 5.5, 5.8, 29.4 and 27.4, all complete. The remaining 25.9% is Phase 6.
@@ -287,11 +287,16 @@ needs is already in one store rather than scattered across managers.
 2. **Phase 6 — sequence and cutover** (25.9%). The timeline, propagation review, the split view,
    the hosted deployment and the actual switch-over.
 
-   **Two of its four entry criteria are open, and neither is code:**
+   **Three of its four entry criteria are met. One is open.**
 
    1. *Phase 3 and Phase 5 exit criteria are met.* **Both done.**
-   2. *Decisions 1 and 8 are ticked.* Decision 1 is the PyPI package and desktop app; decision 8 is
-      whether multi-view is rebuilt as a split view, redesigned or removed. **Owner.**
+   2. *Decisions 1 and 8 are ticked.* **Both are**, and have been since 2026-09-17 — an earlier
+      version of this file wrongly listed them as open. Decision 1: the PyPI package is frozen at
+      2.0.8 and the desktop app stays installable until Phase 6 exit. Decision 8: multi-view is
+      rebuilt as a synchronized split view from the linked-operation rules, deleting the
+      half-migrated legacy path rather than porting it — with a standing instruction to
+      **reassess at Phase 6 entry if the restored rules prove too thin to specify it**, which is a
+      task for whoever opens the phase.
    3. *At least one recorded image sequence has legacy propagation outputs saved as golden data.*
       **The script is written**; what is missing is the frames and the checkpoint.
 
@@ -312,6 +317,12 @@ needs is already in one store rather than scattered across managers.
       a synthetic one: `test_differential_propagation.py` already compares the port against legacy
       live on generated frames, and what that cannot give Phase 6 is something to build against
       without a GPU and a legacy install. **Owner: the frames.**
+
+      **It gates the propagation slices, not the timeline.** The brief's own pilot for Phase 6 is
+      "build a timeline from a file range and mark references from existing annotations, without
+      propagation", and nothing in that touches a model or needs a golden to compare against. The
+      pilot can be built while the recording is found; what it must not do is claim the phase has
+      exited.
    4. *Every P6 rule is answered.* **The two that blocked it are answered** (2026-09-20). RULE-060
       needed a fidelity correction and RULE-055 two behaviour questions; both were re-derived from
       the source rather than taken from the judges, and both answers are on their cards. What is
