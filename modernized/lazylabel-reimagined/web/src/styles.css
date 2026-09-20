@@ -267,3 +267,62 @@ fieldset input {
 .status-bar__item--error {
   color: var(--error-ink);
 }
+
+/* Legacy's arrangement: tools left, image centre, dataset right. A grid rather than draggable
+   splitters -- splitters are Qt's answer to a fixed window, and a browser already reflows. The
+   panes stack on a narrow screen without anything having to be dragged. */
+.workspace {
+  display: grid;
+  grid-template-columns: minmax(12rem, 16rem) minmax(0, 1fr) minmax(14rem, 20rem);
+  gap: 1.5rem;
+  align-items: start;
+}
+
+@media (max-width: 60rem) {
+  .workspace {
+    grid-template-columns: 1fr;
+  }
+}
+
+.panel {
+  border: 1px solid var(--rule);
+  border-radius: 0.375rem;
+  margin-bottom: 0.75rem;
+}
+
+.panel__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.panel__toggle {
+  background: none;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  padding: 0.5rem 0.75rem;
+  text-align: left;
+  flex: 1;
+}
+
+.panel__pending {
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 400;
+  padding-right: 0.75rem;
+}
+
+.panel__body {
+  border-top: 1px solid var(--rule);
+  padding: 0.75rem;
+}
+
+.panel__missing {
+  color: var(--muted);
+  margin: 0;
+}

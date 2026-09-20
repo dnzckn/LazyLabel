@@ -14,6 +14,7 @@ import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { CAPABILITIES } from "../capabilities.js";
 import { DatasetBrowser } from "../dataset/DatasetBrowser.jsx";
 import { NotificationHost } from "../notifications/NotificationProvider.jsx";
+import { Panel, Workspace } from "./Panel.jsx";
 import { StatusBar } from "./StatusBar.jsx";
 import { applyTheme, nextTheme, themeFor } from "./theme.js";
 import type { ImageState } from "../workspace/saveState.js";
@@ -79,7 +80,7 @@ export function App({ client }: { readonly client: ApiClient }): ReactNode {
 
       <header>
         <h1>LazyLabel</h1>
-        <p className="subtitle">The canvas and the drawing tools are built in Phase 5</p>
+        <p className="subtitle">The drawing and AI tools are built in Phase 5</p>
       </header>
 
       {healthError !== null && (
@@ -103,36 +104,61 @@ export function App({ client }: { readonly client: ApiClient }): ReactNode {
         </p>
       )}
 
-      {health !== null && (
-        <dl className="health">
-          <dt>Dataset folder</dt>
-          <dd>{health.dataset}</dd>
-          <dt>Settings database</dt>
-          <dd>{health.database}</dd>
-        </dl>
-      )}
+      <Workspace
+        left={
+          <>
+            {/* Legacy's mode buttons live here: SAM, polygon, bbox, circle, selection, edit. They
+                are named rather than mocked -- a row of disabled buttons that look real invites a
+                user to press one, and saying where the work stands does not. */}
+            <Panel
+              title="Drawing tools"
+              pending={{ phase: "Phase 5", summary: "polygons, boxes, circles and vertex editing" }}
+            />
+            <Panel
+              title="AI tools"
+              pending={{ phase: "Phase 5", summary: "click and box prompts through the SAM service" }}
+            />
+            <Panel
+              title="Image adjustments"
+              pending={{ phase: "Phase 5", summary: "brightness, contrast, channel thresholds and crop" }}
+            />
 
-      <section>
-        <h2>Settings</h2>
-        {state.status === "loading" ? (
-          <p>Loading…</p>
-        ) : (
-          <p>
-            Schema version {state.settings.schemaVersion}, {Object.keys(state.settings.values).length}{" "}
-            settings and {Object.keys(state.settings.hotkeys).length} hotkeys.
-          </p>
-        )}
-        <button type="button" onClick={() => setShowHotkeys((open) => !open)}>
-          {showHotkeys ? "Hide" : "Show"} hotkeys
-        </button>
-      </section>
+            <Panel title="Settings">
+              {state.status === "loading" ? (
+                <p>Loading…</p>
+              ) : (
+                <p>
+                  Schema version {state.settings.schemaVersion},{" "}
+                  {Object.keys(state.settings.values).length} settings and{" "}
+                  {Object.keys(state.settings.hotkeys).length} hotkeys.
+                </p>
+              )}
+              <button type="button" onClick={() => setShowHotkeys((open) => !open)}>
+                {showHotkeys ? "Hide" : "Show"} hotkeys
+              </button>
+              {showHotkeys && <HotkeyReference />}
+            </Panel>
+          </>
+        }
+        centre={
+          /* The browser holds both the file list and the opened image, so for now it sits whole in
+             the centre. Splitting it -- list on the right, image here, as legacy has it -- means
+             lifting the open-image state into a workspace store, which is the next piece rather
+             than something to half-do inside a layout change. */
+          <DatasetBrowser client={client} projectId="default" onImageState={setOpenImage} />
+        }
+        right={
+          <>
+            <Panel
+              title="Segments"
+              pending={{ phase: "Phase 5", summary: "the segment table, with merge, delete and reclass" }}
+            />
+            <Panel
+              title="Classes"
+              pending={{ phase: "Phase 5", summary: "the class table and its ordering controls" }}
+            />
 
-      {showHotkeys && <HotkeyReference />}
-
-      <DatasetBrowser client={client} projectId="default" onImageState={setOpenImage} />
-
-      <section>
-        <h2>What is built</h2>
+            <Panel title="What is built" initiallyCollapsed>
         <table className="capabilities">
           <thead>
             <tr>
@@ -155,13 +181,17 @@ export function App({ client }: { readonly client: ApiClient }): ReactNode {
             ))}
           </tbody>
         </table>
-      </section>
+            </Panel>
+          </>
+        }
+      />
 
       {/* Last, and outside the scrolling content: continuous state, never events. What used to be a
           status-bar message is a notification now, which is what stops a destructive one expiring. */}
       <StatusBar
         image={openImage}
         health={health}
+        healthError={healthError}
         theme={{ switchesTo, onToggle: toggleTheme }}
       />
     </main>

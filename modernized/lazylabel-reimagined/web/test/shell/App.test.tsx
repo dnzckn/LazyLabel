@@ -69,7 +69,11 @@ describe("the application shell", () => {
   it("renders and reports what it is", async () => {
     mount({});
     expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("LazyLabel");
-    await waitFor(() => expect(screen.getByText(/Dataset folder/)).toBeTruthy());
+
+    // The health facts moved into the status bar, which reports only what is WRONG -- a line that
+    // always reads "dataset: ok" trains the eye to skip where "unreadable" would appear. So what
+    // this waits for is the bar having reached the server at all.
+    await waitFor(() => expect(screen.getByLabelText("Status").textContent).toMatch(/AI ready/));
   });
 
   it("blocks with an alert when the dataset folder cannot be read", async () => {
@@ -118,10 +122,35 @@ describe("the application shell", () => {
 
   it("lists every capability with its status, so nothing reads as built that is not", async () => {
     mount({});
-    await waitFor(() => expect(screen.getByText(/What is built/)).toBeTruthy());
+    await waitFor(() => expect(screen.getByRole("button", { name: /What is built/ })).toBeTruthy());
+
+    // The table now lives in a panel that starts closed, so the reference is out of the way
+    // without being gone.
+    screen.getByRole("button", { name: /What is built/ }).click();
 
     // C4 is Phase 5. If the shell ever renders it as available, this catches it.
-    expect(screen.getByText(/Draw and edit polygons/).closest("tr")?.textContent).toMatch(/P5/);
+    await waitFor(() =>
+      expect(screen.getByText(/Draw and edit polygons/).closest("tr")?.textContent).toMatch(/P5/),
+    );
+  });
+
+  it("names the tools that are not built rather than showing dead controls", async () => {
+    // A row of disabled buttons that look like the real thing invites a user to press one.
+    mount({});
+    await waitFor(() => expect(screen.getByLabelText("Tools")).toBeTruthy());
+
+    const tools = screen.getByLabelText("Tools");
+    expect(tools.textContent).toMatch(/Drawing tools/);
+    expect(tools.textContent).toMatch(/AI tools/);
+    expect(tools.textContent).toMatch(/Phase 5/);
+  });
+
+  it("puts the image in the main landmark and the dataset beside it", async () => {
+    mount({});
+    await waitFor(() => expect(screen.getByLabelText("Dataset")).toBeTruthy());
+
+    expect(screen.getByLabelText("Image")).toBeTruthy();
+    expect(screen.getByLabelText("Dataset").textContent).toMatch(/Segments/);
   });
 
   it("shows the hotkey reference when its own hotkey is pressed", async () => {

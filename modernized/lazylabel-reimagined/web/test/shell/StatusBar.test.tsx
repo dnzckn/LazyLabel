@@ -34,6 +34,7 @@ function bar(props: Partial<StatusBarProps> = {}) {
     <StatusBar
       image={props.image === undefined ? null : props.image}
       health={props.health === undefined ? health() : props.health}
+      healthError={props.healthError ?? null}
     />,
   );
 }
@@ -83,6 +84,16 @@ describe("the server", () => {
   it("says so while it is still finding out", () => {
     bar({ health: null });
     expect(text()).toContain("Checking the server");
+  });
+
+  it("stops saying it is checking once the check has failed", () => {
+    // Found by looking at the running app rather than by a test: with only `health: null` to go
+    // on, a failed check is indistinguishable from one still in flight, and the bar reads
+    // "Checking the server…" forever -- a claim that gets more wrong the longer it is shown.
+    bar({ health: null, healthError: "the API answered 500" });
+
+    expect(text()).toContain("Server unreachable");
+    expect(text()).not.toContain("Checking the server");
   });
 
   it("names the device the model runs on", () => {

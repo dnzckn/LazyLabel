@@ -34,8 +34,16 @@ export interface Health {
 
 export interface StatusBarProps {
   readonly image: ImageState | null;
-  /** Null while health is still being fetched, or when the API could not be reached at all. */
+  /** Null while health is still being fetched. */
   readonly health: Health | null;
+  /**
+   * Why the health check failed, when it did.
+   *
+   * Separate from `health: null` because the two look identical from here and mean opposite
+   * things. Without it the bar reads "Checking the server…" forever after a failure -- which is
+   * not merely unhelpful, it is a lie that gets more wrong the longer it is shown.
+   */
+  readonly healthError?: string | null;
   /**
    * What pressing the toggle would switch to, and how to do it. Omitted where there is nothing to
    * change.
@@ -47,7 +55,7 @@ export interface StatusBarProps {
   readonly theme?: { readonly switchesTo: "dark" | "light"; readonly onToggle: () => void };
 }
 
-export function StatusBar({ image, health, theme }: StatusBarProps): ReactNode {
+export function StatusBar({ image, health, healthError, theme }: StatusBarProps): ReactNode {
   return (
     <footer className="status-bar" aria-label="Status">
       {/* Far left, where legacy puts it. */}
@@ -68,7 +76,9 @@ export function StatusBar({ image, health, theme }: StatusBarProps): ReactNode {
 
       <span className="status-bar__spacer" />
 
-      {health === null ? (
+      {healthError != null ? (
+        <span className="status-bar__item status-bar__item--error">Server unreachable</span>
+      ) : health === null ? (
         <span className="status-bar__item">Checking the server…</span>
       ) : (
         <>
