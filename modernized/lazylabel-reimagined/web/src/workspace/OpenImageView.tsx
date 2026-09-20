@@ -41,6 +41,7 @@ import type { AnnotationsResult, ApiClient } from "../api/client.js";
 import { RESOLUTION_DEFAULT } from "../tools/autoPolygon.js";
 import { useHotkey } from "../hotkeys/HotkeyProvider.jsx";
 import { CropLayer } from "../canvas/CropLayer.jsx";
+import { canSave } from "./saveState.js";
 
 /**
  * What a save sends when the image had no annotation file.
@@ -494,7 +495,7 @@ function ConvertButton({
   // drawn since loading has to be written as it now stands, or the edit is lost on the next save.
   // The crop comes from the store for the same reason: it is part of what a save WRITES, and a
   // crop the request leaves out is a crop the panel showed and the file never saw.
-  const { classAliases, segments, crop, activeSide, markSavedOn } = useWorkspace();
+  const { classAliases, segments, crop, activeSide, markSavedOn, imageState } = useWorkspace();
   const [state, setState] = useState<
     | { readonly status: "idle" }
     | { readonly status: "saving" }
@@ -652,15 +653,39 @@ function ConvertButton({
   useHotkey("save_output", saveNow);
   useHotkey("save_output_alt", saveNow);
 
+  /*
+   * WHETHER THIS IMAGE MAY BE WRITTEN AT ALL -- and until now the button never asked.
+   *
+   * `canSave` is false for an image whose annotations could not be READ. Its own comment says it
+   * is exported because the button needs the same answer the navigation logic needs, and it was
+   * called by neither. The hole that leaves is decision 7's central one: the image loads, its
+   * PIXELS are fine, the segment list is empty because the read failed -- and pressing Write puts
+   * an empty annotation file over a damaged one that might still have been recoverable. The write
+   * is unconditional there too, because a failed load returns no revision to make it conditional
+   * on.
+   *
+   * Disabled with the reason beside it rather than hidden. A missing button is indistinguishable
+   * from a bug; a disabled one that says why is an explanation.
+   */
+  const writable = canSave(imageState);
+
   return (
     <div>
       <button
         type="button"
         onClick={() => convert(revisions)}
-        disabled={state.status === "saving"}
+        disabled={state.status === "saving" || !writable}
       >
         {state.status === "saving" ? "Writing…" : `Write ${formats.length} format${formats.length === 1 ? "" : "s"}`}
       </button>
+
+      {!writable && (
+        <p role="status" className="banner banner--warning">
+          This image&rsquo;s annotations could not be read, so nothing can be written over them:
+          saving now would replace a damaged file with an empty one. Move the file aside and
+          reopen the image to start fresh, or repair it outside the app.
+        </p>
+      )}
 
       {state.status === "failed" && (
         <>

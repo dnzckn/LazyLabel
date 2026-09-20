@@ -40,10 +40,6 @@ export const UNREACHED: Readonly<Record<string, Reason>> = {
   saveableFrames: awaiting("C11: Save All has no propagated frames to write yet"),
 
   // ---- Other rules whose UI is not built. ----
-  canSave: awaiting(
-    "the save button is always offered and reports its own refusals; this decides in ADVANCE, "
-      + "which is what a disabled button with a reason would need",
-  ),
 
   // ---- Superseded, and DELETED rather than recorded. ----
   //
