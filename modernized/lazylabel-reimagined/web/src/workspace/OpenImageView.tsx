@@ -544,10 +544,21 @@ function ConvertButton({
 
         setState({
           status: "failed",
+          /*
+           * THE ADVICE HAS TO BE COMPATIBLE WITH THE REASSURANCE, and the first version was not:
+           * it said the work was still on screen and then told the user to reload — which calls
+           * `openImage` and clears the segments, discarding exactly what it had just promised was
+           * safe. Written quickly, and only obvious once read as a whole.
+           *
+           * There is no force-overwrite yet, so the honest instruction is the one that keeps the
+           * work: open the file elsewhere to see what it says, and do not reload this image until
+           * the annotations on screen are somewhere else.
+           */
           reason: conflict
             ? `${key} changed since you loaded it — the desktop app, another tab, or a script `
-              + "wrote it. Your work is still on screen. Reload the image to see what the file "
-              + "says now."
+              + "wrote it. Nothing here was lost; the annotations on screen are still yours. "
+              + "Reloading this image WOULD replace them with what the file now says, so check "
+              + "the file another way first."
             : reason,
         });
       });

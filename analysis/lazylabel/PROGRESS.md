@@ -532,6 +532,14 @@ because a test exercises one side with the other stubbed. Five found:
 | Client ↔ request | `pixelPriority` never sent, so RULE-012's two settings did nothing |
 | Client ↔ request | `expectedRevisions` never sent, so every save was an unconditional overwrite |
 
+**A conflict has no recovery yet, and the message says so rather than pretending.** When a save is
+refused because the file moved, the annotations on screen are still the user's — but there is no
+force-overwrite, and reloading the image calls `openImage`, which clears them. So the instruction
+is the one that KEEPS the work: check the file another way, and do not reload until the
+annotations are somewhere else. A "save anyway" button is the obvious next step and is not built;
+it would need the request to carry the revisions the server actually has rather than the ones the
+client read.
+
 **The method**: take each pair of components that must agree, and ask what carries the agreement.
 For settings, list the keys and grep for readers. For a wire format, compare the fields the
 contract declares against the fields the client sends and the fields it renders. Two of those

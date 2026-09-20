@@ -130,8 +130,13 @@ describe("C9: a file that changed underneath", () => {
     const shown = await screen.findByText(/Nothing was written/);
     expect(shown.textContent).toMatch(/frames\/a\.npz changed since you loaded it/);
     expect(shown.textContent).toMatch(/desktop app, another tab, or a script/);
-    expect(shown.textContent).toMatch(/Your work is still on screen/);
-    expect(shown.textContent).toMatch(/Reload the image/);
+    expect(shown.textContent).toMatch(/Nothing here was lost/);
+    // The advice must not contradict the reassurance. The first version said the work was safe and
+    // then told the user to reload, which calls `openImage` and clears the segments -- discarding
+    // exactly what it had promised. There is no force-overwrite yet, so the instruction has to be
+    // the one that KEEPS the work.
+    expect(shown.textContent).toMatch(/WOULD replace them/);
+    expect(shown.textContent).not.toMatch(/^.*Reload the image to see/);
 
     // SAID ONCE, which is the whole reason this message is written rather than appended to the
     // server's. Concatenating put it on screen three times, and only running it showed that.
