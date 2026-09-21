@@ -36,6 +36,15 @@ export const POLL_MS = 400;
 
 export interface PropagationProgress {
   readonly job: WirePropagationJob | null;
+  /**
+   * The masks themselves, by frame position — what Save All writes.
+   *
+   * Kept rather than discarded once the confidence is read, because a propagation whose results
+   * cannot be saved is half a feature: the timeline colours itself and the work evaporates on
+   * reload. They are held in the bounded form they arrived in, which is what the memory NFR asks
+   * for — a full-image plane per object would be gigabytes on a long sequence.
+   */
+  readonly masks: ReadonlyMap<number, readonly WirePropagationFrame[]>;
   /** Per-frame confidence by the frame's position in the sequence, for the timeline. */
   readonly scores: Readonly<Record<number, number>>;
   /** Frames where every object came out empty — RULE-060 never commits these. */
@@ -47,6 +56,7 @@ export interface PropagationProgress {
 
 const IDLE: PropagationProgress = {
   job: null,
+  masks: new Map(),
   scores: {},
   empty: [],
   error: null,
@@ -92,6 +102,7 @@ export function usePropagation(client: ApiClient): UsePropagation {
    */
   const cursor = useRef(0);
   const byFrame = useRef(new Map<number, ObjectScore[]>());
+  const maskFrames = useRef(new Map<number, WirePropagationFrame[]>());
   const position = useRef(new Map<string, number>());
   const live = useRef(true);
 
@@ -109,6 +120,10 @@ export function usePropagation(client: ApiClient): UsePropagation {
       const objects = byFrame.current.get(index) ?? [];
       objects.push(scoreOf(result));
       byFrame.current.set(index, objects);
+
+      const held = maskFrames.current.get(index) ?? [];
+      held.push(result);
+      maskFrames.current.set(index, held);
     }
     cursor.current = job.cursor;
 
@@ -117,6 +132,9 @@ export function usePropagation(client: ApiClient): UsePropagation {
       job,
       scores,
       empty,
+      // A new Map each time, so React sees the change. Mutating the ref in place and passing the
+      // same reference would leave a Save All button that never notices it has work to do.
+      masks: new Map(maskFrames.current),
       // A cancelled job's `error` is the sentence saying what it KEPT, which is not a failure.
       error: job.state === "failed" ? (job.error ?? "the propagation failed") : null,
       running: job.state === "running",
@@ -127,6 +145,7 @@ export function usePropagation(client: ApiClient): UsePropagation {
     async (request: WirePropagationStart) => {
       cursor.current = 0;
       byFrame.current = new Map();
+      maskFrames.current = new Map();
       position.current = new Map(request.sequence.map((key, index) => [key, index]));
 
       try {
@@ -150,6 +169,7 @@ export function usePropagation(client: ApiClient): UsePropagation {
 
   const reset = useCallback(() => {
     byFrame.current = new Map();
+    maskFrames.current = new Map();
     cursor.current = 0;
     setProgress(IDLE);
   }, []);

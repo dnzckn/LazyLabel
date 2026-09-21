@@ -25,6 +25,7 @@ import { useHotkey } from "../hotkeys/HotkeyProvider.jsx";
 
 import { usePropagation } from "./usePropagation.js";
 import { referenceMasks } from "./references.js";
+import { plannedSave, saveAll } from "./saveAll.js";
 import type { Frame } from "./timeline.js";
 
 export interface PropagationControlProps {
@@ -47,6 +48,10 @@ export function PropagationControl({
   /** What could not become a seed, and why. Reported rather than dropped. */
   const [unusable, setUnusable] = useState<readonly { key: string; reason: string }[]>([]);
   const [loading, setLoading] = useState(false);
+  /** Object id to class id, from the annotations that seeded the run. */
+  const [classes, setClasses] = useState<Readonly<Record<number, number | null>>>({});
+  const [saving, setSaving] = useState<{ done: number; total: number } | null>(null);
+  const [saved, setSaved] = useState<string | null>(null);
 
   const references = frames
     .map((frame, index) => (frame.isReference ? index : -1))
@@ -73,6 +78,8 @@ export function PropagationControl({
     }
 
     setUnusable(seeds.skipped);
+    setClasses(seeds.classes);
+    setSaved(null);
     if (seeds.objects.length === 0) {
       // Every reference failed. Starting anyway is what legacy does, and it writes an empty mask
       // over every frame in the sequence -- work that looks like work and undoes the user's.
@@ -111,6 +118,34 @@ export function PropagationControl({
   const job = progress.job;
   const done = job !== null && !progress.running;
 
+  const { writable, withheld } = plannedSave(frames, progress.masks);
+
+  const write = useCallback(async () => {
+    setSaved(null);
+    setSaving({ done: 0, total: writable.length });
+    try {
+      const outcome = await saveAll({
+        client,
+        projectId,
+        frames,
+        masks: progress.masks,
+        classes,
+        // Decision 7: an explicit act writes, and it writes the formats the user chose. A default
+        // invented here would put files on disk in a format nobody asked for.
+        formats: (settings.values["export_formats"] as string[] | undefined) ?? ["NPZ"],
+        onProgress: (doneCount, total) => setSaving({ done: doneCount, total }),
+      });
+      setSaved(
+        `Saved ${outcome.written.length} frame${outcome.written.length === 1 ? "" : "s"}`
+          + (outcome.failed.length > 0
+            ? ` — ${outcome.failed.length} could not be written: ${outcome.failed[0]!.reason}`
+            : ""),
+      );
+    } finally {
+      setSaving(null);
+    }
+  }, [classes, client, frames, progress.masks, projectId, settings.values, writable.length]);
+
   return (
     <div className="timeline__propagation">
       <div className="timeline__propagation-actions">
@@ -133,8 +168,16 @@ export function PropagationControl({
           </button>
         )}
 
+        {done && writable.length > 0 && (
+          <button type="button" onClick={() => void write()} disabled={saving !== null}>
+            {saving === null
+              ? `Save ${writable.length} frame${writable.length === 1 ? "" : "s"}`
+              : `Saving ${saving.done} of ${saving.total}…`}
+          </button>
+        )}
+
         {done && (
-          <button type="button" onClick={reset}>
+          <button type="button" onClick={reset} disabled={saving !== null}>
             Clear
           </button>
         )}
@@ -173,6 +216,22 @@ export function PropagationControl({
             </li>
           ))}
         </ul>
+      )}
+
+      {saved !== null && (
+        <p className="timeline__propagation-state" role="status">
+          {saved}
+        </p>
+      )}
+
+      {done && withheld.length > 0 && (
+        // RULE-060's last clause, said out loud. A Save All that silently wrote fewer frames than
+        // the timeline shows as finished would be indistinguishable from one that failed.
+        <p className="timeline__propagation-empty">
+          {withheld.length} frame{withheld.length === 1 ? "" : "s"} will not be written:{" "}
+          {withheld[0]!.reason}
+          {withheld.length > 1 ? ", and others" : ""}.
+        </p>
       )}
 
       {progress.empty.length > 0 && (

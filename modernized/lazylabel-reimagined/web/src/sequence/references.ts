@@ -33,6 +33,15 @@ export interface ReferenceMasks {
   readonly objects: readonly PropagationReference[];
   /** Frames and annotations that could not become a seed, with why. Never silently dropped. */
   readonly skipped: readonly { readonly key: string; readonly reason: string }[];
+  /**
+   * Which class each tracked object belongs to, by object id.
+   *
+   * KEPT HERE because the service never learns it and must not: SAM 2 tracks an object, and what
+   * that object IS is the user's decision, carried from the annotation that seeded it. A
+   * propagated mask saved without it would land on disk as an unclassified shape -- which
+   * RULE-012 then cannot order and no exporter can name.
+   */
+  readonly classes: Readonly<Record<number, number | null>>;
 }
 
 /** One annotation's pixels, rasterized the way the exporters rasterize it. */
@@ -87,6 +96,7 @@ export async function referenceMasks(
 ): Promise<ReferenceMasks> {
   const objects: PropagationReference[] = [];
   const skipped: { key: string; reason: string }[] = [];
+  const classes: Record<number, number | null> = {};
   // Legacy's `max(existing_ids, default=0) + 1`, which for a list built in order is a counter.
   let nextObjectId = 1;
 
@@ -127,11 +137,12 @@ export async function referenceMasks(
         objectId: nextObjectId,
         mask: encodeMask(mask),
       });
+      classes[nextObjectId] = segment.classId;
       nextObjectId += 1;
     }
   }
 
-  return { objects, skipped };
+  return { objects, skipped, classes };
 }
 
 function reasonOf(cause: unknown): string {

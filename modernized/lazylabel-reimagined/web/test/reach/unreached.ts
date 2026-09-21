@@ -35,18 +35,12 @@ export const UNREACHED: Readonly<Record<string, Reason>> = {
   // deletion -- the pipeline applies the table inside the loop it already runs over every pixel,
   // so a second pass over the whole image was the wrong shape.
 
-  // ---- Propagation, C11. ----
+  // ---- Propagation, C11. Nothing left here. ----
   //
-  // `frameConfidence` came off this list when the browser learned to propagate: the hook folds
-  // each object's RULE-016 score into a per-frame confidence, which is what RULE-060 flags on.
-  //
-  // `saveableFrames` is a different question and is genuinely still unreached. It answers "which
-  // frames would Save All write", and nothing writes propagated masks to sidecars yet -- the
-  // results reach the timeline and stop there. That is the next slice, not this one.
-  saveableFrames: awaiting(
-    "C11: propagated masks reach the timeline but nothing writes them to sidecars yet, so there "
-      + "is no Save All over a sequence to ask this of",
-  ),
+  // `frameConfidence` came off when the browser learned to propagate, and `saveableFrames` when it
+  // learned to SAVE what it propagated. That one had been sitting here since it was written: the
+  // rule it encodes -- Save All never writes a flagged frame -- was correct, tested, and had never
+  // been asked. A rule nothing consults is not a rule the software follows.
 
   // ---- Other rules whose UI is not built. ----
 
