@@ -297,6 +297,30 @@ to save even though green frames with unsaved propagated masks remain").
 **Both owner-facing harnesses have been run**, and one was wrong: the acceptance harness called an
 empty corpus a pass. Nothing compared is exit 2 now, and a real pass reports the count.
 
+**EVERY SUITE, RUN TOGETHER on 2026-09-21** -- the first time all seven have been verified in one
+pass rather than package by package:
+
+| package | tests |
+| --- | --- |
+| exporters (`annotation-formats`) | 1979 |
+| web | 1096 |
+| inference | 511 passed, 36 skipped |
+| api | 390 passed, 4 skipped, 5 todo |
+| settings-schema | 41 |
+| converter | 30 |
+| contracts | 21 |
+
+**Trim checked in the running app**, not only in the suite: bounds set from two cells, Cut removed
+2 of 4 frames, the panel said "Removed 2 frames from the timeline. No files were touched." -- and
+the folder still held all six images afterwards, which is the claim that matters most about a
+control with the word "remove" on it.
+
+**One divergence is flagged for the owner rather than settled.** RULE-033 binds Ctrl+Plus and
+Ctrl+Minus to the annotation-size MULTIPLIER -- its card says "(not image zoom)" -- and this app
+zooms with them, because the settings schema names those actions `zoom_in` and `zoom_out` and a key
+that does something other than its name is the defect `fit_view` had. It is the only entry on the
+divergence list that follows from no numbered decision.
+
 **Blocked on the owner:**
 
 - **C11's EQUIVALENCE** — not its API, which is built. Proving the propagated masks and the
