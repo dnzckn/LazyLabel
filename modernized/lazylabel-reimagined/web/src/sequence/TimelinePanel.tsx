@@ -116,8 +116,8 @@ export function TimelinePanel({
   const [ownScores, setOwnScores] = useState<Readonly<Record<number, number>>>({});
   /** What Find Archetypes suggested, kept so RULE-091's prefetch can prioritise those frames. */
   const [archetypes, setArchetypes] = useState<readonly string[]>([]);
-  /** RULE-090: the propagated segments by frame position, for whichever frame is opened next. */
-  const [propagated, setPropagated] = useState<ReadonlyMap<number, readonly WireSegment[]>>(
+  /** RULE-090: the propagated segments by IMAGE KEY, for whichever frame is opened next. */
+  const [propagated, setPropagated] = useState<ReadonlyMap<string, readonly WireSegment[]>>(
     new Map(),
   );
   /**
@@ -300,7 +300,7 @@ export function TimelinePanel({
    * the same reason Save All refuses to rewrite a reference.
    */
   const propagatedFor = (frame: Frame): readonly WireSegment[] | undefined =>
-    frame.isReference ? undefined : propagated.get(frame.index);
+    frame.isReference ? undefined : propagated.get(frame.key);
 
   const counts = summarize(frames);
   const order = sorted ? sortedOrder(frames) : frames.map((frame) => frame.index);

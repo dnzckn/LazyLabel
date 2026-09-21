@@ -31,8 +31,8 @@ export interface SaveAllRequest {
   readonly client: ApiClient;
   readonly projectId: string;
   readonly frames: readonly Frame[];
-  /** Propagated results by frame position. */
-  readonly masks: ReadonlyMap<number, readonly WirePropagationFrame[]>;
+  /** Propagated results by IMAGE KEY — see the note on `PropagationProgress.masks`. */
+  readonly masks: ReadonlyMap<string, readonly WirePropagationFrame[]>;
   /** Object id to class id, from the annotations that seeded the run. */
   readonly classes: Readonly<Record<number, number | null>>;
   readonly formats: readonly string[];
@@ -66,7 +66,7 @@ function segmentOf(
 /** Which frames this save will write, and which RULE-060 holds back, without writing anything. */
 export function plannedSave(
   frames: readonly Frame[],
-  masks: ReadonlyMap<number, readonly WirePropagationFrame[]>,
+  masks: ReadonlyMap<string, readonly WirePropagationFrame[]>,
 ): { writable: readonly Frame[]; withheld: readonly { key: string; reason: string }[] } {
   const saveable = new Set(saveableFrames(frames).map((frame) => frame.index));
   const writable: Frame[] = [];
@@ -88,7 +88,7 @@ export function plannedSave(
       });
       continue;
     }
-    if ((masks.get(frame.index) ?? []).length === 0) {
+    if ((masks.get(frame.key) ?? []).length === 0) {
       withheld.push({ key: frame.key, reason: "the propagation produced nothing for it" });
       continue;
     }
@@ -120,7 +120,7 @@ export async function saveAll(request: SaveAllRequest): Promise<SaveAllResult> {
   const failed: { key: string; reason: string }[] = [];
 
   for (const [done, frame] of writable.entries()) {
-    const results = request.masks.get(frame.index) ?? [];
+    const results = request.masks.get(frame.key) ?? [];
     const segments = segmentsFor(results, request.classes);
 
     if (segments.length === 0) {

@@ -37,14 +37,20 @@ export const POLL_MS = 400;
 export interface PropagationProgress {
   readonly job: WirePropagationJob | null;
   /**
-   * The masks themselves, by frame position — what Save All writes.
+   * The masks themselves, BY IMAGE KEY — what Save All writes and what a frame shows.
+   *
+   * By key rather than by position, which is RULE-017's principle applied to this store: a
+   * position is a name for wherever a frame currently sits, and RULE-077's Trim moves every
+   * position after the cut. Keyed by position, a trim would silently re-attribute every mask to
+   * the wrong picture -- the exact failure RULE-017 records of legacy's staging. The results
+   * already carry their source key, so there is nothing to look up.
    *
    * Kept rather than discarded once the confidence is read, because a propagation whose results
    * cannot be saved is half a feature: the timeline colours itself and the work evaporates on
    * reload. They are held in the bounded form they arrived in, which is what the memory NFR asks
    * for — a full-image plane per object would be gigabytes on a long sequence.
    */
-  readonly masks: ReadonlyMap<number, readonly WirePropagationFrame[]>;
+  readonly masks: ReadonlyMap<string, readonly WirePropagationFrame[]>;
   /** Per-frame confidence by the frame's position in the sequence, for the timeline. */
   readonly scores: Readonly<Record<number, number>>;
   /** Frames where every object came out empty — RULE-060 never commits these. */
@@ -102,7 +108,7 @@ export function usePropagation(client: ApiClient): UsePropagation {
    */
   const cursor = useRef(0);
   const byFrame = useRef(new Map<number, ObjectScore[]>());
-  const maskFrames = useRef(new Map<number, WirePropagationFrame[]>());
+  const maskFrames = useRef(new Map<string, WirePropagationFrame[]>());
   const position = useRef(new Map<string, number>());
   const live = useRef(true);
 
@@ -121,9 +127,9 @@ export function usePropagation(client: ApiClient): UsePropagation {
       objects.push(scoreOf(result));
       byFrame.current.set(index, objects);
 
-      const held = maskFrames.current.get(index) ?? [];
+      const held = maskFrames.current.get(result.source) ?? [];
       held.push(result);
-      maskFrames.current.set(index, held);
+      maskFrames.current.set(result.source, held);
     }
     cursor.current = job.cursor;
 

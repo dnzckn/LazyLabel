@@ -68,7 +68,7 @@ export interface PropagationControlProps {
    * Handed up because opening a frame belongs to the shell, not to this control. Built here
    * because this is where the masks and the object classes both are.
    */
-  readonly onSegments?: (byFrame: ReadonlyMap<number, readonly WireSegment[]>) => void;
+  readonly onSegments?: (byKey: ReadonlyMap<string, readonly WireSegment[]>) => void;
 }
 
 export function PropagationControl({
@@ -188,10 +188,10 @@ export function PropagationControl({
   // so what a user REVIEWS on the frame is exactly what a save would write -- two derivations of
   // that would be two chances to disagree.
   const segmentsByFrame = useMemo(() => {
-    const built = new Map<number, readonly WireSegment[]>();
-    for (const [index, results] of progress.masks) {
+    const built = new Map<string, readonly WireSegment[]>();
+    for (const [key, results] of progress.masks) {
       const segments = segmentsFor(results, classes);
-      if (segments.length > 0) built.set(index, segments);
+      if (segments.length > 0) built.set(key, segments);
     }
     return built;
   }, [classes, progress.masks]);

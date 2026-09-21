@@ -31,8 +31,18 @@ function result(objectId = 1, mask: unknown = MASK): WirePropagationFrame {
   return { source: "ignored", objectId, mask, confidence: 0.9 } as WirePropagationFrame;
 }
 
+/**
+ * Propagated results by IMAGE KEY, the way the store holds them.
+ *
+ * Written as frame INDICES here because that is how a test reads, and converted through the same
+ * naming `frame()` uses -- so the conversion is in one place rather than in every case. By key,
+ * not by position, because RULE-077's Trim moves every position after the cut and a
+ * position-keyed store would re-attribute every mask to the wrong picture.
+ */
 function masks(entries: Record<number, WirePropagationFrame[]>) {
-  return new Map(Object.entries(entries).map(([index, value]) => [Number(index), value]));
+  return new Map(
+    Object.entries(entries).map(([index, value]) => [frame(Number(index), "pending").key, value]),
+  );
 }
 
 function fakeClient(onSave?: (key: string, body: unknown) => void) {
