@@ -60,6 +60,8 @@ function Probe(): React.ReactNode {
     setClassAlias,
     setCrop,
     markSaved,
+    zoom,
+    setZoom,
     history,
     imageStates,
     segments,
@@ -80,11 +82,13 @@ function Probe(): React.ReactNode {
       <button type="button" onClick={() => setClassAlias(1, "car")}>name</button>
       <button type="button" onClick={() => setCrop({ x1: 0, y1: 0, x2: 4, y2: 4 })}>crop</button>
       <button type="button" onClick={markSaved}>saved</button>
+      <button type="button" onClick={() => setZoom((zoom ?? 1) * 2)}>zoom in</button>
       <button type="button" onClick={() => history.undo()}>undo</button>
 
       <p data-testid="active">{activeSide}</p>
       <p data-testid="activeSegments">{segments.length}</p>
       <p data-testid="activeCrop">{crop === null ? "none" : "set"}</p>
+      <p data-testid="activeZoom">{zoom === null ? "fit" : String(zoom)}</p>
       <p data-testid="canUndo">{history.state.canUndo ? "yes" : "no"}</p>
       <p data-testid="undoLabel">{history.state.undoLabel ?? "none"}</p>
       {[0, 1].map((i) => (
@@ -254,5 +258,36 @@ describe("closing a side", () => {
     fireEvent.click(screen.getByText("close right"));
 
     await waitFor(() => expect(shown("states")).toBe("left.png:2 none"));
+  });
+});
+
+describe("zoom", () => {
+  it("is per image, like the crop and the processing", async () => {
+    // A 4x zoom that suits a 200-pixel thumbnail fills the screen with one corner of a
+    // 4000-pixel scan, so it cannot be one value for the workspace.
+    await bothOpen();
+    fireEvent.click(screen.getByText("zoom in"));
+
+    await waitFor(() => expect(shown("activeZoom")).toBe("2"));
+    fireEvent.click(screen.getByText("activate right"));
+    await waitFor(() => expect(shown("activeZoom")).toBe("fit"));
+  });
+
+  it("starts at FIT, which is not 100%", async () => {
+    // Fitting is what a user wants on opening an image; 1:1 on a large scan shows a corner.
+    await bothOpen();
+
+    expect(shown("activeZoom")).toBe("fit");
+  });
+
+  it("does not carry over to the next image", async () => {
+    await bothOpen();
+    fireEvent.click(screen.getByText("zoom in"));
+    await waitFor(() => expect(shown("activeZoom")).toBe("2"));
+
+    fireEvent.click(screen.getByText("activate right"));
+    fireEvent.click(screen.getByText("reopen right"));
+
+    await waitFor(() => expect(shown("activeZoom")).toBe("fit"));
   });
 });

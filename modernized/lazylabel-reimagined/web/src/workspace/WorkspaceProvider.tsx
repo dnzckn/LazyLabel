@@ -103,6 +103,16 @@ export interface SideState {
   readonly crop: Crop | null;
   /** What the server should do to the image before sending it — RULE-029 and RULE-032. */
   readonly processing: ImageProcessing;
+  /**
+   * CSS pixels per image pixel, or null to fit the pane.
+   *
+   * Per image, like the crop and the processing, and for the same reason: a 4x zoom that suits a
+   * 200-pixel thumbnail fills the screen with one corner of a 4000-pixel scan.
+   *
+   * Null is the default and is not "1". Fitting is what the app did before there was a zoom and
+   * is what a user wants on opening an image; 1:1 on a large scan shows a corner of it.
+   */
+  readonly zoom: number | null;
 }
 
 const EMPTY_SIDE: SideState = {
@@ -113,6 +123,7 @@ const EMPTY_SIDE: SideState = {
   selected: [],
   crop: null,
   processing: NO_PROCESSING,
+  zoom: null,
 };
 
 /**
@@ -254,6 +265,15 @@ export interface WorkspaceContextValue {
    */
   readonly processing: ImageProcessing;
   readonly setProcessing: (processing: ImageProcessing) => void;
+  /**
+   * How far in the image is drawn — CSS pixels per image pixel, or null to fit the pane.
+   *
+   * Not a display adjustment: those change what the pixels LOOK like and this changes how many of
+   * them you can see at once. An annotator zooms to place a vertex on a boundary, which at the
+   * fitted size of a large scan is guesswork -- and the browser's own zoom scales the panels too.
+   */
+  readonly zoom: number | null;
+  readonly setZoom: (zoom: number | null) => void;
 }
 
 const WorkspaceContext = createContext<WorkspaceContextValue | null>(null);
@@ -388,7 +408,7 @@ export function WorkspaceProvider({
   );
 
   // What the single-image components read. Flat, exactly as they read it when there was one image.
-  const { open, segments, classAliases, selected, crop, processing } = sides[activeSide];
+  const { open, segments, classAliases, selected, crop, processing, zoom } = sides[activeSide];
   const imageState = imageStates[activeSide];
 
   const addSegment = useCallback(
@@ -647,6 +667,11 @@ export function WorkspaceProvider({
     [activeSide, updateSide],
   );
 
+  const setZoom = useCallback(
+    (next: number | null) => updateSide(activeSide, (current) => ({ ...current, zoom: next })),
+    [activeSide, updateSide],
+  );
+
   const markSavedOn = useCallback(
     (at: SideIndex) => updateSide(at, (current) => ({ ...current, dirty: false })),
     [updateSide],
@@ -690,6 +715,8 @@ export function WorkspaceProvider({
       setCrop,
       processing,
       setProcessing,
+      zoom,
+      setZoom,
     }),
     [
       activeClassId,
@@ -719,7 +746,9 @@ export function WorkspaceProvider({
       setCrop,
       setProcessing,
       setSelection,
+      setZoom,
       sides,
+      zoom,
       toggleSelected,
       updateSegment,
     ],

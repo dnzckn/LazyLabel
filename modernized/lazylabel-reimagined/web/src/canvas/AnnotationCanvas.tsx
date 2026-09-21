@@ -25,6 +25,8 @@ export interface AnnotationCanvasProps {
   readonly width: number;
   readonly height: number;
   readonly segments: readonly WireSegment[];
+  /** CSS pixels per image pixel, or null/absent to fit the pane. */
+  readonly zoom?: number | null;
   /** 0 hides the overlay, 1 hides the image. Legacy's default is a half-transparent overlay. */
   readonly opacity?: number;
   /**
@@ -44,6 +46,7 @@ export function AnnotationCanvas({
   width,
   height,
   segments,
+  zoom,
   opacity = 0.5,
   adjustments = NEUTRAL,
   onError,
@@ -103,6 +106,26 @@ export function AnnotationCanvas({
       className="canvas"
       width={width}
       height={height}
+      /*
+       * ZOOM IS AN EXPLICIT DISPLAYED SIZE, overriding the fit. The `width`/`height` attributes
+       * above are the image's own pixels and never change; this is how many CSS pixels they are
+       * drawn across.
+       *
+       * Every drawing layer derives its scale from `getBoundingClientRect`, so none of them has to
+       * know this exists -- which only works because the drawing surface is exactly the image. It
+       * was not, until the coordinate defect was found, and a zoom on top of that would have
+       * multiplied the error.
+       */
+      {...(zoom === null || zoom === undefined
+        ? {}
+        : {
+            style: {
+              width: `${width * zoom}px`,
+              height: `${height * zoom}px`,
+              maxWidth: "none",
+              maxHeight: "none",
+            },
+          })}
       role="img"
       aria-label={`${segments.length} annotations`}
     />

@@ -740,3 +740,19 @@ fieldset input {
   color: var(--muted);
   white-space: nowrap;
 }
+
+/* The zoom control, and the scrolling the zoom makes necessary. */
+.zoom {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.85rem;
+  margin-bottom: 0.5rem;
+}
+
+/* A zoomed image is larger than its pane, so the pane scrolls. `inline-block` on the stack means
+   the scroll container has to be its parent rather than the stack itself. */
+.canvas-scroll {
+  overflow: auto;
+  max-height: 32rem;
+}

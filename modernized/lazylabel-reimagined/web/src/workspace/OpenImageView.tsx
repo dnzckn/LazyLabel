@@ -112,7 +112,7 @@ function OpenedImage({
     useWorkspace();
   // The crop is the store's, not this view's: the SAVE path reads it, so a crop dragged here and
   // held locally would be one the panel showed and the file never saw.
-  const { crop, setCrop } = useWorkspace();
+  const { crop, setCrop, zoom } = useWorkspace();
   const { notify } = useNotifications();
   // Only a context failure falls back to the plain image. A picture that will not DECODE is the
   // canvas's own business -- it reports that and still draws the annotations, which is worth more
@@ -243,6 +243,7 @@ function OpenedImage({
 
               The `<img>` survives as the fallback for a browser that gives no 2D context, where
               the canvas can show nothing at all. */}
+          <div className="canvas-scroll">
           <div className="canvas-stack">
             {canvasFailed ? (
               <img className="preview" src={pixelsUrl} alt={image.name} />
@@ -253,6 +254,7 @@ function OpenedImage({
                 height={metadata.height}
                 segments={segments}
                 adjustments={adjustments}
+                zoom={zoom}
                 onError={onCanvasError}
               />
             )}
@@ -359,6 +361,7 @@ function OpenedImage({
                 onRefused={refuse}
               />
             )}
+          </div>
           </div>
         </>
       )}

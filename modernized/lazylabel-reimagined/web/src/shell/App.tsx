@@ -176,6 +176,7 @@ export function App({ client }: { readonly client: ApiClient }): ReactNode {
               <FragmentPanel />
             </Panel>
             <Panel title="Image adjustments">
+              <ZoomControl />
               <AdjustmentsPanel />
             </Panel>
             <Panel title="Rescale and thresholds" initiallyCollapsed>
@@ -287,6 +288,43 @@ export function App({ client }: { readonly client: ApiClient }): ReactNode {
  * default: a canvas that starts in a drawing mode turns the first click of a session -- often a
  * click to look at something -- into an annotation.
  */
+/**
+ * How far in the image is drawn — the thing a browser's own zoom cannot do.
+ *
+ * Ctrl+= scales the whole PAGE, panels included; an annotator wants the picture larger and the
+ * controls where they were. Legacy's zoom is image-only for the same reason, and without one a
+ * 2000-pixel scan fitted into the pane shows five image pixels per screen pixel, which makes
+ * placing a vertex on a boundary guesswork.
+ *
+ * FIT is the default and is not "100%". Fitting is what a user wants on opening an image; 1:1 on
+ * a large scan shows one corner of it.
+ */
+function ZoomControl(): ReactNode {
+  const { zoom, setZoom, open } = useWorkspace();
+
+  // Powers of two from an eighth to eight. A linear slider spends most of its travel between
+  // sizes nobody wants, and legacy's own steps double.
+  const step = (by: 1 | -1) => {
+    const from = zoom ?? 1;
+    setZoom(Math.min(8, Math.max(0.125, by === 1 ? from * 2 : from / 2)));
+  };
+
+  if (open === null) return null;
+
+  return (
+    <div className="zoom">
+      <span>Zoom</span>
+      <button type="button" aria-label="Zoom out" onClick={() => step(-1)}>−</button>
+      <span className="field__value">{zoom === null ? "Fit" : `${Math.round(zoom * 100)}%`}</span>
+      <button type="button" aria-label="Zoom in" onClick={() => step(1)}>+</button>
+      <button type="button" onClick={() => setZoom(null)} disabled={zoom === null}>
+        Fit
+      </button>
+      <button type="button" onClick={() => setZoom(1)}>1:1</button>
+    </div>
+  );
+}
+
 function ToolPicker(): ReactNode {
   const { activeTool, setActiveTool, segments, selected } = useWorkspace();
   const { notify } = useNotifications();
