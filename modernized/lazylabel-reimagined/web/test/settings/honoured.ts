@@ -101,7 +101,12 @@ export const HONOURED: Readonly<Record<string, Honoured>> = {
       + "so an imported legacy settings file round-trips rather than losing a value the user set.",
   ),
   export_formats: read,
-  stream_window_size: gap("propagation's streaming window; propagation is not built (C11)."),
+  stream_window_size: gap(
+    "propagation's streaming window. RULE-026's arithmetic IS built and proven against legacy's "
+      + "own loop (`inference/src/lazylabel_inference/windows.py`) -- what is missing is the web "
+      + "side: the job API this would be sent to still answers 501 (C11). Narrower than it was, "
+      + "and still a gap, because a user setting it here changes nothing.",
+  ),
   dark_mode: read,
   multi_view_grid_mode: dropped(
     "decision 8: legacy's four-view setting was a control over two viewers, and the split view is "
