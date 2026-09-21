@@ -142,6 +142,18 @@ describe("starting one", () => {
     expect(screen.getByText(/Nothing to carry from yet/)).toBeTruthy();
   });
 
+  it("is on the propagate hotkey, which was listed in the schema and bound to nothing", async () => {
+    // The reference table says a key is live only when a handler exists for it. This is the
+    // handler; before the control existed, `propagate` was one of forty actions the table listed
+    // with a key that did nothing.
+    const fake = fakeClient({});
+    show(fake);
+
+    fireEvent.keyDown(document, { key: defaultSettings().hotkeys["propagate"]!.primary });
+
+    await waitFor(() => expect(fake.started).toHaveLength(1));
+  });
+
   it("shows progress against the total the job reports", async () => {
     const fake = fakeClient({
       start: () => job({ completed: 0, total: 4 }),

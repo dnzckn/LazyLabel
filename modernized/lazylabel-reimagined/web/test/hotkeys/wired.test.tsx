@@ -216,9 +216,12 @@ describe("the hotkey reference", () => {
     }
   });
 
-  it("marks an unbuilt action as not yet", async () => {
-    // Propagation needs the inference service and a recorded sequence. Its key is in the schema
-    // and honoured on import; what must not happen is the table implying it runs.
+  it("reports propagate as inactive while its control is not mounted", async () => {
+    // Propagation IS built now, and this still says "not yet" -- correctly. The key is registered
+    // by the propagation control, which appears only once a timeline exists and this deployment
+    // has an inference client; this fixture has neither. The table answers "will this do something
+    // if I press it now", which is the question a user is actually asking, and the alternative is
+    // a key listed as live that nothing is listening for.
     const table = await openReference();
 
     const row = within(table).getByRole("row", { name: /propagate/ });
