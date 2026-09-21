@@ -42,13 +42,15 @@ All six green, run together:
 | Package | Passing | Note |
 |---|---|---|
 | exporters | 1979 | the seven formats, byte-for-byte against goldens legacy wrote |
-| web | 950 | plus 1 todo: C11's placeholder |
-| api | 332 | plus 4 skipped and 5 todo, all needing a checkpoint or a corpus |
+| web | 991 | plus 1 todo: C11's placeholder |
+| api | 334 | plus 4 skipped and 5 todo, all needing a checkpoint or a corpus |
 | inference | 233 | plus 36 skipped: the differentials, which need real checkpoints |
 | settings-schema | 41 | includes the rule-fixed defaults |
 | converter | 30 | the pickled-alias rewrite |
 
-**3565 passing.** The skips are the honest part: they skip themselves when no checkpoint is
+**3608 passing**, counted from a run rather than from arithmetic — the figure quoted during the
+day had drifted seven behind as the web suite grew, which is what quoting a sum instead of
+measuring one does. The skips are the honest part: they skip themselves when no checkpoint is
 configured, so a green CI run says nothing about them — see `Running the live suites`.
 
 ## What to do next
