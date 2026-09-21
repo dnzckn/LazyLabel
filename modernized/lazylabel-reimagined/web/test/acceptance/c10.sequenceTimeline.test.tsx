@@ -10,8 +10,10 @@
  * sliders and undo/redo were each implemented, tested and unreachable, and every component test
  * passed throughout.
  *
- * NO PROPAGATION, which is Phase 6's next slice and is gated on a golden capture. The timeline is
- * the pilot: a file range and which frames are already ground truth.
+ * PROPAGATION IS REACHABLE HERE NOW. It was not, and the test below that proves it used to prove
+ * the opposite -- that no button was offered, because nothing was behind one. What is still NOT
+ * claimed is that the results agree with legacy: that needs a golden capture, and the panel says so
+ * on screen rather than leaving the silence to be read as confidence.
  */
 
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
@@ -151,12 +153,31 @@ describe("C10: build a timeline and mark reference frames", () => {
     await waitFor(() => expect(screen.getByLabelText("Status").textContent).toMatch(/f03\.png/));
   });
 
-  it("says propagation is not built, rather than offering a button with nothing behind it", async () => {
+  it("offers Propagate now that there is a job API behind it", async () => {
+    // This test used to assert the OPPOSITE -- that no button was offered, because nothing was
+    // behind one. That was the right assertion while it was true, and changing it is what closing
+    // the slice looks like. What has NOT changed is the claim underneath: the panel still says
+    // plainly that agreement with legacy is unproven, because it is.
     await openSequence();
     fireEvent.click(screen.getByText("Build timeline"));
 
     await waitFor(() => expect(cells()).toHaveLength(4));
-    expect(screen.queryByRole("button", { name: /^Propagate/ })).toBeNull();
-    expect(screen.getByText(/waits on a recorded sequence/)).toBeTruthy();
+    expect(screen.getByRole("button", { name: /^Propagate/ })).toBeTruthy();
+    expect(screen.getByText(/has not been proved/)).toBeTruthy();
+  });
+
+  it("will not propagate with nothing to carry from", async () => {
+    // Legacy will: with no reference it runs the whole sequence and writes an empty mask over
+    // every frame, which is worse than doing nothing because it looks like work.
+    // A range over f03 and f04 only, neither of which is annotated -- so the timeline has no
+    // reference in it. The default range does have one, which is why this picks its own.
+    await openSequence();
+    fireEvent.change(screen.getByLabelText("First frame"), { target: { value: "2" } });
+    fireEvent.change(screen.getByLabelText("Last frame"), { target: { value: "3" } });
+    fireEvent.click(screen.getByText("Build timeline"));
+
+    await waitFor(() => expect(cells()).toHaveLength(2));
+    expect(screen.getByRole("button", { name: /^Propagate/ })).toHaveProperty("disabled", true);
+    expect(screen.getByText(/Nothing to carry from yet/)).toBeTruthy();
   });
 });

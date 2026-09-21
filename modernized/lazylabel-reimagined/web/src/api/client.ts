@@ -106,6 +106,36 @@ export interface WireSegmentResponse {
   readonly alternatives: readonly number[];
 }
 
+export interface WirePropagationStart {
+  readonly sequence: readonly string[];
+  readonly references: readonly number[];
+  readonly start?: number;
+  readonly end?: number;
+  readonly streaming?: boolean;
+  /** RULE-026's `stream_window_size`. */
+  readonly window?: number;
+  readonly model?: string;
+}
+
+export interface WirePropagationFrame {
+  readonly source: string;
+  readonly objectId: number;
+  readonly mask: { readonly height: number; readonly width: number; readonly box: readonly number[]; readonly data: string };
+  /** RULE-016. What RULE-060 flags a frame on. */
+  readonly confidence: number;
+}
+
+export interface WirePropagationJob {
+  readonly id: string;
+  readonly state: "running" | "completed" | "cancelled" | "failed";
+  readonly completed: number;
+  readonly total: number | null;
+  readonly cursor: number;
+  readonly cancelling: boolean;
+  readonly error: string | null;
+  readonly results: readonly WirePropagationFrame[];
+}
+
 export interface ApiClientOptions {
   /** Where the API lives. Defaults to "/api", which the dev server proxies and production serves. */
   readonly baseUrl?: string;
@@ -254,6 +284,37 @@ export class ApiClient {
   async segment(request: WireSegmentRequest): Promise<WireSegmentResponse> {
     const response = await this.send("POST", "/inference/segment", request);
     if (response.status === 200) return (await response.json()) as WireSegmentResponse;
+    throw await this.problem(response);
+  }
+
+  /**
+   * Start carrying masks through a sequence. Returns as soon as the job exists.
+   *
+   * 202, never 200: the work runs for minutes and the browser must not be told it is done. The
+   * client returns the job so the caller can poll it, which is the only shape that lets Cancel
+   * mean anything.
+   */
+  async startPropagation(request: WirePropagationStart): Promise<WirePropagationJob> {
+    const response = await this.send("POST", "/inference/propagations", request);
+    if (response.status === 202) return (await response.json()) as WirePropagationJob;
+    throw await this.problem(response);
+  }
+
+  /** A job's state and the results produced since `cursor`. */
+  async propagationState(jobId: string, cursor: number): Promise<WirePropagationJob> {
+    const query = new URLSearchParams({ id: jobId, cursor: String(cursor) });
+    const response = await this.send("GET", `/inference/propagations?${query.toString()}`);
+    if (response.status === 200) return (await response.json()) as WirePropagationJob;
+    throw await this.problem(response);
+  }
+
+  /** Stop a job, keeping the frames it has already finished (RULE-063). */
+  async cancelPropagation(jobId: string): Promise<WirePropagationJob> {
+    const response = await this.send(
+      "DELETE",
+      `/inference/propagations/${encodeURIComponent(jobId)}`,
+    );
+    if (response.status === 200) return (await response.json()) as WirePropagationJob;
     throw await this.problem(response);
   }
 

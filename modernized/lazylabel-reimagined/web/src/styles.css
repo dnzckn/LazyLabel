@@ -591,6 +591,41 @@ fieldset input {
   margin-bottom: 0.5rem;
 }
 
+/*
+ * Propagation. At the TOP of the panel because it is the action the timeline exists for, and
+ * because its progress line has to be visible without scrolling past six hundred cells.
+ */
+.timeline__propagation {
+  border: 1px solid var(--rule);
+  border-radius: 0.25rem;
+  padding: 0.5rem;
+  margin-bottom: 0.6rem;
+}
+
+.timeline__propagation-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+
+.timeline__propagation-hint,
+.timeline__propagation-state,
+.timeline__propagation-empty,
+.timeline__propagation-error {
+  font-size: 0.85rem;
+  margin: 0.4rem 0 0;
+}
+
+.timeline__propagation-hint,
+.timeline__propagation-empty {
+  color: var(--muted);
+}
+
+/* A failure is loud. A cancel is not -- it reports what it KEPT, which is not bad news. */
+.timeline__propagation-error {
+  color: var(--danger, #b3261e);
+}
+
 /* Undo and redo. The label says what would be undone, which no keystroke can. */
 .history {
   display: flex;

@@ -193,16 +193,26 @@ describe("using it", () => {
   });
 });
 
-describe("what is not built", () => {
-  it("offers no propagation button, and says why", async () => {
-    // A control with nothing behind it is the thing this codebase refuses to ship. Naming what is
-    // missing, and what it waits on, is the alternative.
+describe("with no inference service", () => {
+  it("offers no propagation control at all, rather than one that answers 503", async () => {
+    // This harness renders the panel without a client, which is a deployment with no model. The
+    // control is absent rather than present-and-failing: a button that replies 503 teaches a user
+    // the feature is unreliable, where no button says plainly that this deployment has no model.
     show();
     build("0", "4");
 
     await waitFor(() => expect(cells()).toHaveLength(5));
     expect(screen.queryByText(/^Propagate/)).toBeNull();
-    expect(screen.getByText(/waits on a recorded sequence/)).toBeTruthy();
+  });
+
+  it("still says agreement with legacy is unproven", async () => {
+    // Propagation runs now. What has NOT been shown is that it matches legacy frame for frame, and
+    // silence there would be read as confidence.
+    show();
+    build("0", "4");
+
+    await waitFor(() => expect(cells()).toHaveLength(5));
+    expect(screen.getByText(/has not been proved/)).toBeTruthy();
   });
 });
 

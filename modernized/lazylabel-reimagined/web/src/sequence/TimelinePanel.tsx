@@ -11,17 +11,20 @@
  * a file range and which frames are already ground truth. Sequence endpoints belong to the
  * propagation slices, which are gated on the golden capture.
  *
- * NO PROPAGATION BUTTON. There is nothing behind it yet, and a control that does nothing is the
- * thing this codebase refuses to ship. What is here is the timeline, its counts, its sort and its
- * navigation.
+ * THE PROPAGATION BUTTON IS HERE NOW, and it was not before: "a control that does nothing is the
+ * thing this codebase refuses to ship" is why it waited for the job API underneath it. It appears
+ * only when the sequence has a reference to carry FROM, because propagating from nothing is what
+ * legacy does — it runs the whole sequence and writes an empty mask over every frame.
  */
 
 import { useCallback, useMemo, useState, type ReactNode } from "react";
 
 import type { WireDatasetImage } from "@lazylabel/contracts";
 
+import type { ApiClient } from "../api/client.js";
 import { useSettings } from "../settings/SettingsProvider.jsx";
 import { useHotkey } from "../hotkeys/HotkeyProvider.jsx";
+import { PropagationControl } from "./PropagationControl.jsx";
 
 import {
   buildTimeline,
@@ -59,13 +62,32 @@ export interface TimelinePanelProps {
    * ever run.
    */
   readonly scores?: Readonly<Record<number, number>>;
+  /**
+   * How to reach the inference service. Absent means the Propagate control is not offered at all.
+   *
+   * Offered-and-broken is the worse of the two: a button that answers 503 teaches a user that the
+   * feature is unreliable, where no button says plainly that this deployment has no model.
+   */
+  readonly client?: ApiClient;
 }
 
-export function TimelinePanel({ images, onOpen, scores = {} }: TimelinePanelProps): ReactNode {
+export function TimelinePanel({
+  images,
+  onOpen,
+  scores = {},
+  client,
+}: TimelinePanelProps): ReactNode {
   const [range, setRange] = useState<{ from: number; to: number } | null>(null);
   const [overrides, setOverrides] = useState<readonly Frame[] | null>(null);
   const [sorted, setSorted] = useState(false);
   const [current, setCurrent] = useState(0);
+  /*
+   * Scores a propagation produced HERE, merged over whatever the caller passed.
+   *
+   * Both, not one: the prop is how a caller supplies scores from somewhere else, and losing it the
+   * moment this panel could produce its own would be a regression for anyone using it.
+   */
+  const [ownScores, setOwnScores] = useState<Readonly<Record<number, number>>>({});
   /*
    * MIN CONF IS A PERSISTED SETTING, not panel state -- `propagation_confidence_threshold`, which
    * decision 9 keeps with the rest. It was local state for one commit and that was wrong twice
@@ -152,9 +174,14 @@ export function TimelinePanel({ images, onOpen, scores = {} }: TimelinePanelProp
 
   const counts = summarize(frames);
   const order = sorted ? sortedOrder(frames) : frames.map((frame) => frame.index);
+  const allScores = { ...scores, ...ownScores };
 
   return (
     <div className="timeline">
+      {client !== undefined && (
+        <PropagationControl client={client} frames={frames} onScores={setOwnScores} />
+      )}
+
       <p className="timeline__counts">
         {counts.total} frames, {counts.references} reference
         {counts.references === 1 ? "" : "s"}
@@ -220,7 +247,7 @@ export function TimelinePanel({ images, onOpen, scores = {} }: TimelinePanelProp
       </div>
 
       <ConfidencePanel
-        scores={scores}
+        scores={allScores}
         threshold={threshold}
         onThreshold={(value) => {
           const next = clampThreshold(value);
@@ -228,14 +255,14 @@ export function TimelinePanel({ images, onOpen, scores = {} }: TimelinePanelProp
           // The TIMELINE moves with the number, not only the set a save would use. Legacy
           // recomputes one and not the other, so the colours point at one set of frames to review
           // while Save All skips another -- and nothing says the two disagree.
-          setOverrides(applyThreshold(frames, scores, next));
+          setOverrides(applyThreshold(frames, allScores, next));
         }}
       />
 
       <p className="panel__missing">
-        Propagation is the next slice and is not built. It waits on a recorded sequence with
-        legacy's outputs captured as golden data, which is what proves the port agrees frame for
-        frame — see `capture_propagation_goldens.py`.
+        Propagation runs here, and what has not been proved is that it agrees with legacy frame for
+        frame. That needs a recorded sequence with legacy's outputs captured as golden data — see
+        `capture_propagation_goldens.py`.
       </p>
     </div>
   );

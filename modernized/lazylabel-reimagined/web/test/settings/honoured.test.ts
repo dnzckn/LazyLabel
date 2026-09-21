@@ -124,12 +124,14 @@ describe("what the scan currently finds", () => {
   it("reports the counts, so a change in them is visible in the diff", () => {
     // Not a threshold to pass — a number to notice. When a gap is closed this test fails and the
     // person closing it moves the key to `read`, which is exactly the prompt that was missing.
+    // It has now done that job thirteen times: the table opened at thirteen unread settings and
+    // the last of them, `stream_window_size`, closed when the browser learned to propagate.
     const counted = (kind: string) => KEYS.filter((key) => HONOURED[key]?.kind === kind).length;
 
     expect({ read: counted("read"), dropped: counted("dropped"), gap: counted("gap") }).toEqual({
-      read: 29,
+      read: 30,
       dropped: 9,
-      gap: 1,
+      gap: 0,
     });
   });
 });

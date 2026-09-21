@@ -224,6 +224,7 @@ export function App({ client }: { readonly client: ApiClient }): ReactNode {
 
             <Panel title="Sequence" initiallyCollapsed>
               <TimelinePanel
+                client={client}
                 images={listed}
                 onOpen={(key) => {
                   const image = listed.find((entry) => entry.key === key);
