@@ -808,21 +808,21 @@ forgot to switch it on before a session's work is not left re-drawing it — and
 become a polygon is LEFT AS A MASK rather than dropped, because the point is to gain corners to
 drag, not to lose annotations.
 
-Thirty-four of the forty-three actions are live. What is left: `save_segment` and `erase_segment`,
-which work but are not registered (see below); `propagate` and `find_archetypes`, which are C11;
-and `left_click`, `right_click` and `mouse_drag`, which legacy lists in the same table and are not
-keys.
+All of that group is live now; see below for the last two that were working unregistered.
 
-**The hotkey count can UNDER-report, and the app now says so.** `save_segment` (Space) and
-`erase_segment` (Shift+Space) finish a polygon and an AI mask today, but the drawing layers handle
-those keys directly instead of registering them — so the table calls them pending while they work.
-That is the same dishonesty as over-reporting, reached from the other side, and it is the price of
-reading the dispatcher rather than a list.
+**That under-reporting is fixed.** `save_segment` and `erase_segment` finished a shape through
+raw listeners the dispatcher never saw, so the reference called them pending while they worked —
+the one guard that cannot drift, drifting. Both are registered now, and the binding decides accept
+from erase rather than `event.shiftKey`, so a remapping is honoured in full.
 
-Routing them through `useHotkey` fixes it and makes them remappable at once, which is the reason
-to do it. It is not a two-line change: the dispatcher matches on `event.code`, and the layers'
-tests fire `{ key: " " }` with no code, so the keys have to move and their tests with them. Worth
-doing; not worth doing carelessly.
+**Enter stays raw, deliberately.** Legacy's Enter finishes the polygon and then saves, and the
+save half is `save_output` on the opened image. Registering Enter in the layer as well would put
+two handlers on one action with no order between them, and a write that ran first would save
+without the shape the same keystroke was finishing.
+
+**Thirty-six of forty-three are live.** What is left: `propagate` and `find_archetypes` (C11), and
+`left_click`, `right_click` and `mouse_drag`, which legacy lists in the same table and are not
+keys at all. Every hotkey that can be wired, is.
 
 **The two settings gaps left are
 `operate_on_view` (RULE-089) and `stream_window_size` (C11)** — both blocked on work larger than
