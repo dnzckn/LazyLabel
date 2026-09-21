@@ -43,6 +43,14 @@ const TEST_ROOTS = [
  * defect -- which this project has refused to do once already, for `file_manager_show_name`.
  */
 const DELIBERATELY_NOT_IMPLEMENTED: Readonly<Record<string, string>> = {
+  "RULE-033":
+    "only its Ctrl+Plus/Minus clause diverges, and it is worth the owner's eye. Legacy binds those "
+    + "keys to the annotation-size MULTIPLIER -- the card says '(not image zoom)' -- while the "
+    + "settings schema names the same bindings `zoom_in` and `zoom_out`. Wiring them to the "
+    + "multiplier would recreate the exact defect `fit_view` had: a key doing something other "
+    + "than its name, listed under that name in the hotkey reference. They zoom here, and the "
+    + "annotation size keeps its slider. The rest of the rule -- radius 0.3x, line 0.5x, WASD "
+    + "panning 10% of the view -- is built and proven in `canvas/sizing.test.ts`.",
   "RULE-042":
     "decision 7's sibling for class names: legacy accepts any alias, including an empty one and a "
     + "duplicate, and the exporters then write files whose class names collide. This validates on "
@@ -160,6 +168,33 @@ describe("every P0 rule is traceable to a test", () => {
     ).toEqual([]);
   });
 
+  it("names every P2 rule too, which completes the three lists", async () => {
+    // The smallest list, and the cheapest to finish. Nothing in it needed building -- two were
+    // covered and unnamed, and RULE-033's Ctrl+Plus clause is the divergence above.
+    const markdown = await readFile(RULES, "utf-8");
+
+    const p2 = [...markdown.matchAll(/^### (RULE-\d+):[\s\S]*?\*\*Priority:\*\*\s*(P\d)/gm)]
+      .filter((match) => match[2] === "P2")
+      .map((match) => match[1]!);
+
+    expect(p2.length, "no P2 rules were found; the parse is wrong").toBeGreaterThan(4);
+
+    const files = (await Promise.all(TEST_ROOTS.map(collectTests))).flat();
+    const haystack = (await Promise.all(files.map((file) => readFile(file, "utf-8")))).join("\n");
+
+    const unaccounted = p2.filter(
+      (rule) =>
+        !haystack.includes(rule)
+        && DELIBERATELY_NOT_IMPLEMENTED[rule] === undefined
+        && NOT_BUILT_YET[rule] === undefined,
+    );
+
+    expect(
+      unaccounted,
+      `these P2 rules are named by no test, no decision and no gap: ${unaccounted.join(", ")}`,
+    ).toEqual([]);
+  });
+
   it("does not let unbuilt work retire as a decision", () => {
     // The two lists must stay apart. A rule in both would be a gap wearing a decision's clothes.
     const both = Object.keys(NOT_BUILT_YET).filter(
@@ -173,10 +208,21 @@ describe("every P0 rule is traceable to a test", () => {
   });
 
   it("explains every deliberate divergence properly", () => {
-    // A one-word excuse is how this list stops being read.
+    /*
+     * A one-word excuse is how this list stops being read.
+     *
+     * Two shapes of reason are allowed, and the second was added when RULE-033 needed it. Most
+     * divergences follow from a numbered decision the owner made, and naming it is the strongest
+     * possible justification. A few do not: they avoid a DEFECT that legacy's own card describes,
+     * and pointing at that is just as checkable. What is not allowed is a reason that does
+     * neither -- which is how a preference gets written down as a principle.
+     */
     for (const [rule, why] of Object.entries(DELIBERATELY_NOT_IMPLEMENTED)) {
       expect(why.length, `${rule}'s reason is too short to be one`).toBeGreaterThan(60);
-      expect(why, `${rule} does not name the decision`).toMatch(/decision \d+/);
+      expect(
+        why,
+        `${rule} names neither a decision nor the defect it avoids`,
+      ).toMatch(/decision \d+|defect/i);
     }
   });
 });

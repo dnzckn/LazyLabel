@@ -5,6 +5,9 @@
  * SAME answer as rasterizing the whole image, at every pixel. That is the optimisation's entire
  * correctness argument, and it is exactly the kind of thing that holds for the shapes a hand-written
  * test happens to pick and fails on a boundary somewhere else.
+
+ *
+ * Names RULE-094, so the rule is traceable to the test that proves it: a click in Selection mode toggles the most recently added segment covering that pixel.
  */
 
 import { rasterizeSegment } from "@lazylabel/annotation-formats";

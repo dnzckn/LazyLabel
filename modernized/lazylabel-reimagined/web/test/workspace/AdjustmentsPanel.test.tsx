@@ -4,6 +4,9 @@
  * What is worth pinning beyond "a slider changes a setting": that the units are LEGACY's, so a
  * stored settings file round-trips; and that the negative-brightness fold is announced, which is
  * the one thing legacy never does.
+
+ *
+ * Names RULE-050, so the rule is traceable to the test that proves it: the setting inputs are clamped -- annotation size 0.1-5.0, pan speed 0.1-10.0 -- so a typed value out of range cannot reach the canvas.
  */
 
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
