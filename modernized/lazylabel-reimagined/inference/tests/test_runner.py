@@ -218,6 +218,80 @@ class TestAFrameThatCannotBeRead:
         assert predictor.seeds == []
 
 
+class TestAFrameOfTheWrongSIZE:
+    """RULE-071: a frame whose size differs from the reference's is skipped and left out.
+
+    Not a nicety. SAM 2's video state is built from one stack of frames, so a differently sized one
+    is either rejected deep inside the loader -- ending a six-hundred-frame run over one bad image
+    -- or silently resized, which moves every mask it produces. Skipping is the only one of those
+    three outcomes that is honest, and it is what legacy does.
+    """
+
+    def reader_where(self, odd_key: str, size: tuple[int, int]):
+        def reader(key: str):
+            return image() if key != odd_key else np.full((*size, 3), 128, dtype=np.uint8)
+
+        return reader
+
+    def test_it_is_not_staged(self, tmp_path: pathlib.Path) -> None:
+        keys = sequence(5)
+        predictor = FakePredictor()
+
+        results = run(
+            predictor,
+            request(5),
+            [reference(0)],
+            tmp_path,
+            reader=self.reader_where(keys[2], (9, 9)),
+        )
+
+        assert results
+        assert keys[2] not in {result.source for result in results}
+
+    def test_the_others_still_land_on_the_right_images(self, tmp_path: pathlib.Path) -> None:
+        # The same property RULE-017 is about: a frame dropped from the middle must not shift the
+        # attribution of every frame after it.
+        keys = sequence(5)
+        predictor = FakePredictor()
+
+        results = run(
+            predictor,
+            request(5),
+            [reference(0)],
+            tmp_path,
+            reader=self.reader_where(keys[1], (9, 9)),
+        )
+
+        assert all(result.source in keys for result in results)
+        assert keys[1] not in {result.source for result in results}
+
+    def test_a_matching_size_is_kept(self, tmp_path: pathlib.Path) -> None:
+        # The guard must not exclude frames that are simply fine.
+        predictor = FakePredictor()
+
+        results = run(predictor, request(5), [reference(0)], tmp_path)
+
+        assert len({result.source for result in results}) > 1
+
+    def test_the_REFERENCE_decides_the_size_not_the_first_frame(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        # RULE-071 measures against the reference's size. With the reference at frame 3, a frame 0
+        # of a different size is the odd one out -- not the other way round.
+        keys = sequence(5)
+        predictor = FakePredictor()
+
+        results = run(
+            predictor,
+            request(5, references=(3,)),
+            [reference(3)],
+            tmp_path,
+            reader=self.reader_where(keys[0], (9, 9)),
+        )
+
+        assert keys[0] not in {result.source for result in results}
+
+
 class TestRefusals:
     def test_no_references_is_refused(self, tmp_path: pathlib.Path) -> None:
         # Legacy runs the whole sequence and writes an empty mask over every frame.

@@ -169,6 +169,22 @@ def run_propagation(
     root = Path(tempfile.mkdtemp(prefix="lazylabel-propagation-")) if staging_root is None else staging_root
     root.mkdir(parents=True, exist_ok=True)
 
+    # RULE-071's "reference size": the size of the first reference frame, which every other frame
+    # is measured against. Read once, before any window, because a size that changed between
+    # windows would silently change which frames are in the run.
+    reference_size: tuple[int, int] | None = None
+    try:
+        first = read_image(sequence[references[0].frame])
+    except (OSError, ValueError, KeyError):
+        # An unreadable reference fails again below, with a message about the seed rather than
+        # about sizing. NARROW on purpose: a broad `except Exception` here swallowed a NameError in
+        # this very block -- the reader was called by the wrong name -- and the only symptom was
+        # that every frame passed the size check, because there was no reference size to fail it.
+        first = None
+    shape = getattr(first, "shape", None)
+    if shape is not None and len(shape) >= 2:
+        reference_size = (int(shape[0]), int(shape[1]))
+
     try:
         windows = _windows_for(request)
         novel_per_window = novel_frames(windows)
@@ -191,6 +207,7 @@ def run_propagation(
                 reader=read_image,
                 directory=root / f"window-{number:03d}",
                 cancel=cancel,
+                reference_size=reference_size,
             ):
                 yield result
 
@@ -212,6 +229,7 @@ def _run_window(
     reader: Callable[[str], Any],
     directory: Path,
     cancel: Any,
+    reference_size: tuple[int, int] | None,
 ) -> Iterator[FrameResult]:
     plan_for = _build_window(window, references)
 
@@ -226,9 +244,27 @@ def _run_window(
     for position in plan_for.positions:
         key = sequence[position]
         try:
-            images.append((key, reader(key)))
+            array = reader(key)
         except Exception as cause:  # noqa: BLE001 - any read failure means the same thing here
             unreadable.append((key, str(cause)))
+            continue
+
+        # RULE-071: a frame whose size differs from the REFERENCE size is skipped and left out.
+        #
+        # Not a nicety. SAM 2's video state is built from one stack of frames, so a differently
+        # sized one is either rejected deep inside the loader -- ending a 600-frame run over one
+        # bad image -- or silently resized, which moves every mask it produces. Legacy skips them
+        # and says so on the timeline, and skipping is the only one of those three that is honest.
+        shape = getattr(array, "shape", None)
+        size = None if shape is None else (int(shape[0]), int(shape[1]))
+        if reference_size is not None and size is not None and size != reference_size:
+            unreadable.append(
+                (key, f"its size {size[1]}x{size[0]} is not the reference's "
+                      f"{reference_size[1]}x{reference_size[0]}")
+            )
+            continue
+
+        images.append((key, array))
 
     staged = stage_sequence(images, directory)
     # Carried on the staged sequence rather than dropped, so a caller can report "3 frames could
