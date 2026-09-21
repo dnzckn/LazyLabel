@@ -73,6 +73,46 @@ def serve(handle: Callable[[Request], Response], host: str, port: int, logger: L
         server.server_close()
 
 
+def build_deps(config, models, logger, manifest_error=None):
+    """Turn a configuration into the dependencies the app runs on.
+
+    ITS OWN FUNCTION SO IT CAN BE TESTED, and that is not a style preference. Until it existed the
+    wiring lived inline in `main()`, `Deps.service` defaulted to None, and nothing constructed the
+    service at all -- so a machine with checkpoints, a manifest and a GPU answered 503 on every
+    route that reads an image. The whole suite passed throughout, because every test builds its own
+    `Deps` and never ran the line that production runs.
+
+    That is this project's recurring defect at the process level: a thing that works, a test that
+    proves it works, and nothing calling it. The wiring is the part no unit test was looking at.
+    """
+    from .app import Deps
+    from .service import InferenceService
+
+    # None when no root is configured -- the honest state, not a failure. /health and /models still
+    # answer, and they are what an operator installing checkpoints needs before anything else.
+    service = (
+        None
+        if config.dataset_root is None
+        else InferenceService(
+            models=models, model_dir=config.model_dir, dataset_root=config.dataset_root
+        )
+    )
+    if service is None:
+        logger.log(
+            "warn",
+            "no dataset root is configured, so the routes that read images will answer 503",
+            hint="set LAZYLABEL_DATASET_ROOT to the folder holding your images",
+        )
+
+    return Deps(
+        models=models,
+        model_dir=config.model_dir,
+        logger=logger,
+        manifest_error=manifest_error,
+        service=service,
+    )
+
+
 def main() -> int:
     """Entry point: read the configuration, load the manifest, listen."""
     from .app import Deps, create_app
@@ -97,9 +137,7 @@ def main() -> int:
         manifest_error = exc
         logger.log("error", "the model manifest could not be read", reason=str(exc))
 
-    handle = create_app(
-        Deps(models=models, model_dir=config.model_dir, logger=logger, manifest_error=manifest_error)
-    )
+    handle = create_app(build_deps(config, models, logger, manifest_error))
     serve(handle, config.host, config.port, logger)
     return 0
 
