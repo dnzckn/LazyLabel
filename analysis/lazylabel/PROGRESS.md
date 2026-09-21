@@ -780,7 +780,17 @@ pixels: five image pixels to one on screen, with no way to get closer. Placing a
 boundary at that scale is guesswork. And the browser's own zoom scales the whole PAGE, panels
 included, which is not what an annotator wants — legacy's zoom is image-only for that reason.
 
-It is smaller to build than it looks, and today's work is why. Every drawing layer derives its
+**It is built now.** Fit by default, doubling steps, per image beside the crop and the
+processing. It cost almost nothing, and the coordinate fix is why: at 4x the drawing layer
+measures 256x256 over a 64x64 image, and a polygon clicked at pixels (10,10) (40,10) (40,30) saved
+as edges 10.0..41.0 by 10.0..31.0 — the correct inclusive-pixel extent, verified against the file.
+A zoom built before that fix would have multiplied the error instead of inheriting the fix.
+
+What remains of that group is PAN: once an image is larger than its pane the pane scrolls, which
+works, but `pan_mode` and the four `pan_*` keys still do nothing and `pan_multiplier` is still the
+last settings gap that is not C11 or RULE-089. Drag-to-scroll is the shape.
+
+The original note, kept because it is why this was cheap: Every drawing layer derives its
 scale from `getBoundingClientRect`, and the drawing surface is now exactly the image (see the
 coordinate defect above), so a zoom that changes the canvas's displayed WIDTH is followed by every
 tool without touching one of them. What is needed: a zoom factor per side in the store, beside the
