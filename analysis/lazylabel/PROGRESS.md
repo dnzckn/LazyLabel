@@ -786,9 +786,15 @@ measures 256x256 over a 64x64 image, and a polygon clicked at pixels (10,10) (40
 as edges 10.0..41.0 by 10.0..31.0 — the correct inclusive-pixel extent, verified against the file.
 A zoom built before that fix would have multiplied the error instead of inheriting the fix.
 
-What remains of that group is PAN: once an image is larger than its pane the pane scrolls, which
-works, but `pan_mode` and the four `pan_*` keys still do nothing and `pan_multiplier` is still the
-last settings gap that is not C11 or RULE-089. Drag-to-scroll is the shape.
+**The four `pan_*` keys and `pan_multiplier` followed.** They scroll the PANE rather than
+transforming the canvas: the pane already scrolls once an image is larger than it, and a transform
+would be a second way to position the image that the scrollbar could disagree with — the same
+shape as every wiring defect found today. `scrollBy` clamps at the ends itself.
+
+What remains of that group is `pan_mode`, legacy's hand-drag on Q. Drag-to-scroll is the shape,
+and it is the only one of the six zoom-and-pan keys still dead. **The two settings gaps left are
+`operate_on_view` (RULE-089) and `stream_window_size` (C11)** — both blocked on work larger than
+a wiring job.
 
 The original note, kept because it is why this was cheap: Every drawing layer derives its
 scale from `getBoundingClientRect`, and the drawing surface is now exactly the image (see the
