@@ -18,7 +18,7 @@ SPEC = Path(__file__).resolve().parents[4] / "analysis" / "lazylabel" / "AI_NATI
 
 # The routes this service exposes for a capability that is not built, and the marker that holds the
 # place. Kept beside the table so the two cannot drift apart unnoticed.
-PENDING = {"C3", "C10", "C11"}
+PENDING = {"C3", "C10"}
 
 
 def test_the_specification_is_where_this_test_expects_it() -> None:
@@ -34,11 +34,26 @@ def test_every_capability_here_exists_in_the_specification() -> None:
         assert entry.id in listed, f"{entry.id} is not a capability in the specification"
 
 
-def test_nothing_is_marked_built_yet() -> None:
-    # Phase 3 built the SAM 2.1 prompt routes, but C3 also covers SAM 1 and the neighbour prefetch,
-    # so it is not finished. If this ever fails, the table is claiming work the routes do not do,
-    # which is the one direction that matters.
-    assert not any(entry.built for entry in CAPABILITIES)
+def test_only_what_the_routes_actually_do_is_marked_built() -> None:
+    """This test used to assert that NOTHING was built, and C11 is why it no longer can.
+
+    The direction that matters has not changed: the table must never claim work the routes do not
+    do. What changed is that one of them now does it -- the service propagates, end to end, with
+    the video predictor it runs on. C3 still covers a SAM 1 backend and the neighbour prefetch,
+    and C10 still covers archetype finding, so both remain unbuilt.
+    """
+    built = {entry.id for entry in CAPABILITIES if entry.built}
+
+    assert built == {"C11"}
+
+
+def test_a_built_capability_says_what_it_does_NOT_claim() -> None:
+    # The whole reason C11 can be marked built without overstating it. "The service propagates" and
+    # "its results match legacy" are different promises, and only the first is kept.
+    caveat = capability("C11").caveat
+
+    assert "NOT claimed" in caveat
+    assert "legacy" in caveat and "criterion 2" in caveat
 
 
 def test_c3_records_what_is_left_rather_than_what_it_started_as() -> None:

@@ -25,6 +25,13 @@ class Capability:
     phase: str
     built: bool
     missing: str = ""
+    """What a BUILT capability still does not claim.
+
+    Separate from `missing`, which says what is not built. C11 needs both ideas kept apart: the
+    service does propagate now, and that its results match legacy is unproven -- collapsing the
+    two would either understate the work or overstate the guarantee, and the second is worse.
+    """
+    caveat: str = ""
 
 
 CAPABILITIES: list[Capability] = [
@@ -50,8 +57,13 @@ CAPABILITIES: list[Capability] = [
         "C11",
         "Propagate labels through a sequence and review them by confidence",
         "P3",
-        built=False,
-        missing="SAM 2 video propagation, chunked jobs, cancellation and staged frame results",
+        built=True,
+        caveat=(
+            "built: SAM 2 video propagation, RULE-026's streaming windows, the job API with real "
+            "cancellation that keeps committed frames, and the video predictor they run on. NOT "
+            "claimed: that the masks and the flagged frames match legacy. Proving that needs a "
+            "checkpoint and golden outputs, which is Phase 6 exit criterion 2"
+        ),
     ),
     Capability(
         "C13",
