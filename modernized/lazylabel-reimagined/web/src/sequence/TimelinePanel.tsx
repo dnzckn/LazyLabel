@@ -32,6 +32,7 @@ import {
   colourOf,
   markReference,
   markReferences,
+  markSuggested,
   sortedOrder,
   step,
   summarize,
@@ -69,6 +70,13 @@ export interface TimelinePanelProps {
    * feature is unreliable, where no button says plainly that this deployment has no model.
    */
   readonly client?: ApiClient;
+  /**
+   * What Find Archetypes suggested, handed up so RULE-091's prefetch can prioritise those frames.
+   *
+   * Up rather than held here: the prefetch runs beside the OPEN IMAGE, which is a different part
+   * of the tree, and the shell is the only place both can see.
+   */
+  readonly onArchetypes?: (keys: readonly string[]) => void;
 }
 
 export function TimelinePanel({
@@ -76,6 +84,7 @@ export function TimelinePanel({
   onOpen,
   scores = {},
   client,
+  onArchetypes,
 }: TimelinePanelProps): ReactNode {
   const [range, setRange] = useState<{ from: number; to: number } | null>(null);
   const [overrides, setOverrides] = useState<readonly Frame[] | null>(null);
@@ -88,6 +97,10 @@ export function TimelinePanel({
    * moment this panel could produce its own would be a regression for anyone using it.
    */
   const [ownScores, setOwnScores] = useState<Readonly<Record<number, number>>>({});
+  /** What Find Archetypes suggested, kept so RULE-091's prefetch can prioritise those frames. */
+  const [archetypes, setArchetypes] = useState<readonly string[]>([]);
+  const [finding, setFinding] = useState(false);
+  const [foundNote, setFoundNote] = useState<string | null>(null);
   /*
    * MIN CONF IS A PERSISTED SETTING, not panel state -- `propagation_confidence_threshold`, which
    * decision 9 keeps with the rest. It was local state for one commit and that was wrong twice
@@ -172,6 +185,37 @@ export function TimelinePanel({
     );
   }
 
+  /**
+   * C10: ask which frames are worth annotating by hand, and mark them.
+   *
+   * The answer is kept as well as drawn, because RULE-091's prefetch encodes the first uncached
+   * archetype ahead of the neighbours -- a suggestion is where a user JUMPS to, and a jump is the
+   * navigation neighbour-prefetching never helps with.
+   */
+  const find = async () => {
+    if (client === undefined || finding) return;
+    setFinding(true);
+    setFoundNote(null);
+    try {
+      const answer = await client.findArchetypes(frames.map((frame) => frame.key));
+      setArchetypes(answer.suggested);
+      onArchetypes?.(answer.suggested);
+      setOverrides(markSuggested(frames, answer.suggested));
+      setFoundNote(
+        answer.suggested.length === 0
+          ? "No distinct scenes were found — this sequence is too uniform to suggest frames."
+          : answer.fellShort
+            ? `${answer.suggested.length} of ${answer.budget} suggested; this sequence has only `
+              + `${answer.clusters} distinct scenes.`
+            : `${answer.suggested.length} frames suggested from ${answer.clusters} scenes.`,
+      );
+    } catch (cause) {
+      setFoundNote(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setFinding(false);
+    }
+  };
+
   const counts = summarize(frames);
   const order = sorted ? sortedOrder(frames) : frames.map((frame) => frame.index);
   const allScores = { ...scores, ...ownScores };
@@ -238,6 +282,11 @@ export function TimelinePanel({
         <button type="button" onClick={markCurrent}>
           Mark as reference
         </button>
+        {client !== undefined && (
+          <button type="button" onClick={() => void find()} disabled={finding}>
+            {finding ? "Finding…" : "Find archetypes"}
+          </button>
+        )}
         <button type="button" onClick={() => setOverrides(clearFlags(frames))}>
           Clear flags
         </button>
@@ -245,6 +294,12 @@ export function TimelinePanel({
           New timeline
         </button>
       </div>
+
+      {foundNote !== null && (
+        <p className="timeline__counts" role="status">
+          {foundNote}
+        </p>
+      )}
 
       <ConfidencePanel
         scores={allScores}

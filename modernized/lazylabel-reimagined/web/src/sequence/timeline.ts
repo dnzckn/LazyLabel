@@ -284,3 +284,27 @@ export function markReference(frames: readonly Frame[], index: number): readonly
   if (at < 0 || frames[at]!.isReference) return frames;
   return frames.map((frame, i) => (i === at ? { ...frame, isReference: true } : frame));
 }
+
+
+/**
+ * Mark the frames Find Archetypes suggested — RULE-091's priority queue and C10's whole point.
+ *
+ * A REFERENCE IS NEVER DEMOTED. A frame the user has already annotated is ground truth, and the
+ * suggestion is "this is worth annotating"; overwriting the first with the second would tell
+ * someone to redo work they have finished. Legacy's own sort puts reference above suggested for
+ * the same reason.
+ *
+ * A frame already propagated, saved or flagged keeps its state too. Those describe what HAPPENED
+ * to a frame, and a suggestion is only ever advice about what to do next.
+ */
+export function markSuggested(
+  frames: readonly Frame[],
+  suggested: readonly string[],
+): readonly Frame[] {
+  const wanted = new Set(suggested);
+  return frames.map((frame) =>
+    wanted.has(frame.key) && !frame.isReference && frame.state === "pending"
+      ? { ...frame, state: "suggested" as const }
+      : frame,
+  );
+}

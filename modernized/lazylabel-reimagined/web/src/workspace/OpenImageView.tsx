@@ -65,11 +65,14 @@ export function OpenImageView({
   client,
   projectId,
   folderKeys = [],
+  archetypes = [],
 }: {
   readonly client: ApiClient;
   readonly projectId: string;
   /** The folder in the order the user steps through it, for RULE-091's prefetch. */
   readonly folderKeys?: readonly string[];
+  /** Frames Find Archetypes suggested. RULE-091 encodes the first uncached one first. */
+  readonly archetypes?: readonly string[];
 }): ReactNode {
   const { open, processing } = useWorkspace();
 
@@ -80,6 +83,7 @@ export function OpenImageView({
       client={client}
       projectId={projectId}
       folderKeys={folderKeys}
+      archetypes={archetypes}
       image={open.image}
       result={open.result}
       error={open.error}
@@ -96,6 +100,7 @@ function OpenedImage({
   client,
   projectId,
   folderKeys,
+  archetypes,
   image,
   result,
   error,
@@ -106,6 +111,8 @@ function OpenedImage({
   readonly projectId: string;
   /** The folder in the order the user steps through it, for RULE-091's prefetch. */
   readonly folderKeys: readonly string[];
+  /** Frames Find Archetypes suggested. RULE-091 encodes the first uncached one first. */
+  readonly archetypes: readonly string[];
   readonly image: WireDatasetImage;
   readonly result: AnnotationsResult | null;
   readonly error: string | null;
@@ -342,6 +349,7 @@ function OpenedImage({
                       classId={classForNewSegment(segments, activeClassId)}
                       model={aiModel}
                       folderKeys={folderKeys}
+                      archetypes={archetypes}
                       fragmentThreshold={fragmentThreshold}
                       autoPolygon={autoPolygon}
                       {...(settings.values["operate_on_view"] === true

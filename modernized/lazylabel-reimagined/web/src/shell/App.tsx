@@ -52,6 +52,13 @@ export function App({ client }: { readonly client: ApiClient }): ReactNode {
   // The folder as the browser listed it, so the sequence timeline builds from the same answer
   // rather than fetching it again. Two fetches is two answers to one question.
   const [listed, setListed] = useState<readonly WireDatasetImage[]>([]);
+  /**
+   * What Find Archetypes suggested, held HERE because two distant parts of the tree need it.
+   *
+   * The timeline draws them; RULE-091's prefetch, which runs beside the open image, encodes the
+   * first uncached one ahead of the neighbours. The shell is the only place that can see both.
+   */
+  const [archetypes, setArchetypes] = useState<readonly string[]>([]);
 
   // A preference the user chose wins; a default they never chose yields to the operating system.
   // That matters most when settings are UNREACHABLE: dark_mode defaults to true, so honouring the
@@ -209,6 +216,7 @@ export function App({ client }: { readonly client: ApiClient }): ReactNode {
             projectId="default"
             // RULE-091's prefetch needs the folder in the order the user steps through it.
             folderKeys={listed.map((image) => image.key)}
+            archetypes={archetypes}
           />
         }
         right={
@@ -233,6 +241,7 @@ export function App({ client }: { readonly client: ApiClient }): ReactNode {
               <TimelinePanel
                 client={client}
                 images={listed}
+                onArchetypes={setArchetypes}
                 onOpen={(key) => {
                   const image = listed.find((entry) => entry.key === key);
                   if (image !== undefined) openImage(image);

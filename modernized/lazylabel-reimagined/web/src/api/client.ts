@@ -146,6 +146,17 @@ export interface WirePropagationJob {
   readonly results: readonly WirePropagationFrame[];
 }
 
+export interface WireArchetypeResult {
+  readonly suggested: readonly string[];
+  /** How many the app aimed for. Compared against `suggested` to explain a short answer. */
+  readonly budget: number;
+  readonly clusters: number;
+  readonly noise: number;
+  /** Fewer frames were found than the budget asked for -- the sequence is too uniform. */
+  readonly fellShort: boolean;
+  readonly unreadable: readonly { readonly key: string; readonly reason: string }[];
+}
+
 export interface ApiClientOptions {
   /** Where the API lives. Defaults to "/api", which the dev server proxies and production serves. */
   readonly baseUrl?: string;
@@ -325,6 +336,25 @@ export class ApiClient {
       `/inference/propagations/${encodeURIComponent(jobId)}`,
     );
     if (response.status === 200) return (await response.json()) as WirePropagationJob;
+    throw await this.problem(response);
+  }
+
+  /**
+   * Which frames of a sequence are worth annotating by hand (C10).
+   *
+   * One request and one answer, unlike propagation: a single pass that embeds every frame once.
+   * There is no per-frame result to stream, and a partial answer would not help if there were --
+   * half the clusters is not half the suggestions, it is a different set.
+   */
+  async findArchetypes(
+    sequence: readonly string[],
+    model?: string,
+  ): Promise<WireArchetypeResult> {
+    const response = await this.send("POST", "/inference/archetypes", {
+      sequence,
+      ...(model === undefined ? {} : { model }),
+    });
+    if (response.status === 200) return (await response.json()) as WireArchetypeResult;
     throw await this.problem(response);
   }
 
