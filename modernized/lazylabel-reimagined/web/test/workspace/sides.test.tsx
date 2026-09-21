@@ -62,6 +62,9 @@ function Probe(): React.ReactNode {
     markSaved,
     zoom,
     setZoom,
+    activeClassId,
+    setActiveClassId,
+    toggleRecentClass,
     history,
     imageStates,
     segments,
@@ -83,12 +86,16 @@ function Probe(): React.ReactNode {
       <button type="button" onClick={() => setCrop({ x1: 0, y1: 0, x2: 4, y2: 4 })}>crop</button>
       <button type="button" onClick={markSaved}>saved</button>
       <button type="button" onClick={() => setZoom((zoom ?? 1) * 2)}>zoom in</button>
+      <button type="button" onClick={() => setActiveClassId(1)}>class 1</button>
+      <button type="button" onClick={() => setActiveClassId(2)}>class 2</button>
+      <button type="button" onClick={toggleRecentClass}>swap class</button>
       <button type="button" onClick={() => history.undo()}>undo</button>
 
       <p data-testid="active">{activeSide}</p>
       <p data-testid="activeSegments">{segments.length}</p>
       <p data-testid="activeCrop">{crop === null ? "none" : "set"}</p>
       <p data-testid="activeZoom">{zoom === null ? "fit" : String(zoom)}</p>
+      <p data-testid="activeClass">{activeClassId === null ? "none" : String(activeClassId)}</p>
       <p data-testid="canUndo">{history.state.canUndo ? "yes" : "no"}</p>
       <p data-testid="undoLabel">{history.state.undoLabel ?? "none"}</p>
       {[0, 1].map((i) => (
@@ -289,5 +296,34 @@ describe("zoom", () => {
     fireEvent.click(screen.getByText("reopen right"));
 
     await waitFor(() => expect(shown("activeZoom")).toBe("fit"));
+  });
+});
+
+describe("the recent-class toggle", () => {
+  it("swaps between the current class and the one before it", async () => {
+    // What annotators actually do: two classes at a time, alternating. Cell and background,
+    // vehicle and road.
+    await bothOpen();
+    fireEvent.click(screen.getByText("class 1"));
+    fireEvent.click(screen.getByText("class 2"));
+    await waitFor(() => expect(shown("activeClass")).toBe("2"));
+
+    fireEvent.click(screen.getByText("swap class"));
+    await waitFor(() => expect(shown("activeClass")).toBe("1"));
+
+    fireEvent.click(screen.getByText("swap class"));
+    await waitFor(() => expect(shown("activeClass")).toBe("2"));
+  });
+
+  it("does not remember a class you re-picked, which would make the key a no-op", async () => {
+    await bothOpen();
+    fireEvent.click(screen.getByText("class 1"));
+    fireEvent.click(screen.getByText("class 2"));
+    fireEvent.click(screen.getByText("class 2"));
+    await waitFor(() => expect(shown("activeClass")).toBe("2"));
+
+    fireEvent.click(screen.getByText("swap class"));
+
+    await waitFor(() => expect(shown("activeClass")).toBe("1"));
   });
 });

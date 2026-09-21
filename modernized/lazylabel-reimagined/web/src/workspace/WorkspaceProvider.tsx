@@ -31,6 +31,7 @@ import {
   useCallback,
   useContext,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -217,6 +218,14 @@ export interface WorkspaceContextValue {
   /** The class new annotations take, or null to use the next free id. */
   readonly activeClassId: number | null;
   readonly setActiveClassId: (classId: number | null) => void;
+  /**
+   * Swap between the current class and the one before it — legacy's X.
+   *
+   * What makes it worth having is what annotators actually do: two classes at a time, alternating.
+   * Cell and background, vehicle and road. Picking from a list every time is the friction this
+   * removes, and a toggle with no memory would be a key that clears the class instead.
+   */
+  readonly toggleRecentClass: () => void;
   readonly selected: readonly number[];
   readonly toggleSelected: (index: number) => void;
   /**
@@ -300,7 +309,26 @@ export function WorkspaceProvider({
   const [sides, setSides] = useState<readonly [SideState, SideState]>([EMPTY_SIDE, EMPTY_SIDE]);
   const [activeSide, setActiveSide] = useState<SideIndex>(0);
   const [activeTool, setActiveTool] = useState<Tool>("none");
-  const [activeClassId, setActiveClassId] = useState<number | null>(null);
+  const [activeClassId, setActiveClassIdState] = useState<number | null>(null);
+  /*
+   * The class before this one, for legacy's X.
+   *
+   * A ref rather than state: nothing renders from it, and making it state would re-render every
+   * consumer of this context each time the active class changed -- which is all eight of them, for
+   * a value none of them reads.
+   */
+  const previousClassId = useRef<number | null>(null);
+
+  const setActiveClassId = useCallback((classId: number | null) => {
+    setActiveClassIdState((current) => {
+      // Recorded only when it CHANGES, so pressing the same class twice does not make the toggle a
+      // no-op by remembering the class you are already on.
+      if (current !== classId) previousClassId.current = current;
+      return classId;
+    });
+  }, []);
+
+  const toggleRecentClass = useCallback(() => setActiveClassId(previousClassId.current), [setActiveClassId]);
   const [linked, setLinked] = useState(false);
   const [linkReport, setLinkReport] = useState<LinkReport | null>(null);
 
@@ -703,6 +731,7 @@ export function WorkspaceProvider({
       setActiveTool,
       activeClassId,
       setActiveClassId,
+      toggleRecentClass,
       selected,
       toggleSelected,
       setSelection,
@@ -749,6 +778,7 @@ export function WorkspaceProvider({
       setZoom,
       sides,
       zoom,
+      toggleRecentClass,
       toggleSelected,
       updateSegment,
     ],

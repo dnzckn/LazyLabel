@@ -326,7 +326,7 @@ function ZoomControl(): ReactNode {
 }
 
 function ToolPicker(): ReactNode {
-  const { activeTool, setActiveTool, segments, selected } = useWorkspace();
+  const { activeTool, setActiveTool, segments, selected, toggleRecentClass } = useWorkspace();
   const { notify } = useNotifications();
 
   const tools: readonly { readonly value: Tool; readonly label: string }[] = [
@@ -376,6 +376,9 @@ function ToolPicker(): ReactNode {
    * the next click into a new shape.
    */
   useHotkey("pan_mode", () => setActiveTool("pan"));
+  // Legacy's X. It lives beside the tool keys because it is the same kind of thing: what the next
+  // stroke will be, chosen without reaching for a panel.
+  useHotkey("toggle_recent_class", toggleRecentClass);
   useHotkey("edit_mode", () => {
     setActiveTool("none");
     const outcome = enterEditMode(segments, selected);
