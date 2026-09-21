@@ -233,6 +233,86 @@ def seed_points(
     )
 
 
+def seed_mask(
+    predictor: Any,
+    state: Any,
+    staged: StagedSequence,
+    *,
+    frame_index: int,
+    object_id: int,
+    mask: Any,
+) -> FrameResult:
+    """Put an existing MASK on a reference frame — the seed propagation actually uses.
+
+    `seed_points` seeds from clicks, which is how a user creates an object. A propagation starts
+    from frames the user has already annotated, and those are masks: legacy's `add_video_mask`
+    (`sam2_model.py:863-916`) calls `add_new_mask`, not `add_new_points_or_box`. Without this the
+    port could only propagate from prompts it re-derived, which is a different feature that happens
+    to look similar -- re-clicking an object the user has already drawn would give a mask close to
+    theirs and not theirs.
+
+    `astype(bool)` as legacy does. SAM 2 wants a boolean mask, and handing it a uint8 array of 0
+    and 1 is not the same thing to every version of it.
+
+    Same autocast as `seed_points` and for the same reason: every later frame is conditioned on the
+    reference, so seeding outside it makes the whole sequence differ from legacy by a small,
+    systematic amount that looks like a tolerance problem and is a missing context manager.
+
+    And the same deliberate divergence: legacy reports confidence 0.5 when the seed selects nothing
+    and 0.0 for the identical condition during propagation. `confidence_of` gives 0.0 on both
+    paths, because a seed that selected nothing is not a middling result.
+    """
+    if predictor is None or state is None:
+        raise ModelNotLoadedError("no SAM 2 video predictor is initialised")
+    if mask is None:
+        raise InvalidPromptError(f"no mask was given to seed object {object_id}")
+
+    import numpy as np
+    import torch
+
+    binary = np.asarray(mask).astype(bool)
+    if binary.ndim != 2:
+        raise InvalidPromptError(
+            f"a seed mask must be two-dimensional (height, width), got shape {binary.shape}"
+        )
+    if not binary.any():
+        # An empty reference mask cannot seed anything, and SAM 2 does not say so -- it returns a
+        # mask of nothing and the propagation carries nothing through the whole sequence, which
+        # looks exactly like a model that lost the object on frame one.
+        raise InvalidPromptError(
+            f"the reference mask for object {object_id} on frame {frame_index} has no pixels"
+        )
+
+    try:
+        with torch.inference_mode(), torch.autocast(_autocast_device(predictor), dtype=torch.bfloat16):
+            _frame, object_ids, mask_logits = predictor.add_new_mask(
+                inference_state=state,
+                frame_idx=frame_index,
+                obj_id=object_id,
+                mask=binary,
+            )
+    except Exception as cause:
+        raise PropagationError(
+            f"the reference mask was refused on frame {frame_index}: {cause}", completed=0
+        ) from cause
+
+    if mask_logits is None or len(mask_logits) == 0:
+        raise PropagationError(
+            f"the reference mask on frame {frame_index} produced no mask", completed=0
+        )
+
+    ids = [int(candidate) for candidate in object_ids]
+    position = ids.index(object_id) if object_id in ids else 0
+    logits = mask_logits[position]
+
+    return FrameResult(
+        source=staged.source_of(frame_index),
+        object_id=object_id,
+        mask=(logits > 0).cpu().numpy().squeeze().astype("uint8"),
+        confidence=confidence_of(logits),
+    )
+
+
 def _autocast_device(predictor: Any) -> str:
     """Which device type to autocast for: the one the MODEL is on, not the best one available.
 

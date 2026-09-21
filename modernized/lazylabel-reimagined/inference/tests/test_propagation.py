@@ -20,6 +20,7 @@ from lazylabel_inference.propagation import (
     confidence_of,
     initialise_state,
     propagate,
+    seed_mask,
     seed_points,
     stage_sequence,
 )
@@ -312,3 +313,125 @@ class TestInitialisingState:
         assert state == "state"
         assert recorded["offload_video_to_cpu"] is True
         assert recorded["offload_state_to_cpu"] is False
+
+
+class FakeMaskSeeder:
+    """A video predictor that records the mask it was handed."""
+
+    def __init__(self, object_ids=(1,), logits=None, raises: Exception | None = None):
+        import torch
+
+        self.object_ids = list(object_ids)
+        self.logits = torch.full((len(self.object_ids), 1, 4, 4), 3.0) if logits is None else logits
+        self.raises = raises
+        self.calls: list[dict] = []
+
+    def add_new_mask(self, **kwargs):
+        if self.raises is not None:
+            raise self.raises
+        self.calls.append(kwargs)
+        return kwargs["frame_idx"], self.object_ids, self.logits
+
+
+@pytest.mark.skipif(pytest.importorskip("torch", reason="needs torch") is None, reason="needs torch")
+class TestSeedingFromAMask:
+    """The seed propagation actually uses: references are annotations the user already drew.
+
+    `seed_points` seeds from clicks, which is how an object is CREATED. Legacy's own propagation
+    calls `add_new_mask` (`sam2_model.py:863-916`), and a port that could only re-derive prompts
+    would carry a mask close to the user's rather than the user's.
+    """
+
+    def staged(self) -> StagedSequence:
+        return StagedSequence(
+            directory=pathlib.Path("."),
+            frames=[StagedFrame(0, "a.png"), StagedFrame(1, "b.png")],
+        )
+
+    def mask(self, value: int = 1):
+        return np.full((4, 4), value, dtype=np.uint8)
+
+    def seed(self, predictor, **overrides):
+        arguments = {"frame_index": 0, "object_id": 1, "mask": self.mask()}
+        arguments.update(overrides)
+        return seed_mask(predictor, object(), self.staged(), **arguments)
+
+    def test_it_calls_add_new_mask_rather_than_re_deriving_a_prompt(self) -> None:
+        predictor = FakeMaskSeeder()
+
+        self.seed(predictor)
+
+        assert len(predictor.calls) == 1
+        assert predictor.calls[0]["frame_idx"] == 0
+        assert predictor.calls[0]["obj_id"] == 1
+
+    def test_the_mask_arrives_as_BOOLEAN_as_legacy_sends_it(self) -> None:
+        # SAM 2 wants a boolean mask, and a uint8 array of 0 and 1 is not the same thing to every
+        # version of it. Legacy writes `mask.astype(bool)`; so does this.
+        predictor = FakeMaskSeeder()
+
+        self.seed(predictor)
+
+        assert predictor.calls[0]["mask"].dtype == np.bool_
+
+    def test_the_result_names_the_IMAGE_not_a_frame_number(self) -> None:
+        # Resolved through the map, exactly as `propagate` does -- RULE-017's whole point.
+        result = self.seed(FakeMaskSeeder(), frame_index=1)
+
+        assert result.source == "b.png"
+
+    def test_an_empty_reference_mask_is_REFUSED(self) -> None:
+        # SAM 2 does not complain: it returns a mask of nothing and the propagation carries nothing
+        # through the whole sequence, which looks exactly like a model that lost the object on
+        # frame one. The reference having no pixels is a different problem and says so.
+        with pytest.raises(InvalidPromptError, match="no pixels"):
+            self.seed(FakeMaskSeeder(), mask=np.zeros((4, 4), dtype=np.uint8))
+
+    def test_a_mask_of_the_wrong_shape_is_refused(self) -> None:
+        with pytest.raises(InvalidPromptError, match="two-dimensional"):
+            self.seed(FakeMaskSeeder(), mask=np.ones((2, 4, 4), dtype=np.uint8))
+
+    def test_no_mask_at_all_is_refused(self) -> None:
+        with pytest.raises(InvalidPromptError, match="no mask"):
+            self.seed(FakeMaskSeeder(), mask=None)
+
+    def test_no_predictor_is_a_model_error_not_a_prompt_error(self) -> None:
+        # Different things to fix: one is "load a model", the other is "give me a mask".
+        with pytest.raises(ModelNotLoadedError):
+            seed_mask(None, None, self.staged(), frame_index=0, object_id=1, mask=self.mask())
+
+    def test_a_refusal_from_the_model_carries_the_frame(self) -> None:
+        with pytest.raises(PropagationError, match="refused on frame 0"):
+            self.seed(FakeMaskSeeder(raises=RuntimeError("no")))
+
+    def test_an_empty_result_is_an_error_rather_than_an_empty_success(self) -> None:
+        import torch
+
+        with pytest.raises(PropagationError, match="produced no mask"):
+            self.seed(FakeMaskSeeder(logits=torch.empty((0, 1, 4, 4))))
+
+    def test_a_seed_that_selected_nothing_scores_ZERO_not_legacy_s_0_5(self) -> None:
+        # Legacy reports 0.5 here and 0.0 for the identical condition during propagation
+        # (`sam2_model.py:905` against `:1037`). A seed that selected nothing is not a middling
+        # result, and a user shown 0.5 has been told something false.
+        import torch
+
+        result = self.seed(FakeMaskSeeder(logits=torch.full((1, 1, 4, 4), -3.0)))
+
+        assert result.confidence == 0.0
+
+    def test_it_picks_the_logits_for_the_object_it_asked_about(self) -> None:
+        # With several objects tracked, position in the returned list is not the object id.
+        import torch
+
+        logits = torch.stack(
+            [
+                torch.full((1, 4, 4), -3.0),
+                torch.full((1, 4, 4), 3.0),
+            ]
+        )
+
+        result = self.seed(FakeMaskSeeder(object_ids=(7, 9), logits=logits), object_id=9)
+
+        assert result.object_id == 9
+        assert result.confidence > 0.9
