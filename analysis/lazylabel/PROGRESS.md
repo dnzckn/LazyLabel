@@ -149,6 +149,30 @@ What is deliberately still 503 is the propagator: the job API is built, and what
 -- staging a sequence and seeding SAM 2 from the reference frames' own annotations -- is not. A
 test pins it so it cannot quietly become a 202 for a job that will never produce a frame.
 
+**C11's CHAIN IS COMPLETE, browser to video predictor.** Building it end to end turned up three
+more links that did not exist, each the same shape as the fourteen before:
+
+- `load_video_predictor` — `load_backend` builds `SAM2ImagePredictor`, which answers a prompt on
+  one picture and has no notion of a sequence. The propagation module, its windows, its runner and
+  its job API were all complete while the predictor they run on could not be constructed at all.
+- `seed_mask` — the port had only `seed_points`. Legacy seeds propagation with `add_new_mask`, and
+  a port that could only re-derive prompts would carry a mask close to the user's and not theirs.
+- `decode_mask` — nothing decoded a mask travelling TOWARDS the service, which is what a reference
+  is.
+
+And `runner.py`, which joins them: prepended references so a window covering 245-494 can seed from
+frame 0's real picture, three numbering systems reconciled once from what was actually staged
+rather than by arithmetic at every use. Writing its tests found two real bugs in exactly the
+unreadable-frame path RULE-017 is about — a read failure killed the whole job, and `max_frames`
+was the window's nominal size rather than what was staged.
+
+Verified in the running app: marking a frame with no annotations as a reference reports it by name
+and does NOT start a job. The network trace shows metadata, then annotations (204, none), then
+nothing — legacy would have run the whole sequence writing an empty mask over every frame.
+
+What is left for C11 is a real checkpoint and goldens. That is equivalence, Phase 6 criterion 2,
+and it was never the API.
+
 **Blocked on the owner:**
 
 - **C11's EQUIVALENCE** — not its API, which is built. Proving the propagated masks and the
