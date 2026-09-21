@@ -35,12 +35,32 @@ export interface PropagationControlProps {
   readonly frames: readonly Frame[];
   /** Confidences as they arrive, so the timeline can colour itself while the job runs. */
   readonly onScores?: (scores: Readonly<Record<number, number>>) => void;
+  /**
+   * How many propagated frames are not on disk yet.
+   *
+   * Reported UP because the control does not own the buttons that would throw them away. RULE-056
+   * and RULE-058 are legacy losing exactly this work -- New Timeline, leaving the tab, or a
+   * propagation finishing all discard unsaved masks without a word -- and decision 7 is the
+   * standing answer: nothing is lost without the user being asked.
+   */
+  readonly onUnsaved?: (count: number) => void;
+  /**
+   * The same count, written where a CLICK HANDLER can read it without waiting for a render.
+   *
+   * `onUnsaved` travels up through the parent's state, which is one render behind: a user who
+   * propagates and immediately clicks New timeline could slip past the confirmation and lose the
+   * work it exists to protect. A ref is read at the moment the button is pressed, so there is no
+   * window at all. The callback stays for anything that wants to RENDER the number.
+   */
+  readonly unsavedRef?: { current: number };
 }
 
 export function PropagationControl({
   client,
   frames,
   onScores,
+  onUnsaved,
+  unsavedRef,
   projectId = "default",
 }: PropagationControlProps): ReactNode {
   const { settings } = useSettings();
@@ -52,6 +72,8 @@ export function PropagationControl({
   const [classes, setClasses] = useState<Readonly<Record<number, number | null>>>({});
   const [saving, setSaving] = useState<{ done: number; total: number } | null>(null);
   const [saved, setSaved] = useState<string | null>(null);
+  /** Frames already written. What remains is what a discard would destroy. */
+  const [written, setWritten] = useState<ReadonlySet<string>>(new Set());
 
   const references = frames
     .map((frame, index) => (frame.isReference ? index : -1))
@@ -119,6 +141,17 @@ export function PropagationControl({
   const done = job !== null && !progress.running;
 
   const { writable, withheld } = plannedSave(frames, progress.masks);
+  const unsaved = writable.filter((frame) => !written.has(frame.key));
+
+  // Written during render, read by a click handler. The same "latest value" pattern the AI tool
+  // uses for its prediction, and for the same reason: an effect would be one render too late.
+  if (unsavedRef !== undefined) unsavedRef.current = unsaved.length;
+
+  // The callback goes through an effect, because calling a parent's setter during render is a
+  // state update inside another component's render, which React warns about and which can loop.
+  useEffect(() => {
+    onUnsaved?.(unsaved.length);
+  }, [onUnsaved, unsaved.length]);
 
   const write = useCallback(async () => {
     setSaved(null);
@@ -135,6 +168,7 @@ export function PropagationControl({
         formats: (settings.values["export_formats"] as string[] | undefined) ?? ["NPZ"],
         onProgress: (doneCount, total) => setSaving({ done: doneCount, total }),
       });
+      setWritten((previous) => new Set([...previous, ...outcome.written]));
       setSaved(
         `Saved ${outcome.written.length} frame${outcome.written.length === 1 ? "" : "s"}`
           + (outcome.failed.length > 0
@@ -168,10 +202,10 @@ export function PropagationControl({
           </button>
         )}
 
-        {done && writable.length > 0 && (
+        {done && unsaved.length > 0 && (
           <button type="button" onClick={() => void write()} disabled={saving !== null}>
             {saving === null
-              ? `Save ${writable.length} frame${writable.length === 1 ? "" : "s"}`
+              ? `Save ${unsaved.length} frame${unsaved.length === 1 ? "" : "s"}`
               : `Saving ${saving.done} of ${saving.total}…`}
           </button>
         )}

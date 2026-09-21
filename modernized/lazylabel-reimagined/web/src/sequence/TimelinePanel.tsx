@@ -17,7 +17,7 @@
  * legacy does — it runs the whole sequence and writes an empty mask over every frame.
  */
 
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 import type { WireDatasetImage } from "@lazylabel/contracts";
 
@@ -77,6 +77,13 @@ export interface TimelinePanelProps {
    * of the tree, and the shell is the only place both can see.
    */
   readonly onArchetypes?: (keys: readonly string[]) => void;
+  /**
+   * How a discard is confirmed. Injected so a test can answer it without a real dialog.
+   *
+   * Defaults to `window.confirm`, which is the same choice the workspace made for navigating away
+   * from unsaved annotations -- one mechanism for "you are about to lose work", not two.
+   */
+  readonly confirmDiscard?: (message: string) => boolean;
 }
 
 export function TimelinePanel({
@@ -85,6 +92,7 @@ export function TimelinePanel({
   scores = {},
   client,
   onArchetypes,
+  confirmDiscard = (message) => window.confirm(message),
 }: TimelinePanelProps): ReactNode {
   const [range, setRange] = useState<{ from: number; to: number } | null>(null);
   const [overrides, setOverrides] = useState<readonly Frame[] | null>(null);
@@ -99,6 +107,13 @@ export function TimelinePanel({
   const [ownScores, setOwnScores] = useState<Readonly<Record<number, number>>>({});
   /** What Find Archetypes suggested, kept so RULE-091's prefetch can prioritise those frames. */
   const [archetypes, setArchetypes] = useState<readonly string[]>([]);
+  /**
+   * Propagated frames not yet written — what a New timeline would destroy.
+   *
+   * A REF, not state, because a click handler reads it. State arrives a render later, and the one
+   * user this protects is the one who propagates and immediately clicks New timeline.
+   */
+  const unsavedRef = useRef(0);
   const [finding, setFinding] = useState(false);
   const [foundNote, setFoundNote] = useState<string | null>(null);
   /*
@@ -237,6 +252,33 @@ export function TimelinePanel({
     }
   };
 
+  /**
+   * Start again — and ASK FIRST when that would throw propagated work away.
+   *
+   * RULE-056 is legacy doing exactly this without a word: New Timeline wipes references, statuses
+   * and unsaved propagated masks, and the current frame is not saved either. Decision 7 is the
+   * standing answer to that whole family, and a propagation is the most expensive work in this
+   * app to lose -- minutes of GPU time, and nothing on disk to show for it.
+   *
+   * No dialog when there is nothing to lose. A confirmation that always appears is one people
+   * learn to dismiss without reading, which would make it useless on the day it mattered.
+   */
+  const startOver = () => {
+    const unsaved = unsavedRef.current;
+    if (
+      unsaved > 0
+      && !confirmDiscard(
+        `${unsaved} propagated frame${unsaved === 1 ? " has" : "s have"} not been saved. `
+          + "Starting a new timeline discards them. Continue?",
+      )
+    ) {
+      return;
+    }
+    setRange(null);
+    setOverrides(null);
+    unsavedRef.current = 0;
+  };
+
   const counts = summarize(frames);
   const order = sorted ? sortedOrder(frames) : frames.map((frame) => frame.index);
   const allScores = { ...scores, ...ownScores };
@@ -244,7 +286,12 @@ export function TimelinePanel({
   return (
     <div className="timeline">
       {client !== undefined && (
-        <PropagationControl client={client} frames={frames} onScores={setOwnScores} />
+        <PropagationControl
+          client={client}
+          frames={frames}
+          onScores={setOwnScores}
+          unsavedRef={unsavedRef}
+        />
       )}
 
       <p className="timeline__counts">
@@ -311,7 +358,7 @@ export function TimelinePanel({
         <button type="button" onClick={() => setOverrides(clearFlags(frames))}>
           Clear flags
         </button>
-        <button type="button" onClick={() => { setRange(null); setOverrides(null); }}>
+        <button type="button" onClick={startOver}>
           New timeline
         </button>
       </div>

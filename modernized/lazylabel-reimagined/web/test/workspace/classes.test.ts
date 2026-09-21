@@ -1,5 +1,9 @@
 /**
- * Which class a new annotation gets, including the two ways it goes wrong quietly.
+ * Which class a new annotation gets — RULE-011 — including the two ways it goes wrong quietly.
+ *
+ * Named by its rule number because the brief's §5 requires every P0 rule to be traceable to the
+ * test that proves it. A reviewer asking "where is RULE-011 proven?" had nowhere to look, and
+ * "covered by a test that does not say so" is indistinguishable from "not covered".
  */
 
 import { describe, expect, it } from "vitest";

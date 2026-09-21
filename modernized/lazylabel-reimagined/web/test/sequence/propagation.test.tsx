@@ -21,6 +21,7 @@ import type {
   WirePropagationStart,
 } from "../../src/api/client.js";
 import { HotkeyProvider } from "../../src/hotkeys/HotkeyProvider.jsx";
+import { TimelinePanel } from "../../src/sequence/TimelinePanel.jsx";
 import { PropagationControl } from "../../src/sequence/PropagationControl.jsx";
 import { SettingsProvider } from "../../src/settings/SettingsProvider.jsx";
 import type { Frame } from "../../src/sequence/timeline.js";
@@ -446,5 +447,124 @@ describe("stopping it", () => {
 
     expect(screen.queryByText(/Propagated 4 frames/)).toBeNull();
     expect(propagate()).toHaveProperty("disabled", false);
+  });
+});
+
+
+describe("RULE-056: not losing propagated work without asking", () => {
+  /**
+   * Legacy's New Timeline wipes references, statuses and unsaved propagated masks without a word,
+   * and the current frame is not saved either. Decision 7 is the standing answer to that whole
+   * family -- nothing is lost without the user being asked -- and a propagation is the most
+   * expensive work in this app to lose: minutes of GPU time with nothing on disk to show for it.
+   *
+   * Driven through the PANEL rather than the control, because the panel owns the button that
+   * would do the throwing away.
+   */
+  const FOLDER = [
+    { key: "frames/f01.png", name: "f01.png", sidecars: {}, annotated: true, sharesSidecarsWith: [] },
+    { key: "frames/f02.png", name: "f02.png", sidecars: {}, annotated: false, sharesSidecarsWith: [] },
+    { key: "frames/f03.png", name: "f03.png", sidecars: {}, annotated: false, sharesSidecarsWith: [] },
+  ];
+
+  const SQUARE = {
+    type: "Polygon",
+    classId: 0,
+    vertices: [[1, 1], [6, 1], [6, 6], [1, 6]],
+  };
+
+  function panel(confirmDiscard: (message: string) => boolean) {
+    const client = {
+      getSettings: async () => defaultSettings(),
+      putSettings: async (next: unknown) => next,
+      imageMetadata: async () => ({
+        width: 8,
+        height: 8,
+        sourceDepth: 8,
+        sourceChannels: 3,
+        sourceFormat: "png",
+      }),
+      loadAnnotations: async (_p: string, key: string) => ({
+        kind: "loaded",
+        annotations: {
+          sourceFormat: "NPZ",
+          sourceFile: key,
+          revision: "r1",
+          segments: [SQUARE],
+          classAliases: {},
+          failures: [],
+        },
+      }),
+      startPropagation: async () => job({ state: "running" }),
+      propagationState: async () =>
+        job({
+          state: "completed",
+          completed: 1,
+          cursor: 1,
+          results: [{ source: "frames/f02.png", objectId: 1, mask: MASK, confidence: 0.999 }],
+        }),
+    } as unknown as ApiClient;
+
+    render(
+      <SettingsProvider client={client}>
+        <HotkeyProvider bindings={defaultSettings().hotkeys}>
+          <TimelinePanel images={FOLDER as never} client={client} confirmDiscard={confirmDiscard} />
+        </HotkeyProvider>
+      </SettingsProvider>,
+    );
+  }
+
+  async function propagateAndWait() {
+    fireEvent.click(screen.getByText("Build timeline"));
+    await waitFor(() =>
+      expect(screen.getByLabelText("Timeline").querySelectorAll("button")).toHaveLength(3),
+    );
+    fireEvent.click(screen.getByRole("button", { name: /^Propagate/ }));
+    await screen.findByRole("button", { name: /Save 1 frame/ }, { timeout: 3000 });
+  }
+
+  it("ASKS before a New timeline throws propagated frames away", async () => {
+    const confirm = vi.fn(() => false);
+    panel(confirm);
+    await propagateAndWait();
+
+    fireEvent.click(screen.getByText("New timeline"));
+
+    expect(confirm).toHaveBeenCalledTimes(1);
+    expect(confirm.mock.calls[0]![0]).toMatch(/1 propagated frame has not been saved/);
+  });
+
+  it("keeps the timeline when the answer is no", async () => {
+    panel(() => false);
+    await propagateAndWait();
+
+    fireEvent.click(screen.getByText("New timeline"));
+
+    // Still a timeline, not the range picker.
+    expect(screen.getByLabelText("Timeline")).toBeTruthy();
+  });
+
+  it("starts over when the answer is yes", async () => {
+    panel(() => true);
+    await propagateAndWait();
+
+    fireEvent.click(screen.getByText("New timeline"));
+
+    expect(await screen.findByText("Build timeline")).toBeTruthy();
+  });
+
+  it("does NOT ask when there is nothing to lose", async () => {
+    // A confirmation that always appears is one people learn to dismiss without reading, which
+    // makes it useless on the day it matters.
+    const confirm = vi.fn(() => true);
+    panel(confirm);
+    fireEvent.click(screen.getByText("Build timeline"));
+    await waitFor(() =>
+      expect(screen.getByLabelText("Timeline").querySelectorAll("button")).toHaveLength(3),
+    );
+
+    fireEvent.click(screen.getByText("New timeline"));
+
+    expect(confirm).not.toHaveBeenCalled();
   });
 });

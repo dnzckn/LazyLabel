@@ -1,5 +1,8 @@
 /**
- * Writing a propagation's results — RULE-060's last clause, and the last unreached function.
+ * Writing a propagation's results — RULE-082, and RULE-060's last clause.
+ *
+ * RULE-082 is the eligibility itself: Save All exports each frame the engine lists as propagated
+ * and NOT flagged, using its stored masks and each object's reference class.
  *
  * "Save All never writes a flagged frame", including the ones Keep Flagged Masks held on to. Those
  * masks are for REVIEW, and writing them would put the model's unsure guesses on disk under the
