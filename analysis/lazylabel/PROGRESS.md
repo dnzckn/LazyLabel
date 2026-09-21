@@ -69,11 +69,23 @@ UNBLOCKED; everything below it needs something only the owner can provide.
 2. **RULE-089, Operate On View** is now the largest unbuilt rule and the first thing to pick up.
    See below.
 
-3. **RULE-089, Operate On View, in detail.** The setting is read by
-   nothing and the AI panel says so on screen. Honouring it means the AI request carries the
-   ADJUSTED pixels, because the browser applies brightness/contrast/gamma and the model reads the
-   file — a contract change across three packages, and the inference half cannot be verified here
-   without a running service.
+3. **RULE-089, Operate On View — two of its four parts are built.** The chain was further along
+   than the record said: `adjustments` is already on `EmbedRequest`, the API already forwards it,
+   and the Python service already folds it into the embedding cache key, so different adjustments
+   correctly yield a different handle. The service's own header states the intended design — the
+   API "applies the display adjustments, and hands the model exactly the pixels the user is
+   looking at... when the API starts posting rendered pixels, only `_read_image` changes."
+
+   Built: RULE-028's pixel maths moved to `@lazylabel/annotation-formats` so both sides call one
+   implementation, and the API's pixels endpoint takes
+   `adjust=brightness,contrast,gamma,saturation` and applies them last, after the 16-bit
+   conversion.
+
+   Left: (a) the API attaching those rendered bytes to the embed request, which needs `pixels` on
+   `EmbedRequest` and the HTTP client to post them; (b) the Python service preferring posted bytes
+   over reading the file, which is the `_read_image` change its header names; (c) the browser
+   sending `operate_on_view` and its adjustments with the embed. Only (c) is verifiable here
+   without a running inference service.
 
 **Blocked on the owner:**
 
