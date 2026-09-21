@@ -110,8 +110,56 @@ def build_deps(config, models, logger, manifest_error=None):
         logger=logger,
         manifest_error=manifest_error,
         service=service,
-        **({} if service is None else {"propagator": _propagator_for(service, models, logger)}),
+        **(
+            {}
+            if service is None
+            else {
+                "propagator": _propagator_for(service, models, logger),
+                "archetyper": _archetyper_for(service, models, logger),
+            }
+        ),
     )
+
+
+def _archetyper_for(service, models, logger):
+    """C10's feature extractor, bound to this service.
+
+    A different model from the prompt and video ones: archetype finding embeds whole FRAMES to find
+    scenes, which is a feature extractor's job rather than a segmenter's. `load_embedder` builds it
+    with `weights=None` so nothing is fetched from the network -- the only bytes that reach it are
+    the ones the manifest vouched for.
+    """
+    from .archetypes import find_archetypes, load_embedder
+    from .prompts import ModelNotLoadedError
+
+    loaded: dict[str, object] = {}
+
+    def find(sequence, wanted):
+        entry = _embedding_entry(models, wanted)
+        if entry.name not in loaded:
+            logger.log("info", "loading the archetype embedder", model=entry.name)
+            loaded[entry.name] = load_embedder(entry, service.model_dir, device=service.device)
+
+        images = [(key, service.read_image(key)) for key in sequence]
+        return find_archetypes(images, loaded[entry.name])
+
+    def _embedding_entry(entries, wanted):
+        """Any manifest entry will do: the embedder is a feature extractor, not the checkpoint.
+
+        Named anyway when the caller names one, so a deployment with several can be explicit. With
+        none at all this fails when the JOB runs rather than when the route is called, for the same
+        reason propagation does -- which checkpoints are usable can change while the service runs.
+        """
+        if wanted is not None:
+            for each in entries:
+                if each.name == wanted:
+                    return each
+            raise ModelNotLoadedError(f"no model called {wanted!r} is in the manifest")
+        if not entries:
+            raise ModelNotLoadedError("the manifest lists no model to build the embedder from")
+        return entries[0]
+
+    return find
 
 
 def _propagator_for(service, models, logger):

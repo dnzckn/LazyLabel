@@ -18,7 +18,7 @@ SPEC = Path(__file__).resolve().parents[4] / "analysis" / "lazylabel" / "AI_NATI
 
 # The routes this service exposes for a capability that is not built, and the marker that holds the
 # place. Kept beside the table so the two cannot drift apart unnoticed.
-PENDING = {"C3", "C10"}
+PENDING = {"C3"}
 
 
 def test_the_specification_is_where_this_test_expects_it() -> None:
@@ -38,13 +38,13 @@ def test_only_what_the_routes_actually_do_is_marked_built() -> None:
     """This test used to assert that NOTHING was built, and C11 is why it no longer can.
 
     The direction that matters has not changed: the table must never claim work the routes do not
-    do. What changed is that one of them now does it -- the service propagates, end to end, with
-    the video predictor it runs on. C3 still covers a SAM 1 backend and the neighbour prefetch,
-    and C10 still covers archetype finding, so both remain unbuilt.
+    do. What changed is that two of them now do it -- the service propagates end to end with the
+    video predictor it runs on, and it finds archetypes. C3 still covers a SAM 1 backend and the
+    neighbour prefetch, so it remains unbuilt.
     """
     built = {entry.id for entry in CAPABILITIES if entry.built}
 
-    assert built == {"C11"}
+    assert built == {"C10", "C11"}
 
 
 def test_a_built_capability_says_what_it_does_NOT_claim() -> None:

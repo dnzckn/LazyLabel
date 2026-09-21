@@ -40,6 +40,7 @@ from .jobs import (
     ResultsOverflowedError,
     UnknownJobError,
 )
+from .archetypes import TooFewFrames
 from .propagation import PropagationRequest, ReferenceObject
 from .service import (
     ImageUnreadableError,
@@ -102,6 +103,9 @@ class Deps:
     is most of C11, since every state a caller can observe is a state of the job rather than of the
     model. None means no video-capable model is configured, and the route says 503."""
     propagator: Callable[[Any, Any], Any] | None = None
+    """C10, bound the same way and for the same reason: injected so the route is testable without
+    a checkpoint. None means no dataset root, and the route says 503."""
+    archetyper: Callable[[Any, Any], Any] | None = None
 
 
 _PROPAGATION_JOB = re.compile(r"^/inference/propagations/([^/]+)$")
@@ -168,9 +172,15 @@ def _route(deps: Deps, request: Request) -> Response:
     # is the only thing this table is for. It is NOT a place to park a built route: the handlers
     # above return first, so an entry for one would never fire, and it would sit waiting to
     # resurrect the moment someone moved a handler below it.
-    not_built = {
-        ("/inference/archetypes", "POST"): ("C10", "find archetype frames in a sequence"),
-    }
+    if path == "/inference/archetypes" and method == "POST":
+        return _archetypes(deps, request)
+
+    # Empty, and kept rather than deleted: it is the shape a route takes while its contract is
+    # fixed and its implementation is not, and the next capability to reach that state needs a
+    # line rather than a decision. It must NOT be used to park a built route -- the handlers above
+    # return first, so an entry for one would never fire and would sit waiting to resurrect the
+    # moment someone moved a handler below it.
+    not_built: dict[tuple[str, str], tuple[str, str]] = {}
     if (path, method) in not_built:
         capability, summary = not_built[(path, method)]
         raise _pending(capability, summary)
@@ -189,6 +199,8 @@ def _fixed_methods(path: str) -> set[str]:
         return {"POST"}
     if path == "/inference/propagations":
         return {"POST", "GET"}
+    if path == "/inference/archetypes":
+        return {"POST"}
     if _PROPAGATION_JOB.match(path):
         return {"DELETE"}
     return set()
@@ -508,6 +520,58 @@ def _frame(result: Any) -> dict[str, Any]:
         "mask": encode_mask(result.mask),
         "confidence": result.confidence,
     }
+
+
+def _archetypes(deps: Deps, request: Request) -> Response:
+    """C10: which frames of a sequence are worth annotating by hand.
+
+    One request and one answer rather than a job, unlike propagation. It is a single pass that
+    embeds every frame once: there is no per-frame result to stream and nothing a partial answer
+    would be good for -- half the clusters is not half the suggestions, it is a different set.
+    """
+    body = _body(request)
+
+    raw = body.get("sequence")
+    if not isinstance(raw, list) or not raw:
+        raise HttpError(400, "bad_request", "finding archetypes needs a non-empty 'sequence'")
+    if not all(isinstance(each, str) and each for each in raw):
+        raise HttpError(400, "bad_request", "every entry in 'sequence' must be an image key")
+
+    model = body.get("model")
+    if model is not None and not isinstance(model, str):
+        raise HttpError(400, "bad_request", "'model' must be a model name")
+
+    if deps.archetyper is None:
+        raise HttpError(
+            503,
+            "inference_unavailable",
+            "this service has no dataset root configured, so it cannot read the sequence",
+        )
+
+    try:
+        found = deps.archetyper(tuple(raw), model)
+    except TooFewFrames as cause:
+        # 422, not 400: the request is well formed and this sequence cannot answer it. A user with
+        # four frames has made no mistake, and a 400 would tell them they had.
+        raise HttpError(422, "too_few_frames", str(cause)) from cause
+    except InferenceError as cause:
+        raise _inference_error(cause) from cause
+
+    return _json(
+        200,
+        {
+            "suggested": list(found.suggested),
+            "budget": found.budget,
+            "clusters": found.clusters,
+            "noise": found.noise,
+            # Legacy computes this comparison to pick a progress message and throws it away. It is
+            # the difference between "here are your twenty frames" and "this sequence is too
+            # uniform to find twenty distinct ones", and a user who cannot tell those apart will
+            # assume the feature is broken.
+            "fellShort": found.fell_short,
+            "unreadable": [{"key": key, "reason": reason} for key, reason in found.unreadable],
+        },
+    )
 
 
 def _pending(capability: str, summary: str) -> HttpError:

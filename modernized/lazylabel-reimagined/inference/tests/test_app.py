@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import inspect
 import json
 from pathlib import Path
 
@@ -230,30 +231,51 @@ class TestTheEnvelope:
         assert status == 500 and body["code"] == "internal"
 
 
-class TestNotBuiltYet:
-    """Routes whose contract is fixed and whose implementation is not here.
+class TestNothingIsLeftUnbuilt:
+    """Every route this service fixes a contract for now answers it.
 
-    501 is the honest answer: the route exists, its contract is fixed in AI_NATIVE_SPEC.md section
-    3, and the implementation is not here. A 200 with an empty mask would be exactly the failure
-    ASSESSMENT.md 5.4 records of the legacy code, a failure presented as a successful empty result.
+    This class used to parametrize over the routes that returned 501, and it emptied one capability
+    at a time -- C3's prompt routes, then C11's three, then C10's. 501 was the honest answer while
+    it was true: the route exists, its contract is fixed in AI_NATIVE_SPEC.md section 3, and the
+    implementation is not here. A 200 with an empty mask would have been the failure ASSESSMENT.md
+    5.4 records of the legacy code, where a failure is presented as a successful empty result.
 
-    C11's three propagation routes used to be listed here and are now built -- see
-    `TestPropagationJobs`. What is left is C10, and the parametrize stays a parametrize so that
-    adding the next one is a line rather than a decision.
+    What is kept is the MECHANISM, because the next capability to reach that state should cost a
+    line rather than a decision, and because a 501 helper nothing exercises would quietly rot.
     """
 
+    def test_the_unbuilt_table_is_empty(self) -> None:
+        from lazylabel_inference.app import _route  # noqa: PLC2701 - the table under test
+
+        source = inspect.getsource(_route)
+        assert "not_built: dict[tuple[str, str], tuple[str, str]] = {}" in source
+
+    def test_the_501_helper_still_names_a_capability_and_its_phase(self) -> None:
+        # Exercised directly, since no route uses it today. A helper with no caller is the defect
+        # this project keeps finding; a helper with a test is at least a checked one.
+        from lazylabel_inference.app import _pending  # noqa: PLC2701 - the helper under test
+
+        error = _pending("C10", "find archetype frames in a sequence")
+
+        assert error.status == 501
+        assert error.detail["capability"] == "C10"
+        assert error.detail["phase"] == "P3"
+
     @pytest.mark.parametrize(
-        ("method", "path", "capability"),
+        ("method", "path"),
         [
-            ("POST", "/inference/archetypes", "C10"),
+            ("POST", "/inference/embeddings"),
+            ("POST", "/inference/segment"),
+            ("POST", "/inference/propagations"),
+            ("GET", "/inference/propagations"),
+            ("POST", "/inference/archetypes"),
         ],
     )
-    def test_answers_501_naming_the_capability_and_its_phase(
-        self, tmp_path: Path, method: str, path: str, capability: str
-    ) -> None:
+    def test_no_route_answers_501_any_more(self, tmp_path: Path, method: str, path: str) -> None:
         deps = Deps(model_dir=tmp_path, availability=available)
-        status, body = call(deps, method, path)
 
-        assert status == 501
-        assert body["detail"]["capability"] == capability
-        assert body["detail"]["phase"] in ("P3", "P6")
+        status, _ = call(deps, method, path, body=b"{}")
+
+        # 400 for a body this fixture does not fill in, 503 for no dataset root, 200 for a GET that
+        # can answer. Any of those is a built route; 501 is the one answer that is not.
+        assert status != 501

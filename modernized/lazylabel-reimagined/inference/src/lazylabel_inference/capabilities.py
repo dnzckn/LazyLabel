@@ -50,8 +50,13 @@ CAPABILITIES: list[Capability] = [
         "C10",
         "Build a timeline from an image sequence and mark reference frames",
         "P3",
-        built=False,
-        missing="archetype finding; the timeline itself belongs to the web app",
+        built=True,
+        caveat=(
+            "built: archetype finding -- embed, cluster, allocate, pick the medoids -- behind "
+            "POST /inference/archetypes. The timeline itself belongs to the web app and is built "
+            "there. NOT claimed: that the suggested frames match legacy's, which needs a "
+            "checkpoint and a recorded sequence"
+        ),
     ),
     Capability(
         "C11",
