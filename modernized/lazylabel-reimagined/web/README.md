@@ -71,8 +71,10 @@ that proves it works, and nothing calling it.
   both waiting on C11. A new one fails the test, and so does wiring one up without removing its
   entry.
 - `test/settings/honoured.ts` — every setting, classified read, dropped or gap, checked against the
-  source in both directions. Five gaps left, and the two that matter share one blocker: `modified`
-  and `size` are not on the wire.
+  source in both directions. TWO gaps left, and both are blocked on work larger than a wiring job:
+  `operate_on_view` is RULE-089, and `stream_window_size` is C11. The counts in that file are
+  asserted, so closing a gap fails the test and prompts whoever closed it to move the entry —
+  which is how these two numbers stayed true while the rest of this paragraph went stale once.
 - The hotkey reference in the app itself. It marks each action live or "not yet" from the
   DISPATCHER's own registrations rather than a list someone keeps, so it cannot drift — open the
   app and press Show hotkeys. The count moves with what is mounted, deliberately: it answers "will
