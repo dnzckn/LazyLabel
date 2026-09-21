@@ -89,6 +89,26 @@ UNBLOCKED; everything below it needs something only the owner can provide.
    the workspace would have re-encoded the image, seconds of model work each. It keys on the four
    values now.
 
+**C11's next slice is the JOB API, and only part of it is blocked.** Worth separating, because
+"C11 is blocked" has been shorthand for more than is true:
+
+- The propagation ALGORITHM is built and differential-tested against legacy (`propagation.py`'s
+  `propagate`, a generator so a caller can stream progress and stop early -- which is what makes
+  RULE-063's cancellation keep committed work).
+- What answers 501 is the JOB API around it: `POST /inference/propagations` to start,
+  `GET` for state and per-frame results, `DELETE` to cancel. The contract is fixed in
+  `AI_NATIVE_SPEC.md` section 3, and `app.py`'s `not_built` map names each one.
+- The job machinery -- a registry, cancellation that keeps committed frames, progress, a streaming
+  window bounded by `stream_window_size` -- is buildable and testable WITHOUT a checkpoint, the
+  same way the rest of the service's routing is. A fake predictor yielding frames exercises all of
+  it.
+- What genuinely needs the owner is proving the RESULTS match legacy: real checkpoints, a recorded
+  sequence, and golden outputs. That is exit criterion 2, not the job API.
+
+So the honest state is: C11's service half can be built now against a fake predictor, and only its
+equivalence cannot be shown. Doing it also closes `stream_window_size`, the last settings gap, and
+the two unreached functions that wait on propagation producing scores.
+
 **Blocked on the owner:**
 
 - **C11, propagation** — needs the inference service running, a recorded image sequence, and
