@@ -118,12 +118,10 @@ export const HONOURED: Readonly<Record<string, Honoured>> = {
   file_manager_show_voc: read,
   file_manager_show_cm: read,
   file_manager_show_cml: read,
-  // These two need `modified` and `size` on the wire, which the listing does not carry -- and
-  // `listing.ts` has an explicit "ONE PASS, NOT SEVEN PER IMAGE" optimisation, so adding a stat
-  // per image to the default listing would be the wrong fix. A `?details=1` the client asks for
-  // only when a column or a sort needs it is the shape.
-  file_manager_show_modified: gap("needs `modified` on the wire; the listing deliberately does not stat"),
-  file_manager_show_size: gap("needs `size` on the wire; the listing deliberately does not stat"),
+  // Read, and the reason the listing can be asked for DETAILS at all: each costs a stat per image
+  // on the server, so the browser fetches them only while one of these is on or a sort needs them.
+  file_manager_show_modified: read,
+  file_manager_show_size: read,
   // Read, and honest about its limits: only the two NAME orders can be performed, because the
   // listing carries no `modified` and no `size`. The other four fall back to name and the browser
   // says so, rather than showing a list sorted by name that claims to be sorted by size.

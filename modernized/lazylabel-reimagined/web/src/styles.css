@@ -731,3 +731,12 @@ fieldset input {
 .dataset__columns label {
   margin-right: 0.75rem;
 }
+
+/* The Modified and Size cells: right-aligned and tabular, so dates and sizes line up down the
+   column and can be compared by eye rather than read one by one. */
+.dataset__detail {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+  white-space: nowrap;
+}

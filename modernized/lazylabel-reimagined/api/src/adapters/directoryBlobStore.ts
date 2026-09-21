@@ -60,7 +60,11 @@ export class DirectoryBlobStore implements BlobStore {
       const info = await fs.lstat(full);
       if (info.isSymbolicLink()) throw new InvalidKeyError(key, "it is a symbolic link");
       if (!info.isFile()) return null;
-      return { size: info.size, revision: revisionOf(info.size, info.mtimeMs, info.ino) };
+      return {
+        size: info.size,
+        revision: revisionOf(info.size, info.mtimeMs, info.ino),
+        modified: info.mtimeMs,
+      };
     } catch (cause) {
       if (cause instanceof InvalidKeyError) throw cause;
       if (isMissing(cause)) return null;

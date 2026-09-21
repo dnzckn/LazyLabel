@@ -32,8 +32,8 @@ import { ExportFormats } from "./ExportFormats.jsx";
 
 import type { AnnotationsResult, ApiClient } from "../api/client.js";
 import { useSettings } from "../settings/SettingsProvider.jsx";
-import { hideableColumns, visibleColumns } from "./columns.js";
-import { SORT_ORDERS, isSupported, labelFor, sortImages } from "./sorting.js";
+import { formatModified, formatSize, hideableColumns, visibleColumns } from "./columns.js";
+import { SORT_ORDERS, needsDetails, sortImages } from "./sorting.js";
 
 export interface DatasetBrowserProps {
   readonly client: ApiClient;
@@ -78,12 +78,29 @@ export function DatasetBrowser({
   const { open: openState, openImage } = useWorkspace();
   const { settings, save } = useSettings();
 
+  /*
+   * Whether this listing needs each file's size and date -- one stat per image on the server.
+   *
+   * Asked for only when the CHOSEN SORT needs it, or when a column that shows it is switched on.
+   * Only this side knows either, which is why the flag is the client's to send: a server that
+   * always stat-ted would pay for a folder of ten thousand frames on every listing to serve a sort
+   * nobody chose, and one that never did could not serve it at all.
+   *
+   * It is part of the effect's dependencies, so switching to a date sort refetches WITH details
+   * rather than sorting the rows it already has by a field they do not carry.
+   */
+  const { settings: listSettings } = useSettings();
+  const wantsDetails =
+    needsDetails(Number(listSettings.values["file_manager_sort_order"] ?? 0))
+    || listSettings.values["file_manager_show_modified"] === true
+    || listSettings.values["file_manager_show_size"] === true;
+
   useEffect(() => {
     let cancelled = false;
     setState({ status: "loading" });
 
     client
-      .listImages(projectId, here)
+      .listImages(projectId, here, wantsDetails)
       .then((listing) => {
         if (cancelled) return;
         setState({ status: "ready", listing });
@@ -98,7 +115,7 @@ export function DatasetBrowser({
     return () => {
       cancelled = true;
     };
-  }, [client, projectId, here, onListed]);
+  }, [client, projectId, here, onListed, wantsDetails]);
 
   if (state.status === "loading") return <p>Loading the folder…</p>;
   if (state.status === "failed") {
@@ -206,6 +223,8 @@ function ColumnedTable({
   const rawOrder = Number(settings.values["file_manager_sort_order"]);
   const order = Number.isInteger(rawOrder) ? rawOrder : 0;
   const rows = sortImages(listing.images, order);
+  const showModified = settings.values["file_manager_show_modified"] !== false;
+  const showSize = settings.values["file_manager_show_size"] !== false;
 
   return (
     <>
@@ -225,25 +244,38 @@ function ColumnedTable({
             }
           >
             {SORT_ORDERS.map((entry) => (
-              <option key={entry.value} value={entry.value} disabled={!entry.supported}>
+              <option key={entry.value} value={entry.value}>
                 {entry.label}
-                {entry.supported ? "" : " — not available yet"}
               </option>
             ))}
           </select>
         </label>
 
-        {!isSupported(order) && (
-          // An imported legacy settings file can carry one of the four this app cannot perform.
-          // Saying so beats showing a list sorted by name that claims to be sorted by size.
-          <p role="status" className="banner banner--warning">
-            {labelFor(order)} is not available yet — the listing does not carry each file&rsquo;s
-            date or size. Showing name order instead.
-          </p>
-        )}
 
         <details className="dataset__columns">
           <summary>Columns</summary>
+          {/* The two detail columns sit with the format ones: to a user they are all "columns",
+              and separating them by what they cost the server would be exposing an implementation
+              detail as a category. */}
+          {([
+            { suffix: "Modified", setting: "file_manager_show_modified" },
+            { suffix: "Size", setting: "file_manager_show_size" },
+          ] as const).map((column) => (
+            <label key={column.setting}>
+              <input
+                type="checkbox"
+                checked={settings.values[column.setting] !== false}
+                aria-label={`Show the ${column.suffix} column`}
+                onChange={(event) =>
+                  void save({
+                    ...settings,
+                    values: { ...settings.values, [column.setting]: event.target.checked },
+                  })
+                }
+              />{" "}
+              {column.suffix}
+            </label>
+          ))}
           {hideableColumns(listing.columns).map((column) => (
             <label key={column.format}>
               <input
@@ -271,6 +303,11 @@ function ColumnedTable({
                   {column.suffix}
                 </th>
               ))}
+              {/* RULE-036's other two columns. They are the reason the listing can be asked for
+                  details at all: each costs a stat per image on the server, so they are fetched
+                  only while one of them is switched on or a sort needs them. */}
+              {showModified && <th scope="col">Modified</th>}
+              {showSize && <th scope="col">Size</th>}
             </tr>
           </thead>
           <tbody>
@@ -294,6 +331,8 @@ function ColumnedTable({
                     </span>
                   </td>
                 ))}
+                {showModified && <td className="dataset__detail">{formatModified(image.modified)}</td>}
+                {showSize && <td className="dataset__detail">{formatSize(image.size)}</td>}
               </tr>
             ))}
           </tbody>

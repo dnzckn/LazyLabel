@@ -112,6 +112,16 @@ export interface WireDatasetImage {
    * could be told.
    */
   readonly sharesSidecarsWith: readonly string[];
+  /**
+   * The image file's size in bytes — only when the listing was asked for DETAILS.
+   *
+   * Absent by default, and that is the point: filling it costs a `stat` per image, which a folder
+   * of ten thousand frames would pay on every listing for a column most datasets never show. The
+   * client asks when a visible column or a chosen sort needs it.
+   */
+  readonly size?: number;
+  /** When the image was last written, epoch milliseconds, or null when the store cannot say. */
+  readonly modified?: number | null;
 }
 
 export interface WireDatasetListing {

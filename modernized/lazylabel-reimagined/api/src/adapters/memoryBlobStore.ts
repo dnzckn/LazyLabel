@@ -38,7 +38,13 @@ export class MemoryBlobStore implements BlobStore {
     check(key);
     const found = this.blobs.get(key);
     if (found === undefined) return null;
-    return { size: found.length, revision: this.revisions.get(key)! };
+    /*
+     * No `modified`, deliberately. This store keeps bytes in a map and knows no more about when
+     * they were written than the moment it was handed them -- which is the test's clock, not a
+     * file's, and would make every sorted listing in a test agree with nothing real. The port
+     * allows null for exactly this, and a caller that sorts by date has to cope with its absence.
+     */
+    return { size: found.length, revision: this.revisions.get(key)!, modified: null };
   }
 
   async list(prefix: string): Promise<readonly string[]> {
@@ -97,7 +103,7 @@ export class MemoryBlobStore implements BlobStore {
     this.sequence += 1;
     const revision = createHash("sha256").update(`${key}:${this.sequence}`).digest("base64url").slice(0, 22);
     this.revisions.set(key, revision);
-    return { size: stored.length, revision };
+    return { size: stored.length, revision, modified: null };
   }
 }
 

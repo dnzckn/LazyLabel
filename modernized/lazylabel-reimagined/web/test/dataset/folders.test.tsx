@@ -77,6 +77,9 @@ function show(overrides: Partial<ApiClient> = {}) {
   return { listImages };
 }
 
+// The third argument is whether this listing needs each file's size and date -- one stat per
+// image on the server. It is TRUE at the defaults because legacy shows the Modified and Size
+// columns by default, and those are what it pays for.
 describe("a dataset whose images are not at the root", () => {
   it("names the folders below, rather than looking empty", async () => {
     show();
@@ -100,7 +103,7 @@ describe("a dataset whose images are not at the root", () => {
     fireEvent.click(await screen.findByText("frames/"));
 
     await waitFor(() => expect(screen.getByText("a.png")).toBeTruthy());
-    expect(listImages).toHaveBeenCalledWith("p1", "frames");
+    expect(listImages).toHaveBeenCalledWith("p1", "frames", true);
   });
 
   it("goes down two levels, joining the path as it goes", async () => {
@@ -109,7 +112,7 @@ describe("a dataset whose images are not at the root", () => {
     fireEvent.click(await screen.findByText("frames/"));
     fireEvent.click(await screen.findByText("day1/"));
 
-    await waitFor(() => expect(listImages).toHaveBeenCalledWith("p1", "frames/day1"));
+    await waitFor(() => expect(listImages).toHaveBeenCalledWith("p1", "frames/day1", true));
     expect(await screen.findByText("b.png")).toBeTruthy();
   });
 
@@ -121,7 +124,7 @@ describe("a dataset whose images are not at the root", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "frames" }));
 
-    await waitFor(() => expect(listImages).toHaveBeenLastCalledWith("p1", "frames"));
+    await waitFor(() => expect(listImages).toHaveBeenLastCalledWith("p1", "frames", true));
     expect(await screen.findByText("a.png")).toBeTruthy();
   });
 
@@ -132,7 +135,7 @@ describe("a dataset whose images are not at the root", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Dataset" }));
 
-    await waitFor(() => expect(listImages).toHaveBeenLastCalledWith("p1", ""));
+    await waitFor(() => expect(listImages).toHaveBeenLastCalledWith("p1", "", true));
   });
 
   it("does not offer the folder it is already in as somewhere to go", async () => {

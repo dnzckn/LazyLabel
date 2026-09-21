@@ -26,6 +26,15 @@ export interface BlobStat {
   readonly size: number;
   /** Opaque token that changes whenever the bytes change. Never parsed by callers. */
   readonly revision: string;
+  /**
+   * When the bytes were last written, as epoch milliseconds, or null when the store cannot say.
+   *
+   * NULLABLE because not every store has one. A directory does; an object store usually does; a
+   * store that keeps blobs in memory has no more than the moment it was handed them. A caller that
+   * sorts by it has to cope with its absence, which is better than inventing `0` and putting every
+   * file of an unknown age at the top of the list.
+   */
+  readonly modified: number | null;
 }
 
 export interface BlobStore {

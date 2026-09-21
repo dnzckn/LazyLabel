@@ -113,7 +113,7 @@ describe("C1: the dataset browser", () => {
     // them default to FALSE in legacy -- so the default view is .npz and .txt, not all seven.
     // Showing every column regardless was the deviation, not this.
     const headers = screen.getAllByRole("columnheader").map((cell) => cell.textContent);
-    expect(headers).toEqual(["Image", ".npz", ".txt"]);
+    expect(headers).toEqual(["Image", ".npz", ".txt", "Modified", "Size"]);
   });
 
   it("says how many images are already annotated", async () => {

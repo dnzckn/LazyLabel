@@ -35,6 +35,9 @@ interface Listing {
     annotated: boolean;
     sidecars: Record<string, boolean>;
     sharesSidecarsWith: string[];
+    // Present only when the listing was asked for details.
+    size?: number;
+    modified?: number | null;
   }[];
   annotatedCount: number;
   unrecognized: number;
@@ -63,11 +66,11 @@ describe("C1: open a folder of images and see which already carry annotations", 
     await writeFile(full, content);
   }
 
-  async function list(folder = "frames"): Promise<Listing> {
+  async function list(folder = "frames", details = false): Promise<Listing> {
     const response = await app.handle({
       method: "GET",
       path: "/projects/p1/images",
-      query: new URLSearchParams({ folder }),
+      query: new URLSearchParams(details ? { folder, details: "1" } : { folder }),
       headers: {},
       body: new Uint8Array(0),
     });
@@ -239,4 +242,29 @@ describe("C1: open a folder of images and see which already carry annotations", 
     const empty = await app.handle(get("/projects/p1/images/frames/frame_013.png/annotations", SIZE));
     expect(empty.status).toBe(204);
   });
+
+  describe("file details, only when asked for", () => {
+    it("omits size and modified by default", async () => {
+      // Filling them costs a `stat` PER IMAGE, which a folder of ten thousand frames would pay on
+      // every listing for two columns most datasets never show.
+      const listing = await list();
+
+      for (const image of listing.images) {
+        expect(image.size, image.key).toBeUndefined();
+        expect(image.modified, image.key).toBeUndefined();
+      }
+    });
+
+    it("includes them with details=1", async () => {
+      const listing = await list("frames", true);
+
+      for (const image of listing.images) {
+        expect(image.size, image.key).toBeGreaterThan(0);
+        expect(typeof image.modified, image.key).toBe("number");
+      }
+    });
+
+
+  });
+
 });

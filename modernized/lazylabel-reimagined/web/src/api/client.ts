@@ -135,8 +135,20 @@ export class ApiClient {
   }
 
   /** List a folder of images with what each one already carries. */
-  async listImages(projectId: string, folder = ""): Promise<WireDatasetListing> {
-    const query = folder === "" ? "" : `?folder=${encodeURIComponent(folder)}`;
+  /**
+   * `details` adds each image's size and modified time, at the cost of a stat per image on the
+   * server. Ask for it only when a visible column or the chosen sort needs it: only this side
+   * knows what the user has switched on.
+   */
+  async listImages(
+    projectId: string,
+    folder = "",
+    details = false,
+  ): Promise<WireDatasetListing> {
+    const parts = new URLSearchParams();
+    if (folder !== "") parts.set("folder", folder);
+    if (details) parts.set("details", "1");
+    const query = [...parts.keys()].length === 0 ? "" : `?${parts.toString()}`;
     const response = await this.send(
       "GET",
       `/projects/${encodeURIComponent(projectId)}/images${query}`,

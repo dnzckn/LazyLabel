@@ -37,6 +37,18 @@ export interface DatasetImage {
    * rather than waiting for a save to collide.
    */
   readonly sharesSidecarsWith: readonly string[];
+  /**
+   * The image file's size in bytes, and when it was last written — only when DETAILS were asked
+   * for.
+   *
+   * Absent by default and that is the point. The listing is one pass over a directory read;
+   * filling these in costs a `stat` PER IMAGE, which a folder of ten thousand frames pays on every
+   * listing for two columns most datasets never show. So the client asks for them when a visible
+   * column or a chosen sort needs them, and not otherwise.
+   */
+  readonly size?: number;
+  /** Epoch milliseconds, or null when the store cannot say. */
+  readonly modified?: number | null;
 }
 
 export interface DatasetListing {
@@ -68,7 +80,11 @@ export interface DatasetListing {
  * Not recursive, per RULE-051: only the direct children of the chosen folder are listed and
  * loadable. Legacy does the same, and changing it would change which images a dataset contains.
  */
-export async function listDataset(store: BlobStore, folder: string): Promise<DatasetListing> {
+export async function listDataset(
+  store: BlobStore,
+  folder: string,
+  details = false,
+): Promise<DatasetListing> {
   const [entries, folders] = await Promise.all([store.list(folder), store.listFolders(folder)]);
 
   // One set for membership, so each image's seven lookups are seven map probes rather than seven
@@ -109,12 +125,32 @@ export async function listDataset(store: BlobStore, folder: string): Promise<Dat
     };
   });
 
-  rows.sort(byLowercasedName);
+  /*
+   * THE ONLY PLACE THIS FUNCTION STATS, and only when asked. The comment at the top of this file
+   * is about the SIDECARS -- seven lookups per image answered from one directory read rather than
+   * seven filesystem calls -- and that stands: this adds one call per IMAGE, not seven, and only
+   * for a client that has a column or a sort needing it.
+   *
+   * In parallel, because a folder of ten thousand frames issued one after another would take
+   * longer than the listing it belongs to. A stat that fails leaves the fields absent rather than
+   * failing the listing: a file that vanished between the directory read and the stat should not
+   * take the whole folder down with it.
+   */
+  const detailed = details
+    ? await Promise.all(
+        rows.map(async (row) => {
+          const info = await store.stat(row.key).catch(() => null);
+          return info === null ? row : { ...row, size: info.size, modified: info.modified };
+        }),
+      )
+    : rows;
+
+  detailed.sort(byLowercasedName);
 
   return {
     folder,
     folders: [...folders].sort(byLowercased),
-    images: rows,
+    images: detailed,
     annotatedCount: rows.filter((row) => row.annotated).length,
     unrecognized,
   };

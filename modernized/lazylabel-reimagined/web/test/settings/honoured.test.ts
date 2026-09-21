@@ -127,9 +127,9 @@ describe("what the scan currently finds", () => {
     const counted = (kind: string) => KEYS.filter((key) => HONOURED[key]?.kind === kind).length;
 
     expect({ read: counted("read"), dropped: counted("dropped"), gap: counted("gap") }).toEqual({
-      read: 25,
+      read: 27,
       dropped: 9,
-      gap: 5,
+      gap: 3,
     });
   });
 });

@@ -18,24 +18,35 @@
  */
 
 export const SORT_ORDERS = [
-  { value: 0, label: "Name (A–Z)", supported: true },
-  { value: 1, label: "Name (Z–A)", supported: true },
-  { value: 2, label: "Modified (oldest first)", supported: false },
-  { value: 3, label: "Modified (newest first)", supported: false },
-  { value: 4, label: "Size (smallest first)", supported: false },
-  { value: 5, label: "Size (largest first)", supported: false },
+  { value: 0, label: "Name (A–Z)", needsDetails: false },
+  { value: 1, label: "Name (Z–A)", needsDetails: false },
+  { value: 2, label: "Modified (oldest first)", needsDetails: true },
+  { value: 3, label: "Modified (newest first)", needsDetails: true },
+  { value: 4, label: "Size (smallest first)", needsDetails: true },
+  { value: 5, label: "Size (largest first)", needsDetails: true },
 ] as const;
 
-export function isSupported(order: number): boolean {
-  return SORT_ORDERS.some((entry) => entry.value === order && entry.supported);
+/**
+ * Whether this order needs the listing to have been asked for DETAILS.
+ *
+ * Four of the six sort by a file's date or size, which the listing carries only on request --
+ * because filling them costs a stat per image, and a folder of ten thousand frames would pay for
+ * it on every listing to serve a sort nobody chose.
+ */
+export function needsDetails(order: number): boolean {
+  return SORT_ORDERS.some((entry) => entry.value === order && entry.needsDetails);
 }
 
-export function labelFor(order: number): string {
-  return SORT_ORDERS.find((entry) => entry.value === order)?.label ?? SORT_ORDERS[0].label;
+export function isSupported(order: number): boolean {
+  return SORT_ORDERS.some((entry) => entry.value === order);
 }
+
 
 interface Named {
   readonly name: string;
+  /** Present only when the listing was asked for details. */
+  readonly size?: number;
+  readonly modified?: number | null;
 }
 
 /**
@@ -48,13 +59,38 @@ interface Named {
  * both look correct depending on who you ask.
  */
 export function sortImages<T extends Named>(images: readonly T[], order: number): readonly T[] {
-  if (!isSupported(order)) return images;
-  if (order === 0) return images;
+  if (!isSupported(order) || order === 0) return images;
 
-  const byName = [...images].sort((a, b) => {
-    const left = a.name.toLowerCase();
-    const right = b.name.toLowerCase();
-    return left < right ? -1 : left > right ? 1 : 0;
+  if (order === 1) {
+    return [...images].sort((a, b) => compareNames(b, a));
+  }
+
+  /*
+   * A DETAIL SORT WITH NO DETAILS FALLS BACK TO NAME, rather than putting every file it cannot
+   * measure at one end. That happens for one render after the order changes -- the listing has to
+   * be fetched again with `details=1` -- and for any store that cannot report a modified time at
+   * all, which the port allows.
+   *
+   * Ties break by NAME, so a folder whose files were all written in the same second has a stable,
+   * meaningful order rather than whatever the previous sort left behind.
+   */
+  const by = order === 2 || order === 3 ? "modified" : "size";
+  const descending = order === 3 || order === 5;
+  if (images.every((image) => image[by] === undefined || image[by] === null)) return images;
+
+  return [...images].sort((a, b) => {
+    const left = a[by] ?? null;
+    const right = b[by] ?? null;
+    // A file whose date or size is unknown sorts LAST whichever way the order runs: it is a gap in
+    // what is known, not a very small or very old file.
+    if (left === null || right === null) return left === right ? compareNames(a, b) : left === null ? 1 : -1;
+    if (left === right) return compareNames(a, b);
+    return descending ? right - left : left - right;
   });
-  return byName.reverse();
+}
+
+function compareNames(a: Named, b: Named): number {
+  const left = a.name.toLowerCase();
+  const right = b.name.toLowerCase();
+  return left < right ? -1 : left > right ? 1 : 0;
 }

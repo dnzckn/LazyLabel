@@ -354,7 +354,17 @@ async function proxySegment(deps: AppDeps, request: ApiRequest): Promise<ApiResp
 async function listImages(deps: AppDeps, request: ApiRequest): Promise<ApiResponse> {
   const folder = request.query.get("folder") ?? "";
 
-  const listing = await listDataset(deps.blobStore, folder);
+  /*
+   * `details=1` adds each image's size and modified time, at the cost of a stat PER IMAGE.
+   *
+   * Opt-in rather than always, because a folder of ten thousand frames would pay for it on every
+   * listing to fill two columns most datasets never show. The client asks when a visible column or
+   * a chosen sort needs them -- which is the only way it can be both correct and cheap, since only
+   * the client knows what the user has switched on.
+   */
+  const details = request.query.get("details") === "1";
+
+  const listing = await listDataset(deps.blobStore, folder, details);
   return json(200, {
     folder: listing.folder,
     folders: listing.folders,
