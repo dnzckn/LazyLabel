@@ -129,6 +129,26 @@ Two consequences worth stating plainly:
   genuinely different question: propagated masks reach the timeline but nothing writes them to
   sidecars yet. That is the next slice.
 
+**A FIFTEENTH wiring defect, and the worst one: the inference service was never constructed.**
+Found by asking what `server.py` actually builds rather than by anything failing. `Deps.service`
+defaults to None, `main()` never set it, and there was no dataset-root configuration to set it
+from -- so a deployed service with checkpoints, a manifest and a GPU answered 503 to embeddings and
+segment alike. Probably since Phase 3.
+
+Every test in that suite builds its own `Deps`, so not one of them ever ran the line production
+runs. The same shape as the other fourteen, one level up: a thing that works, a test that proves it
+works, and nothing calling it.
+
+The API had the IDENTICAL defect earlier and it had been fixed -- but the fix was unprotected,
+because `main.ts` could not be imported without starting a server and exiting the process. So both
+entry points now have their wiring in a `buildDeps` function with tests, and the API's entry point
+runs only when its module is the process. A module that cannot be imported without side effects is
+a module whose contents cannot be checked, and that is where this defect family lives.
+
+What is deliberately still 503 is the propagator: the job API is built, and what runs INSIDE a job
+-- staging a sequence and seeding SAM 2 from the reference frames' own annotations -- is not. A
+test pins it so it cannot quietly become a 202 for a job that will never produce a frame.
+
 **Blocked on the owner:**
 
 - **C11's EQUIVALENCE** — not its API, which is built. Proving the propagated masks and the
