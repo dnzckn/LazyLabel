@@ -24,22 +24,26 @@ Every guard this project uses is closed or its remainder recorded: no unread set
 unreached function with a written reason, 40 of 43 hotkeys live (the other three are mouse
 bindings), and all 94 business rules traceable to a test or recorded as a decision.
 
-## The suites, as of 2026-09-20
+## The suites, as of 2026-09-21
 
-All six green, run together:
+All **seven** green, every one run in a single pass on 2026-09-21. The `contracts` package was
+missing from this table entirely, which is how a table stops being a census.
 
 | Package | Passing | Note |
 |---|---|---|
 | exporters | 1979 | the seven formats, byte-for-byte against goldens legacy wrote |
-| web | 991 | plus 1 todo: C11's placeholder |
-| api | 334 | plus 4 skipped and 5 todo, all needing a checkpoint or a corpus |
-| inference | 233 | plus 36 skipped: the differentials, which need real checkpoints |
+| web | 1097 | C11's placeholder is gone; it has an acceptance test now |
+| inference | 519 | plus 36 skipped: the differentials, which need real checkpoints |
+| api | 398 | plus 4 skipped and 5 todo, all needing a checkpoint or a corpus |
 | settings-schema | 41 | includes the rule-fixed defaults |
 | converter | 30 | the pickled-alias rewrite |
+| contracts | 21 | the wire shapes both sides agree on |
 
-**3608 passing**, counted from a run rather than from arithmetic — the figure quoted during the
-day had drifted seven behind as the web suite grew, which is what quoting a sum instead of
-measuring one does. The skips are the honest part: they skip themselves when no checkpoint is
+Each figure is read from that package's own run. Four commit messages this week quoted a count
+that had been typed before the run printed it and needed amending, which is why the rule is now
+written down: run the suite as its own step, then write the number.
+
+The skips are the honest part: they skip themselves when no checkpoint is
 configured, so a green CI run says nothing about them — see `Running the live suites`.
 
 ## What to do next
