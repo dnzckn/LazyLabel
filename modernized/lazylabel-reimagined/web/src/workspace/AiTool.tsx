@@ -24,6 +24,7 @@ import { decodeMask, encodeMask, type WireSegment } from "@lazylabel/contracts";
 import { AiLayer } from "../canvas/AiLayer.jsx";
 import { segmentPixels } from "../canvas/AnnotationCanvas.jsx";
 import { filterFragments } from "../tools/fragments.js";
+import { SETTLE_MS, prefetchOrder } from "./prefetch.js";
 import { useNotifications } from "../notifications/NotificationProvider.jsx";
 import type { AiPrompt } from "../tools/ai.js";
 import type { ApiClient, WireSegmentResponse } from "../api/client.js";
@@ -39,6 +40,16 @@ export interface AiToolProps {
   readonly classId: number;
   /** A manifest model NAME. The service refuses anything not listed. */
   readonly model: string;
+  /**
+   * The folder in the order the user steps through it — RULE-091's prefetch.
+   *
+   * A cold SAM encode is seconds, and the first click after navigating to the next image is
+   * exactly when a user is least willing to wait for one. Empty means no prefetch, which is what
+   * a view with no folder behind it should do.
+   */
+  readonly folderKeys?: readonly string[];
+  /** Frames Find Archetypes suggested. They are encoded ahead of the neighbours (RULE-091). */
+  readonly archetypes?: readonly string[];
   /** RULE-027's threshold, from settings. */
   readonly fragmentThreshold: number;
   /**
@@ -75,6 +86,8 @@ export function AiTool({
   height,
   classId,
   model,
+  folderKeys = [],
+  archetypes = [],
   fragmentThreshold,
   autoPolygon,
   operateOnView,
@@ -88,6 +101,14 @@ export function AiTool({
 
   /** Rises with every prompt; an answer with a stale number is thrown away. */
   const latest = useRef(0);
+
+  /**
+   * Images this session has had encoded, so the prefetch never asks twice.
+   *
+   * A ref rather than state: nothing renders from it, and making it state would re-render the
+   * whole tool every time a background encode finished.
+   */
+  const encoded = useRef(new Set<string>());
 
   /*
    * THE PREDICTION, READ THROUGH A REF SO ACCEPTING IT CANNOT USE A STALE ONE.
@@ -127,6 +148,7 @@ export function AiTool({
         if (cancelled) return;
         setHandle(response.handle);
         setEncoding(false);
+        encoded.current.add(imageKey);
         // Only a COLD encode is worth a message: one on every image would be noise, and the whole
         // point of the cache is that the user does not wait.
         if (!response.cached) notify({ severity: "info", message: "Image ready for AI prompts" });
@@ -150,6 +172,63 @@ export function AiTool({
     // model work per keystroke anywhere in the app. Serialising the four numbers means the encode
     // happens when the view actually changes, which is what RULE-089 asks for.
   }, [client, imageKey, model, notify, viewKey]);
+
+  /**
+   * RULE-091: encode the neighbours before anyone asks for them.
+   *
+   * Runs AFTER the current image is warm, not alongside it. Racing the prefetch against the encode
+   * the user is waiting on would make the thing they asked for slower in order to make a thing
+   * they have not asked for faster — and on a single GPU the two are the same queue.
+   *
+   * One at a time, and re-checked between each: a folder change or a navigation mid-prefetch
+   * should abandon what is left rather than finish warming a folder nobody is looking at.
+   *
+   * FAILURES ARE SILENT HERE, deliberately, and it is the one place in this app where that is
+   * right. Nothing was asked for, so nothing was promised; a notification saying an image the user
+   * has not opened could not be prepared is noise about a problem they will meet properly, with a
+   * real message, if they ever open it.
+   */
+  useEffect(() => {
+    if (handle === null || folderKeys.length === 0) return;
+
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      void (async () => {
+        for (;;) {
+          if (cancelled) return;
+          const [next] = prefetchOrder({
+            keys: folderKeys,
+            current: imageKey,
+            archetypes,
+            encoded: encoded.current,
+          });
+          if (next === undefined) return;
+
+          try {
+            await client.embed({
+              image: next,
+              model,
+              ...(operateOnView === undefined ? {} : { adjustments: operateOnView }),
+            });
+          } catch {
+            // Silent on purpose -- see above. Recorded as done either way, so one unreadable image
+            // cannot spin this loop.
+          }
+          encoded.current.add(next);
+        }
+      })();
+    }, SETTLE_MS);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+    // `archetypes` and `folderKeys` are read through their JOINED values for the same reason the
+    // encode effect keys on the adjustment numbers: a caller building the array fresh each render
+    // would restart the prefetch continuously.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [handle, imageKey, model, viewKey, folderKeys.join(" "), archetypes.join(" ")]);
+
 
   const onPrompt = useCallback(
     (prompt: AiPrompt) => {

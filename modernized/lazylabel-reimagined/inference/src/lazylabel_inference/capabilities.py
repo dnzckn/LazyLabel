@@ -39,11 +39,12 @@ CAPABILITIES: list[Capability] = [
         "C3",
         "Segment an object by clicking or boxing it with SAM",
         "P3",
-        built=False,
-        missing=(
-            "the SAM 1 backend, and the neighbour prefetch that makes the first click on the next "
-            "image immediate. SAM 2.1 prompts, the embedding handles and the cache are built, and "
-            "the prompts are proven against the legacy Sam2Model"
+        built=True,
+        caveat=(
+            "built: SAM 2.1 and SAM 1 prompts, the embedding handles, RULE-091's cache and the "
+            "neighbour prefetch that warms it. The prefetch lives in the WEB app, which is the "
+            "only side that knows the folder order. NOT claimed: the 150 ms p95 of RULE-074, "
+            "which needs measuring on real hardware rather than asserting here"
         ),
     ),
     Capability(

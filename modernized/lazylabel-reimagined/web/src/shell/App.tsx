@@ -203,7 +203,14 @@ export function App({ client }: { readonly client: ApiClient }): ReactNode {
             </Panel>
           </>
         }
-        centre={<OpenImageView client={client} projectId="default" />}
+        centre={
+          <OpenImageView
+            client={client}
+            projectId="default"
+            // RULE-091's prefetch needs the folder in the order the user steps through it.
+            folderKeys={listed.map((image) => image.key)}
+          />
+        }
         right={
           <>
             <DatasetBrowser client={client} projectId="default" onListed={setListed} />

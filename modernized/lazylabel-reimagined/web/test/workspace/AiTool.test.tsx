@@ -65,6 +65,8 @@ function mount(client: Partial<ApiClient>, props: Partial<Parameters<typeof AiTo
         classId={over.classId ?? 0}
         model="SAM 2.1 large"
         fragmentThreshold={over.fragmentThreshold ?? 0}
+        {...(over.folderKeys === undefined ? {} : { folderKeys: over.folderKeys })}
+        {...(over.archetypes === undefined ? {} : { archetypes: over.archetypes })}
         {...(over.autoPolygon === undefined ? {} : { autoPolygon: over.autoPolygon })}
         {...(over.operateOnView === undefined ? {} : { operateOnView: over.operateOnView })}
         onAccept={onAccept}
@@ -414,5 +416,85 @@ describe("Operate On View (RULE-089)", () => {
     rerender({ operateOnView: { brightness: 60, contrast: 0, gamma: 1, saturation: 1 } });
 
     await waitFor(() => expect(embed).toHaveBeenCalledTimes(2));
+  });
+});
+
+
+describe("RULE-091: encoding the neighbours before anyone asks", () => {
+  /**
+   * The cache was built and keyed properly and nothing ever warmed it, so the first click after
+   * navigating still paid for a cold encode — seconds of it. `prefetch.test.ts` proves the ORDER;
+   * this proves the prefetch is REACHED, which is the half that has gone missing fourteen times in
+   * this project.
+   */
+  const FOLDER = ["frames/a.png", "frames/b.png", "frames/c.png", "frames/d.png"];
+
+  function embedSpy() {
+    const asked: string[] = [];
+    return {
+      asked,
+      embed: async ({ image }: { image: string }) => {
+        asked.push(image);
+        return { handle: `h-${image}`, cached: false };
+      },
+    };
+  }
+
+  it("encodes the neighbours after the current image is warm", async () => {
+    const spy = embedSpy();
+    mount({ embed: spy.embed } as never, { folderKeys: FOLDER } as never);
+
+    // The current image first, always: racing the prefetch against the encode the user is waiting
+    // on would make the thing they asked for slower for the sake of one they have not.
+    await waitFor(() => expect(spy.asked[0]).toBe("frames/a.png"));
+    await waitFor(() => expect(spy.asked).toContain("frames/b.png"), { timeout: 3000 });
+
+    expect(spy.asked.indexOf("frames/b.png")).toBeGreaterThan(0);
+  });
+
+  it("walks the whole order, not just the next image", async () => {
+    const spy = embedSpy();
+    mount({ embed: spy.embed } as never, { folderKeys: FOLDER } as never);
+
+    await waitFor(() => expect(spy.asked).toContain("frames/c.png"), { timeout: 3000 });
+  });
+
+  it("puts an archetype ahead of the neighbours", async () => {
+    const spy = embedSpy();
+    mount({ embed: spy.embed } as never, {
+      folderKeys: FOLDER,
+      archetypes: ["frames/d.png"],
+    } as never);
+
+    await waitFor(() => expect(spy.asked).toContain("frames/d.png"), { timeout: 3000 });
+    expect(spy.asked.indexOf("frames/d.png")).toBeLessThan(spy.asked.indexOf("frames/b.png"));
+  });
+
+  it("does nothing at all without a folder behind it", async () => {
+    // A view with no listing should not invent one. This is also what makes every other test in
+    // this file free of background encodes.
+    const spy = embedSpy();
+    mount({ embed: spy.embed } as never);
+
+    await waitFor(() => expect(spy.asked).toHaveLength(1));
+    await new Promise((resolve) => setTimeout(resolve, 400));
+
+    expect(spy.asked).toEqual(["frames/a.png"]);
+  });
+
+  it("keeps going when one neighbour cannot be encoded", async () => {
+    // Nothing was asked for, so nothing was promised. One unreadable image must not stop the
+    // others being warmed, and must not spin the loop either.
+    const asked: string[] = [];
+    const embed = async ({ image }: { image: string }) => {
+      asked.push(image);
+      if (image === "frames/b.png") throw new Error("unreadable");
+      return { handle: `h-${image}`, cached: false };
+    };
+
+    mount({ embed } as never, { folderKeys: FOLDER } as never);
+
+    await waitFor(() => expect(asked).toContain("frames/c.png"), { timeout: 3000 });
+    expect(asked.filter((key) => key === "frames/b.png")).toHaveLength(1);
   });
 });

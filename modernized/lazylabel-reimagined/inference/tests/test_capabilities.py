@@ -18,7 +18,7 @@ SPEC = Path(__file__).resolve().parents[4] / "analysis" / "lazylabel" / "AI_NATI
 
 # The routes this service exposes for a capability that is not built, and the marker that holds the
 # place. Kept beside the table so the two cannot drift apart unnoticed.
-PENDING = {"C3"}
+PENDING: set[str] = set()
 
 
 def test_the_specification_is_where_this_test_expects_it() -> None:
@@ -38,13 +38,14 @@ def test_only_what_the_routes_actually_do_is_marked_built() -> None:
     """This test used to assert that NOTHING was built, and C11 is why it no longer can.
 
     The direction that matters has not changed: the table must never claim work the routes do not
-    do. What changed is that two of them now do it -- the service propagates end to end with the
-    video predictor it runs on, and it finds archetypes. C3 still covers a SAM 1 backend and the
-    neighbour prefetch, so it remains unbuilt.
+    do. What changed is that all four now do it. C3 was the last, and its "missing" line had gone
+    stale in both halves: the SAM 1 backend was built, and the neighbour prefetch turned out to
+    belong to the WEB app, since the service is handed one image key and never learns the folder
+    order.
     """
     built = {entry.id for entry in CAPABILITIES if entry.built}
 
-    assert built == {"C10", "C11"}
+    assert built == {"C3", "C10", "C11"}
 
 
 def test_a_built_capability_says_what_it_does_NOT_claim() -> None:
@@ -57,13 +58,25 @@ def test_a_built_capability_says_what_it_does_NOT_claim() -> None:
 
 
 def test_c3_records_what_is_left_rather_than_what_it_started_as() -> None:
-    # A "missing" line that never changes is how a table stops being read.
-    missing = capability("C3").missing
-    assert "SAM 1" in missing
-    assert "SAM 2.1 prompts" in missing and "built" in missing
+    """A line that never changes is how a table stops being read -- and this one had stopped.
+
+    It claimed the SAM 1 backend was missing long after `load_backend` handled the family, and it
+    claimed the neighbour prefetch was this service's to build when the service is handed one image
+    key and never learns what folder it came from.
+    """
+    caveat = capability("C3").caveat
+
+    assert "SAM 1" in caveat
+    assert "WEB app" in caveat
+    assert capability("C3").missing == ""
 
 
 def test_the_pending_set_matches_the_table() -> None:
+    """Empty now, and kept rather than deleted.
+
+    It is the guard that would catch a capability being marked built with nothing behind it, and
+    the next one to be added needs it in place.
+    """
     from_table = {entry.id for entry in CAPABILITIES if not entry.built and entry.missing}
     # C13 is listed with "nothing missing": settings are the API's, and this service holds none.
     assert from_table - {"C13"} == PENDING

@@ -64,9 +64,12 @@ const EMPTY_ANNOTATIONS = {
 export function OpenImageView({
   client,
   projectId,
+  folderKeys = [],
 }: {
   readonly client: ApiClient;
   readonly projectId: string;
+  /** The folder in the order the user steps through it, for RULE-091's prefetch. */
+  readonly folderKeys?: readonly string[];
 }): ReactNode {
   const { open, processing } = useWorkspace();
 
@@ -76,6 +79,7 @@ export function OpenImageView({
     <OpenedImage
       client={client}
       projectId={projectId}
+      folderKeys={folderKeys}
       image={open.image}
       result={open.result}
       error={open.error}
@@ -91,6 +95,7 @@ export function OpenImageView({
 function OpenedImage({
   client,
   projectId,
+  folderKeys,
   image,
   result,
   error,
@@ -99,6 +104,8 @@ function OpenedImage({
 }: {
   readonly client: ApiClient;
   readonly projectId: string;
+  /** The folder in the order the user steps through it, for RULE-091's prefetch. */
+  readonly folderKeys: readonly string[];
   readonly image: WireDatasetImage;
   readonly result: AnnotationsResult | null;
   readonly error: string | null;
@@ -334,6 +341,7 @@ function OpenedImage({
                       height={metadata.height}
                       classId={classForNewSegment(segments, activeClassId)}
                       model={aiModel}
+                      folderKeys={folderKeys}
                       fragmentThreshold={fragmentThreshold}
                       autoPolygon={autoPolygon}
                       {...(settings.values["operate_on_view"] === true
