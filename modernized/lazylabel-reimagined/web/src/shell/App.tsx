@@ -255,9 +255,12 @@ export function App({ client }: { readonly client: ApiClient }): ReactNode {
                 client={client}
                 images={listed}
                 onArchetypes={setArchetypes}
-                onOpen={(key) => {
+                onOpen={(key, segments) => {
                   const image = listed.find((entry) => entry.key === key);
-                  if (image !== undefined) openImage(image);
+                  // RULE-090: a frame the propagation produced masks for shows those masks.
+                  if (image !== undefined) {
+                    openImage(image, segments === undefined ? undefined : { segments });
+                  }
                 }}
               />
             </Panel>

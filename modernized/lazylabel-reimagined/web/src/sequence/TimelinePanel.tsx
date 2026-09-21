@@ -21,6 +21,8 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 
 import type { WireDatasetImage } from "@lazylabel/contracts";
 
+import type { WireSegment } from "@lazylabel/contracts";
+
 import type { ApiClient } from "../api/client.js";
 import { useSettings } from "../settings/SettingsProvider.jsx";
 import { useHotkey } from "../hotkeys/HotkeyProvider.jsx";
@@ -53,7 +55,13 @@ export interface TimelinePanelProps {
   /** The folder as the browser listed it, in its order. */
   readonly images: readonly WireDatasetImage[];
   /** Opening a frame is the workspace's job, not the timeline's. */
-  readonly onOpen?: (key: string) => void;
+  /**
+   * Opening a frame is the workspace's job, not the timeline's.
+   *
+   * `segments` are RULE-090's propagated masks for that frame, when there are any: a frame the
+   * propagation produced a mask for shows that mask, not whatever its sidecar held.
+   */
+  readonly onOpen?: (key: string, segments?: readonly WireSegment[]) => void;
   /**
    * What propagation scored each frame, by timeline index — RULE-060's per-frame confidence.
    *
@@ -108,6 +116,10 @@ export function TimelinePanel({
   const [ownScores, setOwnScores] = useState<Readonly<Record<number, number>>>({});
   /** What Find Archetypes suggested, kept so RULE-091's prefetch can prioritise those frames. */
   const [archetypes, setArchetypes] = useState<readonly string[]>([]);
+  /** RULE-090: the propagated segments by frame position, for whichever frame is opened next. */
+  const [propagated, setPropagated] = useState<ReadonlyMap<number, readonly WireSegment[]>>(
+    new Map(),
+  );
   /**
    * Propagated frames not yet written — what a New timeline would destroy.
    *
@@ -158,7 +170,7 @@ export function TimelinePanel({
       if (next === null) return;
       setCurrent(next);
       const frame = frames[next];
-      if (frame !== undefined) onOpen?.(frame.key);
+      if (frame !== undefined) onOpen?.(frame.key, propagatedFor(frame));
     },
     [current, frames, onOpen],
   );
@@ -280,6 +292,16 @@ export function TimelinePanel({
     unsavedRef.current = 0;
   };
 
+  /**
+   * RULE-090's masks for one frame, or nothing.
+   *
+   * NEVER for a reference frame. That is the user's own drawing, and showing the propagation's
+   * reconstruction of it in its place is the one substitution propagation must not make -- it is
+   * the same reason Save All refuses to rewrite a reference.
+   */
+  const propagatedFor = (frame: Frame): readonly WireSegment[] | undefined =>
+    frame.isReference ? undefined : propagated.get(frame.index);
+
   const counts = summarize(frames);
   const order = sorted ? sortedOrder(frames) : frames.map((frame) => frame.index);
   const allScores = { ...scores, ...ownScores };
@@ -292,6 +314,7 @@ export function TimelinePanel({
           frames={frames}
           onScores={setOwnScores}
           unsavedRef={unsavedRef}
+          onSegments={setPropagated}
           onRunStart={() => {
             setOwnScores({});
             setOverrides((previous) => resetForPropagation(previous ?? frames));
@@ -334,7 +357,7 @@ export function TimelinePanel({
                 title={`${frame.key} — ${role}`}
                 onClick={() => {
                   setCurrent(index);
-                  onOpen?.(frame.key);
+                  onOpen?.(frame.key, propagatedFor(frame));
                 }}
               />
             </li>

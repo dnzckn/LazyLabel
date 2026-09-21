@@ -57,6 +57,18 @@ export type Tool = "none" | "select" | "polygon" | "box" | "circle" | "ai" | "cr
  */
 export type SideIndex = 0 | 1;
 
+/** What an open can carry beyond the image itself. */
+export interface OpenOptions {
+  /**
+   * Segments to show INSTEAD of the ones the file holds — RULE-090's propagated masks.
+   *
+   * An override rather than a merge, because that is what the rule says: fresh propagated masks
+   * first, else the annotation file. Merging would put the model's guess and the user's own
+   * drawing on the same image with no way to tell them apart.
+   */
+  readonly segments?: readonly WireSegment[];
+}
+
 export const SIDES: readonly SideIndex[] = [0, 1];
 
 export interface OpenImage {
@@ -171,9 +183,9 @@ export interface WorkspaceContextValue {
 
   readonly open: OpenImage | null;
   /** Open into the active side. */
-  readonly openImage: (image: WireDatasetImage) => void;
+  readonly openImage: (image: WireDatasetImage, options?: OpenOptions) => void;
   /** Open into a named side, without changing which side is active. */
-  readonly openImageOn: (side: SideIndex, image: WireDatasetImage) => void;
+  readonly openImageOn: (side: SideIndex, image: WireDatasetImage, options?: OpenOptions) => void;
   /**
    * Empty a side and forget its edits.
    *
@@ -351,7 +363,7 @@ export function WorkspaceProvider({
   );
 
   const openImageOn = useCallback(
-    (side: SideIndex, image: WireDatasetImage) => {
+    (side: SideIndex, image: WireDatasetImage, options?: OpenOptions) => {
       /*
        * WHAT IS ON THIS SIDE IS ABOUT TO BE THROWN AWAY, and until now nothing asked.
        *
@@ -400,8 +412,24 @@ export function WorkspaceProvider({
             return {
               ...current,
               open: { ...current.open, metadata, result },
-              segments: result.kind === "loaded" ? result.annotations.segments : [],
+              /*
+               * RULE-090: a frame with fresh PROPAGATED masks shows those, not the file.
+               *
+               * Which is what makes the results reviewable at all. Without it a propagation put
+               * colours on the timeline and a Save button on screen, and opening one of the frames
+               * it had just produced a mask for showed whatever the sidecar held -- nothing, for a
+               * frame never annotated. The masks could be saved without ever being looked at.
+               *
+               * Never on a reference frame: that is the user's own drawing, and replacing it with
+               * the model's reconstruction of it is the one thing propagation must not do.
+               */
+              segments:
+                options?.segments ?? (result.kind === "loaded" ? result.annotations.segments : []),
               classAliases: result.kind === "loaded" ? result.annotations.classAliases : {},
+              // Propagated masks are UNSAVED work the moment they are shown, so the status bar,
+              // the close guard and the navigation guard all count them -- which is the whole of
+              // decision 7 applied to a mask the user did not draw by hand.
+              dirty: options?.segments !== undefined,
             };
           });
         })
@@ -418,7 +446,7 @@ export function WorkspaceProvider({
   );
 
   const openImage = useCallback(
-    (image: WireDatasetImage) => openImageOn(activeSide, image),
+    (image: WireDatasetImage, options?: OpenOptions) => openImageOn(activeSide, image, options),
     [activeSide, openImageOn],
   );
 

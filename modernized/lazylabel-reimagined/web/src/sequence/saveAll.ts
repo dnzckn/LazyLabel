@@ -98,6 +98,22 @@ export function plannedSave(
   return { writable, withheld };
 }
 
+/**
+ * A frame's propagated results as segments — what a save writes AND what RULE-090 shows.
+ *
+ * One function for both, deliberately. If the review path built these differently from the save
+ * path, a user could accept a mask on screen and have a different one written to disk, and nothing
+ * would say so.
+ */
+export function segmentsFor(
+  results: readonly WirePropagationFrame[],
+  classes: Readonly<Record<number, number | null>>,
+): readonly WireSegment[] {
+  return results
+    .map((result) => segmentOf(result, classes))
+    .filter((segment): segment is WireSegment => segment !== null);
+}
+
 export async function saveAll(request: SaveAllRequest): Promise<SaveAllResult> {
   const { writable, withheld } = plannedSave(request.frames, request.masks);
   const written: string[] = [];
@@ -105,9 +121,7 @@ export async function saveAll(request: SaveAllRequest): Promise<SaveAllResult> {
 
   for (const [done, frame] of writable.entries()) {
     const results = request.masks.get(frame.index) ?? [];
-    const segments = results
-      .map((result) => segmentOf(result, request.classes))
-      .filter((segment): segment is WireSegment => segment !== null);
+    const segments = segmentsFor(results, request.classes);
 
     if (segments.length === 0) {
       failed.push({ key: frame.key, reason: "every propagated mask for it was empty" });

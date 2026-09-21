@@ -139,7 +139,9 @@ describe("using it", () => {
 
     fireEvent.click(cells()[2]!);
 
-    expect(onOpen).toHaveBeenCalledWith("frames/f03.png");
+    // The second argument is RULE-090's propagated masks, and there are none until a
+    // propagation has run -- so an ordinary click opens the file, which is the rule's "else".
+    expect(onOpen).toHaveBeenCalledWith("frames/f03.png", undefined);
   });
 
   it("jumps to the next reference, and opens it", async () => {
@@ -149,7 +151,7 @@ describe("using it", () => {
 
     fireEvent.click(screen.getByText("Next reference"));
 
-    expect(onOpen).toHaveBeenCalledWith("frames/f02.png");
+    expect(onOpen).toHaveBeenCalledWith("frames/f02.png", undefined);
   });
 
   it("does nothing when there is no frame of that kind, rather than jumping somewhere", async () => {

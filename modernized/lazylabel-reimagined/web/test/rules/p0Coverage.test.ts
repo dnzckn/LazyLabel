@@ -104,12 +104,6 @@ const NOT_BUILT_YET: Readonly<Record<string, string>> = {
   "RULE-077":
     "Trim. Cut removes the frames between two markers from the timeline and Keep removes "
     + "everything outside them, touching no files. Nothing in the sequence panel offers either.",
-  "RULE-090":
-    "a timeline frame should show its fresh PROPAGATED masks, not the file on disk. Today a "
-    + "propagation's results reach the timeline's colours and the Save button and stop there, so "
-    + "opening a propagated frame shows whatever its sidecar held -- which for a frame that has "
-    + "never been annotated is nothing. The masks can be saved without ever being looked at, "
-    + "which is half of 'propagate labels and REVIEW them by confidence'.",
 };
 
 describe("every P0 rule is traceable to a test", () => {

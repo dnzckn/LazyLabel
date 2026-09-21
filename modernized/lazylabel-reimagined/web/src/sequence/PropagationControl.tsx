@@ -17,7 +17,8 @@
  * would be lying for the half second it takes.
  */
 
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import type { WireSegment } from "@lazylabel/contracts";
 
 import type { ApiClient } from "../api/client.js";
 import { useSettings } from "../settings/SettingsProvider.jsx";
@@ -25,7 +26,7 @@ import { useHotkey } from "../hotkeys/HotkeyProvider.jsx";
 
 import { usePropagation } from "./usePropagation.js";
 import { referenceMasks } from "./references.js";
-import { plannedSave, saveAll } from "./saveAll.js";
+import { plannedSave, saveAll, segmentsFor } from "./saveAll.js";
 import type { Frame } from "./timeline.js";
 
 export interface PropagationControlProps {
@@ -61,6 +62,13 @@ export interface PropagationControlProps {
    * because the statuses belong to the panel.
    */
   readonly onRunStart?: () => void;
+  /**
+   * The propagated segments, by frame position — RULE-090.
+   *
+   * Handed up because opening a frame belongs to the shell, not to this control. Built here
+   * because this is where the masks and the object classes both are.
+   */
+  readonly onSegments?: (byFrame: ReadonlyMap<number, readonly WireSegment[]>) => void;
 }
 
 export function PropagationControl({
@@ -70,6 +78,7 @@ export function PropagationControl({
   onUnsaved,
   unsavedRef,
   onRunStart,
+  onSegments,
   projectId = "default",
 }: PropagationControlProps): ReactNode {
   const { settings } = useSettings();
@@ -174,6 +183,22 @@ export function PropagationControl({
   useEffect(() => {
     onUnsaved?.(unsaved.length);
   }, [onUnsaved, unsaved.length]);
+
+  // RULE-090's masks, in the shape an open needs them. Built with the same function the save uses,
+  // so what a user REVIEWS on the frame is exactly what a save would write -- two derivations of
+  // that would be two chances to disagree.
+  const segmentsByFrame = useMemo(() => {
+    const built = new Map<number, readonly WireSegment[]>();
+    for (const [index, results] of progress.masks) {
+      const segments = segmentsFor(results, classes);
+      if (segments.length > 0) built.set(index, segments);
+    }
+    return built;
+  }, [classes, progress.masks]);
+
+  useEffect(() => {
+    onSegments?.(segmentsByFrame);
+  }, [onSegments, segmentsByFrame]);
 
   const write = useCallback(async () => {
     setSaved(null);

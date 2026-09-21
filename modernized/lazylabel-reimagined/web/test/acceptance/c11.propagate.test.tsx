@@ -192,6 +192,50 @@ describe("C11: propagate labels through a sequence", () => {
     await waitFor(() => expect(cellLabels()[2]).toContain("flagged"), { timeout: 3000 });
   });
 
+  it("shows a propagated frame's MASKS when you open it — RULE-090", async () => {
+    /*
+     * The review half of this capability, and it was missing. A propagation put colours on the
+     * timeline and a Save button on screen, and opening one of the frames it had just produced a
+     * mask for showed whatever the sidecar held -- nothing, for a frame never annotated. The masks
+     * could be saved without ever being looked at.
+     */
+    mount();
+    await openTimeline();
+    fireEvent.click(screen.getByRole("button", { name: /^Propagate/ }));
+    await waitFor(() => expect(cellLabels()[1]).toContain("propagated"), { timeout: 3000 });
+
+    // Frame 2 (index 1) is the one the propagation returned a mask for.
+    fireEvent.click(screen.getByLabelText("Timeline").querySelectorAll("button")[1]!);
+
+    /*
+     * THE SEGMENT ITSELF, not merely that the image is dirty. An earlier version of this test
+     * asserted only "unsaved", and a mutation that removed the segment override still passed --
+     * because the dirty flag is set on a different line. A test that survives the removal of the
+     * thing it is named after is not testing that thing.
+     *
+     * f02 has no sidecar of its own, so any segment on screen came from the propagation. The
+     * class is 3, carried from the polygon that seeded the run, which is what makes it saveable.
+     */
+    await waitFor(() => expect(screen.getByLabelText("Status").textContent).toMatch(/f02\.png/));
+    await waitFor(() => expect(screen.getByLabelText("Select AI 1, class 3")).toBeTruthy());
+  });
+
+  it("does NOT replace a reference frame's own drawing", async () => {
+    // The one substitution propagation must not make. A reference is the user's work; showing the
+    // model's reconstruction of it in its place is the same mistake Save All refuses to make.
+    mount();
+    await openTimeline();
+    fireEvent.click(screen.getByRole("button", { name: /^Propagate/ }));
+    await waitFor(() => expect(cellLabels()[1]).toContain("propagated"), { timeout: 3000 });
+
+    fireEvent.click(screen.getByLabelText("Timeline").querySelectorAll("button")[0]!);
+
+    await waitFor(() => expect(screen.getByLabelText("Status").textContent).toMatch(/f01\.png/));
+    // Its OWN polygon, from its own file -- not the propagation's AI mask of the same object.
+    await waitFor(() => expect(screen.getByLabelText("Select Polygon 1, class 3")).toBeTruthy());
+    expect(screen.queryByLabelText(/Select AI/)).toBeNull();
+  });
+
   it("still says agreement with legacy is unproven", async () => {
     // Propagation runs. That its results match the old app has not been shown, and silence there
     // would be read as confidence.
