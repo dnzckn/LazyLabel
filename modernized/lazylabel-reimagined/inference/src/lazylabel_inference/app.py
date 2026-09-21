@@ -34,7 +34,15 @@ from .prompts import (
     Point,
     Prompt,
 )
+from .jobs import (
+    Job,
+    JobRegistry,
+    ResultsOverflowedError,
+    UnknownJobError,
+)
+from .propagation import PropagationRequest
 from .service import ImageUnreadableError, InferenceService, UnknownHandleError, encode_mask
+from .windows import DEFAULT_WINDOW, novel_frames, plan, should_stream
 
 MAX_BODY_BYTES = 64 * 1024 * 1024
 
@@ -80,6 +88,14 @@ class Deps:
     verify_on_health: bool = False
     """Present once a dataset root is configured; None leaves the prompt routes reporting 503."""
     service: InferenceService | None = None
+    """Propagation jobs this process is running. In memory, because decision 3 is single-user."""
+    jobs: JobRegistry = field(default_factory=JobRegistry)
+    """What actually propagates: given a parsed request and a cancel event, yields frame results.
+
+    Injected rather than reached for, so the job ROUTES are testable without a checkpoint -- which
+    is most of C11, since every state a caller can observe is a state of the job rather than of the
+    model. None means no video-capable model is configured, and the route says 503."""
+    propagator: Callable[[Any, Any], Any] | None = None
 
 
 _PROPAGATION_JOB = re.compile(r"^/inference/propagations/([^/]+)$")
@@ -129,26 +145,29 @@ def _route(deps: Deps, request: Request) -> Response:
     if path == "/inference/segment" and method == "POST":
         return _segment(deps, request)
 
-    # Not built, and each one is Phase 6's job API rather than unfinished Phase 3 work: the
-    # propagation and archetype MODULES are complete and differential-tested against legacy, and
-    # what is missing is a job API with real cancellation, progress and streaming limits. The
-    # contract is fixed in AI_NATIVE_SPEC.md section 3.
-    #
-    # C3's two routes used to be listed here and are built. They were dead entries -- the handlers
-    # above return first -- and `_fixed_methods` already names POST for both, so they were not even
-    # carrying the 405. What they WERE doing is waiting to resurrect: move a handler, or add a
-    # route before its early return, and a built endpoint starts answering "not built yet".
+    # C11's three, built. What a caller observes of a propagation is the state of the JOB rather
+    # than of the model, so all of it is testable with an injected propagator and no checkpoint;
+    # what still needs one is proving the RESULTS match legacy, which is Phase 6 criterion 2.
+    if path == "/inference/propagations" and method == "POST":
+        return _start_propagation(deps, request)
+    if path == "/inference/propagations" and method == "GET":
+        return _propagation_state(deps, request)
+
+    job_id = _PROPAGATION_JOB.match(path)
+    if job_id is not None and method == "DELETE":
+        return _cancel_propagation(deps, job_id.group(1))
+
+    # C10's module is complete and differential-tested; what is missing is the route's own
+    # contract. C3's and C11's entries used to live here and came off as each was built -- which
+    # is the only thing this table is for. It is NOT a place to park a built route: the handlers
+    # above return first, so an entry for one would never fire, and it would sit waiting to
+    # resurrect the moment someone moved a handler below it.
     not_built = {
-        ("/inference/propagations", "POST"): ("C11", "start a propagation job over a sequence"),
-        ("/inference/propagations", "GET"): ("C11", "job state and per-frame results"),
         ("/inference/archetypes", "POST"): ("C10", "find archetype frames in a sequence"),
     }
     if (path, method) in not_built:
         capability, summary = not_built[(path, method)]
         raise _pending(capability, summary)
-
-    if method == "DELETE" and _PROPAGATION_JOB.match(path):
-        raise _pending("C11", "cancel a running propagation, keeping frames already committed")
 
     allowed = sorted({m for p, m in not_built if p == path} | _fixed_methods(path))
     if allowed:
@@ -162,6 +181,10 @@ def _fixed_methods(path: str) -> set[str]:
         return {"GET"}
     if path in ("/inference/embeddings", "/inference/segment"):
         return {"POST"}
+    if path == "/inference/propagations":
+        return {"POST", "GET"}
+    if _PROPAGATION_JOB.match(path):
+        return {"DELETE"}
     return set()
 
 
@@ -273,6 +296,178 @@ def _segment(deps: Deps, request: Request) -> Response:
             "alternatives": list(prediction.alternatives),
         },
     )
+
+
+def _propagation_request(body: dict[str, Any]) -> PropagationRequest:
+    """Parse and CHECK a propagation body, before a model is loaded or a thread is started.
+
+    Every refusal here is a 400 the caller can fix. The alternative -- accepting a request with no
+    references and discovering it three minutes into a GPU job -- is the shape of failure this
+    service exists to stop.
+    """
+    raw_sequence = body.get("sequence")
+    if not isinstance(raw_sequence, list) or not raw_sequence:
+        raise HttpError(400, "bad_request", "a propagation needs a non-empty 'sequence' of images")
+    if not all(isinstance(each, str) and each for each in raw_sequence):
+        raise HttpError(400, "bad_request", "every entry in 'sequence' must be an image key")
+    sequence = tuple(raw_sequence)
+
+    raw_references = body.get("references")
+    if not isinstance(raw_references, list) or not raw_references:
+        # Nothing to carry. Legacy starts the job anyway and produces empty masks for every frame.
+        raise HttpError(
+            400, "bad_request", "a propagation needs at least one reference frame to carry from"
+        )
+    references = []
+    for each in raw_references:
+        if not isinstance(each, int) or isinstance(each, bool) or not 0 <= each < len(sequence):
+            raise HttpError(
+                400,
+                "bad_request",
+                f"each reference must be a frame position within the sequence; got {each!r}",
+            )
+        references.append(each)
+
+    def bound(name: str) -> int | None:
+        value = body.get(name)
+        if value is None:
+            return None
+        if not isinstance(value, int) or isinstance(value, bool) or not 0 <= value < len(sequence):
+            raise HttpError(400, "bad_request", f"'{name}' must be a frame position, got {value!r}")
+        return value
+
+    window = body.get("window", DEFAULT_WINDOW)
+    if not isinstance(window, int) or isinstance(window, bool) or window <= 0:
+        raise HttpError(400, "bad_request", f"'window' must be a positive frame count, got {window!r}")
+
+    streaming = body.get("streaming", True)
+    if not isinstance(streaming, bool):
+        raise HttpError(400, "bad_request", "'streaming' must be true or false")
+
+    model = body.get("model")
+    if model is not None and not isinstance(model, str):
+        raise HttpError(400, "bad_request", "'model' must be a model name")
+
+    return PropagationRequest(
+        sequence=sequence,
+        references=tuple(sorted(set(references))),
+        start=bound("start"),
+        end=bound("end"),
+        streaming=streaming,
+        window=window,
+        model=model,
+    )
+
+
+def _frames_to_cover(wanted: PropagationRequest) -> int:
+    """How many frames the job will actually produce results for -- the progress denominator.
+
+    RULE-025 runs BOTH ways from the earliest reference, and RULE-026 windows each pass. Counting
+    each window's full span would exceed the sequence length, because overlap frames are covered
+    twice and kept once; `novel_frames` is what each window contributes.
+    """
+    lowest = wanted.lowest_reference
+    last = len(wanted.sequence) - 1
+    forward = plan(
+        lowest,
+        wanted.end if wanted.end is not None else last,
+        window=wanted.window if should_stream(len(wanted.sequence), wanted.window, streaming=wanted.streaming) else len(wanted.sequence) or 1,
+    )
+    backward = plan(
+        lowest,
+        wanted.start if wanted.start is not None else 0,
+        window=wanted.window if should_stream(len(wanted.sequence), wanted.window, streaming=wanted.streaming) else len(wanted.sequence) or 1,
+        reverse=True,
+    )
+    return sum(len(each) for each in novel_frames(forward)) + sum(
+        len(each) for each in novel_frames(backward)
+    )
+
+
+def _start_propagation(deps: Deps, request: Request) -> Response:
+    wanted = _propagation_request(_body(request))
+
+    if deps.propagator is None:
+        # The same 503 the prompt routes give, and for the same reason: the route exists and the
+        # contract holds, and this machine has no video-capable model to honour it with.
+        raise HttpError(
+            503,
+            "inference_unavailable",
+            "no video-capable model is configured, so nothing can be propagated",
+        )
+
+    propagator = deps.propagator
+    job = deps.jobs.start(
+        lambda cancel: propagator(wanted, cancel),
+        total=_frames_to_cover(wanted),
+    )
+    # 202: accepted and running, with nowhere to look yet but the job itself.
+    return _json(202, {**job.snapshot(), "results": []})
+
+
+def _propagation_state(deps: Deps, request: Request) -> Response:
+    """Job state, and the results produced since the caller's cursor.
+
+    Without an id this lists the jobs, which is what a client that has just reconnected needs: the
+    alternative is a running propagation nobody holds a handle to.
+    """
+    job_id = request.query.get("id")
+    if job_id is None:
+        return _json(200, {"jobs": [each.snapshot() for each in deps.jobs.list()]})
+
+    job = _job(deps, job_id)
+
+    raw_cursor = request.query.get("cursor", "0")
+    try:
+        cursor = int(raw_cursor)
+    except ValueError as cause:
+        raise HttpError(400, "bad_request", f"'cursor' must be a number, got {raw_cursor!r}") from cause
+
+    try:
+        results, next_cursor = job.results_since(cursor)
+    except ResultsOverflowedError as cause:
+        # 410: they existed and are gone. Not a 404 (the job is right here) and emphatically not a
+        # 200 with later frames, which would hide the gap the client most needs to know about.
+        raise HttpError(
+            410,
+            "results_overflowed",
+            str(cause),
+            {"earliest": cause.earliest, "requested": cause.requested},
+        ) from cause
+    except ValueError as cause:
+        raise HttpError(400, "bad_request", str(cause)) from cause
+
+    return _json(
+        200,
+        {**job.snapshot(), "cursor": next_cursor, "results": [_frame(each) for each in results]},
+    )
+
+
+def _cancel_propagation(deps: Deps, job_id: str) -> Response:
+    """Ask a job to stop, keeping what it has done. RULE-063.
+
+    Returns at once: the frame in flight still finishes, so the job reports `cancelling` until it
+    does. A route that blocked until the worker noticed would make Cancel feel as unresponsive as
+    the thing being cancelled.
+    """
+    return _json(200, _job(deps, job_id, cancel=True).snapshot())
+
+
+def _job(deps: Deps, job_id: str, *, cancel: bool = False) -> Job:
+    try:
+        return deps.jobs.cancel(job_id) if cancel else deps.jobs.get(job_id)
+    except UnknownJobError as cause:
+        raise HttpError(404, "unknown_job", str(cause)) from cause
+
+
+def _frame(result: Any) -> dict[str, Any]:
+    """One propagated object on one frame, as the wire carries it."""
+    return {
+        "source": result.source,
+        "objectId": result.object_id,
+        "mask": encode_mask(result.mask),
+        "confidence": result.confidence,
+    }
 
 
 def _pending(capability: str, summary: str) -> HttpError:

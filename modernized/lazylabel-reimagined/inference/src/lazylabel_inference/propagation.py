@@ -297,3 +297,29 @@ def propagate(
         raise PropagationError(
             f"propagation failed after {completed} frames: {cause}", completed=completed
         ) from cause
+
+
+@dataclass(frozen=True)
+class PropagationRequest:
+    """What a caller asked for, parsed and validated, before any model is involved.
+
+    A separate type from the HTTP body so the job routes can be tested without a checkpoint and so
+    the propagator receives something already checked. Frame indices are 0-based POSITIONS in
+    `sequence`, never file names -- RULE-017's whole point is that identity does not live in a name.
+    """
+
+    #: Dataset keys in timeline order. The map every result is resolved through.
+    sequence: tuple[str, ...]
+    #: Frames carrying prompts, as positions in `sequence`. Propagation moves away from the lowest.
+    references: tuple[int, ...]
+    #: Inclusive range of positions to cover, or None for the whole timeline.
+    start: int | None = None
+    end: int | None = None
+    streaming: bool = True
+    window: int = 250
+    model: str | None = None
+
+    @property
+    def lowest_reference(self) -> int:
+        """Where both passes begin. RULE-025: forward and backward both leave the EARLIEST one."""
+        return min(self.references)

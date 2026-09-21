@@ -231,19 +231,20 @@ class TestTheEnvelope:
 
 
 class TestNotBuiltYet:
-    """Phase 3 and Phase 6 routes.
+    """Routes whose contract is fixed and whose implementation is not here.
 
     501 is the honest answer: the route exists, its contract is fixed in AI_NATIVE_SPEC.md section
     3, and the implementation is not here. A 200 with an empty mask would be exactly the failure
     ASSESSMENT.md 5.4 records of the legacy code, a failure presented as a successful empty result.
+
+    C11's three propagation routes used to be listed here and are now built -- see
+    `TestPropagationJobs`. What is left is C10, and the parametrize stays a parametrize so that
+    adding the next one is a line rather than a decision.
     """
 
     @pytest.mark.parametrize(
         ("method", "path", "capability"),
         [
-            ("POST", "/inference/propagations", "C11"),
-            ("GET", "/inference/propagations", "C11"),
-            ("DELETE", "/inference/propagations/job-1", "C11"),
             ("POST", "/inference/archetypes", "C10"),
         ],
     )
@@ -256,15 +257,3 @@ class TestNotBuiltYet:
         assert status == 501
         assert body["detail"]["capability"] == capability
         assert body["detail"]["phase"] in ("P3", "P6")
-
-    # The placeholder for SAM prompts came off when Phase 3 built them -- which is what
-    # xfail(strict=True) is for: the unexpected pass failed the suite and forced the marker away
-    # rather than leaving a test that quietly asserted something untrue.
-    @pytest.mark.xfail(
-        strict=True,
-        reason="C11 [P3]: propagation is Phase 3 exit criterion 2. When this passes, delete the marker.",
-    )
-    def test_propagation_starts_a_job(self, tmp_path: Path) -> None:
-        deps = Deps(model_dir=tmp_path, availability=available)
-        status, _ = call(deps, "POST", "/inference/propagations", body=b"{}")
-        assert status == 202
