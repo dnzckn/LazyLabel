@@ -35,6 +35,7 @@ import {
   markReference,
   markReferences,
   markSuggested,
+  trim,
   resetForPropagation,
   sortedOrder,
   step,
@@ -120,6 +121,9 @@ export function TimelinePanel({
   const [propagated, setPropagated] = useState<ReadonlyMap<string, readonly WireSegment[]>>(
     new Map(),
   );
+  /** RULE-077's two trim bounds, as positions in the timeline. Order between them does not matter. */
+  const [bounds, setBounds] = useState<readonly [number | null, number | null]>([null, null]);
+  const [trimNote, setTrimNote] = useState<string | null>(null);
   /**
    * Propagated frames not yet written — what a New timeline would destroy.
    *
@@ -302,6 +306,26 @@ export function TimelinePanel({
   const propagatedFor = (frame: Frame): readonly WireSegment[] | undefined =>
     frame.isReference ? undefined : propagated.get(frame.key);
 
+  /**
+   * Cut or Keep — RULE-077.
+   *
+   * The masks are NOT cleared, which is a deliberate divergence. Legacy resets its propagation
+   * engine here and its own card records the cost: "Save All then reports nothing to save even
+   * though green frames with unsaved propagated masks remain". They are keyed by image key, so a
+   * trim cannot lose or misplace them.
+   */
+  const applyTrim = (mode: "cut" | "keep") => {
+    const outcome = trim(frames, bounds[0], bounds[1], mode, current);
+    if (outcome.kind === "refused") {
+      setTrimNote(outcome.reason);
+      return;
+    }
+    setOverrides(outcome.frames);
+    setCurrent(outcome.current);
+    setBounds([null, null]);
+    setTrimNote(`Removed ${outcome.removed} frame${outcome.removed === 1 ? "" : "s"} from the timeline. No files were touched.`);
+  };
+
   const counts = summarize(frames);
   const order = sorted ? sortedOrder(frames) : frames.map((frame) => frame.index);
   const allScores = { ...scores, ...ownScores };
@@ -390,6 +414,35 @@ export function TimelinePanel({
           New timeline
         </button>
       </div>
+
+      {/* RULE-077. The bounds are set from the current frame, which is where a user's attention
+          already is -- asking them to type two numbers would be asking them to count. */}
+      <div className="timeline__controls">
+        <button type="button" onClick={() => setBounds([current, bounds[1]])}>
+          Trim from here
+        </button>
+        <button type="button" onClick={() => setBounds([bounds[0], current])}>
+          Trim to here
+        </button>
+        <button type="button" onClick={() => applyTrim("cut")}>
+          Cut
+        </button>
+        <button type="button" onClick={() => applyTrim("keep")}>
+          Keep
+        </button>
+        <span className="field__value">
+          {bounds[0] === null && bounds[1] === null
+            ? "no trim bounds set"
+            : `bounds ${bounds[0] === null ? "—" : bounds[0] + 1} to `
+              + `${bounds[1] === null ? "—" : bounds[1] + 1}`}
+        </span>
+      </div>
+
+      {trimNote !== null && (
+        <p className="timeline__counts" role="status">
+          {trimNote}
+        </p>
+      )}
 
       {foundNote !== null && (
         <p className="timeline__counts" role="status">

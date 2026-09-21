@@ -308,3 +308,91 @@ export function markSuggested(
       : frame,
   );
 }
+
+export type TrimMode = "cut" | "keep";
+
+export type TrimOutcome =
+  | {
+      readonly kind: "trimmed";
+      readonly frames: readonly Frame[];
+      readonly removed: number;
+      /** Where the current frame lands: the nearest kept one, ties to the lower index. */
+      readonly current: number;
+    }
+  | { readonly kind: "refused"; readonly reason: string };
+
+/**
+ * Trim — RULE-077. Cut removes the frames between the markers; Keep removes everything outside.
+ *
+ * FILES ARE NOT TOUCHED. This edits the timeline's idea of which frames are in the run, and
+ * nothing else; a frame removed here is still on disk with whatever it had.
+ *
+ * REMAINING FRAMES KEEP EVERYTHING — status, score, masks, reference role — and keeping the masks
+ * is where this diverges from legacy on purpose. Legacy resets the propagation engine on trim, and
+ * its own rule card records what that costs: "Save All then reports nothing to save even though
+ * green frames with unsaved propagated masks remain". The masks are keyed by image key here rather
+ * than by position, so a trim cannot lose or misplace them, and they simply survive. Decision 7 is
+ * the standing reason not to copy that.
+ *
+ * MARKER ORDER DOES NOT MATTER, and both ends are inclusive. A user drags two markers and does not
+ * think about which came first.
+ */
+export function trim(
+  frames: readonly Frame[],
+  a: number | null,
+  b: number | null,
+  mode: TrimMode,
+  current = 0,
+): TrimOutcome {
+  if (a === null || b === null) {
+    return { kind: "refused", reason: "Set both trim bounds first." };
+  }
+
+  const low = Math.min(a, b);
+  const high = Math.max(a, b);
+  const inside = (index: number): boolean => index >= low && index <= high;
+
+  const kept = frames.filter((_frame, index) => (mode === "cut" ? !inside(index) : inside(index)));
+  const removed = frames.length - kept.length;
+
+  if (kept.length === 0) {
+    // Legacy refuses this too, and the reason is not arbitrary: an empty timeline has no range
+    // picker in it, so the only way back would be to rebuild from scratch.
+    return { kind: "refused", reason: "Cannot remove all frames from the timeline." };
+  }
+  if (removed === 0) {
+    return {
+      kind: "refused",
+      reason:
+        mode === "keep"
+          ? "Nothing to remove — every frame is inside the range."
+          : "Nothing to remove — no frame is inside the range.",
+    };
+  }
+
+  // Which of the ORIGINAL positions survived, in order, so the current frame can be moved to the
+  // nearest one rather than to whatever now sits at its old number.
+  const survivors = frames
+    .map((_frame, index) => index)
+    .filter((index) => (mode === "cut" ? !inside(index) : inside(index)));
+
+  let nearest = 0;
+  let best = Number.POSITIVE_INFINITY;
+  survivors.forEach((original, position) => {
+    const distance = Math.abs(original - current);
+    // Strictly less, so a tie keeps the EARLIER frame -- which is what legacy does and is the only
+    // choice that does not depend on iteration order.
+    if (distance < best) {
+      best = distance;
+      nearest = position;
+    }
+  });
+
+  return {
+    kind: "trimmed",
+    // Re-indexed 0..n-1. Everything else about a frame travels with it untouched.
+    frames: kept.map((frame, index) => ({ ...frame, index })),
+    removed,
+    current: nearest,
+  };
+}

@@ -100,14 +100,7 @@ async function collectTests(root: string): Promise<string[]> {
  * Kept apart from the deliberate list above on purpose. "We chose not to" and "nobody has yet" are
  * different sentences, and a table that blurs them lets unbuilt work retire quietly as a decision.
  */
-const NOT_BUILT_YET: Readonly<Record<string, string>> = {
-  "RULE-077":
-    "Trim. Cut removes the frames between two markers from the timeline and Keep removes "
-    + "everything outside them, touching no files. Nothing in the sequence panel offers either. "
-    + "Its blocker is gone: the propagated masks were keyed by frame POSITION, which a trim "
-    + "shifts, so a cut would have re-attributed every mask to the wrong picture. They are keyed "
-    + "by image key now, which is RULE-017's principle applied to that store.",
-};
+const NOT_BUILT_YET: Readonly<Record<string, string>> = {};
 
 describe("every P0 rule is traceable to a test", () => {
   it("names each one, or records why this app does not implement it", async () => {

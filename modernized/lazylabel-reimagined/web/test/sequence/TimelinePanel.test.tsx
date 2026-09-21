@@ -369,3 +369,91 @@ describe("the frame keys", () => {
     expect(current()).toBe(before);
   });
 });
+
+
+describe("trimming the timeline — RULE-077", () => {
+  /** Sets both bounds from a cell, since the controls take them from the current frame. */
+  function boundsFrom(first: number, second: number) {
+    fireEvent.click(cells()[first]!);
+    fireEvent.click(screen.getByText("Trim from here"));
+    fireEvent.click(cells()[second]!);
+    fireEvent.click(screen.getByText("Trim to here"));
+  }
+
+  it("cuts the frames between the bounds and says how many", async () => {
+    show();
+    build("0", "4");
+    await waitFor(() => expect(cells()).toHaveLength(5));
+
+    boundsFrom(1, 2);
+    fireEvent.click(screen.getByText("Cut"));
+
+    await waitFor(() => expect(cells()).toHaveLength(3));
+    expect(screen.getByText(/Removed 2 frames from the timeline/)).toBeTruthy();
+  });
+
+  it("says plainly that no files were touched", async () => {
+    // The single most important thing about this control. A user reading "removed" about a list of
+    // their own images has every reason to think something was deleted.
+    show();
+    build("0", "4");
+    await waitFor(() => expect(cells()).toHaveLength(5));
+
+    boundsFrom(1, 2);
+    fireEvent.click(screen.getByText("Cut"));
+
+    expect(await screen.findByText(/No files were touched/)).toBeTruthy();
+  });
+
+  it("keeps only what is inside the bounds", async () => {
+    show();
+    build("0", "4");
+    await waitFor(() => expect(cells()).toHaveLength(5));
+
+    boundsFrom(1, 3);
+    fireEvent.click(screen.getByText("Keep"));
+
+    await waitFor(() => expect(cells()).toHaveLength(3));
+    expect(cells()[0]!.getAttribute("aria-label")).toContain("frames/f02.png");
+  });
+
+  it("refuses without both bounds, rather than guessing one", async () => {
+    show();
+    build("0", "4");
+    await waitFor(() => expect(cells()).toHaveLength(5));
+
+    fireEvent.click(screen.getByText("Cut"));
+
+    expect(await screen.findByText(/Set both trim bounds first/)).toBeTruthy();
+    expect(cells()).toHaveLength(5);
+  });
+
+  it("refuses to empty the timeline", async () => {
+    // An empty timeline has no range picker in it, so the only way back would be to rebuild.
+    show();
+    build("0", "4");
+    await waitFor(() => expect(cells()).toHaveLength(5));
+
+    boundsFrom(0, 4);
+    fireEvent.click(screen.getByText("Cut"));
+
+    expect(await screen.findByText(/Cannot remove all frames/)).toBeTruthy();
+    expect(cells()).toHaveLength(5);
+  });
+
+  it("keeps a reference frame's role through a trim", async () => {
+    // "Remaining frames keep their status, score, masks and reference data." Losing a reference
+    // would silently change what the next propagation carries from.
+    show();
+    build("0", "4");
+    await waitFor(() => expect(cells()).toHaveLength(5));
+
+    // f02 and f05 are the annotated ones in FOLDER, so both are references.
+    boundsFrom(2, 3);
+    fireEvent.click(screen.getByText("Cut"));
+
+    await waitFor(() => expect(cells()).toHaveLength(3));
+    const labels = [...cells()].map((cell) => cell.getAttribute("aria-label"));
+    expect(labels.filter((label) => label?.includes("reference"))).toHaveLength(2);
+  });
+});
