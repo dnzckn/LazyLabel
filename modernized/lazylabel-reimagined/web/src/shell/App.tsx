@@ -421,10 +421,17 @@ function HotkeyReference(): ReactNode {
           key for each and pressing it did nothing -- a worse failure than a missing feature,
           because the user is told exactly where to find it. The state comes from the dispatcher
           itself rather than a list someone keeps, so it cannot go stale. */}
+      {/* THIS COUNT CAN UNDER-REPORT, and saying so is the price of reading the dispatcher rather
+          than a list. `save_segment` (Space) and `erase_segment` (Shift+Space) finish a polygon
+          and an AI mask today, but the drawing layers handle those keys directly rather than
+          registering them -- so they read as "not yet" while working. Routing them through here
+          would make them remappable and honest at once, and is the reason to do it. */}
       <p className="panel__missing">
         {liveCount} of {entries.length} do something today. The rest are the desktop app&rsquo;s
         bindings, kept so your remapping survives, and marked below until the action behind them is
-        built.
+        built. Two exceptions run the other way: Space and Shift+Space finish a shape today
+        although the table calls them pending, because the drawing surfaces handle those keys
+        themselves instead of registering them here.
       </p>
       <table className="hotkeys">
         <thead>

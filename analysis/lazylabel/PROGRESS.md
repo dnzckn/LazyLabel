@@ -798,6 +798,17 @@ the same factor. That layer has no Escape and no refusal where the crop and shap
 both: nothing is committed and nothing can be lost, and the fix for a mistaken drag is another
 drag.
 
+**The hotkey count can UNDER-report, and the app now says so.** `save_segment` (Space) and
+`erase_segment` (Shift+Space) finish a polygon and an AI mask today, but the drawing layers handle
+those keys directly instead of registering them — so the table calls them pending while they work.
+That is the same dishonesty as over-reporting, reached from the other side, and it is the price of
+reading the dispatcher rather than a list.
+
+Routing them through `useHotkey` fixes it and makes them remappable at once, which is the reason
+to do it. It is not a two-line change: the dispatcher matches on `event.code`, and the layers'
+tests fire `{ key: " " }` with no code, so the keys have to move and their tests with them. Worth
+doing; not worth doing carelessly.
+
 **The two settings gaps left are
 `operate_on_view` (RULE-089) and `stream_window_size` (C11)** — both blocked on work larger than
 a wiring job.
