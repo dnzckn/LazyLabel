@@ -791,8 +791,14 @@ transforming the canvas: the pane already scrolls once an image is larger than i
 would be a second way to position the image that the scrollbar could disagree with — the same
 shape as every wiring defect found today. `scrollBy` clamps at the ends itself.
 
-What remains of that group is `pan_mode`, legacy's hand-drag on Q. Drag-to-scroll is the shape,
-and it is the only one of the six zoom-and-pan keys still dead. **The two settings gaps left are
+**`pan_mode` followed, so all six zoom-and-pan keys are live.** The hand drags the pane opposite
+the pointer, which is what grabbing a picture means, and measures each move from the last so one
+drag does not accelerate. It shares `pan_multiplier` with the arrow keys, so both gestures move by
+the same factor. That layer has no Escape and no refusal where the crop and shape layers have
+both: nothing is committed and nothing can be lost, and the fix for a mistaken drag is another
+drag.
+
+**The two settings gaps left are
 `operate_on_view` (RULE-089) and `stream_window_size` (C11)** — both blocked on work larger than
 a wiring job.
 
