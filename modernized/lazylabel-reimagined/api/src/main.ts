@@ -4,6 +4,7 @@
 
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
+import { pathToFileURL } from "node:url";
 
 import { createApp } from "./app.js";
 import { DirectoryBlobStore } from "./adapters/directoryBlobStore.js";
@@ -12,6 +13,55 @@ import { SqliteMetadataStore } from "./adapters/sqliteMetadataStore.js";
 import { loadConfig } from "./config.js";
 import { createLogger } from "./http/log.js";
 import { createServer } from "./server.js";
+import type { AppDeps } from "./app.js";
+import type { Config } from "./config.js";
+import type { BlobStore } from "./ports/blobStore.js";
+import type { MetadataStore } from "./ports/metadataStore.js";
+import type { Logger } from "./http/log.js";
+
+/**
+ * Which adapters a configuration asks for — extracted so a test can ask the same question.
+ *
+ * It was inline until the inference service was found with the identical defect one layer down:
+ * its entry point never constructed its service, so every AI route answered 503 in production
+ * while its whole suite passed. The fix HERE was made earlier and was equally unprotected — no
+ * test called `main`, so nothing would have noticed the line going away again.
+ *
+ * The stores are passed in rather than built here because building them touches the disk, and a
+ * test of "does a configured URL produce a client" should not need a dataset on disk to ask it.
+ */
+export function buildDeps(
+  config: Config,
+  stores: {
+    blobStore: BlobStore;
+    metadataStore: MetadataStore;
+    logger: Logger;
+    /** Passed in because `healthy` belongs to the DIRECTORY adapter, not to the port. */
+    datasetHealthy: () => Promise<boolean>;
+  },
+): AppDeps {
+  /*
+   * THE INFERENCE ADAPTER WAS NEVER CONSTRUCTED, and until this existed the AI tools were
+   * unreachable in every real deployment however the service was run. The adapter was written and
+   * tested, `AppDeps` accepted it, and no entry point ever passed one -- the built-but-unreachable
+   * shape this project keeps finding, at the process level rather than the component level.
+   *
+   * Absent stays supported: no URL means the AI routes answer 503 with a reason and everything
+   * else works, which is what a machine with no GPU should do.
+   */
+  const inference =
+    config.inferenceUrl === null
+      ? undefined
+      : new HttpInferenceClient({ baseUrl: config.inferenceUrl });
+
+  return {
+    blobStore: stores.blobStore,
+    metadataStore: stores.metadataStore,
+    logger: stores.logger,
+    datasetHealthy: stores.datasetHealthy,
+    ...(inference === undefined ? {} : { inference }),
+  };
+}
 
 async function main(): Promise<void> {
   const config = loadConfig();
@@ -29,28 +79,14 @@ async function main(): Promise<void> {
   }
   const metadataStore = new SqliteMetadataStore(config.databasePath);
 
-  /*
-   * THE INFERENCE ADAPTER WAS NEVER CONSTRUCTED HERE, and until this line existed the AI tools
-   * were unreachable in every real deployment however the service was run. The adapter was
-   * written and tested, `AppDeps` accepted it, and no entry point ever passed one -- the same
-   * built-but-unreachable shape this project has found repeatedly, at the process level rather
-   * than the component level.
-   *
-   * Absent stays supported: no URL means the AI routes answer 503 with a reason and everything
-   * else works, which is what a machine with no GPU should do.
-   */
-  const inference =
-    config.inferenceUrl === null
-      ? undefined
-      : new HttpInferenceClient({ baseUrl: config.inferenceUrl });
-
-  const app = createApp({
-    blobStore,
-    metadataStore,
-    logger,
-    datasetHealthy: () => blobStore.healthy(),
-    ...(inference === undefined ? {} : { inference }),
-  });
+  const app = createApp(
+    buildDeps(config, {
+      blobStore,
+      metadataStore,
+      logger,
+      datasetHealthy: () => blobStore.healthy(),
+    }),
+  );
 
   const server = createServer(app);
   server.listen(config.port, config.host, () => {
@@ -75,9 +111,23 @@ async function main(): Promise<void> {
   process.on("SIGTERM", () => shutdown("SIGTERM"));
 }
 
-main().catch((cause: unknown) => {
-  createLogger().log("error", "the API could not start", {
-    reason: cause instanceof Error ? cause.message : String(cause),
+/*
+ * Run only when this module IS the process, not when something imports it.
+ *
+ * Without the guard, importing `buildDeps` from a test starts a server, reads the real
+ * environment, and exits the process when the configuration is absent -- so the wiring could not
+ * be tested at all, which is how it came to be untested in the first place. A module that cannot
+ * be imported without side effects is a module whose contents cannot be checked.
+ */
+const isEntryPoint =
+  process.argv[1] !== undefined
+  && import.meta.url === pathToFileURL(process.argv[1]).href;
+
+if (isEntryPoint) {
+  main().catch((cause: unknown) => {
+    createLogger().log("error", "the API could not start", {
+      reason: cause instanceof Error ? cause.message : String(cause),
+    });
+    process.exit(1);
   });
-  process.exit(1);
-});
+}
