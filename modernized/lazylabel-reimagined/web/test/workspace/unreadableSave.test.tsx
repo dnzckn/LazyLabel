@@ -16,7 +16,7 @@ import { defaultSettings } from "@lazylabel/settings-schema";
 
 import type { AnnotationsResult, ApiClient } from "../../src/api/client.js";
 import { HotkeyProvider } from "../../src/hotkeys/HotkeyProvider.jsx";
-import { NotificationProvider } from "../../src/notifications/NotificationProvider.jsx";
+import { NotificationHost, NotificationProvider } from "../../src/notifications/NotificationProvider.jsx";
 import { SettingsProvider } from "../../src/settings/SettingsProvider.jsx";
 import { OpenImageView } from "../../src/workspace/OpenImageView.jsx";
 import { WorkspaceProvider, useWorkspace } from "../../src/workspace/WorkspaceProvider.jsx";
@@ -64,6 +64,8 @@ function mount(result: AnnotationsResult) {
 
   render(
     <NotificationProvider>
+      {/* Notifications need somewhere to render: without the host they are raised and unseen. */}
+      <NotificationHost />
       <SettingsProvider client={client}>
         <HotkeyProvider bindings={defaultSettings().hotkeys}>
           <WorkspaceProvider client={client} projectId="p1" confirmNavigation={() => true}>
@@ -157,5 +159,21 @@ describe("panning the zoomed image", () => {
     fireEvent.keyDown(document, { key: keyFor("pan_up"), code: "KeyW" });
 
     expect(by).toHaveBeenCalledWith({ left: 0, top: -64, behavior: "auto" });
+  });
+});
+
+describe("converting existing masks to polygons", () => {
+  const press = () =>
+    fireEvent.keyDown(document, { key: defaultSettings().hotkeys["convert_to_polygons"]!.primary });
+
+  it("says so when there is nothing it can convert", async () => {
+    // An image of polygons, or of slivers that approximate to a line. Silence would leave a user
+    // pressing the key again.
+    mount(empty);
+    await open();
+
+    press();
+
+    await waitFor(() => expect(screen.getByText(/No masks on this image could become polygons/)).toBeTruthy());
   });
 });
