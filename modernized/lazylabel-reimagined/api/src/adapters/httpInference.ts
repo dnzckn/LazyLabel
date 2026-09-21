@@ -22,6 +22,8 @@ import {
   type InferenceClient,
   type InferenceHealth,
   type ModelStatus,
+  type PropagationJob,
+  type PropagationStart,
   type SegmentRequest,
   type SegmentResult,
 } from "../ports/inference.js";
@@ -112,6 +114,83 @@ export class HttpInferenceClient implements InferenceClient {
     };
   }
 
+  async startPropagation(
+    request: PropagationStart,
+    correlationId: string,
+  ): Promise<PropagationJob> {
+    // 202, not 200: the service accepted the job and it is running. Treating only 200 as success
+    // here would turn every successful start into an error.
+    const response = await this.send("POST", "/inference/propagations", request, correlationId);
+    if (response.status !== 202) throw await this.failure(response);
+    return this.job(await this.json(response));
+  }
+
+  async propagationState(
+    jobId: string,
+    cursor: number,
+    correlationId: string,
+  ): Promise<PropagationJob> {
+    const query = new URLSearchParams({ id: jobId, cursor: String(cursor) });
+    const response = await this.send(
+      "GET",
+      `/inference/propagations?${query.toString()}`,
+      undefined,
+      correlationId,
+    );
+    if (response.status !== 200) throw await this.failure(response);
+    return this.job(await this.json(response));
+  }
+
+  async listPropagations(correlationId: string): Promise<readonly PropagationJob[]> {
+    const response = await this.send("GET", "/inference/propagations", undefined, correlationId);
+    if (response.status !== 200) throw await this.failure(response);
+
+    const body = (await this.json(response)) as { jobs?: unknown };
+    if (!Array.isArray(body.jobs)) {
+      throw new InferenceError(502, "malformed_response", "the service listed no jobs array");
+    }
+    return body.jobs.map((each) => this.job(each));
+  }
+
+  async cancelPropagation(jobId: string, correlationId: string): Promise<PropagationJob> {
+    const response = await this.send(
+      "DELETE",
+      `/inference/propagations/${encodeURIComponent(jobId)}`,
+      undefined,
+      correlationId,
+    );
+    if (response.status !== 200) throw await this.failure(response);
+    return this.job(await this.json(response));
+  }
+
+  /**
+   * Read a job off the wire, refusing one that is missing what a caller has to branch on.
+   *
+   * `state` most of all: a job whose state did not arrive would be shown as running forever, which
+   * is the shape of failure this service exists to stop -- a caller that cannot tell it has
+   * stopped waiting for something that already finished.
+   */
+  private job(body: unknown): PropagationJob {
+    const raw = (body ?? {}) as Record<string, unknown>;
+    const state = raw["state"];
+    if (typeof raw["id"] !== "string" || typeof state !== "string") {
+      throw new InferenceError(502, "malformed_response", "the service returned no job");
+    }
+    if (!["running", "completed", "cancelled", "failed"].includes(state)) {
+      throw new InferenceError(502, "malformed_response", `unknown job state ${JSON.stringify(state)}`);
+    }
+    return {
+      id: raw["id"],
+      state: state as PropagationJob["state"],
+      completed: typeof raw["completed"] === "number" ? raw["completed"] : 0,
+      total: typeof raw["total"] === "number" ? raw["total"] : null,
+      cursor: typeof raw["cursor"] === "number" ? raw["cursor"] : 0,
+      cancelling: raw["cancelling"] === true,
+      error: typeof raw["error"] === "string" ? raw["error"] : null,
+      results: Array.isArray(raw["results"]) ? (raw["results"] as PropagationJob["results"]) : [],
+    };
+  }
+
   private async send(
     method: string,
     path: string,
@@ -153,7 +232,7 @@ export class HttpInferenceClient implements InferenceClient {
   }
 
   private async failure(response: Response): Promise<InferenceError> {
-    let problem: { code?: string; message?: string } = {};
+    let problem: { code?: string; message?: string; detail?: unknown } = {};
     try {
       problem = (await response.json()) as typeof problem;
     } catch {
@@ -163,6 +242,7 @@ export class HttpInferenceClient implements InferenceClient {
       response.status,
       problem.code ?? "inference_failed",
       problem.message ?? `the inference service answered ${response.status}`,
+      problem.detail,
     );
   }
 }

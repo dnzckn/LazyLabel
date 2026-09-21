@@ -149,6 +149,21 @@ export function createApp(deps: AppDeps): App {
       pattern: "/inference/segment",
       handler: (request) => proxySegment(deps, request),
     },
+    {
+      method: "POST",
+      pattern: "/inference/propagations",
+      handler: (request) => startPropagation(deps, request),
+    },
+    {
+      method: "GET",
+      pattern: "/inference/propagations",
+      handler: (request) => propagationState(deps, request),
+    },
+    {
+      method: "DELETE",
+      pattern: "/inference/propagations/:jobId",
+      handler: (request, params) => cancelPropagation(deps, request, params),
+    },
     { method: "GET", pattern: "/users/me/settings", handler: () => getSettings(deps) },
     { method: "PUT", pattern: "/users/me/settings", handler: (request) => putSettings(deps, request) },
   ];
@@ -360,6 +375,84 @@ async function proxySegment(deps: AppDeps, request: ApiRequest): Promise<ApiResp
         ...(box === undefined || box === null ? {} : { box: box as [number, number, number, number] }),
       },
       correlationId,
+    ),
+  );
+}
+
+/**
+ * C11: start a propagation, watch it, stop it.
+ *
+ * The API forwards rather than interprets. It checks the SHAPE -- so a body that cannot possibly
+ * work is refused here rather than three minutes into a GPU job -- and leaves every judgement about
+ * frames and models to the service, which is the only side that knows what it loaded.
+ */
+async function startPropagation(deps: AppDeps, request: ApiRequest): Promise<ApiResponse> {
+  const body = parseJsonObject(request.body);
+
+  const sequence = body["sequence"];
+  if (!Array.isArray(sequence) || sequence.length === 0
+    || !sequence.every((each) => typeof each === "string" && each !== "")) {
+    throw badRequest("a propagation needs a non-empty 'sequence' of image keys");
+  }
+
+  const references = body["references"];
+  if (!Array.isArray(references) || references.length === 0
+    || !references.every((each) => Number.isInteger(each))) {
+    // Legacy starts the job anyway and produces an empty mask for every frame in the sequence.
+    throw badRequest("a propagation needs at least one reference frame to carry from");
+  }
+
+  const optional = (name: string): number | undefined => {
+    const value = body[name];
+    if (value === undefined || value === null) return undefined;
+    if (!Number.isInteger(value)) throw badRequest(`'${name}' must be a whole frame number`);
+    return value as number;
+  };
+
+  const started = await inferenceOf(deps).startPropagation(
+    {
+      sequence: sequence as readonly string[],
+      references: references as readonly number[],
+      ...(optional("start") === undefined ? {} : { start: optional("start")! }),
+      ...(optional("end") === undefined ? {} : { end: optional("end")! }),
+      ...(optional("window") === undefined ? {} : { window: optional("window")! }),
+      ...(typeof body["streaming"] === "boolean" ? { streaming: body["streaming"] } : {}),
+      ...(typeof body["model"] === "string" ? { model: body["model"] } : {}),
+    },
+    request.headers["x-correlation-id"] ?? "",
+  );
+
+  // 202 all the way through: the browser must not be told the work is done.
+  return json(202, started);
+}
+
+async function propagationState(deps: AppDeps, request: ApiRequest): Promise<ApiResponse> {
+  const correlationId = request.headers["x-correlation-id"] ?? "";
+  const jobId = request.query.get("id");
+
+  if (jobId === null) {
+    return json(200, { jobs: await inferenceOf(deps).listPropagations(correlationId) });
+  }
+
+  const raw = request.query.get("cursor") ?? "0";
+  const cursor = Number(raw);
+  if (!Number.isInteger(cursor) || cursor < 0) {
+    throw badRequest(`'cursor' must be a whole number, got ${JSON.stringify(raw)}`);
+  }
+
+  return json(200, await inferenceOf(deps).propagationState(jobId, cursor, correlationId));
+}
+
+async function cancelPropagation(
+  deps: AppDeps,
+  request: ApiRequest,
+  params: Record<string, string>,
+): Promise<ApiResponse> {
+  return json(
+    200,
+    await inferenceOf(deps).cancelPropagation(
+      params["jobId"] ?? "",
+      request.headers["x-correlation-id"] ?? "",
     ),
   );
 }
@@ -851,7 +944,7 @@ function toHttpError(cause: unknown): HttpError {
   // prompt from an expired handle from a model that will not load, and each needs something
   // different from the caller.
   if (cause instanceof InferenceError) {
-    return new HttpError(cause.status, cause.code, cause.message);
+    return new HttpError(cause.status, cause.code, cause.message, cause.detail);
   }
   if (cause instanceof InferenceUnreachableError) {
     // 503, not 500. The API is fine; the model is not answering, and annotation work continues.

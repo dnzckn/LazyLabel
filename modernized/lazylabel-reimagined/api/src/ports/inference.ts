@@ -80,12 +80,18 @@ export interface InferenceHealth {
  * `status` is carried through rather than flattened, because the five outcomes the service
  * distinguishes — bad prompt, expired handle, unreadable image, model unavailable, model raised —
  * need five different things from the caller, and collapsing them here would undo that.
+ *
+ * `detail` is carried for the same reason, one level down. C11's `results_overflowed` says which
+ * cursor is the earliest still buffered, and that is the whole difference between "you have missed
+ * some results" and "you have missed some, carry on from here" — a caller given only the first has
+ * nothing to do but retry the cursor that already failed.
  */
 export class InferenceError extends Error {
   constructor(
     readonly status: number,
     readonly code: string,
     message: string,
+    readonly detail?: unknown,
   ) {
     super(message);
     this.name = "InferenceError";
@@ -117,10 +123,69 @@ export interface ModelStatus {
   readonly detail: string | null;
 }
 
+/**
+ * Starting a propagation — C11. Frame numbers are POSITIONS in `sequence`, never file names.
+ *
+ * RULE-017 is the reason: legacy names each staged frame after its position in its own list and
+ * skips one it cannot read without renumbering, so every frame after a gap comes back attributed
+ * to the image before it. Identity lives in this array, and results are resolved through it.
+ */
+export interface PropagationStart {
+  readonly sequence: readonly string[];
+  /** Frames carrying prompts. Both passes leave the EARLIEST one (RULE-025). */
+  readonly references: readonly number[];
+  readonly start?: number;
+  readonly end?: number;
+  /** RULE-026. Off means one pass over the whole sequence, which on a long one is gigabytes. */
+  readonly streaming?: boolean;
+  readonly window?: number;
+  readonly model?: string;
+}
+
+/** One propagated object on one frame. */
+export interface PropagationFrame {
+  readonly source: string;
+  readonly objectId: number;
+  readonly mask: WireMask;
+  /** RULE-016. What decides which frames the user is told to check by hand. */
+  readonly confidence: number;
+}
+
+export type PropagationState = "running" | "completed" | "cancelled" | "failed";
+
+/**
+ * A job's state, and the results since the cursor the caller asked with.
+ *
+ * `completed` and `state` are separate answers on purpose: legacy's propagation wraps its loop in
+ * `except Exception: return`, so a run that died on frame 40 of 200 is indistinguishable from a
+ * run that was 39 frames long. Here "2 of 200, failed" is a different thing from "2 of 2, done".
+ */
+export interface PropagationJob {
+  readonly id: string;
+  readonly state: PropagationState;
+  readonly completed: number;
+  readonly total: number | null;
+  /** Ask with this next. It counts everything ever produced, not what is still buffered. */
+  readonly cursor: number;
+  /** Asked to stop and not yet stopped: the frame in flight still finishes. */
+  readonly cancelling: boolean;
+  readonly error: string | null;
+  readonly results: readonly PropagationFrame[];
+}
+
 export interface InferenceClient {
   health(): Promise<InferenceHealth>;
   /** What the service could load. A checkpoint that is not listed is not loadable. */
   models(): Promise<readonly ModelStatus[]>;
   embed(request: EmbedRequest, correlationId: string): Promise<EmbedResult>;
   segment(request: SegmentRequest, correlationId: string): Promise<SegmentResult>;
+
+  /** Begin a propagation. Returns as soon as the job exists; it runs for minutes. */
+  startPropagation(request: PropagationStart, correlationId: string): Promise<PropagationJob>;
+  /** State and the results produced since `cursor`. */
+  propagationState(jobId: string, cursor: number, correlationId: string): Promise<PropagationJob>;
+  /** Every job this service knows about, for a client that has just reconnected. */
+  listPropagations(correlationId: string): Promise<readonly PropagationJob[]>;
+  /** Ask a job to stop, keeping the frames already done (RULE-063). Returns at once. */
+  cancelPropagation(jobId: string, correlationId: string): Promise<PropagationJob>;
 }
