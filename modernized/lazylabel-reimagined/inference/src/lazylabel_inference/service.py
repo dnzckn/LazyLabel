@@ -246,3 +246,65 @@ def encode_mask(mask: Any) -> dict[str, Any]:
         "box": [x0, y0, x1, y1],
         "data": base64.b64encode(region.tobytes()).decode("ascii"),
     }
+
+
+def decode_mask(wire: Any) -> Any:
+    """The exact inverse of {@link encode_mask}: a bounded wire mask back to a full array.
+
+    Needed the moment a mask travels TOWARDS this service rather than away from it, which is what a
+    propagation reference is -- the user's own annotation, seeding the run.
+
+    THE BOX IS HALF-OPEN, `[x0, y0, x1, y1]` with the far edges exclusive, because `encode_mask`
+    computes them as `width - argmax(...)`. Reading them as inclusive loses the last row and column
+    of every reference mask, which is the kind of error that survives a visual check and shows up
+    as a mask that shrinks by a pixel on every round trip.
+    """
+    import numpy as np
+
+    if not isinstance(wire, dict):
+        raise InvalidPromptError(f"a mask must be an object, got {type(wire).__name__}")
+
+    height, width = wire.get("height"), wire.get("width")
+    if not isinstance(height, int) or not isinstance(width, int) or height <= 0 or width <= 0:
+        raise InvalidPromptError("a mask needs a positive integer 'height' and 'width'")
+
+    mask = np.zeros((height, width), dtype=np.uint8)
+
+    box = wire.get("box")
+    if box is None:
+        # An empty mask is a legal ENCODING -- `encode_mask` produces it for an all-zero array --
+        # so decoding one is not an error here. Whether an empty mask may be USED is the caller's
+        # question, and `seed_mask` refuses it with a message about references.
+        return mask
+
+    if not isinstance(box, (list, tuple)) or len(box) != 4 or not all(
+        isinstance(value, int) for value in box
+    ):
+        raise InvalidPromptError(f"a mask box must be four integers, got {box!r}")
+
+    x0, y0, x1, y1 = box
+    if not (0 <= x0 <= x1 <= width and 0 <= y0 <= y1 <= height):
+        raise InvalidPromptError(
+            f"the mask box {list(box)} does not fit inside {width}x{height}"
+        )
+
+    data = wire.get("data")
+    if not isinstance(data, str):
+        raise InvalidPromptError("a mask needs its 'data' as a base64 string")
+
+    try:
+        raw = base64.b64decode(data, validate=True)
+    except Exception as cause:  # noqa: BLE001 - any decode failure means the same thing
+        raise InvalidPromptError(f"the mask data is not valid base64: {cause}") from cause
+
+    expected = (y1 - y0) * (x1 - x0)
+    if len(raw) != expected:
+        # Length is the only check that catches a box and a payload describing different regions,
+        # and without it numpy would either throw somewhere unhelpful or silently reshape.
+        raise InvalidPromptError(
+            f"the mask data is {len(raw)} bytes but its box {list(box)} needs {expected}"
+        )
+
+    if expected:
+        mask[y0:y1, x0:x1] = np.frombuffer(raw, dtype=np.uint8).reshape(y1 - y0, x1 - x0)
+    return mask
