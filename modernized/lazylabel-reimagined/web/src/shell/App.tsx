@@ -22,6 +22,7 @@ import { ClassTable } from "../workspace/ClassTable.jsx";
 import { HistoryControls } from "../workspace/HistoryControls.jsx";
 import { ChannelPanel } from "../workspace/ChannelPanel.jsx";
 import { SplitView } from "../split/SplitView.jsx";
+import { CloseGuard } from "../workspace/CloseGuard.jsx";
 import { TimelinePanel } from "../sequence/TimelinePanel.jsx";
 import { CropPanel } from "../workspace/CropPanel.jsx";
 import { ModelPicker } from "../workspace/ModelPicker.jsx";
@@ -144,6 +145,9 @@ export function App({ client }: { readonly client: ApiClient }): ReactNode {
   return (
     <main className="app">
       <NotificationHost />
+      {/* Renders nothing. It asks `onClose` whether closing this tab would lose work, and arms the
+          browser's own dialog when it would -- decision 7's last silent path. */}
+      <CloseGuard />
 
       <header>
         <h1>LazyLabel</h1>
