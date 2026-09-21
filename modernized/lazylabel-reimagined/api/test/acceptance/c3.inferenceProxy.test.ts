@@ -331,6 +331,17 @@ describe("C3: the API's inference proxy", () => {
         status: 200,
         body: { mask: MASK, score: 1, chosen: 0, alternatives: [1] },
       },
+      "/inference/archetypes": {
+        status: 200,
+        body: {
+          suggested: ["frames/frame_000.png"],
+          budget: 1,
+          clusters: 1,
+          noise: 0,
+          fellShort: false,
+          unreadable: [],
+        },
+      },
       "/inference/propagations": {
         status: 202,
         body: {

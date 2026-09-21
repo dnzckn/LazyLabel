@@ -92,7 +92,7 @@ def test_every_error_code_the_api_maps_is_one_this_service_can_produce() -> None
     # inference_unavailable is the API's own code for "no service configured", so it is expected on
     # the API side without this service ever sending it.
     expected = set(contract["errorCodes"]) - {"inference_unavailable"}
-    missing = expected - (produced | _codes_from_the_job_routes())
+    missing = expected - (produced | _codes_from_the_job_routes() | _codes_from_the_archetype_route())
     assert not missing, f"the API expects codes this service never sends: {sorted(missing)}"
 
 
@@ -152,6 +152,36 @@ def _codes_from_the_job_routes() -> set[str]:
 
     assert threading.active_count() >= 1  # the driver thread is done; nothing is left running
     return codes
+
+
+def _codes_from_the_archetype_route() -> set[str]:
+    """C10's code, collected by DRIVING the route rather than by listing it.
+
+    Same reasoning as the job routes above: `too_few_frames` is a fact about the SEQUENCE, not
+    about inference, so it never passes through the typed-error mapping. Adding the name to a
+    hand-written set would satisfy the assertion and prove nothing.
+
+    422 rather than 400 is the part worth pinning here. The request was well formed and this
+    sequence cannot answer it -- a user with four frames has made no mistake, and a 400 would tell
+    them they had.
+    """
+    import json as _json
+
+    from lazylabel_inference.app import Deps, Request, create_app
+    from lazylabel_inference.archetypes import TooFewFrames
+
+    def refuses(_sequence, _model):
+        raise TooFewFrames("4 frames is fewer than the 5 this needs to say anything")
+
+    response = create_app(Deps(archetyper=refuses))(
+        Request(
+            method="POST",
+            path="/inference/archetypes",
+            body=_json.dumps({"sequence": ["a.png", "b.png"]}).encode("utf-8"),
+        )
+    )
+    assert response.status == 422, f"expected 422, got {response.status}"
+    return {_json.loads(response.body)["code"]}
 
 
 class _FakeFrame:

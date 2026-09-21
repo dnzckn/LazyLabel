@@ -103,7 +103,7 @@
       "path": "/inference/propagations",
       "method": "POST",
       "status": 202,
-      "$comment": "202, not 200: the service accepted a job that runs for minutes. Both sides keep it -- an API that answered 200 would tell the browser the work was done. Frame numbers are POSITIONS in `sequence` and never file names, which is RULE-017: legacy names each staged frame after its position in its own list and skips one it cannot read without renumbering, so every frame after a gap comes back attributed to the image before it.",
+      "$comment": "202, not 200: the service accepted a job that runs for minutes. Both sides keep it -- an API that answered 200 would tell the browser the work was done. Frame numbers are POSITIONS in `sequence` and never file names, which is RULE-017: legacy names each staged frame after its position in its own list and skips one it cannot read without renumbering, so every frame after a gap comes back attributed to the image before it. The reference MASKS travel in `objects`, separately from `references`, because one frame can carry several objects and the service needs both answers. They are the user's own annotations: legacy seeds with `add_new_mask`, and re-deriving a prompt from someone's polygon gives a mask close to theirs and not theirs.",
       "body": {
         "sequence": [
           "frames/frame_000.png",
@@ -115,6 +115,40 @@
         ],
         "window": 250,
         "streaming": true,
+        "model": "SAM 2.1 large",
+        "objects": [
+          {
+            "frame": 0,
+            "objectId": 1,
+            "mask": {
+              "height": 4,
+              "width": 4,
+              "box": [
+                1,
+                1,
+                3,
+                3
+              ],
+              "data": "AQEBAQ=="
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "find archetypes in a sequence",
+      "path": "/inference/archetypes",
+      "method": "POST",
+      "status": 200,
+      "$comment": "One request and one answer rather than a job, unlike propagation: a single pass that embeds every frame once. There is no per-frame result to stream, and a partial answer would not help if there were -- half the clusters is not half the suggestions, it is a different set.",
+      "body": {
+        "sequence": [
+          "frames/frame_000.png",
+          "frames/frame_001.png",
+          "frames/frame_002.png",
+          "frames/frame_003.png",
+          "frames/frame_004.png"
+        ],
         "model": "SAM 2.1 large"
       }
     }
@@ -153,6 +187,7 @@
     "prediction_failed",
     "inference_unavailable",
     "unknown_job",
-    "results_overflowed"
+    "results_overflowed",
+    "too_few_frames"
   ]
 }
