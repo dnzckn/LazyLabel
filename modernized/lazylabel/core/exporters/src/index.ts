@@ -62,3 +62,14 @@ export {
 // into an editable polygon. Same reason as the three above: these are the OpenCV ports proven
 // against goldens legacy wrote, and a second approximation in the browser would be a second answer
 // to a question with one right one.
+
+// RULE-028's display adjustments, shared for the reason the geometry above is: they are ports of
+// OpenCV's own arithmetic, and the browser and the API have to produce the same pixels or a mask
+// comes back for an image the user was not looking at (RULE-089).
+export {
+  NEUTRAL,
+  adjustImage,
+  adjustPixel,
+  isNeutral,
+  type Adjustments,
+} from "./image/displayAdjustments.js";
