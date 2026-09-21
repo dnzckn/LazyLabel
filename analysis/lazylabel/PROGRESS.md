@@ -115,10 +115,19 @@ What is STILL blocked is equivalence -- proving the results match legacy -- whic
 checkpoints, a recorded sequence and goldens. That is Phase 6 exit criterion 2, and it was never
 the job API.
 
-**Still to wire: the browser.** The chain reaches web -> API -> service everywhere except the last
-step: nothing in the web app calls the propagation routes yet, so `stream_window_size` remains a
-settings GAP and `frameConfidence`/`saveableFrames` remain unreached. That is the next slice and it
-needs no checkpoint either.
+**The browser propagates now, and the chain is joined.** `PropagationControl` + `usePropagation`
+start a job, poll it by cursor, cancel it and fold the per-object scores into RULE-060's per-frame
+confidence. Checked in the running app, not only in the suite: the control renders on a real
+six-frame timeline, sits disabled with "Nothing to carry from yet" until a reference exists, and on
+a click with no inference service shows the API's own 503 sentence rather than failing silently.
+
+Two consequences worth stating plainly:
+
+- **The settings table has no gaps left.** 30 read, 9 deliberately dropped, 0 gaps.
+  `stream_window_size` was the last, and it opened at thirteen unread.
+- **`frameConfidence` is reached.** One unreached function remains, `saveableFrames`, and it is a
+  genuinely different question: propagated masks reach the timeline but nothing writes them to
+  sidecars yet. That is the next slice.
 
 **Blocked on the owner:**
 
