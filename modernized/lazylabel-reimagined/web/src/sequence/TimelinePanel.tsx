@@ -33,6 +33,7 @@ import {
   markReference,
   markReferences,
   markSuggested,
+  resetForPropagation,
   sortedOrder,
   step,
   summarize,
@@ -291,6 +292,10 @@ export function TimelinePanel({
           frames={frames}
           onScores={setOwnScores}
           unsavedRef={unsavedRef}
+          onRunStart={() => {
+            setOwnScores({});
+            setOverrides((previous) => resetForPropagation(previous ?? frames));
+          }}
         />
       )}
 

@@ -10,6 +10,21 @@
  * the saved file, the propagation would start from a shape the user has never seen and cannot
  * produce again.
  *
+ * TWO DELIBERATE DIVERGENCES FROM RULE-023, both in the direction of not losing work silently.
+ *
+ * 1. LEGACY SEEDS ONLY FROM MASK SEGMENTS. A polygon, box or circle on the open frame has no mask
+ *    in memory, so legacy excludes it "silently ... until saved and reloaded" — the same polygon
+ *    works after a save, because NPZ, YOLO-Seg and COCO all carry masks. A user who draws a
+ *    polygon and propagates gets nothing carried from it and no word about why. This rasterizes
+ *    every shape instead, with `rasterizeSegment`, which is the function the exporters use — so
+ *    what seeds the run is the same shape the file would have held.
+ *
+ * 2. LEGACY READS THE OPEN FRAME FROM MEMORY, including unsaved segments; every other reference
+ *    it loads from disk. This reads all of them from disk, which is decision 5 — the files are
+ *    the truth. The consequence is the opposite of legacy's: an unsaved annotation is not carried,
+ *    and the user is TOLD ("it has no annotations to carry") rather than watching an empty mask
+ *    propagate through six hundred frames.
+ *
  * OBJECT IDS ARE A RUNNING COUNTER, one per annotation across every reference frame, which is
  * exactly what legacy does (`propagation_manager.py:410-412`: `max(existing_ids, default=0) + 1`).
  * The consequence is worth stating because it looks like a bug and is the behaviour: two

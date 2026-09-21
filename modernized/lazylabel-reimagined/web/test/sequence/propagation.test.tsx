@@ -211,6 +211,22 @@ describe("starting one", () => {
     expect(fake.started[0]!.objects!.map((each) => each.objectId)).toEqual([1, 2]);
   });
 
+  it("seeds from a POLYGON, which RULE-023 says legacy silently ignores", async () => {
+    // Legacy seeds only from MASK segments: a polygon on the open frame has no mask in memory and
+    // is excluded "silently ... until saved and reloaded". The same polygon works after a save,
+    // because NPZ, YOLO-Seg and COCO all carry masks -- so the rule is really about WHEN the
+    // rasterization happens. Doing it here, with the function the exporters use, means what seeds
+    // the run is the same shape the file would have held.
+    const fake = fakeClient({});
+    show(fake);
+
+    fireEvent.click(propagate());
+
+    await waitFor(() => expect(fake.started).toHaveLength(1));
+    // SQUARE is a Polygon. Legacy would carry nothing from it and say nothing.
+    expect(fake.started[0]!.objects![0]!.mask.data.length).toBeGreaterThan(0);
+  });
+
   it("REPORTS a reference it could not use instead of seeding from the rest", async () => {
     // A propagation that quietly seeded from one of two references would produce a plausible
     // result that is not the one the user asked for, and nothing on screen would say so.

@@ -53,6 +53,14 @@ export interface PropagationControlProps {
    * window at all. The callback stays for anything that wants to RENDER the number.
    */
   readonly unsavedRef?: { current: number };
+  /**
+   * A new run is about to begin — RULE-075/076.
+   *
+   * Each Propagate resets what earlier runs put on the timeline, so a frame the new run does not
+   * cover cannot keep a status it no longer has results for. Announced rather than done here
+   * because the statuses belong to the panel.
+   */
+  readonly onRunStart?: () => void;
 }
 
 export function PropagationControl({
@@ -61,6 +69,7 @@ export function PropagationControl({
   onScores,
   onUnsaved,
   unsavedRef,
+  onRunStart,
   projectId = "default",
 }: PropagationControlProps): ReactNode {
   const { settings } = useSettings();
@@ -100,6 +109,9 @@ export function PropagationControl({
     }
 
     setUnusable(seeds.skipped);
+    // Before any result arrives: a frame the new run does not reach must not keep a green status
+    // whose mask has just been thrown away with the previous run's.
+    onRunStart?.();
     setClasses(seeds.classes);
     setSaved(null);
     if (seeds.objects.length === 0) {
@@ -121,7 +133,17 @@ export function PropagationControl({
       objects: seeds.objects,
       ...(Number.isFinite(window) && window > 0 ? { window } : {}),
     });
-  }, [client, frames, loading, progress.running, projectId, references, settings.values, start]);
+  }, [
+    client,
+    frames,
+    loading,
+    onRunStart,
+    progress.running,
+    projectId,
+    references,
+    settings.values,
+    start,
+  ]);
 
   useHotkey("propagate", () => void begin());
 

@@ -57,16 +57,26 @@ async function walk(dir: string): Promise<void> {
  * Same-file uses COUNT: a helper called by the module that exports it is reached, and exporting it
  * so a test can name it directly is ordinary. What is being looked for is a function no line of
  * shipping code runs.
+ *
+ * COMMENTS DO NOT COUNT, and that sentence is here because they used to. `resetForPropagation` was
+ * written, tested, and called by no shipping code — and this guard reported it reached, because a
+ * comment in its own module mentioned it by name. A guard that a sentence about a function can
+ * satisfy stops working precisely when someone documents carefully, which is backwards.
  */
+function withoutComments(text: string): string {
+  return text.replace(/\/\*[\s\S]*?\*\//g, " ").replace(/\/\/[^\n]*/g, " ");
+}
+
 function callsTo(name: string): number {
   const word = new RegExp(`\\b${name}\\b`, "g");
   const ownDeclaration = new RegExp(`^export\\s+(?:async\\s+)?function\\s+${name}\\b`, "gm");
   let total = 0;
-  for (const [file, text] of texts) {
-    total += (text.match(word) ?? []).length;
-    if (file === declared.get(name)) total -= (text.match(ownDeclaration) ?? []).length;
+  for (const [, text] of texts) {
+    const code = withoutComments(text);
+    total += (code.match(word) ?? []).length;
   }
-  return total;
+  // Its own declaration is one of those matches, wherever it lives.
+  return Math.max(0, total - 1);
 }
 
 const unreachedNow = (): readonly string[] =>
@@ -125,6 +135,6 @@ describe("what the sweep currently finds", () => {
   it("reports the count, so a change in it shows up in the diff", () => {
     // Asserted rather than printed. Wiring one up fails this test, and the person who wired it
     // then removes its entry -- which is the whole mechanism.
-    expect(unreachedNow().length).toBe(0);
+    expect(unreachedNow().length).toBe(3);
   });
 });

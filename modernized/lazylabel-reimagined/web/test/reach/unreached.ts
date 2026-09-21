@@ -42,6 +42,28 @@ export const UNREACHED: Readonly<Record<string, Reason>> = {
   // rule it encodes -- Save All never writes a flagged frame -- was correct, tested, and had never
   // been asked. A rule nothing consults is not a rule the software follows.
 
+  // ---- Hidden by the guard's own blind spot until 2026-09-21. ----
+  //
+  // All three were mentioned by NAME in a comment, and the sweep counted a mention as a use. The
+  // guard strips comments now; these are what was behind it, and each is a real gap rather than
+  // dead code. `resetForPropagation` came off the list in the same commit, wired into the start of
+  // a propagation run where RULE-075 says it belongs.
+  onClose: awaiting(
+    "RULE-054 and decision 7: this decides what to say about unsaved work when the workspace "
+      + "closes, and nothing asks it, because the app registers no `beforeunload` handler at all. "
+      + "Closing a tab with unsaved annotations is silent",
+  ),
+  summarizeSave: awaiting(
+    "turns a save OUTCOME into what to tell the user, including the case legacy gets wrong -- a "
+      + "save that wrote no files is not a save. The save paths notify from the intent instead, so "
+      + "this is the correction nobody applied",
+  ),
+  project: awaiting(
+    "the image-to-display direction of the coordinate transform. Every drawing path needs only "
+      + "`locate`, the other direction; this waits for the first feature that draws a known image "
+      + "point onto the screen",
+  ),
+
   // ---- Other rules whose UI is not built. ----
 
   // ---- Superseded, and DELETED rather than recorded. ----
