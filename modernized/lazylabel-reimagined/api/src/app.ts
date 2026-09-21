@@ -160,6 +160,11 @@ export function createApp(deps: AppDeps): App {
       handler: (request) => propagationState(deps, request),
     },
     {
+      method: "POST",
+      pattern: "/inference/archetypes",
+      handler: (request) => findArchetypes(deps, request),
+    },
+    {
       method: "DELETE",
       pattern: "/inference/propagations/:jobId",
       handler: (request, params) => cancelPropagation(deps, request, params),
@@ -478,6 +483,37 @@ async function cancelPropagation(
     200,
     await inferenceOf(deps).cancelPropagation(
       params["jobId"] ?? "",
+      request.headers["x-correlation-id"] ?? "",
+    ),
+  );
+}
+
+/**
+ * C10: which frames of a sequence are worth annotating by hand.
+ *
+ * One request and one answer rather than a job, unlike propagation. It is a single pass that
+ * embeds every frame once, so there is no per-frame result to stream -- and half the clusters is
+ * not half the suggestions, it is a different set.
+ */
+async function findArchetypes(deps: AppDeps, request: ApiRequest): Promise<ApiResponse> {
+  const body = parseJsonObject(request.body);
+
+  const sequence = body["sequence"];
+  if (!Array.isArray(sequence) || sequence.length === 0
+    || !sequence.every((each) => typeof each === "string" && each !== "")) {
+    throw badRequest("finding archetypes needs a non-empty 'sequence' of image keys");
+  }
+
+  const model = body["model"];
+  if (model !== undefined && typeof model !== "string") {
+    throw badRequest("'model' must be a model name");
+  }
+
+  return json(
+    200,
+    await inferenceOf(deps).findArchetypes(
+      sequence as readonly string[],
+      model,
       request.headers["x-correlation-id"] ?? "",
     ),
   );

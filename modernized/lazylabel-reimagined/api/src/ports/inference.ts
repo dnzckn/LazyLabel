@@ -188,6 +188,23 @@ export interface PropagationJob {
   readonly results: readonly PropagationFrame[];
 }
 
+/**
+ * What Find Archetypes suggests, and enough about how it got there to explain itself.
+ *
+ * `fellShort` is the difference between "here are your twenty frames" and "this sequence is too
+ * uniform to find twenty distinct ones". Legacy computes the same comparison to pick a progress
+ * message and throws it away, and a user who cannot tell those apart assumes the feature is broken.
+ */
+export interface ArchetypeResult {
+  readonly suggested: readonly string[];
+  readonly budget: number;
+  readonly clusters: number;
+  readonly noise: number;
+  readonly fellShort: boolean;
+  /** Frames that could not be read. They still count towards the budget, so they are reported. */
+  readonly unreadable: readonly { readonly key: string; readonly reason: string }[];
+}
+
 export interface InferenceClient {
   health(): Promise<InferenceHealth>;
   /** What the service could load. A checkpoint that is not listed is not loadable. */
@@ -203,4 +220,11 @@ export interface InferenceClient {
   listPropagations(correlationId: string): Promise<readonly PropagationJob[]>;
   /** Ask a job to stop, keeping the frames already done (RULE-063). Returns at once. */
   cancelPropagation(jobId: string, correlationId: string): Promise<PropagationJob>;
+
+  /** Which frames of a sequence are worth annotating by hand (C10). One pass, one answer. */
+  findArchetypes(
+    sequence: readonly string[],
+    model: string | undefined,
+    correlationId: string,
+  ): Promise<ArchetypeResult>;
 }

@@ -22,6 +22,7 @@ import {
   type InferenceClient,
   type InferenceHealth,
   type ModelStatus,
+  type ArchetypeResult,
   type PropagationJob,
   type PropagationStart,
   type SegmentRequest,
@@ -161,6 +162,39 @@ export class HttpInferenceClient implements InferenceClient {
     );
     if (response.status !== 200) throw await this.failure(response);
     return this.job(await this.json(response));
+  }
+
+  async findArchetypes(
+    sequence: readonly string[],
+    model: string | undefined,
+    correlationId: string,
+  ): Promise<ArchetypeResult> {
+    const response = await this.send(
+      "POST",
+      "/inference/archetypes",
+      { sequence, ...(model === undefined ? {} : { model }) },
+      correlationId,
+    );
+    if (response.status !== 200) throw await this.failure(response);
+
+    const body = (await this.json(response)) as Partial<ArchetypeResult>;
+    if (!Array.isArray(body.suggested)) {
+      // An empty list is a legal answer -- a sequence too uniform to have scenes -- but a MISSING
+      // one is not, and rendering "0 suggestions" for it would present a failure as a result.
+      throw new InferenceError(
+        502,
+        "malformed_response",
+        "the inference service suggested no frames and did not say so",
+      );
+    }
+    return {
+      suggested: body.suggested,
+      budget: body.budget ?? 0,
+      clusters: body.clusters ?? 0,
+      noise: body.noise ?? 0,
+      fellShort: body.fellShort === true,
+      unreadable: body.unreadable ?? [],
+    };
   }
 
   /**
