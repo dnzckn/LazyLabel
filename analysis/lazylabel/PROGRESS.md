@@ -3,37 +3,26 @@
 Where the conversion stands, on branch `main-web`. `MODERNIZATION_BRIEF.md` is the plan and does
 not change as work lands; this file is the log against it, and is the one to read first.
 
-Last updated: 2026-09-20.
+Last updated: 2026-09-21.
 
 ## Short answer
 
-**The app runs, and is not finished.** Phases 1–5 have met their exit criteria. Phase 6 is
-part-built: **thirteen of the fourteen capabilities are done**, and the one that is not is C11,
-propagating an annotation along a sequence — which needs the inference service, a recorded
-sequence, and legacy's outputs captured as golden data. That is the largest single piece left and
-it is blocked on things only the owner can supply.
+**Every capability is built, and the conversion is not finished — because finishing means PROVING
+it, and that needs data only the owner has.**
 
-Of Phase 6's five exit criteria: **criterion 3 is met** (multi-view delivered per decision 8, with
-linked operations); criteria 2 and 4 have their harnesses written and wait on the owner's data;
-criterion 5's checklist is written (`CUTOVER.md`); criterion 1 is part-built — persona flow 2's
-steps 1, 2 and 5 are done and 3, 4 and 6 are propagation.
+All fourteen capabilities are built and reachable from the app, C11 included: propagation runs end
+to end, from the browser's reference masks through the API to a SAM 2 video predictor, with a job
+API that cancels without losing committed frames. What is NOT claimed is that its results match
+legacy's. That is Phase 6 exit criterion 2 and it needs a checkpoint, a recorded sequence, and
+golden outputs.
 
-By the brief's weighting: **roughly 85% of the conversion is done** — the first five phases are
-6.0, 5.5, 5.8, 29.4 and 27.4, all complete, and Phase 6's 25.9% is perhaps half met. That last
-figure is a judgement rather than a measurement, and propagation is most of what it excludes.
+Of Phase 6's five exit criteria: **1, 3 and 5 are met**; **2 and 4 have working harnesses and wait
+on the owner's data**. Both harnesses have now been RUN — see the blocked section — and one of them
+was wrong until today.
 
-Phase 4's panels were frames when it exited, because the tools that fill them are Phase 5's by the
-brief's own split. They are filled now: drawing tools, AI tools, adjustments, crop, segments and
-classes are all built and reachable.
-
-| Phase | Share | State |
-|---|---|---|
-| P1 — format library | 6.0% | **complete** |
-| P2 — architecture and scaffolds | 5.5% | **complete** |
-| P3 — inference service | 5.8% | **complete** |
-| P4 — workspace, dataset browser, persistence | 29.4% | **complete**; its panels are filled by P5's tools |
-| P5 — tools | 27.4% | **complete**; all four exit criteria met |
-| P6 — sequence and cutover | 25.9% | timeline, multi-view and the confidence histogram built; propagation waits on golden data |
+Every guard this project uses is closed or its remainder recorded: no unread settings, one
+unreached function with a written reason, 40 of 43 hotkeys live (the other three are mouse
+bindings), and all 94 business rules traceable to a test or recorded as a decision.
 
 ## The suites, as of 2026-09-20
 
@@ -55,283 +44,44 @@ configured, so a green CI run says nothing about them — see `Running the live 
 
 ## What to do next
 
-In order, and each is a slice that can be finished on its own. Everything above the line is
-UNBLOCKED; everything below it needs something only the owner can provide.
+Everything that can be done without the owner has been done. These three need something only the
+owner can supply, and each is one command once it arrives.
 
-**Unblocked, in the order I would take them:**
+1. **Capture propagation goldens** — Phase 6 exit criterion 2. Needs a SAM 2 checkpoint and a
+   folder of frames from a real recording.
 
-1. **The remaining hotkeys are mostly DECISIONS, not wiring.** Twenty-six of forty-three are live;
-   the reference marks the rest "not yet" from the dispatcher's own registrations, so the list is
-   always current — open the app, press Show hotkeys, and read those rows. Of the seventeen left:
-   six need a zoom and pan model this app does not have (the browser does its own); three are
-   mouse bindings rather than keys; two are C11. What is genuinely wireable is down to a handful,
-   so this is no longer the first thing to pick up.
-2. **RULE-089, Operate On View** is now the largest unbuilt rule and the first thing to pick up.
-   See below.
+   ```
+   python inference/tests/fixtures/capture_propagation_goldens.py        --frames <folder> --seed 0:1:<x>,<y> --checkpoint <file.pt> --out <name>.npz
+   ```
 
-3. **RULE-089 is BUILT.** All four parts: RULE-028's pixel maths shared so the browser and API
-   compute one answer; the API's pixels endpoint taking `adjust=`; the API rendering and posting
-   those bytes with an embed, and the Python service decoding them instead of reading the file;
-   and the browser sending the adjustments when the setting is on. Absent rather than neutral when
-   it is off, because the two are different requests -- neutral would still put a re-encoded image
-   on the wire for a picture identical to the file beside the service.
+   It validates the checkpoint, the frames and the seed BEFORE loading the model, so a mistyped
+   seed costs a second rather than a 2.4 GB load. Verified to that point on 2026-09-21.
 
-   The harness had to change first, and that ordering is the lesson. The shared contract fixture
-   records the bodies the API sends and both suites read it; it could not express a field the API
-   ADDS whose value comes from the image on disk. An example now declares `addedByApi`, checked
-   for presence rather than value -- and with that in place the contract test failed until the
-   feature existed.
+2. **Run the acceptance corpus** — Phase 6 exit criterion 4. Needs a folder whose immediate
+   subfolders are datasets with their sidecars beside their images.
 
-   Two bugs surfaced that no suite would have caught later. The API's own: `adjust=40,0,1,1`
-   returned the same BYTE COUNT as the unadjusted image, so a size check read as "nothing
-   happened"; hashing showed different pixels. And the browser's: the encode effect depended on
-   the adjustments OBJECT's identity, which its caller rebuilds every render -- every keystroke in
-   the workspace would have re-encoded the image, seconds of model work each. It keys on the four
-   values now.
+   ```
+   cd modernized/lazylabel-reimagined/api && npm run acceptance -- <corpus-root>
+   ```
 
-**C11's service half is now BUILT.** What that means precisely, because "C11 is blocked" was
-shorthand for more than was ever true:
+   Exit 0 is a pass and reports how many files were compared; exit 1 means files differed; **exit 2
+   means nothing was compared at all**, which is not a pass and was reported as one until today.
 
-- The propagation ALGORITHM was already built and differential-tested (`propagation.py`'s
-  `propagate`, a generator so a caller can stream and stop early -- which is what makes RULE-063's
-  cancellation keep committed work).
-- **RULE-026's windows** (`inference/.../windows.py`) are built and checked against legacy's own
-  `_propagate_chunked`, lifted out of the legacy source with `ast` and executed with a stand-in
-  `self`. Every other differential here skips without a checkpoint; this one needs nothing, so it
-  runs on every commit. A transcription cannot check itself, and this compares against legacy's
-  actual bytes over every window size and span that crosses a boundary, both directions.
-- **The job API** (`jobs.py` + three routes) is built: start, poll by cursor, cancel. The cancel
-  flag is checked AFTER appending, so the frame in flight when Cancel arrived is kept. A failure is
-  a state with its reason, which is the defect it replaces -- legacy's `except Exception: return`
-  makes a run that died on frame 40 of 200 identical to a run that was 39 frames long.
-- **The API proxies all three**, so it is reachable rather than built-and-unreachable. Doing that
-  found `InferenceError` dropping `detail`, which is where `results_overflowed` carries the cursor
-  to resume from.
-- Adding C11 to the shared contract fixture then found a real bug: **every sequence shorter than
-  six frames answered 500**, because the default 5-frame overlap was carried into a plan with one
-  window. `effective()` decides that once now.
+3. **Decide RULE-033's Ctrl+Plus binding.** Legacy binds Ctrl+Plus and Ctrl+Minus to the
+   annotation-size MULTIPLIER — its card says "(not image zoom)" — and this app zooms with them,
+   because the settings schema names those actions `zoom_in`/`zoom_out` and a key that does
+   something other than its name is the defect `fit_view` had. It is the only divergence on the
+   list that follows from no numbered decision. Recorded in
+   `web/test/rules/p0Coverage.test.ts`.
 
-What is STILL blocked is equivalence -- proving the results match legacy -- which needs real
-checkpoints, a recorded sequence and goldens. That is Phase 6 exit criterion 2, and it was never
-the job API.
-
-**The browser propagates now, and the chain is joined.** `PropagationControl` + `usePropagation`
-start a job, poll it by cursor, cancel it and fold the per-object scores into RULE-060's per-frame
-confidence. Checked in the running app, not only in the suite: the control renders on a real
-six-frame timeline, sits disabled with "Nothing to carry from yet" until a reference exists, and on
-a click with no inference service shows the API's own 503 sentence rather than failing silently.
-
-Two consequences worth stating plainly:
-
-- **The settings table has no gaps left.** 30 read, 9 deliberately dropped, 0 gaps.
-  `stream_window_size` was the last, and it opened at thirteen unread.
-- **`frameConfidence` is reached.** One unreached function remains, `saveableFrames`, and it is a
-  genuinely different question: propagated masks reach the timeline but nothing writes them to
-  sidecars yet. That is the next slice.
-
-**A FIFTEENTH wiring defect, and the worst one: the inference service was never constructed.**
-Found by asking what `server.py` actually builds rather than by anything failing. `Deps.service`
-defaults to None, `main()` never set it, and there was no dataset-root configuration to set it
-from -- so a deployed service with checkpoints, a manifest and a GPU answered 503 to embeddings and
-segment alike. Probably since Phase 3.
-
-Every test in that suite builds its own `Deps`, so not one of them ever ran the line production
-runs. The same shape as the other fourteen, one level up: a thing that works, a test that proves it
-works, and nothing calling it.
-
-The API had the IDENTICAL defect earlier and it had been fixed -- but the fix was unprotected,
-because `main.ts` could not be imported without starting a server and exiting the process. So both
-entry points now have their wiring in a `buildDeps` function with tests, and the API's entry point
-runs only when its module is the process. A module that cannot be imported without side effects is
-a module whose contents cannot be checked, and that is where this defect family lives.
-
-What is deliberately still 503 is the propagator: the job API is built, and what runs INSIDE a job
--- staging a sequence and seeding SAM 2 from the reference frames' own annotations -- is not. A
-test pins it so it cannot quietly become a 202 for a job that will never produce a frame.
-
-**C11's CHAIN IS COMPLETE, browser to video predictor.** Building it end to end turned up three
-more links that did not exist, each the same shape as the fourteen before:
-
-- `load_video_predictor` — `load_backend` builds `SAM2ImagePredictor`, which answers a prompt on
-  one picture and has no notion of a sequence. The propagation module, its windows, its runner and
-  its job API were all complete while the predictor they run on could not be constructed at all.
-- `seed_mask` — the port had only `seed_points`. Legacy seeds propagation with `add_new_mask`, and
-  a port that could only re-derive prompts would carry a mask close to the user's and not theirs.
-- `decode_mask` — nothing decoded a mask travelling TOWARDS the service, which is what a reference
-  is.
-
-And `runner.py`, which joins them: prepended references so a window covering 245-494 can seed from
-frame 0's real picture, three numbering systems reconciled once from what was actually staged
-rather than by arithmetic at every use. Writing its tests found two real bugs in exactly the
-unreadable-frame path RULE-017 is about — a read failure killed the whole job, and `max_frames`
-was the window's nominal size rather than what was staged.
-
-Verified in the running app: marking a frame with no annotations as a reference reports it by name
-and does NOT start a job. The network trace shows metadata, then annotations (204, none), then
-nothing — legacy would have run the whole sequence writing an empty mask over every frame.
-
-What is left for C11 is a real checkpoint and goldens. That is equivalence, Phase 6 criterion 2,
-and it was never the API.
-
-**EVERY CAPABILITY THE INFERENCE SERVICE OWNS IS NOW BUILT.** C10 and C3 went the same way C11
-did, and both of their "missing" lines turned out to be partly stale:
-
-- **C10, Find Archetypes.** The module was complete and differential-tested; the route, the API
-  proxy and the browser control did not exist. All three now do, and the timeline marks what it
-  suggests -- without demoting a reference, because that is ground truth the user annotated while a
-  suggestion is only advice about what to do next.
-- **C3's line was wrong in BOTH halves.** The SAM 1 backend has been built since Phase 3
-  (`load_backend` handles the family, and there is a differential suite for it). And the neighbour
-  prefetch was never this service's to build: it is handed one image key and never learns what
-  folder it came from, so only the web app can know the order.
-
-**RULE-091's prefetch is built**, which is the half that makes RULE-074's 150 ms budget reachable.
-The cache existed and was keyed properly; nothing warmed it, so the first click after navigating
-still paid for a cold encode. The order is the rule -- first uncached ARCHETYPE, then N+1, N+2,
-N-1 -- and it closes a loop: the archetype slot had been empty since the prefetch was written,
-because nothing produced any suggestions until C10 reached the browser.
-
-The 200 ms and 500 ms timings are exported rather than inlined, because RULE-091's own answer calls
-them "defaults to measure in Phase 3 against the 150 ms p95 budget, not constants to port
-unexamined".
-
-The capability table gained a `caveat` field to say this honestly. `missing` is what is not built;
-`caveat` is what a BUILT capability does not claim. C11 needs both kept apart -- the service
-propagates, and that its results match legacy is unproven -- and collapsing them would overstate
-the guarantee, which is the worse of the two errors.
-
-**BOTH HARNESSES THE OWNER WILL USE HAVE NOW BEEN RUN.** They had been written and never
-executed, which is this project's recurring defect one level out: a tool nobody has run is a tool
-nobody knows works, and recorded sequences and real datasets are the worst possible thing to find
-that out with.
-
-- `capture_propagation_goldens.py` came through clean. Checkpoint, frames and seed are validated
-  BEFORE the model loads, so a mistyped seed costs a second rather than a 2.4 GB load, and each
-  refusal names what it wanted. Driven to the point where only a real checkpoint was missing, it
-  failed there and said so.
-- **The acceptance harness called an empty corpus a pass.** Pointed at a folder of bare images it
-  printed "Every annotation file round-tripped identically" and exited zero, having read no
-  annotation file at all -- its own purpose turned on itself. Nothing compared is exit 2 now,
-  distinct from pass and from failure, and a real pass reports the count so the claim is checkable.
-  Verified both ways against a corpus with one annotation written into it by the API.
-
-**Also fixed by counting rather than by anything failing:** `fit_view` was bound to toggling the
-hotkey reference -- scaffolding from when the dispatcher was new, and a lie once the reference
-table began reporting it live. And a finished propagation left the timeline grey: the threshold was
-applied only in the Min Conf slider's change handler, so RULE-060's flag appeared only if the user
-touched a control they had no reason to touch.
-
-**All three guards are now empty.** 0 unread settings (from 13), 0 unreached functions (from 13),
-40 of 43 hotkeys live -- the three that are not are mouse bindings, pinned as such by a test so
-nobody "fixes" them into a lie. Every capability is built, and the web table's `PLACEHELD` list is
-empty with its guard kept.
-
-**THE REACH GUARD HAD A HOLE, and it was hiding four functions.** It counted every mention of a
-name in production source -- including mentions inside COMMENTS. So a function documented carefully
-enough to be named in a nearby comment was reported as reached. `resetForPropagation` was exactly
-that: written, tested, called by nothing, and "reached" because the comment on the function below
-it said "it is NOT the same as `resetForPropagation`".
-
-A guard that a sentence about a function can satisfy stops working precisely when someone documents
-well. Comments are stripped now. Three of the four it was hiding are recorded and one was wired:
-
-- `resetForPropagation` -> wired into the start of a propagation run (RULE-075).
-- `onClose` -- decides what to say about unsaved work when the workspace closes, and nothing asks
-  it, because there is **no `beforeunload` handler at all**. Closing a tab with unsaved annotations
-  is silent. RULE-054 and decision 7.
-- `summarizeSave` -- turns a save OUTCOME into what to tell the user, including the case legacy
-  gets wrong: a save that wrote no files is not a save.
-- `project` -- the image-to-display direction of the coordinate transform; nothing draws a known
-  image point onto the screen yet.
-
-**Traceability by priority, after asking every rule "does any test name you?":**
-P0 38/38 traceable (2 recorded as deliberately not implemented), P1 48 rules with 17 still
-untraceable, P2 8 with 3. The P0 guard is a test; P1 and P2 are measured and not yet guarded.
-
-That sweep is also what found RULE-023's divergence, now recorded: legacy seeds propagation only
-from MASK segments and silently ignores an unsaved polygon, where this rasterizes every shape with
-the exporters' own function and reads all references from disk (decision 5).
-
-**The P1 sweep has now found three real defects,** which is the argument for finishing it rather
-than leaving 17 rules untraceable:
-
-- RULE-075 -> `resetForPropagation` existed, was tested, and nothing called it; a second Propagate
-  left frames the new run did not reach showing a green status whose masks had just been discarded.
-- RULE-023 -> a recorded divergence: legacy seeds only from MASK segments and silently ignores an
-  unsaved polygon, where this rasterizes every shape and reads all references from disk.
-- RULE-071 -> **propagation fed SAM frames of the wrong size instead of skipping them.** SAM 2's
-  video state is one stack of frames, so a differently sized one is either rejected deep inside the
-  loader -- ending a 600-frame run over one bad image -- or silently resized, which moves every
-  mask it produces.
-
-Writing that last fix, a broad `except Exception` around the new block swallowed a NameError (the
-image reader was called by the wrong name), so there was simply no reference size and every frame
-passed the check. The catch is narrow now. A broad except around code that can contain a typo turns
-a crash into a silently disabled feature -- the same shape as every other defect found here.
-
-**Still untraceable: 17 P1 rules and 3 P2.** Guarding P1 the way P0 is guarded is the next slice of
-this thread, and each rule read so far has been worth reading.
-
-**WHERE THIS STANDS NOW.** Every capability is built and reachable, and every guard is closed or
-its remainder recorded:
-
-| guard | asks | state |
-| --- | --- | --- |
-| settings | does anything READ this key? | 30 read, 9 dropped, **0 gaps** (opened at 13 unread) |
-| reach | does any shipping code CALL this function? | **1 left** (`project`), recorded; comments no longer count as uses |
-| hotkeys | will this key do something? | **40 of 43**; the other three are mouse bindings, pinned as such |
-| P0 rules | does any test NAME this rule? | **38 of 38**, 2 recorded as deliberate divergences |
-| P1 rules | same | **all accounted, none unbuilt** (Trim landed last) |
-
-**RULE-090 is built**, which was the review half of C11: a propagated frame shows its masks instead
-of its sidecar, never on a reference frame, and the segments come from the same function the SAVE
-uses -- so what is accepted on screen is what reaches disk.
-
-**RULE-077, Trim, is built** -- the last rule on either list. Finding its blocker first was what
-made it cheap: the propagated masks were keyed by frame POSITION, and a trim shifts every position
-after the cut, so a cut would have re-attributed every mask to the wrong picture. Keyed by image
-key, a trim cannot lose or misplace one -- which is also why this app does NOT copy legacy's reset
-of the propagation engine on trim, whose cost its own card records ("Save All then reports nothing
-to save even though green frames with unsaved propagated masks remain").
-
-**Both owner-facing harnesses have been run**, and one was wrong: the acceptance harness called an
-empty corpus a pass. Nothing compared is exit 2 now, and a real pass reports the count.
-
-**EVERY SUITE, RUN TOGETHER on 2026-09-21** -- the first time all seven have been verified in one
-pass rather than package by package:
-
-| package | tests |
-| --- | --- |
-| exporters (`annotation-formats`) | 1979 |
-| web | 1096 |
-| inference | 511 passed, 36 skipped |
-| api | 390 passed, 4 skipped, 5 todo |
-| settings-schema | 41 |
-| converter | 30 |
-| contracts | 21 |
-
-**Trim checked in the running app**, not only in the suite: bounds set from two cells, Cut removed
-2 of 4 frames, the panel said "Removed 2 frames from the timeline. No files were touched." -- and
-the folder still held all six images afterwards, which is the claim that matters most about a
-control with the word "remove" on it.
-
-**One divergence is flagged for the owner rather than settled.** RULE-033 binds Ctrl+Plus and
-Ctrl+Minus to the annotation-size MULTIPLIER -- its card says "(not image zoom)" -- and this app
-zooms with them, because the settings schema names those actions `zoom_in` and `zoom_out` and a key
-that does something other than its name is the defect `fit_view` had. It is the only entry on the
-divergence list that follows from no numbered decision.
-
-**Blocked on the owner:**
-
-- **C11's EQUIVALENCE** — not its API, which is built. Proving the propagated masks and the
-  flagged frames match legacy needs the inference service running, a recorded image sequence, and
-  legacy's outputs captured as golden data. `inference/tests/fixtures/capture_propagation_goldens.py`
-  is written and waiting. This is Phase 6 exit criteria 1 and 2.
-- **Exit criterion 4** — `npm run acceptance -- <corpus>` over the real datasets.
-- **The live differential suites** — they skip themselves with no checkpoint, so a green CI run
-  says nothing about them.
-- **P0-or-P1 tier calls** on RULE-055 and RULE-060, and whether a linked pair reconciles class IDS
-  as well as names.
+**If more building is wanted before the data arrives,** the honest answer is that there is no named
+work left: the rule lists, the settings table, the reach sweep and the hotkey reference are all
+empty or recorded. The way more work has been FOUND, every time, is to take a list nobody has
+audited and ask one question of all of it at once. The lists already asked: settings ("does
+anything read this?"), exports ("does anything call this?"), hotkeys ("will this do something?"),
+business rules by priority ("does any test name this?"), and the spec's failure modes ("does this
+row do what it promises?"). Each found real defects. Unasked lists remain — the spec's
+non-functional requirements and the assessment's security findings among them.
 
 ## What is done, and what proves it
 
