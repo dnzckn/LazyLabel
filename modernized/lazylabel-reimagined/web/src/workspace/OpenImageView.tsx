@@ -336,6 +336,9 @@ function OpenedImage({
                       model={aiModel}
                       fragmentThreshold={fragmentThreshold}
                       autoPolygon={autoPolygon}
+                      {...(settings.values["operate_on_view"] === true
+                        ? { operateOnView: { ...adjustments } }
+                        : {})}
                       onAccept={(segment) => addSegment(segment, "Accept AI mask")}
                       // The MASK erases, not its bounding box: an AI mask is rarely a
                       // rectangle, and erasing its box would take out pixels the model never

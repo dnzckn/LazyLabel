@@ -31,9 +31,15 @@ export function renderWithSettings(
 
   // The hotkey provider comes with the settings one: layers read the drawing-aid sizing AND
   // register remappable keys, and `useHotkey` throws without a provider by design.
-  return render(
+  const wrap = (inner: ReactNode) => (
     <SettingsProvider client={client}>
-      <HotkeyProvider bindings={base.hotkeys}>{node}</HotkeyProvider>
-    </SettingsProvider>,
+      <HotkeyProvider bindings={base.hotkeys}>{inner}</HotkeyProvider>
+    </SettingsProvider>
   );
+
+  const result = render(wrap(node));
+  // A rerender has to go back through the providers. Testing Library's own replaces the WHOLE
+  // tree, so handing it a bare component drops the context the component needs -- which surfaces
+  // as "useSettings must be used inside a SettingsProvider" from a test that had one.
+  return { ...result, rerender: (next: ReactNode) => result.rerender(wrap(next)) };
 }

@@ -90,12 +90,10 @@ export const HONOURED: Readonly<Record<string, Honoured>> = {
   default_model_filename: dropped(
     "RULE-085, as `default_model_type`: the file name is not allowed to be the identity.",
   ),
-  operate_on_view: gap(
-    "RULE-089. With it on, the model should segment the ADJUSTED pixels on screen rather than the "
-      + "decoded file. The adjustments are applied in the browser and the model reads the file, so "
-      + "honouring it means the request carries the view -- a contract change across three "
-      + "packages. The AI panel says so on screen rather than implying otherwise.",
-  ),
+  // RULE-089, and it took all four packages. Sending the adjustments with an embed is what makes
+  // the API render the picture the user is looking at and post it to the model; omitting them is
+  // the rule's default, where the model segments the original file and no image crosses that wire.
+  operate_on_view: read,
 
   auto_save: dropped(
     "decision 7: nothing is written without an explicit act. Legacy saves on navigation, which is "

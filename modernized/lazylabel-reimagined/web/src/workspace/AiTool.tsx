@@ -53,6 +53,17 @@ export interface AiToolProps {
    * about.
    */
   readonly autoPolygon?: { readonly enabled: boolean; readonly resolution: number };
+  /**
+   * RULE-089: the display adjustments to segment THROUGH, or absent for the original file.
+   *
+   * Absent rather than neutral when the setting is off, because the two are different requests:
+   * neutral would still ask the API to render and post an image, and the rule's default is that
+   * no image crosses that wire at all.
+   *
+   * Changing it re-encodes, which the rule says too -- the adjustments are part of the embedding
+   * cache key, so a different view is a different encoding rather than a stale one.
+   */
+  readonly operateOnView?: Readonly<Record<string, number>>;
   readonly onAccept: (segment: WireSegment) => void;
   readonly onErase: (mask: WireSegment) => void;
 }
@@ -66,6 +77,7 @@ export function AiTool({
   model,
   fragmentThreshold,
   autoPolygon,
+  operateOnView,
   onAccept,
   onErase,
 }: AiToolProps): ReactNode {
@@ -94,6 +106,8 @@ export function AiTool({
   current.current = result;
 
   // One encode per image. Cleared when the image changes so a handle cannot outlive its pixels.
+  const viewKey = operateOnView === undefined ? "" : JSON.stringify(operateOnView);
+
   useEffect(() => {
     let cancelled = false;
     setHandle(null);
@@ -101,7 +115,14 @@ export function AiTool({
     setEncoding(true);
 
     client
-      .embed({ image: imageKey, model })
+      .embed({
+        image: imageKey,
+        model,
+        // RULE-089's Operate On View. Sending the adjustments is what makes the API render the
+        // picture the user is looking at and post it to the model; omitting them is the rule's
+        // default, where the model segments the original file.
+        ...(operateOnView === undefined ? {} : { adjustments: operateOnView }),
+      })
       .then((response) => {
         if (cancelled) return;
         setHandle(response.handle);
@@ -124,7 +145,11 @@ export function AiTool({
     return () => {
       cancelled = true;
     };
-  }, [client, imageKey, model, notify]);
+    // Keyed on the VALUES, not the object. `operateOnView` is built fresh by the caller on every
+    // render, so depending on its identity would re-encode the image continuously -- seconds of
+    // model work per keystroke anywhere in the app. Serialising the four numbers means the encode
+    // happens when the view actually changes, which is what RULE-089 asks for.
+  }, [client, imageKey, model, notify, viewKey]);
 
   const onPrompt = useCallback(
     (prompt: AiPrompt) => {

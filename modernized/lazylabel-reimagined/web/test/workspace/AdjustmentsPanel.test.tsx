@@ -136,14 +136,12 @@ describe("a settings file that holds nonsense", () => {
 });
 
 describe("what the adjustments do NOT do", () => {
-  it("says they do not reach the AI, because Operate On View is not built", async () => {
-    // `operate_on_view` exists in the settings schema and NOTHING reads it. The panel used to say
-    // "With Operate On View on, they also change what the AI segments", which is legacy's
-    // behaviour (RULE-089) and is not this app's: a model prompted here sees the image as it was
-    // decoded. Claiming otherwise would have a user adjust the contrast to help SAM and wonder why
-    // the mask did not move.
+  it("says whether they reach the AI, which is now a SETTING rather than a gap", async () => {
+    // It used to say Operate On View was not built. It is, across all four packages -- so the
+    // panel says what the setting does instead of apologising for its absence.
     mount();
 
-    expect(await screen.findByText(/do not yet reach the AI/)).toBeTruthy();
+    await waitFor(() => expect(screen.getByText(/never the file/)).toBeTruthy());
+    expect(screen.getByText(/with it on, the API renders exactly what you can see/)).toBeTruthy();
   });
 });

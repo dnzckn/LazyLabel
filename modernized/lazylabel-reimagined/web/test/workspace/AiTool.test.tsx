@@ -54,9 +54,7 @@ function mount(client: Partial<ApiClient>, props: Partial<Parameters<typeof AiTo
     ...client,
   } as unknown as ApiClient;
 
-  // The AI layer reads the drawing-aid sizing, which comes from the settings. `useSettings` throws
-  // without a provider by design -- a hook that quietly defaults makes a missing wire invisible.
-  renderWithSettings(
+  const tree = (over: Partial<Parameters<typeof AiTool>[0]> = props) => (
     <NotificationProvider>
       <NotificationHost />
       <AiTool
@@ -64,17 +62,28 @@ function mount(client: Partial<ApiClient>, props: Partial<Parameters<typeof AiTo
         imageKey="frames/a.png"
         width={IMAGE.width}
         height={IMAGE.height}
-        classId={props.classId ?? 0}
+        classId={over.classId ?? 0}
         model="SAM 2.1 large"
-        fragmentThreshold={props.fragmentThreshold ?? 0}
-        {...(props.autoPolygon === undefined ? {} : { autoPolygon: props.autoPolygon })}
+        fragmentThreshold={over.fragmentThreshold ?? 0}
+        {...(over.autoPolygon === undefined ? {} : { autoPolygon: over.autoPolygon })}
+        {...(over.operateOnView === undefined ? {} : { operateOnView: over.operateOnView })}
         onAccept={onAccept}
         onErase={onErase}
       />
-    </NotificationProvider>,
+    </NotificationProvider>
   );
 
-  return { onAccept, onErase };
+  // The AI layer reads the drawing-aid sizing, which comes from the settings. `useSettings` throws
+  // without a provider by design -- a hook that quietly defaults makes a missing wire invisible.
+  const result = renderWithSettings(tree());
+
+  return {
+    onAccept,
+    onErase,
+    /** Re-render with different props, for the cases where CHANGING one is the behaviour. */
+    rerender: (next: Partial<Parameters<typeof AiTool>[0]>) =>
+      result.rerender(tree({ ...props, ...next })),
+  };
 }
 
 const surface = () => screen.getByLabelText("AI tool");
@@ -367,5 +376,43 @@ describe("Auto-Convert", () => {
     expect(segment.type).toBe("Polygon");
     expect(segment.vertices?.length).toBeGreaterThanOrEqual(3);
     expect(segment.mask).toBeUndefined();
+  });
+});
+
+describe("Operate On View (RULE-089)", () => {
+  it("does NOT send adjustments by default, so the model sees the file", async () => {
+    // The rule's default, and the cheaper path: no image crosses the API-to-service wire.
+    const embed = vi.fn(async () => ({ handle: "h1", cached: true }));
+    mount({ embed });
+
+    await waitFor(() => expect(embed).toHaveBeenCalled());
+    expect(embed.mock.calls[0]![0]).toEqual({ image: "frames/a.png", model: "SAM 2.1 large" });
+  });
+
+  it("sends them when the setting is on, so the model sees what the USER sees", async () => {
+    const embed = vi.fn(async () => ({ handle: "h1", cached: true }));
+    mount({ embed }, { operateOnView: { brightness: 40, contrast: 0, gamma: 1, saturation: 1 } });
+
+    await waitFor(() => expect(embed).toHaveBeenCalled());
+    expect(embed.mock.calls[0]![0]).toEqual({
+      image: "frames/a.png",
+      model: "SAM 2.1 large",
+      adjustments: { brightness: 40, contrast: 0, gamma: 1, saturation: 1 },
+    });
+  });
+
+  it("RE-ENCODES when the view changes, rather than reusing the handle", async () => {
+    // The rule says so, and the adjustments are part of the embedding cache key: a different view
+    // is a different encoding, not a stale one. Reusing it would prompt a model that had encoded
+    // a picture the user has since changed.
+    const embed = vi.fn(async () => ({ handle: "h1", cached: true }));
+    const { rerender } = mount({ embed }, {
+      operateOnView: { brightness: 10, contrast: 0, gamma: 1, saturation: 1 },
+    });
+    await waitFor(() => expect(embed).toHaveBeenCalledTimes(1));
+
+    rerender({ operateOnView: { brightness: 60, contrast: 0, gamma: 1, saturation: 1 } });
+
+    await waitFor(() => expect(embed).toHaveBeenCalledTimes(2));
   });
 });
