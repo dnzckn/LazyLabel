@@ -23,6 +23,7 @@
  *     makes are both derived from the pixels being processed.
  */
 
+import { adjustImage, isNeutral, NEUTRAL, type Adjustments } from "@lazylabel/annotation-formats";
 import { clahe } from "./clahe.js";
 import {
   equalizeLut,
@@ -474,4 +475,61 @@ export function applyClahe(data: Uint8Array, frame: Frame, processing: Processin
       data[at + 2] = value;
     }
   }
+}
+
+/**
+ * RULE-028's display adjustments, applied where they belong: LAST.
+ *
+ * RULE-032 fixes the order as rescale, channel threshold, FFT, the 16-bit conversion, and then
+ * these. They are the only step defined on what a person SEES rather than on the image's own
+ * values, which is why they come after everything that reasons about the data.
+ *
+ * The browser applies these too, for its own display, and that is not a duplicate implementation:
+ * it calls the same `adjustImage` from the shared package. The API needs them so it can hand a
+ * model exactly the pixels a user is looking at -- RULE-089's Operate On View -- and two different
+ * answers here would mean a mask returned for an image nobody saw.
+ *
+ * The samples here are three channels per pixel, not four: the browser's canvas buffer is RGBA and
+ * this is not, so the loop is per-pixel rather than `adjustImage`'s stride of four. Alpha is the
+ * thing that differs, and there is none.
+ */
+export function applyAdjustments(data: Uint8Array, adjustments: Adjustments): void {
+  if (isNeutral(adjustments)) return;
+  // A four-channel view lets the shared function do the work rather than this file repeating the
+  // arithmetic. The alpha it leaves alone is discarded with the view.
+  const rgba = new Uint8ClampedArray((data.length / 3) * 4);
+  for (let at = 0, out = 0; at < data.length; at += 3, out += 4) {
+    rgba[out] = data[at]!;
+    rgba[out + 1] = data[at + 1]!;
+    rgba[out + 2] = data[at + 2]!;
+  }
+  adjustImage(rgba, adjustments);
+  for (let at = 0, out = 0; at < data.length; at += 3, out += 4) {
+    data[at] = rgba[out]!;
+    data[at + 1] = rgba[out + 1]!;
+    data[at + 2] = rgba[out + 2]!;
+  }
+}
+
+/**
+ * `adjust=brightness,contrast,gamma,saturation` — the four in the order the panel shows them.
+ *
+ * One parameter rather than four, because they are applied as a set and a request carrying two of
+ * them has not said what the other two are. Out of range is REFUSED rather than clamped, like
+ * every other parameter here: a slider that stops responding is worse than an error.
+ */
+export function adjustmentsFromQuery(query: URLSearchParams): Adjustments {
+  const raw = query.get("adjust");
+  if (raw === null || raw === "") return NEUTRAL;
+
+  const parts = raw.split(",").map((part) => Number(part.trim()));
+  if (parts.length !== 4 || parts.some((value) => !Number.isFinite(value))) {
+    throw new Error("adjust must be four numbers: brightness,contrast,gamma,saturation");
+  }
+  const [brightness, contrast, gamma, saturation] = parts as [number, number, number, number];
+  if (brightness < -100 || brightness > 100) throw new Error("brightness must be -100 to 100");
+  if (contrast < -100 || contrast > 100) throw new Error("contrast must be -100 to 100");
+  if (gamma <= 0 || gamma > 10) throw new Error("gamma must be greater than 0 and at most 10");
+  if (saturation < 0 || saturation > 10) throw new Error("saturation must be 0 to 10");
+  return { brightness, contrast, gamma, saturation };
 }

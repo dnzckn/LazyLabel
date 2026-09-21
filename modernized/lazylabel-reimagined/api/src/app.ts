@@ -31,7 +31,12 @@ import {
   renderThumbnail,
   UnsupportedImageError,
 } from "./images/pipeline.js";
-import { ImageTooLargeError, processingFromQuery } from "./images/processing.js";
+import {
+  ImageTooLargeError,
+  adjustmentsFromQuery,
+  applyAdjustments,
+  processingFromQuery,
+} from "./images/processing.js";
 import { RenderCache } from "./images/renderCache.js";
 import { RevisionConflictError, type BlobStore } from "./ports/blobStore.js";
 import {
@@ -416,8 +421,13 @@ async function imagePixels(
   // is a 400 rather than an ignored one: an image that looks untouched for a reason nobody can see
   // is worse than an error.
   let processing;
+  let adjustments;
   try {
     processing = processingFromQuery(request.query);
+    // RULE-028, applied LAST and after the 16-bit conversion, which is where RULE-032 puts it.
+    // The browser applies these for its own display; the API needs them so it can hand a model
+    // exactly the pixels a user is looking at, which is RULE-089's Operate On View.
+    adjustments = adjustmentsFromQuery(request.query);
   } catch (cause) {
     throw badRequest(cause instanceof Error ? cause.message : String(cause));
   }
@@ -446,6 +456,8 @@ async function imagePixels(
     }
     throw cause;
   }
+
+  applyAdjustments(decoded.data, adjustments);
 
   const rendered = await renderPng(decoded);
   const headers = {
