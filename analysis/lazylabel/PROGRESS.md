@@ -69,45 +69,25 @@ UNBLOCKED; everything below it needs something only the owner can provide.
 2. **RULE-089, Operate On View** is now the largest unbuilt rule and the first thing to pick up.
    See below.
 
-3. **RULE-089, Operate On View — two of its four parts are built.** The chain was further along
-   than the record said: `adjustments` is already on `EmbedRequest`, the API already forwards it,
-   and the Python service already folds it into the embedding cache key, so different adjustments
-   correctly yield a different handle. The service's own header states the intended design — the
-   API "applies the display adjustments, and hands the model exactly the pixels the user is
-   looking at... when the API starts posting rendered pixels, only `_read_image` changes."
+3. **RULE-089 is BUILT.** All four parts: RULE-028's pixel maths shared so the browser and API
+   compute one answer; the API's pixels endpoint taking `adjust=`; the API rendering and posting
+   those bytes with an embed, and the Python service decoding them instead of reading the file;
+   and the browser sending the adjustments when the setting is on. Absent rather than neutral when
+   it is off, because the two are different requests -- neutral would still put a re-encoded image
+   on the wire for a picture identical to the file beside the service.
 
-   Built: RULE-028's pixel maths moved to `@lazylabel/annotation-formats` so both sides call one
-   implementation, and the API's pixels endpoint takes
-   `adjust=brightness,contrast,gamma,saturation` and applies them last, after the 16-bit
-   conversion.
+   The harness had to change first, and that ordering is the lesson. The shared contract fixture
+   records the bodies the API sends and both suites read it; it could not express a field the API
+   ADDS whose value comes from the image on disk. An example now declares `addedByApi`, checked
+   for presence rather than value -- and with that in place the contract test failed until the
+   feature existed.
 
-   Left: (a) the API attaching those rendered bytes to the embed request; (b) the Python service
-   preferring posted bytes over reading the file; (c) the browser sending `operate_on_view` and
-   its adjustments with the embed.
-
-   **(a) and (b) were written, and backed out, because the SHARED CONTRACT FIXTURE blocks them —
-   and it is right to.** `contracts/fixtures/inference-contract.json` records the exact request
-   bodies the API sends, and BOTH suites read it: the TypeScript one posts each body to the API
-   and asserts the service received it byte for byte, and the Python one posts the same body to
-   its own app. That is what makes the Python side's acceptance mean anything on this side.
-
-   Attaching `pixels` breaks two assumptions in it at once:
-
-   1. **One body cannot describe both directions any more.** The browser sends the API
-      `{image, model, adjustments}`; the API would send the service that PLUS `pixels`. The
-      fixture has a single `body` per example and the test asserts they are equal.
-   2. **`pixels` has no literal value.** It is a base64 PNG the API renders from the image on
-      disk, so no fixture can write it down. A sentinel does not work either: the Python test
-      posts the body to its own app, where a sentinel would fail to decode.
-
-   So the fixture needs an example to say what the API ADDS, separately from what it receives, and
-   to allow a field checked for presence rather than value — and the TypeScript proxy test needs a
-   real image in its `MemoryBlobStore`, because the API now reads the file to render it rather
-   than forwarding blind. That harness change is the actual next step, before any of (a) to (c).
-
-   The Python half itself was straightforward and is worth recording: `_read_image` takes an
-   optional base64 PNG, decodes it with `cv2.imdecode` and skips the file entirely. Its own header
-   predicted exactly that ("only `_read_image` changes").
+   Two bugs surfaced that no suite would have caught later. The API's own: `adjust=40,0,1,1`
+   returned the same BYTE COUNT as the unadjusted image, so a size check read as "nothing
+   happened"; hashing showed different pixels. And the browser's: the encode effect depended on
+   the adjustments OBJECT's identity, which its caller rebuilds every render -- every keystroke in
+   the workspace would have re-encoded the image, seconds of model work each. It keys on the four
+   values now.
 
 **Blocked on the owner:**
 
