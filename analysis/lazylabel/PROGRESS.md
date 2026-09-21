@@ -173,6 +173,33 @@ nothing — legacy would have run the whole sequence writing an empty mask over 
 What is left for C11 is a real checkpoint and goldens. That is equivalence, Phase 6 criterion 2,
 and it was never the API.
 
+**EVERY CAPABILITY THE INFERENCE SERVICE OWNS IS NOW BUILT.** C10 and C3 went the same way C11
+did, and both of their "missing" lines turned out to be partly stale:
+
+- **C10, Find Archetypes.** The module was complete and differential-tested; the route, the API
+  proxy and the browser control did not exist. All three now do, and the timeline marks what it
+  suggests -- without demoting a reference, because that is ground truth the user annotated while a
+  suggestion is only advice about what to do next.
+- **C3's line was wrong in BOTH halves.** The SAM 1 backend has been built since Phase 3
+  (`load_backend` handles the family, and there is a differential suite for it). And the neighbour
+  prefetch was never this service's to build: it is handed one image key and never learns what
+  folder it came from, so only the web app can know the order.
+
+**RULE-091's prefetch is built**, which is the half that makes RULE-074's 150 ms budget reachable.
+The cache existed and was keyed properly; nothing warmed it, so the first click after navigating
+still paid for a cold encode. The order is the rule -- first uncached ARCHETYPE, then N+1, N+2,
+N-1 -- and it closes a loop: the archetype slot had been empty since the prefetch was written,
+because nothing produced any suggestions until C10 reached the browser.
+
+The 200 ms and 500 ms timings are exported rather than inlined, because RULE-091's own answer calls
+them "defaults to measure in Phase 3 against the 150 ms p95 budget, not constants to port
+unexamined".
+
+The capability table gained a `caveat` field to say this honestly. `missing` is what is not built;
+`caveat` is what a BUILT capability does not claim. C11 needs both kept apart -- the service
+propagates, and that its results match legacy is unproven -- and collapsing them would overstate
+the guarantee, which is the worse of the two errors.
+
 **Blocked on the owner:**
 
 - **C11's EQUIVALENCE** — not its API, which is built. Proving the propagated masks and the
