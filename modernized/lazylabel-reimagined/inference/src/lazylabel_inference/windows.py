@@ -153,3 +153,27 @@ def novel_frames(windows: list[Window]) -> list[list[int]]:
         seen.update(fresh)
         novel.append(fresh)
     return novel
+
+
+def effective(
+    total_frames: int,
+    window: int,
+    *,
+    streaming: bool = True,
+    overlap: int = DEFAULT_OVERLAP,
+) -> tuple[int, int]:
+    """The window and overlap actually used, given whether streaming applies at all.
+
+    THE CASE THIS EXISTS FOR is the short sequence. With streaming off -- or a sequence no longer
+    than the window, which is the same thing -- the whole range is one pass, and an overlap between
+    windows that do not exist is meaningless. Carrying the default 5 into that plan refuses any
+    sequence of fewer than six frames outright, which is how a three-frame propagation became a
+    500 rather than a propagation.
+
+    The clamp on the streaming branch is the same defect one step along: a user is allowed to set a
+    window of 50 and nothing stops a caller asking for less, so an overlap that does not fit inside
+    the window is reduced until it does rather than refused.
+    """
+    if not should_stream(total_frames, window, streaming=streaming):
+        return max(total_frames, 1), 0
+    return window, min(overlap, window - 1)

@@ -104,6 +104,24 @@ class TestStarting:
 
         assert answer["total"] == 10
 
+    @pytest.mark.parametrize("length", [1, 2, 3, 5, 6, 7, 250, 251])
+    def test_a_sequence_of_any_length_starts(self, tmp_path: Path, length: int) -> None:
+        # A three-frame sequence used to answer 500: the default 5-frame overlap does not fit in a
+        # one-window plan, and nothing had tried a sequence shorter than six. The bug was never
+        # "3 is special" -- it was a whole class of lengths.
+        deps = deps_with(yields(), tmp_path=tmp_path)
+        sequence = [f"frame-{index:03d}.png" for index in range(length)]
+
+        status, answer = call(
+            deps,
+            "POST",
+            "/inference/propagations",
+            body=json.dumps({"sequence": sequence, "references": [0]}).encode("utf-8"),
+        )
+
+        assert status == 202
+        assert answer["total"] <= length
+
     def test_503_when_no_video_capable_model_is_configured(self, tmp_path: Path) -> None:
         # The same answer the prompt routes give, and for the same reason. Not a 501: the route is
         # built, this machine cannot honour it.

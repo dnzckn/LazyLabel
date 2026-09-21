@@ -21,9 +21,11 @@ from types import SimpleNamespace
 
 import pytest
 
-from lazylabel_inference.windows import (
+from lazylabel_inference.windows import (  # noqa: I001
+    Window,
     DEFAULT_OVERLAP,
     DEFAULT_WINDOW,
+    effective,
     estimate_megabytes,
     novel_frames,
     plan,
@@ -197,3 +199,38 @@ class TestWhatEachWindowContributes:
         flattened = [frame for window in novel_frames(plan(0, 599, window=250, overlap=5)) for frame in window]
 
         assert flattened == list(range(600))
+
+
+class TestTheWindowActuallyUsed:
+    """`effective` — and the three-frame sequence that used to be a 500 rather than a propagation."""
+
+    def test_a_sequence_shorter_than_the_overlap_is_one_window_with_no_overlap(self):
+        # The defect this exists for. A default overlap of 5 carried into a 3-frame plan refuses
+        # the plan outright, and the route answered 500 for every sequence under six frames.
+        window, overlap = effective(3, DEFAULT_WINDOW)
+
+        assert (window, overlap) == (3, 0)
+        assert plan(0, 2, window=window, overlap=overlap) == [Window(0, 2, 1)]
+
+    @pytest.mark.parametrize("frames", [1, 2, 3, 4, 5, 6, 7, 249, 250])
+    def test_every_short_sequence_produces_a_usable_plan(self, frames: int):
+        # The bug was not "3 is special", it was a whole class of lengths nobody had tried.
+        window, overlap = effective(frames, DEFAULT_WINDOW)
+
+        plan(0, frames - 1, window=window, overlap=overlap)  # must not raise
+
+    def test_streaming_off_is_one_window_however_long_the_sequence(self):
+        assert effective(10_000, DEFAULT_WINDOW, streaming=False) == (10_000, 0)
+
+    def test_streaming_on_and_long_enough_keeps_the_window_and_the_overlap(self):
+        assert effective(600, 250) == (250, 5)
+
+    def test_an_overlap_too_big_for_the_window_is_reduced_rather_than_refused(self):
+        # A user can set a 50-frame window and nothing stops a caller asking for less. Refusing
+        # would turn a legal setting into an error.
+        assert effective(1000, 3) == (3, 2)
+        assert effective(1000, 1) == (1, 0)
+
+    def test_an_empty_sequence_still_gives_a_window_of_at_least_one(self):
+        # Zero would trip plan()'s own guard, turning "nothing to do" into an exception.
+        assert effective(0, DEFAULT_WINDOW)[0] == 1

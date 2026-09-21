@@ -42,7 +42,7 @@ from .jobs import (
 )
 from .propagation import PropagationRequest
 from .service import ImageUnreadableError, InferenceService, UnknownHandleError, encode_mask
-from .windows import DEFAULT_WINDOW, novel_frames, plan, should_stream
+from .windows import DEFAULT_WINDOW, effective, novel_frames, plan
 
 MAX_BODY_BYTES = 64 * 1024 * 1024
 
@@ -366,22 +366,17 @@ def _frames_to_cover(wanted: PropagationRequest) -> int:
     each window's full span would exceed the sequence length, because overlap frames are covered
     twice and kept once; `novel_frames` is what each window contributes.
     """
+    window, overlap = effective(
+        len(wanted.sequence), wanted.window, streaming=wanted.streaming
+    )
     lowest = wanted.lowest_reference
-    last = len(wanted.sequence) - 1
-    forward = plan(
-        lowest,
-        wanted.end if wanted.end is not None else last,
-        window=wanted.window if should_stream(len(wanted.sequence), wanted.window, streaming=wanted.streaming) else len(wanted.sequence) or 1,
+    passes = (
+        plan(lowest, wanted.end if wanted.end is not None else len(wanted.sequence) - 1,
+             window=window, overlap=overlap),
+        plan(lowest, wanted.start if wanted.start is not None else 0,
+             window=window, overlap=overlap, reverse=True),
     )
-    backward = plan(
-        lowest,
-        wanted.start if wanted.start is not None else 0,
-        window=wanted.window if should_stream(len(wanted.sequence), wanted.window, streaming=wanted.streaming) else len(wanted.sequence) or 1,
-        reverse=True,
-    )
-    return sum(len(each) for each in novel_frames(forward)) + sum(
-        len(each) for each in novel_frames(backward)
-    )
+    return sum(len(each) for one in passes for each in novel_frames(one))
 
 
 def _start_propagation(deps: Deps, request: Request) -> Response:

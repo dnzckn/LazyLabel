@@ -306,20 +306,54 @@ describe("C3: the API's inference proxy", () => {
          * could not say so would have forced the feature to ship untested or not at all.
          */
         addedByApi?: string[];
+        /**
+         * What the API answers when the service accepts it. 200 unless the example says otherwise.
+         *
+         * Needed the moment a route stopped answering 200: C11's start returns 202, and a harness
+         * that asserted 200 everywhere would have made the fixture entry fail for a reason having
+         * nothing to do with whether the two sides agree about the BODY, which is all this is for.
+         */
+        status?: number;
       }[];
       errorCodes: string[];
     }
+
+    /**
+     * What the fake service answers, by route.
+     *
+     * Keyed on the path rather than a chain of `endsWith`, so adding a route is a line here. The
+     * bodies only have to be well-formed enough for the client to accept them; what is under test
+     * is the request the API SENDS.
+     */
+    const SERVICE_ANSWERS: Record<string, { status: number; body: unknown }> = {
+      "/inference/embeddings": { status: 200, body: { handle: "h", cached: false } },
+      "/inference/segment": {
+        status: 200,
+        body: { mask: MASK, score: 1, chosen: 0, alternatives: [1] },
+      },
+      "/inference/propagations": {
+        status: 202,
+        body: {
+          id: "job-1",
+          state: "running",
+          completed: 0,
+          total: 3,
+          cursor: 0,
+          cancelling: false,
+          error: null,
+          results: [],
+        },
+      },
+    };
 
     it("sends exactly the bodies the inference service was tested against", async () => {
       const contract = JSON.parse(await readFile(CONTRACT, "utf-8")) as Contract;
       expect(contract.requests.length).toBeGreaterThanOrEqual(5);
 
       for (const example of contract.requests) {
-        const service = fakeService(() =>
-          example.path.endsWith("embeddings")
-            ? jsonResponse(200, { handle: "h", cached: false })
-            : jsonResponse(200, { mask: MASK, score: 1, chosen: 0, alternatives: [1] }),
-        );
+        const answer = SERVICE_ANSWERS[example.path];
+        expect(answer, `${example.name}: no fake answer for ${example.path}`).toBeTruthy();
+        const service = fakeService(() => jsonResponse(answer!.status, answer!.body));
 
         /*
          * A REAL IMAGE, because the API is no longer a pure forwarder for every case: under
@@ -335,7 +369,7 @@ describe("C3: the API's inference proxy", () => {
         }
 
         const response = await appWith(service, store).handle(post(example.path, example.body));
-        expect(response.status, example.name).toBe(200);
+        expect(response.status, example.name).toBe(example.status ?? 200);
 
         // Byte for byte the same object, so the Python side's acceptance means something here --
         // except for what the API is declared to ADD, which has no literal value to record.

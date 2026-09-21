@@ -97,6 +97,26 @@
           120
         ]
       }
+    },
+    {
+      "name": "start a propagation",
+      "path": "/inference/propagations",
+      "method": "POST",
+      "status": 202,
+      "$comment": "202, not 200: the service accepted a job that runs for minutes. Both sides keep it -- an API that answered 200 would tell the browser the work was done. Frame numbers are POSITIONS in `sequence` and never file names, which is RULE-017: legacy names each staged frame after its position in its own list and skips one it cannot read without renumbering, so every frame after a gap comes back attributed to the image before it.",
+      "body": {
+        "sequence": [
+          "frames/frame_000.png",
+          "frames/frame_001.png",
+          "frames/frame_002.png"
+        ],
+        "references": [
+          0
+        ],
+        "window": 250,
+        "streaming": true,
+        "model": "SAM 2.1 large"
+      }
     }
   ],
   "responses": {
@@ -131,6 +151,8 @@
     "image_unreadable",
     "model_unavailable",
     "prediction_failed",
-    "inference_unavailable"
+    "inference_unavailable",
+    "unknown_job",
+    "results_overflowed"
   ]
 }
