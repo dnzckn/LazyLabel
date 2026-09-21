@@ -226,6 +226,32 @@ touched a control they had no reason to touch.
 nobody "fixes" them into a lie. Every capability is built, and the web table's `PLACEHELD` list is
 empty with its guard kept.
 
+**THE REACH GUARD HAD A HOLE, and it was hiding four functions.** It counted every mention of a
+name in production source -- including mentions inside COMMENTS. So a function documented carefully
+enough to be named in a nearby comment was reported as reached. `resetForPropagation` was exactly
+that: written, tested, called by nothing, and "reached" because the comment on the function below
+it said "it is NOT the same as `resetForPropagation`".
+
+A guard that a sentence about a function can satisfy stops working precisely when someone documents
+well. Comments are stripped now. Three of the four it was hiding are recorded and one was wired:
+
+- `resetForPropagation` -> wired into the start of a propagation run (RULE-075).
+- `onClose` -- decides what to say about unsaved work when the workspace closes, and nothing asks
+  it, because there is **no `beforeunload` handler at all**. Closing a tab with unsaved annotations
+  is silent. RULE-054 and decision 7.
+- `summarizeSave` -- turns a save OUTCOME into what to tell the user, including the case legacy
+  gets wrong: a save that wrote no files is not a save.
+- `project` -- the image-to-display direction of the coordinate transform; nothing draws a known
+  image point onto the screen yet.
+
+**Traceability by priority, after asking every rule "does any test name you?":**
+P0 38/38 traceable (2 recorded as deliberately not implemented), P1 48 rules with 17 still
+untraceable, P2 8 with 3. The P0 guard is a test; P1 and P2 are measured and not yet guarded.
+
+That sweep is also what found RULE-023's divergence, now recorded: legacy seeds propagation only
+from MASK segments and silently ignores an unsaved polygon, where this rasterizes every shape with
+the exporters' own function and reads all references from disk (decision 5).
+
 **Blocked on the owner:**
 
 - **C11's EQUIVALENCE** — not its API, which is built. Proving the propagated masks and the
