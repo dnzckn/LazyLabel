@@ -339,6 +339,8 @@ function ToolPicker(): ReactNode {
     // Not an annotation tool: a crop decides which pixels reach the FILE (RULE-018), and it sits
     // here because it is chosen and drawn the same way the others are.
     { value: "crop", label: "Crop" },
+    // Also not an annotation tool: it moves the VIEW, and nothing it does can be lost.
+    { value: "pan", label: "Pan" },
   ];
 
   /*
@@ -373,6 +375,7 @@ function ToolPicker(): ReactNode {
    * second half is not a reason to ignore the first, and leaving the polygon tool armed would put
    * the next click into a new shape.
    */
+  useHotkey("pan_mode", () => setActiveTool("pan"));
   useHotkey("edit_mode", () => {
     setActiveTool("none");
     const outcome = enterEditMode(segments, selected);

@@ -756,3 +756,12 @@ fieldset input {
   overflow: auto;
   max-height: 32rem;
 }
+
+/* The pan surface: a hand, because that is what the gesture is. */
+.pan-layer {
+  cursor: grab;
+}
+
+.pan-layer:active {
+  cursor: grabbing;
+}

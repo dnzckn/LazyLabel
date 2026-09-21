@@ -47,7 +47,7 @@ import { linkedAdd, type LinkedAdd } from "../split/linkedAdd.js";
 import type { ImageSize } from "../split/linked.js";
 
 /** Every tool the workspace offers. */
-export type Tool = "none" | "select" | "polygon" | "box" | "circle" | "ai" | "crop";
+export type Tool = "none" | "select" | "polygon" | "box" | "circle" | "ai" | "crop" | "pan";
 
 /**
  * Which of the two slots. Two rather than a list, because two is what exists: legacy's four-view

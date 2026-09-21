@@ -42,6 +42,7 @@ import { RESOLUTION_DEFAULT } from "../tools/autoPolygon.js";
 import { useHotkey } from "../hotkeys/HotkeyProvider.jsx";
 import { CropLayer } from "../canvas/CropLayer.jsx";
 import { canSave } from "./saveState.js";
+import { PanLayer } from "../canvas/PanLayer.jsx";
 
 /**
  * What a save sends when the image had no annotation file.
@@ -344,6 +345,15 @@ function OpenedImage({
                 // RULE-046's refusals -- a mask with no outline, a shape over the 200-vertex limit
                 // -- go to the notifications rather than being drawn over the image.
                 onNoHandles={(reason) => notify({ severity: "info", message: reason })}
+              />
+            )}
+
+            {activeTool === "pan" && (
+              <PanLayer
+                width={metadata.width}
+                height={metadata.height}
+                pane={scrollRef}
+                multiplier={panStep / 64}
               />
             )}
 
