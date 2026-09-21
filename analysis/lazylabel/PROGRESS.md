@@ -89,32 +89,43 @@ UNBLOCKED; everything below it needs something only the owner can provide.
    the workspace would have re-encoded the image, seconds of model work each. It keys on the four
    values now.
 
-**C11's next slice is the JOB API, and only part of it is blocked.** Worth separating, because
-"C11 is blocked" has been shorthand for more than is true:
+**C11's service half is now BUILT.** What that means precisely, because "C11 is blocked" was
+shorthand for more than was ever true:
 
-- The propagation ALGORITHM is built and differential-tested against legacy (`propagation.py`'s
-  `propagate`, a generator so a caller can stream progress and stop early -- which is what makes
-  RULE-063's cancellation keep committed work).
-- What answers 501 is the JOB API around it: `POST /inference/propagations` to start,
-  `GET` for state and per-frame results, `DELETE` to cancel. The contract is fixed in
-  `AI_NATIVE_SPEC.md` section 3, and `app.py`'s `not_built` map names each one.
-- The job machinery -- a registry, cancellation that keeps committed frames, progress, a streaming
-  window bounded by `stream_window_size` -- is buildable and testable WITHOUT a checkpoint, the
-  same way the rest of the service's routing is. A fake predictor yielding frames exercises all of
-  it.
-- What genuinely needs the owner is proving the RESULTS match legacy: real checkpoints, a recorded
-  sequence, and golden outputs. That is exit criterion 2, not the job API.
+- The propagation ALGORITHM was already built and differential-tested (`propagation.py`'s
+  `propagate`, a generator so a caller can stream and stop early -- which is what makes RULE-063's
+  cancellation keep committed work).
+- **RULE-026's windows** (`inference/.../windows.py`) are built and checked against legacy's own
+  `_propagate_chunked`, lifted out of the legacy source with `ast` and executed with a stand-in
+  `self`. Every other differential here skips without a checkpoint; this one needs nothing, so it
+  runs on every commit. A transcription cannot check itself, and this compares against legacy's
+  actual bytes over every window size and span that crosses a boundary, both directions.
+- **The job API** (`jobs.py` + three routes) is built: start, poll by cursor, cancel. The cancel
+  flag is checked AFTER appending, so the frame in flight when Cancel arrived is kept. A failure is
+  a state with its reason, which is the defect it replaces -- legacy's `except Exception: return`
+  makes a run that died on frame 40 of 200 identical to a run that was 39 frames long.
+- **The API proxies all three**, so it is reachable rather than built-and-unreachable. Doing that
+  found `InferenceError` dropping `detail`, which is where `results_overflowed` carries the cursor
+  to resume from.
+- Adding C11 to the shared contract fixture then found a real bug: **every sequence shorter than
+  six frames answered 500**, because the default 5-frame overlap was carried into a plan with one
+  window. `effective()` decides that once now.
 
-So the honest state is: C11's service half can be built now against a fake predictor, and only its
-equivalence cannot be shown. Doing it also closes `stream_window_size`, the last settings gap, and
-the two unreached functions that wait on propagation producing scores.
+What is STILL blocked is equivalence -- proving the results match legacy -- which needs real
+checkpoints, a recorded sequence and goldens. That is Phase 6 exit criterion 2, and it was never
+the job API.
+
+**Still to wire: the browser.** The chain reaches web -> API -> service everywhere except the last
+step: nothing in the web app calls the propagation routes yet, so `stream_window_size` remains a
+settings GAP and `frameConfidence`/`saveableFrames` remain unreached. That is the next slice and it
+needs no checkpoint either.
 
 **Blocked on the owner:**
 
-- **C11, propagation** — needs the inference service running, a recorded image sequence, and
+- **C11's EQUIVALENCE** — not its API, which is built. Proving the propagated masks and the
+  flagged frames match legacy needs the inference service running, a recorded image sequence, and
   legacy's outputs captured as golden data. `inference/tests/fixtures/capture_propagation_goldens.py`
-  is written and waiting. This unblocks Phase 6 exit criteria 1 and 2 and the last two unreached
-  functions.
+  is written and waiting. This is Phase 6 exit criteria 1 and 2.
 - **Exit criterion 4** — `npm run acceptance -- <corpus>` over the real datasets.
 - **The live differential suites** — they skip themselves with no checkpoint, so a green CI run
   says nothing about them.
