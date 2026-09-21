@@ -129,3 +129,33 @@ describe("an image with no annotation file at all", () => {
     await waitFor(() => expect(saveAnnotations).toHaveBeenCalled());
   });
 });
+
+describe("panning the zoomed image", () => {
+  const keyFor = (action: string) => defaultSettings().hotkeys[action]!.primary;
+
+  it("scrolls the pane, which is the thing that moves", async () => {
+    // A transform on the canvas would be a second way to position the image, and the two would
+    // disagree the moment a user touched the scrollbar.
+    mount(empty);
+    await open();
+    const pane = document.querySelector(".canvas-scroll") as HTMLElement;
+    const by = vi.fn();
+    pane.scrollBy = by as unknown as typeof pane.scrollBy;
+
+    fireEvent.keyDown(document, { key: keyFor("pan_right"), code: "KeyD" });
+
+    expect(by).toHaveBeenCalledWith({ left: 64, top: 0, behavior: "auto" });
+  });
+
+  it("moves the other way for the opposite key", async () => {
+    mount(empty);
+    await open();
+    const pane = document.querySelector(".canvas-scroll") as HTMLElement;
+    const by = vi.fn();
+    pane.scrollBy = by as unknown as typeof pane.scrollBy;
+
+    fireEvent.keyDown(document, { key: keyFor("pan_up"), code: "KeyW" });
+
+    expect(by).toHaveBeenCalledWith({ left: 0, top: -64, behavior: "auto" });
+  });
+});

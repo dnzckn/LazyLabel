@@ -60,7 +60,10 @@ export const HONOURED: Readonly<Record<string, Honoured>> = {
   point_radius: read,
   line_thickness: read,
   annotation_size_multiplier: read,
-  pan_multiplier: gap("the canvas pans with the browser's own scrolling, which has no multiplier."),
+  // Scales the step the four `pan_*` keys move the zoomed image by. The PANE scrolls rather than
+  // the canvas being transformed: the pane already scrolls once an image is larger than it, and a
+  // transform would be a second way to position the image that the scrollbar could disagree with.
+  pan_multiplier: read,
 
   polygon_join_threshold: read,
   fragment_threshold: read,

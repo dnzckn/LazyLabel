@@ -10,7 +10,7 @@
  * other things ask the same question and a prop chain would make this one the owner by accident.
  */
 
-import { useCallback, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useMemo, useRef, useState, type ReactNode } from "react";
 
 import { normalizeExportFormats } from "@lazylabel/settings-schema";
 import type {
@@ -113,6 +113,36 @@ function OpenedImage({
   // The crop is the store's, not this view's: the SAVE path reads it, so a crop dragged here and
   // held locally would be one the panel showed and the file never saw.
   const { crop, setCrop, zoom } = useWorkspace();
+
+  /*
+   * PANNING THE ZOOMED IMAGE FROM THE KEYBOARD -- the four `pan_*` keys, which the reference has
+   * promised since Phase 2 while nothing listened, and `pan_multiplier`, the last setting outside
+   * C11 and RULE-089 with no reader.
+   *
+   * Scrolling the pane rather than transforming the canvas. The pane already scrolls once an image
+   * is larger than it, so this moves the thing that moves -- a transform would be a second way to
+   * position the image, and the two would disagree the moment a user used the scrollbar.
+   *
+   * `pan_multiplier` scales the step, as legacy's does: its value is a factor on a base step, so 1
+   * is normal and 2 moves twice as far per press. A user on a large scan wants fewer presses to
+   * cross it.
+   */
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const rawPan = Number(settings.values["pan_multiplier"]);
+  const panStep = 64 * (Number.isFinite(rawPan) && rawPan > 0 ? Math.min(10, rawPan) : 1);
+  const pan = useCallback(
+    (dx: number, dy: number) => {
+      // `scrollBy` clamps at the ends itself, so pressing into an edge does nothing rather than
+      // needing a bound here that would have to agree with the browser's.
+      scrollRef.current?.scrollBy({ left: dx * panStep, top: dy * panStep, behavior: "auto" });
+    },
+    [panStep],
+  );
+
+  useHotkey("pan_left", () => pan(-1, 0));
+  useHotkey("pan_right", () => pan(1, 0));
+  useHotkey("pan_up", () => pan(0, -1));
+  useHotkey("pan_down", () => pan(0, 1));
   const { notify } = useNotifications();
   // Only a context failure falls back to the plain image. A picture that will not DECODE is the
   // canvas's own business -- it reports that and still draws the annotations, which is worth more
@@ -243,7 +273,7 @@ function OpenedImage({
 
               The `<img>` survives as the fallback for a browser that gives no 2D context, where
               the canvas can show nothing at all. */}
-          <div className="canvas-scroll">
+          <div className="canvas-scroll" ref={scrollRef}>
           <div className="canvas-stack">
             {canvasFailed ? (
               <img className="preview" src={pixelsUrl} alt={image.name} />
