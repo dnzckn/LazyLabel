@@ -281,16 +281,18 @@ its remainder recorded:
 | reach | does any shipping code CALL this function? | **1 left** (`project`), recorded; comments no longer count as uses |
 | hotkeys | will this key do something? | **40 of 43**; the other three are mouse bindings, pinned as such |
 | P0 rules | does any test NAME this rule? | **38 of 38**, 2 recorded as deliberate divergences |
-| P1 rules | same | all accounted; **1 unbuilt** (RULE-077, Trim) |
+| P1 rules | same | **all accounted, none unbuilt** (Trim landed last) |
 
 **RULE-090 is built**, which was the review half of C11: a propagated frame shows its masks instead
 of its sidecar, never on a reference frame, and the segments come from the same function the SAVE
 uses -- so what is accepted on screen is what reaches disk.
 
-**RULE-077's blocker is gone.** The propagated masks were keyed by frame POSITION, and a trim
-shifts every position after the cut; they are keyed by image key now. Not a live defect -- the
-store is cleared by a new run and a new timeline -- but a trap laid for whoever built Trim, and it
-would have looked like a Trim bug rather than a storage one.
+**RULE-077, Trim, is built** -- the last rule on either list. Finding its blocker first was what
+made it cheap: the propagated masks were keyed by frame POSITION, and a trim shifts every position
+after the cut, so a cut would have re-attributed every mask to the wrong picture. Keyed by image
+key, a trim cannot lose or misplace one -- which is also why this app does NOT copy legacy's reset
+of the propagation engine on trim, whose cost its own card records ("Save All then reports nothing
+to save even though green frames with unsaved propagated masks remain").
 
 **Both owner-facing harnesses have been run**, and one was wrong: the acceptance harness called an
 empty corpus a pass. Nothing compared is exit 2 now, and a real pass reports the count.
