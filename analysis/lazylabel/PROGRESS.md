@@ -798,6 +798,19 @@ the same factor. That layer has no Escape and no refusal where the crop and shap
 both: nothing is committed and nothing can be lost, and the fix for a mistaken drag is another
 drag.
 
+**`toggle_recent_class` and `convert_to_polygons` followed.** The first is legacy's X and needed a
+memory the store did not keep: the class before this one, recorded only when the class CHANGES, or
+picking the same class twice would remember the one you are already on and the key would become a
+no-op. The second is Auto-Convert applied after the fact, at the same resolution, so a user who
+forgot to switch it on before a session's work is not left re-drawing it — and a mask that cannot
+become a polygon is LEFT AS A MASK rather than dropped, because the point is to gain corners to
+drag, not to lose annotations.
+
+Thirty-four of the forty-three actions are live. What is left: `save_segment` and `erase_segment`,
+which work but are not registered (see below); `propagate` and `find_archetypes`, which are C11;
+and `left_click`, `right_click` and `mouse_drag`, which legacy lists in the same table and are not
+keys.
+
 **The hotkey count can UNDER-report, and the app now says so.** `save_segment` (Space) and
 `erase_segment` (Shift+Space) finish a polygon and an AI mask today, but the drawing layers handle
 those keys directly instead of registering them — so the table calls them pending while they work.
