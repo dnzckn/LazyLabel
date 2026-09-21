@@ -117,14 +117,14 @@ describe("C5: erasing with a shape", () => {
     clickCanvas(150, 2);
     clickCanvas(150, 90);
     clickCanvas(2, 90);
-    fireEvent.keyDown(document, { key: " " });
+    fireEvent.keyDown(document, { key: " ", code: "Space" });
     await waitFor(() => expect(shown("count")).toBe("1"));
 
     // ...and a shift-finished polygon over part of it erases rather than adds.
     clickCanvas(60, 20);
     clickCanvas(100, 20);
     clickCanvas(100, 70);
-    fireEvent.keyDown(document, { key: " ", shiftKey: true });
+    fireEvent.keyDown(document, { key: " ", code: "Space", shiftKey: true });
 
     // The original is replaced by what is left of it, as a mask.
     await waitFor(() => expect(shown("types")).toBe("AI"));
@@ -138,7 +138,7 @@ describe("C5: erasing with a shape", () => {
     clickCanvas(10, 10);
     clickCanvas(50, 10);
     clickCanvas(50, 50);
-    fireEvent.keyDown(document, { key: " ", shiftKey: true });
+    fireEvent.keyDown(document, { key: " ", code: "Space", shiftKey: true });
 
     expect(await screen.findByText(/No annotations to erase/)).toBeTruthy();
     expect(shown("count")).toBe("0");
@@ -202,7 +202,7 @@ describe("C4: drawing a polygon by hand", () => {
     clickCanvas(10, 10);
     clickCanvas(50, 10);
     clickCanvas(50, 50);
-    fireEvent.keyDown(document, { key: " " });
+    fireEvent.keyDown(document, { key: " ", code: "Space" });
 
     await waitFor(() => expect(shown("count")).toBe("1"));
   });
@@ -214,7 +214,7 @@ describe("C4: drawing a polygon by hand", () => {
     clickCanvas(10, 10);
     clickCanvas(50, 10);
     clickCanvas(50, 50);
-    fireEvent.keyDown(document, { key: " " });
+    fireEvent.keyDown(document, { key: " ", code: "Space" });
     await waitFor(() => expect(shown("count")).toBe("1"));
 
     fireEvent.click(screen.getByText("undo"));
@@ -228,7 +228,7 @@ describe("C4: drawing a polygon by hand", () => {
 
     clickCanvas(10, 10);
     clickCanvas(50, 10);
-    fireEvent.keyDown(document, { key: " " });
+    fireEvent.keyDown(document, { key: " ", code: "Space" });
 
     expect(await screen.findByText(/at least 3 points/)).toBeTruthy();
     expect(shown("count")).toBe("0");
@@ -242,7 +242,7 @@ describe("C4: drawing a polygon by hand", () => {
       clickCanvas(10 + offset, 10);
       clickCanvas(50 + offset, 10);
       clickCanvas(50 + offset, 50);
-      fireEvent.keyDown(document, { key: " " });
+      fireEvent.keyDown(document, { key: " ", code: "Space" });
       await waitFor(() => expect(shown("count")).toBe(offset === 0 ? "1" : "2"));
     }
 

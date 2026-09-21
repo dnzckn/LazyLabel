@@ -127,7 +127,7 @@ export function drawTriangle(x: number, y: number, erase = false): void {
   press(x, y);
   press(x + 40, y);
   press(x + 40, y + 30);
-  fireEvent.keyDown(document, { key: " ", shiftKey: erase });
+  fireEvent.keyDown(document, { key: " ", code: "Space", shiftKey: erase });
 }
 
 /** The save button, which exists whenever an image is open — including one with no file yet. */

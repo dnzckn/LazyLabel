@@ -167,7 +167,7 @@ describe("the keyboard", () => {
 
   it("finishes on Space", () => {
     const { onComplete } = triangle();
-    fireEvent.keyDown(document, { key: " " });
+    fireEvent.keyDown(document, { key: " ", code: "Space" });
 
     expect(onComplete).toHaveBeenCalledTimes(1);
   });
@@ -181,7 +181,7 @@ describe("the keyboard", () => {
 
   it("erases on Shift+Space", () => {
     const { onErase } = triangle();
-    fireEvent.keyDown(document, { key: " ", shiftKey: true });
+    fireEvent.keyDown(document, { key: " ", code: "Space", shiftKey: true });
 
     expect(onErase).toHaveBeenCalledTimes(1);
   });
@@ -189,7 +189,7 @@ describe("the keyboard", () => {
   it("says why a two-point polygon will not finish", () => {
     // Legacy does nothing at all here, so a user concludes the key is not bound.
     const { onRefused, onComplete } = twoPoints();
-    fireEvent.keyDown(document, { key: " " });
+    fireEvent.keyDown(document, { key: " ", code: "Space" });
 
     expect(onComplete).not.toHaveBeenCalled();
     expect(onRefused.mock.calls[0]?.[0]).toContain("at least 3 points");
@@ -229,7 +229,7 @@ describe("the keyboard", () => {
 
   it("does nothing on a key press when no polygon is being drawn", () => {
     const { onComplete, onRefused } = layer();
-    fireEvent.keyDown(document, { key: " " });
+    fireEvent.keyDown(document, { key: " ", code: "Space" });
 
     expect(onComplete).not.toHaveBeenCalled();
     expect(onRefused).not.toHaveBeenCalled();

@@ -129,23 +129,35 @@ export function AiLayer({
    */
   useHotkey("clear_points", () => setPrompt(clear()));
 
+  /*
+   * ACCEPTING THE PREVIEW, through the dispatcher rather than a raw Space listener -- the same
+   * move the polygon layer made, and for the same reason: the hotkey reference reads the
+   * dispatcher's registrations, so an action handled outside it read as "not yet" while working.
+   *
+   * The BINDING decides accept from erase, not `event.shiftKey`: `save_segment` is Space and
+   * `erase_segment` is Shift+Space. Reading the modifier here would ignore half of any remapping.
+   */
+  const accept = useCallback(
+    (erase: boolean) => {
+      if (pending(prompt) === "nothing") {
+        onRefused?.(NOTHING_TO_ACCEPT);
+        return;
+      }
+      onAccept(erase);
+      setPrompt(clear());
+    },
+    [onAccept, onRefused, prompt],
+  );
+
+  useHotkey("save_segment", () => accept(false));
+  useHotkey("erase_segment", () => accept(true));
+
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (isTypingTarget(event.target)) return;
 
       if (event.key === "Escape") {
         event.preventDefault();
-        setPrompt(clear());
-        return;
-      }
-
-      if (event.key === " ") {
-        event.preventDefault();
-        if (pending(prompt) === "nothing") {
-          onRefused?.(NOTHING_TO_ACCEPT);
-          return;
-        }
-        onAccept(event.shiftKey);
         setPrompt(clear());
         return;
       }

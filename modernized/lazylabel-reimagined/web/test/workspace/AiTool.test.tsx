@@ -227,7 +227,7 @@ describe("prompting", () => {
     await ready();
 
     // The stale answer did not replace the fresh one: accepting still commits, and exactly once.
-    fireEvent.keyDown(document, { key: " " });
+    fireEvent.keyDown(document, { key: " ", code: "Space" });
     await waitFor(() => expect(screen.queryByText(/No AI segment preview/)).toBeNull());
   });
 
@@ -251,7 +251,7 @@ describe("prompting", () => {
     await ready();
     expect(screen.queryByText(/the model raised/)).toBeNull();
 
-    fireEvent.keyDown(document, { key: " " });
+    fireEvent.keyDown(document, { key: " ", code: "Space" });
     await waitFor(() => expect(onAccept).toHaveBeenCalledTimes(1));
   });
 
@@ -272,7 +272,7 @@ describe("prompting", () => {
 
     expect(await screen.findByText(/the model raised/)).toBeTruthy();
 
-    fireEvent.keyDown(document, { key: " " });
+    fireEvent.keyDown(document, { key: " ", code: "Space" });
     await waitFor(() => expect(screen.getByText(/No AI segment preview to accept/)).toBeTruthy());
     expect(onAccept).not.toHaveBeenCalled();
   });
@@ -286,7 +286,7 @@ describe("accepting", () => {
     click(10, 10);
     await ready();
 
-    fireEvent.keyDown(document, { key: " " });
+    fireEvent.keyDown(document, { key: " ", code: "Space" });
 
     await waitFor(() => expect(onAccept).toHaveBeenCalledTimes(1));
     const segment = onAccept.mock.calls[0]?.[0] as WireSegment;
@@ -301,7 +301,7 @@ describe("accepting", () => {
     click(10, 10);
     await ready();
 
-    fireEvent.keyDown(document, { key: " ", shiftKey: true });
+    fireEvent.keyDown(document, { key: " ", code: "Space", shiftKey: true });
 
     await waitFor(() => expect(onErase).toHaveBeenCalledTimes(1));
     expect(onAccept).not.toHaveBeenCalled();
@@ -313,7 +313,7 @@ describe("accepting", () => {
 
     click(10, 10);
     await ready();
-    fireEvent.keyDown(document, { key: " " });
+    fireEvent.keyDown(document, { key: " ", code: "Space" });
 
     await waitFor(() => expect((onAccept.mock.calls[0]?.[0] as WireSegment).classId).toBe(7));
   });
@@ -329,7 +329,7 @@ describe("accepting", () => {
 
     // One region, so at 100 it survives -- the threshold drops fragments relative to the largest,
     // and the largest is never below itself.
-    fireEvent.keyDown(document, { key: " " });
+    fireEvent.keyDown(document, { key: " ", code: "Space" });
     await waitFor(() => expect(onAccept).toHaveBeenCalledTimes(1));
   });
 });
@@ -344,7 +344,7 @@ describe("Auto-Convert", () => {
     click(10, 10);
     await ready();
 
-    fireEvent.keyDown(document, { key: " " });
+    fireEvent.keyDown(document, { key: " ", code: "Space" });
 
     await waitFor(() => expect(onAccept).toHaveBeenCalled());
     const segment = onAccept.mock.calls.at(-1)![0];
@@ -360,7 +360,7 @@ describe("Auto-Convert", () => {
     click(10, 10);
     await ready();
 
-    fireEvent.keyDown(document, { key: " " });
+    fireEvent.keyDown(document, { key: " ", code: "Space" });
 
     await waitFor(() => expect(onAccept).toHaveBeenCalled());
     const segment = onAccept.mock.calls.at(-1)![0];

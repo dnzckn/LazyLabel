@@ -212,7 +212,7 @@ describe("flow 1, step by step", () => {
 
     clickImage(6, 6);
     await previewReady();
-    fireEvent.keyDown(document, { key: " " });
+    fireEvent.keyDown(document, { key: " ", code: "Space" });
 
     await waitFor(() => expect(shown("count")).toBe("1"));
     expect(shown("types")).toBe("AI");
@@ -254,7 +254,7 @@ describe("flow 1, step 6: moving to the next image", () => {
     await readyToPrompt();
     clickImage(6, 6);
     await previewReady();
-    fireEvent.keyDown(document, { key: " " });
+    fireEvent.keyDown(document, { key: " ", code: "Space" });
     await waitFor(() => expect(shown("count")).toBe("1"));
 
     fireEvent.click(screen.getByText("open b"));
@@ -272,7 +272,7 @@ describe("flow 1, step 6: moving to the next image", () => {
     const { saveAnnotations } = await readyToPrompt();
     clickImage(6, 6);
     await previewReady();
-    fireEvent.keyDown(document, { key: " " });
+    fireEvent.keyDown(document, { key: " ", code: "Space" });
     await waitFor(() => expect(shown("count")).toBe("1"));
 
     fireEvent.click(screen.getByText("open b"));

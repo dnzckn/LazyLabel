@@ -33,6 +33,7 @@ import {
   type PolygonDraft,
 } from "../tools/polygon.js";
 import { useSizing } from "./useSizing.js";
+import { useHotkey } from "../hotkeys/HotkeyProvider.jsx";
 
 export interface PolygonLayerProps {
   readonly width: number;
@@ -85,6 +86,38 @@ export function PolygonLayer({
     [onComplete, onErase],
   );
 
+  /*
+   * FINISHING THE SHAPE, through the dispatcher rather than a raw Space listener.
+   *
+   * It worked before as a raw handler -- but the hotkey reference reads the dispatcher's own
+   * registrations to say which keys do anything, so an action handled outside it read as "not yet"
+   * while working. That is the same dishonesty as promising a key that does nothing, reached from
+   * the other side, and it made the one guard that cannot drift drift.
+   *
+   * The BINDING decides which of the two this is, not `event.shiftKey`: `save_segment` is Space
+   * and `erase_segment` is Shift+Space, and a user who remaps either gets what they asked for.
+   * Reading the modifier here would quietly ignore half of any remapping.
+   */
+  const finishWith = useCallback(
+    (erase: boolean) => {
+      // Guarded on there being a draft, because these keys are registered whenever this layer is
+      // mounted and the layer outlives any one shape.
+      setDraft((current) => {
+        if (current.vertices.length === 0) return current;
+        const outcome = finish(current, { shift: erase });
+        if (outcome.kind === "close") complete(outcome.vertices, false);
+        else if (outcome.kind === "erase") complete(outcome.vertices, true);
+        else if (outcome.kind === "ignored") onRefused?.(outcome.reason);
+        return current;
+      });
+    },
+    [complete, onRefused],
+  );
+
+  useHotkey("save_segment", () => finishWith(false));
+  useHotkey("erase_segment", () => finishWith(true));
+
+
   const onPointerDown = useCallback(
     (event: React.PointerEvent<SVGSVGElement>) => {
       // Only the primary button draws. A right-click is a context menu and a middle-click is a
@@ -135,7 +168,16 @@ export function PolygonLayer({
         return;
       }
 
-      if (event.key === " " || event.key === "Enter") {
+      /*
+       * ENTER STAYS HERE, where Space has moved to the dispatcher.
+       *
+       * Legacy's Enter "finishes the polygon and then saves", and the save half is
+       * `save_output`, registered by the opened image. Registering Enter here as well would put
+       * two handlers on one action with no guaranteed order between them -- and if the write ran
+       * first it would save without the shape the same keystroke was finishing. Left raw, the
+       * finish happens here and the write happens on its own, exactly as before.
+       */
+      if (event.key === "Enter") {
         event.preventDefault();
         const outcome = finish(draft, { shift: event.shiftKey });
         if (outcome.kind === "close") complete(outcome.vertices, false);

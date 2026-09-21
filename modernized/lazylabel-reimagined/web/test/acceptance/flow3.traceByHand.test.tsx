@@ -141,7 +141,7 @@ async function openAndDraw() {
   click("Polygon tool", 20, 20);
   click("Polygon tool", 80, 20);
   click("Polygon tool", 80, 70);
-  fireEvent.keyDown(document, { key: " " });
+  fireEvent.keyDown(document, { key: " ", code: "Space" });
 
   // Step 3: the outline is a labelled object.
   await waitFor(() => expect(shown("count")).toBe("1"));

@@ -129,7 +129,7 @@ describe("accepting", () => {
     const { surface, onAccept } = layer();
     click(surface, 30, 40);
 
-    fireEvent.keyDown(document, { key: " " });
+    fireEvent.keyDown(document, { key: " ", code: "Space" });
 
     expect(onAccept).toHaveBeenCalledWith(false);
   });
@@ -138,7 +138,7 @@ describe("accepting", () => {
     const { surface, onAccept } = layer();
     click(surface, 30, 40);
 
-    fireEvent.keyDown(document, { key: " ", shiftKey: true });
+    fireEvent.keyDown(document, { key: " ", code: "Space", shiftKey: true });
 
     expect(onAccept).toHaveBeenCalledWith(true);
   });
@@ -146,14 +146,14 @@ describe("accepting", () => {
   it("clears the prompt afterwards", () => {
     const { surface } = layer();
     click(surface, 30, 40);
-    fireEvent.keyDown(document, { key: " " });
+    fireEvent.keyDown(document, { key: " ", code: "Space" });
 
     expect(screen.queryByTestId("ai-positive-0")).toBeNull();
   });
 
   it("says so when there is nothing to accept", () => {
     const { onAccept, onRefused } = layer();
-    fireEvent.keyDown(document, { key: " " });
+    fireEvent.keyDown(document, { key: " ", code: "Space" });
 
     expect(onAccept).not.toHaveBeenCalled();
     expect(onRefused.mock.calls[0]?.[0]).toBe("No AI segment preview to accept");
@@ -165,7 +165,7 @@ describe("accepting", () => {
 
     const { surface, onAccept } = layer();
     click(surface, 30, 40);
-    fireEvent.keyDown(input, { key: " " });
+    fireEvent.keyDown(input, { key: " ", code: "Space" });
 
     expect(onAccept).not.toHaveBeenCalled();
     input.remove();
