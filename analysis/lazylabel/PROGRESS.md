@@ -498,7 +498,20 @@ needs is already in one store rather than scattered across managers.
    and says propagation has not run, which is what a user sees now, and the chart branch is
    exercised with real scores in tests rather than sitting on a shelf.
 
-   **Exit criterion 4's harness is written too.** "Every dataset in the acceptance corpus imports
+   **The harness has now been RUN**, on 2026-09-20, against a four-image folder:
+
+```
+frames: 1 identical, 0 differ, 0 need the converter, 0 unreadable, 3 without annotations
+Every annotation file round-tripped identically.
+```
+
+That is not the acceptance corpus — criterion 4 needs the owner's real datasets and stays open —
+but it moves the TOOL from written to working. It found the folder, classified every image,
+round-tripped the one with annotations byte for byte, and wrote nothing into the dataset: the
+files are the same sizes afterwards, which is the property it promises and the one that would be
+expensive to be wrong about.
+
+**Exit criterion 4's harness is written too.** "Every dataset in the acceptance corpus imports
    and re-exports identically" needs the owner's corpus; what did not need it is the command:
 
    ```bash
