@@ -218,8 +218,14 @@ def _embeddings(deps: Deps, request: Request) -> Response:
     if adjustments is not None and not isinstance(adjustments, dict):
         raise HttpError(400, "bad_request", "'adjustments' must be an object of numbers")
 
+    # RULE-089: the API has rendered what the user can SEE and posted it, so the file on disk is
+    # not read. Absent is the rule's default -- the model segments the original.
+    pixels = body.get("pixels")
+    if pixels is not None and not isinstance(pixels, str):
+        raise HttpError(400, "bad_request", "'pixels' must be a base64 PNG string")
+
     try:
-        handle, cached = _service(deps).embed(image, model, adjustments)
+        handle, cached = _service(deps).embed(image, model, adjustments, pixels)
     except InferenceError as cause:
         raise _inference_error(cause) from cause
 

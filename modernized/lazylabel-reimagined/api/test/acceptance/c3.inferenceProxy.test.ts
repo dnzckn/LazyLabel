@@ -22,6 +22,7 @@ import { HttpInferenceClient } from "../../src/adapters/httpInference.js";
 import { MemoryBlobStore } from "../../src/adapters/memoryBlobStore.js";
 import { SqliteMetadataStore } from "../../src/adapters/sqliteMetadataStore.js";
 import { get, jsonBody, post } from "../helpers/request.js";
+import sharp from "sharp";
 
 const HEALTHY_INFERENCE = {
   status: "ok",
@@ -70,9 +71,9 @@ describe("C3: the API's inference proxy", () => {
   });
   afterEach(() => metadata.close());
 
-  function appWith(service: ReturnType<typeof fakeService>): App {
+  function appWith(service: ReturnType<typeof fakeService>, blobStore = new MemoryBlobStore()): App {
     return createApp({
-      blobStore: new MemoryBlobStore(),
+      blobStore,
       metadataStore: metadata,
       inference: new HttpInferenceClient({ baseUrl: "http://inference.test", fetch: service.fetch }),
     });
@@ -291,7 +292,21 @@ describe("C3: the API's inference proxy", () => {
     );
 
     interface Contract {
-      requests: { name: string; path: string; method: string; body: Record<string, unknown> }[];
+      requests: {
+        name: string;
+        path: string;
+        method: string;
+        body: Record<string, unknown>;
+        /**
+         * Fields the API ADDS before forwarding, listed rather than written out because their
+         * value comes from the image on disk -- `pixels` is a base64 PNG the API renders.
+         *
+         * The fixture used to describe one body for both directions, which held only while the
+         * API was a pure forwarder. RULE-089 makes it a pipeline for one case, and a fixture that
+         * could not say so would have forced the feature to ship untested or not at all.
+         */
+        addedByApi?: string[];
+      }[];
       errorCodes: string[];
     }
 
@@ -306,12 +321,31 @@ describe("C3: the API's inference proxy", () => {
             : jsonResponse(200, { mask: MASK, score: 1, chosen: 0, alternatives: [1] }),
         );
 
-        const response = await appWith(service).handle(post(example.path, example.body));
+        /*
+         * A REAL IMAGE, because the API is no longer a pure forwarder for every case: under
+         * RULE-089 it renders the adjusted picture and posts the bytes, so the file named in the
+         * body has to exist. The other examples do not touch it.
+         */
+        const store = new MemoryBlobStore();
+        const named = example.body["image"];
+        if (typeof named === "string") {
+          await store.writeAtomic(named, await sharp({
+            create: { width: 4, height: 4, channels: 3, background: { r: 120, g: 130, b: 140 } },
+          }).png().toBuffer());
+        }
+
+        const response = await appWith(service, store).handle(post(example.path, example.body));
         expect(response.status, example.name).toBe(200);
 
-        // Byte for byte the same object, so the Python side's acceptance means something here.
+        // Byte for byte the same object, so the Python side's acceptance means something here --
+        // except for what the API is declared to ADD, which has no literal value to record.
         expect(service.calls[0]!.path, example.name).toBe(example.path);
-        expect(service.calls[0]!.body, example.name).toEqual(example.body);
+        const sent = { ...(service.calls[0]!.body as Record<string, unknown>) };
+        for (const field of example.addedByApi ?? []) {
+          expect(sent[field], `${example.name}: ${field}`).toBeTruthy();
+          delete sent[field];
+        }
+        expect(sent, example.name).toEqual(example.body);
       }
     });
 

@@ -37,6 +37,7 @@ import {
   applyAdjustments,
   processingFromQuery,
 } from "./images/processing.js";
+import { isNeutral, type Adjustments } from "@lazylabel/annotation-formats";
 import { RenderCache } from "./images/renderCache.js";
 import { RevisionConflictError, type BlobStore } from "./ports/blobStore.js";
 import {
@@ -307,6 +308,18 @@ async function proxyEmbed(deps: AppDeps, request: ApiRequest): Promise<ApiRespon
     throw badRequest("'adjustments' must be an object of numbers");
   }
 
+  /*
+   * RULE-089. Adjustments present means the user asked the model to segment what they can SEE, so
+   * the API renders them and posts the bytes; absent means the service reads the original file,
+   * which is the rule's default and puts no image on this wire.
+   *
+   * NEUTRAL ADJUSTMENTS SEND NOTHING, and that is not an optimisation. An image adjusted by
+   * nothing IS the original, so rendering it would put a re-encoded PNG on the wire for a picture
+   * identical to the file already beside the service.
+   */
+  const wanted = adjustmentsOf(adjustments as Record<string, number> | undefined);
+  const pixels = wanted === null ? undefined : await renderForModel(deps, image, wanted);
+
   const correlationId = request.headers["x-correlation-id"] ?? "";
   return json(
     200,
@@ -315,6 +328,7 @@ async function proxyEmbed(deps: AppDeps, request: ApiRequest): Promise<ApiRespon
         image,
         model,
         ...(adjustments === undefined ? {} : { adjustments: adjustments as Record<string, number> }),
+        ...(pixels === undefined ? {} : { pixels }),
       },
       correlationId,
     ),
@@ -857,4 +871,32 @@ function toHttpError(cause: unknown): HttpError {
 
 function newCorrelationId(): string {
   return globalThis.crypto.randomUUID();
+}
+
+/**
+ * The adjustments a request is really asking for, or null when they amount to nothing.
+ *
+ * Null for absent AND for neutral, because the two mean the same to a model: segment the file as
+ * it is. Treating neutral as a request would re-encode every image for no visible change.
+ */
+function adjustmentsOf(raw: Record<string, number> | undefined): Adjustments | null {
+  if (raw === undefined) return null;
+  const wanted: Adjustments = {
+    brightness: Number(raw["brightness"] ?? 0),
+    contrast: Number(raw["contrast"] ?? 0),
+    gamma: Number(raw["gamma"] ?? 1),
+    saturation: Number(raw["saturation"] ?? 1),
+  };
+  return isNeutral(wanted) ? null : wanted;
+}
+
+/** The image as the user sees it, base64 PNG, for a model to encode. */
+async function renderForModel(
+  deps: AppDeps,
+  key: string,
+  adjustments: Adjustments,
+): Promise<string> {
+  const decoded = await decodeImage(await imageBytes(deps, key), undefined);
+  applyAdjustments(decoded.data, adjustments);
+  return Buffer.from(await renderPng(decoded)).toString("base64");
 }

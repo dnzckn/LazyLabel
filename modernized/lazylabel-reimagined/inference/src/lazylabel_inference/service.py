@@ -107,6 +107,7 @@ class InferenceService:
         image_key: str,
         model_name: str,
         adjustments: dict[str, float] | None = None,
+        pixels: str | None = None,
     ) -> tuple[str, bool]:
         """Encode an image, or recognise that it is already encoded.
 
@@ -128,7 +129,7 @@ class InferenceService:
             return handle, True
 
         backend = self.backend(model_name)
-        image = self._read_image(path)
+        image = self._read_image(path, pixels)
         backend.set_image(image)
 
         # The cached value is a marker, not the tensor: the predictor holds the encoded state
@@ -176,12 +177,32 @@ class InferenceService:
             ) from None
         return full
 
-    def _read_image(self, path: Path) -> Any:
-        """Decode as RGB uint8, the way the legacy loader does."""
+    def _read_image(self, path: Path, pixels: str | None = None) -> Any:
+        """Decode as RGB uint8, the way the legacy loader does.
+
+        `pixels` is a base64 PNG the API has already rendered -- RULE-089's Operate On View, where
+        the model must segment what the USER SEES rather than the file. When it is present the file
+        on disk is not read at all: the API owns the image pipeline, so it has applied the 16-bit
+        decoding, RULE-032's chain and RULE-028's display adjustments, and reading the file here
+        would undo every one of them.
+
+        Applying the adjustments on this side instead was the alternative, and it is worse: a third
+        implementation of arithmetic the browser and the API already share, and the only one that
+        could not be compared against them without a running model.
+        """
         try:
             import cv2
         except ImportError as cause:  # pragma: no cover - cv2 ships with the AI extra
             raise ImageUnreadableError(f"OpenCV is not installed: {cause}") from cause
+
+        if pixels is not None:
+            import numpy as np
+
+            raw = np.frombuffer(base64.b64decode(pixels), dtype=np.uint8)
+            decoded = cv2.imdecode(raw, cv2.IMREAD_COLOR)
+            if decoded is None:
+                raise ImageUnreadableError("the rendered pixels could not be decoded as an image")
+            return cv2.cvtColor(decoded, cv2.COLOR_BGR2RGB)
 
         if not path.is_file():
             raise ImageUnreadableError(f"{path.name} is not in the dataset folder")

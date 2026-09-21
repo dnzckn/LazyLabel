@@ -23,6 +23,19 @@ export interface EmbedRequest {
   /** Manifest model name, not a file path. */
   readonly model: string;
   readonly adjustments?: Readonly<Record<string, number>>;
+  /**
+   * The rendered image to encode, base64 PNG — RULE-089's Operate On View.
+   *
+   * Absent means the service reads the original file itself, which is the rule's DEFAULT and the
+   * cheaper path: no image crosses this wire. Present means the user asked the model to segment
+   * what they can SEE, so the API has applied the display adjustments and these bytes are the
+   * answer.
+   *
+   * The API renders them rather than the service, because the API owns the image pipeline. A
+   * service that applied them itself would be a third implementation of arithmetic the browser
+   * and the API already share.
+   */
+  readonly pixels?: string;
 }
 
 export interface EmbedResult {

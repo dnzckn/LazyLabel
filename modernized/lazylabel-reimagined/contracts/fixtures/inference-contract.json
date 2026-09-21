@@ -5,7 +5,10 @@
       "name": "embed an image",
       "path": "/inference/embeddings",
       "method": "POST",
-      "body": { "image": "frames/frame_012.png", "model": "SAM 2.1 large" }
+      "body": {
+        "image": "frames/frame_012.png",
+        "model": "SAM 2.1 large"
+      }
     },
     {
       "name": "embed with display adjustments",
@@ -14,14 +17,31 @@
       "body": {
         "image": "frames/frame_012.png",
         "model": "SAM 2.1 large",
-        "adjustments": { "brightness": 40.0, "contrast": 0.0, "gamma": 1.0 }
-      }
+        "adjustments": {
+          "brightness": 40.0,
+          "contrast": 0.0,
+          "gamma": 1.0
+        }
+      },
+      "addedByApi": [
+        "pixels"
+      ],
+      "note": "RULE-089. The browser sends this body; the API renders the adjusted image and adds `pixels`, a base64 PNG, before forwarding. It is listed rather than written out because its value comes from the image on disk -- the TypeScript suite checks it is present and non-empty, and the Python suite posts this body without it, which is the path where the service reads the file itself."
     },
     {
       "name": "one positive point",
       "path": "/inference/segment",
       "method": "POST",
-      "body": { "handle": "c318c68e9f3b84dec5ca65482b559109", "points": [{ "x": 85, "y": 80, "positive": true }] }
+      "body": {
+        "handle": "c318c68e9f3b84dec5ca65482b559109",
+        "points": [
+          {
+            "x": 85,
+            "y": 80,
+            "positive": true
+          }
+        ]
+      }
     },
     {
       "name": "positives and negatives",
@@ -30,8 +50,16 @@
       "body": {
         "handle": "c318c68e9f3b84dec5ca65482b559109",
         "points": [
-          { "x": 85, "y": 80, "positive": true },
-          { "x": 12, "y": 14, "positive": false }
+          {
+            "x": 85,
+            "y": 80,
+            "positive": true
+          },
+          {
+            "x": 12,
+            "y": 14,
+            "positive": false
+          }
         ]
       }
     },
@@ -39,7 +67,15 @@
       "name": "a box",
       "path": "/inference/segment",
       "method": "POST",
-      "body": { "handle": "c318c68e9f3b84dec5ca65482b559109", "box": [30, 40, 140, 120] }
+      "body": {
+        "handle": "c318c68e9f3b84dec5ca65482b559109",
+        "box": [
+          30,
+          40,
+          140,
+          120
+        ]
+      }
     },
     {
       "name": "a box and points together",
@@ -47,18 +83,46 @@
       "method": "POST",
       "body": {
         "handle": "c318c68e9f3b84dec5ca65482b559109",
-        "points": [{ "x": 85, "y": 80, "positive": true }],
-        "box": [30, 40, 140, 120]
+        "points": [
+          {
+            "x": 85,
+            "y": 80,
+            "positive": true
+          }
+        ],
+        "box": [
+          30,
+          40,
+          140,
+          120
+        ]
       }
     }
   ],
   "responses": {
-    "embeddings": { "handle": "c318c68e9f3b84dec5ca65482b559109", "cached": false },
+    "embeddings": {
+      "handle": "c318c68e9f3b84dec5ca65482b559109",
+      "cached": false
+    },
     "segment": {
-      "mask": { "height": 4, "width": 4, "box": [1, 1, 3, 3], "data": "AQEBAQ==" },
+      "mask": {
+        "height": 4,
+        "width": 4,
+        "box": [
+          1,
+          1,
+          3,
+          3
+        ],
+        "data": "AQEBAQ=="
+      },
       "score": 0.9916,
       "chosen": 2,
-      "alternatives": [0.0678, 0.0855, 0.9916]
+      "alternatives": [
+        0.0678,
+        0.0855,
+        0.9916
+      ]
     }
   },
   "errorCodes": [
