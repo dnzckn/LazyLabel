@@ -130,10 +130,25 @@ export interface ModelStatus {
  * skips one it cannot read without renumbering, so every frame after a gap comes back attributed
  * to the image before it. Identity lives in this array, and results are resolved through it.
  */
+export interface PropagationReference {
+  /** Position in `sequence`, never a file name (RULE-017). */
+  readonly frame: number;
+  readonly objectId: number;
+  /** The user's OWN annotation. Legacy seeds propagation with `add_new_mask`, not with clicks. */
+  readonly mask: WireMask;
+}
+
 export interface PropagationStart {
   readonly sequence: readonly string[];
   /** Frames carrying prompts. Both passes leave the EARLIEST one (RULE-025). */
   readonly references: readonly number[];
+  /**
+   * The masks to carry, one per object per reference frame.
+   *
+   * Separate from `references` because a frame can hold several objects and the service needs
+   * both answers: which frames are references (RULE-025 leaves the earliest) and what is on them.
+   */
+  readonly objects?: readonly PropagationReference[];
   readonly start?: number;
   readonly end?: number;
   /** RULE-026. Off means one pass over the whole sequence, which on a long one is gigabytes. */

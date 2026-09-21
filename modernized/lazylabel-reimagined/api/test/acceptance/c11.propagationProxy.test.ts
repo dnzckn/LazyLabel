@@ -122,6 +122,37 @@ describe("C11: propagation through the API", () => {
       });
     });
 
+    it("forwards the reference masks untouched", async () => {
+      // What a mask MEANS is the format library's business and what it is worth is the model's.
+      // The API's job is the shape, so the bytes go over exactly as they arrived.
+      const service = fakeService(() => jsonResponse(202, job()));
+      const objects = [{ frame: 0, objectId: 1, mask: MASK }];
+
+      await appWith(service).handle(
+        post("/inference/propagations", { sequence: SEQUENCE, references: [0], objects }),
+      );
+
+      expect((service.calls[0]!.body as { objects: unknown }).objects).toEqual(objects);
+    });
+
+    it.each([
+      [{ objects: "some" }, "list of reference masks"],
+      [{ objects: [{ objectId: 1, mask: MASK }] }, "whole 'frame' position"],
+      [{ objects: [{ frame: 0, mask: MASK }] }, "whole 'objectId'"],
+      [{ objects: [{ frame: 0, objectId: 1 }] }, "needs its 'mask'"],
+      [{ objects: [null] }, "must be an object"],
+    ])("refuses a malformed reference %j before a GPU is involved", async (extra, expected) => {
+      const service = fakeService(() => jsonResponse(202, job()));
+
+      const response = await appWith(service).handle(
+        post("/inference/propagations", { sequence: SEQUENCE, references: [0], ...extra }),
+      );
+
+      expect(response.status).toBe(400);
+      expect(jsonBody(response).message).toContain(expected);
+      expect(service.calls).toHaveLength(0);
+    });
+
     it("omits what was not asked for rather than sending defaults", async () => {
       // A default invented here is a default the service cannot tell from a choice.
       const service = fakeService(() => jsonResponse(202, job()));

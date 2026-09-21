@@ -409,10 +409,36 @@ async function startPropagation(deps: AppDeps, request: ApiRequest): Promise<Api
     return value as number;
   };
 
+  /*
+   * The reference masks pass through SHAPE-CHECKED and otherwise untouched. What a mask means is
+   * the format library's business and what it is worth is the model's; the API's job is to refuse
+   * a body that cannot possibly work before a GPU is involved.
+   */
+  const objects = body["objects"];
+  if (objects !== undefined) {
+    if (!Array.isArray(objects)) throw badRequest("'objects' must be a list of reference masks");
+    for (const each of objects) {
+      const one = each as Record<string, unknown> | null;
+      if (one === null || typeof one !== "object") {
+        throw badRequest("each reference object must be an object");
+      }
+      if (!Number.isInteger(one["frame"])) {
+        throw badRequest("each reference object needs a whole 'frame' position");
+      }
+      if (!Number.isInteger(one["objectId"])) {
+        throw badRequest("each reference object needs a whole 'objectId'");
+      }
+      if (one["mask"] === undefined || one["mask"] === null) {
+        throw badRequest("each reference object needs its 'mask'");
+      }
+    }
+  }
+
   const started = await inferenceOf(deps).startPropagation(
     {
       sequence: sequence as readonly string[],
       references: references as readonly number[],
+      ...(objects === undefined ? {} : { objects: objects as never }),
       ...(optional("start") === undefined ? {} : { start: optional("start")! }),
       ...(optional("end") === undefined ? {} : { end: optional("end")! }),
       ...(optional("window") === undefined ? {} : { window: optional("window")! }),
