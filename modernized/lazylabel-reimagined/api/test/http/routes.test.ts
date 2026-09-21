@@ -265,3 +265,38 @@ describe("the API envelope", () => {
 function filled(n: number): string {
   return Buffer.from(new Uint8Array(n).fill(1)).toString("base64");
 }
+
+describe("health names the folder it is pointed at", () => {
+  /**
+   * `AI_NATIVE_SPEC.md`'s failure-mode table asks for "a blocking error naming the path, never an
+   * empty file list", and the path never left the server -- so the browser said "the dataset
+   * folder cannot be read" about a folder only the operator had configured and only the server
+   * knew. The one person who could fix it was given every word except the useful one.
+   *
+   * Sent on EVERY health response rather than only on failure, because a deployment pointed at the
+   * WRONG folder looks perfectly healthy: it lists somebody else's images.
+   */
+  it("reports the dataset root when it has one", async () => {
+    const named = createApp({
+      blobStore: new MemoryBlobStore(),
+      metadataStore: new SqliteMetadataStore(":memory:"),
+      datasetRoot: "/datasets/cells_2024",
+    });
+
+    const response = await named.handle(get("/health"));
+
+    expect(jsonBody(response).datasetRoot).toBe("/datasets/cells_2024");
+  });
+
+  it("omits it rather than sending an empty one when it has none", async () => {
+    // A banner reading "the dataset folder  cannot be read" is worse than one naming nothing.
+    const anonymous = createApp({
+      blobStore: new MemoryBlobStore(),
+      metadataStore: new SqliteMetadataStore(":memory:"),
+    });
+
+    const response = await anonymous.handle(get("/health"));
+
+    expect(jsonBody(response)).not.toHaveProperty("datasetRoot");
+  });
+});

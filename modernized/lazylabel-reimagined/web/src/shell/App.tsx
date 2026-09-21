@@ -163,7 +163,17 @@ export function App({ client }: { readonly client: ApiClient }): ReactNode {
       {/* The dataset folder is the source of truth, so losing it blocks everything. */}
       {health?.dataset === "unreadable" && (
         <p role="alert" className="banner banner--error">
-          The dataset folder cannot be read. Nothing can be loaded or saved until it is available.
+          {/*
+            * NAMING THE PATH, which the failure-mode table asks for and which this did not do.
+            * "The dataset folder cannot be read" is true of a folder the operator configured, the
+            * server knows and the browser was never told -- so the one person who can fix it was
+            * given every word except the useful one. On a deployment pointed at the WRONG folder
+            * it is worse still, because that one looks healthy: it lists somebody else's images.
+            */}
+          {health?.datasetRoot === undefined
+            ? "The dataset folder cannot be read."
+            : `The dataset folder ${health.datasetRoot} cannot be read.`}{" "}
+          Nothing can be loaded or saved until it is available.
         </p>
       )}
 

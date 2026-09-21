@@ -80,7 +80,35 @@ describe("the application shell", () => {
     await waitFor(() => expect(screen.getByLabelText("Status").textContent).toMatch(/AI ready/));
   });
 
-  it("blocks with an alert when the dataset folder cannot be read", async () => {
+  it("blocks with an alert when the dataset folder cannot be read, NAMING it", async () => {
+    // The folder is the source of truth, so this is fatal and says so, rather than showing an
+    // empty file list that reads as "you have no images".
+    //
+    // And it names the path, which the failure-mode table asks for and which this did not do. The
+    // folder is one the operator configured and only the server knew, so the one person who can
+    // fix it was given every word except the useful one.
+    mount({
+      health: async () => ({
+        status: "unavailable",
+        dataset: "unreadable",
+        datasetRoot: "/datasets/cells_2024",
+        database: "ok",
+        degraded: [],
+        ai: AI_READY,
+      }),
+    });
+
+    await waitFor(() =>
+      expect(screen.getByRole("alert").textContent).toMatch(
+        /dataset folder .* cannot be read/i,
+      ),
+    );
+    expect(screen.getByRole("alert").textContent).toContain("/datasets/cells_2024");
+  });
+
+  it("still blocks when the server does not say which folder", async () => {
+    // An older API sends no path. A banner reading "cannot read undefined" would be worse than one
+    // that names nothing, so the sentence simply loses that clause.
     mount({
       health: async () => ({
         status: "unavailable",
@@ -91,9 +119,9 @@ describe("the application shell", () => {
       }),
     });
 
-    // The folder is the source of truth, so this is fatal and says so, rather than showing an empty
-    // file list that reads as "you have no images".
-    await waitFor(() => expect(screen.getByRole("alert").textContent).toMatch(/dataset folder cannot be read/i));
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent).toMatch(/dataset folder cannot be read/i);
+    expect(alert.textContent).not.toMatch(/undefined/);
   });
 
   it("warns without blocking when settings are unavailable", async () => {

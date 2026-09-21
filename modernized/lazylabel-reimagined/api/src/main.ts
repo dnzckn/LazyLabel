@@ -59,6 +59,8 @@ export function buildDeps(
     metadataStore: stores.metadataStore,
     logger: stores.logger,
     datasetHealthy: stores.datasetHealthy,
+    // So a blocking failure can name the folder the operator configured, not just describe it.
+    datasetRoot: config.datasetRoot,
     ...(inference === undefined ? {} : { inference }),
   };
 }

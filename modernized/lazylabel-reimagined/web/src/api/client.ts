@@ -56,6 +56,13 @@ export class ApiError extends Error {
 export interface ApiHealth {
   readonly status: string;
   readonly dataset: string;
+  /**
+   * The folder the server is pointed at, when it says.
+   *
+   * Optional because an older API does not send it, and a banner that read "cannot read undefined"
+   * would be worse than one that named nothing.
+   */
+  readonly datasetRoot?: string;
   readonly database: string;
   readonly degraded: string[];
   readonly ai: {

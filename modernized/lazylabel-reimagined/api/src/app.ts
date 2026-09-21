@@ -84,6 +84,17 @@ export interface AppDeps {
   /** Reports whether the dataset root is reachable. Drives the health endpoint. */
   readonly datasetHealthy?: () => Promise<boolean>;
   /**
+   * Where the dataset is, so a failure can NAME it.
+   *
+   * `AI_NATIVE_SPEC.md`'s failure-mode table asks for "a blocking error naming the path, never an
+   * empty file list", and the path never left the server: the browser said "the dataset folder
+   * cannot be read" about a folder only the operator had configured and only the server knew.
+   *
+   * Reported on every health response rather than only on failure, because a deployment pointed at
+   * the wrong folder looks healthy -- it lists somebody else's images perfectly well.
+   */
+  readonly datasetRoot?: string;
+  /**
    * The inference service, when one is configured.
    *
    * Absent is a supported deployment, not a broken one: the failure-mode table says everything
@@ -240,6 +251,7 @@ async function health(deps: AppDeps): Promise<ApiResponse> {
   return json(status, {
     status: dataset ? (database ? "ok" : "degraded") : "unavailable",
     dataset: dataset ? "ok" : "unreadable",
+    ...(deps.datasetRoot === undefined ? {} : { datasetRoot: deps.datasetRoot }),
     database: database ? "ok" : "unavailable",
     // The AI tools are a third independent axis. Losing them disables clicking objects with SAM
     // and nothing else, so it degrades rather than breaks -- RULE-084's behaviour, with the reason
