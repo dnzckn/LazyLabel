@@ -621,6 +621,14 @@ fieldset input {
   color: var(--muted);
 }
 
+/* References that could not seed. A list, because each one names a different file. */
+.timeline__propagation-skipped {
+  font-size: 0.85rem;
+  color: var(--muted);
+  margin: 0.4rem 0 0;
+  padding-left: 1.1rem;
+}
+
 /* A failure is loud. A cancel is not -- it reports what it KEPT, which is not bad news. */
 .timeline__propagation-error {
   color: var(--danger, #b3261e);

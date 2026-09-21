@@ -106,9 +106,19 @@ export interface WireSegmentResponse {
   readonly alternatives: readonly number[];
 }
 
+export interface WirePropagationReference {
+  /** Position in `sequence`, never a file name (RULE-017). */
+  readonly frame: number;
+  readonly objectId: number;
+  /** The user's OWN annotation, rasterized the way export rasterizes it. */
+  readonly mask: WireMask;
+}
+
 export interface WirePropagationStart {
   readonly sequence: readonly string[];
   readonly references: readonly number[];
+  /** The masks to carry. Separate from `references`: one frame can hold several objects. */
+  readonly objects?: readonly WirePropagationReference[];
   readonly start?: number;
   readonly end?: number;
   readonly streaming?: boolean;

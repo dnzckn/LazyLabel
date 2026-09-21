@@ -17,17 +17,19 @@
  * would be lying for the half second it takes.
  */
 
-import { useCallback, useEffect, type ReactNode } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 
 import type { ApiClient } from "../api/client.js";
 import { useSettings } from "../settings/SettingsProvider.jsx";
 import { useHotkey } from "../hotkeys/HotkeyProvider.jsx";
 
 import { usePropagation } from "./usePropagation.js";
+import { referenceMasks } from "./references.js";
 import type { Frame } from "./timeline.js";
 
 export interface PropagationControlProps {
   readonly client: ApiClient;
+  readonly projectId?: string;
   /** The timeline, in its own order. Frame positions in the request are indices into this. */
   readonly frames: readonly Frame[];
   /** Confidences as they arrive, so the timeline can colour itself while the job runs. */
@@ -38,16 +40,44 @@ export function PropagationControl({
   client,
   frames,
   onScores,
+  projectId = "default",
 }: PropagationControlProps): ReactNode {
   const { settings } = useSettings();
   const { progress, start, cancel, reset } = usePropagation(client);
+  /** What could not become a seed, and why. Reported rather than dropped. */
+  const [unusable, setUnusable] = useState<readonly { key: string; reason: string }[]>([]);
+  const [loading, setLoading] = useState(false);
 
   const references = frames
     .map((frame, index) => (frame.isReference ? index : -1))
     .filter((index) => index >= 0);
 
   const begin = useCallback(async () => {
-    if (references.length === 0 || progress.running) return;
+    if (references.length === 0 || progress.running || loading) return;
+
+    /*
+     * The reference MASKS are loaded before anything starts. They are the user's own annotations,
+     * and the service seeds SAM 2 with them rather than with prompts re-derived from them --
+     * re-clicking an object someone already drew gives a mask close to theirs and not theirs.
+     */
+    setLoading(true);
+    let seeds;
+    try {
+      seeds = await referenceMasks(
+        client,
+        projectId,
+        references.map((index) => ({ position: index, key: frames[index]!.key })),
+      );
+    } finally {
+      setLoading(false);
+    }
+
+    setUnusable(seeds.skipped);
+    if (seeds.objects.length === 0) {
+      // Every reference failed. Starting anyway is what legacy does, and it writes an empty mask
+      // over every frame in the sequence -- work that looks like work and undoes the user's.
+      return;
+    }
 
     /*
      * `stream_window_size` — RULE-026, and until this call the one setting in the schema that
@@ -59,9 +89,10 @@ export function PropagationControl({
     await start({
       sequence: frames.map((frame) => frame.key),
       references,
+      objects: seeds.objects,
       ...(Number.isFinite(window) && window > 0 ? { window } : {}),
     });
-  }, [frames, progress.running, references, settings.values, start]);
+  }, [client, frames, loading, progress.running, projectId, references, settings.values, start]);
 
   useHotkey("propagate", () => void begin());
 
@@ -86,14 +117,14 @@ export function PropagationControl({
         <button
           type="button"
           onClick={() => void begin()}
-          disabled={references.length === 0 || progress.running}
+          disabled={references.length === 0 || progress.running || loading}
           title={
             references.length === 0
               ? "Mark at least one frame as a reference first"
               : "Carry the reference masks through the sequence"
           }
         >
-          Propagate
+          {loading ? "Reading references…" : "Propagate"}
         </button>
 
         {progress.running && (
@@ -129,6 +160,19 @@ export function PropagationControl({
         <p className="timeline__propagation-error" role="alert">
           {progress.error}
         </p>
+      )}
+
+      {unusable.length > 0 && (
+        // Never silently dropped: a propagation that seeded from three of five references would
+        // produce a plausible result that is not the one the user asked for, and nothing on screen
+        // would say so.
+        <ul className="timeline__propagation-skipped">
+          {unusable.map((each) => (
+            <li key={`${each.key}:${each.reason}`}>
+              {each.key} could not seed: {each.reason}
+            </li>
+          ))}
+        </ul>
       )}
 
       {progress.empty.length > 0 && (

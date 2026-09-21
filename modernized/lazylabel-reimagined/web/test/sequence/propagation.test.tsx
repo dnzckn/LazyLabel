@@ -28,6 +28,17 @@ import type { Frame } from "../../src/sequence/timeline.js";
 afterEach(cleanup);
 
 const MASK = { height: 2, width: 2, box: [0, 0, 1, 1], data: "AQE=" };
+/** One annotation on a reference frame: a square the user drew. */
+const SQUARE = {
+  type: "Polygon",
+  classId: 0,
+  vertices: [
+    [1, 1],
+    [6, 1],
+    [6, 6],
+    [1, 6],
+  ],
+};
 /** A mask with no pixels: RULE-016 scores it, RULE-060 refuses to commit it. */
 const EMPTY_MASK = { height: 2, width: 2, box: [0, 0, -1, -1], data: "" };
 
@@ -68,6 +79,9 @@ function fakeClient(script: {
   start?: () => WirePropagationJob | Promise<WirePropagationJob>;
   poll?: (call: number, cursor: number) => WirePropagationJob | Promise<WirePropagationJob>;
   cancel?: () => WirePropagationJob | Promise<WirePropagationJob>;
+  /** What each reference frame's sidecar holds. A key with no entry has no annotations. */
+  annotations?: Record<string, readonly unknown[]>;
+  metadata?: () => never;
 }): Fake {
   const started: WirePropagationStart[] = [];
   const polls: { id: string; cursor: number }[] = [];
@@ -77,6 +91,21 @@ function fakeClient(script: {
   const client = {
     getSettings: async () => defaultSettings(),
     putSettings: async (next: unknown) => next,
+    imageMetadata: async () => {
+      if (script.metadata) script.metadata();
+      return { width: 8, height: 8, sourceDepth: 8, sourceChannels: 3, sourceFormat: "png" };
+    },
+    loadAnnotations: async (_project: string, key: string) => ({
+      kind: "loaded",
+      annotations: {
+        sourceFormat: "NPZ",
+        sourceFile: key,
+        revision: "r1",
+        segments: script.annotations?.[key] ?? [SQUARE],
+        classAliases: {},
+        failures: [],
+      },
+    }),
     startPropagation: async (request: WirePropagationStart) => {
       started.push(request);
       return script.start?.() ?? job();
@@ -152,6 +181,58 @@ describe("starting one", () => {
     fireEvent.keyDown(document, { key: defaultSettings().hotkeys["propagate"]!.primary });
 
     await waitFor(() => expect(fake.started).toHaveLength(1));
+  });
+
+  it("sends the user's OWN annotation as the seed", async () => {
+    // Legacy seeds with `add_new_mask`, not with clicks. Re-deriving a prompt from someone's
+    // polygon and clicking it again gives a mask close to theirs and not theirs.
+    const fake = fakeClient({});
+    show(fake);
+
+    fireEvent.click(propagate());
+
+    await waitFor(() => expect(fake.started).toHaveLength(1));
+    const objects = fake.started[0]!.objects!;
+    expect(objects).toHaveLength(1);
+    expect(objects[0]!.frame).toBe(0);
+    expect(objects[0]!.mask.data.length).toBeGreaterThan(0);
+  });
+
+  it("numbers objects with a running counter, as legacy does", async () => {
+    // `max(existing_ids, default=0) + 1`. Two annotations on two reference frames are TWO tracked
+    // objects, not one refined twice -- legacy makes no attempt to match them across frames.
+    const fake = fakeClient({});
+    show(fake, [frame(0, true), frame(1, true), frame(2), frame(3)]);
+
+    fireEvent.click(propagate());
+
+    await waitFor(() => expect(fake.started).toHaveLength(1));
+    expect(fake.started[0]!.objects!.map((each) => each.objectId)).toEqual([1, 2]);
+  });
+
+  it("REPORTS a reference it could not use instead of seeding from the rest", async () => {
+    // A propagation that quietly seeded from one of two references would produce a plausible
+    // result that is not the one the user asked for, and nothing on screen would say so.
+    const fake = fakeClient({ annotations: { [FRAMES[1]!.key]: [] } });
+    show(fake, [frame(0, true), frame(1, true), frame(2)]);
+
+    fireEvent.click(propagate());
+
+    expect(await screen.findByText(/no annotations to carry/)).toBeTruthy();
+    await waitFor(() => expect(fake.started).toHaveLength(1));
+    expect(fake.started[0]!.objects).toHaveLength(1);
+  });
+
+  it("will not start at all when NO reference could be used", async () => {
+    // Legacy starts anyway and writes an empty mask over every frame in the sequence -- work that
+    // looks like work and undoes the user's.
+    const fake = fakeClient({ annotations: { [FRAMES[0]!.key]: [] } });
+    show(fake);
+
+    fireEvent.click(propagate());
+
+    expect(await screen.findByText(/no annotations to carry/)).toBeTruthy();
+    expect(fake.started).toHaveLength(0);
   });
 
   it("shows progress against the total the job reports", async () => {
