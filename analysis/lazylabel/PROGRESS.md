@@ -770,11 +770,23 @@ A fourth batch added `add_reference_frame` — which needed a capability rather 
 user works — and `clear_points`.
 
 **Twenty-six of forty-three are live.** The remaining seventeen are named in the table as "not
-yet" rather than silently promised, and most of them are a decision rather than a wiring job:
-`zoom_in`, `zoom_out` and the four `pan_*` keys need a zoom and pan model this app does not have,
-because the browser does its own; `propagate` and `find_archetypes` are C11; `left_click`,
-`right_click` and `mouse_drag` are mouse bindings legacy lists in the same table and are not keys
-at all.
+yet" rather than silently promised, and `propagate` and `find_archetypes` are C11; `left_click`, `right_click` and `mouse_drag` are mouse
+bindings legacy lists in the same table and are not keys at all.
+
+**`zoom_in`, `zoom_out` and the four `pan_*` keys are a REAL GAP, and I had this wrong.** I
+recorded them earlier as a decision — the browser does its own zooming — and that is not the same
+thing. `.canvas` is capped at `max-height: 24rem`, so a 2000-pixel scan is displayed at 384
+pixels: five image pixels to one on screen, with no way to get closer. Placing a vertex on a
+boundary at that scale is guesswork. And the browser's own zoom scales the whole PAGE, panels
+included, which is not what an annotator wants — legacy's zoom is image-only for that reason.
+
+It is smaller to build than it looks, and today's work is why. Every drawing layer derives its
+scale from `getBoundingClientRect`, and the drawing surface is now exactly the image (see the
+coordinate defect above), so a zoom that changes the canvas's displayed WIDTH is followed by every
+tool without touching one of them. What is needed: a zoom factor per side in the store, beside the
+crop and the processing, since it is as per-image as they are; an explicit width on `.canvas` in
+place of the cap; the stack scrolling; and pan as drag-to-scroll once the image is larger than its
+pane. `pan_multiplier` is then the last of the settings gaps.
 
 **The eleventh is the one that costs a user their work.** `onNavigateAway` and `onClose` were
 written for decision 7's central case, tested on their own, exposed — and called by nothing. So
