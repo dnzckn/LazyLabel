@@ -801,9 +801,21 @@ function ConvertButton({
 
       {state.status === "saved" && (
         <>
-          <p role="status">
-            Wrote {Object.keys(state.result.written).join(", ")} beside {image.name}.
-          </p>
+          {Object.keys(state.result.written).length === 0 ? (
+            /*
+             * A SAVE THAT WROTE NOTHING IS NOT A SAVE, and this rendered "Wrote  beside f01.png."
+             * -- a blank list presented as a success. Legacy prints `annotations saved!` from a
+             * path that may have written nothing at all, because it reports the INTENT; the whole
+             * point of building this from the outcome is not to.
+             */
+            <p role="status" className="banner banner--warning">
+              No files were written for {image.name}.
+            </p>
+          ) : (
+            <p role="status">
+              Wrote {Object.keys(state.result.written).join(", ")} beside {image.name}.
+            </p>
+          )}
 
           {state.result.stale.length > 0 && (
             <p role="status" className="banner banner--warning">

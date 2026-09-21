@@ -48,11 +48,6 @@ export const UNREACHED: Readonly<Record<string, Reason>> = {
   // guard strips comments now; these are what was behind it, and each is a real gap rather than
   // dead code. `resetForPropagation` came off the list in the same commit, wired into the start of
   // a propagation run where RULE-075 says it belongs.
-  summarizeSave: awaiting(
-    "turns a save OUTCOME into what to tell the user, including the case legacy gets wrong -- a "
-      + "save that wrote no files is not a save. The save paths notify from the intent instead, so "
-      + "this is the correction nobody applied",
-  ),
   project: awaiting(
     "the image-to-display direction of the coordinate transform. Every drawing path needs only "
       + "`locate`, the other direction; this waits for the first feature that draws a known image "

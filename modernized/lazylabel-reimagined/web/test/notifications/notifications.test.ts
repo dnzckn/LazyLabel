@@ -15,7 +15,6 @@ import {
   create,
   dismiss,
   push,
-  summarizeSave,
   sticky,
   type Notification,
 } from "../../src/notifications/notifications.js";
@@ -124,78 +123,3 @@ describe("dismissing", () => {
   });
 });
 
-describe("describing a save", () => {
-  it("names the file when one was written", () => {
-    expect(summarizeSave({ written: { NPZ: "a.npz" }, stale: [], skippedEmpty: [] })).toEqual({
-      severity: "success",
-      message: "Saved a.npz.",
-    });
-  });
-
-  it("counts and lists when several were", () => {
-    const summary = summarizeSave({
-      written: { NPZ: "a.npz", COCO_JSON: "a_coco.json" },
-      stale: [],
-      skippedEmpty: [],
-    });
-
-    expect(summary.message).toBe("Saved 2 files: a.npz, a_coco.json.");
-  });
-
-  it("calls a save that wrote nothing exactly that", () => {
-    // Legacy prints "Multi-view annotations saved!" from a path that may have written nothing,
-    // because it reports the intent. A save that wrote no files is not a save.
-    const summary = summarizeSave({ written: {}, stale: [], skippedEmpty: [] });
-
-    expect(summary.severity).toBe("warning");
-    expect(summary.message).toBe("No files were written.");
-  });
-
-  it("reports stale sidecars and says they were left alone", () => {
-    // Decision 15f. A user told "these files are out of date" and not told they survived will
-    // assume they did not.
-    const summary = summarizeSave({ written: { NPZ: "a.npz" }, stale: ["a.xml"], skippedEmpty: [] });
-
-    expect(summary.detail).toContain("a.xml");
-    expect(summary.detail).toContain("left alone");
-  });
-
-  it("makes a save with stale files stay on screen", () => {
-    // It is still a success, but the user now has something to decide, and a decision does not
-    // belong behind a five-second timer.
-    const summary = summarizeSave({ written: { NPZ: "a.npz" }, stale: ["a.xml"], skippedEmpty: [] });
-
-    expect(summary.severity).toBe("warning");
-    expect(create("n", summary).autoDismissMs).toBeNull();
-  });
-
-  it("lets an ordinary save clear itself", () => {
-    const summary = summarizeSave({ written: { NPZ: "a.npz" }, stale: [], skippedEmpty: [] });
-
-    expect(create("n", summary).autoDismissMs).toBe(TRANSIENT_MS);
-  });
-
-  it("reports a format that produced nothing", () => {
-    const summary = summarizeSave({
-      written: { NPZ: "a.npz" },
-      stale: [],
-      skippedEmpty: ["PASCAL_VOC"],
-    });
-
-    expect(summary.detail).toContain("PASCAL_VOC");
-  });
-
-  it("reads correctly for one stale file and for several", () => {
-    const one = summarizeSave({ written: { NPZ: "a.npz" }, stale: ["a.xml"], skippedEmpty: [] });
-    const many = summarizeSave({
-      written: { NPZ: "a.npz" },
-      stale: ["a.xml", "a.txt"],
-      skippedEmpty: [],
-    });
-
-    expect(one.detail).toContain("a.xml is still on disk");
-    expect(one.detail).toContain("was left alone");
-    expect(many.detail).toContain("a.xml, a.txt are still on disk");
-    expect(many.detail).toContain("were left alone");
-  });
-});

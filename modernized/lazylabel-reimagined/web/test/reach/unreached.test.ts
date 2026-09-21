@@ -122,8 +122,9 @@ describe("the reasons are usable", () => {
   });
 
   it("names what replaced every dead one", () => {
-    // Nothing is classified `dead` today -- the four that were got deleted instead. The check
-    // stays because the next one will, and the rule for it should already be written down.
+    // Nothing is classified `dead` today -- the five that were got deleted instead, most recently
+    // `summarizeSave`, whose job the save report already did inline and better. The check stays
+    // because the next one will, and the rule for it should already be written down.
     for (const [name, reason] of Object.entries(UNREACHED)) {
       if (reason.kind !== "dead") continue;
       expect(reason.instead.length, `${name} does not say what took its place`).toBeGreaterThan(25);
@@ -135,6 +136,6 @@ describe("what the sweep currently finds", () => {
   it("reports the count, so a change in it shows up in the diff", () => {
     // Asserted rather than printed. Wiring one up fails this test, and the person who wired it
     // then removes its entry -- which is the whole mechanism.
-    expect(unreachedNow().length).toBe(2);
+    expect(unreachedNow().length).toBe(1);
   });
 });
