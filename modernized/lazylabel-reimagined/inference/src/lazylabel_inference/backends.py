@@ -248,3 +248,51 @@ def assert_weights_only_loading() -> None:
 
 # The class was called Sam2Backend when SAM 2 was the only family it served.
 Sam2Backend = PredictorBackend
+
+
+def load_video_predictor(entry: ModelEntry, model_dir: Path, *, device: str | None = None) -> Any:
+    """Build the SAM 2 VIDEO predictor — a different object from the image one.
+
+    `load_backend` builds `SAM2ImagePredictor`, which answers a prompt on one picture and has no
+    notion of a sequence. Propagation needs `build_sam2_video_predictor`, and nothing built one:
+    the propagation module, its windows and its job API were all complete while the predictor they
+    run on could not be constructed at all. The same built-but-unreachable shape this project keeps
+    finding, one layer further down again.
+
+    As with `load_backend`, the caller verifies the checkpoint against the manifest first; this
+    refuses to guess and will not silently load an unverified file. `sam2.build_sam` passes
+    `weights_only=True` explicitly, which is Phase 3 exit criterion 3 and applies here identically.
+
+    SAM 1 is refused by name rather than by a failure deep inside `sam2`: "this model cannot
+    propagate" is something a user can act on, and "config not found" is not.
+    """
+    if not entry.is_video_capable:
+        raise ModelNotLoadedError(
+            f"{entry.name} cannot propagate through a sequence; only SAM 2 has a video predictor"
+        )
+
+    config = SAM2_CONFIGS.get(entry.size)
+    if config is None:
+        raise ModelNotLoadedError(f"no SAM 2 config is known for size {entry.size!r}")
+
+    checkpoint = model_dir / entry.filename
+    if not checkpoint.is_file():
+        raise ModelNotLoadedError(f"{entry.filename} is not in {model_dir}")
+
+    try:
+        import torch
+
+        from sam2.build_sam import build_sam2_video_predictor
+    except ImportError as cause:
+        raise ModelNotLoadedError(
+            f"the AI stack is not installed: {cause}. "
+            "Install the AI extra: pip install lazylabel-inference[ai]"
+        ) from cause
+
+    resolved = device or ("cuda" if torch.cuda.is_available() else "cpu")
+    try:
+        return build_sam2_video_predictor(config, str(checkpoint), device=resolved)
+    except Exception as cause:
+        raise ModelNotLoadedError(
+            f"{entry.name}'s video predictor could not be loaded from {entry.filename}: {cause}"
+        ) from cause

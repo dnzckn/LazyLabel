@@ -40,8 +40,14 @@ from .jobs import (
     ResultsOverflowedError,
     UnknownJobError,
 )
-from .propagation import PropagationRequest
-from .service import ImageUnreadableError, InferenceService, UnknownHandleError, encode_mask
+from .propagation import PropagationRequest, ReferenceObject
+from .service import (
+    ImageUnreadableError,
+    InferenceService,
+    UnknownHandleError,
+    decode_mask,
+    encode_mask,
+)
 from .windows import DEFAULT_WINDOW, effective, novel_frames, plan
 
 MAX_BODY_BYTES = 64 * 1024 * 1024
@@ -349,6 +355,7 @@ def _propagation_request(body: dict[str, Any]) -> PropagationRequest:
         raise HttpError(400, "bad_request", "'model' must be a model name")
 
     return PropagationRequest(
+        objects=_reference_objects(body, len(sequence)),
         sequence=sequence,
         references=tuple(sorted(set(references))),
         start=bound("start"),
@@ -357,6 +364,44 @@ def _propagation_request(body: dict[str, Any]) -> PropagationRequest:
         window=window,
         model=model,
     )
+
+
+def _reference_objects(body: dict[str, Any], length: int) -> tuple[ReferenceObject, ...]:
+    """The masks to carry, decoded here so no layer below this one parses a wire format.
+
+    They are the user's OWN annotations rather than prompts re-derived from them: legacy seeds
+    propagation with `add_new_mask`, and re-clicking an object someone already drew gives a mask
+    close to theirs and not theirs.
+    """
+    raw = body.get("objects")
+    if raw is None:
+        return ()
+    if not isinstance(raw, list):
+        raise HttpError(400, "bad_request", "'objects' must be a list of reference masks")
+
+    objects: list[ReferenceObject] = []
+    for entry in raw:
+        if not isinstance(entry, dict):
+            raise HttpError(400, "bad_request", "each reference object must be an object")
+
+        frame = entry.get("frame")
+        if not isinstance(frame, int) or isinstance(frame, bool) or not 0 <= frame < length:
+            raise HttpError(
+                400, "bad_request", f"a reference object needs a frame position, got {frame!r}"
+            )
+
+        object_id = entry.get("objectId")
+        if not isinstance(object_id, int) or isinstance(object_id, bool):
+            raise HttpError(400, "bad_request", "a reference object needs an integer 'objectId'")
+
+        try:
+            mask = decode_mask(entry.get("mask"))
+        except InferenceError as cause:
+            raise _inference_error(cause) from cause
+
+        objects.append(ReferenceObject(frame=frame, object_id=object_id, mask=mask))
+
+    return tuple(objects)
 
 
 def _frames_to_cover(wanted: PropagationRequest) -> int:

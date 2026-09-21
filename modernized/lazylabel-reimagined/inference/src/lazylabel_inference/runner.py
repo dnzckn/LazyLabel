@@ -39,6 +39,7 @@ from typing import Any, Callable, Iterator
 
 from .propagation import (
     FrameResult,
+    ReferenceObject,
     PropagationRequest,
     StagedSequence,
     initialise_state,
@@ -48,22 +49,6 @@ from .propagation import (
 )
 from .prompts import InvalidPromptError
 from .windows import Window, effective, novel_frames, plan
-
-
-@dataclass(frozen=True)
-class ReferenceObject:
-    """One object the user has already drawn, on one frame, as the run's seed.
-
-    The mask is the user's OWN annotation rather than something re-derived from a prompt: legacy
-    seeds propagation with `add_new_mask`, and re-clicking an object someone already drew gives a
-    mask close to theirs and not theirs.
-    """
-
-    #: Position in `PropagationRequest.sequence`, never a file name (RULE-017).
-    frame: int
-    object_id: int
-    #: A decoded 2-D array. Decoding happens at the route, so this layer never parses wire formats.
-    mask: Any
 
 
 @dataclass

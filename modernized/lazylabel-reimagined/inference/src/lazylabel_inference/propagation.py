@@ -380,6 +380,22 @@ def propagate(
 
 
 @dataclass(frozen=True)
+class ReferenceObject:
+    """One object the user has already drawn, on one frame, as the run's seed.
+
+    The mask is the user's OWN annotation rather than something re-derived from a prompt: legacy
+    seeds propagation with `add_new_mask`, and re-clicking an object someone already drew gives a
+    mask close to theirs and not theirs.
+    """
+
+    #: Position in `PropagationRequest.sequence`, never a file name (RULE-017).
+    frame: int
+    object_id: int
+    #: A decoded 2-D array. Decoding happens at the route, so this layer never parses wire formats.
+    mask: Any
+
+
+@dataclass(frozen=True)
 class PropagationRequest:
     """What a caller asked for, parsed and validated, before any model is involved.
 
@@ -392,6 +408,12 @@ class PropagationRequest:
     sequence: tuple[str, ...]
     #: Frames carrying prompts, as positions in `sequence`. Propagation moves away from the lowest.
     references: tuple[int, ...]
+    """The masks to carry, one per object per reference frame.
+
+    Empty is legal HERE and refused by the runner, on purpose: the request type describes what was
+    asked for, and "you gave me no masks" is a better message than a validation error about a field.
+    """
+    objects: tuple[ReferenceObject, ...] = ()
     #: Inclusive range of positions to cover, or None for the whole timeline.
     start: int | None = None
     end: int | None = None

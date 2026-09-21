@@ -110,7 +110,66 @@ def build_deps(config, models, logger, manifest_error=None):
         logger=logger,
         manifest_error=manifest_error,
         service=service,
+        **({} if service is None else {"propagator": _propagator_for(service, models, logger)}),
     )
+
+
+def _propagator_for(service, models, logger):
+    """What runs inside a propagation job, bound to this service.
+
+    Built here rather than inside the runner because the runner is index arithmetic and takes a
+    predictor and a reader -- which is what lets its numbering be tested against a fake instead of
+    against a GPU. This is the three lines that turn those arguments into real ones.
+
+    The VIDEO predictor, not the image one: `load_backend` builds `SAM2ImagePredictor`, which
+    answers a prompt on one picture and has no notion of a sequence.
+    """
+    from .backends import load_video_predictor
+    from .prompts import ModelNotLoadedError
+    from .runner import run_propagation
+
+    loaded: dict[str, object] = {}
+
+    def propagate_job(request, cancel):
+        entry = _video_entry(models, request.model)
+        if entry.name not in loaded:
+            logger.log("info", "loading the video predictor", model=entry.name)
+            loaded[entry.name] = load_video_predictor(entry, service.model_dir, device=service.device)
+
+        return run_propagation(
+            loaded[entry.name],
+            service.read_image,
+            request,
+            list(request.objects),
+            cancel,
+        )
+
+    def _video_entry(entries, wanted):
+        """The model to propagate with: the one asked for, else the only video-capable one.
+
+        Refusing to GUESS between several is deliberate. Which checkpoint produced a mask changes
+        the mask, and picking one alphabetically would make a propagation's results depend on a
+        detail nobody chose.
+        """
+        capable = [each for each in entries if each.is_video_capable]
+        if wanted is not None:
+            for each in capable:
+                if each.name == wanted:
+                    return each
+            raise ModelNotLoadedError(
+                f"no video-capable model called {wanted!r} is in the manifest"
+            )
+        if not capable:
+            raise ModelNotLoadedError("no video-capable model is in the manifest")
+        if len(capable) > 1:
+            raise ModelNotLoadedError(
+                "several models can propagate ("
+                + ", ".join(each.name for each in capable)
+                + "); name the one to use"
+            )
+        return capable[0]
+
+    return propagate_job
 
 
 def main() -> int:

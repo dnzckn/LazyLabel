@@ -160,6 +160,18 @@ class InferenceService:
             )
         return session.backend.predict(prompt)
 
+    def read_image(self, image_key: str) -> Any:
+        """One image by its dataset key, decoded as RGB uint8.
+
+        Public because a propagation reads a whole SEQUENCE and the runner that does it is
+        deliberately not given this service -- it takes a reader, so its index arithmetic can be
+        tested against a fake instead of against a folder of pictures.
+
+        The same `_resolve` guard as every other path in: a key that escapes the dataset root is
+        refused here rather than by whatever the filesystem happens to do with it.
+        """
+        return self._read_image(self._resolve(image_key))
+
     def _resolve(self, image_key: str) -> Path:
         """Turn a dataset-relative key into a path, refusing anything that escapes the root."""
         if not image_key or "\0" in image_key or "\\" in image_key:

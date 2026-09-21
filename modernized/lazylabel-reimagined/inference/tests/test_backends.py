@@ -12,8 +12,8 @@ from pathlib import Path
 
 import pytest
 
-from lazylabel_inference.backends import SAM2_CONFIGS, load_backend
-from lazylabel_inference.manifest import parse_manifest
+from lazylabel_inference.backends import SAM2_CONFIGS, load_backend, load_video_predictor
+from lazylabel_inference.manifest import ManifestError, parse_manifest
 from lazylabel_inference.prompts import ModelNotLoadedError
 
 HAS_TORCH = importlib.util.find_spec("torch") is not None
@@ -101,3 +101,62 @@ class TestWeightsOnly:
         # If upstream ever drops this, the guarantee falls back to the torch default alone, and
         # this test is where we find out rather than in an incident.
         assert "weights_only=True" in source
+
+
+class TestTheVideoPredictor:
+    """`load_video_predictor` — the object propagation runs on, which nothing built.
+
+    `load_backend` builds `SAM2ImagePredictor`, which answers a prompt on one picture and has no
+    notion of a sequence. The propagation module, its windows, its runner and its job API were all
+    complete while the predictor they run on could not be constructed at all.
+
+    No checkpoint is needed for any case here: every one is a refusal, and the refusals are what a
+    user actually meets.
+    """
+
+    def entry(self, tmp_path, *, family: str = "sam2", size: str = "large"):
+        import hashlib
+        import json
+
+        content = b"weights" * 10
+        (tmp_path / "model.pth").write_bytes(content)
+        return parse_manifest(
+            json.dumps(
+                {
+                    "models": [
+                        {
+                            "name": f"{family} {size}",
+                            "family": family,
+                            "size": size,
+                            "filename": "model.pth",
+                            "sha256": hashlib.sha256(content).hexdigest(),
+                            "bytes": len(content),
+                        }
+                    ]
+                }
+            )
+        )[0]
+
+    def test_sam1_is_refused_BY_NAME_rather_than_failing_inside_sam2(self, tmp_path) -> None:
+        # "This model cannot propagate" is something a user can act on. "Config not found" is not.
+        with pytest.raises(ModelNotLoadedError, match="only SAM 2 has a video predictor"):
+            load_video_predictor(self.entry(tmp_path, family="sam1", size="vit_h"), tmp_path)
+
+    def test_a_size_with_no_config_cannot_REACH_the_loader(self, tmp_path) -> None:
+        """The loader's own check for an unknown size is unreachable, and that is worth recording.
+
+        `load_video_predictor` refuses a size it has no config for, mirroring `_load_sam2`. Trying
+        to test it showed the manifest parser gets there first: an entry with a size SAM 2 does not
+        have never becomes a `ModelEntry` at all. So the guarantee lives one layer up, and this
+        asserts it there -- rather than deleting the loader's check, which is the right kind of
+        defence for a function that can be called directly.
+        """
+        with pytest.raises(ManifestError):
+            self.entry(tmp_path, size="enormous")
+
+    def test_a_missing_checkpoint_names_the_file_and_the_folder(self, tmp_path) -> None:
+        entry = self.entry(tmp_path)
+        (tmp_path / "model.pth").unlink()
+
+        with pytest.raises(ModelNotLoadedError, match="model.pth is not in"):
+            load_video_predictor(entry, tmp_path)

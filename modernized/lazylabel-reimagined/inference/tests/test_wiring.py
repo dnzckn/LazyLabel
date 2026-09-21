@@ -113,18 +113,26 @@ class TestReadingItFromTheEnvironment:
             )
 
 
-class TestPropagationIsNotWiredYET:
-    def test_no_propagator_is_built_and_the_route_says_503_rather_than_pretending(
+class TestPropagationIsWiredNow:
+    """The propagator is built too, and this test used to assert the opposite.
+
+    It said "no propagator exists and the route says 503" -- true when the job API was built and
+    what ran inside a job was not. Inverting it is what closing that slice looks like. What is
+    still missing is a CHECKPOINT, which is a different thing from a missing implementation and
+    fails differently.
+    """
+
+    def test_a_dataset_root_produces_a_propagator(self, tmp_path: pathlib.Path) -> None:
+        deps = build_deps(config(tmp_path, root=tmp_path), [], Logger())
+
+        assert deps.propagator is not None
+
+    def test_without_a_root_there_is_none_and_the_route_says_503(
         self, tmp_path: pathlib.Path
     ) -> None:
-        """The job API is built; what runs INSIDE a job is not, and this records that honestly.
-
-        Staging a sequence and seeding SAM 2 from the reference frames' own annotations is the next
-        slice. Until it exists `Deps.propagator` stays None and the route answers 503 with a reason
-        -- which is the same answer the prompt routes gave before this commit wired them, and it is
-        the answer that must not quietly become a 202 for a job that will never produce a frame.
-        """
-        deps = build_deps(config(tmp_path, root=tmp_path), [], Logger())
+        # A propagation reads a whole sequence, so with nowhere to read from there is nothing to
+        # run. The route says so rather than starting a job that could never produce a frame.
+        deps = build_deps(config(tmp_path, root=None), [], Logger())
 
         assert deps.propagator is None
 
@@ -137,4 +145,22 @@ class TestPropagationIsNotWiredYET:
         )
 
         assert response.status == 503
-        assert "video-capable model" in response.body
+
+    def test_an_empty_manifest_fails_when_the_JOB_runs_not_when_it_starts(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """A manifest with no video-capable model is a job that FAILS, not a route that refuses.
+
+        Deliberate, and worth stating. Which checkpoints are usable can change while the service
+        runs -- a file is installed, a hash starts matching -- so the route would be answering a
+        question whose answer it cannot hold. The job's failure carries the reason and the frames
+        it managed, which is the machinery that already exists for exactly this.
+        """
+        from lazylabel_inference.prompts import ModelNotLoadedError
+        from lazylabel_inference.propagation import PropagationRequest
+
+        deps = build_deps(config(tmp_path, root=tmp_path), [], Logger())
+        assert deps.propagator is not None
+
+        with pytest.raises(ModelNotLoadedError, match="no video-capable model"):
+            deps.propagator(PropagationRequest(("a.png", "b.png"), (0,)), None)
