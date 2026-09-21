@@ -14,6 +14,7 @@ import * as path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import {
+  comparedCount,
   normalizeEol,
   roundTripFolder,
   sameBytes,
@@ -219,5 +220,56 @@ describe("round-tripping a folder on disk", () => {
     await roundTripFolder(root, "frames");
 
     expect((await readdir(path.join(root, "frames"))).sort()).toEqual(before);
+  });
+});
+
+
+describe("what counts as having been compared", () => {
+  /**
+   * The exit code depends on this, and the exit code is what Phase 6's criterion is checked by.
+   *
+   * The harness reported "Every annotation file round-tripped identically" with an exit code of
+   * zero over a corpus of bare images -- no annotation file read at all. That is the exact failure
+   * this tool exists to catch, turned on the tool itself, and it means the criterion could be met
+   * by pointing at the wrong directory.
+   */
+  const image = (status: string) => ({
+    key: "a.png",
+    status: status as never,
+    detail: "",
+    formats: [] as string[],
+    differing: [] as string[],
+  });
+
+  it("counts a file that round-tripped", () => {
+    expect(comparedCount([{ folder: "f", images: [image("identical")] }])).toBe(1);
+  });
+
+  it("counts one that DIFFERED, because a difference is evidence too", () => {
+    expect(comparedCount([{ folder: "f", images: [image("differs")] }])).toBe(1);
+  });
+
+  it("counts an unreadable one, which is a finding rather than an absence", () => {
+    expect(comparedCount([{ folder: "f", images: [image("unreadable")] }])).toBe(1);
+  });
+
+  it("does NOT count an image with no annotations beside it", () => {
+    // An ordinary thing for an image to be, and evidence of nothing.
+    expect(comparedCount([{ folder: "f", images: [image("skipped")] }])).toBe(0);
+  });
+
+  it("is zero for a corpus of bare images, however many there are", () => {
+    const bare = Array.from({ length: 200 }, () => image("skipped"));
+
+    expect(comparedCount([{ folder: "f", images: bare }])).toBe(0);
+  });
+
+  it("adds up across datasets", () => {
+    expect(
+      comparedCount([
+        { folder: "a", images: [image("identical"), image("skipped")] },
+        { folder: "b", images: [image("differs")] },
+      ]),
+    ).toBe(2);
   });
 });

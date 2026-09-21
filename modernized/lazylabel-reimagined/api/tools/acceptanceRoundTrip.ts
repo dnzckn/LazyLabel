@@ -74,6 +74,22 @@ export function sameBytes(format: string, before: Uint8Array, after: Uint8Array)
 }
 
 /** A one-line summary per dataset, and the exit code that follows from it. */
+/**
+ * How many annotation files were actually read and re-exported.
+ *
+ * ITS OWN FUNCTION BECAUSE THE EXIT CODE DEPENDS ON IT, and the exit code is what Phase 6's
+ * criterion is checked by. A `skipped` image is one with no annotations beside it, which is a
+ * perfectly ordinary thing for an image to be and is NOT evidence of anything -- so a corpus made
+ * entirely of them has proven nothing, however cleanly it ran.
+ */
+export function comparedCount(outcomes: readonly DatasetOutcome[]): number {
+  return outcomes.reduce(
+    (total, outcome) =>
+      total + outcome.images.filter((image) => image.status !== "skipped").length,
+    0,
+  );
+}
+
 export function summarize(outcomes: readonly DatasetOutcome[]): {
   readonly lines: readonly string[];
   readonly failed: number;
@@ -316,10 +332,33 @@ export async function main(argv: readonly string[]): Promise<number> {
   for (const line of lines) console.log(line);
 
   console.log("");
+
+  /*
+   * NOTHING ROUND-TRIPPED IS NOT SUCCESS, and this reported it as success until someone ran the
+   * harness against a folder of bare images to see what it would say.
+   *
+   * It is the exact failure the tool exists to catch, turned on the tool itself: an exit code of
+   * zero and "every annotation file round-tripped identically" over a corpus where no annotation
+   * file was read at all. Phase 6's exit criterion is checked by running this, so a vacuous pass
+   * here is a criterion that can be met by pointing at the wrong directory.
+   */
+  const compared = comparedCount(outcomes);
+
+  if (compared === 0) {
+    console.log(
+      "NOTHING WAS COMPARED: no dataset in this corpus has annotation files to round-trip.",
+    );
+    console.log(
+      "This is not a pass. Check the corpus path, and that each dataset folder holds its "
+        + "sidecars beside its images.",
+    );
+    return 2;
+  }
+
   console.log(
     failed === 0
-      ? "Every annotation file round-tripped identically."
-      : `${failed} file(s) did not round-trip. Each is listed above.`,
+      ? `Every annotation file round-tripped identically (${compared} compared).`
+      : `${failed} of ${compared} file(s) did not round-trip. Each is listed above.`,
   );
   return failed === 0 ? 0 : 1;
 }
