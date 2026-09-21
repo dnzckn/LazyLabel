@@ -4,6 +4,11 @@
  * A 1000x800 image with X = "-10:1200" and Y = "50:700" stores (0, 50, 999, 700): x clamps to
  * [0, 999] and y to [0, 799]. The crop then blanks everything outside it on save, which is why
  * being one pixel out deletes a row of somebody's work.
+
+ *
+ * Names RULE-045 so the rule is traceable to the test that proves it: a rule named in
+ * NO test cannot be audited, because "covered by a test that does not say so" and "not
+ * covered" look identical to a reviewer. Crop coordinate validation and reuse by image size.
  */
 
 import { describe, expect, it } from "vitest";

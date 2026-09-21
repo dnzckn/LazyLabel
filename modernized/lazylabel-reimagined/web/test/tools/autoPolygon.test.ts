@@ -9,6 +9,11 @@
  * The geometry is not retested here: `findExternalContours`, `arcLength` and `approxPolyDP` are
  * Phase 1's OpenCV ports with their own goldens. What is tested is the sequence legacy runs
  * (`segment_manager._mask_to_polygon_vertices`), its slider mapping, and each case it refuses.
+
+ *
+ * Names RULE-021 so the rule is traceable to the test that proves it: a rule named in
+ * NO test cannot be audited, because "covered by a test that does not say so" and "not
+ * covered" look identical to a reviewer. Auto-convert AI masks to polygons.
  */
 
 import { describe, expect, it } from "vitest";

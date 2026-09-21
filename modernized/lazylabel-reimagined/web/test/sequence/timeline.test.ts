@@ -5,6 +5,11 @@
  * the Sort puts FLAGGED almost last, below pending, and Clear Flags resets SKIPPED frames while a
  * new propagation run does not. Both are legacy's, both are reproduced, and both look like bugs
  * until you know why.
+
+ *
+ * Names RULE-064, RULE-093 so the rule is traceable to the test that proves it: a rule named in
+ * NO test cannot be audited, because "covered by a test that does not say so" and "not
+ * covered" look identical to a reviewer. Clear Flags repaints non-reference frames as pending; the timeline is built from the file list order between Start and End.
  */
 
 import { describe, expect, it } from "vitest";

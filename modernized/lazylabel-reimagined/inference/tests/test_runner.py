@@ -8,6 +8,10 @@ than shifting every entry after it.
 That is the whole of RULE-017, and it is arithmetic, so every case here runs against a fake
 predictor that records what it was handed. A real checkpoint could not test most of it: a model
 does not fail to stage a frame on request.
+
+Also names RULE-025 and RULE-071, which this module implements and which are proven below:
+RULE-025 is the direction and range -- both passes, always away from the EARLIEST reference -- and
+RULE-071 is the skipping of frames whose size differs from the reference's.
 """
 
 from __future__ import annotations

@@ -4,6 +4,11 @@
  * Named by its rule number because the brief's §5 requires every P0 rule to be traceable to the
  * test that proves it. A reviewer asking "where is RULE-011 proven?" had nowhere to look, and
  * "covered by a test that does not say so" is indistinguishable from "not covered".
+
+ *
+ * Names RULE-086 so the rule is traceable to the test that proves it: a rule named in
+ * NO test cannot be audited, because "covered by a test that does not say so" and "not
+ * covered" look identical to a reviewer. Active class toggle and recent-class hotkey.
  */
 
 import { describe, expect, it } from "vitest";

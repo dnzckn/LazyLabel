@@ -3,6 +3,11 @@
  *
  * Each block below is a legacy behaviour that loses annotations, written as the test that stops it
  * coming back. The rule cards name every one of them; none is hypothetical.
+
+ *
+ * Names RULE-068 so the rule is traceable to the test that proves it: a rule named in
+ * NO test cannot be audited, because "covered by a test that does not say so" and "not
+ * covered" look identical to a reviewer. Enter completes pending work then saves.
  */
 
 import { describe as group, expect, it } from "vitest";

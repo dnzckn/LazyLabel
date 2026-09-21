@@ -7,6 +7,10 @@ to die on frame 40, and that is the case most worth having.
 
 What a checkpoint is still needed for is proving the RESULTS match legacy's, which is Phase 6's
 exit criterion 2 and a different claim from this one.
+
+Names RULE-044, propagation's preconditions, which the refusals below are: a request with no
+reference frame to carry from, and a service with no video-capable model, are both answered before
+any work starts rather than part-way through it.
 """
 
 from __future__ import annotations

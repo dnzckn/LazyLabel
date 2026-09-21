@@ -3,6 +3,11 @@
  *
  * The card's worked example is the anchor: an AI mask and a 350-vertex polygon selected, press R,
  * and edit mode opens with no handles and a message; with only the AI mask selected it refuses.
+
+ *
+ * Names RULE-061 so the rule is traceable to the test that proves it: a rule named in
+ * NO test cannot be audited, because "covered by a test that does not say so" and "not
+ * covered" look identical to a reviewer. Undoing a circle centre drag changes its radius.
  */
 
 import { describe, expect, it } from "vitest";

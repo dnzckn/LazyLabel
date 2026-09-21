@@ -43,6 +43,20 @@ const TEST_ROOTS = [
  * defect -- which this project has refused to do once already, for `file_manager_show_name`.
  */
 const DELIBERATELY_NOT_IMPLEMENTED: Readonly<Record<string, string>> = {
+  "RULE-042":
+    "decision 7's sibling for class names: legacy accepts any alias, including an empty one and a "
+    + "duplicate, and the exporters then write files whose class names collide. This validates on "
+    + "entry instead, so the divergence is deliberate and the rule is not copied.",
+  "RULE-065":
+    "decision 8: legacy's Sequence tab briefly OPENS an image outside the timeline, saves the "
+    + "current frame without marking it saved, and bounces back. That is three surprising things "
+    + "to implement faithfully; here the dataset browser and the timeline are separate controls "
+    + "and opening an image from either does what it says.",
+  "RULE-073":
+    "a legacy DEFECT this app fixes rather than reproduces: legacy re-evaluates flags in the "
+    + "engine and not on the timeline, so a Min Conf change moves which frames Save All writes "
+    + "without moving which ones look flagged. Here one threshold drives both, so there is "
+    + "nothing to keep in step -- see decision 7 on never losing work silently.",
   "RULE-054":
     "decision 7: closing never saves, and this app never had anything to save on close -- "
     + "annotations are written by an explicit act, so there is no auto-save to suppress.",
@@ -80,6 +94,24 @@ async function collectTests(root: string): Promise<string[]> {
   return found;
 }
 
+/**
+ * P1 rules naming a feature this app has NOT BUILT. Not divergences — work.
+ *
+ * Kept apart from the deliberate list above on purpose. "We chose not to" and "nobody has yet" are
+ * different sentences, and a table that blurs them lets unbuilt work retire quietly as a decision.
+ */
+const NOT_BUILT_YET: Readonly<Record<string, string>> = {
+  "RULE-077":
+    "Trim. Cut removes the frames between two markers from the timeline and Keep removes "
+    + "everything outside them, touching no files. Nothing in the sequence panel offers either.",
+  "RULE-090":
+    "a timeline frame should show its fresh PROPAGATED masks, not the file on disk. Today a "
+    + "propagation's results reach the timeline's colours and the Save button and stop there, so "
+    + "opening a propagated frame shows whatever its sidecar held -- which for a frame that has "
+    + "never been annotated is nothing. The masks can be saved without ever being looked at, "
+    + "which is half of 'propagate labels and REVIEW them by confidence'.",
+};
+
 describe("every P0 rule is traceable to a test", () => {
   it("names each one, or records why this app does not implement it", async () => {
     const markdown = await readFile(RULES, "utf-8");
@@ -103,6 +135,51 @@ describe("every P0 rule is traceable to a test", () => {
       untraceable,
       `these P0 rules are named by no test and by no decision: ${untraceable.join(", ")}`,
     ).toEqual([]);
+  });
+
+  it("names every P1 rule too, or records it as a divergence or as unbuilt", async () => {
+    /*
+     * The same question of the next list down, and it has already earned its place: asking it of
+     * P1 found `resetForPropagation` unwired (RULE-075), a recorded seeding divergence (RULE-023),
+     * and propagation feeding SAM frames of the wrong size (RULE-071).
+     *
+     * P1 is not P0 -- these are not money, regulatory or data-integrity rules -- so an entry here
+     * may be work rather than a decision, and `NOT_BUILT_YET` is where that is said out loud.
+     */
+    const markdown = await readFile(RULES, "utf-8");
+
+    const p1 = [...markdown.matchAll(/^### (RULE-\d+):[\s\S]*?\*\*Priority:\*\*\s*(P\d)/gm)]
+      .filter((match) => match[2] === "P1")
+      .map((match) => match[1]!);
+
+    expect(p1.length, "no P1 rules were found; the parse is wrong").toBeGreaterThan(30);
+
+    const files = (await Promise.all(TEST_ROOTS.map(collectTests))).flat();
+    const haystack = (await Promise.all(files.map((file) => readFile(file, "utf-8")))).join("\n");
+
+    const unaccounted = p1.filter(
+      (rule) =>
+        !haystack.includes(rule)
+        && DELIBERATELY_NOT_IMPLEMENTED[rule] === undefined
+        && NOT_BUILT_YET[rule] === undefined,
+    );
+
+    expect(
+      unaccounted,
+      `these P1 rules are named by no test, no decision and no gap: ${unaccounted.join(", ")}`,
+    ).toEqual([]);
+  });
+
+  it("does not let unbuilt work retire as a decision", () => {
+    // The two lists must stay apart. A rule in both would be a gap wearing a decision's clothes.
+    const both = Object.keys(NOT_BUILT_YET).filter(
+      (rule) => DELIBERATELY_NOT_IMPLEMENTED[rule] !== undefined,
+    );
+
+    expect(both, "listed as both a decision and unbuilt").toEqual([]);
+    for (const [rule, why] of Object.entries(NOT_BUILT_YET)) {
+      expect(why.length, `${rule} does not say what is missing`).toBeGreaterThan(60);
+    }
   });
 
   it("explains every deliberate divergence properly", () => {

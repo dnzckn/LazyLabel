@@ -5,6 +5,11 @@
  * the browser only ever receives what comes after. What is tested here is the ASKING: that an
  * empty request produces no query at all, that the widget's marker-spacing rule holds, and that
  * the channels offered follow the source.
+
+ *
+ * Names RULE-067 so the rule is traceable to the test that proves it: a rule named in
+ * NO test cannot be audited, because "covered by a test that does not say so" and "not
+ * covered" look identical to a reviewer. Crop persistence across image navigation.
  */
 
 import { describe, expect, it } from "vitest";
