@@ -252,6 +252,26 @@ That sweep is also what found RULE-023's divergence, now recorded: legacy seeds 
 from MASK segments and silently ignores an unsaved polygon, where this rasterizes every shape with
 the exporters' own function and reads all references from disk (decision 5).
 
+**The P1 sweep has now found three real defects,** which is the argument for finishing it rather
+than leaving 17 rules untraceable:
+
+- RULE-075 -> `resetForPropagation` existed, was tested, and nothing called it; a second Propagate
+  left frames the new run did not reach showing a green status whose masks had just been discarded.
+- RULE-023 -> a recorded divergence: legacy seeds only from MASK segments and silently ignores an
+  unsaved polygon, where this rasterizes every shape and reads all references from disk.
+- RULE-071 -> **propagation fed SAM frames of the wrong size instead of skipping them.** SAM 2's
+  video state is one stack of frames, so a differently sized one is either rejected deep inside the
+  loader -- ending a 600-frame run over one bad image -- or silently resized, which moves every
+  mask it produces.
+
+Writing that last fix, a broad `except Exception` around the new block swallowed a NameError (the
+image reader was called by the wrong name), so there was simply no reference size and every frame
+passed the check. The catch is narrow now. A broad except around code that can contain a typo turns
+a crash into a silently disabled feature -- the same shape as every other defect found here.
+
+**Still untraceable: 17 P1 rules and 3 P2.** Guarding P1 the way P0 is guarded is the next slice of
+this thread, and each rule read so far has been worth reading.
+
 **Blocked on the owner:**
 
 - **C11's EQUIVALENCE** — not its API, which is built. Proving the propagated masks and the
