@@ -64,15 +64,10 @@ UNBLOCKED; everything below it needs something only the owner can provide.
    six need a zoom and pan model this app does not have (the browser does its own); three are
    mouse bindings rather than keys; two are C11. What is genuinely wireable is down to a handful,
    so this is no longer the first thing to pick up.
-2. **The wire's `modified` and `size`.** Four of the sort's six orders need them, and so do the
-   last two column settings — `file_manager_show_modified` and `file_manager_show_size`, the only
-   gaps left in that group. `listing.ts` has an explicit "ONE PASS, NOT SEVEN PER IMAGE"
-   optimisation, so do NOT add a stat per image to the default listing: add a `?details=1` the
-   client asks for only when a column or a sort needs it. Everything else in the browser is done,
-   and the unsupported orders are disabled in the control and named in a banner rather than
-   silently falling through.
+2. **RULE-089, Operate On View** is now the largest unbuilt rule and the first thing to pick up.
+   See below.
 
-3. **RULE-089, Operate On View.** The largest single rule left unbuilt. The setting is read by
+3. **RULE-089, Operate On View, in detail.** The setting is read by
    nothing and the AI panel says so on screen. Honouring it means the AI request carries the
    ADJUSTED pixels, because the browser applies brightness/contrast/gamma and the model reads the
    file — a contract change across three packages, and the inference half cannot be verified here
