@@ -6,7 +6,7 @@
  * block a user who could be working or let one label into a void.
  */
 
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { defaultSettings } from "@lazylabel/settings-schema";
@@ -168,18 +168,32 @@ describe("the application shell", () => {
     expect(screen.getByLabelText("Dataset").textContent).toMatch(/Segments/);
   });
 
-  it("shows the hotkey reference when its own hotkey is pressed", async () => {
+  it("shows the hotkey reference from its button", async () => {
+    // It used to have a KEY, and that key was `fit_view`. The binding was honest scaffolding when
+    // the dispatcher was new -- the first wire through it, proving the path end to end -- and it
+    // became a lie once the reference table began reporting `fit_view` as live. A key listed under
+    // that name, with its key beside it, that opens a list of keys instead of fitting the image is
+    // worse than one that does nothing: a user presses it once and stops trusting the table.
     mount({});
     await waitFor(() => expect(screen.getByText(/Show hotkeys/)).toBeTruthy());
 
-    // "." is bound to fit_view, which the shell registers. This is the hotkey path end to end:
-    // event, translation, binding lookup, handler.
+    fireEvent.click(screen.getByText(/Show hotkeys/));
+
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Hotkeys" })).toBeTruthy());
+    expect(screen.getByText("merge_segments")).toBeTruthy();
+  });
+
+  it("does NOT open the reference on the fit_view key", async () => {
+    // The specific regression. "." fits the image now, and must not do this.
+    mount({});
+    await waitFor(() => expect(screen.getByText(/Show hotkeys/)).toBeTruthy());
+
     document.dispatchEvent(
       new KeyboardEvent("keydown", { code: "Period", key: ".", bubbles: true, cancelable: true }),
     );
 
-    await waitFor(() => expect(screen.getByRole("heading", { name: "Hotkeys" })).toBeTruthy());
-    expect(screen.getByText("merge_segments")).toBeTruthy();
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(screen.queryByRole("heading", { name: "Hotkeys" })).toBeNull();
   });
 });
 

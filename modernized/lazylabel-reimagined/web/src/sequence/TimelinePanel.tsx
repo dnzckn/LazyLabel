@@ -172,6 +172,7 @@ export function TimelinePanel({
   useHotkey("prev_flagged_frame", () => navigate("flagged", -1));
   useHotkey("next_reference_frame", () => navigate("reference", 1));
   useHotkey("prev_reference_frame", () => navigate("reference", -1));
+  useHotkey("find_archetypes", () => void find());
   useHotkey("next_suggested_frame", () => navigate("suggested", 1));
   useHotkey("prev_suggested_frame", () => navigate("suggested", -1));
 

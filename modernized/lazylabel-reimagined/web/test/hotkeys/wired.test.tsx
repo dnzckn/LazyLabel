@@ -229,6 +229,27 @@ describe("the hotkey reference", () => {
     expect(row.textContent).toContain("not yet");
   });
 
+  it("marks zoom and fit as working, now that they are", async () => {
+    // All three were listed with a key and answered by nothing. `fit_view` was worse than the
+    // other two: it was WIRED, to toggling this very table, which is scaffolding that became a lie
+    // the moment the table started reporting it live.
+    const table = await openReference();
+
+    for (const action of ["zoom_in", "zoom_out", "fit_view"]) {
+      expect(rowFor(table, action).textContent, action).toContain("yes");
+    }
+  });
+
+  it("still reports the MOUSE bindings as not yet, because they are not keys", async () => {
+    // Three of the schema's actions are mouse bindings. No keyboard dispatcher will ever answer
+    // them, and reporting them as live would be the same lie in a different direction.
+    const table = await openReference();
+
+    for (const action of ["left_click", "right_click", "mouse_drag"]) {
+      expect(rowFor(table, action).textContent, action).toContain("not yet");
+    }
+  });
+
   it("counts them in the summary, so the scale is visible without reading every row", async () => {
     await openReference();
 

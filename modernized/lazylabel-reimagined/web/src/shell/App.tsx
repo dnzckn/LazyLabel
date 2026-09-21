@@ -99,8 +99,17 @@ export function App({ client }: { readonly client: ApiClient }): ReactNode {
     };
   }, [client]);
 
-  // The shell's own hotkey, and the proof the dispatcher works end to end.
-  useHotkey("fit_view", () => setShowHotkeys((open) => !open));
+  /*
+   * `fit_view` USED TO LIVE HERE AND DID THE WRONG THING. It toggled the hotkey reference, which
+   * was honest scaffolding when it was written -- the first wire through a new dispatcher, proving
+   * the thing worked end to end -- and became a lie the moment the reference table started
+   * reporting it as live. A key called `fit_view`, listed under that name with its key beside it,
+   * that opens a list of keys instead of fitting the image is worse than a key that does nothing:
+   * a user presses it once, gets something unexpected, and stops trusting the table.
+   *
+   * It is now in `ZoomControl`, where `setZoom` already is and where fitting is what it means.
+   * The reference dialog keeps its button and loses a binding the schema never gave it.
+   */
 
   /*
    * NEXT AND PREVIOUS IMAGE -- the keys an annotator presses more than any other, and the second
@@ -325,6 +334,19 @@ function ZoomControl(): ReactNode {
     const from = zoom ?? 1;
     setZoom(Math.min(8, Math.max(0.125, by === 1 ? from * 2 : from / 2)));
   };
+
+  /*
+   * The keys, which the schema has always listed and nothing has ever answered.
+   *
+   * ABOVE the early return, because a hook cannot be conditional -- so they are registered even
+   * with no image open, where zooming changes nothing visible. That is the same bargain the
+   * segment table's keys make, and the reference table means the same thing by "live": a handler
+   * exists. Duplicating each action's enablement into that table is where it would start to drift.
+   */
+  useHotkey("zoom_in", () => step(1));
+  useHotkey("zoom_out", () => step(-1));
+  // Fit, which is this app's default and is NOT 1:1 -- one-to-one on a large scan shows a corner.
+  useHotkey("fit_view", () => setZoom(null));
 
   if (open === null) return null;
 
