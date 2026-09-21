@@ -84,9 +84,7 @@ export const CAPABILITIES: readonly Capability[] = [
     id: "C11",
     summary: "Propagate labels through a sequence and review them by confidence",
     builtIn: "P3, P6",
-    webStatus: "pending",
-    webPhase: "P6",
-    missing: "the propagation controls and the progress socket",
+    webStatus: "built",
   },
   {
     id: "C12",

@@ -124,24 +124,31 @@ describe("the application shell", () => {
     );
   });
 
-  it("lists every capability with its status, so nothing reads as built that is not", async () => {
+  it("lists every capability with its status, and none of them now reads as pending", async () => {
+    /*
+     * This assertion has been rewritten three times as the table emptied, and each rewrite is the
+     * point rather than an inconvenience. It named C4 while drawing was unbuilt, then C11 while
+     * propagation was, and now there is nothing left to name.
+     *
+     * What it guards has never changed: the table must not read as available for something that
+     * is not. `coverage.test.ts` keeps the other direction honest -- a capability marked built
+     * with no acceptance test behind it fails there.
+     */
     mount({});
     await waitFor(() => expect(screen.getByRole("button", { name: /What is built/ })).toBeTruthy());
 
-    // The table now lives in a panel that starts closed, so the reference is out of the way
-    // without being gone.
+    // The table lives in a panel that starts closed, so the reference is out of the way without
+    // being gone.
     screen.getByRole("button", { name: /What is built/ }).click();
 
-    // C4 was the example when it was pending; it is built now, and drawing IS reachable. The
-    // assertion moved to one that is still unbuilt rather than being deleted, because what it
-    // guards is that the table never reads as available for something that is not: C11 is
-    // propagation, which has no controls and no progress socket.
     await waitFor(() =>
       expect(screen.getByText(/Propagate labels through a sequence/).closest("tr")?.textContent)
-        .toMatch(/P6/),
+        .toMatch(/built/),
     );
-    // And the built one reads as built, so the table is not simply saying "P6" to everything.
     expect(screen.getByText(/Draw and edit polygons/).closest("tr")?.textContent).toMatch(/built/);
+    // And not by saying "built" to everything: a row that is this service's business at all says
+    // so, and the ones that are not are marked rather than claimed.
+    expect(screen.queryByText(/pending/)).toBeNull();
   });
 
   it("offers every tool panel, with nothing left named as missing", async () => {

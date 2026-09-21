@@ -17,7 +17,7 @@
  * legacy does — it runs the whole sequence and writes an empty mask over every frame.
  */
 
-import { useCallback, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 
 import type { WireDatasetImage } from "@lazylabel/contracts";
 
@@ -172,6 +172,26 @@ export function TimelinePanel({
   useHotkey("prev_flagged_frame", () => navigate("flagged", -1));
   useHotkey("next_reference_frame", () => navigate("reference", 1));
   useHotkey("prev_reference_frame", () => navigate("reference", -1));
+  /*
+   * APPLY THE THRESHOLD WHEN SCORES ARRIVE, not only when the slider moves.
+   *
+   * Without this a propagation finished and the timeline did not change: the histogram filled in,
+   * the frames stayed grey, and nothing said which of them needed review until the user happened
+   * to nudge Min Conf. RULE-060's flag is the whole review half of the capability, and a flag that
+   * appears only if you touch an unrelated control is a flag nobody sees.
+   *
+   * Keyed on the scores themselves, so re-running a propagation re-flags rather than leaving the
+   * previous run's colours in place.
+   */
+  const scoreKey = JSON.stringify(ownScores);
+  useEffect(() => {
+    if (Object.keys(ownScores).length === 0) return;
+    setOverrides((previous) => applyThreshold(previous ?? frames, ownScores, threshold));
+    // `frames` is derived from `overrides`, so depending on it here would re-enter this effect on
+    // its own result. The scores and the threshold are what should trigger a re-flag.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scoreKey, threshold]);
+
   useHotkey("find_archetypes", () => void find());
   useHotkey("next_suggested_frame", () => navigate("suggested", 1));
   useHotkey("prev_suggested_frame", () => navigate("suggested", -1));
