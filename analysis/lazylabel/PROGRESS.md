@@ -200,6 +200,32 @@ The capability table gained a `caveat` field to say this honestly. `missing` is 
 propagates, and that its results match legacy is unproven -- and collapsing them would overstate
 the guarantee, which is the worse of the two errors.
 
+**BOTH HARNESSES THE OWNER WILL USE HAVE NOW BEEN RUN.** They had been written and never
+executed, which is this project's recurring defect one level out: a tool nobody has run is a tool
+nobody knows works, and recorded sequences and real datasets are the worst possible thing to find
+that out with.
+
+- `capture_propagation_goldens.py` came through clean. Checkpoint, frames and seed are validated
+  BEFORE the model loads, so a mistyped seed costs a second rather than a 2.4 GB load, and each
+  refusal names what it wanted. Driven to the point where only a real checkpoint was missing, it
+  failed there and said so.
+- **The acceptance harness called an empty corpus a pass.** Pointed at a folder of bare images it
+  printed "Every annotation file round-tripped identically" and exited zero, having read no
+  annotation file at all -- its own purpose turned on itself. Nothing compared is exit 2 now,
+  distinct from pass and from failure, and a real pass reports the count so the claim is checkable.
+  Verified both ways against a corpus with one annotation written into it by the API.
+
+**Also fixed by counting rather than by anything failing:** `fit_view` was bound to toggling the
+hotkey reference -- scaffolding from when the dispatcher was new, and a lie once the reference
+table began reporting it live. And a finished propagation left the timeline grey: the threshold was
+applied only in the Min Conf slider's change handler, so RULE-060's flag appeared only if the user
+touched a control they had no reason to touch.
+
+**All three guards are now empty.** 0 unread settings (from 13), 0 unreached functions (from 13),
+40 of 43 hotkeys live -- the three that are not are mouse bindings, pinned as such by a test so
+nobody "fixes" them into a lie. Every capability is built, and the web table's `PLACEHELD` list is
+empty with its guard kept.
+
 **Blocked on the owner:**
 
 - **C11's EQUIVALENCE** — not its API, which is built. Proving the propagated masks and the
