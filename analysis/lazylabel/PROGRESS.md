@@ -61,12 +61,12 @@ missing from this table entirely, which is how a table stops being a census.
 | Package | Passing | Note |
 |---|---|---|
 | exporters | 1991 | the seven formats, byte-for-byte against goldens legacy wrote |
-| web | 1208 | includes the four propagation-golden scenarios, 16 tests against legacy's own sequence mode |
+| web | 1218 | includes the four propagation-golden scenarios (16 tests against legacy's own sequence mode) and the tile planning |
 | inference | 604 | plus 43 skipped: the differentials and the golden comparison, which need real checkpoints. With them: 647 passed, 0 skipped |
-| api | 422 | plus 4 skipped (SEC-09's symlink tests, where the OS will not make a link, as on this machine) and 1 todo (C8's placeholder) |
+| api | 440 | plus 4 skipped (SEC-09's symlink tests, where the OS will not make a link, as on this machine); no todo left, since C8 is built |
 | settings-schema | 55 | includes the rule-fixed defaults |
 | converter | 30 | the pickled-alias rewrite |
-| contracts | 28 | the wire shapes both sides agree on |
+| contracts | 36 | the wire shapes both sides agree on, and the tile pyramid's geometry |
 
 Each figure is read from that package's own run. Four commit messages this week quoted a count
 that had been typed before the run printed it and needed amending, which is why the rule is now
@@ -489,7 +489,7 @@ configured, so a green CI run says nothing about them — see `Running the live 
 **The owner's answers, 2026-09-23.** Asked as questions, answered as follows:
 - **Ctrl+Plus/Minus keep zooming** (RULE-033). The divergence from legacy's annotation-size
   shortcut is now a decision, recorded as such in `web/test/rules/p0Coverage.test.ts`.
-- **Image tiles: build them now** (C8). This is the work in progress.
+- **Image tiles: build them now** (C8). **Built**, below.
 - **The sequence timeline keeps legacy's behaviour** (C10): rebuilt from the files, nothing new
   stored.
 - **Python 3.12 goes in a separate venv**, leaving the shared `E:env\lazylabel` alone. The suites
@@ -598,6 +598,29 @@ question stays here, because the tile work is judged against it. On 2026-09-23 a
 
 Over a 100 Mbit/s link the transfer alone is about 3.3 s. Tiles mean a tiled canvas as well as a
 route, since a route nothing calls is the defect this project keeps finding.
+
+**Tiles are built, route and canvas, and C8 is complete (2026-09-23).** The API serves
+`/images/{key}/tiles/{z}/{x}/{y}`: 512-pixel PNG tiles of the same processed view `/pixels` serves.
+Level 0 is the image's own pixels. Each level above is the one below averaged in 2x2 blocks with
+integer rounding, so a tile is the same bytes on every machine. One decode serves every tile of a
+view. The geometry lives in `@lazylabel/contracts`, so the browser asks for exactly the tiles
+that exist. `c8.tiles.test.ts` holds every level-0 tile of an 1100 x 700 image to that region of
+`/pixels`, and the levels above to a longhand 2x2 reference.
+
+The canvas draws the coarsest level first, then the level matching how large the image is drawn,
+and only the tiles in view. Its backing store is still the image's size, so no drawing layer
+measures anything differently. Run in the browser pane on a regenerated noisy 50-megapixel 16-bit
+TIFF (336 MB on disk):
+- **fitted**: three tiles, **322 KB** against the 41 MB PNG before. The first paint still waits
+  about 2 s cold, because the server decodes the TIFF, which tiles do not change;
+- **at 1:1**: only the four tiles in view, 2 MB, in 182 ms;
+- **scrolled to the centre**: the 12 tiles around the view, the centre tile first, in 118 ms. The
+  pixels are exact: the disc reads (19, 19, 253), its 16-bit colour truncated by 256 per RULE-024;
+- **fitted again** after zooming, the whole picture is right;
+- **brightness +50**: the same on both sides of a tile seam, and in the coarse region too.
+
+A tile that fails to load falls back to the whole image, as it loaded before. The split view's
+panes use tiles too.
 
 **The five security findings the brief said must be designed out have been audited against the
 new code. Three of the five had not been.** Checked 2026-09-23:

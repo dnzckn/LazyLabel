@@ -60,6 +60,7 @@ async function mount(segments: readonly WireSegment[]) {
       },
     } as unknown as AnnotationsResult),
     pixelsUrl: () => "/pixels",
+    tileUrl: () => "/tile",
   } as unknown as ApiClient;
 
   // `useHotkey` throws without a provider by design -- a hook that quietly works without one

@@ -59,6 +59,7 @@ function mount(result: AnnotationsResult) {
     }),
     models: async () => [],
     pixelsUrl: () => "/pixels",
+    tileUrl: () => "/tile",
     saveAnnotations,
   } as unknown as ApiClient;
 

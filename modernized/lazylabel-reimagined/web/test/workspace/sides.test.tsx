@@ -117,6 +117,7 @@ function mount(client: Partial<ApiClient> = {}, confirm: (summary: string) => bo
     imageMetadata: async () => ({ width: 10, height: 20, sourceDepth: 8, sourceFormat: "png" }),
     loadAnnotations: async () => loaded(2),
     pixelsUrl: () => "/pixels",
+    tileUrl: () => "/tile",
     ...client,
   } as unknown as ApiClient;
 

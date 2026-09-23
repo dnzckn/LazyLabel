@@ -91,6 +91,11 @@ export function OpenImageView({
       // conversion and the browser only ever receives what comes after it. The query is "" when
       // nothing is asked for, so an unprocessed image keeps the URL the browser has cached.
       pixelsUrl={client.pixelsUrl(projectId, open.image.key, processingQuery(processing))}
+      // C8: the same picture a tile at a time, so a 50-megapixel image fitted to the pane costs a
+      // few hundred kilobytes rather than 41 MB and a half-second stall.
+      tileUrl={(z, x, y) =>
+        client.tileUrl(projectId, open.image.key, z, x, y, processingQuery(processing))
+      }
     />
   );
 }
@@ -105,6 +110,7 @@ function OpenedImage({
   error,
   metadata,
   pixelsUrl,
+  tileUrl,
 }: {
   readonly client: ApiClient;
   readonly projectId: string;
@@ -117,6 +123,8 @@ function OpenedImage({
   readonly error: string | null;
   readonly metadata: WireImageMetadata | null;
   readonly pixelsUrl: string;
+  /** One tile of the same picture (C8). The canvas falls back to `pixelsUrl` if tiles fail. */
+  readonly tileUrl?: (z: number, x: number, y: number) => string;
 }): ReactNode {
   const { settings } = useSettings();
   // The LIVE names, not the ones the file held: a class renamed since loading must be written
@@ -331,6 +339,7 @@ function OpenedImage({
                 adjustments={adjustments}
                 zoom={zoom}
                 onError={onCanvasError}
+                {...(tileUrl === undefined ? {} : { tileUrl, pane: scrollRef })}
               />
             )}
 

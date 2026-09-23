@@ -50,6 +50,7 @@ function mount(client: Partial<ApiClient>) {
     imageMetadata: async () => ({ width: 1, height: 1, sourceDepth: 8, sourceFormat: "png" }),
     models: async () => [],
     pixelsUrl: () => "/api/pixels",
+    tileUrl: () => "/tile",
     thumbnailUrl: () => "/api/thumbnail",
     ...client,
   } as ApiClient;

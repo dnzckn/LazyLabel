@@ -67,6 +67,7 @@ function mount(answer: boolean, result: AnnotationsResult = loaded()) {
     imageMetadata: async () => ({ width: 10, height: 10, sourceDepth: 8, sourceFormat: "png" }),
     loadAnnotations: async () => result,
     pixelsUrl: () => "/pixels",
+    tileUrl: () => "/tile",
   } as unknown as ApiClient;
 
   render(

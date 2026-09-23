@@ -117,6 +117,7 @@ function mount({
       })),
     loadAnnotations: async (_project: string, key: string) => annotations(counts[key] ?? 0),
     pixelsUrl: () => "/pixels",
+    tileUrl: () => "/tile",
   } as unknown as ApiClient;
 
   render(

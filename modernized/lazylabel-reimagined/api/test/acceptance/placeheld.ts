@@ -9,4 +9,6 @@
  * can drift from the other unnoticed.
  */
 
-export const PLACEHELD = ["C8"] as const;
+// Empty since 2026-09-23, when C8's tiles were built and drawn. Kept rather than deleted: the next
+// capability someone plans without building belongs here, and `coverage.test.ts` will say so.
+export const PLACEHELD: readonly string[] = [];

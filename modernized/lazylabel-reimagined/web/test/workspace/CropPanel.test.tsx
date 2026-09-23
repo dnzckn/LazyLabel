@@ -43,6 +43,7 @@ function mount(size: { width: number; height: number } = { width: 1000, height: 
     imageMetadata: async () => ({ ...size, sourceDepth: 8, sourceFormat: "png" }),
     loadAnnotations: async () => ({ kind: "none" }),
     pixelsUrl: () => "/pixels",
+    tileUrl: () => "/tile",
   } as unknown as ApiClient;
 
   return render(

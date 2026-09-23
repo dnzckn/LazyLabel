@@ -280,6 +280,9 @@ export function App({ client }: { readonly client: ApiClient }): ReactNode {
                 pixelsUrl={(key, processing) =>
                   client.pixelsUrl("default", key, processingQuery(processing))
                 }
+                tileUrl={(key, processing, z, x, y) =>
+                  client.tileUrl("default", key, z, x, y, processingQuery(processing))
+                }
               />
             </Panel>
 

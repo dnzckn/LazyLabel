@@ -61,6 +61,7 @@ function show(overrides: Record<string, unknown> = {}) {
     loadAnnotations: async () => LOADED,
     imageMetadata: async () => ({ width: 1920, height: 1080, sourceDepth: 8, sourceFormat: "png" }),
     pixelsUrl: () => "/api/pixels",
+    tileUrl: () => "/tile",
     thumbnailUrl: () => "/api/thumbnail",
     getSettings: async () => defaultSettings(),
     putSettings: async (settings: unknown) => settings,

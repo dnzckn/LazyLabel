@@ -69,6 +69,7 @@ function mount(sourceChannels = 1) {
     }),
     models: async () => [],
     pixelsUrl,
+    tileUrl: () => "/tile",
     thumbnailUrl: () => "/thumbnail",
     saveAnnotations,
   } as unknown as ApiClient;

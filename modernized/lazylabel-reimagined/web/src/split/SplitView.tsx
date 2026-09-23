@@ -63,9 +63,14 @@ export interface SplitViewProps {
    * and the other raw, which in a comparison view is the one thing that must not happen.
    */
   readonly pixelsUrl: (key: string, processing: ImageProcessing) => string;
+  /**
+   * One tile of the same processed picture (C8). A pane is fitted, so it needs one coarse level of
+   * each image -- two 50-megapixel images side by side were two 41 MB downloads before tiles.
+   */
+  readonly tileUrl?: (key: string, processing: ImageProcessing, z: number, x: number, y: number) => string;
 }
 
-export function SplitView({ images, pixelsUrl }: SplitViewProps): ReactNode {
+export function SplitView({ images, pixelsUrl, tileUrl }: SplitViewProps): ReactNode {
   const { sides, activeSide, setActiveSide, openImageOn, closeSide, linked, setLinked, linkReport } =
     useWorkspace();
   const [left, right] = sides;
@@ -208,7 +213,7 @@ export function SplitView({ images, pixelsUrl }: SplitViewProps): ReactNode {
               key={side}
               className={`split__pane${activeSide === side ? " split__pane--active" : ""}`}
             >
-              <Pane side={sides[side]} pixelsUrl={pixelsUrl} />
+              <Pane side={sides[side]} pixelsUrl={pixelsUrl} {...(tileUrl === undefined ? {} : { tileUrl })} />
               <figcaption>
                 {sides[side].open.image.name}
                 {activeSide === side && right.open !== null ? " — editing" : ""}
@@ -246,9 +251,11 @@ function sizeOf(side: SideState): ImageSize | null {
 function Pane({
   side,
   pixelsUrl,
+  tileUrl,
 }: {
   readonly side: SideState;
   readonly pixelsUrl: (key: string, processing: ImageProcessing) => string;
+  readonly tileUrl?: (key: string, processing: ImageProcessing, z: number, x: number, y: number) => string;
 }): ReactNode {
   const open = side.open;
   if (open === null) return null;
@@ -271,6 +278,9 @@ function Pane({
   return (
     <AnnotationCanvas
       imageUrl={pixelsUrl(open.image.key, side.processing)}
+      {...(tileUrl === undefined
+        ? {}
+        : { tileUrl: (z: number, x: number, y: number) => tileUrl(open.image.key, side.processing, z, x, y) })}
       width={size.width}
       height={size.height}
       // The LIVE segments, straight from the store, so an edit made in the centre view appears

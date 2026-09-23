@@ -10,15 +10,22 @@
  * objects the difference is 25 GB against a few megabytes, which is the whole reason the wire
  * format is bounded in the first place. Undoing that here would put the cost straight back.
  *
+ * THE IMAGE ARRIVES IN TILES when `tileUrl` is given (C8): first the coarsest level, one tile
+ * holding the whole picture, then the level matching how large it is drawn, and only the tiles in
+ * view. A 50-megapixel TIFF was a 41 MB PNG and a half-second stall before this; fitted to a pane
+ * it is now a few hundred kilobytes. The canvas stays the size of the image in pixels, so every
+ * drawing layer measures it exactly as before -- only how the pixels get onto it has changed.
+ *
  * Colours come from RULE-034, so a dataset looks the way the user's desktop app drew it.
  */
 
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 
 import { maskRegion, type WireSegment } from "@lazylabel/contracts";
 
 import { NEUTRAL, adjustImage, isNeutral, type Adjustments } from "../tools/adjustments.js";
 import { classColor } from "./classColor.js";
+import { tileId, tileRect, tilesInView, topLevel, visibleRegion, type ScreenRect, type TileKey } from "./tiles.js";
 
 export interface AnnotationCanvasProps {
   readonly imageUrl: string;
@@ -39,6 +46,50 @@ export interface AnnotationCanvasProps {
    */
   readonly adjustments?: Adjustments;
   readonly onError?: (reason: string) => void;
+  /**
+   * Where one tile of the image is (C8). Given, the image arrives a tile at a time; absent, whole
+   * from `imageUrl`, which is also what a failed tile falls back to.
+   */
+  readonly tileUrl?: (z: number, x: number, y: number) => string;
+  /** The scrolling box the canvas sits in, so only the tiles in view are fetched. */
+  readonly pane?: RefObject<HTMLElement | null>;
+}
+
+interface Loaded {
+  readonly key: TileKey;
+  readonly image: HTMLImageElement;
+}
+
+/** The 2D context, or null with the reason reported -- in all three of the ways it can be missing. */
+function contextOf(
+  canvas: HTMLCanvasElement,
+  onError?: (reason: string) => void,
+): CanvasRenderingContext2D | null {
+  // The spec says null; jsdom returns UNDEFINED after logging "not implemented"; a browser with
+  // canvas disabled by policy throws. `=== null` catches one of the three, and the other two turn
+  // into a TypeError inside the load handler -- a blank view and a stack trace, not a fallback.
+  let context: CanvasRenderingContext2D | null | undefined;
+  try {
+    context = canvas.getContext("2d");
+  } catch {
+    context = null;
+  }
+  if (!context) {
+    onError?.("this browser did not provide a 2D canvas");
+    return null;
+  }
+  return context;
+}
+
+function viewport(): ScreenRect {
+  return { left: 0, top: 0, right: window.innerWidth, bottom: window.innerHeight, width: window.innerWidth, height: window.innerHeight };
+}
+
+/** Whether a segment's mask box reaches into a region; a segment with no box cannot. */
+function reaches(segment: WireSegment, x: number, y: number, width: number, height: number): boolean {
+  const box = segment.mask?.box;
+  if (box == null) return false;
+  return box[0] < x + width && box[2] > x && box[1] < y + height && box[3] > y;
 }
 
 export function AnnotationCanvas({
@@ -50,28 +101,145 @@ export function AnnotationCanvas({
   opacity = 0.5,
   adjustments = NEUTRAL,
   onError,
+  tileUrl,
+  pane,
 }: AnnotationCanvasProps): ReactNode {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
+  /*
+   * THE TILE STATE. Refs rather than state because tiles arrive between renders and are drawn
+   * straight onto the canvas; putting them in state would re-render the whole view per tile.
+   *
+   * `identity` is tile 0/0/0's URL -- the image and its processing in one string -- because the
+   * `tileUrl` function a parent passes is a new function on every render, and a view that
+   * restarted its tiles whenever its parent rendered would never finish loading.
+   */
+  const identity = tileUrl?.(0, 0, 0) ?? null;
+  const tileUrlRef = useRef(tileUrl);
+  tileUrlRef.current = tileUrl;
+  const paneRef = useRef(pane);
+  paneRef.current = pane;
+  const loaded = useRef(new Map<string, Loaded>());
+  const pending = useRef(new Set<string>());
+  /** The finest level drawn so far: a coarser tile arriving after it needs a repaint, not a draw. */
+  const finest = useRef(Number.POSITIVE_INFINITY);
+  const latest = useRef({ width, height, segments, opacity, adjustments, onError });
+  latest.current = { width, height, segments, opacity, adjustments, onError };
+  /** Set by the first tile that fails: this image is then loaded whole, as it was before tiles. */
+  const [whole, setWhole] = useState(false);
+
+  // A new image or processing is a new pyramid. Declared before the painting effect, so the store
+  // is empty by the time that effect runs for the new image.
+  const [shownIdentity, setShownIdentity] = useState(identity);
+  if (shownIdentity !== identity) {
+    setShownIdentity(identity);
+    setWhole(false);
+  }
+  useEffect(() => {
+    loaded.current = new Map();
+    pending.current = new Set();
+    finest.current = Number.POSITIVE_INFINITY;
+  }, [identity]);
+
+  const tiled = identity !== null && !whole;
+
+  /** Everything, from the tiles already here: coarse first, finer over it, then the overlay. */
+  const paintAll = useRef((context: CanvasRenderingContext2D) => {
+    const now = latest.current;
+    context.clearRect(0, 0, now.width, now.height);
+    const tiles = [...loaded.current.values()].sort((a, b) => b.key.z - a.key.z);
+    for (const { key, image } of tiles) {
+      const at = tileRect(key, image.naturalWidth, image.naturalHeight);
+      context.drawImage(image, at.x, at.y, at.width, at.height);
+    }
+    finest.current = tiles.length === 0 ? Number.POSITIVE_INFINITY : tiles[tiles.length - 1]!.key.z;
+    applyAdjustments(context, now.width, now.height, now.adjustments, now.onError);
+    for (const segment of now.segments) drawSegment(context, segment, now.opacity);
+  });
+
+  /** One tile that has just arrived: drawn, adjusted, and the overlay redrawn over it alone. */
+  const drawTile = useRef((context: CanvasRenderingContext2D, key: TileKey, image: HTMLImageElement) => {
+    if (key.z > finest.current) {
+      // Coarser than what is already there: drawn directly it would paint blur over detail.
+      paintAll.current(context);
+      return;
+    }
+    finest.current = key.z;
+    const now = latest.current;
+    const at = tileRect(key, image.naturalWidth, image.naturalHeight);
+    const x = at.x;
+    const y = at.y;
+    const w = Math.min(at.width, now.width - x);
+    const h = Math.min(at.height, now.height - y);
+    if (w <= 0 || h <= 0) return;
+
+    context.drawImage(image, at.x, at.y, at.width, at.height);
+    applyAdjustments(context, w, h, now.adjustments, now.onError, { x, y });
+    // The overlay, redrawn over this region only. The tile has just replaced every pixel in it,
+    // overlay included, so drawing the masks again here blends them exactly once.
+    context.save();
+    context.beginPath();
+    context.rect(x, y, w, h);
+    context.clip();
+    for (const segment of now.segments) {
+      if (reaches(segment, x, y, w, h)) drawSegment(context, segment, now.opacity);
+    }
+    context.restore();
+  });
+
+  /** Ask for whatever the current view needs and does not have. */
+  const requestTiles = useRef(() => {
+    const canvas = canvasRef.current;
+    const url = tileUrlRef.current;
+    if (canvas === null || url === undefined) return;
+    const now = latest.current;
+    const wanted: TileKey[] = [{ z: topLevel(now.width, now.height), x: 0, y: 0 }];
+    const drawn = canvas.getBoundingClientRect();
+    const scroller = paneRef.current?.current ?? null;
+    const view = visibleRegion(drawn, scroller?.getBoundingClientRect() ?? viewport(), now.width, now.height);
+    if (view !== null) {
+      const scale = (drawn.width / now.width) * (window.devicePixelRatio || 1);
+      wanted.push(...tilesInView(now.width, now.height, view, scale));
+    }
+
+    const store = loaded.current;
+    for (const key of wanted) {
+      const id = tileId(key);
+      if (store.has(id) || pending.current.has(id)) continue;
+      pending.current.add(id);
+      const image = new Image();
+      image.onload = () => {
+        // A tile for an image no longer shown: the store it belonged to has been replaced.
+        if (loaded.current !== store) return;
+        pending.current.delete(id);
+        store.set(id, { key, image });
+        const context = canvasRef.current === null ? null : contextOf(canvasRef.current);
+        if (context !== null) drawTile.current(context, key, image);
+      };
+      image.onerror = () => {
+        if (loaded.current !== store) return;
+        pending.current.delete(id);
+        // One failed tile and the image is loaded whole, as it was before tiles existed: a view
+        // with a hole in it is worse than a slower one.
+        setWhole(true);
+      };
+      image.src = url(key.z, key.x, key.y);
+    }
+  });
+
+  // THE PAINTING: everything that changes what is drawn repaints in full.
   useEffect(() => {
     const canvas = canvasRef.current;
     if (canvas === null) return;
+    const context = contextOf(canvas, onError);
+    if (context === null) return;
+    const drawingContext = context;
 
-    // Three ways this fails, and only one of them is the documented one. The spec says null; jsdom
-    // returns UNDEFINED after logging "not implemented"; a browser with canvas disabled by policy
-    // throws. `=== null` catches one of the three, and the other two turn into a TypeError inside
-    // the load handler -- which is to say, a blank view and a stack trace rather than a fallback.
-    let context: CanvasRenderingContext2D | null | undefined;
-    try {
-      context = canvas.getContext("2d");
-    } catch {
-      context = null;
-    }
-    if (!context) {
-      onError?.("this browser did not provide a 2D canvas");
+    if (tiled) {
+      paintAll.current(drawingContext);
+      requestTiles.current();
       return;
     }
-    const drawingContext = context;
 
     let cancelled = false;
     const image = new Image();
@@ -98,7 +266,32 @@ export function AnnotationCanvas({
     return () => {
       cancelled = true;
     };
-  }, [imageUrl, width, height, segments, opacity, adjustments, onError]);
+  }, [tiled, identity, imageUrl, width, height, segments, opacity, adjustments, onError]);
+
+  // WHAT IS IN VIEW CHANGES as the pane scrolls, the window resizes or the zoom redraws the canvas
+  // at another size; each asks for the tiles the new view needs, once per animation frame at most.
+  useEffect(() => {
+    if (!tiled) return;
+    let frame = 0;
+    const schedule = () => {
+      if (frame !== 0) return;
+      frame = requestAnimationFrame(() => {
+        frame = 0;
+        requestTiles.current();
+      });
+    };
+    const scroller = pane?.current ?? null;
+    scroller?.addEventListener("scroll", schedule, { passive: true });
+    window.addEventListener("resize", schedule);
+    const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(schedule);
+    if (canvasRef.current !== null) observer?.observe(canvasRef.current);
+    return () => {
+      if (frame !== 0) cancelAnimationFrame(frame);
+      scroller?.removeEventListener("scroll", schedule);
+      window.removeEventListener("resize", schedule);
+      observer?.disconnect();
+    };
+  }, [tiled, identity, pane]);
 
   return (
     <canvas
@@ -153,13 +346,15 @@ export function applyAdjustments(
   height: number,
   adjustments: Adjustments,
   onError?: (reason: string) => void,
+  /** Only this part of the canvas: where one tile has just been drawn. The whole canvas if absent. */
+  region: { readonly x: number; readonly y: number } = { x: 0, y: 0 },
 ): void {
   if (isNeutral(adjustments) || width <= 0 || height <= 0) return;
 
   try {
-    const frame = context.getImageData(0, 0, width, height);
+    const frame = context.getImageData(region.x, region.y, width, height);
     adjustImage(frame.data, adjustments);
-    context.putImageData(frame, 0, 0);
+    context.putImageData(frame, region.x, region.y);
   } catch (cause: unknown) {
     onError?.(
       "the image adjustments could not be applied, so the image is shown unadjusted "

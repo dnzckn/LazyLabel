@@ -83,15 +83,12 @@ export const CAPABILITIES: readonly Capability[] = [
     summary: "Adjust the displayed image, threshold channels, rescale and crop",
     builtIn: "P5",
     // Decode, the 16-bit conversion, the processing chain, thumbnails, the rendered pixels for the
-    // model (RULE-089) and, since 2026-09-23, TILES are all built: `/tiles/{z}/{x}/{y}` serves the
-    // processed view a piece at a time, held to `/pixels` pixel for pixel by `c8.tiles.test.ts`.
-    // The owner chose to build tiles (2026-09-23) after the measurement: a noisy 50-megapixel
-    // 16-bit TIFF sent whole is a 41 MB PNG, 2.4 s from click to pixels cold, and a 0.5 s stall.
-    // Pending until the browser draws them, because a route nothing calls is not a capability.
-    apiStatus: "pending",
-    apiPhase: "P5",
-    missing:
-      "the web canvas drawing tiles: the API serves them (`/images/{imagePath}/tiles/{z}/{x}/{y}`), and the browser still loads each image whole",
+    // model (RULE-089), and tiles -- the last part, built 2026-09-23 at the owner's word after the
+    // measurement: a noisy 50-megapixel 16-bit TIFF sent whole was a 41 MB PNG, 2.4 s from click
+    // to pixels cold and a 0.5 s stall in the browser. Fitted to a pane it is now three tiles and
+    // 322 KB; at 1:1, only the tiles in view. `c8.tiles.test.ts` holds each tile to `/pixels` pixel
+    // for pixel, and the browser draws them (`web/src/canvas/AnnotationCanvas.tsx`).
+    apiStatus: "built",
   },
   {
     id: "C9",

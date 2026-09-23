@@ -64,6 +64,7 @@ function mount(options: { hold?: boolean } = {}) {
     imageMetadata: async () => ({ ...IMAGE, sourceDepth: 8, sourceFormat: "png" }),
     loadAnnotations: async (): Promise<AnnotationsResult> => ({ kind: "none" }),
     pixelsUrl: () => "/pixels",
+    tileUrl: () => "/tile",
     saveAnnotations: async (_project: string, _key: string, body: Saved) => {
       saves.push(body);
       if (options.hold) await new Promise<void>((resolve) => releases.push(resolve));

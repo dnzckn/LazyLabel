@@ -74,6 +74,7 @@ function client(overrides: Partial<ApiClient> = {}): ApiClient {
     putSettings: async (settings: unknown) => settings,
     saveAnnotations: async () => ({ written: { NPZ: "r1" }, stale: [], skippedEmpty: [] }),
     pixelsUrl: () => "/api/pixels",
+    tileUrl: () => "/tile",
     thumbnailUrl: () => "/api/thumbnail",
     ...overrides,
   } as unknown as ApiClient;

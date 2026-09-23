@@ -132,6 +132,7 @@ function mount() {
     },
     models: async () => [],
     pixelsUrl: () => "/pixels",
+    tileUrl: () => "/tile",
     thumbnailUrl: () => "/thumbnail",
   } as unknown as ApiClient;
 

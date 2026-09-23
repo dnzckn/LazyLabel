@@ -57,6 +57,7 @@ async function mount(segments: readonly WireSegment[], aliases: Record<string, s
         },
       }) as unknown as AnnotationsResult,
     pixelsUrl: () => "/pixels",
+    tileUrl: () => "/tile",
   } as unknown as ApiClient;
 
   render(

@@ -249,6 +249,16 @@ export class ApiClient {
     return `${this.baseUrl}${this.imagePath(projectId, imagePath)}/pixels${query}`;
   }
 
+  /**
+   * One tile of an image's pyramid (C8), processed the same way `pixelsUrl` is.
+   *
+   * `query` is the same processing query, so a tile is always a piece of the picture `pixelsUrl`
+   * would give -- which is what the API's tile route is held to.
+   */
+  tileUrl(projectId: string, imagePath: string, z: number, x: number, y: number, query = ""): string {
+    return `${this.baseUrl}${this.imagePath(projectId, imagePath)}/tiles/${z}/${x}/${y}${query}`;
+  }
+
   thumbnailUrl(projectId: string, imagePath: string, size = 160): string {
     return `${this.baseUrl}${this.imagePath(projectId, imagePath)}/thumbnail?size=${size}`;
   }

@@ -60,6 +60,7 @@ function show() {
     imageMetadata: async () => ({ width: 10, height: 10, sourceDepth: 8, sourceChannels: 3, sourceFormat: "png" }),
     loadAnnotations: async () => ({ kind: "none" }),
     pixelsUrl: () => "/pixels",
+    tileUrl: () => "/tile",
   } as unknown as ApiClient;
 
   render(

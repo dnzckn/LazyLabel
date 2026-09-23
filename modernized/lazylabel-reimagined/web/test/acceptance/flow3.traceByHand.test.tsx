@@ -87,6 +87,7 @@ function mount() {
     imageMetadata: async () => ({ ...IMAGE, sourceDepth: 8, sourceFormat: "png" }),
     loadAnnotations: async (): Promise<AnnotationsResult> => ({ kind: "none" }),
     pixelsUrl: () => "/pixels",
+    tileUrl: () => "/tile",
   } as unknown as ApiClient;
 
   render(

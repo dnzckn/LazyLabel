@@ -78,6 +78,7 @@ export function mount(loaded: AnnotationsResult = { kind: "none" }) {
     }),
     models: async () => [],
     pixelsUrl: () => "/pixels",
+    tileUrl: () => "/tile",
     thumbnailUrl: () => "/thumbnail",
     saveAnnotations,
   } as unknown as ApiClient;

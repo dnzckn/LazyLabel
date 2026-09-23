@@ -42,6 +42,7 @@ function mount(metadata: { sourceChannels: number; sourceDepth: 8 | 16 }) {
     imageMetadata: async () => ({ width: 40, height: 20, sourceFormat: "png", ...metadata }),
     loadAnnotations: async () => ({ kind: "none" }),
     pixelsUrl: () => "/pixels",
+    tileUrl: () => "/tile",
   } as unknown as ApiClient;
 
   render(

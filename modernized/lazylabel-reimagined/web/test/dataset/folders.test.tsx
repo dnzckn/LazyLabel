@@ -60,6 +60,7 @@ function show(overrides: Partial<ApiClient> = {}) {
     getSettings: async () => defaultSettings(),
     putSettings: async (settings: unknown) => settings,
     pixelsUrl: () => "/pixels",
+    tileUrl: () => "/tile",
     thumbnailUrl: () => "/thumbnail",
     ...overrides,
   } as unknown as ApiClient;

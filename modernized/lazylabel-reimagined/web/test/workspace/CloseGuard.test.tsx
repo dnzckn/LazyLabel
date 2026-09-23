@@ -45,6 +45,7 @@ function client(): ApiClient {
     }),
     loadAnnotations: async () => ({ kind: "none" }),
     pixelsUrl: () => "/pixels",
+    tileUrl: () => "/tile",
     thumbnailUrl: () => "/thumbnail",
   } as unknown as ApiClient;
 }
