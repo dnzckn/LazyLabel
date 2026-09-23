@@ -20,6 +20,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { flushSync } from "react-dom";
 
 import { classColor } from "./classColor.js";
 import { locate, scale, type DisplayBox, type ImagePoint } from "./coordinates.js";
@@ -169,33 +170,39 @@ export function PolygonLayer({
       }
 
       /*
-       * ENTER STAYS HERE, where Space has moved to the dispatcher.
+       * ENTER: FINISH, THEN LET THE SAVE HAPPEN -- legacy's "finishes the polygon and then saves".
        *
-       * Legacy's Enter "finishes the polygon and then saves", and the save half is
-       * `save_output`, registered by the opened image. Registering Enter here as well would put
-       * two handlers on one action with no guaranteed order between them -- and if the write ran
-       * first it would save without the shape the same keystroke was finishing. Left raw, the
-       * finish happens here and the write happens on its own, exactly as before.
+       * The save half is `save_output`, the dispatcher's. This comment used to say that leaving
+       * Enter raw here made the finish happen first. It did not: the dispatcher's listener was
+       * registered first and ran first, so the save wrote the annotations WITHOUT the shape, and
+       * its return then cleared the shape's "unsaved" -- an empty file on disk under the word
+       * "saved". Found in a real browser on 2026-09-23. Two things make the order true now: this
+       * listens in the CAPTURE phase, so it runs before the dispatcher's bubbling one, and
+       * `flushSync` commits the shape to the store before the save reads it.
        */
       if (event.key === "Enter") {
         event.preventDefault();
         const outcome = finish(draft, { shift: event.shiftKey });
-        if (outcome.kind === "close") complete(outcome.vertices, false);
-        else if (outcome.kind === "erase") complete(outcome.vertices, true);
+        if (outcome.kind === "close") flushSync(() => complete(outcome.vertices, false));
+        else if (outcome.kind === "erase") flushSync(() => complete(outcome.vertices, true));
         else if (outcome.kind === "ignored") onRefused?.(outcome.reason);
         return;
       }
 
       // Undo during drawing steps back one vertex rather than reaching the annotation history,
-      // which has nothing about this polygon in it until the polygon exists.
+      // which has nothing about this polygon in it until the polygon exists. STOPPED here: the
+      // dispatcher's Undo also hears Ctrl+Z, and without this it took back the previous
+      // annotation as well as the vertex.
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "z") {
         event.preventDefault();
+        event.stopPropagation();
         setDraft((current) => undoVertex(current));
       }
     };
 
-    document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
+    // CAPTURE, so these run before the dispatcher's listener, which bubbles (see Enter above).
+    document.addEventListener("keydown", onKeyDown, true);
+    return () => document.removeEventListener("keydown", onKeyDown, true);
   }, [complete, draft, onRefused]);
 
   const box = boxOf();

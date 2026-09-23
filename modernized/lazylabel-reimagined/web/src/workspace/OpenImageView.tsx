@@ -624,6 +624,7 @@ function ConvertButton({
   const convert = useCallback((expected: Readonly<Record<string, string | null>>) => {
     // Captured now, not read in the callback below: see `markSavedOn` there.
     const side = activeSide;
+    const written = { segments, classAliases, crop };
     setState({ status: "saving" });
     client
       .saveAnnotations(projectId, image.key, {
@@ -662,7 +663,7 @@ function ConvertButton({
          * round trip and the user can switch panes during it; marking whichever side happens to be
          * active on return would tell them the image they just moved to is saved when it is not.
          */
-        markSavedOn(side);
+        markSavedOn(side, written);
         // The revisions this write produced become the ones the NEXT write is conditional on.
         // Without this, saving twice would compare against the load's revision the second time and
         // conflict with the app's own previous save.

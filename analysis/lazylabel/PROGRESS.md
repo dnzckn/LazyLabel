@@ -34,7 +34,7 @@ missing from this table entirely, which is how a table stops being a census.
 | Package | Passing | Note |
 |---|---|---|
 | exporters | 1991 | the seven formats, byte-for-byte against goldens legacy wrote |
-| web | 1130 | C11's placeholder is gone; it has an acceptance test now |
+| web | 1133 | C11's placeholder is gone; it has an acceptance test now |
 | inference | 560 | plus 36 skipped: the differentials, which need real checkpoints |
 | api | 414 | plus 4 skipped and 5 todo, all needing a checkpoint or a corpus |
 | settings-schema | 55 | includes the rule-fixed defaults |
@@ -97,6 +97,22 @@ pointed at a 1.5.0 `settings.json` imported it and served width 1234 and gamma 1
 built by Docker itself; `deploy/README.md` keeps saying so. The inference image lacked OpenCV, so
 every image route would have failed on `import cv2`; it installs the headless build now. A
 `.dockerignore` keeps a developer's `node_modules`, `dist` and checkpoints out of the context.
+
+**Enter wrote an empty file and said "saved" -- found in a real browser, 2026-09-23.** Drawing a
+polygon and pressing Enter, legacy's "finish the polygon and then save", left `photo.npz` with zero
+class channels and `photo.txt` empty, while the canvas showed the polygon and the status bar read
+"1 segment, saved". Two listeners hear that keystroke, the polygon layer's and the hotkey
+dispatcher's, and the dispatcher was registered first: the SAVE ran before the finish, wrote the
+annotations without the shape, and on its return cleared the "unsaved" the shape had just set. A
+comment beside the code had reasoned the opposite order. The same race made Ctrl+Z while drawing
+undo the previous ANNOTATION as well as the vertex. Fixed: the polygon layer listens in the capture
+phase and commits a finished shape with `flushSync` before the save reads it, Ctrl+Z on a draft
+stops there, and -- the general form -- a save now clears "unsaved" only if the annotations, names
+and crop it wrote are still what is on screen, so an edit made while any save is in flight stays
+unsaved. `web/test/canvas/keysWhileDrawing.test.tsx` reproduces all three against the old code;
+each part of the fix is mutation-checked. Rerun in the browser: the file held the polygon (28,200
+pixels where it was drawn), and reopened from disk it came back as a bit-packed mask the canvas
+drew exactly. jsdom had never caught this because no test pressed Enter with a save listening.
 
 **The spec's latency budget had never been measured, and it was missed.** `AI_NATIVE_SPEC.md`
 asks for p95 of 150 ms from click to mask on a 12-megapixel image with a warm embedding. Measured on

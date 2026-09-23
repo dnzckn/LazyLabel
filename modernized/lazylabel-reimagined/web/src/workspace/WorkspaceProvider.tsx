@@ -159,6 +159,13 @@ export function sideScope(side: SideIndex): string {
  * the user is looking at -- "that shape does not fit the other image" -- and belongs beside the
  * two panes, not in a list at the top of the page competing with save failures.
  */
+/** What one save wrote, by reference: every edit replaces these, so identity is the test. */
+export interface WrittenState {
+  readonly segments: readonly WireSegment[];
+  readonly classAliases: Readonly<Record<string, string>>;
+  readonly crop: Crop | null;
+}
+
 export type LinkReport =
   | { readonly kind: "linked"; readonly classId: number; readonly allocated: boolean; readonly image: string }
   | { readonly kind: "refused"; readonly reason: string; readonly erase?: boolean }
@@ -241,8 +248,15 @@ export interface WorkspaceContextValue {
   readonly history: History;
   /** Cleared on a successful save; that is what makes `dirty` mean "differs from the file". */
   readonly markSaved: () => void;
-  /** The same for a named side, which is what a split view's two save paths need. */
-  readonly markSavedOn: (side: SideIndex) => void;
+  /**
+   * The same for a named side, which is what a split view's two save paths need.
+   *
+   * Given what the save WROTE, it clears "unsaved" only if that is still what the side holds. A
+   * save is a round trip, and an edit made while it is in flight is not in the file: clearing the
+   * flag regardless is how Enter -- which finishes a polygon and saves in one keystroke -- once left
+   * an empty file on disk and the word "saved" on screen.
+   */
+  readonly markSavedOn: (side: SideIndex, written?: WrittenState) => void;
   /**
    * Which drawing tool is in force.
    *
@@ -844,7 +858,15 @@ export function WorkspaceProvider({
   );
 
   const markSavedOn = useCallback(
-    (at: SideIndex) => updateSide(at, (current) => ({ ...current, dirty: false })),
+    (at: SideIndex, written?: WrittenState) =>
+      updateSide(at, (current) =>
+        written !== undefined
+        && (current.segments !== written.segments
+          || current.classAliases !== written.classAliases
+          || current.crop !== written.crop)
+          ? current
+          : { ...current, dirty: false },
+      ),
     [updateSide],
   );
 
