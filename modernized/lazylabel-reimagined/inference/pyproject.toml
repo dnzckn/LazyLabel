@@ -6,7 +6,10 @@ build-backend = "setuptools.build_meta"
 name = "lazylabel-inference"
 version = "0.1.0"
 description = "SAM 1 and SAM 2.1 prompts, propagation jobs and archetype finding for LazyLabel web."
-requires-python = ">=3.10"
+# SEC-08: CPython 3.10 reaches end of life in October 2026, and the 3.10 builds this ran on carried
+# the expat and OpenSSL versions SEC-08 names. Raised on 2026-09-23 after every suite passed on
+# CPython 3.12.11 with PyTorch 2.10.0, in a venv of its own (`E:\venv\lazylabel-312`).
+requires-python = ">=3.12"
 # The service starts on the standard library alone, so /health and /models answer on a machine with
 # nothing installed and can say what is missing. Every route that reads an image needs numpy and
 # OpenCV too, and this said "deliberately empty" long after that stopped being true: a fresh CI
@@ -24,7 +27,13 @@ ai = [
     # RULE-084's floor, which is doing security work as well as feature work: segment-anything's
     # build_sam calls plain torch.load with no weights_only, so it is safe only because PyTorch 2.6
     # changed that default. assert_weights_only_loading() is what keeps that checked.
-    "torch>=2.7.1",
+    #
+    # 2.10.0 since 2026-09-23: the version every suite passed on under CPython 3.12. Two things
+    # were learned doing so, and both are in `tests/conftest.py`: PyTorch 2.10 cannot load its
+    # DLLs on Windows once PyQt6 6.9 is loaded, and it keeps more GPU memory between test modules
+    # than 2.7.1 did. SAM 2's masks also move slightly with the PyTorch version where the model is
+    # unsure, which is why the propagation golden records the one it was captured on.
+    "torch>=2.10.0",
     # SEC-12: pinned to exactly what every differential suite ran against, read from this
     # environment's install records on 2026-09-23. segment-anything has one release. SAM 2 is not on
     # PyPI, and was NOT DECLARED AT ALL until then -- so an install of this extra, the image's

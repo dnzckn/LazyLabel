@@ -62,7 +62,7 @@ missing from this table entirely, which is how a table stops being a census.
 |---|---|---|
 | exporters | 1991 | the seven formats, byte-for-byte against goldens legacy wrote |
 | web | 1218 | includes the four propagation-golden scenarios (16 tests against legacy's own sequence mode) and the tile planning |
-| inference | 604 | plus 43 skipped: the differentials and the golden comparison, which need real checkpoints. With them: 647 passed, 0 skipped |
+| inference | 605 | plus 43 skipped: the differentials and the golden comparison, which need real checkpoints. With them: 648 passed, 0 skipped. Both on CPython 3.12.11 with PyTorch 2.10, which the package has required since 2026-09-23 |
 | api | 440 | plus 4 skipped (SEC-09's symlink tests, where the OS will not make a link, as on this machine); no todo left, since C8 is built |
 | settings-schema | 55 | includes the rule-fixed defaults |
 | converter | 30 | the pickled-alias rewrite |
@@ -492,7 +492,7 @@ configured, so a green CI run says nothing about them — see `Running the live 
 - **Image tiles: build them now** (C8). **Built**, below.
 - **The sequence timeline keeps legacy's behaviour** (C10): rebuilt from the files, nothing new
   stored.
-- **Python 3.12 goes in a separate venv**, leaving the shared `E:env\lazylabel` alone. The suites
+- **Python 3.12 goes in a separate venv**, leaving the shared `E:\venv\lazylabel` alone. The suites
   run there with PyTorch, and only then are `requires-python` and the torch floor raised.
 - **Propagation goldens come from a synthetic clip** of moving shapes, since no real recording is
   available.
@@ -645,20 +645,39 @@ network call at all -- every mention of downloading is prose saying it does not 
 checkpoint's SHA-256 is verified against the manifest before it loads. That last clause was
 true of one load path in three when it was written; SEC-17 below is where that was found.
 
-**SEC-08 is NOT addressed, and it needs the owner.** Both Python packages declare
-`requires-python = ">=3.10"`, and on 2026-09-23 their suites ran on CPython 3.10.11 with expat
-2.5.0 and OpenSSL 1.1.1t -- the Microsoft Store build, and exactly the versions SEC-08 names.
-**CPython 3.10 reaches end of life in October 2026.** Raising the requirement to 3.12 is a one-line
-change in each `pyproject.toml`, and it was not made, because it would make both suites
-uninstallable on the interpreter they currently run on. The order is: move the uv venv at
-`E:\venv\lazylabel` to CPython 3.12 or 3.13, re-run both suites, THEN raise `requires-python`.
+**SEC-08 is addressed (2026-09-23).** Both Python packages now declare `requires-python =
+">=3.12"`, and the inference service's `ai` extra requires `torch>=2.10.0`. They had declared 3.10,
+and their suites ran on CPython 3.10.11 with expat 2.5.0 and OpenSSL 1.1.1t, the versions SEC-08
+names. **CPython 3.10 reaches end of life in October 2026.**
 
-**The first half of that is now evidenced, without touching the shared venv.** On 2026-09-23 both
-suites ran in scratch venvs on CPython 3.12.11 and 3.13.5, with CI's non-PyTorch packages: inference
-476 passed and 84 skipped (the same PyTorch and checkpoint skips as CI), converter 30 of 30, on
-either version. Those interpreters bring expat 2.7.1 and OpenSSL 3.0.16, which retire the two
-versions SEC-08 names. What is not evidenced is the PyTorch half on 3.12 or 3.13, and moving a venv
-that LazyLabelText shares is not this project's call.
+The owner chose the order: a venv of its own, suites run there with PyTorch, THEN the floors.
+- The venv is `E:\venv\lazylabel-312`: CPython 3.12.11, PyTorch 2.10.0 (CUDA 12.8), SAM 2 at the
+  pinned commit. The shared `E:\venv\lazylabel` was not touched.
+- Every suite passes there. The full live suite ran in one process with all three checkpoints and
+  legacy on the path. The CI-matched inference run ran on 3.12 without PyTorch. The converter ran
+  too. The figures are in the table below.
+- The inference CI job and the converter CI job now run 3.12. The legacy characterization,
+  analysis and exporter-differential jobs run legacy's or the pipeline's own code, and stay on 3.10.
+- The inference image now builds from `nvidia/cuda:12.8.1-runtime-ubuntu24.04`, whose Python is
+  3.12. It is still unbuilt, as the owner deferred Docker.
+
+**Three things surfaced doing it, and none was a defect in the port:**
+1. **PyQt6 6.9.2 loaded before PyTorch 2.10 breaks torch's `c10.dll` on Windows** (WinError 1114).
+   The order is harmless with 6.9.1 and 2.7.1. Legacy imports Qt, so the differential suites could
+   not import torch when run on their own. `tests/conftest.py` imports torch first, and so does the
+   golden capture script. **It matters beyond the tests: legacy's desktop app imports Qt before
+   torch, so it would not start on this combination.** Its venv should stay on 2.7.1 until that is
+   handled.
+2. **On 2.10 the whole live suite filled the 10 GB GPU**: 260 s and 8 SAM 1 errors, or worse. Each
+   module passed on its own; the SAM 1 differential alone peaks at 8.3 GB. `tests/conftest.py` now
+   empties PyTorch's cache between modules, and with the import-order fix the full run takes 73 s.
+3. **SAM 2's masks move with the PyTorch version where the model is unsure.** On the synthetic
+   golden, 2.10 against 2.7.1 moved 8 of 46 masks slightly. One moved to IoU 0.93: frame 1's square,
+   where it touches its same-coloured decoy. No flag changed, no object went empty, and no score
+   moved by more than 0.0009. The live differential still matches port to legacy on 2.10, because
+   it runs both on the same PyTorch. So the golden now records what it was captured on, and was
+   recaptured on the 3.12 venv. Its mask check runs only on the same PyTorch minor version and says
+   why when it skips. Flags, empty objects and scores are checked everywhere.
 
 SEC-10 holds: there is no `atexit` registration anywhere, and the backend cache is keyed by
 model name, so re-selecting a model reuses it -- memory is bounded by the manifest, where
@@ -1723,22 +1742,28 @@ themselves when no checkpoint is configured**. CI has no checkpoints, so CI pass
 about them. Run them locally, deliberately:
 
 ```bash
-cd modernized/lazylabel-reimagined/inference && LAZYLABEL_TEST_SAM1_CHECKPOINT=/path/to/sam_vit_h_4b8939.pth LAZYLABEL_TEST_CHECKPOINT=/path/to/sam2.1_hiera_large.pt LAZYLABEL_TEST_EMBEDDER=/path/to/mobilenetv3_small_tv.pth PYTHONPATH=/path/to/legacy/lazylabel/src python -m pytest tests/ -q
+cd modernized/lazylabel-reimagined/inference && LAZYLABEL_TEST_SAM1_CHECKPOINT=/path/to/sam_vit_h_4b8939.pth LAZYLABEL_TEST_CHECKPOINT=/path/to/sam2.1_hiera_large.pt LAZYLABEL_TEST_EMBEDDER=/path/to/mobilenetv3_small_tv.pth PYTHONPATH=/path/to/legacy/lazylabel/src E:/venv/lazylabel-312/Scripts/python.exe -m pytest tests/ -q
 ```
 
-With all three set, the last run on 2026-09-23 was **647 passed, 0 skipped**, in 75 s on this
-machine. That run followed the propagation golden and the backward-pass fix it found. It was 611
-earlier the same day, and 600 before that day's fixes and their tests. Any `skipped` count above zero means a
+In the 3.12 venv, which the packages have required since 2026-09-23, the last run with all
+three set was **648 passed, 0 skipped**, in 77 s on this machine. It came after the golden was
+recaptured there. The old 3.10 venv still runs the suite, but it skips the golden's mask check,
+because that golden is PyTorch 2.10's: the golden module there reads 10 passed, 1 skipped. Earlier
+that day the count was 611, and 600 before that day's fixes and their tests. Any `skipped` count above zero means a
 checkpoint was not found and that suite did not actually run. This section said "255 passed, 1
 xfailed" until then. The xfail was C11's placeholder, removed on 2026-09-21 when the job API
 landed, and the suite has grown since. The count here is the one the last run printed, not a target.
 
-Five warnings are expected, and none is a failure being hidden:
+Thirty-seven warnings are expected on 3.12, and none is a failure being hidden:
 - two come from the weights-only guard's tests, which set `TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD` on
   purpose, to prove the refusal;
 - three come from SAM 2's optional `_C` extension, one for each module that runs the video
   predictor (the differential, the golden and the live propagation test). Its absence skips only a
-  hole-filling post-process, and legacy runs without it too: the golden was captured that way.
+  hole-filling post-process, and legacy runs without it too: the golden was captured that way;
+- thirty-two come from SAM 2's own `utils/transforms.py`, which calls `torch.jit.script`.
+  PyTorch 2.10 deprecates it, and the call runs once per image predictor built. It is harmless at
+  the pinned commit, and it is the line to watch when PyTorch removes `jit.script`. On 3.10 with
+  2.7.1 there were five warnings, the first two groups.
 
 `MODEL_MANIFEST.md` lists the checkpoints and their verified hashes.
 

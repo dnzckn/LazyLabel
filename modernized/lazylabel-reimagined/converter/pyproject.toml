@@ -6,7 +6,9 @@ build-backend = "setuptools.build_meta"
 name = "lazylabel-converter"
 version = "0.1.0"
 description = "Rewrites a legacy LazyLabel NPZ's pickled class-alias table as JSON, without executing it."
-requires-python = ">=3.10"
+# SEC-08, raised with the inference service on 2026-09-23: CPython 3.10 reaches end of life in
+# October 2026, and this suite passes on 3.12.11.
+requires-python = ">=3.12"
 # numpy only for the tests, which build legacy-shaped archives to convert. The converter itself
 # reads the .npy header and the pickle directly, so it does not need numpy to run.
 dependencies = []

@@ -115,6 +115,14 @@ class TestTheGoldenItself:
         assert any(r["empty"] for r in results)
         assert set(golden["scenarios"]["skip-labeled"]["labeled"]) & {r["frame"] for r in flagged}
 
+    def test_it_says_what_it_was_captured_on(self, golden) -> None:
+        # Without it the mask comparison can only skip: SAM 2's answer moves with PyTorch, and a
+        # golden that does not say which one it came from cannot be compared with any.
+        environment = golden["environment"]
+
+        assert {"python", "torch", "cuda", "device", "sam2"} <= set(environment)
+        assert environment["sam2"] == "2b90b9f5ceec907a1c18123530e92e794ad901a4"
+
     def test_no_score_sits_on_the_threshold(self, golden) -> None:
         threshold = golden["threshold"]
         for result in golden["results"]:
@@ -176,6 +184,27 @@ def ported(golden, clip, tmp_path_factory) -> dict[tuple[int, int], object]:
     return {(names.index(result.source), result.object_id): result for result in results}
 
 
+def same_pytorch(golden: dict) -> tuple[bool, str]:
+    """Whether this is the PyTorch the golden was captured on, to the minor version, and why not.
+
+    SAM 2's answer moves with PyTorch where the model is unsure. Measured 2026-09-23 on this clip:
+    2.10 against 2.7.1 moved 8 of 46 masks slightly and one -- frame 1's square, where it touches its
+    same-coloured decoy -- to IoU 0.93, while every flag and empty object stayed the same and no
+    score moved by more than 0.0009. So the golden's masks, and its scores to four decimals, are
+    compared only on its own PyTorch; across versions, `test_differential_propagation.py` holds the
+    masks to legacy by running both on the same one.
+    """
+    import torch
+
+    captured = golden.get("environment", {}).get("torch")
+    if captured is None:
+        return False, "the golden does not record the PyTorch it was captured on"
+    minor = lambda version: ".".join(version.split("+")[0].split(".")[:2])  # noqa: E731
+    if minor(captured) != minor(torch.__version__):
+        return False, f"the golden's masks are PyTorch {captured}'s and this is {torch.__version__}"
+    return True, ""
+
+
 def iou(a: np.ndarray, b: np.ndarray) -> float:
     a, b = np.asarray(a).astype(bool), np.asarray(b).astype(bool)
     union = (a | b).sum()
@@ -192,6 +221,9 @@ class TestThePortAgainstIt:
         assert answered == {(r["frame"], r["object"]) for r in golden["results"]}
 
     def test_every_mask_is_within_decision_10(self, golden, masks, ported) -> None:
+        same, why = same_pytorch(golden)
+        if not same:
+            pytest.skip(why)
         worst = min(
             (iou(ported[(r["frame"], r["object"])].mask, masks[f"{r['frame']}:{r['object']}"]),
              r["frame"], r["object"])
@@ -220,15 +252,17 @@ class TestThePortAgainstIt:
         assert port == legacy
 
     def test_every_score_is_legacy_s(self, golden, ported) -> None:
-        """RULE-016's score, within what another GPU's arithmetic can move it.
+        """RULE-016's score: to 1e-4 on the golden's own PyTorch, and within half the margin on another.
 
-        On the machine the golden was captured on the difference is exactly 0.0 for every object.
-        The tolerance is for a different GPU, or a CPU, doing the same bfloat16 work. A port that
-        scored differently -- the mean over every logit rather than the positive ones, say -- moves
-        scores by far more than this and fails. A fifth of `MARGIN`, so no score that passes this
-        can have crossed the threshold.
+        On the machine and PyTorch the golden was captured on, the difference is exactly 0.0 for
+        every object. Another PyTorch moves scores slightly (0.0009 at most, 2.7.1 against 2.10), so
+        there the tolerance is half of `MARGIN`: loose enough for that, and still too tight for any
+        score to cross Min Conf. A port that scored differently -- the mean over every logit rather
+        than the positive ones, say -- moves scores by far more than either and fails.
         """
+        same, _ = same_pytorch(golden)
+        tolerance = 1e-4 if same else MARGIN / 2
         for r in golden["results"]:
             assert ported[(r["frame"], r["object"])].confidence == pytest.approx(
-                r["confidence"], abs=MARGIN / 5
+                r["confidence"], abs=tolerance
             ), f"frame {r['frame']} object {r['object']}"

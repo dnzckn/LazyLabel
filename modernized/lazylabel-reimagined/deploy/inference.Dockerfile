@@ -9,10 +9,11 @@
 
 # The CUDA runtime rather than the devel image: nothing here compiles a kernel, and devel is
 # several gigabytes larger for tooling this service never invokes.
-FROM nvidia/cuda:12.4.1-runtime-ubuntu22.04
+FROM nvidia/cuda:12.8.1-runtime-ubuntu24.04
 
-# `requires-python = ">=3.10"`, and 22.04 ships 3.10 — so the distribution's own Python is used
-# rather than a PPA or a source build. One fewer thing to keep current.
+# `requires-python = ">=3.12"` since 2026-09-23 (SEC-08), and 24.04 ships 3.12 -- so the
+# distribution's own Python is used rather than a PPA or a source build. One fewer thing to keep
+# current. 22.04, the base until then, ships 3.10, which the package now refuses.
 # git because SAM 2 is installed from its repository by commit (pyproject.toml says why).
 RUN apt-get update \
     && apt-get install --no-install-recommends -y python3 python3-pip python3-venv git \

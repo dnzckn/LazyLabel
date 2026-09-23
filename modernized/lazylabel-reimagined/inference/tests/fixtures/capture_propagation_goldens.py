@@ -447,9 +447,41 @@ def same_answers(first: list[dict], other: list[dict]) -> str | None:
     return None
 
 
+def environment() -> dict:
+    """What the golden was captured ON, because SAM 2's answer moves with it.
+
+    Measured 2026-09-23: the same clip, legacy and the same weights, on PyTorch 2.10 rather than
+    2.7.1, moved 8 of 46 masks slightly and one -- frame 1's square, where it touches its
+    same-coloured decoy -- to IoU 0.93. No flag changed and no score moved past the fourth decimal.
+    So a golden's MASKS are only comparable on the PyTorch they were captured on, and the test reads
+    this to know when that is.
+    """
+    import importlib.metadata
+    import platform
+
+    import torch
+
+    sam2 = "unknown"
+    try:
+        direct = json.loads(importlib.metadata.distribution("SAM-2").read_text("direct_url.json") or "{}")
+        sam2 = direct.get("vcs_info", {}).get("commit_id", sam2)
+    except importlib.metadata.PackageNotFoundError:
+        pass
+    return {
+        "python": platform.python_version(),
+        "torch": torch.__version__,
+        "cuda": torch.version.cuda,
+        "device": torch.cuda.get_device_name(0) if torch.cuda.is_available() else "cpu",
+        "sam2": sam2,
+    }
+
+
 def load_legacy() -> types.SimpleNamespace:
     """Legacy's classes, with its worker threads made to run on the calling thread."""
     os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    # PyTorch before legacy, because legacy loads Qt: on Windows, PyTorch 2.10 cannot load its DLLs
+    # once PyQt6 6.9 is loaded (tests/conftest.py has the measurement).
+    import torch  # noqa: F401
     try:
         from lazylabel.core import FileManager, SegmentManager
         from lazylabel.models.sam2_model import Sam2Model
@@ -567,6 +599,7 @@ def main() -> int:
         "captured": datetime.date.today().isoformat(),
         "checkpoint": args.checkpoint.name,
         "checkpointSha256": sha256_file(args.checkpoint),
+        "environment": environment(),
         "threshold": args.threshold,
         "height": int(height),
         "width": int(width),
