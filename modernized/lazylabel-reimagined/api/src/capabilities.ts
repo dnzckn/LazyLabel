@@ -105,10 +105,13 @@ export const CAPABILITIES: readonly Capability[] = [
   {
     id: "C11",
     summary: "Propagate labels through a sequence and review them by confidence",
+    // Built, and read as pending until 2026-09-23 while the routes existed: the API proxies the
+    // job routes and `c11.propagationProxy.test.ts` proves them. The "progress socket" this once
+    // listed was REPLACED by polling, deliberately: the job API returns the frames finished so
+    // far on every read, so a client that polls loses nothing a socket would have pushed, and
+    // cancelling keeps committed frames either way (RULE-063).
     builtIn: "P3, P6",
-    apiStatus: "pending",
-    apiPhase: "P6",
-    missing: "propagation jobs, the progress socket and staged frame results",
+    apiStatus: "built",
   },
   {
     id: "C12",

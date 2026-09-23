@@ -9,4 +9,4 @@
  * can drift from the other unnoticed.
  */
 
-export const PLACEHELD = ["C3", "C8", "C10", "C11", "C14"] as const;
+export const PLACEHELD = ["C3", "C8", "C10", "C14"] as const;
