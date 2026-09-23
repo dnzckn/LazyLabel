@@ -117,6 +117,19 @@ could. It found one more the day it was written, `stream_window_size`, which pro
 only an import can change. It is recorded as a GAP, awaiting legacy's streaming controls (RULE-026),
 which are not built -- the one piece of C11's settings surface still missing.
 
+**The plan for it, so it can be built as written.** RULE-026's card: window 50-1000 in steps of 50,
+default 250, saved as `stream_window_size`; overlap 5; streaming on by default; memory estimate
+12.6 MB per frame. The plumbing exists -- `PropagationControl.tsx` already reads
+`stream_window_size` and sends it, the API forwards a boolean `streaming`, and the inference
+`PropagationRequest` takes `streaming: bool = True`. Missing are only the controls:
+(1) in `SettingsEditor.tsx`, a "Propagation" fieldset with the window as a number clamped to 50-1000
+and rounded to a multiple of 50 when editing finishes, then remove `stream_window_size` from
+`NOT_EDITABLE` in `web/test/settings/settable.test.ts`; (2) in `PropagationControl.tsx`, a Streaming
+checkbox, on by default, sent as `streaming`; (3) when it is off, the frame count times 12.6 MB shown
+before the run starts, which is RULE-026's warning and what the Python `estimate_megabytes` (listed
+as awaiting exactly this in `inference/tests/test_reach.py`) computes -- either call it through the
+API or compute the same product in the browser and keep that entry's reason current.
+
 **Enter wrote an empty file and said "saved" -- found in a real browser, 2026-09-23.** Drawing a
 polygon and pressing Enter, legacy's "finish the polygon and then save", left `photo.npz` with zero
 class channels and `photo.txt` empty, while the canvas showed the polygon and the status bar read
