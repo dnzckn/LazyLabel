@@ -25,7 +25,11 @@ at RULE-022's minimum of five. **Propagation now matches legacy's frame for fram
 captured from legacy's own sequence mode (2026-09-23; "What to do next" has the detail). That
 covers the masks, the scores and the flags, and what Keep Flagged Masks, Skip Labeled and Save All
 do with them. It holds for sequences that fit in one streaming window; nothing covers a longer one
-yet. Archetype suggestions are not yet compared with legacy's.
+yet. **Find Archetypes matches legacy's too**: on a 90-frame, three-scene sequence the port and
+legacy's own `ReferenceFinderWorker` suggest the same 10 frames
+(`inference/tests/test_differential_archetypes.py`), on 3.12 with PyTorch 2.10 and on 3.10 with
+2.7.1. Legacy is handed a temporary copy of the checkpoint, because it downloads into its worktree
+when the file is missing and deletes the file when a load fails.
 
 **Running the whole stack with the real models found what 3,000 component tests had not.** That
 means the browser, the API, and the inference service on the GPU, as a user would run them. From
@@ -62,7 +66,7 @@ missing from this table entirely, which is how a table stops being a census.
 |---|---|---|
 | exporters | 1991 | the seven formats, byte-for-byte against goldens legacy wrote |
 | web | 1225 | includes the four propagation-golden scenarios (16 tests against legacy's own sequence mode), the tile planning and legacy's reference buttons |
-| inference | 605 | plus 43 skipped: the differentials and the golden comparison, which need real checkpoints. With them: 648 passed, 0 skipped. Both on CPython 3.12.11 with PyTorch 2.10, which the package has required since 2026-09-23 |
+| inference | 605 | plus 45 skipped: the differentials and the golden comparison, which need real checkpoints. With them: 650 passed, 0 skipped. Both on CPython 3.12.11 with PyTorch 2.10, which the package has required since 2026-09-23 |
 | api | 440 | plus 4 skipped (SEC-09's symlink tests, where the OS will not make a link, as on this machine); no todo left, since C8 is built |
 | settings-schema | 55 | includes the rule-fixed defaults |
 | converter | 30 | the pickled-alias rewrite |
@@ -1751,8 +1755,8 @@ cd modernized/lazylabel-reimagined/inference && LAZYLABEL_TEST_SAM1_CHECKPOINT=/
 ```
 
 In the 3.12 venv, which the packages have required since 2026-09-23, the last run with all
-three set was **648 passed, 0 skipped**, in 77 s on this machine. It came after the golden was
-recaptured there. The old 3.10 venv still runs the suite, but it skips the golden's mask check,
+three set was **650 passed, 0 skipped**, in 76 s on this machine, with the archetype differential
+added after the golden was recaptured. The old 3.10 venv still runs the suite, but it skips the golden's mask check,
 because that golden is PyTorch 2.10's: the golden module there reads 10 passed, 1 skipped. Earlier
 that day the count was 611, and 600 before that day's fixes and their tests. Any `skipped` count above zero means a
 checkpoint was not found and that suite did not actually run. This section said "255 passed, 1

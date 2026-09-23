@@ -55,8 +55,9 @@ CAPABILITIES: list[Capability] = [
         caveat=(
             "built: archetype finding -- embed, cluster, allocate, pick the medoids -- behind "
             "POST /inference/archetypes. The timeline itself belongs to the web app and is built "
-            "there. NOT claimed: that the suggested frames match legacy's, which needs a "
-            "checkpoint and a recorded sequence"
+            "there. The suggestions match legacy's ReferenceFinderWorker frame for frame on a "
+            "90-frame, three-scene sequence (tests/test_differential_archetypes.py, with the "
+            "embedder checkpoint). NOT claimed: the same on real footage, which no one has supplied"
         ),
     ),
     Capability(
