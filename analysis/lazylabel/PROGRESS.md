@@ -18,7 +18,10 @@ API that cancels without losing committed frames. Run that way for the first tim
 against the real stack with SAM 2.1 large, on eight synthetic frames of a moving disc. The reference
 came from a polygon file on frame 0. All seven other frames propagated, and Save All wrote NPZ and
 YOLO files whose boxes follow the disc to within about a pixel in every frame. The reference was not
-rewritten. What is NOT claimed is that its results match
+rewritten. Find Archetypes ran the same way with the real MobileNetV3 embedder. Eight near-identical frames
+came back as "too uniform to suggest frames", which is a result, and the page showed it as one.
+Thirty frames in three distinct scenes gave "5 frames suggested from 3 scenes": two, two and one,
+at RULE-022's minimum of five. What is NOT claimed is that its results match
 legacy's. That is Phase 6 exit criterion 2 and it needs a checkpoint, a recorded sequence, and
 golden outputs.
 
