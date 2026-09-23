@@ -34,7 +34,7 @@ missing from this table entirely, which is how a table stops being a census.
 | Package | Passing | Note |
 |---|---|---|
 | exporters | 1991 | the seven formats, byte-for-byte against goldens legacy wrote |
-| web | 1120 | C11's placeholder is gone; it has an acceptance test now |
+| web | 1123 | C11's placeholder is gone; it has an acceptance test now |
 | inference | 557 | plus 36 skipped: the differentials, which need real checkpoints |
 | api | 414 | plus 4 skipped and 5 todo, all needing a checkpoint or a corpus |
 | settings-schema | 55 | includes the rule-fixed defaults |
@@ -76,6 +76,12 @@ job on a fresh export of HEAD, one job per export so no install could leak betwe
    the repository root on the path, not `src`, and the job installs dependencies without the app;
    importing the UI package also needs scipy, which it did not install. With `PYTHONPATH: src` and
    scipy, in a fresh venv with exactly its packages: 13 passed.
+
+**The same question asked of the environment variables** -- does each service's README name every
+variable it reads? -- found three that no operator could have learned without the source: the API's
+`LAZYLABEL_INFERENCE_URL`, which decides whether the AI tools exist at all, and the web app's
+`LAZYLABEL_API` and `VITE_LAZYLABEL_API`. Documented, and `web/test/source/envDocumented.test.ts`
+now asks it of all three services on every run, matching reads rather than mentions.
 
 Every CI job except the three image builds has now been run this way and passes: the five Node
 packages, inference, converter (30), characterization (13), analysis, and the differential job

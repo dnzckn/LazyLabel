@@ -37,6 +37,7 @@ LAZYLABEL_DATASET_ROOT=/path/to/your/images npm start
 | `LAZYLABEL_DATASET_ROOT` | *required* | The folder holding your images. The API refuses to start without it rather than guessing. |
 | `LAZYLABEL_DB` | `<root>/.lazylabel/lazylabel.db` | SQLite file for settings, hotkeys and job records. |
 | `LAZYLABEL_PORT` | `8787` | |
+| `LAZYLABEL_INFERENCE_URL` | *none* | Where the inference service listens, such as `http://127.0.0.1:8788`. Unset is a supported deployment: every route except SAM prompts, propagation and archetypes works, and those answer 503 with the reason. A value that is not an http or https URL is refused at startup, quoted. |
 | `LAZYLABEL_HOST` | `127.0.0.1` | Loopback by default. Decision 3 is one trusted user, so exposing this is a deliberate act behind a reverse proxy, not a default. |
 | `LAZYLABEL_LEGACY_SETTINGS_DIR` | `~/.config/lazylabel` | Where the desktop app kept `settings.json` and `hotkeys.json`. Read once, at startup, while this database holds no settings; after that the stored settings are the truth and these files are never read again. Empty turns the import off. |
 

@@ -15,6 +15,11 @@ npm run dev     # proxies /api to http://127.0.0.1:8787
 npm run build
 ```
 
+| Variable | Default | What it is |
+|---|---|---|
+| `LAZYLABEL_API` | `http://127.0.0.1:8787` | Development only: where `npm run dev` proxies `/api`. Read from the environment or a `.env` file by `vite.config.ts`. |
+| `VITE_LAZYLABEL_API` | `/api` | The API's base URL, compiled into the build. Leave it unset: the default is same-origin, which the deployment's proxy serves, and an absolute URL would need CORS on an API that has none. |
+
 ## What genuinely works
 
 - **The typed API client.** Every response shape comes from `@lazylabel/contracts`, shared with the
@@ -26,7 +31,8 @@ npm run build
   failure-mode table calls for exactly that, and it is only true if the browser treats a settings
   failure as degraded rather than fatal.
 - **The hotkey system.** Bindings come from the shared schema, so this and the API agree about what
-  `Ctrl+Z` means and which assignments are legal (RULE-049).
+  `Ctrl+Z` means and which assignments are legal (RULE-049). Settings, Show hotkeys opens the
+  editor: click a key and press the new one, and a key another action holds is refused by name.
 
 ## The keyboard translation
 
