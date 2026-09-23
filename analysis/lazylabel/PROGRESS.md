@@ -231,7 +231,14 @@ vertex", one entry for the gesture. The other drawing tools were driven the same
 - a Box drag added a four-sided polygon under the next class;
 - a Circle drag added a circle;
 - a click inside the box selected it, outlined 2 screen pixels wide;
-- dragging the circle's radius handle resized it about its fixed centre, as one undo entry. Two tests, both failing without the fix; the harness shows
+- dragging the circle's radius handle resized it about its fixed centre, as one undo entry.
+
+Then the class table, merge and crop, read back from the files written:
+- class 0 renamed "cell" was saved as `class_aliases_json` `{"0":"cell"}`, JSON not pickle;
+- "Merge into class 1" put both boxes in class 1, leaving two mask channels;
+- a crop over the top-left blanked what fell outside. The triangle was cut at the crop edge, and
+  a box wholly outside was gone from both the NPZ and the YOLO file, as the warning said it would
+  be ("Saving will blank 553,972 pixels outside this rectangle"). Two tests, both failing without the fix; the harness shows
 the image at its own size, where the first could not show, so the test shows it at a quarter.
 
 **Linked editing in the split view, checked in a real browser 2026-09-23.** With two same-sized
