@@ -122,10 +122,12 @@ Each was examined rather than flipped.
 - **C14** waited on "its per-viewer class-id space", decided on 2026-09-20: ids stay per image, and
   linked operations match classes by name in the web app. Each side of the split view saves through
   C9's per-image route, so it reads `not-this-service`.
-- **C8** still lists "decode, tile, and render adjusted pixels". Decode and render exist. **Tiling
-  does not**, and the spec's API sketch has a tile route
-  (`/images/{imagePath}/tiles/{z}/{x}/{y}`) and a thumbnail route. Its NFR table makes 50 megapixels
-  the supported working size. Whether whole-image PNGs meet that is a measurement, and is next.
+- **C8** listed "decode, tile, and render adjusted pixels". Decode, the thumbnail route and the
+  rendered pixels exist. **Tiles do not**: the spec's API sketch has a tile route
+  (`/images/{imagePath}/tiles/{z}/{x}/{y}`), and its NFR table makes 50 megapixels the supported
+  working size. Measured the same day, whole-image PNGs meet that size on a local install (the
+  figures are in "What to do next", item 4). Whether a hosted install needs tiles is the owner's
+  call, so C8 stays pending with that as its whole entry.
 
 **Collapsing a panel threw away what it held -- found and fixed 2026-09-23.** A panel UNMOUNTED
 its contents when collapsed, and collapsing is what people do for room. Collapsing Sequence after a
@@ -224,8 +226,8 @@ configured, so a green CI run says nothing about them — see `Running the live 
 
 ## What to do next
 
-Everything that can be done without the owner has been done. These three need something only the
-owner can supply, and each is one command once it arrives.
+Everything that can be done without the owner has been done. These five need something only the
+owner can supply: the first two are one command once it arrives, the last three are decisions.
 
 1. **Capture propagation goldens** — Phase 6 exit criterion 2. Needs a SAM 2 checkpoint and a
    folder of frames from a real recording.
@@ -253,6 +255,24 @@ owner can supply, and each is one command once it arrives.
    something other than its name is the defect `fit_view` had. It is the only divergence on the
    list that follows from no numbered decision. Recorded in
    `web/test/rules/p0Coverage.test.ts`.
+
+4. **Decide whether a hosted install needs image tiles (C8).** The spec's API sketch has a tile
+   route and nothing builds one; the API sends each image whole, as one 8-bit PNG. Measured on
+   2026-09-23 on a noisy 50-megapixel 16-bit TIFF, the spec's supported working size:
+   - a 41 MB PNG;
+   - 2.4 s from click to pixels cold (1.7 s of it the server's decode, conversion and encode);
+   - 0.8 s from click to a painted canvas warm;
+   - one 0.5 s main-thread stall while the browser decodes.
+
+   That is enough on a local install. Over a 100 Mbit/s link the transfer alone is about 3.3 s.
+   Tiles mean a tiled canvas as well as a route, since a route nothing calls is the defect this
+   project keeps finding. `api/src/capabilities.ts` holds C8 pending on exactly this.
+
+5. **Decide whether a sequence timeline should survive a reload (C10).** Legacy's never did: it
+   lives in memory and is rebuilt from the file range. This app does the same, with the files as
+   the truth (decision 5). Unsaved propagated frames are now protected by the close-tab warning.
+   What a reload loses is the range, the trims and the flags. Keeping them would be new scope, and
+   the architecture already names where: its SQLite row lists "sequences".
 
 **The five security findings the brief said must be designed out have been audited against the
 new code. Three of the five had not been.** Checked 2026-09-23:

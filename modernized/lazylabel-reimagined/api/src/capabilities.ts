@@ -82,9 +82,15 @@ export const CAPABILITIES: readonly Capability[] = [
     id: "C8",
     summary: "Adjust the displayed image, threshold channels, rescale and crop",
     builtIn: "P5",
+    // Decode, the 16-bit conversion, the processing chain, thumbnails and the rendered pixels for
+    // the model (RULE-089) are all built; what the spec's API sketch has and this does not is TILES.
+    // Measured 2026-09-23 on a noisy 50-megapixel 16-bit TIFF, the supported working size: one
+    // 41 MB PNG, 2.4 s from click to pixels cold, 0.8 s to a painted canvas warm, a 0.5 s decode
+    // stall. Enough on a local install; whether a hosted one on a slow link needs tiles is the owner's call.
     apiStatus: "pending",
     apiPhase: "P5",
-    missing: "the image pipeline: decode, tile, and render adjusted pixels for the model",
+    missing:
+      "tiles (`/images/{imagePath}/tiles/{z}/{x}/{y}` in the spec): not needed at 50 megapixels on a local install, measured; the owner decides for a hosted one",
   },
   {
     id: "C9",
