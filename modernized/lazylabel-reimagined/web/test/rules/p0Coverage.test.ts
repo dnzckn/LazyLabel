@@ -25,7 +25,13 @@ import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
 
-const HERE = path.dirname(fileURLToPath(import.meta.url));
+/**
+ * This file, which is NOT evidence for any rule. Its own prose names rules as examples, and until
+ * 2026-09-23 it read itself: RULE-058, a P0 rule, passed as traced because the paragraph above uses
+ * it to illustrate the question, while no test anywhere named it.
+ */
+const SELF = fileURLToPath(import.meta.url);
+const HERE = path.dirname(SELF);
 const REPO = path.join(HERE, "..", "..", "..", "..", "..");
 const RULES = path.join(REPO, "analysis", "lazylabel", "BUSINESS_RULES.md");
 
@@ -93,7 +99,7 @@ async function collectTests(root: string): Promise<string[]> {
         await walk(full, insideTests || entry.name === "test" || entry.name === "tests");
         continue;
       }
-      if (!insideTests) continue;
+      if (!insideTests || path.resolve(full) === path.resolve(SELF)) continue;
       if (/\.(ts|tsx|py)$/.test(entry.name)) found.push(full);
     }
   }

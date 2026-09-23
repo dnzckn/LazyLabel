@@ -70,6 +70,7 @@ function job(overrides: Record<string, unknown> = {}) {
 
 function mount() {
   const started: unknown[] = [];
+  const saved: string[] = [];
 
   const client = {
     getSettings: async () => defaultSettings(),
@@ -124,6 +125,10 @@ function mount() {
           { source: "frames/f03.png", objectId: 1, mask: MASK, confidence: 0.4 },
         ],
       }),
+    saveAnnotations: async (_project: string, key: string) => {
+      saved.push(key);
+      return { written: [], stale: [], skippedEmpty: [] };
+    },
     models: async () => [],
     pixelsUrl: () => "/pixels",
     thumbnailUrl: () => "/thumbnail",
@@ -141,7 +146,7 @@ function mount() {
     </NotificationProvider>,
   );
 
-  return { started, client };
+  return { started, saved, client };
 }
 
 async function openTimeline() {
@@ -243,5 +248,49 @@ describe("C11: propagate labels through a sequence", () => {
     await openTimeline();
 
     expect(screen.getByText(/has not been proved/)).toBeTruthy();
+  });
+});
+
+describe("RULE-058: the open frame keeps its unsaved work through finish, Save All and Trim", () => {
+  /*
+   * Legacy clears and reloads the current frame after a propagation finishes, after Save All and
+   * after a trim, so unsaved annotations on it are lost -- even on the reference the run was just
+   * seeded from (P0, a recorded defect). This app reloads nothing behind the user's back: the open
+   * frame stays exactly as it was, still marked unsaved, for the user to save or discard.
+   *
+   * Until 2026-09-23 the only mention of RULE-058 in any test was the P0 guard's own header, which
+   * the guard counted as coverage.
+   */
+  const status = () => screen.getByLabelText("Status").textContent ?? "";
+  const UNSAVED = /frames\/f01\.png — 0 segments, unsaved/;
+
+  it("leaves a deleted polygon deleted, and unsaved, through all three", async () => {
+    const { saved } = mount();
+    await openTimeline();
+
+    // The reference frame, open, with its polygon deleted and not saved.
+    fireEvent.click(screen.getByLabelText("Timeline").querySelectorAll("button")[0]!);
+    fireEvent.click(await screen.findByLabelText("Select Polygon 1, class 3"));
+    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+    await waitFor(() => expect(status()).toMatch(UNSAVED));
+
+    // 1. A propagation finishes.
+    fireEvent.click(screen.getByRole("button", { name: /^Propagate/ }));
+    await waitFor(() => expect(cellLabels()[1]).toContain("propagated"), { timeout: 3000 });
+    expect(status()).toMatch(UNSAVED);
+
+    // 2. Save All writes the propagated frames -- and not the open one.
+    fireEvent.click(await screen.findByRole("button", { name: /^Save \d+ frame/ }));
+    await waitFor(() => expect(saved).toContain("frames/f02.png"));
+    expect(saved).not.toContain("frames/f01.png");
+    expect(status()).toMatch(UNSAVED);
+
+    // 3. A trim that keeps only the open frame.
+    fireEvent.click(screen.getByRole("button", { name: "Trim from here" }));
+    fireEvent.click(screen.getByRole("button", { name: "Trim to here" }));
+    fireEvent.click(screen.getByRole("button", { name: "Keep" }));
+    await screen.findByText(/Removed 3 frames from the timeline/);
+    expect(status()).toMatch(UNSAVED);
+    expect(screen.queryByLabelText("Select Polygon 1, class 3")).toBeNull();
   });
 });

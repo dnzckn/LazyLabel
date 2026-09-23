@@ -35,7 +35,7 @@ missing from this table entirely, which is how a table stops being a census.
 | Package | Passing | Note |
 |---|---|---|
 | exporters | 1991 | the seven formats, byte-for-byte against goldens legacy wrote |
-| web | 1159 | C11's placeholder is gone; it has an acceptance test now |
+| web | 1160 | C11's placeholder is gone; it has an acceptance test now |
 | inference | 560 | plus 36 skipped: the differentials, which need real checkpoints |
 | api | 418 | plus 4 skipped (SEC-09's symlink tests, where the OS will not make a link, as on this machine) and 1 todo (C8's placeholder) |
 | settings-schema | 55 | includes the rule-fixed defaults |
@@ -154,6 +154,21 @@ propagated frames. These did not:
 Both now ask first, through the same question New timeline asks, and neither asks when nothing is
 unsaved. Six tests: removing the question fails the four that expect it, and two hold the other
 side.
+
+**RULE-058, a P0 rule, was traced by the P0 guard's own comment -- found and fixed 2026-09-23.**
+The guard (`web/test/rules/p0Coverage.test.ts`) passes a rule when any test file names it, and it
+read itself. Its header uses RULE-058 to illustrate the question, and no other test named RULE-058.
+It was the only rule traced that way; a scan of all 38 P0 rules against the other 195 test files
+found no second one. The guard now skips its own file, and fails on RULE-058 when the new test's
+mentions are removed.
+
+The rule is legacy reloading the open frame after a propagation finishes, after Save All and after
+a trim, which discards its unsaved annotations. The new test, in `c11.propagate.test.tsx`, drives
+the app: delete the reference's polygon, then propagate, Save All and trim. The frame still reads
+"0 segments, unsaved" after each, and Save All does not write it. Two protections hold this, and
+each alone suffices: nothing reopens the open frame, and reopening a frame with unsaved work asks
+first. Putting legacy's reload back, with the question answered yes, fails the test with "1
+segment, saved": the deletion lost.
 
 **The settings half of C13's editor was missing too -- found and built 2026-09-23.** The
 hotkey editor was never built (now it is); the brief's phrase is "web settings AND hotkey editor",
