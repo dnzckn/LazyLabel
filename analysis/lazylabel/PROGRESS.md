@@ -553,6 +553,19 @@ configured, so a green CI run says nothing about them — see `Running the live 
      their confidence to four decimals, as legacy's tooltip does, and the reference frame's own
      result from the run is ignored. Legacy's engine never reports that result.
 
+   **Then end to end, in the browser pane against the real stack**, with the API, the inference
+   service and SAM 2.1 large on the GPU. The clip was set up as a dataset, and frame 8's reference
+   was saved through the API with the clip's exact masks. The timeline matched legacy's defaults
+   scenario frame by frame: frames 2 and 11 flagged, the other 21 propagated. All 23 confidences
+   matched legacy's to four decimals. "Save 21 frames" wrote 21 NPZ files, legacy's count, and
+   all 38 masks in them are identical to legacy's (IoU 1.0000). Each file held exactly the objects
+   legacy wrote, the disc alone on frames 20-23. The timeline then showed them saved.
+
+   Propagating again with Skip labeled on painted the 21 saved frames brown ("21 kept their
+   existing labels"), re-flagged 2 and 11 with the same scores, and offered nothing to save. All 43
+   sidecars kept their modification times. Before this change, that second run and a Save All
+   would have rewritten all 21.
+
    **One divergence is kept, and it is the owner's to decide.** This app marks every frame that is
    annotated when a timeline is built as a reference. That is the brief's pilot, "mark references
    from existing annotations", and C10's test pins it. Legacy never marks one on its own: the user
