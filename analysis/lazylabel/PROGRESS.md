@@ -493,7 +493,8 @@ configured, so a green CI run says nothing about them — see `Running the live 
 - **The sequence timeline keeps legacy's behaviour** (C10): rebuilt from the files, nothing new
   stored.
 - **Python 3.12 goes in a separate venv**, leaving the shared `E:\venv\lazylabel` alone. The suites
-  run there with PyTorch, and only then are `requires-python` and the torch floor raised.
+  run there with PyTorch, and only then are `requires-python` and the torch floor raised. **Done**:
+  every suite passed on 3.12.11 with PyTorch 2.10.0, and both floors are raised (SEC-08, below).
 - **Propagation goldens come from a synthetic clip** of moving shapes, since no real recording is
   available.
 - **The acceptance corpus is not available yet**; criterion 4 stays open.
@@ -695,16 +696,16 @@ commit. The workflow's header says how to move one forward. What remains is the 
 `tests.yml` still carries all three of SEC-11's problems, including codecov-action v3, and
 Dependabot would keep the pins fresh but opens pull requests on its own.
 
-**SEC-12 is two-thirds done, and the third needs the owner.** On 2026-09-23 the `ai` extra pinned
+**SEC-12 is done.** On 2026-09-23 the `ai` extra pinned
 `segment-anything==1.0` (its only release) and declared SAM 2 -- which it had NOT declared at all,
 so the inference image could never have loaded a SAM 2 model -- by the exact commit this
 environment's install record names, `2b90b9f5`, the one every differential suite ran against. The
 image gains `git` to fetch it and `SAM2_BUILD_CUDA=0`, because that optional extension fills holes in
 masks and the tested environment never had it: building it would change masks relative to every
-equivalence result. What remains is the torch floor: `>=2.7.1` still admits the torch whose
+equivalence result. The last third was the torch floor: `>=2.7.1` still admitted the torch whose
 weights-only unpickler has CVE-2026-24747 (fixed in 2.10.0), and the SEC-03 guard catches the
-environment variable, not that CVE. Raising it means installing and testing a new CUDA torch in the
-shared venv first -- the order SEC-08 needs too.
+environment variable, not that CVE. It is `>=2.10.0` since the same day, after every suite passed
+on 2.10.0 in the 3.12 venv; SEC-08 above has what that turned up.
 
 SEC-13 holds, checked against both loggers with a filename carrying an ANSI escape and a newline:
 the JSON encoding escapes both, so a crafted name cannot colour the console or FORGE a second log
@@ -766,8 +767,9 @@ unknown keys are still stored -- that is RULE-088's fix, not a shape problem. Ev
 was mutation-checked.
 
 **The audit of all seventeen findings is complete.** Held: SEC-01, 04, 05, 07, 09, 10, 13, 14.
-Fixed: SEC-02, 03, 06, 16, 17, and SEC-11 for the new app's CI. Not applicable: SEC-15. Needing
-the owner: SEC-08, SEC-12's torch floor, and SEC-11's legacy half (`tests.yml`).
+Fixed: SEC-02, 03, 06, 08, 12, 16, 17, and SEC-11 for the new app's CI. Not applicable: SEC-15.
+Not taken up: SEC-11's legacy half (`tests.yml`). The owner was asked on 2026-09-23 and chose only
+the backup-ref cleanup, so the legacy workflow keeps its mutable action tags.
 
 **What widening the reach guard found last: the hotkey EDITOR is not built.** `checkAssignment`
 is RULE-049's per-keystroke check for a rebinding dialog, and nothing calls it because there is no
