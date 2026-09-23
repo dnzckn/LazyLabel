@@ -662,6 +662,9 @@ def _models(deps: Deps) -> Response:
                     "family": s.entry.family,
                     "size": s.entry.size,
                     "videoCapable": s.entry.is_video_capable,
+                    # Whether it answers prompts. The embedder Find Archetypes uses is in the same
+                    # manifest and does not; the picker offered it for the AI tool until 2026-09-23.
+                    "segmenter": s.entry.is_segmenter,
                     "present": s.present,
                     "verified": s.verified,
                     "detail": s.detail,

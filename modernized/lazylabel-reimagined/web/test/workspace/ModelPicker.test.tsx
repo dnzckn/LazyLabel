@@ -22,6 +22,7 @@ const usable = (name: string, over: Partial<WireModelStatus> = {}): WireModelSta
   family: "sam2",
   size: "large",
   videoCapable: true,
+  segmenter: true,
   present: true,
   verified: true,
   detail: null,
@@ -98,6 +99,19 @@ describe("models that cannot be used", () => {
     const broken = await screen.findByRole("radio", { name: /SAM 1 huge/ });
     expect((broken as HTMLInputElement).disabled).toBe(true);
     expect(screen.getByText(/sha256 does not match/)).toBeTruthy();
+  });
+
+  it("lists the embedder, but not as a model to segment with", async () => {
+    // It shares the manifest with the SAM checkpoints. Choosing it for the AI tool failed with
+    // "no backend for family 'embedder'" until 2026-09-23.
+    mount([
+      usable("SAM 2.1 large"),
+      usable("MobileNetV3 small", { family: "embedder", size: "mobilenet_v3_small", segmenter: false, videoCapable: false }),
+    ]);
+
+    const embedder = await screen.findByRole("radio", { name: /MobileNetV3 small/ });
+    expect((embedder as HTMLInputElement).disabled).toBe(true);
+    expect(screen.getByText(/Find Archetypes uses this model; it cannot segment/)).toBeTruthy();
   });
 
   it("shows a missing one too, and says it is missing", async () => {

@@ -214,6 +214,24 @@ def test_two_first_requests_load_the_model_once(tmp_path, monkeypatch):
     assert loads == ["m"]
 
 
+def test_the_archetype_embedder_is_refused_as_a_segmenter_and_says_so(tmp_path):
+    """It shares the manifest with the SAM checkpoints. Chosen for the AI tool, it failed with "no
+    backend for family 'embedder'" until 2026-09-23; now the refusal names what to do instead."""
+    from PIL import Image
+
+    from lazylabel_inference.manifest import ModelEntry
+    from lazylabel_inference.prompts import InvalidPromptError
+    from lazylabel_inference.service import InferenceService
+
+    Image.new("RGB", (4, 4)).save(tmp_path / "a.png")
+    embedder = ModelEntry(name="MobileNetV3 small", family="embedder", size="mobilenet_v3_small",
+                          filename="m.pth", sha256="0" * 64, bytes=1)
+    service = InferenceService(models=[embedder], model_dir=tmp_path, dataset_root=tmp_path)
+
+    with pytest.raises(InvalidPromptError, match="cannot segment.*choose a SAM model"):
+        service.embed("a.png", "MobileNetV3 small")
+
+
 def test_unreadable_posted_pixels_are_refused_rather_than_guessed(tmp_path):
     """A base64 string that is not an image must fail loudly.
 

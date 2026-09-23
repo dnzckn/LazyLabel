@@ -80,7 +80,10 @@ export function ModelPicker({ client }: { readonly client: ApiClient }): ReactNo
     <>
       <ul className="models">
         {state.models.map((model) => {
-          const usable = model.present && model.verified;
+          // An embedder is listed -- an operator installing checkpoints wants to see it verified
+          // -- but it is no model to segment with, and choosing it failed with a message about a
+          // "backend for family 'embedder'" until 2026-09-23.
+          const usable = model.present && model.verified && model.segmenter;
 
           return (
             <li key={model.name}>
@@ -103,7 +106,9 @@ export function ModelPicker({ client }: { readonly client: ApiClient }): ReactNo
                 // The reason, not just the fact. "Unavailable" sends a user looking; "the file is
                 // not in the model directory" tells them where to look.
                 <p className="models__why" role="status">
-                  {model.detail ?? (model.present ? "does not match its recorded hash" : "not installed")}
+                  {!model.segmenter && model.present && model.verified
+                    ? "Find Archetypes uses this model; it cannot segment"
+                    : (model.detail ?? (model.present ? "does not match its recorded hash" : "not installed"))}
                 </p>
               )}
             </li>

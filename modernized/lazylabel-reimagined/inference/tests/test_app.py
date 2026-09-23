@@ -116,6 +116,8 @@ class TestModels:
         assert status == 200
         assert body["models"][0]["verified"] is True
         assert body["models"][0]["family"] == "sam1"
+        # It answers prompts; the picker offers only the models that do.
+        assert body["models"][0]["segmenter"] is True
 
     def test_reports_a_checkpoint_that_does_not_match_its_hash(self, tmp_path: Path) -> None:
         entries = model_entry(tmp_path)

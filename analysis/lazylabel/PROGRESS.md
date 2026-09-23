@@ -59,8 +59,8 @@ missing from this table entirely, which is how a table stops being a census.
 | Package | Passing | Note |
 |---|---|---|
 | exporters | 1991 | the seven formats, byte-for-byte against goldens legacy wrote |
-| web | 1168 | C11's placeholder is gone; it has an acceptance test now |
-| inference | 573 | plus 38 skipped: the differentials, which need real checkpoints |
+| web | 1169 | C11's placeholder is gone; it has an acceptance test now |
+| inference | 574 | plus 38 skipped: the differentials, which need real checkpoints |
 | api | 422 | plus 4 skipped (SEC-09's symlink tests, where the OS will not make a link, as on this machine) and 1 todo (C8's placeholder) |
 | settings-schema | 55 | includes the rule-fixed defaults |
 | converter | 30 | the pickled-alias rewrite |
@@ -213,6 +213,19 @@ Mutations caught:
 - rendering only for adjustments fails one;
 - a key without processing fails one;
 - the view sending an empty chain fails one.
+
+**The AI model picker offered the archetype embedder -- found against the real stack and fixed
+2026-09-23.** The manifest lists MobileNetV3 beside the SAM checkpoints, for Find Archetypes. The
+picker offered it for the AI tool, and choosing it failed with "no backend for family 'embedder'".
+- The service now reports `segmenter` for each model.
+- The picker lists the embedder, verified but disabled, with "Find Archetypes uses this model; it
+  cannot segment".
+- An embed request naming it is refused, saying to choose a SAM model. `is_segmenter` existed for
+  exactly this and was called by nothing.
+
+In the same run, SAM 1 went through the whole stack: its restore after the prefetch returned the
+disc. So did switching models mid-session, SAM 1 to SAM 2.1 and back, each answering from its own
+encoding. Two tests, each failing without its fix.
 
 **Two objects, one of which vanishes -- three bugs found against the real stack and fixed
 2026-09-23.** Forty frames: a class-0 disc moving right, and a class-2 disc moving left that is gone

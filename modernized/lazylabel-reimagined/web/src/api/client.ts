@@ -94,6 +94,8 @@ export interface WireModelStatus {
   readonly family: string;
   readonly size: string;
   readonly videoCapable: boolean;
+  /** It answers prompts. False for the embedder Find Archetypes uses, which shares the manifest. */
+  readonly segmenter: boolean;
   /** The file is in the model directory. */
   readonly present: boolean;
   /** Its SHA-256 matches the manifest. Present and unverified is the case worth showing. */

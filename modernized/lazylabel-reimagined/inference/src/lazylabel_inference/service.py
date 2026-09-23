@@ -138,6 +138,11 @@ class InferenceService:
         loses one can ask again rather than leaking a session.
         """
         entry = self.model(model_name)
+        if not entry.is_segmenter:
+            # Said plainly: "no backend for family 'embedder'" was what a user got for choosing it.
+            raise InvalidPromptError(
+                f"{entry.name} cannot segment -- it is the embedder Find Archetypes uses; choose a SAM model"
+            )
         path = self._resolve(image_key)
 
         key = EmbeddingKey(
