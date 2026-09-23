@@ -1,0 +1,2688 @@
+{
+  "source": "legacy lazylabel sequence mode (MainWindow, SequenceViewMode, PropagationManager, Sam2Model) at snapshot 2a7d5d8, run headless by capture_propagation_goldens.py",
+  "captured": "2026-09-23",
+  "checkpoint": "sam2.1_hiera_large.pt",
+  "checkpointSha256": "2647878d5dfa5098f2f8649825738a9345572bae2d4350a2468587ece47dd318",
+  "threshold": 0.99,
+  "height": 240,
+  "width": 320,
+  "frames": [
+    "frame_000.png",
+    "frame_001.png",
+    "frame_002.png",
+    "frame_003.png",
+    "frame_004.png",
+    "frame_005.png",
+    "frame_006.png",
+    "frame_007.png",
+    "frame_008.png",
+    "frame_009.png",
+    "frame_010.png",
+    "frame_011.png",
+    "frame_012.png",
+    "frame_013.png",
+    "frame_014.png",
+    "frame_015.png",
+    "frame_016.png",
+    "frame_017.png",
+    "frame_018.png",
+    "frame_019.png",
+    "frame_020.png",
+    "frame_021.png",
+    "frame_022.png",
+    "frame_023.png"
+  ],
+  "frameDigests": [
+    "af6400c07e5f338aa548889031003a9c718866493b4b80602ecea19a99750802",
+    "f3cd6a658991675528a0cf73105113269ca2fb104269c4c89e1a18cf32814e59",
+    "4d6c7253f060de0eba6323734b72b32cfe0418a52d0bdd2c1491eb525efea758",
+    "0c9d408636e82d56a4f9a655ac14e0a53947dc03b1f73ddc49953cd0b79f6f40",
+    "fbb7281f83954c2934965754b7db06d4aebb64c332b3e95b6bd9bf8bbeec468f",
+    "ab1e78fce919a8a6ae752b6da55b1d05b0919dec587a5437071d4c71a6e49799",
+    "436bfde4184d4b57dd73ad3ad262f8c1ce4573fb428bfdea1867ee340bd74286",
+    "6b0fda18d5c1ef5a56cb23e400fefb2eda6afff9e8823efceb71ba69941b95c2",
+    "645001eabd25a78ea009424f42814d7d5a752bea061fe2684b5d16271c486218",
+    "0763d742a457138ce1f87b152806902723d28d894aed42c7736382d194ce3538",
+    "33a61d0e2bc8f013ee8534663e01aab8dd97c7f17396a000a1a99ee1d7108491",
+    "6b671f073b764c7f95c1e2cc103df7c32be5ee01aa079362ee0ccbc646681316",
+    "e59f76a30cd581ae4f0c84cb145a602bfde692c220a4cb295e50a0e815b5c84d",
+    "647ce378e4c6596a617f95ae1d789639db13d74a0cced53b02804b91f2293f3e",
+    "e416d1605185c47df3ade7d7cc196a08c4ef6eb22a61e6e2b73ed01346cef318",
+    "e38c438e275917a9140b0774413a855ff56ea84829a2d87d33667e04a4cd346f",
+    "266101fe4e7a893fa91df3ba5993db2e16ac6437bb085e92320994a9994dec70",
+    "a24ed382324494e0081bc5178ca40c4a7d339f8361689504351ed06ab2a3541f",
+    "f8c55846ada0ab1a25f950d81f8228b3cdc4e01630dbe7b3e50ef899ad5ba1b1",
+    "734281f13abaf4417706781b305b1406dbd74453fadab7c1fa82c6288eac9024",
+    "719a68f1a05a77c36d554090edeae32f9e34b074faf5e95c3cccdf5ddd3d03b9",
+    "b4b0a6f0e7d840645d96c426ba53ac4d97b5c678d80bc5a0707928b168e525a8",
+    "0a00108b81f126410782a011a073c17304aea325fa429082403d6ddc037e002c",
+    "c0b85ce017ee75c8841b2ddcb70d854703a2c6d0c03046f9cb3d9f49c7752ffb"
+  ],
+  "references": [
+    {
+      "frame": 8,
+      "object": 1,
+      "class": 1,
+      "pixels": 1793,
+      "maskDigest": "e48e00ecda752a8a6ae6bd5660ca53d038172ee3bfea1d77d3bd9db8ad8362f9"
+    },
+    {
+      "frame": 8,
+      "object": 2,
+      "class": 2,
+      "pixels": 1296,
+      "maskDigest": "3049576e960e385c2a31e155efe0675fc8f839bef582703d289c676946ce75b2"
+    }
+  ],
+  "direction": "both",
+  "results": [
+    {
+      "frame": 0,
+      "object": 1,
+      "pass": "backward",
+      "confidence": 0.9999732971191406,
+      "empty": false,
+      "flagged": false,
+      "pixels": 1831
+    },
+    {
+      "frame": 0,
+      "object": 2,
+      "pass": "backward",
+      "confidence": 0.9999140501022339,
+      "empty": false,
+      "flagged": false,
+      "pixels": 1295
+    },
+    {
+      "frame": 1,
+      "object": 1,
+      "pass": "backward",
+      "confidence": 0.9999786615371704,
+      "empty": false,
+      "flagged": false,
+      "pixels": 1825
+    },
+    {
+      "frame": 1,
+      "object": 2,
+      "pass": "backward",
+      "confidence": 0.9986395239830017,
+      "empty": false,
+      "flagged": false,
+      "pixels": 1389
+    },
+    {
+      "frame": 2,
+      "object": 1,
+      "pass": "backward",
+      "confidence": 0.9999456405639648,
+      "empty": false,
+      "flagged": false,
+      "pixels": 1826
+    },
+    {
+      "frame": 2,
+      "object": 2,
+      "pass": "backward",
+      "confidence": 0.9752891063690186,
+      "empty": false,
+      "flagged": true,
+      "pixels": 2566
+    },
+    {
+      "frame": 3,
+      "object": 1,
+      "pass": "backward",
+      "confidence": 0.9999475479125977,
+      "empty": false,
+      "flagged": false,
+      "pixels": 1825
+    },
+    {
+      "frame": 3,
+      "object": 2,
+      "pass": "backward",
+      "confidence": 0.9968749284744263,
+      "empty": false,
+      "flagged": false,
+      "pixels": 2120
+    },
+    {
+      "frame": 4,
+      "object": 1,
+      "pass": "backward",
+      "confidence": 0.9955653548240662,
+      "empty": false,
+      "flagged": false,
+      "pixels": 1810
+    },
+    {
+      "frame": 4,
+      "object": 2,
+      "pass": "backward",
+      "confidence": 0.9992332458496094,
+      "empty": false,
+      "flagged": false,
+      "pixels": 2178
+    },
+    {
+      "frame": 5,
+      "object": 1,
+      "pass": "backward",
+      "confidence": 0.9999891519546509,
+      "empty": false,
+      "flagged": false,
+      "pixels": 1803
+    },
+    {
+      "frame": 5,
+      "object": 2,
+      "pass": "backward",
+      "confidence": 0.9990123510360718,
+      "empty": false,
+      "flagged": false,
+      "pixels": 2388
+    },
+    {
+      "frame": 6,
+      "object": 1,
+      "pass": "backward",
+      "confidence": 0.9999721050262451,
+      "empty": false,
+      "flagged": false,
+      "pixels": 1798
+    },
+    {
+      "frame": 6,
+      "object": 2,
+      "pass": "backward",
+      "confidence": 0.999767005443573,
+      "empty": false,
+      "flagged": false,
+      "pixels": 1281
+    },
+    {
+      "frame": 7,
+      "object": 1,
+      "pass": "backward",
+      "confidence": 0.9999842643737793,
+      "empty": false,
+      "flagged": false,
+      "pixels": 1797
+    },
+    {
+      "frame": 7,
+      "object": 2,
+      "pass": "backward",
+      "confidence": 0.9999986886978149,
+      "empty": false,
+      "flagged": false,
+      "pixels": 1292
+    },
+    {
+      "frame": 9,
+      "object": 1,
+      "pass": "forward",
+      "confidence": 0.9999865293502808,
+      "empty": false,
+      "flagged": false,
+      "pixels": 1788
+    },
+    {
+      "frame": 9,
+      "object": 2,
+      "pass": "forward",
+      "confidence": 0.9999862909317017,
+      "empty": false,
+      "flagged": false,
+      "pixels": 1292
+    },
+    {
+      "frame": 10,
+      "object": 1,
+      "pass": "forward",
+      "confidence": 0.999916672706604,
+      "empty": false,
+      "flagged": false,
+      "pixels": 1739
+    },
+    {
+      "frame": 10,
+      "object": 2,
+      "pass": "forward",
+      "confidence": 0.9999985694885254,
+      "empty": false,
+      "flagged": false,
+      "pixels": 1293
+    },
+    {
+      "frame": 11,
+      "object": 1,
+      "pass": "forward",
+      "confidence": 0.9046063423156738,
+      "empty": false,
+      "flagged": true,
+      "pixels": 1306
+    },
+    {
+      "frame": 11,
+      "object": 2,
+      "pass": "forward",
+      "confidence": 0.9999418258666992,
+      "empty": false,
+      "flagged": false,
+      "pixels": 1292
+    },
+    {
+      "frame": 12,
+      "object": 1,
+      "pass": "forward",
+      "confidence": 0.9989935755729675,
+      "empty": false,
+      "flagged": false,
+      "pixels": 2292
+    },
+    {
+      "frame": 12,
+      "object": 2,
+      "pass": "forward",
+      "confidence": 0.9998763799667358,
+      "empty": false,
+      "flagged": false,
+      "pixels": 1292
+    },
+    {
+      "frame": 13,
+      "object": 1,
+      "pass": "forward",
+      "confidence": 0.9998302459716797,
+      "empty": false,
+      "flagged": false,
+      "pixels": 1988
+    },
+    {
+      "frame": 13,
+      "object": 2,
+      "pass": "forward",
+      "confidence": 0.9999974966049194,
+      "empty": false,
+      "flagged": false,
+      "pixels": 1292
+    },
+    {
+      "frame": 14,
+      "object": 1,
+      "pass": "forward",
+      "confidence": 0.9999368190765381,
+      "empty": false,
+      "flagged": false,
+      "pixels": 2044
+    },
+    {
+      "frame": 14,
+      "object": 2,
+      "pass": "forward",
+      "confidence": 0.9999984502792358,
+      "empty": false,
+      "flagged": false,
+      "pixels": 1292
+    },
+    {
+      "frame": 15,
+      "object": 1,
+      "pass": "forward",
+      "confidence": 0.9995200634002686,
+      "empty": false,
+      "flagged": false,
+      "pixels": 1199
+    },
+    {
+      "frame": 15,
+      "object": 2,
+      "pass": "forward",
+      "confidence": 0.9999947547912598,
+      "empty": false,
+      "flagged": false,
+      "pixels": 1292
+    },
+    {
+      "frame": 16,
+      "object": 1,
+      "pass": "forward",
+      "confidence": 0.9996925592422485,
+      "empty": false,
+      "flagged": false,
+      "pixels": 475
+    },
+    {
+      "frame": 16,
+      "object": 2,
+      "pass": "forward",
+      "confidence": 0.9999833106994629,
+      "empty": false,
+      "flagged": false,
+      "pixels": 1292
+    },
+    {
+      "frame": 17,
+      "object": 1,
+      "pass": "forward",
+      "confidence": 0.9996156692504883,
+      "empty": false,
+      "flagged": false,
+      "pixels": 578
+    },
+    {
+      "frame": 17,
+      "object": 2,
+      "pass": "forward",
+      "confidence": 0.9999982118606567,
+      "empty": false,
+      "flagged": false,
+      "pixels": 1186
+    },
+    {
+      "frame": 18,
+      "object": 1,
+      "pass": "forward",
+      "confidence": 0.9995409250259399,
+      "empty": false,
+      "flagged": false,
+      "pixels": 1334
+    },
+    {
+      "frame": 18,
+      "object": 2,
+      "pass": "forward",
+      "confidence": 0.9999992847442627,
+      "empty": false,
+      "flagged": false,
+      "pixels": 791
+    },
+    {
+      "frame": 19,
+      "object": 1,
+      "pass": "forward",
+      "confidence": 0.9994913339614868,
+      "empty": false,
+      "flagged": false,
+      "pixels": 1772
+    },
+    {
+      "frame": 19,
+      "object": 2,
+      "pass": "forward",
+      "confidence": 0.9999990463256836,
+      "empty": false,
+      "flagged": false,
+      "pixels": 395
+    },
+    {
+      "frame": 20,
+      "object": 1,
+      "pass": "forward",
+      "confidence": 0.9995225667953491,
+      "empty": false,
+      "flagged": false,
+      "pixels": 1804
+    },
+    {
+      "frame": 20,
+      "object": 2,
+      "pass": "forward",
+      "confidence": 0.0,
+      "empty": true,
+      "flagged": false,
+      "pixels": 0
+    },
+    {
+      "frame": 21,
+      "object": 1,
+      "pass": "forward",
+      "confidence": 0.9993158578872681,
+      "empty": false,
+      "flagged": false,
+      "pixels": 1660
+    },
+    {
+      "frame": 21,
+      "object": 2,
+      "pass": "forward",
+      "confidence": 0.0,
+      "empty": true,
+      "flagged": false,
+      "pixels": 0
+    },
+    {
+      "frame": 22,
+      "object": 1,
+      "pass": "forward",
+      "confidence": 0.9992781281471252,
+      "empty": false,
+      "flagged": false,
+      "pixels": 1164
+    },
+    {
+      "frame": 22,
+      "object": 2,
+      "pass": "forward",
+      "confidence": 0.0,
+      "empty": true,
+      "flagged": false,
+      "pixels": 0
+    },
+    {
+      "frame": 23,
+      "object": 1,
+      "pass": "forward",
+      "confidence": 0.9994091987609863,
+      "empty": false,
+      "flagged": false,
+      "pixels": 596
+    },
+    {
+      "frame": 23,
+      "object": 2,
+      "pass": "forward",
+      "confidence": 0.0,
+      "empty": true,
+      "flagged": false,
+      "pixels": 0
+    }
+  ],
+  "scenarios": {
+    "defaults": {
+      "keepFlagged": false,
+      "skipLabeled": true,
+      "labeled": [],
+      "timeline": [
+        "propagated",
+        "propagated",
+        "flagged",
+        "propagated",
+        "propagated",
+        "propagated",
+        "propagated",
+        "propagated",
+        "reference",
+        "propagated",
+        "propagated",
+        "flagged",
+        "propagated",
+        "propagated",
+        "propagated",
+        "propagated",
+        "propagated",
+        "propagated",
+        "propagated",
+        "propagated",
+        "propagated",
+        "propagated",
+        "propagated",
+        "propagated"
+      ],
+      "timelineConfidence": {
+        "0": 0.9999140501022339,
+        "1": 0.9986395239830017,
+        "2": 0.9752891063690186,
+        "3": 0.9968749284744263,
+        "4": 0.9955653548240662,
+        "5": 0.9990123510360718,
+        "6": 0.999767005443573,
+        "7": 0.9999842643737793,
+        "9": 0.9999862909317017,
+        "10": 0.999916672706604,
+        "11": 0.9046063423156738,
+        "12": 0.9989935755729675,
+        "13": 0.9998302459716797,
+        "14": 0.9999368190765381,
+        "15": 0.9995200634002686,
+        "16": 0.9996925592422485,
+        "17": 0.9996156692504883,
+        "18": 0.9995409250259399,
+        "19": 0.9994913339614868,
+        "20": 0.9995225667953491,
+        "21": 0.9993158578872681,
+        "22": 0.9992781281471252,
+        "23": 0.9994091987609863
+      },
+      "view": [
+        "propagated",
+        "propagated",
+        "flagged",
+        "propagated",
+        "propagated",
+        "propagated",
+        "propagated",
+        "propagated",
+        "reference",
+        "propagated",
+        "propagated",
+        "flagged",
+        "propagated",
+        "propagated",
+        "propagated",
+        "propagated",
+        "propagated",
+        "propagated",
+        "propagated",
+        "propagated",
+        "propagated",
+        "propagated",
+        "propagated",
+        "propagated"
+      ],
+      "viewConfidence": {
+        "0": 0.9999140501022339,
+        "1": 0.9986395239830017,
+        "2": 0.9752891063690186,
+        "3": 0.9968749284744263,
+        "4": 0.9955653548240662,
+        "5": 0.9990123510360718,
+        "6": 0.999767005443573,
+        "7": 0.9999842643737793,
+        "9": 0.9999862909317017,
+        "10": 0.999916672706604,
+        "11": 0.9046063423156738,
+        "12": 0.9989935755729675,
+        "13": 0.9998302459716797,
+        "14": 0.9999368190765381,
+        "15": 0.9995200634002686,
+        "16": 0.9996925592422485,
+        "17": 0.9996156692504883,
+        "18": 0.9995409250259399,
+        "19": 0.9994913339614868,
+        "20": 0.9995225667953491,
+        "21": 0.9993158578872681,
+        "22": 0.9992781281471252,
+        "23": 0.9994091987609863
+      },
+      "keptMasks": {
+        "0": [
+          1,
+          2
+        ],
+        "1": [
+          1,
+          2
+        ],
+        "3": [
+          1,
+          2
+        ],
+        "4": [
+          1,
+          2
+        ],
+        "5": [
+          1,
+          2
+        ],
+        "6": [
+          1,
+          2
+        ],
+        "7": [
+          1,
+          2
+        ],
+        "9": [
+          1,
+          2
+        ],
+        "10": [
+          1,
+          2
+        ],
+        "12": [
+          1,
+          2
+        ],
+        "13": [
+          1,
+          2
+        ],
+        "14": [
+          1,
+          2
+        ],
+        "15": [
+          1,
+          2
+        ],
+        "16": [
+          1,
+          2
+        ],
+        "17": [
+          1,
+          2
+        ],
+        "18": [
+          1,
+          2
+        ],
+        "19": [
+          1,
+          2
+        ],
+        "20": [
+          1
+        ],
+        "21": [
+          1
+        ],
+        "22": [
+          1
+        ],
+        "23": [
+          1
+        ]
+      },
+      "engine": {
+        "propagated": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          9,
+          10,
+          11,
+          12,
+          13,
+          14,
+          15,
+          16,
+          17,
+          18,
+          19,
+          20,
+          21,
+          22,
+          23
+        ],
+        "flagged": [
+          2,
+          11
+        ]
+      },
+      "counts": {
+        "flagged": 2,
+        "propagated": 21
+      },
+      "propagationNotices": [
+        "Loading images into model...",
+        "Starting propagation (both)...",
+        "Propagation complete: 23 frames, 2 flagged. Scrub timeline or click 'Save All' to save."
+      ],
+      "saveAll": {
+        "written": [
+          {
+            "frame": 0,
+            "segments": [
+              {
+                "class": 1,
+                "object": 1,
+                "pixels": 1831
+              },
+              {
+                "class": 2,
+                "object": 2,
+                "pixels": 1295
+              }
+            ]
+          },
+          {
+            "frame": 1,
+            "segments": [
+              {
+                "class": 1,
+                "object": 1,
+                "pixels": 1825
+              },
+              {
+                "class": 2,
+                "object": 2,
+                "pixels": 1389
+              }
+            ]
+          },
+          {
+            "frame": 3,
+            "segments": [
+              {
+                "class": 1,
+                "object": 1,
+                "pixels": 1825
+              },
+              {
+                "class": 2,
+                "object": 2,
+                "pixels": 2120
+              }
+            ]
+          },
+          {
+            "frame": 4,
+            "segments": [
+              {
+                "class": 1,
+                "object": 1,
+                "pixels": 1810
+              },
+              {
+                "class": 2,
+                "object": 2,
+                "pixels": 2178
+              }
+            ]
+          },
+          {
+            "frame": 5,
+            "segments": [
+              {
+                "class": 1,
+                "object": 1,
+                "pixels": 1803
+              },
+              {
+                "class": 2,
+                "object": 2,
+                "pixels": 2388
+              }
+            ]
+          },
+          {
+            "frame": 6,
+            "segments": [
+              {
+                "class": 1,
+                "object": 1,
+                "pixels": 1798
+              },
+              {
+                "class": 2,
+                "object": 2,
+                "pixels": 1281
+              }
+            ]
+          },
+          {
+            "frame": 7,
+            "segments": [
+              {
+                "class": 1,
+                "object": 1,
+                "pixels": 1797
+              },
+              {
+                "class": 2,
+                "object": 2,
+                "pixels": 1292
+              }
+            ]
+          },
+          {
+            "frame": 9,
+            "segments": [
+              {
+                "class": 1,
+                "object": 1,
+                "pixels": 1788
+              },
+              {
+                "class": 2,
+                "object": 2,
+                "pixels": 1292
+              }
+            ]
+          },
+          {
+            "frame": 10,
+            "segments": [
+              {
+                "class": 1,
+                "object": 1,
+                "pixels": 1739
+              },
+              {
+                "class": 2,
+                "object": 2,
+                "pixels": 1293
+              }
+            ]
+          },
+          {
+            "frame": 12,
+            "segments": [
+              {
+                "class": 1,
+                "object": 1,
+                "pixels": 2292
+              },
+              {
+                "class": 2,
+                "object": 2,
+                "pixels": 1292
+              }
+            ]
+          },
+          {
+            "frame": 13,
+            "segments": [
+              {
+                "class": 1,
+                "object": 1,
+                "pixels": 1988
+              },
+              {
+                "class": 2,
+                "object": 2,
+                "pixels": 1292
+              }
+            ]
+          },
+          {
+            "frame": 14,
+            "segments": [
+              {
+                "class": 1,
+                "object": 1,
+                "pixels": 2044
+              },
+              {
+                "class": 2,
+                "object": 2,
+                "pixels": 1292
+              }
+            ]
+          },
+          {
+            "frame": 15,
+            "segments": [
+              {
+                "class": 1,
+                "object": 1,
+                "pixels": 1199
+              },
+              {
+                "class": 2,
+                "object": 2,
+                "pixels": 1292
+              }
+            ]
+          },
+          {
+            "frame": 16,
+            "segments": [
+              {
+                "class": 1,
+                "object": 1,
+                "pixels": 475
+              },
+              {
+                "class": 2,
+                "object": 2,
+                "pixels": 1292
+              }
+            ]
+          },
+          {
+            "frame": 17,
+            "segments": [
+              {
+                "class": 1,
+                "object": 1,
+                "pixels": 578
+              },
+              {
+                "class": 2,
+                "object": 2,
+                "pixels": 1186
+              }
+            ]
+          },
+          {
+            "frame": 18,
+            "segments": [
+              {
+                "class": 1,
+                "object": 1,
+                "pixels": 1334
+              },
+              {
+                "class": 2,
+                "object": 2,
+                "pixels": 791
+              }
+            ]
+          },
+          {
+            "frame": 19,
+            "segments": [
+              {
+                "class": 1,
+                "object": 1,
+                "pixels": 1772
+              },
+              {
+                "class": 2,
+                "object": 2,
+                "pixels": 395
+              }
+            ]
+          },
+          {
+            "frame": 20,
+            "segments": [
+              {
+                "class": 1,
+                "object": 1,
+                "pixels": 1804
+              }
+            ]
+          },
+          {
+            "frame": 21,
+            "segments": [
+              {
+                "class": 1,
+                "object": 1,
+                "pixels": 1660
+              }
+            ]
+          },
+          {
+            "frame": 22,
+            "segments": [
+              {
+                "class": 1,
+                "object": 1,
+                "pixels": 1164
+              }
+            ]
+          },
+          {
+            "frame": 23,
+            "segments": [
+              {
+                "class": 1,
+                "object": 1,
+                "pixels": 596
+              }
+            ]
+          }
+        ],
+        "timeline": [
+          "saved",
+          "saved",
+          "flagged",
+          "saved",
+          "saved",
+          "saved",
+          "saved",
+          "saved",
+          "reference",
+          "saved",
+          "saved",
+          "flagged",
+          "saved",
+          "saved",
+          "saved",
+          "saved",
+          "saved",
+          "saved",
+          "saved",
+          "saved",
+          "saved",
+          "saved",
+          "saved",
+          "saved"
+        ],
+        "notices": [
+          "Saving 21 frames...",
+          "Saved 21 frames to NPZ"
+        ]
+      }
+    },
+    "keep-flagged": {
+      "keepFlagged": true,
+      "skipLabeled": true,
+      "labeled": [],
+      "timeline": [
+        "propagated",
+        "propagated",
+        "flagged",
+        "propagated",
+        "propagated",
+        "propagated",
+        "propagated",
+        "propagated",
+        "reference",
+        "propagated",
+        "propagated",
+        "flagged",
+        "propagated",
+        "propagated",
+        "propagated",
+        "propagated",
+        "propagated",
+        "propagated",
+        "propagated",
+        "propagated",
+        "propagated",
+        "propagated",
+        "propagated",
+        "propagated"
+      ],
+      "timelineConfidence": {
+        "0": 0.9999140501022339,
+        "1": 0.9986395239830017,
+        "2": 0.9752891063690186,
+        "3": 0.9968749284744263,
+        "4": 0.9955653548240662,
+        "5": 0.9990123510360718,
+        "6": 0.999767005443573,
+        "7": 0.9999842643737793,
+        "9": 0.9999862909317017,
+        "10": 0.999916672706604,
+        "11": 0.9046063423156738,
+        "12": 0.9989935755729675,
+        "13": 0.9998302459716797,
+        "14": 0.9999368190765381,
+        "15": 0.9995200634002686,
+        "16": 0.9996925592422485,
+        "17": 0.9996156692504883,
+        "18": 0.9995409250259399,
+        "19": 0.9994913339614868,
+        "20": 0.9995225667953491,
+        "21": 0.9993158578872681,
+        "22": 0.9992781281471252,
+        "23": 0.9994091987609863
+      },
+      "view": [
+        "propagated",
+        "propagated",
+        "flagged",
+        "propagated",
+        "propagated",
+        "propagated",
+        "propagated",
+        "propagated",
+        "reference",
+        "propagated",
+        "propagated",
+        "flagged",
+        "propagated",
+        "propagated",
+        "propagated",
+        "propagated",
+        "propagated",
+        "propagated",
+        "propagated",
+        "propagated",
+        "propagated",
+        "propagated",
+        "propagated",
+        "propagated"
+      ],
+      "viewConfidence": {
+        "0": 0.9999140501022339,
+        "1": 0.9986395239830017,
+        "2": 0.9752891063690186,
+        "3": 0.9968749284744263,
+        "4": 0.9955653548240662,
+        "5": 0.9990123510360718,
+        "6": 0.999767005443573,
+        "7": 0.9999842643737793,
+        "9": 0.9999862909317017,
+        "10": 0.999916672706604,
+        "11": 0.9046063423156738,
+        "12": 0.9989935755729675,
+        "13": 0.9998302459716797,
+        "14": 0.9999368190765381,
+        "15": 0.9995200634002686,
+        "16": 0.9996925592422485,
+        "17": 0.9996156692504883,
+        "18": 0.9995409250259399,
+        "19": 0.9994913339614868,
+        "20": 0.9995225667953491,
+        "21": 0.9993158578872681,
+        "22": 0.9992781281471252,
+        "23": 0.9994091987609863
+      },
+      "keptMasks": {
+        "0": [
+          1,
+          2
+        ],
+        "1": [
+          1,
+          2
+        ],
+        "2": [
+          1,
+          2
+        ],
+        "3": [
+          1,
+          2
+        ],
+        "4": [
+          1,
+          2
+        ],
+        "5": [
+          1,
+          2
+        ],
+        "6": [
+          1,
+          2
+        ],
+        "7": [
+          1,
+          2
+        ],
+        "9": [
+          1,
+          2
+        ],
+        "10": [
+          1,
+          2
+        ],
+        "11": [
+          1,
+          2
+        ],
+        "12": [
+          1,
+          2
+        ],
+        "13": [
+          1,
+          2
+        ],
+        "14": [
+          1,
+          2
+        ],
+        "15": [
+          1,
+          2
+        ],
+        "16": [
+          1,
+          2
+        ],
+        "17": [
+          1,
+          2
+        ],
+        "18": [
+          1,
+          2
+        ],
+        "19": [
+          1,
+          2
+        ],
+        "20": [
+          1
+        ],
+        "21": [
+          1
+        ],
+        "22": [
+          1
+        ],
+        "23": [
+          1
+        ]
+      },
+      "engine": {
+        "propagated": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          9,
+          10,
+          11,
+          12,
+          13,
+          14,
+          15,
+          16,
+          17,
+          18,
+          19,
+          20,
+          21,
+          22,
+          23
+        ],
+        "flagged": [
+          2,
+          11
+        ]
+      },
+      "counts": {
+        "flagged": 2,
+        "propagated": 21
+      },
+      "propagationNotices": [
+        "Loading images into model...",
+        "Starting propagation (both)...",
+        "Propagation complete: 23 frames, 2 flagged. Scrub timeline or click 'Save All' to save."
+      ],
+      "saveAll": {
+        "written": [
+          {
+            "frame": 0,
+            "segments": [
+              {
+                "class": 1,
+                "object": 1,
+                "pixels": 1831
+              },
+              {
+                "class": 2,
+                "object": 2,
+                "pixels": 1295
+              }
+            ]
+          },
+          {
+            "frame": 1,
+            "segments": [
+              {
+                "class": 1,
+                "object": 1,
+                "pixels": 1825
+              },
+              {
+                "class": 2,
+                "object": 2,
+                "pixels": 1389
+              }
+            ]
+          },
+          {
+            "frame": 3,
+            "segments": [
+              {
+                "class": 1,
+                "object": 1,
+                "pixels": 1825
+              },
+              {
+                "class": 2,
+                "object": 2,
+                "pixels": 2120
+              }
+            ]
+          },
+          {
+            "frame": 4,
+            "segments": [
+              {
+                "class": 1,
+                "object": 1,
+                "pixels": 1810
+              },
+              {
+                "class": 2,
+                "object": 2,
+                "pixels": 2178
+              }
+            ]
+          },
+          {
+            "frame": 5,
+            "segments": [
+              {
+                "class": 1,
+                "object": 1,
+                "pixels": 1803
+              },
+              {
+                "class": 2,
+                "object": 2,
+                "pixels": 2388
+              }
+            ]
+          },
+          {
+            "frame": 6,
+            "segments": [
+              {
+                "class": 1,
+                "object": 1,
+                "pixels": 1798
+              },
+              {
+                "class": 2,
+                "object": 2,
+                "pixels": 1281
+              }
+            ]
+          },
+          {
+            "frame": 7,
+            "segments": [
+              {
+                "class": 1,
+                "object": 1,
+                "pixels": 1797
+              },
+              {
+                "class": 2,
+                "object": 2,
+                "pixels": 1292
+              }
+            ]
+          },
+          {
+            "frame": 9,
+            "segments": [
+              {
+                "class": 1,
+                "object": 1,
+                "pixels": 1788
+              },
+              {
+                "class": 2,
+                "object": 2,
+                "pixels": 1292
+              }
+            ]
+          },
+          {
+            "frame": 10,
+            "segments": [
+              {
+                "class": 1,
+                "object": 1,
+                "pixels": 1739
+              },
+              {
+                "class": 2,
+                "object": 2,
+                "pixels": 1293
+              }
+            ]
+          },
+          {
+            "frame": 12,
+            "segments": [
+              {
+                "class": 1,
+                "object": 1,
+                "pixels": 2292
+              },
+              {
+                "class": 2,
+                "object": 2,
+                "pixels": 1292
+              }
+            ]
+          },
+          {
+            "frame": 13,
+            "segments": [
+              {
+                "class": 1,
+                "object": 1,
+                "pixels": 1988
+              },
+              {
+                "class": 2,
+                "object": 2,
+                "pixels": 1292
+              }
+            ]
+          },
+          {
+            "frame": 14,
+            "segments": [
+              {
+                "class": 1,
+                "object": 1,
+                "pixels": 2044
+              },
+              {
+                "class": 2,
+                "object": 2,
+                "pixels": 1292
+              }
+            ]
+          },
+          {
+            "frame": 15,
+            "segments": [
+              {
+                "class": 1,
+                "object": 1,
+                "pixels": 1199
+              },
+              {
+                "class": 2,
+                "object": 2,
+                "pixels": 1292
+              }
+            ]
+          },
+          {
+            "frame": 16,
+            "segments": [
+              {
+                "class": 1,
+                "object": 1,
+                "pixels": 475
+              },
+              {
+                "class": 2,
+                "object": 2,
+                "pixels": 1292
+              }
+            ]
+          },
+          {
+            "frame": 17,
+            "segments": [
+              {
+                "class": 1,
+                "object": 1,
+                "pixels": 578
+              },
+              {
+                "class": 2,
+                "object": 2,
+                "pixels": 1186
+              }
+            ]
+          },
+          {
+            "frame": 18,
+            "segments": [
+              {
+                "class": 1,
+                "object": 1,
+                "pixels": 1334
+              },
+              {
+                "class": 2,
+                "object": 2,
+                "pixels": 791
+              }
+            ]
+          },
+          {
+            "frame": 19,
+            "segments": [
+              {
+                "class": 1,
+                "object": 1,
+                "pixels": 1772
+              },
+              {
+                "class": 2,
+                "object": 2,
+                "pixels": 395
+              }
+            ]
+          },
+          {
+            "frame": 20,
+            "segments": [
+              {
+                "class": 1,
+                "object": 1,
+                "pixels": 1804
+              }
+            ]
+          },
+          {
+            "frame": 21,
+            "segments": [
+              {
+                "class": 1,
+                "object": 1,
+                "pixels": 1660
+              }
+            ]
+          },
+          {
+            "frame": 22,
+            "segments": [
+              {
+                "class": 1,
+                "object": 1,
+                "pixels": 1164
+              }
+            ]
+          },
+          {
+            "frame": 23,
+            "segments": [
+              {
+                "class": 1,
+                "object": 1,
+                "pixels": 596
+              }
+            ]
+          }
+        ],
+        "timeline": [
+          "saved",
+          "saved",
+          "flagged",
+          "saved",
+          "saved",
+          "saved",
+          "saved",
+          "saved",
+          "reference",
+          "saved",
+          "saved",
+          "flagged",
+          "saved",
+          "saved",
+          "saved",
+          "saved",
+          "saved",
+          "saved",
+          "saved",
+          "saved",
+          "saved",
+          "saved",
+          "saved",
+          "saved"
+        ],
+        "notices": [
+          "Saving 21 frames...",
+          "Saved 21 frames to NPZ"
+        ]
+      }
+    },
+    "skip-labeled": {
+      "keepFlagged": false,
+      "skipLabeled": true,
+      "labeled": [
+        2,
+        5,
+        15,
+        21
+      ],
+      "timeline": [
+        "propagated",
+        "propagated",
+        "skipped",
+        "propagated",
+        "propagated",
+        "skipped",
+        "propagated",
+        "propagated",
+        "reference",
+        "propagated",
+        "propagated",
+        "flagged",
+        "propagated",
+        "propagated",
+        "propagated",
+        "skipped",
+        "propagated",
+        "propagated",
+        "propagated",
+        "propagated",
+        "propagated",
+        "skipped",
+        "propagated",
+        "propagated"
+      ],
+      "timelineConfidence": {
+        "0": 0.9999140501022339,
+        "1": 0.9986395239830017,
+        "3": 0.9968749284744263,
+        "4": 0.9955653548240662,
+        "6": 0.999767005443573,
+        "7": 0.9999842643737793,
+        "9": 0.9999862909317017,
+        "10": 0.999916672706604,
+        "11": 0.9046063423156738,
+        "12": 0.9989935755729675,
+        "13": 0.9998302459716797,
+        "14": 0.9999368190765381,
+        "16": 0.9996925592422485,
+        "17": 0.9996156692504883,
+        "18": 0.9995409250259399,
+        "19": 0.9994913339614868,
+        "20": 0.9995225667953491,
+        "22": 0.9992781281471252,
+        "23": 0.9994091987609863
+      },
+      "view": [
+        "propagated",
+        "propagated",
+        "pending",
+        "propagated",
+        "propagated",
+        "pending",
+        "propagated",
+        "propagated",
+        "reference",
+        "propagated",
+        "propagated",
+        "flagged",
+        "propagated",
+        "propagated",
+        "propagated",
+        "pending",
+        "propagated",
+        "propagated",
+        "propagated",
+        "propagated",
+        "propagated",
+        "pending",
+        "propagated",
+        "propagated"
+      ],
+      "viewConfidence": {
+        "0": 0.9999140501022339,
+        "1": 0.9986395239830017,
+        "3": 0.9968749284744263,
+        "4": 0.9955653548240662,
+        "6": 0.999767005443573,
+        "7": 0.9999842643737793,
+        "9": 0.9999862909317017,
+        "10": 0.999916672706604,
+        "11": 0.9046063423156738,
+        "12": 0.9989935755729675,
+        "13": 0.9998302459716797,
+        "14": 0.9999368190765381,
+        "16": 0.9996925592422485,
+        "17": 0.9996156692504883,
+        "18": 0.9995409250259399,
+        "19": 0.9994913339614868,
+        "20": 0.9995225667953491,
+        "22": 0.9992781281471252,
+        "23": 0.9994091987609863
+      },
+      "keptMasks": {
+        "0": [
+          1,
+          2
+        ],
+        "1": [
+          1,
+          2
+        ],
+        "3": [
+          1,
+          2
+        ],
+        "4": [
+          1,
+          2
+        ],
+        "6": [
+          1,
+          2
+        ],
+        "7": [
+          1,
+          2
+        ],
+        "9": [
+          1,
+          2
+        ],
+        "10": [
+          1,
+          2
+        ],
+        "12": [
+          1,
+          2
+        ],
+        "13": [
+          1,
+          2
+        ],
+        "14": [
+          1,
+          2
+        ],
+        "16": [
+          1,
+          2
+        ],
+        "17": [
+          1,
+          2
+        ],
+        "18": [
+          1,
+          2
+        ],
+        "19": [
+          1,
+          2
+        ],
+        "20": [
+          1
+        ],
+        "22": [
+          1
+        ],
+        "23": [
+          1
+        ]
+      },
+      "engine": {
+        "propagated": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          9,
+          10,
+          11,
+          12,
+          13,
+          14,
+          15,
+          16,
+          17,
+          18,
+          19,
+          20,
+          21,
+          22,
+          23
+        ],
+        "flagged": [
+          2,
+          11
+        ]
+      },
+      "counts": {
+        "flagged": 1,
+        "propagated": 18
+      },
+      "propagationNotices": [
+        "Loading images into model...",
+        "Starting propagation (both)...",
+        "Propagation complete: 23 frames, 2 flagged. Scrub timeline or click 'Save All' to save."
+      ],
+      "saveAll": {
+        "written": [
+          {
+            "frame": 0,
+            "segments": [
+              {
+                "class": 1,
+                "object": 1,
+                "pixels": 1831
+              },
+              {
+                "class": 2,
+                "object": 2,
+                "pixels": 1295
+              }
+            ]
+          },
+          {
+            "frame": 1,
+            "segments": [
+              {
+                "class": 1,
+                "object": 1,
+                "pixels": 1825
+              },
+              {
+                "class": 2,
+                "object": 2,
+                "pixels": 1389
+              }
+            ]
+          },
+          {
+            "frame": 3,
+            "segments": [
+              {
+                "class": 1,
+                "object": 1,
+                "pixels": 1825
+              },
+              {
+                "class": 2,
+                "object": 2,
+                "pixels": 2120
+              }
+            ]
+          },
+          {
+            "frame": 4,
+            "segments": [
+              {
+                "class": 1,
+                "object": 1,
+                "pixels": 1810
+              },
+              {
+                "class": 2,
+                "object": 2,
+                "pixels": 2178
+              }
+            ]
+          },
+          {
+            "frame": 6,
+            "segments": [
+              {
+                "class": 1,
+                "object": 1,
+                "pixels": 1798
+              },
+              {
+                "class": 2,
+                "object": 2,
+                "pixels": 1281
+              }
+            ]
+          },
+          {
+            "frame": 7,
+            "segments": [
+              {
+                "class": 1,
+                "object": 1,
+                "pixels": 1797
+              },
+              {
+                "class": 2,
+                "object": 2,
+                "pixels": 1292
+              }
+            ]
+          },
+          {
+            "frame": 9,
+            "segments": [
+              {
+                "class": 1,
+                "object": 1,
+                "pixels": 1788
+              },
+              {
+                "class": 2,
+                "object": 2,
+                "pixels": 1292
+              }
+            ]
+          },
+          {
+            "frame": 10,
+            "segments": [
+              {
+                "class": 1,
+                "object": 1,
+                "pixels": 1739
+              },
+              {
+                "class": 2,
+                "object": 2,
+                "pixels": 1293
+              }
+            ]
+          },
+          {
+            "frame": 12,
+            "segments": [
+              {
+                "class": 1,
+                "object": 1,
+                "pixels": 2292
+              },
+              {
+                "class": 2,
+                "object": 2,
+                "pixels": 1292
+              }
+            ]
+          },
+          {
+            "frame": 13,
+            "segments": [
+              {
+                "class": 1,
+                "object": 1,
+                "pixels": 1988
+              },
+              {
+                "class": 2,
+                "object": 2,
+                "pixels": 1292
+              }
+            ]
+          },
+          {
+            "frame": 14,
+            "segments": [
+              {
+                "class": 1,
+                "object": 1,
+                "pixels": 2044
+              },
+              {
+                "class": 2,
+                "object": 2,
+                "pixels": 1292
+              }
+            ]
+          },
+          {
+            "frame": 16,
+            "segments": [
+              {
+                "class": 1,
+                "object": 1,
+                "pixels": 475
+              },
+              {
+                "class": 2,
+                "object": 2,
+                "pixels": 1292
+              }
+            ]
+          },
+          {
+            "frame": 17,
+            "segments": [
+              {
+                "class": 1,
+                "object": 1,
+                "pixels": 578
+              },
+              {
+                "class": 2,
+                "object": 2,
+                "pixels": 1186
+              }
+            ]
+          },
+          {
+            "frame": 18,
+            "segments": [
+              {
+                "class": 1,
+                "object": 1,
+                "pixels": 1334
+              },
+              {
+                "class": 2,
+                "object": 2,
+                "pixels": 791
+              }
+            ]
+          },
+          {
+            "frame": 19,
+            "segments": [
+              {
+                "class": 1,
+                "object": 1,
+                "pixels": 1772
+              },
+              {
+                "class": 2,
+                "object": 2,
+                "pixels": 395
+              }
+            ]
+          },
+          {
+            "frame": 20,
+            "segments": [
+              {
+                "class": 1,
+                "object": 1,
+                "pixels": 1804
+              }
+            ]
+          },
+          {
+            "frame": 22,
+            "segments": [
+              {
+                "class": 1,
+                "object": 1,
+                "pixels": 1164
+              }
+            ]
+          },
+          {
+            "frame": 23,
+            "segments": [
+              {
+                "class": 1,
+                "object": 1,
+                "pixels": 596
+              }
+            ]
+          }
+        ],
+        "timeline": [
+          "saved",
+          "saved",
+          "skipped",
+          "saved",
+          "saved",
+          "skipped",
+          "saved",
+          "saved",
+          "reference",
+          "saved",
+          "saved",
+          "flagged",
+          "saved",
+          "saved",
+          "saved",
+          "skipped",
+          "saved",
+          "saved",
+          "saved",
+          "saved",
+          "saved",
+          "skipped",
+          "saved",
+          "saved"
+        ],
+        "notices": [
+          "Saving 21 frames...",
+          "Saved 18 frames to NPZ"
+        ]
+      }
+    },
+    "overwrite": {
+      "keepFlagged": false,
+      "skipLabeled": false,
+      "labeled": [
+        2,
+        5,
+        15,
+        21
+      ],
+      "timeline": [
+        "propagated",
+        "propagated",
+        "flagged",
+        "propagated",
+        "propagated",
+        "propagated",
+        "propagated",
+        "propagated",
+        "reference",
+        "propagated",
+        "propagated",
+        "flagged",
+        "propagated",
+        "propagated",
+        "propagated",
+        "propagated",
+        "propagated",
+        "propagated",
+        "propagated",
+        "propagated",
+        "propagated",
+        "propagated",
+        "propagated",
+        "propagated"
+      ],
+      "timelineConfidence": {
+        "0": 0.9999140501022339,
+        "1": 0.9986395239830017,
+        "2": 0.9752891063690186,
+        "3": 0.9968749284744263,
+        "4": 0.9955653548240662,
+        "5": 0.9990123510360718,
+        "6": 0.999767005443573,
+        "7": 0.9999842643737793,
+        "9": 0.9999862909317017,
+        "10": 0.999916672706604,
+        "11": 0.9046063423156738,
+        "12": 0.9989935755729675,
+        "13": 0.9998302459716797,
+        "14": 0.9999368190765381,
+        "15": 0.9995200634002686,
+        "16": 0.9996925592422485,
+        "17": 0.9996156692504883,
+        "18": 0.9995409250259399,
+        "19": 0.9994913339614868,
+        "20": 0.9995225667953491,
+        "21": 0.9993158578872681,
+        "22": 0.9992781281471252,
+        "23": 0.9994091987609863
+      },
+      "view": [
+        "propagated",
+        "propagated",
+        "flagged",
+        "propagated",
+        "propagated",
+        "propagated",
+        "propagated",
+        "propagated",
+        "reference",
+        "propagated",
+        "propagated",
+        "flagged",
+        "propagated",
+        "propagated",
+        "propagated",
+        "propagated",
+        "propagated",
+        "propagated",
+        "propagated",
+        "propagated",
+        "propagated",
+        "propagated",
+        "propagated",
+        "propagated"
+      ],
+      "viewConfidence": {
+        "0": 0.9999140501022339,
+        "1": 0.9986395239830017,
+        "2": 0.9752891063690186,
+        "3": 0.9968749284744263,
+        "4": 0.9955653548240662,
+        "5": 0.9990123510360718,
+        "6": 0.999767005443573,
+        "7": 0.9999842643737793,
+        "9": 0.9999862909317017,
+        "10": 0.999916672706604,
+        "11": 0.9046063423156738,
+        "12": 0.9989935755729675,
+        "13": 0.9998302459716797,
+        "14": 0.9999368190765381,
+        "15": 0.9995200634002686,
+        "16": 0.9996925592422485,
+        "17": 0.9996156692504883,
+        "18": 0.9995409250259399,
+        "19": 0.9994913339614868,
+        "20": 0.9995225667953491,
+        "21": 0.9993158578872681,
+        "22": 0.9992781281471252,
+        "23": 0.9994091987609863
+      },
+      "keptMasks": {
+        "0": [
+          1,
+          2
+        ],
+        "1": [
+          1,
+          2
+        ],
+        "3": [
+          1,
+          2
+        ],
+        "4": [
+          1,
+          2
+        ],
+        "5": [
+          1,
+          2
+        ],
+        "6": [
+          1,
+          2
+        ],
+        "7": [
+          1,
+          2
+        ],
+        "9": [
+          1,
+          2
+        ],
+        "10": [
+          1,
+          2
+        ],
+        "12": [
+          1,
+          2
+        ],
+        "13": [
+          1,
+          2
+        ],
+        "14": [
+          1,
+          2
+        ],
+        "15": [
+          1,
+          2
+        ],
+        "16": [
+          1,
+          2
+        ],
+        "17": [
+          1,
+          2
+        ],
+        "18": [
+          1,
+          2
+        ],
+        "19": [
+          1,
+          2
+        ],
+        "20": [
+          1
+        ],
+        "21": [
+          1
+        ],
+        "22": [
+          1
+        ],
+        "23": [
+          1
+        ]
+      },
+      "engine": {
+        "propagated": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          9,
+          10,
+          11,
+          12,
+          13,
+          14,
+          15,
+          16,
+          17,
+          18,
+          19,
+          20,
+          21,
+          22,
+          23
+        ],
+        "flagged": [
+          2,
+          11
+        ]
+      },
+      "counts": {
+        "flagged": 2,
+        "propagated": 21
+      },
+      "propagationNotices": [
+        "Loading images into model...",
+        "Starting propagation (both)...",
+        "Propagation complete: 23 frames, 2 flagged. Scrub timeline or click 'Save All' to save."
+      ],
+      "saveAll": {
+        "written": [
+          {
+            "frame": 0,
+            "segments": [
+              {
+                "class": 1,
+                "object": 1,
+                "pixels": 1831
+              },
+              {
+                "class": 2,
+                "object": 2,
+                "pixels": 1295
+              }
+            ]
+          },
+          {
+            "frame": 1,
+            "segments": [
+              {
+                "class": 1,
+                "object": 1,
+                "pixels": 1825
+              },
+              {
+                "class": 2,
+                "object": 2,
+                "pixels": 1389
+              }
+            ]
+          },
+          {
+            "frame": 3,
+            "segments": [
+              {
+                "class": 1,
+                "object": 1,
+                "pixels": 1825
+              },
+              {
+                "class": 2,
+                "object": 2,
+                "pixels": 2120
+              }
+            ]
+          },
+          {
+            "frame": 4,
+            "segments": [
+              {
+                "class": 1,
+                "object": 1,
+                "pixels": 1810
+              },
+              {
+                "class": 2,
+                "object": 2,
+                "pixels": 2178
+              }
+            ]
+          },
+          {
+            "frame": 5,
+            "segments": [
+              {
+                "class": 1,
+                "object": 1,
+                "pixels": 1803
+              },
+              {
+                "class": 2,
+                "object": 2,
+                "pixels": 2388
+              }
+            ]
+          },
+          {
+            "frame": 6,
+            "segments": [
+              {
+                "class": 1,
+                "object": 1,
+                "pixels": 1798
+              },
+              {
+                "class": 2,
+                "object": 2,
+                "pixels": 1281
+              }
+            ]
+          },
+          {
+            "frame": 7,
+            "segments": [
+              {
+                "class": 1,
+                "object": 1,
+                "pixels": 1797
+              },
+              {
+                "class": 2,
+                "object": 2,
+                "pixels": 1292
+              }
+            ]
+          },
+          {
+            "frame": 9,
+            "segments": [
+              {
+                "class": 1,
+                "object": 1,
+                "pixels": 1788
+              },
+              {
+                "class": 2,
+                "object": 2,
+                "pixels": 1292
+              }
+            ]
+          },
+          {
+            "frame": 10,
+            "segments": [
+              {
+                "class": 1,
+                "object": 1,
+                "pixels": 1739
+              },
+              {
+                "class": 2,
+                "object": 2,
+                "pixels": 1293
+              }
+            ]
+          },
+          {
+            "frame": 12,
+            "segments": [
+              {
+                "class": 1,
+                "object": 1,
+                "pixels": 2292
+              },
+              {
+                "class": 2,
+                "object": 2,
+                "pixels": 1292
+              }
+            ]
+          },
+          {
+            "frame": 13,
+            "segments": [
+              {
+                "class": 1,
+                "object": 1,
+                "pixels": 1988
+              },
+              {
+                "class": 2,
+                "object": 2,
+                "pixels": 1292
+              }
+            ]
+          },
+          {
+            "frame": 14,
+            "segments": [
+              {
+                "class": 1,
+                "object": 1,
+                "pixels": 2044
+              },
+              {
+                "class": 2,
+                "object": 2,
+                "pixels": 1292
+              }
+            ]
+          },
+          {
+            "frame": 15,
+            "segments": [
+              {
+                "class": 1,
+                "object": 1,
+                "pixels": 1199
+              },
+              {
+                "class": 2,
+                "object": 2,
+                "pixels": 1292
+              }
+            ]
+          },
+          {
+            "frame": 16,
+            "segments": [
+              {
+                "class": 1,
+                "object": 1,
+                "pixels": 475
+              },
+              {
+                "class": 2,
+                "object": 2,
+                "pixels": 1292
+              }
+            ]
+          },
+          {
+            "frame": 17,
+            "segments": [
+              {
+                "class": 1,
+                "object": 1,
+                "pixels": 578
+              },
+              {
+                "class": 2,
+                "object": 2,
+                "pixels": 1186
+              }
+            ]
+          },
+          {
+            "frame": 18,
+            "segments": [
+              {
+                "class": 1,
+                "object": 1,
+                "pixels": 1334
+              },
+              {
+                "class": 2,
+                "object": 2,
+                "pixels": 791
+              }
+            ]
+          },
+          {
+            "frame": 19,
+            "segments": [
+              {
+                "class": 1,
+                "object": 1,
+                "pixels": 1772
+              },
+              {
+                "class": 2,
+                "object": 2,
+                "pixels": 395
+              }
+            ]
+          },
+          {
+            "frame": 20,
+            "segments": [
+              {
+                "class": 1,
+                "object": 1,
+                "pixels": 1804
+              }
+            ]
+          },
+          {
+            "frame": 21,
+            "segments": [
+              {
+                "class": 1,
+                "object": 1,
+                "pixels": 1660
+              }
+            ]
+          },
+          {
+            "frame": 22,
+            "segments": [
+              {
+                "class": 1,
+                "object": 1,
+                "pixels": 1164
+              }
+            ]
+          },
+          {
+            "frame": 23,
+            "segments": [
+              {
+                "class": 1,
+                "object": 1,
+                "pixels": 596
+              }
+            ]
+          }
+        ],
+        "timeline": [
+          "saved",
+          "saved",
+          "flagged",
+          "saved",
+          "saved",
+          "saved",
+          "saved",
+          "saved",
+          "reference",
+          "saved",
+          "saved",
+          "flagged",
+          "saved",
+          "saved",
+          "saved",
+          "saved",
+          "saved",
+          "saved",
+          "saved",
+          "saved",
+          "saved",
+          "saved",
+          "saved",
+          "saved"
+        ],
+        "notices": [
+          "Saving 21 frames...",
+          "Saved 21 frames to NPZ"
+        ]
+      }
+    }
+  },
+  "note": "Masks are in the .npz beside this file as packed bits, one entry per 'frame:object', unpacked with np.unpackbits(...)[: height * width].reshape(height, width). Reference frames have no entry: legacy's engine skips them. An EMPTY mask is not a low-confidence one: RULE-060 drops it before the threshold check. Timelines list what the timeline widget last painted on each frame, 'pending' where it painted nothing."
+}

@@ -60,7 +60,7 @@ missing from this table entirely, which is how a table stops being a census.
 |---|---|---|
 | exporters | 1991 | the seven formats, byte-for-byte against goldens legacy wrote |
 | web | 1172 | C11's placeholder is gone; it has an acceptance test now |
-| inference | 574 | plus 38 skipped: the differentials, which need real checkpoints |
+| inference | 604 | plus 43 skipped: the differentials and the golden comparison, which need real checkpoints. With them: 647 passed, 0 skipped |
 | api | 422 | plus 4 skipped (SEC-09's symlink tests, where the OS will not make a link, as on this machine) and 1 todo (C8's placeholder) |
 | settings-schema | 55 | includes the rule-fixed defaults |
 | converter | 30 | the pickled-alias rewrite |
@@ -500,18 +500,54 @@ configured, so a green CI run says nothing about them — see `Running the live 
   (`backup/main-web-with-trailers`, `refs/original/refs/heads/main-web`).
 
 
-Everything that can be done without the owner has been done. These five need something only the
-owner can supply: the first two are one command once it arrives, the last three are decisions.
+1. **Propagation goldens: captured, and the model's half of Phase 6 exit criterion 2 is met.**
+   Legacy's own sequence mode ran headless on a clip of moving shapes, the owner's choice. That
+   means MainWindow's methods, `SequenceViewMode`, `PropagationManager` and `Sam2Model`, with only
+   the widgets replaced by recorders. It ran four scenarios: legacy's defaults, Keep Flagged Masks
+   on, and Skip Labeled on and off over four labelled frames. The clip
+   (`inference/tests/fixtures/synthetic_clip.py`) is drawn from integers alone, so it regenerates
+   byte-identical anywhere and the golden pins every frame's digest. It has two tracked objects,
+   the reference on frame 8, and a same-coloured decoy for each object. The decoys make SAM 2
+   unsure in both passes: frame 2's square scores 0.975 on the backward pass and frame 11's disc
+   0.905 on the forward pass, each beside an object that passes. The square also leaves the
+   picture, so it comes back empty on frames 20-23. Output:
+   `inference/tests/goldens/propagation/synthetic-shapes.{json,npz}`, 60 kB and 14 kB.
 
-1. **Capture propagation goldens** — Phase 6 exit criterion 2. Needs a SAM 2 checkpoint and a
-   folder of frames from a real recording.
+   **Its first run found a defect nothing else could.** The port walked the backward pass
+   forwards: it started at frame 0 and moved towards the reference, in a fresh SAM 2 state.
+   Legacy walks back from the reference, in reverse, in the state the forward pass has just
+   filled. On the golden, the square's mask on frame 0 shared no pixel with legacy's (IoU 0.00),
+   and frames 2, 3, 4 and 6 were flagged differently. No test could see it. The runner's fake
+   predictor ignored `reverse`, and the live differential seeds on frame 0, so it has no backward
+   pass.
 
-   ```
-   python inference/tests/fixtures/capture_propagation_goldens.py        --frames <folder> --seed 0:1:<x>,<y> --checkpoint <file.pt> --out <name>.npz
-   ```
+   Fixed. A sequence no longer than the window now runs in one state, forward and then back, as
+   legacy's full-context mode does, and backward windows walk in reverse. On the golden the runner
+   now matches legacy on every object on every frame: IoU 1.0000, scores different by exactly 0.0,
+   and the same flags. The fake follows SAM 2's own walk order, and 9 of the 11 new runner tests
+   fail against the old runner. The job's progress total also stopped counting the reference frame
+   twice, so a mid-sequence reference no longer leaves the bar one short.
+   `inference/tests/test_propagation_goldens.py` needs only a checkpoint, not legacy.
 
-   It validates the checkpoint, the frames and the seed BEFORE loading the model, so a mistyped
-   seed costs a second rather than a 2.4 GB load. Verified to that point on 2026-09-21.
+   **What remains is the behaviour half, and it belongs to the web app.** That means which frames
+   the timeline flags, what Keep Flagged Masks keeps, what Skip Labeled leaves alone and what Save
+   All writes. The golden records all four per scenario. Held against it, the web app has three
+   gaps, and all three are legacy losing or keeping work in ways the port does not reproduce:
+   - It has **no Keep Flagged Masks**. Legacy's default discards every mask on a frame where any
+     object fails, so the user reviews that frame from scratch.
+   - It has **no Skip Labeled**. Legacy's default, RULE-081 and P0, leaves a frame that already has
+     a sidecar alone. The web's Save All writes with no revision check, so re-running and saving
+     overwrites a frame saved since the timeline was built. That includes a flagged frame the user
+     fixed by hand, which is the workflow the option exists for.
+   - It **marks every annotated frame as a reference** when a timeline is built. Legacy never marks
+     one by itself: references come from "+ Reference", "+ All Before" and "+ All Labeled". Marking
+     them automatically is what leaves Skip Labeled nothing to protect, and a rebuilt timeline turns
+     every frame an earlier Save All wrote into a seed.
+
+   This is the work in progress.
+
+Everything else that can be done without the owner has been done. One item needs something only
+the owner can supply, and it is one command once it arrives:
 
 2. **Run the acceptance corpus** — Phase 6 exit criterion 4. Needs a folder whose immediate
    subfolders are datasets with their sidecars beside their images.
@@ -523,30 +559,17 @@ owner can supply: the first two are one command once it arrives, the last three 
    Exit 0 is a pass and reports how many files were compared; exit 1 means files differed; **exit 2
    means nothing was compared at all**, which is not a pass and was reported as one until today.
 
-3. **Decide RULE-033's Ctrl+Plus binding.** Legacy binds Ctrl+Plus and Ctrl+Minus to the
-   annotation-size MULTIPLIER — its card says "(not image zoom)" — and this app zooms with them,
-   because the settings schema names those actions `zoom_in`/`zoom_out` and a key that does
-   something other than its name is the defect `fit_view` had. It is the only divergence on the
-   list that follows from no numbered decision. Recorded in
-   `web/test/rules/p0Coverage.test.ts`.
+The three decisions this list used to end with are answered, above: Ctrl+Plus keeps zooming, the
+timeline keeps legacy's behaviour, and image tiles get built. The measurement that framed the tiles
+question stays here, because the tile work is judged against it. On 2026-09-23 a noisy
+50-megapixel 16-bit TIFF, the spec's supported working size, sent whole as one 8-bit PNG, came to:
+- a 41 MB PNG;
+- 2.4 s from click to pixels cold (1.7 s of it the server's decode, conversion and encode);
+- 0.8 s from click to a painted canvas warm;
+- one 0.5 s main-thread stall while the browser decodes.
 
-4. **Decide whether a hosted install needs image tiles (C8).** The spec's API sketch has a tile
-   route and nothing builds one; the API sends each image whole, as one 8-bit PNG. Measured on
-   2026-09-23 on a noisy 50-megapixel 16-bit TIFF, the spec's supported working size:
-   - a 41 MB PNG;
-   - 2.4 s from click to pixels cold (1.7 s of it the server's decode, conversion and encode);
-   - 0.8 s from click to a painted canvas warm;
-   - one 0.5 s main-thread stall while the browser decodes.
-
-   That is enough on a local install. Over a 100 Mbit/s link the transfer alone is about 3.3 s.
-   Tiles mean a tiled canvas as well as a route, since a route nothing calls is the defect this
-   project keeps finding. `api/src/capabilities.ts` holds C8 pending on exactly this.
-
-5. **Decide whether a sequence timeline should survive a reload (C10).** Legacy's never did: it
-   lives in memory and is rebuilt from the file range. This app does the same, with the files as
-   the truth (decision 5). Unsaved propagated frames are now protected by the close-tab warning.
-   What a reload loses is the range, the trims and the flags. Keeping them would be new scope, and
-   the architecture already names where: its SQLite row lists "sequences".
+Over a 100 Mbit/s link the transfer alone is about 3.3 s. Tiles mean a tiled canvas as well as a
+route, since a route nothing calls is the defect this project keeps finding.
 
 **The five security findings the brief said must be designed out have been audited against the
 new code. Three of the five had not been.** Checked 2026-09-23:
@@ -1222,31 +1245,12 @@ expensive to be wrong about.
       one action), and the class-id reconciliation RULE-092 already scheduled here. **The last is
       the owner's.**
    3. *At least one recorded image sequence has legacy propagation outputs saved as golden data.*
-      **The script is written**; what is missing is the frames and the checkpoint.
-
-      ```bash
-      PYTHONPATH=E:/GitHub/LazyLabel/legacy/lazylabel/src E:/venv/lazylabel/Scripts/python.exe         modernized/lazylabel-reimagined/inference/tests/fixtures/capture_propagation_goldens.py         --frames <a folder of frames> --seed 0:1:<x>,<y>         --checkpoint <sam2.1_hiera_large.pt> --out <name>.npz
-      ```
-
-      It captures every frame's mask, its confidence, and whether legacy would flag it — the flags
-      as much as the masks, because RULE-060 decides which frames a user is told to check by hand,
-      and a port that tracks perfectly while flagging a different set has changed the feature in
-      the way a user would notice. Masks are packed bits: a 2-megapixel frame is 2 MB as JSON
-      digits and 250 KB packed, and a sequence has hundreds.
-
-      It says so when nothing was flagged, because a golden where nothing is flagged cannot prove
-      the flagging rule — valid capture, just not one that exercises RULE-060.
-
-      This is still the longest-lead item, and it needs a sequence someone cares about rather than
-      a synthetic one: `test_differential_propagation.py` already compares the port against legacy
-      live on generated frames, and what that cannot give Phase 6 is something to build against
-      without a GPU and a legacy install. **Owner: the frames.**
-
-      **It gates the propagation slices, not the timeline.** The brief's own pilot for Phase 6 is
-      "build a timeline from a file range and mark references from existing annotations, without
-      propagation", and nothing in that touches a model or needs a golden to compare against. The
-      pilot can be built while the recording is found; what it must not do is claim the phase has
-      exited.
+      **Met on 2026-09-23, on a synthetic clip, which is the owner's answer** in place of a
+      recording: "just make some random shapes move around then use that clip series".
+      `inference/tests/goldens/propagation/synthetic-shapes` holds legacy's sequence mode run
+      headless under four scenarios. What it found, and the capture command, are under "What to
+      do next". The capture script used to seed from clicked points, which neither app does; it
+      drives legacy's own MainWindow methods now, seeded from masks the way both apps seed.
    4. *Every P6 rule is answered.* **The two that blocked it are answered** (2026-09-20). RULE-060
       needed a fidelity correction and RULE-055 two behaviour questions; both were re-derived from
       the source rather than taken from the judges, and both answers are on their cards. What is
@@ -1671,18 +1675,19 @@ about them. Run them locally, deliberately:
 cd modernized/lazylabel-reimagined/inference && LAZYLABEL_TEST_SAM1_CHECKPOINT=/path/to/sam_vit_h_4b8939.pth LAZYLABEL_TEST_CHECKPOINT=/path/to/sam2.1_hiera_large.pt LAZYLABEL_TEST_EMBEDDER=/path/to/mobilenetv3_small_tv.pth PYTHONPATH=/path/to/legacy/lazylabel/src python -m pytest tests/ -q
 ```
 
-With all three set, the last run on 2026-09-23 was **611 passed, 0 skipped**, in 57 s on this
-machine. That run followed the frame-unit fix to the job and the runner. It was 600 earlier the same
-day, before that day's fixes and their tests. Any `skipped` count above zero means a
+With all three set, the last run on 2026-09-23 was **647 passed, 0 skipped**, in 75 s on this
+machine. That run followed the propagation golden and the backward-pass fix it found. It was 611
+earlier the same day, and 600 before that day's fixes and their tests. Any `skipped` count above zero means a
 checkpoint was not found and that suite did not actually run. This section said "255 passed, 1
 xfailed" until then. The xfail was C11's placeholder, removed on 2026-09-21 when the job API
 landed, and the suite has grown since. The count here is the one the last run printed, not a target.
 
-Four warnings are expected, and none is a failure being hidden:
+Five warnings are expected, and none is a failure being hidden:
 - two come from the weights-only guard's tests, which set `TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD` on
   purpose, to prove the refusal;
-- two come from SAM 2's optional `_C` extension, whose absence skips only a hole-filling
-  post-process.
+- three come from SAM 2's optional `_C` extension, one for each module that runs the video
+  predictor (the differential, the golden and the live propagation test). Its absence skips only a
+  hole-filling post-process, and legacy runs without it too: the golden was captured that way.
 
 `MODEL_MANIFEST.md` lists the checkpoints and their verified hashes.
 

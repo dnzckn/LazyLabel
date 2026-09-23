@@ -193,8 +193,13 @@ remembers the old one can see where each item went.
 - **Find Archetypes** (C10). Built: `POST /inference/archetypes`. The embedder is a manifest entry
   like any other, `family: "embedder"`, found by family and hash-checked before it loads.
 - **The propagation differential.** `tests/test_differential_propagation.py` compares the port with
-  *legacy's* propagation, masks and flagged frames both. What is still open is a golden captured
-  from a real recording, which needs the owner's frames:
-  `tests/fixtures/capture_propagation_goldens.py`.
+  *legacy's* propagation, masks and flagged frames both.
+- **The propagation golden.** `tests/goldens/propagation/synthetic-shapes` is legacy's sequence
+  mode, run headless on a clip of moving shapes (`tests/fixtures/synthetic_clip.py`, the owner's
+  choice on 2026-09-23 in place of a recording). It holds every object's mask and score on every
+  frame, and what legacy's window did with them under Keep Flagged Masks and Skip Labeled, on and
+  off. `tests/test_propagation_goldens.py` holds the runner to it with a checkpoint and no legacy
+  install. Recapture with `tests/fixtures/capture_propagation_goldens.py`; `synthetic_clip.py
+  --out <folder>` prints the whole command.
 - **API-to-inference contract tests** (exit criterion 4). `tests/test_contract.py` and the API's
   own suite hold both sides to `contracts/fixtures/inference-contract.json`.

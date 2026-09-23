@@ -55,6 +55,10 @@ class Window:
     end: int
     #: 1-based, as legacy numbers them for the progress message ("window 2 of 3").
     number: int
+    #: A backward window. Its frames are still `start..end` in ascending order; what differs is that
+    #: SAM 2 walks them from the REFERENCE end down, which the runner needs to know to stage the
+    #: reference after the window rather than before it.
+    reverse: bool = False
 
     @property
     def size(self) -> int:
@@ -131,7 +135,7 @@ def _backward(start: int, end: int, window: int, overlap: int) -> list[Window]:
     cursor = start
     while cursor >= end:
         begin = max(cursor - window + 1, end)
-        windows.append(Window(begin, cursor, len(windows) + 1))
+        windows.append(Window(begin, cursor, len(windows) + 1, reverse=True))
         if begin <= end:
             break
         cursor = begin - 1 + overlap

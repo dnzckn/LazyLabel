@@ -108,6 +108,22 @@ class TestStarting:
 
         assert answer["total"] == 10
 
+    @pytest.mark.parametrize("length", [10, 600])
+    def test_a_reference_mid_sequence_is_counted_ONCE(self, tmp_path: Path, length: int) -> None:
+        # Both passes open on the reference frame and it is reported once, so the whole sequence is
+        # `length` frames of work. Counted per pass it was length + 1, and the bar stopped one short.
+        deps = deps_with(yields(), tmp_path=tmp_path)
+        sequence = [f"frame-{index:03d}.png" for index in range(length)]
+
+        _, answer = call(
+            deps,
+            "POST",
+            "/inference/propagations",
+            body=json.dumps({"sequence": sequence, "references": [length // 2]}).encode("utf-8"),
+        )
+
+        assert answer["total"] == length
+
     @pytest.mark.parametrize("length", [1, 2, 3, 5, 6, 7, 250, 251])
     def test_a_sequence_of_any_length_starts(self, tmp_path: Path, length: int) -> None:
         # A three-frame sequence used to answer 500: the default 5-frame overlap does not fit in a

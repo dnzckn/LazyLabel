@@ -50,11 +50,12 @@ def test_only_what_the_routes_actually_do_is_marked_built() -> None:
 
 def test_a_built_capability_says_what_it_does_NOT_claim() -> None:
     # The whole reason C11 can be marked built without overstating it. "The service propagates" and
-    # "its results match legacy" are different promises, and only the first is kept.
+    # "its results match legacy" are different promises. Since 2026-09-23 the second is kept for
+    # the path a golden covers, and the caveat has to say which path that is.
     caveat = capability("C11").caveat
 
     assert "NOT claimed" in caveat
-    assert "legacy" in caveat and "criterion 2" in caveat
+    assert "golden" in caveat and "streaming path" in caveat
 
 
 def test_c3_records_what_is_left_rather_than_what_it_started_as() -> None:

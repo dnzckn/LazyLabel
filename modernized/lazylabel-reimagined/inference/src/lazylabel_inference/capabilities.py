@@ -66,9 +66,12 @@ CAPABILITIES: list[Capability] = [
         built=True,
         caveat=(
             "built: SAM 2 video propagation, RULE-026's streaming windows, the job API with real "
-            "cancellation that keeps committed frames, and the video predictor they run on. NOT "
-            "claimed: that the masks and the flagged frames match legacy. Proving that needs a "
-            "checkpoint and golden outputs, which is Phase 6 exit criterion 2"
+            "cancellation that keeps committed frames, and the video predictor they run on. Every "
+            "mask, empty object and flag matches legacy's on the synthetic-shapes golden, frame for "
+            "frame (tests/test_propagation_goldens.py, with a checkpoint). NOT claimed: the same for "
+            "the streaming path, which only a sequence longer than the window takes, which no golden "
+            "covers, and whose backward windows deliberately differ from legacy's -- legacy's come "
+            "back empty after the first"
         ),
     ),
     Capability(

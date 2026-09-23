@@ -436,18 +436,22 @@ def _frames_to_cover(wanted: PropagationRequest) -> int:
     RULE-025 runs BOTH ways from the earliest reference, and RULE-026 windows each pass. Counting
     each window's full span would exceed the sequence length, because overlap frames are covered
     twice and kept once; `novel_frames` is what each window contributes.
+
+    Over BOTH passes at once, because the reference frame opens both and is reported once. Counted
+    per pass, as it was until 2026-09-23, a reference mid-sequence made the total one more than the
+    frames the job could ever complete, so its progress stopped one short of the end.
     """
     window, overlap = effective(
         len(wanted.sequence), wanted.window, streaming=wanted.streaming
     )
     lowest = wanted.lowest_reference
-    passes = (
-        plan(lowest, wanted.end if wanted.end is not None else len(wanted.sequence) - 1,
-             window=window, overlap=overlap),
-        plan(lowest, wanted.start if wanted.start is not None else 0,
-             window=window, overlap=overlap, reverse=True),
-    )
-    return sum(len(each) for one in passes for each in novel_frames(one))
+    passes = [
+        *plan(lowest, wanted.end if wanted.end is not None else len(wanted.sequence) - 1,
+              window=window, overlap=overlap),
+        *plan(lowest, wanted.start if wanted.start is not None else 0,
+              window=window, overlap=overlap, reverse=True),
+    ]
+    return sum(len(each) for each in novel_frames(passes))
 
 
 def _start_propagation(deps: Deps, request: Request) -> Response:

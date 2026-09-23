@@ -28,7 +28,15 @@ from lazylabel_inference.runner import ReferenceObject, run_propagation
 
 
 class FakePredictor:
-    """Records every seed and reports which staged frames it was walked over."""
+    """Records every seed, and walks the staged frames in the order SAM 2 itself would.
+
+    The walk is SAM 2's own (`SAM2VideoPredictor.propagate_in_video`), not a simplification of it:
+    a missing start is the earliest seeded frame, a missing count is every frame, forward stops at
+    the last frame, and a reverse walk from frame 0 does nothing. Until 2026-09-23 this fake ignored
+    `reverse` and walked every call forward from its start, and a runner that walked its backward
+    pass the wrong way -- from the far end towards the reference -- passed every test in this file.
+    The synthetic-shapes golden found it instead.
+    """
 
     device = "cpu"
 
@@ -40,7 +48,14 @@ class FakePredictor:
 
     # --- what `initialise_state` calls -------------------------------------------------
     def init_state(self, **kwargs):
-        state = {"video_path": kwargs.get("video_path"), "frames": kwargs}
+        video_path = kwargs.get("video_path")
+        staged = sorted(pathlib.Path(video_path).glob("*.jpg")) if video_path else []
+        state = {
+            "video_path": video_path,
+            "frames": kwargs,
+            "num_frames": len(staged),
+            "seeded": set(),
+        }
         self.states.append(state)
         return state
 
@@ -49,6 +64,7 @@ class FakePredictor:
         import torch
 
         self.seeds.append(kwargs)
+        kwargs["inference_state"]["seeded"].add(kwargs["frame_idx"])
         return kwargs["frame_idx"], self.object_ids, torch.full((len(self.object_ids), 1, 2, 2), 3.0)
 
     # --- what `propagate` calls --------------------------------------------------------
@@ -56,12 +72,21 @@ class FakePredictor:
         import torch
 
         self.walks.append(kwargs)
-        start = kwargs.get("start_frame_idx") or 0
-        count = kwargs.get("max_frame_num_to_track") or 1
-        for offset in range(count):
-            yield start + offset, self.object_ids, torch.full(
-                (len(self.object_ids), 1, 2, 2), 3.0
-            )
+        state = kwargs["inference_state"]
+        start = kwargs.get("start_frame_idx")
+        if start is None:
+            start = min(state["seeded"])
+        count = kwargs.get("max_frame_num_to_track")
+        if count is None:
+            count = state["num_frames"]
+        if kwargs.get("reverse"):
+            last = max(start - count, 0)
+            order = range(start, last - 1, -1) if start > 0 else range(0)
+        else:
+            last = min(start + count, state["num_frames"] - 1)
+            order = range(start, last + 1)
+        for index in order:
+            yield index, self.object_ids, torch.full((len(self.object_ids), 1, 2, 2), 3.0)
 
 
 def image(value: int = 128):
@@ -134,6 +159,133 @@ class TestOneWindow:
         assert sorted(seed["obj_id"] for seed in predictor.seeds) == [1, 2]
         # One frame, staged once: two annotations on the same picture must not stage it twice.
         assert {seed["frame_idx"] for seed in predictor.seeds} == {1}
+
+
+def frames_of(results) -> list[int]:
+    """Timeline positions in the order they came back, one entry per frame."""
+    order: list[int] = []
+    for result in results:
+        position = sequence(1000).index(result.source)
+        if not order or order[-1] != position:
+            order.append(position)
+    return order
+
+
+class TestTheWholeSequenceInOneState:
+    """Legacy's full-context mode: what every sequence no longer than the window gets.
+
+    RULE-025's two passes, in the order and the direction legacy runs them, and in ONE state -- the
+    thing that made the synthetic-shapes golden match legacy on every frame instead of sharing no
+    pixel with it on frame 0.
+    """
+
+    def test_both_passes_run_in_ONE_state(self, tmp_path: pathlib.Path) -> None:
+        predictor = FakePredictor()
+
+        run(predictor, request(10, references=(4,)), [reference(4)], tmp_path)
+
+        assert len(predictor.states) == 1
+        assert [(walk["start_frame_idx"], bool(walk["reverse"])) for walk in predictor.walks] == [
+            (4, False),
+            (4, True),
+        ]
+
+    def test_the_backward_pass_walks_DOWN_from_the_reference(self, tmp_path: pathlib.Path) -> None:
+        # The defect in one line: this came back 0, 1, 2, 3 -- tracked from the far end, where the
+        # model has nothing to go on, towards the reference it should have started from.
+        results = run(FakePredictor(), request(10, references=(4,)), [reference(4)], tmp_path)
+
+        assert frames_of(results) == [4, 5, 6, 7, 8, 9, 3, 2, 1, 0]
+
+    def test_the_reference_frame_is_reported_once(self, tmp_path: pathlib.Path) -> None:
+        # Both walks open on it. Reporting it twice would give the frame two results per object.
+        results = run(
+            FakePredictor(object_ids=(1, 2)),
+            request(6, references=(3,)),
+            [reference(3, 1), reference(3, 2)],
+            tmp_path,
+        )
+
+        assert [result.object_id for result in results if result.source == sequence(6)[3]] == [1, 2]
+
+    def test_every_frame_is_staged_even_when_a_range_is_asked_for(self, tmp_path: pathlib.Path) -> None:
+        # Legacy loads every frame in this mode, and it shows: SAM 2 computes one frame past a
+        # pass's end before the loop stops, and that frame's memory is in the state for the other.
+        predictor = FakePredictor()
+
+        results = run(predictor, request(10, references=(4,), start=2, end=6), [reference(4)], tmp_path)
+
+        assert predictor.states[0]["num_frames"] == 10
+        assert frames_of(results) == [4, 5, 6, 3, 2]
+
+    def test_a_reference_on_the_first_frame_has_no_backward_pass(self, tmp_path: pathlib.Path) -> None:
+        # Legacy's `if min_ref > start` -- there is nothing before frame 0 to walk to.
+        predictor = FakePredictor()
+
+        run(predictor, request(5), [reference(0)], tmp_path)
+
+        assert [bool(walk["reverse"]) for walk in predictor.walks] == [False]
+
+    def test_a_reference_on_the_last_frame_has_no_forward_pass(self, tmp_path: pathlib.Path) -> None:
+        predictor = FakePredictor()
+
+        results = run(predictor, request(5, references=(4,)), [reference(4)], tmp_path)
+
+        assert [bool(walk["reverse"]) for walk in predictor.walks] == [True]
+        assert frames_of(results) == [4, 3, 2, 1, 0]
+
+    def test_both_passes_leave_the_EARLIEST_reference(self, tmp_path: pathlib.Path) -> None:
+        # RULE-025: "No backward pass from later references is ever run". The later reference is a
+        # seed in the same state, and the forward walk passes through it.
+        predictor = FakePredictor()
+
+        results = run(
+            predictor, request(10, references=(3, 7)), [reference(7), reference(3)], tmp_path
+        )
+
+        assert {walk["start_frame_idx"] for walk in predictor.walks} == {3}
+        assert frames_of(results) == [3, 4, 5, 6, 7, 8, 9, 2, 1, 0]
+
+    def test_turning_streaming_off_keeps_a_long_sequence_in_one_state(self, tmp_path: pathlib.Path) -> None:
+        predictor = FakePredictor()
+
+        run(predictor, request(300, window=250, streaming=False, references=(100,)), [reference(100)], tmp_path)
+
+        assert len(predictor.states) == 1
+
+
+class TestBackwardWindows:
+    """A sequence longer than the window, walked backward: the mirror image of the forward windows."""
+
+    def big(self) -> PropagationRequest:
+        # 600 frames, the reference on the last: three backward windows, 350-599, 105-354, 0-109.
+        return request(600, window=250, references=(599,))
+
+    def test_each_window_is_walked_in_REVERSE(self, tmp_path: pathlib.Path) -> None:
+        predictor = FakePredictor()
+
+        run(predictor, self.big(), [reference(599)], tmp_path)
+
+        assert predictor.walks
+        assert all(walk["reverse"] for walk in predictor.walks)
+
+    def test_the_reference_is_staged_AFTER_a_window_it_is_not_in(self, tmp_path: pathlib.Path) -> None:
+        # The walk starts at the reference and moves down, so the reference has to sit just above
+        # the window's highest frame. Legacy prepends it, and a reverse walk from staged index 0 is
+        # one SAM 2 skips outright -- so its later backward chunks came back empty.
+        predictor = FakePredictor()
+
+        run(predictor, self.big(), [reference(599)], tmp_path)
+
+        # The first window holds the reference at its top (250 frames, index 249); the next two
+        # append it after their own 250 and 110 frames.
+        assert [seed["frame_idx"] for seed in predictor.seeds] == [249, 250, 110]
+        assert [walk["start_frame_idx"] for walk in predictor.walks] == [249, 250, 110]
+
+    def test_together_they_cover_every_frame_once_walking_down(self, tmp_path: pathlib.Path) -> None:
+        results = run(FakePredictor(), self.big(), [reference(599)], tmp_path)
+
+        assert frames_of(results) == list(range(599, -1, -1))
 
 
 class TestPrependedReferences:

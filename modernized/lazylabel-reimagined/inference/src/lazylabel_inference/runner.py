@@ -24,6 +24,17 @@ conversion happens once, when a window is built, and every result is resolved ba
 `StagedSequence`'s map — so a frame that could not be staged removes an entry rather than shifting
 every entry after it.
 
+TWO MODES, AS LEGACY HAS. A sequence no longer than the window -- or any sequence with streaming off
+-- runs in ONE state: every frame staged, forward from the earliest reference, then backward from
+the same reference in the same state (`_run_whole`, legacy's full-context mode). Only a longer
+sequence is windowed. The difference is not an optimisation. SAM 2 tracks each frame from the
+memory of the frames it tracked just before, and walking backward those are the frames AFTER it --
+which, in the state the forward pass has just filled, are frames the forward pass tracked. Until
+2026-09-23 this ran the backward pass in a fresh state of its own and walked it FORWARD from the far
+end, and the synthetic-shapes golden caught it on its first run: the square's mask on frame 0
+shared no pixel with legacy's (IoU 0.00), and four frames were flagged that legacy did not flag.
+A backward WINDOW is walked in reverse too, from the reference, which is staged after its frames.
+
 NOTHING HERE IMPORTS TORCH DIRECTLY. The predictor arrives from the service and the staging is
 `propagation.py`'s, so the arithmetic below is testable with a fake that yields whatever a test
 needs — which is the only way to test the case that matters, a sequence long enough to window.
@@ -48,7 +59,7 @@ from .propagation import (
     stage_sequence,
 )
 from .prompts import InvalidPromptError
-from .windows import Window, effective, novel_frames, plan
+from .windows import Window, effective, novel_frames, plan, should_stream
 
 
 @dataclass
@@ -95,9 +106,14 @@ def _windows_for(request: PropagationRequest) -> list[Window]:
 def _build_window(window: Window, references: list[ReferenceObject]) -> _WindowPlan:
     """Which frames this window stages, and where each one lands.
 
-    External references — those outside the window — are prepended, deduplicated BY FRAME because
-    one frame can carry several objects and staging it twice would give SAM 2 two copies of the
-    same picture.
+    External references — those outside the window — are deduplicated BY FRAME, because one frame
+    can carry several objects and staging it twice would give SAM 2 two copies of the same picture.
+
+    They go on the side the walk STARTS from: before a forward window's frames and after a backward
+    window's. A backward walk begins at the reference and moves down, so the reference has to sit
+    just above the window's highest frame. Legacy prepends in both directions, and a reverse walk
+    that starts from the earliest seeded frame starts at staged index 0 -- where SAM 2 skips reverse
+    tracking outright -- so every backward chunk after the first came back with nothing at all.
     """
     inside = range(window.start, window.end + 1)
     external: list[int] = []
@@ -106,7 +122,7 @@ def _build_window(window: Window, references: list[ReferenceObject]) -> _WindowP
             external.append(reference.frame)
     external.sort()
 
-    positions = [*external, *inside]
+    positions = [*inside, *external] if window.reverse else [*external, *inside]
     return _WindowPlan(
         window=window,
         positions=positions,
@@ -186,6 +202,19 @@ def run_propagation(
         reference_size = (int(shape[0]), int(shape[1]))
 
     try:
+        if not should_stream(len(sequence), request.window, streaming=request.streaming):
+            yield from _run_whole(
+                predictor=predictor,
+                request=request,
+                references=references,
+                sequence=sequence,
+                reader=read_image,
+                directory=root / "whole",
+                cancel=cancel,
+                reference_size=reference_size,
+            )
+            return
+
         windows = _windows_for(request)
         novel_per_window = novel_frames(windows)
 
@@ -218,21 +247,17 @@ def run_propagation(
             shutil.rmtree(root, ignore_errors=True)
 
 
-def _run_window(
+def _stage_and_seed(
     *,
     predictor: Any,
-    request: PropagationRequest,
+    plan_for: _WindowPlan,
     references: list[ReferenceObject],
-    window: Window,
-    novel: set[int],
     sequence: list[str],
     reader: Callable[[str], Any],
     directory: Path,
-    cancel: Any,
     reference_size: tuple[int, int] | None,
-) -> Iterator[FrameResult]:
-    plan_for = _build_window(window, references)
-
+) -> tuple[StagedSequence, Any]:
+    """Stage `plan_for.positions`, open a SAM 2 state on them, and seed every reference staged."""
     # READ FAILURES ARE SKIPPED, not fatal. `stage_sequence` already guards the WRITE of each
     # frame and keeps going, and a read has to behave the same way or one corrupt image ends a job
     # that was about to do 599 other frames correctly. The frame is simply absent from the staging,
@@ -289,22 +314,142 @@ def _run_window(
             object_id=reference.object_id,
             mask=reference.mask,
         )
+    return staged, state
 
-    first = plan_for.staged_index.get(window.start)
-    # Bounded by what was actually STAGED, not by the window's nominal size. A frame that could not
-    # be read leaves the staging shorter, and asking SAM 2 to track more frames than exist is how a
-    # skipped image turns into a result attributed past the end of the sequence.
-    available = len(staged.frames) - (first or 0)
+
+def _run_whole(
+    *,
+    predictor: Any,
+    request: PropagationRequest,
+    references: list[ReferenceObject],
+    sequence: list[str],
+    reader: Callable[[str], Any],
+    directory: Path,
+    cancel: Any,
+    reference_size: tuple[int, int] | None,
+) -> Iterator[FrameResult]:
+    """Legacy's full-context mode: every frame in ONE state, forward from the earliest reference, then back.
+
+    `propagation_manager.py:623-685` loads every frame, walks forward from the earliest reference
+    to the range end, and then walks BACKWARD from the same reference to the range start in the
+    same state -- so the backward walk has the forward walk's frames in its memory. Both passes
+    here do the same, which is what makes them match legacy frame for frame.
+
+    EVERY frame is staged, not only the range, because legacy stages every frame -- and because it
+    shows: SAM 2 computes one frame past the end of a pass before the loop sees it and stops, and
+    that frame's memory is in the state when the other pass runs. Staging only the range would make
+    a range ending near the reference differ from legacy for that reason alone.
+
+    Each pass stops at its range end the way legacy's `_propagate_range` does, by breaking on the
+    first frame beyond it; a pass whose range is empty does not run (`range_size <= 0: return`). The
+    reference frame opens both walks and is reported once.
+    """
+    if cancel is not None and cancel.is_set():
+        # Before any staging: a cancel that arrived first costs nothing at all.
+        return
+    plan_for = _WindowPlan(
+        window=Window(0, len(sequence) - 1, 1),
+        positions=list(range(len(sequence))),
+        staged_index={},
+    )
+    staged, state = _stage_and_seed(
+        predictor=predictor,
+        plan_for=plan_for,
+        references=references,
+        sequence=sequence,
+        reader=reader,
+        directory=directory,
+        reference_size=reference_size,
+    )
+
+    lowest = request.lowest_reference
+    last = len(sequence) - 1
+    end = request.end if request.end is not None else last
+    start = request.start if request.start is not None else 0
+    passes: list[tuple[bool, Callable[[int], bool]]] = []
+    if end - lowest > 0:
+        passes.append((False, lambda position: position > end))
+    if lowest - start > 0:
+        passes.append((True, lambda position: position < start))
+
+    # Where both walks begin. None when the earliest reference could not be staged, and SAM 2 then
+    # starts from the earliest frame it WAS seeded on, which is the nearest thing to the request.
+    first = plan_for.staged_index.get(lowest)
+    reported: set[int] = set()
+    in_flight: str | None = None
+    for number, (reverse, beyond) in enumerate(passes):
+        if number > 0 and cancel is not None and cancel.is_set():
+            # Between the passes, as between windows: the backward walk is the other half of the
+            # GPU work, and a Cancel that waited for it would look like a button that did nothing.
+            return
+        this_pass: set[int] = set()
+        for result in propagate(predictor, state, staged, start_frame=first, reverse=reverse):
+            position = _position_of(result.source, sequence)
+            if position is None:
+                continue
+            if beyond(position):
+                break
+            if position in reported:
+                continue
+            if cancel is not None and cancel.is_set():
+                # The frame in flight finishes WHOLE, every object on it (RULE-063).
+                if in_flight is None:
+                    in_flight = result.source
+                if result.source != in_flight:
+                    return
+            this_pass.add(position)
+            yield result
+        reported |= this_pass
+
+
+def _run_window(
+    *,
+    predictor: Any,
+    request: PropagationRequest,
+    references: list[ReferenceObject],
+    window: Window,
+    novel: set[int],
+    sequence: list[str],
+    reader: Callable[[str], Any],
+    directory: Path,
+    cancel: Any,
+    reference_size: tuple[int, int] | None,
+) -> Iterator[FrameResult]:
+    plan_for = _build_window(window, references)
+    staged, state = _stage_and_seed(
+        predictor=predictor,
+        plan_for=plan_for,
+        references=references,
+        sequence=sequence,
+        reader=reader,
+        directory=directory,
+        reference_size=reference_size,
+    )
+
+    if window.reverse:
+        # A backward walk begins AT the reference and moves down through the window, which is why
+        # `_build_window` staged the reference just above the window's frames. SAM 2 bounds a
+        # reverse walk at staged index 0 itself.
+        first = plan_for.staged_index.get(request.lowest_reference)
+        span = None if first is None else first + 1
+    else:
+        first = plan_for.staged_index.get(window.start)
+        # Bounded by what was actually STAGED, not by the window's nominal size. A frame that could
+        # not be read leaves the staging shorter, and asking SAM 2 to track more frames than exist
+        # is how a skipped image turns into a result attributed past the end of the sequence.
+        available = len(staged.frames) - (first or 0)
+        # The WINDOW's length rather than the novel count: the overlap frames are propagated again
+        # -- that is what gives the next window its run-up -- and their results are discarded below
+        # rather than never produced.
+        span = max(0, min(window.size, available))
     in_flight: str | None = None
     for result in propagate(
         predictor,
         state,
         staged,
         start_frame=first,
-        # The WINDOW's length rather than the novel count: the overlap frames are propagated again
-        # -- that is what gives the next window its run-up -- and their results are discarded below
-        # rather than never produced.
-        max_frames=max(0, min(window.size, available)),
+        max_frames=span,
+        reverse=window.reverse,
     ):
         position = _position_of(result.source, sequence)
         # RULE-026: a frame covered by an earlier window keeps the EARLIER window's result, which
