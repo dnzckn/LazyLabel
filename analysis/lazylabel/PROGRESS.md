@@ -14,7 +14,11 @@ All fourteen capabilities are built and reachable from the app -- C13's hotkey A
 since 2026-09-23, when asking what a user can reach, rather than what the code reads, found neither
 had been built; every setting now has a control or a written reason. C11 is included: propagation runs end
 to end, from the browser's reference masks through the API to a SAM 2 video predictor, with a job
-API that cancels without losing committed frames. What is NOT claimed is that its results match
+API that cancels without losing committed frames. Run that way for the first time on 2026-09-23, in the browser pane
+against the real stack with SAM 2.1 large, on eight synthetic frames of a moving disc. The reference
+came from a polygon file on frame 0. All seven other frames propagated, and Save All wrote NPZ and
+YOLO files whose boxes follow the disc to within about a pixel in every frame. The reference was not
+rewritten. What is NOT claimed is that its results match
 legacy's. That is Phase 6 exit criterion 2 and it needs a checkpoint, a recorded sequence, and
 golden outputs.
 
