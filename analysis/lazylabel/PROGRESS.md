@@ -78,20 +78,21 @@ owner can supply, and each is one command once it arrives.
    list that follows from no numbered decision. Recorded in
    `web/test/rules/p0Coverage.test.ts`.
 
-**The security findings are being audited against the new code, in progress.** `ASSESSMENT.md`
-section 6 lists seventeen, and the brief says SEC-01, 02, 03, 04 and 06 must be designed out
-rather than ported. **SEC-03 was not.** Its runtime guard existed and only a test ever called it;
-with `TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD` set, a SAM 1 checkpoint would have executed code in
-production. Fixed and reproduced both ways on 2026-09-23.
+**The five security findings the brief said must be designed out have been audited against the
+new code. Three of the five had not been.** Checked 2026-09-23:
 
-**SEC-02 was not designed out either.** The API refuses formats outside its allow-list, but the
-inference service read the dataset directly with `cv2.imread`, which picks a codec from the file's
-first bytes -- so EXR or JPEG 2000 bytes in a file named `.png` reached OpenCV's bundled, unaudited
-decoders. Same allow-list now, checked on the bytes, read once so what is checked is what is
-decoded. Fixed 2026-09-23.
+| finding | state | what was wrong |
+| --- | --- | --- |
+| SEC-01 pickle | **held** | only the converter unpickles, through a restricted `find_class`; the NPZ reader refuses `\|O` arrays |
+| SEC-02 decoder by content | **fixed** | the inference service read the dataset with `cv2.imread`, bypassing the API's allow-list, so EXR or JPEG 2000 bytes in a `.png` reached OpenCV's unaudited codecs |
+| SEC-03 checkpoint pickle | **fixed** | the runtime guard only ever ran in CI; with `TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD` set, a SAM 1 checkpoint executed code -- reproduced |
+| SEC-04 failed load deleting sidecars | **held** | no auto-save, and `canSave` refuses writing back an image whose load failed |
+| SEC-06 unbounded allocation | **fixed** | `assertObjects` had no caller and the text readers built one full-image mask per line; 20,000 polygons on a 12 MP image asked for ~224 GiB |
 
-Still to check, in the brief's order: SEC-01 (pickle), SEC-04 (a failed load deleting sidecars),
-SEC-06 (no limits on pixels, objects or array shapes). Two of three checked so far were real.
+Two of the three were the same defect as everything else found here -- a guard that existed and
+that nothing called -- in the two packages NEITHER reach guard scanned: the Python service (which
+now has one) and the formats package (which does not yet). The remaining twelve findings are rated
+Medium or below for the web, and are the natural next thing to walk.
 
 **If more building is wanted before the data arrives,** the honest answer is that there is no named
 work left: the rule lists, the settings table, the reach sweep and the hotkey reference are all
