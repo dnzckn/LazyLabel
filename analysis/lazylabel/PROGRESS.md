@@ -380,8 +380,20 @@ median response down from 470 KiB to 59 KiB. The change also found four web modu
 mask layout themselves rather than through `@lazylabel/contracts` -- the canvas, erase, selection
 and sequence references -- which bit packing would have broken without a type error; all four read
 through one `maskRegion` now. `inference/tools/measure_latency.py` re-takes the number on any
-machine. Not measured: the browser's share, and the median is still mostly the model's 55 ms plus
-choosing among three full-resolution candidates, which has room left if a slower GPU needs it.
+machine. The median is still mostly the model's 55 ms plus choosing among three full-resolution
+candidates, which has room left if a slower GPU needs it.
+
+**And from the browser, later the same day.** A browser-pane run through the whole stack, on
+12-megapixel images, timed each click's request in the page. Warm embedding, with each click adding
+a point to the prompt: 82-128 ms per click, a median of 96 ms, across 14 clicks in three situations.
+- **Clicks on one image.**
+- **The first click on a newly encoded image.** 107 ms; the encode itself was 599 ms.
+- **A return to a cached image.** Its encoding came back in 17 ms, and the first click, which
+  restored it, took 107 ms.
+
+The one exception is the first click after the model loads, at 220 ms: a one-time warm-up, not a
+per-image cost. Painting the mask is not in these figures; the response is 234 KiB for a large
+object's bounded mask.
 
 **Green suites were not a green CI.** `npm run typecheck` is the web job's first step after
 install, and on 2026-09-23 it failed with 37 type errors in seven test files: mocks declared with
