@@ -93,14 +93,27 @@ class InferenceService:
         if name in self._backends:
             return self._backends[name]
 
-        entry = self.model(name)
-        status = check_checkpoint(entry, self.model_dir)
-        if not status.usable:
-            raise ModelNotLoadedError(f"{entry.name} cannot be used: {status.detail}")
-
+        entry = self.verified(self.model(name))
         backend = load_backend(entry, self.model_dir, device=self.device)
         self._backends[name] = backend
         return backend
+
+    def verified(self, entry: ModelEntry) -> ModelEntry:
+        """The entry back, once its checkpoint is proven to be the file the manifest vouches for.
+
+        EVERY path that loads a checkpoint calls this first, and `test_checkpoint_paths.py` holds
+        the whole source to that. It used to be inline in `backend`, and the two load paths written
+        after it -- the video predictor a propagation builds and the embedder Find Archetypes
+        builds -- went straight to their loaders: the manifest's full SHA-256 was carried on all
+        three paths and checked on one (SEC-17).
+
+        Hashing a multi-gigabyte file takes seconds, and it is paid once per model per process,
+        because every caller keeps what it loads.
+        """
+        status = check_checkpoint(entry, self.model_dir)
+        if not status.usable:
+            raise ModelNotLoadedError(f"{entry.name} cannot be used: {status.detail}")
+        return entry
 
     def embed(
         self,

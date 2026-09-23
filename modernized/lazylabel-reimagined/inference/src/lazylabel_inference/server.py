@@ -126,8 +126,8 @@ def _archetyper_for(service, models, logger):
 
     A different model from the prompt and video ones: archetype finding embeds whole FRAMES to find
     scenes, which is a feature extractor's job rather than a segmenter's. `load_embedder` builds it
-    with `weights=None` so nothing is fetched from the network -- the only bytes that reach it are
-    the ones the manifest vouched for.
+    with `weights=None` so nothing is fetched from the network, and `service.verified` runs first,
+    so the only bytes that reach it are the ones the manifest vouched for.
     """
     from .archetypes import find_archetypes, load_embedder
     from .prompts import ModelNotLoadedError
@@ -135,29 +135,46 @@ def _archetyper_for(service, models, logger):
     loaded: dict[str, object] = {}
 
     def find(sequence, wanted):
-        entry = _embedding_entry(models, wanted)
+        entry = _embedder_entry(models, wanted)
         if entry.name not in loaded:
+            service.verified(entry)
             logger.log("info", "loading the archetype embedder", model=entry.name)
             loaded[entry.name] = load_embedder(entry, service.model_dir, device=service.device)
 
         images = [(key, service.read_image(key)) for key in sequence]
         return find_archetypes(images, loaded[entry.name])
 
-    def _embedding_entry(entries, wanted):
-        """Any manifest entry will do: the embedder is a feature extractor, not the checkpoint.
+    def _embedder_entry(entries, wanted):
+        """The feature extractor to embed frames with: the one asked for, else the only one listed.
 
-        Named anyway when the caller names one, so a deployment with several can be explicit. With
-        none at all this fails when the JOB runs rather than when the route is called, for the same
-        reason propagation does -- which checkpoints are usable can change while the service runs.
+        Chosen by FAMILY. This used to take the manifest's first entry whatever it was, on the
+        theory that any entry would do, and `load_embedder` refuses anything that is not an
+        embedder. So every manifest listing SAM first, the example included, failed Find Archetypes
+        on every call. The browser never names a model here, so the default is the path that runs.
+
+        Several embedders are not chosen between, for the reason `_video_entry` gives: which
+        weights embedded the frames decides which frames get suggested. With none, this fails when
+        the call runs rather than when the service starts, because which checkpoints are usable can
+        change while it runs.
         """
+        embedders = [each for each in entries if each.family == "embedder"]
         if wanted is not None:
-            for each in entries:
+            for each in embedders:
                 if each.name == wanted:
                     return each
-            raise ModelNotLoadedError(f"no model called {wanted!r} is in the manifest")
-        if not entries:
-            raise ModelNotLoadedError("the manifest lists no model to build the embedder from")
-        return entries[0]
+            raise ModelNotLoadedError(f"no embedder called {wanted!r} is in the manifest")
+        if not embedders:
+            raise ModelNotLoadedError(
+                "no embedder is in the manifest. Find Archetypes needs the MobileNetV3 small "
+                'checkpoint listed with family "embedder" and size "mobilenet_v3_small"'
+            )
+        if len(embedders) > 1:
+            raise ModelNotLoadedError(
+                "several embedders are listed ("
+                + ", ".join(each.name for each in embedders)
+                + "); name the one to use"
+            )
+        return embedders[0]
 
     return find
 
@@ -181,6 +198,7 @@ def _propagator_for(service, models, logger):
     def propagate_job(request, cancel):
         entry = _video_entry(models, request.model)
         if entry.name not in loaded:
+            service.verified(entry)
             logger.log("info", "loading the video predictor", model=entry.name)
             loaded[entry.name] = load_video_predictor(entry, service.model_dir, device=service.device)
 

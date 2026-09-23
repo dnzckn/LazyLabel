@@ -9,15 +9,14 @@ criteria: SAM 1 and SAM 2.1 masks match legacy against the real weights, propaga
 for frame and flags the same frames at the threshold, checkpoints load only through a hash-checked
 manifest, and failures are typed errors rather than `None`.
 
-**The propagation and archetype MODULES are built and proven; their HTTP ROUTES are not.** That
-distinction is the route table below, and it is deliberate rather than an oversight: Phase 3's
-criterion was equivalence with legacy, which `propagation.py` and `archetypes.py` meet. Exposing
-them over HTTP needs a job API with real cancellation, progress and streaming limits, which is
-Phase 6's scope and not a wrapper around a function call.
+Phase 6 put propagation and archetype finding on HTTP. Phase 3 had proven the modules equivalent to
+legacy and stopped there on purpose: a propagation needs a job API with real cancellation, progress
+and streaming limits, which is not a wrapper around a function call. That job API is now the
+`/inference/propagations` routes below.
 
 ```bash
-python -m pytest                                        # 232 tests; the live ones skip without checkpoints
-LAZYLABEL_MODEL_DIR=/path/to/checkpoints python -m lazylabel_inference.server
+python -m pytest                                        # the live tests skip without checkpoints
+LAZYLABEL_MODEL_DIR=/path/to/checkpoints LAZYLABEL_DATASET_ROOT=/path/to/images python -m lazylabel_inference.server
 ```
 
 To run the differential comparison against the legacy model, which needs a real checkpoint:
@@ -29,15 +28,16 @@ LAZYLABEL_TEST_CHECKPOINT=/path/to/sam2.1_hiera_large.pt PYTHONPATH=/path/to/leg
 | Variable | Default | What it is |
 |---|---|---|
 | `LAZYLABEL_MODEL_DIR` | *required* | Where the checkpoints are. The service will not guess, and it never downloads one. |
-| `LAZYLABEL_MODEL_MANIFEST` | `<model dir>/manifest.json` | |
+| `LAZYLABEL_MODEL_MANIFEST` | `<model dir>/manifest.json` | Copy `models/manifest.example.json` and fill in the real hashes. It lists the MobileNetV3 embedder too, which Find Archetypes needs. |
+| `LAZYLABEL_DATASET_ROOT` | *none* | The folder the images are read from. Without it the service still starts, so `/health` and `/models` can help an operator installing checkpoints, and every route that reads an image answers 503 and says why. A path that is not a directory is refused at startup. |
 | `LAZYLABEL_INFERENCE_PORT` | `8788` | |
 | `LAZYLABEL_INFERENCE_HOST` | `127.0.0.1` | Only the API talks to this service. A model endpoint on every interface is not a default to fall into. |
 
 ## The model stack is optional, on purpose
 
 PyTorch is imported lazily, inside the functions that need it, and only the `[ai]` extra installs
-it. So 129 of the tests run with neither PyTorch nor a checkpoint, in about two seconds, and CI
-needs neither. The nine that do need a checkpoint skip themselves cleanly without one.
+it. So most of the tests run with neither PyTorch nor a checkpoint, and CI needs neither. The ones
+that do need a checkpoint skip themselves cleanly without one.
 
 That is not austerity for its own sake. The two things this service must get right *before* a model
 is ever loaded — is this checkpoint the one it claims to be, and can the AI stack run here at all —
@@ -54,6 +54,11 @@ load a truncated checkpoint with no message saying why.
 Here every checkpoint is pinned by SHA-256 in a manifest, the size is checked first because it is
 free, and **nothing is downloaded at runtime** (SEC-03, SEC-05, SEC-17). The build pipeline puts the
 files there.
+
+**Every** path that loads a checkpoint checks it first: the prompt backend, the video predictor a
+propagation builds, and the embedder Find Archetypes builds. Until 2026-09-23 only the first did;
+`tests/test_checkpoint_paths.py` now holds the whole source to all three, so a fourth path cannot
+skip the check without failing it.
 
 **RULE-085 — what a checkpoint is.** Legacy decides SAM 1 versus SAM 2, and which size, by looking
 for substrings in the *file name*. The card lists the cost:
@@ -82,14 +87,14 @@ and a pre-release newer than the minimum is allowed *and said to be* a pre-relea
 | `GET /models` | built — every declared checkpoint, verified in full |
 | `POST /inference/embeddings` | built — encodes an image, returns a stable handle, says whether it was cached |
 | `POST /inference/segment` | built — points and boxes, SAM 2.1, the mask bounded on the wire |
-| `POST`/`GET /inference/propagations`, `DELETE /inference/propagations/{id}` | **501**, C11, Phase 6 — the module is built and differential-tested; the JOB API is not |
-| `POST /inference/archetypes` | **501**, C10, Phase 6 — same: `archetypes.py` is complete, the route is not |
+| `POST`/`GET /inference/propagations`, `DELETE /inference/propagations/{id}` | built — C11: start a propagation job, read its frames as they arrive, cancel it |
+| `POST /inference/archetypes` | built — C10: which frames of a sequence are worth annotating by hand |
 
-For the routes that still answer 501, that is the honest status: the route exists, its contract is
-fixed in `AI_NATIVE_SPEC.md` section 3,
-and the implementation is not here. A 200 with an empty mask would be precisely the failure
-`ASSESSMENT.md` 5.4 records of the legacy code — a failure presented as a successful empty result,
-which the caller cannot tell from a real one.
+No route answers 501 any more. While some did, 501 was the honest status: the route existed, its
+contract was fixed in `AI_NATIVE_SPEC.md` section 3, and the implementation was not there yet. A 200
+with an empty mask would have been precisely the failure `ASSESSMENT.md` 5.4 records of the legacy
+code — a failure presented as a successful empty result, which the caller cannot tell from a real
+one.
 
 `/health` reports its three failure modes separately, because they need different actions: PyTorch
 missing is an installation problem, no checkpoints is a configuration problem, and a checkpoint that
@@ -103,7 +108,7 @@ working, the unexpected **pass** fails the suite and forces the marker off — w
 happened when Phase 3 built the prompt routes, so the placeholder came off because the suite made
 it come off rather than because anyone remembered.
 
-One remains, for propagation.
+None remain. The last one, for propagation, came off when the job API was built.
 
 ## What Phase 3 built, and how it is proven
 
@@ -141,19 +146,21 @@ adjustments), so invalidation is structural rather than a step someone must reme
 off-by-one hides: a single pixel, a single row, a single column, a full mask, an empty mask, and two
 blobs whose box is mostly nothing.
 
-## Still to do in Phase 3
+## What this list used to say was still to do
 
-- **SAM 1.** `load_backend` refuses `family: "sam1"` with a typed error rather than guessing. It
-  needs a checkpoint to be written against; none is mirrored yet (`MODEL_MANIFEST.md`).
-- **The neighbour prefetch.** RULE-091 specifies pre-computing the next, next-but-one and previous
-  images after a settle. The cache is ready for it; the scheduling is not built.
-- **Find Archetypes** (C10). Phase 3 work on the model side: the brief lists
-  `reference_finder_worker.py` in Phase 3's scope. Only the timeline UI is Phase 6.
-- **The propagation differential.** Staging, confidence and the error path are built and tested,
-  and `tests/test_propagation_live.py` proves the whole thing against the real SAM 2 video
-  predictor: a 40x40 rectangle sliding 12 pixels a frame is tracked at exactly 1600 pixels on every
-  frame, in the right place, attributed to the right source image. What exit criterion 2 still
-  wants is the comparison against *legacy's* propagation on a recorded sequence, which needs both
-  video states stood up side by side.
-- **API-to-inference contract tests** (exit criterion 4). The API does not proxy these routes
-  yet, so nothing tests the two services talking to each other.
+Each of these was open when Phase 3 closed, and each is done. Kept as a list so a reader who
+remembers the old one can see where each item went.
+
+- **SAM 1.** Built. `tests/test_differential_sam1.py` compares it with legacy against the real
+  `vit_h` weights.
+- **The neighbour prefetch** (RULE-091). Built in the browser, `web/src/workspace/prefetch.ts`,
+  because the browser is what knows which image the user will open next. The cache here is what it
+  warms.
+- **Find Archetypes** (C10). Built: `POST /inference/archetypes`. The embedder is a manifest entry
+  like any other, `family: "embedder"`, found by family and hash-checked before it loads.
+- **The propagation differential.** `tests/test_differential_propagation.py` compares the port with
+  *legacy's* propagation, masks and flagged frames both. What is still open is a golden captured
+  from a real recording, which needs the owner's frames:
+  `tests/fixtures/capture_propagation_goldens.py`.
+- **API-to-inference contract tests** (exit criterion 4). `tests/test_contract.py` and the API's
+  own suite hold both sides to `contracts/fixtures/inference-contract.json`.

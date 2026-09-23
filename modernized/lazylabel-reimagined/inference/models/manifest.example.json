@@ -16,6 +16,14 @@
       "filename": "sam2.1_hiera_large.pt",
       "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
       "bytes": 897952466
+    },
+    {
+      "name": "MobileNetV3 small",
+      "family": "embedder",
+      "size": "mobilenet_v3_small",
+      "filename": "mobilenetv3_small_tv.pth",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "bytes": 10305097
     }
   ]
 }

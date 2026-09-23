@@ -33,7 +33,7 @@ missing from this table entirely, which is how a table stops being a census.
 |---|---|---|
 | exporters | 1979 | the seven formats, byte-for-byte against goldens legacy wrote |
 | web | 1097 | C11's placeholder is gone; it has an acceptance test now |
-| inference | 519 | plus 36 skipped: the differentials, which need real checkpoints |
+| inference | 557 | plus 36 skipped: the differentials, which need real checkpoints |
 | api | 398 | plus 4 skipped and 5 todo, all needing a checkpoint or a corpus |
 | settings-schema | 41 | includes the rule-fixed defaults |
 | converter | 30 | the pickled-alias rewrite |
@@ -98,7 +98,8 @@ Medium or below for the web, and are the natural next thing to walk. Two are che
 stays literal text and there is nothing to expand or fetch; and SEC-09, because the directory
 store `lstat`s every key and refuses a symbolic link. SEC-05 holds too: the service contains no
 network call at all -- every mention of downloading is prose saying it does not -- and each
-checkpoint's SHA-256 is verified against the manifest before it loads.
+checkpoint's SHA-256 is verified against the manifest before it loads. That last clause was
+true of one load path in three when it was written; SEC-17 below is where that was found.
 
 **SEC-08 is NOT addressed, and it needs the owner.** Both Python packages declare
 `requires-python = ">=3.10"`, and on 2026-09-23 their suites ran on CPython 3.10.11 with expat
@@ -137,7 +138,33 @@ CANCELLED job too, because breaking out of the loop over the generator closes it
 kill leaves frames behind, and then in a directory nothing trusts. The theme-icon half was
 PyQt's and has no browser counterpart.
 
-Three remain to walk: SEC-15, SEC-16 and SEC-17.
+SEC-15 does not apply: it is the NSIS uninstaller's `RMDir /r`, and the web app ships no
+installer -- nothing under `modernized/` builds one.
+
+**SEC-17 is fixed, and walking it found two defects in code written for this app.** Its own advice
+-- pinned weights, a full SHA-256, `weights_only=True`, nothing downloaded -- was followed on paper:
+the embedder is a manifest entry with a 64-character hash, built with `weights=None` and loaded with
+`weights_only=True`. But nothing CHECKED that hash. `InferenceService.backend` verified its
+checkpoint before loading; the video predictor a propagation builds and the embedder Find
+Archetypes builds went straight to their loaders. Explicit `weights_only=True` on both meant no
+code could execute, so the exposure was integrity rather than execution: results attributed to a
+model that did not make them, and a truncated download failing inside torch instead of with the
+one-line reason the check already gives. All three paths now go through one
+`InferenceService.verified`, and `inference/tests/test_checkpoint_paths.py` asks the whole source
+whether any function loads a checkpoint without calling it first -- mutation-checked on both new
+calls.
+
+The second defect was worse for a user. Find Archetypes chose its model by POSITION: with none
+named -- and the browser never names one -- it took the manifest's first entry whatever its
+family, and the embedder loader refuses anything that is not an embedder. Every manifest listing
+SAM first failed Find Archetypes on every call, and `manifest.example.json` did not list the
+embedder at all. It is now found by family, refuses to guess between several, and says what to add
+when there is none; the example lists it. Run end to end on 2026-09-23 against the real
+MobileNetV3 weights with SAM listed first: the embedder verified, loaded, and returned 5 suggested
+frames in 2 clusters. The inference README, which still called both job routes 501, was brought
+up to date in the same change.
+
+One remains to walk: SEC-16.
 
 **If more building is wanted before the data arrives,** the honest answer is that there is no named
 work left: the rule lists, the settings table, the reach sweep and the hotkey reference are all
@@ -733,7 +760,7 @@ Component tests prove the component; only an end-to-end path proves it is reacha
 
 **The same shape has a wider form, and it is worth hunting deliberately: A WIRE BETWEEN TWO
 CORRECT PIECES.** Both ends built, both tested, and nothing joining them — which no test catches,
-because a test exercises one side with the other stubbed. Five found:
+because a test exercises one side with the other stubbed. Fourteen found:
 
 | Where | What was missing |
 |---|---|
@@ -749,6 +776,8 @@ because a test exercises one side with the other stubbed. Five found:
 | CSS ↔ coordinates | the drawing layer's box was not the image's, so every drawn vertex was misplaced |
 | Hotkey ↔ behaviour | 40 of 43 actions had no handler, while the reference listed every one with its key |
 | Rule ↔ navigation | `onNavigateAway` and `onClose` had no caller, so opening another image discarded unsaved work silently |
+| Manifest ↔ load path | `check_checkpoint` guarded one load path of three; the video predictor and the archetype embedder loaded unverified (SEC-17) |
+| Manifest ↔ job | Find Archetypes took the manifest's FIRST entry, so any manifest listing SAM first failed it on every call |
 
 **A conflict has no recovery yet, and the message says so rather than pretending.** When a save is
 refused because the file moved, the annotations on screen are still the user's — but there is no
