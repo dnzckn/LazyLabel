@@ -245,7 +245,10 @@ because the browser tool cannot send Space, which is what accepts. With `save_se
 J, a click on a disc and J accepted it through SAM 2.1 ("Undo: Accept AI mask"). With Auto-Convert
 on, the mask became a polygon, and the saved box was centre (500, 381), 299 x 298, for a disc
 centred at (500, 380) with diameter 300. It has more than 200 vertices, so it offers no handles,
-which is legacy's limit; the notice saying so is a transient one. Two tests, both failing without the fix; the harness shows
+which is legacy's limit; the notice saying so is a transient one. Erasing with an AI mask (`erase_segment`,
+Shift+Space, rebound to K the same way) ran through a real mask next. It gave "Undo: Erase from 3
+annotations". The disc it covered was "removed completely", because what remained was under the
+10-pixel minimum, and the triangle it crossed was cut into its two remaining pieces. Two tests, both failing without the fix; the harness shows
 the image at its own size, where the first could not show, so the test shows it at a quarter.
 
 **Linked editing in the split view, checked in a real browser 2026-09-23.** With two same-sized
