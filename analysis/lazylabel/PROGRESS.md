@@ -93,7 +93,11 @@ Two of the three were the same defect as everything else found here -- a guard t
 that nothing called -- in the two packages NEITHER reach guard scanned: the Python service (which
 now has one) and the formats package (which the TypeScript guard now scans too -- and making it
 catch SEC-06's pattern exposed two more holes in the guard itself, both fixed on 2026-09-23). The remaining twelve findings are rated
-Medium or below for the web, and are the natural next thing to walk.
+Medium or below for the web, and are the natural next thing to walk. Two are checked and HOLD
+(2026-09-23): SEC-07, because the XML reader has no entity lookup at all, so an unknown entity
+stays literal text and there is nothing to expand or fetch; and SEC-09, because the directory
+store `lstat`s every key and refuses a symbolic link. Ten remain: SEC-05 and SEC-08 through
+SEC-17 except SEC-09.
 
 **If more building is wanted before the data arrives,** the honest answer is that there is no named
 work left: the rule lists, the settings table, the reach sweep and the hotkey reference are all
