@@ -207,10 +207,15 @@ class InferenceService:
         except ImportError as cause:  # pragma: no cover - cv2 ships with the AI extra
             raise ImageUnreadableError(f"OpenCV is not installed: {cause}") from cause
 
-        if pixels is not None:
-            import numpy as np
+        import numpy as np
 
-            raw = np.frombuffer(base64.b64decode(pixels), dtype=np.uint8)
+        if pixels is not None:
+            posted = base64.b64decode(pixels)
+            # The API renders PNG, so anything else arriving here is not the API's output -- and is
+            # refused on the same terms a file on disk would be.
+            if sniff_image_format(posted) != "png":
+                raise ImageUnreadableError("the rendered pixels are not the PNG the API sends")
+            raw = np.frombuffer(posted, dtype=np.uint8)
             decoded = cv2.imdecode(raw, cv2.IMREAD_COLOR)
             if decoded is None:
                 raise ImageUnreadableError("the rendered pixels could not be decoded as an image")
@@ -219,11 +224,27 @@ class InferenceService:
         if not path.is_file():
             raise ImageUnreadableError(f"{path.name} is not in the dataset folder")
 
-        # cv2.imread returns None rather than raising, which is how legacy's failure becomes a
+        # SEC-02. `cv2.imread` picks its decoder from the file's CONTENT, and OpenCV's wheels bundle
+        # codecs pip-audit does not track -- OpenEXR 2.3.0 and OpenJPEG among them. The API refuses
+        # any format outside its allow-list, but this service reads the dataset DIRECTLY, so a
+        # file named `x.png` holding EXR bytes went straight past that check to whatever decoder
+        # cv2 chose. Same list as the API's, checked on the bytes rather than the name.
+        #
+        # Read ONCE and decoded from memory, so what was checked is exactly what is decoded.
+        # Sniffing the head and then letting `imread` open the file again would leave a window in
+        # which the file on disk could be swapped for something else.
+        blob = path.read_bytes()
+        found = sniff_image_format(blob)
+        if found is None:
+            raise ImageUnreadableError(
+                f"{path.name} is not an image type LazyLabel opens (JPEG, PNG, WebP, TIFF, GIF or BMP)"
+            )
+
+        # cv2.imdecode returns None rather than raising, which is how legacy's failure becomes a
         # cvtColor exception inside a catch-all and then a bare False.
-        data = cv2.imread(str(path))
+        data = cv2.imdecode(np.frombuffer(blob, dtype=np.uint8), cv2.IMREAD_COLOR)
         if data is None:
-            raise ImageUnreadableError(f"{path.name} could not be decoded as an image")
+            raise ImageUnreadableError(f"{path.name} could not be decoded as a {found} image")
         return cv2.cvtColor(data, cv2.COLOR_BGR2RGB)
 
     def _prune_sessions(self) -> None:
@@ -320,3 +341,28 @@ def decode_mask(wire: Any) -> Any:
     if expected:
         mask[y0:y1, x0:x1] = np.frombuffer(raw, dtype=np.uint8).reshape(y1 - y0, x1 - x0)
     return mask
+
+
+def sniff_image_format(head: bytes) -> str | None:
+    """The image format these bytes START with, if it is one LazyLabel opens; else None.
+
+    The same set as the API's `DECODABLE` plus BMP, which the API decodes itself -- one allow-list
+    in two languages, because the two services read the same files and a format one refuses must
+    not be decodable through the other.
+
+    By signature, never by extension. A name says what someone called the file; the first bytes
+    say which decoder will run.
+    """
+    if head.startswith(b"\x89PNG\r\n\x1a\n"):
+        return "png"
+    if head.startswith(b"\xff\xd8\xff"):
+        return "jpeg"
+    if len(head) >= 12 and head[:4] == b"RIFF" and head[8:12] == b"WEBP":
+        return "webp"
+    if head.startswith((b"II*\x00", b"MM\x00*")):
+        return "tiff"
+    if head.startswith((b"GIF87a", b"GIF89a")):
+        return "gif"
+    if head.startswith(b"BM"):
+        return "bmp"
+    return None

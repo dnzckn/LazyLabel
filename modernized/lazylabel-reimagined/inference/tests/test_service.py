@@ -137,3 +137,99 @@ class TestDecodingAMask:
 
         with pytest.raises(InvalidPromptError, match="must be an object"):
             decode_mask("a mask")
+
+
+class TestOnlyListedFormatsReachADecoder:
+    """SEC-02: the decoder is chosen by CONTENT, so the check has to be on content too.
+
+    `cv2.imread` picks a codec from a file's first bytes, and OpenCV's wheels bundle codecs pip-audit
+    does not track -- OpenEXR 2.3.0 and OpenJPEG among them. The API refuses formats outside its
+    allow-list, but this service reads the dataset DIRECTLY, so a file named `x.png` holding EXR
+    bytes went straight past the API's check to whatever decoder OpenCV chose.
+    """
+
+    def service(self, root):
+        from lazylabel_inference.service import InferenceService
+
+        return InferenceService(models=[], model_dir=root, dataset_root=root)
+
+    @pytest.mark.parametrize(
+        ("name", "head"),
+        [
+            ("openexr", b"v/1\x01" + b"\x00" * 60),
+            ("jpeg2000", b"\x00\x00\x00\x0cjP  \r\n\x87\n" + b"\x00" * 60),
+            ("pfm", b"PF\n4 4\n-1.0\n" + b"\x00" * 60),
+            ("sun raster", b"\x59\xa6\x6a\x95" + b"\x00" * 60),
+        ],
+    )
+    def test_an_unlisted_format_is_refused_whatever_the_file_is_CALLED(
+        self, tmp_path, name, head
+    ) -> None:
+        from lazylabel_inference.service import ImageUnreadableError
+
+        # Named .png deliberately: the extension is exactly what an attacker controls.
+        (tmp_path / "x.png").write_bytes(head)
+
+        with pytest.raises(ImageUnreadableError, match="not an image type LazyLabel opens"):
+            self.service(tmp_path).read_image("x.png")
+
+    def test_a_real_png_still_decodes(self, tmp_path) -> None:
+        import io
+
+        from PIL import Image
+
+        buffer = io.BytesIO()
+        Image.new("RGB", (4, 3), (10, 200, 30)).save(buffer, format="PNG")
+        (tmp_path / "ok.png").write_bytes(buffer.getvalue())
+
+        decoded = self.service(tmp_path).read_image("ok.png")
+
+        assert decoded.shape == (3, 4, 3)
+        assert tuple(decoded[0, 0]) == (10, 200, 30)
+
+    def test_a_listed_format_that_will_not_decode_says_which_format_it_claimed(
+        self, tmp_path
+    ) -> None:
+        from lazylabel_inference.service import ImageUnreadableError
+
+        # A PNG signature on garbage: allowed through the sniff, refused by the decoder -- and the
+        # message names the format it CLAIMED, which is what someone debugging it needs.
+        (tmp_path / "broken.png").write_bytes(b"\x89PNG\r\n\x1a\n" + b"not really a png")
+
+        with pytest.raises(ImageUnreadableError, match="as a png image"):
+            self.service(tmp_path).read_image("broken.png")
+
+    def test_posted_pixels_must_be_the_PNG_the_API_sends(self, tmp_path) -> None:
+        import base64
+
+        from lazylabel_inference.service import ImageUnreadableError
+
+        # RULE-089's rendered pixels always arrive as PNG. Anything else is not the API's output.
+        exr = base64.b64encode(b"v/1\x01" + b"\x00" * 60).decode("ascii")
+
+        with pytest.raises(ImageUnreadableError, match="not the PNG the API sends"):
+            self.service(tmp_path)._read_image(tmp_path / "unused.png", pixels=exr)
+
+
+class TestTheSignatureTable:
+    """One allow-list in two languages, so a format one service refuses cannot pass the other."""
+
+    @pytest.mark.parametrize(
+        ("head", "expected"),
+        [
+            (b"\x89PNG\r\n\x1a\n", "png"),
+            (b"\xff\xd8\xff\xe0", "jpeg"),
+            (b"RIFF\x00\x00\x00\x00WEBP", "webp"),
+            (b"II*\x00", "tiff"),
+            (b"MM\x00*", "tiff"),
+            (b"GIF89a", "gif"),
+            (b"GIF87a", "gif"),
+            (b"BM", "bmp"),
+            (b"", None),
+            (b"RIFF\x00\x00\x00\x00WAVE", None),
+        ],
+    )
+    def test_recognises_exactly_the_api_s_formats(self, head, expected) -> None:
+        from lazylabel_inference.service import sniff_image_format
+
+        assert sniff_image_format(head) == expected
