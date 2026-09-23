@@ -95,10 +95,14 @@ export const CAPABILITIES: readonly Capability[] = [
   {
     id: "C10",
     summary: "Build a timeline from an image sequence and mark reference frames",
+    // Read pending until 2026-09-23 for want of "sequence and timeline persistence", which was the
+    // architecture's expectation, not a requirement: none of C10's rules (RULE-093, 048, 022, 076,
+    // 072, 065, 077) asks for a saved timeline, legacy keeps none between sessions, and the web app
+    // rebuilds one from the files, which decision 5 makes the truth. The API's share is the file
+    // order (C1), the annotations references are marked from (C2), image sizes for RULE-048, and
+    // RULE-022's suggestions, which `c10.archetypeProxy.test.ts` proves through the proxy.
     builtIn: "P6",
-    apiStatus: "pending",
-    apiPhase: "P6",
-    missing: "sequence and timeline persistence",
+    apiStatus: "built",
   },
   {
     id: "C11",
@@ -127,10 +131,12 @@ export const CAPABILITIES: readonly Capability[] = [
     id: "C14",
     summary: "Compare two images side by side and annotate both together",
     builtIn: "P6, per decision 8",
-    apiStatus: "pending",
-    apiPhase: "P6",
-    missing:
-      "deliberately unmodelled: decision 8 rebuilds the split view from the linked-operation rules, and its per-viewer class-id space is a Phase 6 entry decision",
+    // Read pending until 2026-09-23 for a decision taken on 2026-09-20: class ids stay per image
+    // (decision 6) and a linked operation matches classes by NAME, resolving each image's own
+    // aliases. That happens in the web app (`split/linked.ts`). Each side of the split view is an
+    // ordinary open image and saves through C9's per-image route with its own aliases, so the API
+    // owes the split view nothing of its own.
+    apiStatus: "not-this-service",
   },
 ];
 

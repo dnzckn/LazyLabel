@@ -37,7 +37,7 @@ missing from this table entirely, which is how a table stops being a census.
 | exporters | 1991 | the seven formats, byte-for-byte against goldens legacy wrote |
 | web | 1153 | C11's placeholder is gone; it has an acceptance test now |
 | inference | 560 | plus 36 skipped: the differentials, which need real checkpoints |
-| api | 414 | plus 4 skipped and 5 todo, all needing a checkpoint or a corpus |
+| api | 418 | plus 4 skipped (SEC-09's symlink tests, where the OS will not make a link, as on this machine) and 1 todo (C8's placeholder) |
 | settings-schema | 55 | includes the rule-fixed defaults |
 | converter | 30 | the pickled-alias rewrite |
 | contracts | 28 | the wire shapes both sides agree on |
@@ -99,17 +99,33 @@ built by Docker itself; `deploy/README.md` keeps saying so. The inference image 
 every image route would have failed on `import cv2`; it installs the headless build now. A
 `.dockerignore` keeps a developer's `node_modules`, `dist` and checkpoints out of the context.
 
-**The API's capability table: C11 corrected 2026-09-23, four more to examine.** C11 read "pending"
-while the propagation proxy and `c11.propagationProxy.test.ts` existed; it reads built now, with
-polling-instead-of-socket recorded as a decision beside it. `api/src/capabilities.ts` still marks
-**C8, C10 and C14** pending, and each needs judgment, not a flip (C3 was stale the same way as C11
-and reads built since 2026-09-23: its acceptance test proves the RULE-089 rendered-pixels route it
-listed as missing); **C8** lists "decode, tile, and
-render adjusted pixels for the model" -- rendering exists (`renderForModel`), tiling may genuinely
-not; **C10** lists "sequence and timeline persistence", which the architecture puts in SQLite and
-may be a real gap; **C14** needs its entry read. The coverage test keeps `placeheld.ts` equal to the
-pending set, so each correction is: confirm, write or name its acceptance test, flip, drop the
-placeholder.
+**The API's capability table: four stale entries corrected 2026-09-23; C8 is the one real gap.**
+Each was examined rather than flipped.
+- **C11** read "pending" while the propagation proxy and `c11.propagationProxy.test.ts` existed. It
+  reads built, with polling instead of a socket recorded as a decision beside it.
+- **C3** was stale the same way: its acceptance test proves the RULE-089 rendered-pixels route it
+  listed as missing.
+- **C10** listed "sequence and timeline persistence". That was the architecture's expectation (its
+  SQLite row names "sequences"), not a requirement: none of C10's seven rules asks for a saved
+  timeline, and legacy keeps none between sessions. The web app rebuilds the timeline from the
+  files, which decision 5 makes the truth. The API's share is:
+  - the file order (C1);
+  - the annotations that references are marked from (C2);
+  - frame sizes for RULE-048;
+  - RULE-022's suggestions.
+
+  Examining it found the frame-size route (`GET …/images/*/metadata`) called by the browser and
+  **proven by no test**. The function behind it was unit-tested; the route was not.
+  `c10.frameSizes.test.ts` now covers it with four tests; swapping width and height fails one.
+  **Owner question:** should a timeline survive a reload, which legacy's never did? That would be
+  new scope, and where it would live is already named: the architecture's SQLite row.
+- **C14** waited on "its per-viewer class-id space", decided on 2026-09-20: ids stay per image, and
+  linked operations match classes by name in the web app. Each side of the split view saves through
+  C9's per-image route, so it reads `not-this-service`.
+- **C8** still lists "decode, tile, and render adjusted pixels". Decode and render exist. **Tiling
+  does not**, and the spec's API sketch has a tile route
+  (`/images/{imagePath}/tiles/{z}/{x}/{y}`) and a thumbnail route. Its NFR table makes 50 megapixels
+  the supported working size. Whether whole-image PNGs meet that is a measurement, and is next.
 
 **Collapsing a panel threw away what it held -- found and fixed 2026-09-23.** A panel UNMOUNTED
 its contents when collapsed, and collapsing is what people do for room. Collapsing Sequence after a
