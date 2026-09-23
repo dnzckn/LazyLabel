@@ -98,6 +98,20 @@ built by Docker itself; `deploy/README.md` keeps saying so. The inference image 
 every image route would have failed on `import cv2`; it installs the headless build now. A
 `.dockerignore` keeps a developer's `node_modules`, `dist` and checkpoints out of the context.
 
+**NEXT: the settings half of C13's editor is missing too -- found 2026-09-23, not yet built.** The
+hotkey editor was never built (now it is); the brief's phrase is "web settings AND hotkey editor",
+so the same question was asked of the settings: not "does anything READ this key", which the
+settings guard answers, but "can a user SET it". Of 39 keys, 17 have a control. Nine of the rest are
+deliberate (window and panel geometry, the dropped legacy keys, the name column). **Thirteen are read
+by the app and settable by no one** -- they keep their default unless a desktop import brings a
+value: `line_thickness`, `pan_multiplier` and `polygon_join_threshold` (RULE-050 clamps typed values
+for pan speed and join threshold, which presumes the inputs exist), `operate_on_view` (RULE-089, so a
+new user can never turn it on), `pixel_priority_enabled` and `pixel_priority_ascending` (RULE-012,
+same), and the seven `file_manager_show_*` column toggles. What to build: a settings dialog beside
+the hotkey one, with RULE-050's clamps on the numbers, and a guard that classifies every key as
+editable, geometry, dropped with its decision, or import-only with a reason -- so "read and
+unsettable" cannot recur silently, as "exported and uncalled" once could.
+
 **Enter wrote an empty file and said "saved" -- found in a real browser, 2026-09-23.** Drawing a
 polygon and pressing Enter, legacy's "finish the polygon and then save", left `photo.npz` with zero
 class channels and `photo.txt` empty, while the canvas showed the polygon and the status bar read
