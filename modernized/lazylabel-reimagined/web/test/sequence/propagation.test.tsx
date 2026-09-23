@@ -619,6 +619,38 @@ describe("RULE-056: not losing propagated work without asking", () => {
    * the tab, or collapsing the Sequence panel for room, threw the whole propagation away.
    */
 
+  it("does not ask on a first run, when there is nothing to lose", async () => {
+    const confirm = vi.fn((_message: string) => false);
+    panel(confirm);
+
+    await propagateAndWait();
+
+    expect(confirm).not.toHaveBeenCalled();
+  });
+
+  it("ASKS before Propagate runs again over unsaved frames, and keeps them on a no", async () => {
+    const confirm = vi.fn((_message: string) => false);
+    panel(confirm);
+    await propagateAndWait();
+
+    fireEvent.click(screen.getByRole("button", { name: /^Propagate/ }));
+
+    expect(confirm).toHaveBeenCalledTimes(1);
+    expect(confirm.mock.calls[0]![0]).toMatch(/1 propagated frame has not been saved. Propagating again/);
+    expect(screen.getByRole("button", { name: /Save 1 frame/ })).toBeTruthy();
+  });
+
+  it("ASKS before Clear throws unsaved frames away, and keeps them on a no", async () => {
+    const confirm = vi.fn((_message: string) => false);
+    panel(confirm);
+    await propagateAndWait();
+
+    fireEvent.click(screen.getByRole("button", { name: "Clear" }));
+
+    expect(confirm.mock.calls[0]![0]).toMatch(/1 propagated frame has not been saved. Clearing/);
+    expect(screen.getByRole("button", { name: /Save 1 frame/ })).toBeTruthy();
+  });
+
   it("asks before the TAB closes on propagated frames", async () => {
     panel(() => false);
     await propagateAndWait();

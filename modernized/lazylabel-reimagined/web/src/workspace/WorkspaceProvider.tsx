@@ -212,13 +212,14 @@ export interface WorkspaceContextValue {
   /** Open into a named side, without changing which side is active. */
   readonly openImageOn: (side: SideIndex, image: WireDatasetImage, options?: OpenOptions) => void;
   /**
-   * Empty a side and forget its edits.
+   * Empty a side and forget its edits -- after asking, when that would lose unsaved work.
    *
    * Needed the moment a second side can be opened: a split view that returns to one image must
    * leave nothing behind, and a side still holding unsaved work that nothing displays is decision
-   * 7's silent loss by another route.
+   * 7's silent loss by another route. So is emptying it without a word, which it did until
+   * 2026-09-23. Returns whether the side was closed.
    */
-  readonly closeSide: (side: SideIndex) => void;
+  readonly closeSide: (side: SideIndex) => boolean;
   /**
    * The derived answer the save path and the status bar need: what is open, is it saved, is it
    * safe to write. Null while nothing is open or the open image is still loading.
@@ -492,11 +493,18 @@ export function WorkspaceProvider({
   );
 
   const closeSide = useCallback(
-    (side: SideIndex) => {
+    (side: SideIndex): boolean => {
+      // The question opening another image asks, because closing is navigation too. Until
+      // 2026-09-23 it asked nothing, so "None -- one image" discarded the second side's work.
+      const decision = onNavigateAway(stateOf(sides[side]), { saveOnNavigate: false });
+      if (decision.kind === "ask" && !confirmNavigation(`${decision.summary} Close it anyway?`)) {
+        return false;
+      }
       updateSide(side, () => EMPTY_SIDE);
       history.clear(sideScope(side));
+      return true;
     },
-    [history, updateSide],
+    [confirmNavigation, history, sides, updateSide],
   );
 
   const imageStates = useMemo<readonly [ImageState | null, ImageState | null]>(

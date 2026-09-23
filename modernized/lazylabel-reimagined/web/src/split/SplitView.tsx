@@ -108,9 +108,9 @@ export function SplitView({ images, pixelsUrl }: SplitViewProps): ReactNode {
               if (chosen === undefined) {
                 // Back to one image. The side is emptied rather than left holding an image nobody
                 // can see: a pane off screen still reporting unsaved work is decision 7's silent
-                // loss by another route.
-                setActiveSide(0);
-                closeSide(1);
+                // loss by another route. Emptying it is asked first when it holds unsaved work;
+                // on a no, the pair stays as it was and the list shows it again.
+                if (closeSide(1)) setActiveSide(0);
                 return;
               }
               openImageOn(1, chosen);

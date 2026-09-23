@@ -17,7 +17,7 @@
  * would be lying for the half second it takes.
  */
 
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { WireSegment } from "@lazylabel/contracts";
 
 import type { ApiClient } from "../api/client.js";
@@ -69,6 +69,8 @@ export interface PropagationControlProps {
    * because this is where the masks and the object classes both are.
    */
   readonly onSegments?: (byKey: ReadonlyMap<string, readonly WireSegment[]>) => void;
+  /** Asks before a new run discards unsaved frames. Injected so a test can answer it. */
+  readonly confirmDiscard?: (message: string) => boolean;
 }
 
 export function PropagationControl({
@@ -79,6 +81,7 @@ export function PropagationControl({
   unsavedRef,
   onRunStart,
   onSegments,
+  confirmDiscard = (message) => window.confirm(message),
   projectId = "default",
 }: PropagationControlProps): ReactNode {
   const { settings } = useSettings();
@@ -98,9 +101,32 @@ export function PropagationControl({
   const references = frames
     .map((frame, index) => (frame.isReference ? index : -1))
     .filter((index) => index >= 0);
+  /** The unsaved count as of the last render, read by a click handler at the moment it runs. */
+  const unsavedNow = useRef(0);
+
+  /*
+   * A new run replaces the last one's masks, and Clear drops them, so unsaved frames go either
+   * way. New timeline asks before doing that (RULE-056); these two did not, until 2026-09-23 --
+   * the same loss by other buttons, and decision 7 is that nothing is lost without being asked.
+   * No question when nothing is unsaved: one that always appears is one people stop reading.
+   */
+  const mayDiscard = useCallback(
+    (doing: string): boolean => {
+      const count = unsavedNow.current;
+      return (
+        count === 0
+        || confirmDiscard(
+          `${count} propagated frame${count === 1 ? " has" : "s have"} not been saved. `
+            + `${doing} discards them. Continue?`,
+        )
+      );
+    },
+    [confirmDiscard],
+  );
 
   const begin = useCallback(async () => {
     if (references.length === 0 || progress.running || loading) return;
+    if (!mayDiscard("Propagating again")) return;
 
     /*
      * The reference MASKS are loaded before anything starts. They are the user's own annotations,
@@ -149,6 +175,7 @@ export function PropagationControl({
     client,
     frames,
     loading,
+    mayDiscard,
     onRunStart,
     progress.running,
     projectId,
@@ -180,6 +207,7 @@ export function PropagationControl({
   // Written during render, read by a click handler. The same "latest value" pattern the AI tool
   // uses for its prediction, and for the same reason: an effect would be one render too late.
   if (unsavedRef !== undefined) unsavedRef.current = unsaved.length;
+  unsavedNow.current = unsaved.length;
 
   // The callback goes through an effect, because calling a parent's setter during render is a
   // state update inside another component's render, which React warns about and which can loop.
@@ -277,7 +305,7 @@ export function PropagationControl({
         )}
 
         {done && (
-          <button type="button" onClick={reset} disabled={saving !== null}>
+          <button type="button" onClick={() => mayDiscard("Clearing") && reset()} disabled={saving !== null}>
             Clear
           </button>
         )}

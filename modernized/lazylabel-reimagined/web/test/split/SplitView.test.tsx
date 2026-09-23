@@ -94,10 +94,12 @@ function mount({
   images = FOLDER,
   counts = {} as Record<string, number>,
   metadata,
+  confirm,
 }: {
   images?: readonly WireDatasetImage[];
   counts?: Record<string, number>;
   metadata?: ApiClient["imageMetadata"];
+  confirm?: (summary: string) => boolean;
 } = {}) {
   const pixelsUrl = vi.fn((key: string, processing: Parameters<typeof processingQuery>[0]) => {
     const query = processingQuery(processing);
@@ -118,7 +120,7 @@ function mount({
   } as unknown as ApiClient;
 
   render(
-    <WorkspaceProvider client={client} projectId="default">
+    <WorkspaceProvider client={client} projectId="default" {...(confirm ? { confirmNavigation: confirm } : {})}>
       <Opener />
       <SplitView images={images} pixelsUrl={pixelsUrl} />
     </WorkspaceProvider>,
@@ -201,6 +203,23 @@ describe("choosing the pair", () => {
     // The editing side comes back with it. A closed side left active would send every tool at an
     // image that is no longer on screen.
     expect(screen.queryByLabelText("Edit the right image")).toBeNull();
+  });
+
+  it("ASKS before clearing a pair whose second image has unsaved work, and keeps it on a no", async () => {
+    // Opening another image into the side asked; choosing "None" did not, until 2026-09-23.
+    const confirm = vi.fn((_summary: string) => false);
+    mount({ confirm });
+    await openLeft();
+    await pairWith("right.png");
+    fireEvent.click(screen.getByLabelText("Edit the right image"));
+    fireEvent.click(screen.getByText("draw"));
+
+    fireEvent.change(screen.getByLabelText("Second image"), { target: { value: "" } });
+
+    expect(confirm).toHaveBeenCalledTimes(1);
+    expect(confirm.mock.calls[0]![0]).toMatch(/right\.png/);
+    expect(panes()).toEqual(["left.png", "right.png — editing (unsaved)"]);
+    expect((screen.getByLabelText("Second image") as HTMLSelectElement).value).toBe("frames/right.png");
   });
 
   it("allows the same image on both sides, and warns that the two do not share edits", async () => {

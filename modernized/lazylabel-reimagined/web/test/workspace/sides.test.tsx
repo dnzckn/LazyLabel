@@ -112,7 +112,7 @@ function Probe(): React.ReactNode {
   );
 }
 
-function mount(client: Partial<ApiClient> = {}) {
+function mount(client: Partial<ApiClient> = {}, confirm: (summary: string) => boolean = () => true) {
   const full = {
     imageMetadata: async () => ({ width: 10, height: 20, sourceDepth: 8, sourceFormat: "png" }),
     loadAnnotations: async () => loaded(2),
@@ -121,7 +121,7 @@ function mount(client: Partial<ApiClient> = {}) {
   } as unknown as ApiClient;
 
   render(
-    <WorkspaceProvider client={full} projectId="p1" confirmNavigation={() => true}>
+    <WorkspaceProvider client={full} projectId="p1" confirmNavigation={confirm}>
       <Probe />
     </WorkspaceProvider>,
   );
@@ -130,8 +130,8 @@ function mount(client: Partial<ApiClient> = {}) {
 const shown = (id: string) => screen.getByTestId(id).textContent;
 
 /** Both sides open and settled, left active. */
-async function bothOpen(): Promise<void> {
-  mount();
+async function bothOpen(confirm?: (summary: string) => boolean): Promise<void> {
+  mount({}, confirm);
   fireEvent.click(screen.getByText("open left"));
   fireEvent.click(screen.getByText("open right"));
   await waitFor(() => {
@@ -265,6 +265,41 @@ describe("closing a side", () => {
     fireEvent.click(screen.getByText("close right"));
 
     await waitFor(() => expect(shown("states")).toBe("left.png:2 none"));
+  });
+
+  /*
+   * Emptying a side with unsaved work on it asked nothing until 2026-09-23: choosing "None -- one
+   * image" in the split view threw the second image's annotations away, while opening another
+   * image into the same side asked first. Closing is navigation, and asks the same question.
+   */
+  it("ASKS before emptying a side with unsaved work, and keeps it when the answer is no", async () => {
+    const asked: string[] = [];
+    await bothOpen((summary) => {
+      asked.push(summary);
+      return false;
+    });
+    fireEvent.click(screen.getByText("activate right"));
+    fireEvent.click(screen.getByText("draw"));
+    await waitFor(() => expect(shown("side1")).toContain("|3|dirty"));
+
+    fireEvent.click(screen.getByText("close right"));
+
+    expect(asked).toHaveLength(1);
+    expect(asked[0]).toMatch(/right\.png/);
+    expect(shown("side1")).toBe("right.png|3|dirty|0|-");
+  });
+
+  it("does not ask when the side has nothing unsaved", async () => {
+    const asked: string[] = [];
+    await bothOpen((summary) => {
+      asked.push(summary);
+      return false;
+    });
+
+    fireEvent.click(screen.getByText("close right"));
+
+    expect(asked).toHaveLength(0);
+    await waitFor(() => expect(shown("side1")).toBe("none|0|clean|0|-"));
   });
 });
 

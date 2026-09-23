@@ -35,7 +35,7 @@ missing from this table entirely, which is how a table stops being a census.
 | Package | Passing | Note |
 |---|---|---|
 | exporters | 1991 | the seven formats, byte-for-byte against goldens legacy wrote |
-| web | 1153 | C11's placeholder is gone; it has an acceptance test now |
+| web | 1159 | C11's placeholder is gone; it has an acceptance test now |
 | inference | 560 | plus 36 skipped: the differentials, which need real checkpoints |
 | api | 418 | plus 4 skipped (SEC-09's symlink tests, where the OS will not make a link, as on this machine) and 1 todo (C8's placeholder) |
 | settings-schema | 55 | includes the rule-fixed defaults |
@@ -142,6 +142,18 @@ frames are unsaved. Seven tests: six failed before the fix, and the seventh hold
 restores a deleted annotation with Drawing tools collapsed; the split view's canvases return at
 the same size and place after a collapse). Found while examining C10, below: nothing persists a
 timeline anywhere, so the question became what else could lose one.
+
+**Asked of every path that replaces work in memory, the same day, three more asked nothing.**
+Opening an image asks when the one it replaces has unsaved work, and New timeline asks about unsaved
+propagated frames. These did not:
+- **"None -- one image"** in the split view emptied the second side, unsaved annotations and all.
+  `closeSide` now asks the question opening does; on a no the pair stays and the picker shows it.
+- **Propagate, a second time,** replaced the last run's unsaved masks.
+- **Clear** dropped them.
+
+Both now ask first, through the same question New timeline asks, and neither asks when nothing is
+unsaved. Six tests: removing the question fails the four that expect it, and two hold the other
+side.
 
 **The settings half of C13's editor was missing too -- found and built 2026-09-23.** The
 hotkey editor was never built (now it is); the brief's phrase is "web settings AND hotkey editor",

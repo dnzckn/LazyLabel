@@ -352,6 +352,7 @@ export function TimelinePanel({
           frames={frames}
           onScores={setOwnScores}
           unsavedRef={unsavedRef}
+          confirmDiscard={confirmDiscard}
           onSegments={setPropagated}
           onRunStart={() => {
             setOwnScores({});
