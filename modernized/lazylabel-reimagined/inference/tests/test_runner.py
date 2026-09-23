@@ -16,6 +16,7 @@ RULE-071 is the skipping of frames whose size differs from the reference's.
 
 from __future__ import annotations
 
+import importlib.util
 import pathlib
 
 import numpy as np
@@ -98,8 +99,13 @@ def run(predictor, wanted, references, tmp_path, *, reader=None, cancel=None):
     )
 
 
+# Staging writes JPEGs with cv2, and the fake predictor returns torch tensors because the code under
+# test calls `.cpu()` on them inside torch.autocast. So these need both, and must SKIP without
+# either -- which, checking cv2 alone, they did not: installing OpenCV for SEC-02's tests made
+# them fail on `import torch` instead.
 pytestmark = pytest.mark.skipif(
-    pytest.importorskip("cv2", reason="staging needs cv2") is None, reason="staging needs cv2"
+    importlib.util.find_spec("cv2") is None or importlib.util.find_spec("torch") is None,
+    reason="the runner stages frames with cv2, and its fake predictor returns torch tensors",
 )
 
 

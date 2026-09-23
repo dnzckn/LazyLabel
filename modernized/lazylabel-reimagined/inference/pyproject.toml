@@ -7,10 +7,16 @@ name = "lazylabel-inference"
 version = "0.1.0"
 description = "SAM 1 and SAM 2.1 prompts, propagation jobs and archetype finding for LazyLabel web."
 requires-python = ">=3.10"
-# Deliberately empty. The scaffold runs on the standard library alone, so its tests need neither
-# PyTorch nor a model checkpoint and CI stays measured in seconds. Phase 3 adds the model stack
-# under the [ai] extra below, and nothing outside models/ will import it directly.
-dependencies = []
+# The service starts on the standard library alone, so /health and /models answer on a machine with
+# nothing installed and can say what is missing. Every route that reads an image needs numpy and
+# OpenCV too, and this said "deliberately empty" long after that stopped being true: a fresh CI
+# environment could not even collect the suite.
+#
+# OpenCV is NOT declared, on purpose. It ships as two distributions, opencv-python and
+# opencv-python-headless, that install the same cv2 package; declaring either puts a second copy
+# beside an environment's existing one, and removing either later breaks both. A machine that runs
+# the desktop app already has opencv-python. The image and CI install the headless build explicitly.
+dependencies = ["numpy"]
 
 [project.optional-dependencies]
 # Phase 3. Pinned then, not now: a version pinned before the code exists is a guess that ages.
@@ -26,7 +32,8 @@ ai = [
     "scikit-learn>=1.3",
     "pillow",
 ]
-dev = ["pytest>=8"]
+# Pillow builds the PNGs the decoder allow-list tests feed the service (SEC-02).
+dev = ["pytest>=8", "pillow"]
 
 [tool.setuptools.packages.find]
 where = ["src"]

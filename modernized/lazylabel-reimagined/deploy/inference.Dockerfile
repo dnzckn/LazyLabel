@@ -30,7 +30,11 @@ COPY lazylabel-reimagined/inference /src/inference
 # The `ai` extra is what pulls torch, segment-anything, torchvision, scikit-learn and pillow.
 # Without it the package installs and the service starts and reports no models, which is a useful
 # thing to be able to do but is not what this image is for.
-RUN pip install --no-cache-dir /src/inference[ai]
+#
+# OpenCV is installed here rather than declared by the package (pyproject.toml says why), and it is
+# the HEADLESS build: the GUI build needs libGL, which this image does not have. Without it, every
+# route that reads an image failed on `import cv2` -- found 2026-09-23, before this image was built.
+RUN pip install --no-cache-dir /src/inference[ai] opencv-python-headless
 
 # THE CPU WHEEL IS THE FAILURE THIS IMAGE IS MOST LIKELY TO HAVE, and it is silent: on some index
 # configurations pip resolves a CPU-only torch, the service then starts, reports no accelerator,

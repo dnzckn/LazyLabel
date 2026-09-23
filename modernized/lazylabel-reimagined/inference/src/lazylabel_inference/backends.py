@@ -146,6 +146,8 @@ def load_backend(entry: ModelEntry, model_dir: Path, *, device: str | None = Non
     the version minimum is doing security work beyond feature availability, and
     `assert_weights_only_loading` below is what keeps that true rather than assumed.
     """
+    _refuse_unbuildable(entry)
+
     checkpoint = model_dir / entry.filename
     if not checkpoint.is_file():
         raise ModelNotLoadedError(f"{entry.filename} is not in {model_dir}")
@@ -167,6 +169,25 @@ def load_backend(entry: ModelEntry, model_dir: Path, *, device: str | None = Non
         return PredictorBackend(_entry=entry, _predictor=_load_sam2(entry, checkpoint, resolved))
 
     raise ModelNotLoadedError(f"no backend for family {entry.family!r}")
+
+
+def _refuse_unbuildable(entry: ModelEntry) -> None:
+    """Refuse an entry no backend can build, before anything heavy is imported.
+
+    A configuration mistake is the same mistake whether or not PyTorch is installed, and should be
+    reported as itself. Checked after the import, as it was, a machine without the AI stack was told
+    to install it -- and after installing gigabytes, was told the entry was wrong anyway.
+    """
+    if entry.family == "sam1":
+        if entry.size not in SAM1_VARIANTS:
+            raise ModelNotLoadedError(
+                f"{entry.size!r} is not a SAM 1 variant ({', '.join(sorted(SAM1_VARIANTS))})"
+            )
+    elif entry.family == "sam2":
+        if entry.size not in SAM2_CONFIGS:
+            raise ModelNotLoadedError(f"no SAM 2 config is known for size {entry.size!r}")
+    else:
+        raise ModelNotLoadedError(f"no backend for family {entry.family!r}")
 
 
 def _load_sam1(entry: ModelEntry, checkpoint: Path, device: str) -> Any:

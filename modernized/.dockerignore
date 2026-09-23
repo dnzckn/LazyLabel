@@ -1,0 +1,15 @@
+# The build context is this folder (see deploy/api.Dockerfile), so this is what every image sees.
+#
+# Installs and build output from the machine running `docker build`. Each image installs and builds
+# its own; copying a developer's would put Windows or macOS binaries (sharp's among them) and stale
+# dist folders into a Linux image, where they fail in ways that look like anything but this.
+**/node_modules
+**/dist
+**/.venv
+**/__pycache__
+**/.pytest_cache
+**/.differential
+
+# Checkpoints are mounted at run time and never baked into an image (SEC-05), and they are gigabytes.
+**/*.pt
+**/*.pth

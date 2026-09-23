@@ -45,6 +45,40 @@ Each figure is read from that package's own run. Four commit messages this week 
 that had been typed before the run printed it and needed amending, which is why the rule is now
 written down: run the suite as its own step, then write the number.
 
+**A clean checkout was not this machine either -- four ways, found 2026-09-23 by running every CI
+job on a fresh export of HEAD, one job per export so no install could leak between them:**
+
+1. **The 24 NPZ goldens were never committed.** The root `.gitignore` ignores `*.npz`, and the
+   modernized tree re-included only JSON and TXT. The byte-for-byte NPZ proof, 17 API tests and
+   the converter's two real-legacy-file tests passed here and nowhere else. Committed, each checked
+   against the SHA-256 the committed manifest records: 24 of 24 match.
+2. **The API and web jobs failed typecheck and build.** `contracts` imports the format library, and
+   a library's imports resolve from its own folder, which a job that installs only the app never
+   populates. CI now installs the linked libraries first; both jobs pass on a clean export (api
+   414 passed, web 1098, typecheck and build clean).
+3. **The inference job could not collect its suite.** `pyproject.toml` still called its dependencies
+   "deliberately empty" while five test modules imported numpy; with numpy, SEC-02's decoder tests
+   needed OpenCV and Pillow; with those, the runner tests failed on `import torch` because their
+   skip checked cv2 alone; and two backend tests expected a family error that a machine without
+   PyTorch never reached. numpy is declared, Pillow joins `dev`, OpenCV is installed by CI and the
+   image rather than declared (its two distributions conflict, and this venv has the desktop app's),
+   the runner skip names both needs, and the loader refuses an unbuildable entry before importing
+   PyTorch. In a fresh venv with exactly CI's packages: 476 passed, 84 skipped, every skip a missing
+   PyTorch or checkpoint.
+4. **CI skipped 110 differentials without saying so.** `test_windows.py` runs legacy's own loop and
+   needs the legacy snapshot; the inference job never checked it out, while the file's docstring
+   said it ran on every commit. The job now materializes it the way the differential job does.
+
+**The API image could not have started.** Its build stage failed at `tsc` for reason 2, and had it
+built, Node resolves `@lazylabel/*` to each library's `dist` at run time, which nothing built, and
+the runtime stage copied `api/node_modules` alone, whose `file:` links pointed at folders it did not
+copy. The Dockerfile now installs and builds the libraries in order and keeps the whole tree. Those
+steps were run on a clean export: the result started, `/health` answered 200, and a second start
+pointed at a 1.5.0 `settings.json` imported it and served width 1234 and gamma 1.4. Still never
+built by Docker itself; `deploy/README.md` keeps saying so. The inference image lacked OpenCV, so
+every image route would have failed on `import cv2`; it installs the headless build now. A
+`.dockerignore` keeps a developer's `node_modules`, `dist` and checkpoints out of the context.
+
 **Green suites were not a green CI.** `npm run typecheck` is the web job's first step after
 install, and on 2026-09-23 it failed with 37 type errors in seven test files: mocks declared with
 no parameters, so their recorded calls were typed as empty tuples; `saveAll`'s test helper still

@@ -21,6 +21,11 @@ COPY lazylabel-reimagined/web lazylabel-reimagined/web
 #
 # `VITE_LAZYLABEL_API` still exists for anyone who genuinely wants a separate origin. It is not
 # set here.
+# The libraries' own dependencies before the app's: contracts imports the format library, and a
+# library's imports resolve from ITS folder, so without this `npm run build` failed at its typecheck
+# on any machine that had not installed every package by hand. Found on a clean export, 2026-09-23.
+RUN for lib in lazylabel/core/exporters lazylabel-reimagined/settings-schema lazylabel-reimagined/contracts; do       (cd "/src/$lib" && npm ci --no-audit --no-fund) || exit 1;     done
+
 WORKDIR /src/lazylabel-reimagined/web
 RUN npm install --no-audit --no-fund && npm run build
 

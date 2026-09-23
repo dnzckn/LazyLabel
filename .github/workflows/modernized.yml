@@ -55,6 +55,17 @@ jobs:
           cache: npm
           cache-dependency-path: ${{ matrix.path }}/package-lock.json
 
+      # The API and the web app reach the libraries' SOURCE through file: links, and a library's own
+      # imports resolve from ITS folder, not from the app's. contracts imports the format library, so
+      # contracts needs its own install or tsc cannot find it from there. Every package is installed
+      # on a developer's machine, which is how this passed everywhere except a fresh checkout.
+      - name: Install the linked libraries
+        if: matrix.service == 'api' || matrix.service == 'web app'
+        run: |
+          for lib in ../../lazylabel/core/exporters ../settings-schema ../contracts; do
+            (cd "$lib" && npm ci)
+          done
+
       - name: Install
         run: npm ci
 
@@ -75,13 +86,24 @@ jobs:
         working-directory: modernized/lazylabel-reimagined/inference
     steps:
       - uses: actions/checkout@v4
+        with:
+          # The legacy snapshot is an older commit, so the shallow default cannot reach it.
+          fetch-depth: 0
+      # test_windows.py runs legacy's own windowing loop, lifted from its source by AST, and skips
+      # all 110 of its differentials when the snapshot is absent -- which it was here, so a green run
+      # said nothing about them while the file's own docstring said they ran on every commit.
+      - name: Check out the legacy snapshot
+        working-directory: .
+        run: git worktree add --detach legacy/lazylabel 2a7d5d8
       - uses: actions/setup-python@v5
         with:
           python-version: "3.10"
-      # The scaffold runs on the standard library alone, so this needs neither PyTorch nor a
-      # checkpoint. Phase 3 adds the [ai] extra, and this job will install it then.
+      # No [ai] extra, on purpose: PyTorch is gigabytes, and every test that needs it also needs a
+      # checkpoint CI does not have, so those skip and say why. Everything else runs -- including
+      # SEC-02's decoder allow-list, which needs OpenCV. It is installed here rather than declared by
+      # the package, because its two distributions conflict (pyproject.toml says more).
       - name: Install
-        run: python -m pip install --quiet -e ".[dev]"
+        run: python -m pip install --quiet -e ".[dev]" opencv-python-headless
       - name: Test
         run: python -m pytest -q
 
