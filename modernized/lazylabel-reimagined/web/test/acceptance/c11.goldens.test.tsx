@@ -23,12 +23,11 @@
  * overwrote frames labelled since the timeline was built; and it never showed a written frame as
  * saved. Built, and held here.
  *
- * THE LABELLED FRAMES GET THEIR SIDECARS AFTER THE TIMELINE IS BUILT. This app marks the frames
- * that are annotated when a timeline is built as references, where legacy leaves that to the user
- * ("+ All Labeled"). So the scenario is set up the way it arises in use: build the timeline from
- * the reference, then find four frames labelled -- by an earlier Save All, or fixed by hand -- by
- * the time Propagate is pressed. That is the workflow Skip Labeled exists for, and legacy's own
- * tooltip says so: "Useful when re-running propagation after fixing flagged frames".
+ * THE SETUP IS LEGACY'S, exactly: the labelled frames have their sidecars from the start, and the
+ * reference is marked by hand -- click frame 8, "Mark as reference" -- because building a timeline
+ * marks nothing since 2026-09-23, as legacy's does not. Until then this app marked every annotated
+ * frame on build, and this test had to add the labelled frames' sidecars after the build to get
+ * legacy's configuration at all.
  */
 
 import { readFileSync } from "node:fs";
@@ -192,7 +191,7 @@ function mount(scenario: Scenario) {
   const client = {
     getSettings: async () => defaultSettings(),
     putSettings: async (next: unknown) => next,
-    // Asked when Propagate is pressed: by then the scenario's labelled frames have sidecars.
+    // Asked again when Propagate is pressed, which is when Skip Labeled takes its snapshot.
     listImages: async () => listing(new Set([REFERENCE, ...scenario.labeled])),
     imageMetadata: async () => ({
       width: GOLDEN.width,
@@ -234,7 +233,7 @@ function mount(scenario: Scenario) {
     <SettingsProvider client={client}>
       <HotkeyProvider bindings={defaultSettings().hotkeys}>
         <TimelinePanel
-          images={listing(new Set([REFERENCE])).images as never}
+          images={listing(new Set([REFERENCE, ...scenario.labeled])).images as never}
           client={client}
           confirmDiscard={() => true}
           onOpen={(key, segments) =>
@@ -260,6 +259,9 @@ const confidences = () =>
 async function propagate(scenario: Scenario) {
   fireEvent.click(await screen.findByText("Build timeline"));
   await waitFor(() => expect(cells()).toHaveLength(KEYS.length));
+  // The reference, marked as a user marks it: open the frame, then "Mark as reference".
+  fireEvent.click(cells()[REFERENCE]!);
+  fireEvent.click(screen.getByRole("button", { name: "Mark as reference" }));
 
   const controls = screen.getByRole("button", { name: /^Propagate/ }).closest("div")!;
   if (scenario.keepFlagged) fireEvent.click(within(controls).getByLabelText("Keep flagged masks"));

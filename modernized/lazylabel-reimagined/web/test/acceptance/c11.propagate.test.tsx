@@ -156,6 +156,8 @@ async function openTimeline() {
   fireEvent.click(screen.getByRole("button", { name: /Sequence/ }));
   await waitFor(() => expect(screen.getByText("Build timeline")).toBeTruthy());
   fireEvent.click(screen.getByText("Build timeline"));
+  // Building marks nothing since 2026-09-23, as in legacy: the reference is marked as a user marks it.
+  fireEvent.click(screen.getByRole("button", { name: "+ All labeled" }));
   await waitFor(() =>
     expect(screen.getByLabelText("Timeline").querySelectorAll("button")).toHaveLength(4),
   );

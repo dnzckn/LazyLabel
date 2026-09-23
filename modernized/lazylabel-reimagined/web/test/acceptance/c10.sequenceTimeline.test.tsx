@@ -124,11 +124,21 @@ describe("C10: build a timeline and mark reference frames", () => {
     await waitFor(() => expect(cells()).toHaveLength(3));
   });
 
-  it("marks the frames that already have annotations as references", async () => {
+  it("marks no reference by itself, as legacy does not (the owner's call, 2026-09-23)", async () => {
+    await openSequence();
+    fireEvent.click(screen.getByText("Build timeline"));
+
+    await waitFor(() => expect(cells()).toHaveLength(4));
+    const labels = [...cells()].map((cell) => cell.getAttribute("aria-label"));
+    expect(labels.filter((label) => label?.includes("reference"))).toHaveLength(0);
+  });
+
+  it("marks the frames that already have annotations when asked for all labeled ones", async () => {
     // The capability's second half, and it needs no new endpoint: the folder listing already says
     // which images are annotated.
     await openSequence();
     fireEvent.click(screen.getByText("Build timeline"));
+    fireEvent.click(screen.getByRole("button", { name: "+ All labeled" }));
 
     await waitFor(() => expect(cells()).toHaveLength(4));
     const labels = [...cells()].map((cell) => cell.getAttribute("aria-label"));
@@ -139,6 +149,7 @@ describe("C10: build a timeline and mark reference frames", () => {
   it("counts the references above the timeline", async () => {
     await openSequence();
     fireEvent.click(screen.getByText("Build timeline"));
+    fireEvent.click(screen.getByRole("button", { name: "+ All labeled" }));
 
     expect(await screen.findByText(/4 frames, 1 reference/)).toBeTruthy();
   });

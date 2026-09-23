@@ -120,10 +120,12 @@ export function buildTimeline(files: readonly string[], from: number, to: number
 }
 
 /**
- * Mark the frames that already carry annotations as references — the pilot's second half.
+ * "+ All Labeled": mark the frames that already carry annotations as references.
  *
- * `annotated` is the set of dataset keys that have a sidecar. A frame that already has labels is
- * ground truth, and propagation must run FROM it rather than over it.
+ * `annotated` is the set of dataset keys that have a sidecar. Only when the user asks: this ran
+ * whenever a timeline was built until 2026-09-23, and legacy never marks a reference by itself
+ * (`_on_add_all_labeled_reference` is a button). Marking on build made a rebuilt timeline seed from
+ * every frame an earlier Save All wrote.
  *
  * RULE-048: every reference must be the same pixel size, because SAM 2 stages one video at one
  * size. The FIRST reference in timeline order sets that size and any later one that disagrees is

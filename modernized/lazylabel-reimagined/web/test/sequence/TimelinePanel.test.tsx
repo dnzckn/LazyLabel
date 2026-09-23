@@ -61,7 +61,13 @@ function show(images: readonly WireDatasetImage[] = FOLDER) {
   return { onOpen };
 }
 
-function build(from?: string, to?: string) {
+/**
+ * Build a timeline and, unless told not to, mark its annotated frames with "+ All labeled".
+ *
+ * Building marks nothing since 2026-09-23, as in legacy, so a test about using references has to
+ * make some -- and "+ All labeled" is how a user gets the setup these tests were written against.
+ */
+function build(from?: string, to?: string, { references = true } = {}) {
   if (from !== undefined) {
     fireEvent.change(screen.getByLabelText("First frame"), { target: { value: from } });
   }
@@ -69,6 +75,7 @@ function build(from?: string, to?: string) {
     fireEvent.change(screen.getByLabelText("Last frame"), { target: { value: to } });
   }
   fireEvent.click(screen.getByText("Build timeline"));
+  if (references) fireEvent.click(screen.getByRole("button", { name: "+ All labeled" }));
 }
 
 const cells = () => screen.getByLabelText("Timeline").querySelectorAll("button");
@@ -97,9 +104,19 @@ describe("building one", () => {
     await waitFor(() => expect(cells()).toHaveLength(3));
   });
 
-  it("marks the already-annotated frames as references", async () => {
-    // The pilot's second half. The listing already says which images are annotated, so no new
-    // endpoint is needed for it.
+  it("marks NO frame a reference until the user does, as legacy does not", async () => {
+    // The owner's call, 2026-09-23. This used to mark every annotated frame on build, which made a
+    // rebuilt timeline seed from every frame an earlier Save All wrote.
+    show();
+
+    build("0", "4", { references: false });
+
+    await waitFor(() => expect(cells()).toHaveLength(5));
+    const named = [...cells()].map((c) => c.getAttribute("aria-label"));
+    expect(named.filter((label) => label?.includes("reference"))).toHaveLength(0);
+  });
+
+  it("marks the annotated frames when the user asks for all labeled ones", async () => {
     show();
 
     build("0", "4");
@@ -225,6 +242,8 @@ describe("the confidence histogram", () => {
     const saved: Record<string, unknown> = {};
     render(withSettings(<TimelinePanel images={FOLDER} scores={scores} />, saved));
     fireEvent.click(screen.getByText("Build timeline"));
+    // f02 is a reference in these tests, marked the way a user marks it since building stopped doing so.
+    fireEvent.click(screen.getByRole("button", { name: "+ All labeled" }));
     return saved;
   }
 

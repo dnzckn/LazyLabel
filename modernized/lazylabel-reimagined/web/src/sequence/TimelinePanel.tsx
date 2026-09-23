@@ -173,11 +173,13 @@ export function TimelinePanel({
   const frames = useMemo(() => {
     if (overrides !== null) return overrides;
     if (range === null) return [];
-    // Sizes are not known here, so RULE-048's check defers: `markReferences` takes a frame at its
-    // word when it cannot measure it. The mismatch is caught when the frames are actually staged,
-    // which is the propagation slice's problem and not the pilot's.
-    return markReferences(buildTimeline(keys, range.from, range.to), annotated);
-  }, [annotated, keys, overrides, range]);
+    // NO REFERENCES UNTIL THE USER MARKS THEM, as in legacy (the owner's call, 2026-09-23). This
+    // marked every annotated frame when the timeline was built, which is not what legacy does: its
+    // references come from "+ Add Current", "+ All Before" and "+ All Labeled". Marking them
+    // automatically made every frame an earlier Save All wrote a seed on a rebuilt timeline -- each
+    // of its annotations tracked as an object of its own -- and left Skip Labeled nothing to protect.
+    return buildTimeline(keys, range.from, range.to);
+  }, [keys, overrides, range]);
 
   /*
    * What the timeline SHOWS: the stored frames with this run's kept labels painted over them.

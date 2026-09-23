@@ -572,16 +572,13 @@ configured, so a green CI run says nothing about them — see `Running the live 
    sidecars kept their modification times. Before this change, that second run and a Save All
    would have rewritten all 21.
 
-   **One divergence is kept, and it is the owner's to decide.** This app marks every frame that is
-   annotated when a timeline is built as a reference. That is the brief's pilot, "mark references
-   from existing annotations", and C10's test pins it. Legacy never marks one on its own: the user
-   presses "+ Add Current", "+ All Before" or "+ All Labeled", and can "Clear All". The difference
-   shows on a rebuilt timeline: every frame an earlier Save All wrote becomes a seed, and each of
-   its annotations is tracked as its own object. **Legacy's other three buttons now exist**
-   (2026-09-23): "+ All before", which goes by display order as legacy's does; "+ All labeled"; and
-   "Clear references", which also clears the size-mismatch skips, as legacy's does. A user can
-   therefore reach legacy's setup: clear, then mark. Not marking at build, the one remaining
-   difference, is the owner's call.
+   **Timelines no longer mark references by themselves: the owner chose legacy's behaviour
+   (2026-09-23).** Building a timeline used to make every annotated frame a reference. That was the
+   brief's pilot wording, and it made a rebuilt timeline seed from every frame an earlier Save All
+   wrote, each annotation tracked as an object of its own. References now come only from the four
+   buttons legacy has: "Mark as reference", "+ All before", "+ All labeled" and "Clear references".
+   The golden's web test now sets up exactly what legacy's capture did: the labelled frames have
+   their sidecars from the start, and frame 8 is marked by hand.
 
 Everything else that can be done without the owner has been done. One item needs something only
 the owner can supply, and it is one command once it arrives:
