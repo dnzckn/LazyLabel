@@ -43,6 +43,36 @@ That is not austerity for its own sake. The two things this service must get rig
 is ever loaded — is this checkpoint the one it claims to be, and can the AI stack run here at all —
 are exactly the two that need no model to test. Both are legacy defects, and both are fixed here.
 
+## Setting it up with CUDA
+
+The PyTorch wheels from PyTorch's own index carry the CUDA runtime inside them. The machine needs an
+NVIDIA driver recent enough for that CUDA version and nothing else — no CUDA toolkit, no cuDNN
+install. These commands built the environment every suite passed in on 2026-09-23 (Windows,
+RTX 3080, driver 591.86, which supports CUDA up to 13.1):
+
+```bash
+uv venv E:/venv/lazylabel-312 --python 3.12
+uv pip install --python E:/venv/lazylabel-312/Scripts/python.exe "torch==2.10.0" "torchvision==0.25.0" --index-url https://download.pytorch.org/whl/cu128
+cd modernized/lazylabel-reimagined/inference && SAM2_BUILD_CUDA=0 uv pip install --python E:/venv/lazylabel-312/Scripts/python.exe -e ".[ai,dev]" opencv-python-headless
+E:/venv/lazylabel-312/Scripts/python.exe -c "import torch; print(torch.__version__, torch.cuda.is_available(), torch.cuda.get_device_name(0))"
+```
+
+The last line should print `True` and the card's name. Four things decide it:
+- **Install torch from PyTorch's index, first.** From PyPI on Windows, pip picks a CPU-only build.
+  Nothing fails: the service starts, reports no accelerator, and runs at a tenth of the speed.
+- **Pick the index for the driver.** `cu128` needs a driver for CUDA 12.8 or later. `nvidia-smi`
+  prints the highest CUDA version the driver supports, top right.
+- **`SAM2_BUILD_CUDA=0`.** SAM 2's optional extension needs a compiler and only fills holes in
+  masks. Every equivalence result was measured without it, so building it would change masks.
+- **Import torch before anything that loads Qt.** On Windows, PyTorch 2.10 cannot load its DLLs
+  once PyQt6 6.9 is loaded. The service never loads Qt. The test suite imports legacy, which does,
+  so `tests/conftest.py` imports torch first.
+
+In a container the same holds. The image needs the driver passed through: Docker Desktop's WSL 2
+backend on Windows, or the NVIDIA Container Toolkit on Linux, then `--gpus all`. It does not need
+CUDA installed inside it beyond what the wheels bring. `deploy/inference.Dockerfile` has not been
+built yet.
+
 ## What it fixes
 
 **RULE-087 — checkpoint integrity.** The legacy check is that the number of bytes received equals
