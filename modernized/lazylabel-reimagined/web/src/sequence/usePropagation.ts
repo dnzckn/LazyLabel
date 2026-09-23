@@ -167,7 +167,22 @@ export function usePropagation(client: ApiClient): UsePropagation {
     const id = progress.job?.id;
     if (id === undefined) return;
     try {
-      absorb(await client.cancelPropagation(id));
+      /*
+       * The cancel answer is a SNAPSHOT: the job's state, no results, and the job's LATEST cursor.
+       * Absorbing it moved this cursor past frames the browser had never been sent -- a real run on
+       * 2026-09-23 kept 42 frames and the timeline showed 39 -- which is exactly the hole the poll
+       * below refuses to leave. So only the state is taken from it. While the job is stopping, the
+       * poll carries on from the cursor this browser actually holds; if it has already stopped,
+       * one last poll from there collects what was committed since.
+       */
+      const snapshot = await client.cancelPropagation(id);
+      setProgress((previous) => ({
+        ...previous,
+        job: { ...snapshot, cursor: cursor.current, results: [] },
+        error: snapshot.state === "failed" ? (snapshot.error ?? "the propagation failed") : null,
+        running: snapshot.state === "running",
+      }));
+      if (snapshot.state !== "running") absorb(await client.propagationState(id, cursor.current));
     } catch (cause) {
       setProgress((previous) => ({ ...previous, error: messageOf(cause) }));
     }

@@ -151,6 +151,10 @@ export function PropagationControl({
     onRunStart?.();
     setClasses(seeds.classes);
     setSaved(null);
+    // A new run's masks are new work, whatever an earlier Save All wrote. Until 2026-09-23 this set
+    // was never cleared, so a frame saved once counted as saved for every later run: no Save button
+    // for its new mask, and no question before anything threw that mask away.
+    setWritten(new Set());
     if (seeds.objects.length === 0) {
       // Every reference failed. Starting anyway is what legacy does, and it writes an empty mask
       // over every frame in the sequence -- work that looks like work and undoes the user's.
@@ -305,7 +309,15 @@ export function PropagationControl({
         )}
 
         {done && (
-          <button type="button" onClick={() => mayDiscard("Clearing") && reset()} disabled={saving !== null}>
+          <button
+            type="button"
+            onClick={() => {
+              if (!mayDiscard("Clearing")) return;
+              reset();
+              setWritten(new Set());
+            }}
+            disabled={saving !== null}
+          >
             Clear
           </button>
         )}
@@ -376,7 +388,8 @@ export function PropagationControl({
 }
 
 function summaryOf(state: string, completed: number): string {
-  if (state === "cancelled") return `Stopped after ${completed} frames`;
-  if (state === "failed") return `Failed after ${completed} frames`;
-  return `Propagated ${completed} frames`;
+  const frames = `${completed} frame${completed === 1 ? "" : "s"}`;
+  if (state === "cancelled") return `Stopped after ${frames}`;
+  if (state === "failed") return `Failed after ${frames}`;
+  return `Propagated ${frames}`;
 }

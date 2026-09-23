@@ -177,6 +177,24 @@ class TestCancelling:
 
         assert job.error == "cancelled after 3 frames; those frames are kept"
 
+    def test_says_one_frame_when_one_was_kept(self):
+        # A real run on 2026-09-23 read "cancelled after 1 frames".
+        jobs = registry()
+        release = threading.Event()
+
+        def slow(_cancel):
+            yield "a"
+            release.wait(5)
+
+        job = jobs.start(slow, total=3)
+        while job.completed < 1:
+            time.sleep(0.005)
+        jobs.cancel(job.id)
+        release.set()
+        job.wait(5)
+
+        assert job.error == "cancelled after 1 frame; that frame is kept"
+
     def test_cancel_stops_the_worker_being_pulled(self):
         # Not merely "the state says cancelled": the generator must stop being advanced, because
         # each pull is a frame of GPU work nobody is waiting for any more.

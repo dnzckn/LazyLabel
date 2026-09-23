@@ -206,7 +206,9 @@ class JobRegistry:
             if error is not None:
                 job.error = error
             elif state is JobState.CANCELLED:
-                job.error = f"cancelled after {job.completed} frames; those frames are kept"
+                frames = "1 frame" if job.completed == 1 else f"{job.completed} frames"
+                kept = "that frame is" if job.completed == 1 else "those frames are"
+                job.error = f"cancelled after {frames}; {kept} kept"
         job._done.set()
 
     def get(self, job_id: str) -> Job:

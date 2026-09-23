@@ -42,8 +42,8 @@ missing from this table entirely, which is how a table stops being a census.
 | Package | Passing | Note |
 |---|---|---|
 | exporters | 1991 | the seven formats, byte-for-byte against goldens legacy wrote |
-| web | 1165 | C11's placeholder is gone; it has an acceptance test now |
-| inference | 569 | plus 38 skipped: the differentials, which need real checkpoints |
+| web | 1168 | C11's placeholder is gone; it has an acceptance test now |
+| inference | 570 | plus 38 skipped: the differentials, which need real checkpoints |
 | api | 422 | plus 4 skipped (SEC-09's symlink tests, where the OS will not make a link, as on this machine) and 1 todo (C8's placeholder) |
 | settings-schema | 55 | includes the rule-fixed defaults |
 | converter | 30 | the pickled-alias rewrite |
@@ -184,6 +184,26 @@ Mutations caught:
 - rendering only for adjustments fails one;
 - a key without processing fails one;
 - the view sending an empty chain fails one.
+
+**Propagation over a long sequence, run against the real stack -- two bugs found and fixed
+2026-09-23.** The run had 130 frames and the streaming window set to 50 in the settings editor, so
+three windows overlapped by five. Every one of the 129 saved boxes followed the disc to within 1.0
+px, with no drift at either seam (frames 45-51 and 90-96); the whole run took 36 s. Cancelling partway
+and saving again found two bugs:
+- **A cancel lost frames.** The service kept 42 frames and the timeline showed 39. The cancel answer
+  is a snapshot: the job's state, no results, and its latest cursor. The browser took that cursor,
+  and so skipped the frames committed since its last poll -- the very hole the poll refuses to leave.
+  The browser now takes only the state; polling collects the rest from its own cursor, with one
+  final poll if the job has already stopped. Re-run: "stopped after 36 frames", and the timeline
+  showed 35 propagated plus the reference, with Save 35 frames offered.
+- **After one Save All, a later run's masks counted as saved.** The set of written frames was never
+  cleared, so re-propagated frames got no Save button and no question before New timeline, Clear or
+  a closed tab threw them away. It is now cleared when a run starts and on Clear. Re-run: after
+  saving 35, the next run offered Save 129 frames.
+
+Each has a test that fails without its fix. The two cancel tests whose fake service answered
+"completed" after a cancel -- which the service never does -- now answer "cancelled", as it does.
+"Stopped after 1 frames" reads "1 frame" now, in the browser and in the service's sentence.
 
 **A click could be answered from ANOTHER image's encoding -- found in a real browser and fixed
 2026-09-23.** It was found in the first full-stack run with a real model: the browser pane, the API,

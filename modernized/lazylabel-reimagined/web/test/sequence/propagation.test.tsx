@@ -441,13 +441,19 @@ describe("stopping it", () => {
   });
 
   it("reports what the cancel KEPT, because that is RULE-063's promise", async () => {
+    const stopped = job({
+      state: "cancelled",
+      completed: 3,
+      error: "cancelled after 3 frames; those frames are kept",
+    });
+    // As the service does: once cancelled, a poll reports the cancelled job too.
+    let cancelled = false;
     const fake = fakeClient({
-      cancel: () =>
-        job({
-          state: "cancelled",
-          completed: 3,
-          error: "cancelled after 3 frames; those frames are kept",
-        }),
+      poll: () => (cancelled ? stopped : job({ state: "running" })),
+      cancel: () => {
+        cancelled = true;
+        return stopped;
+      },
     });
     show(fake);
     fireEvent.click(propagate());
@@ -458,12 +464,36 @@ describe("stopping it", () => {
     expect(screen.getByText(/those frames are kept/)).toBeTruthy();
   });
 
+  it("says 1 frame, not 1 frames", async () => {
+    // A real run on 2026-09-23 read "Stopped after 1 frames".
+    const stopped = job({ state: "cancelled", completed: 1, error: "cancelled after 1 frame; that frame is kept" });
+    let cancelled = false;
+    const fake = fakeClient({
+      poll: () => (cancelled ? stopped : job({ state: "running" })),
+      cancel: () => {
+        cancelled = true;
+        return stopped;
+      },
+    });
+    show(fake);
+    fireEvent.click(propagate());
+
+    fireEvent.click(await screen.findByRole("button", { name: "Cancel" }));
+
+    expect(await screen.findByText(/Stopped after 1 frame\b(?!s)/)).toBeTruthy();
+  });
+
   it("does not treat a cancel as a failure", async () => {
     // The service puts its "what was kept" sentence in `error`, and a control that rendered every
     // non-null `error` as an alert would paint a successful stop red.
+    const stopped = job({ state: "cancelled", completed: 3, error: "cancelled after 3 frames; kept" });
+    let cancelled = false;
     const fake = fakeClient({
-      cancel: () =>
-        job({ state: "cancelled", completed: 3, error: "cancelled after 3 frames; kept" }),
+      poll: () => (cancelled ? stopped : job({ state: "running" })),
+      cancel: () => {
+        cancelled = true;
+        return stopped;
+      },
     });
     show(fake);
     fireEvent.click(propagate());
@@ -472,6 +502,44 @@ describe("stopping it", () => {
 
     await screen.findByText(/Stopped after 3 frames/);
     expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("collects every frame the service kept, not only those polled before the cancel", async () => {
+    /*
+     * Found in a real run on 2026-09-23: the service kept 42 frames and the timeline showed 39.
+     * The cancel answer is a snapshot -- state, no results -- carrying the job's LATEST cursor, and
+     * taking it moved the browser's cursor past frames it had never been sent.
+     */
+    const result = (n: number) => ({ source: FRAMES[n]!.key, objectId: 1, mask: MASK, confidence: 0.99 });
+    let cancelled = false;
+    const fake = fakeClient({
+      start: () => job({ state: "running" }),
+      poll: (_call, cursor) =>
+        cancelled
+          ? job({
+              state: "cancelled",
+              completed: 3,
+              cursor: 3,
+              error: "cancelled after 3 frames; those frames are kept",
+              results: cursor <= 1 ? [result(2), result(3)] : [],
+            })
+          : job({ state: "running", completed: 1, cursor: 1, results: cursor === 0 ? [result(1)] : [] }),
+      cancel: () => {
+        cancelled = true;
+        return job({ state: "running", completed: 3, cursor: 3, cancelling: true });
+      },
+    });
+    const { onScores } = show(fake);
+    fireEvent.click(propagate());
+    await waitFor(() => expect(fake.polls.length).toBeGreaterThan(0));
+
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+
+    await screen.findByText(/Stopped after 3 frames/, {}, { timeout: 3000 });
+    // Asked from where this browser was, not from the snapshot's cursor.
+    expect(fake.polls.at(-1)!.cursor).toBe(1);
+    // Every kept frame reached the timeline, the last two included.
+    await waitFor(() => expect(Object.keys(onScores.mock.calls.at(-1)![0]).sort()).toEqual(["1", "2", "3"]));
   });
 
   it("clears a finished job so the panel can start again", async () => {
@@ -540,6 +608,7 @@ describe("RULE-056: not losing propagated work without asking", () => {
           cursor: 1,
           results: [{ source: "frames/f02.png", objectId: 1, mask: MASK, confidence: 0.999 }],
         }),
+      saveAnnotations: async () => ({ written: [], stale: [], skippedEmpty: [] }),
     } as unknown as ApiClient;
 
     const timeline = <TimelinePanel images={FOLDER as never} client={client} confirmDiscard={confirmDiscard} />;
@@ -649,6 +718,26 @@ describe("RULE-056: not losing propagated work without asking", () => {
 
     expect(confirm.mock.calls[0]![0]).toMatch(/1 propagated frame has not been saved. Clearing/);
     expect(screen.getByRole("button", { name: /Save 1 frame/ })).toBeTruthy();
+  });
+
+  it("counts a SECOND run's frames as unsaved, even where the first run's were saved", async () => {
+    /*
+     * Found in a real browser on 2026-09-23: the set of frames written was never cleared, so once
+     * a Save All had written a frame, every later run's mask for it counted as saved -- no Save
+     * button to write the new masks, and no question before New timeline, Clear or a closed tab
+     * threw them away.
+     */
+    const confirm = vi.fn((_message: string) => false);
+    panel(confirm);
+    await propagateAndWait();
+    fireEvent.click(screen.getByRole("button", { name: /Save 1 frame/ }));
+    await screen.findByText(/Saved 1 frame/);
+
+    fireEvent.click(screen.getByRole("button", { name: /^Propagate/ }));
+
+    expect(await screen.findByRole("button", { name: /Save 1 frame/ }, { timeout: 3000 })).toBeTruthy();
+    fireEvent.click(screen.getByText("New timeline"));
+    expect(confirm.mock.calls.at(-1)![0]).toMatch(/1 propagated frame has not been saved/);
   });
 
   it("asks before the TAB closes on propagated frames", async () => {
