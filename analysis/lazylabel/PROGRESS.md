@@ -196,6 +196,11 @@ value. The 413 test no longer allocates 64 MB to prove the mechanism: it patches
 still a bound, which is what SEC-06 asks. The service's only client is the API, which refuses
 images above 100 megapixels before it renders anything.
 
+A one-off run checked the rest of the path. A 50-megapixel colour picture with camera-like noise, as
+the API would post it, is a 105 MB body. The old cap refused that; the new one admits it. The body
+then went through the JSON parse and the service's own decode, and reached the encoder as 5774 x
+8660 x 3 in 0.9 s.
+
 **RULE-058, a P0 rule, was traced by the P0 guard's own comment -- found and fixed 2026-09-23.**
 The guard (`web/test/rules/p0Coverage.test.ts`) passes a rule when any test file names it, and it
 read itself. Its header uses RULE-058 to illustrate the question, and no other test named RULE-058.
