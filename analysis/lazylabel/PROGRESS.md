@@ -108,7 +108,9 @@ change in each `pyproject.toml`, and it was not made, because it would make both
 uninstallable on the interpreter they currently run on. The order is: move the uv venv at
 `E:\venv\lazylabel` to CPython 3.12 or 3.13, re-run both suites, THEN raise `requires-python`.
 
-Eight remain to walk: SEC-10 through SEC-17.
+SEC-10 holds: there is no `atexit` registration anywhere, and the backend cache is keyed by
+model name, so re-selecting a model reuses it -- memory is bounded by the manifest, where
+legacy's grew on every switch. Seven remain to walk: SEC-11 through SEC-17.
 
 **If more building is wanted before the data arrives,** the honest answer is that there is no named
 work left: the rule lists, the settings table, the reach sweep and the hotkey reference are all
