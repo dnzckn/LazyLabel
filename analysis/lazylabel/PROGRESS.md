@@ -102,8 +102,9 @@ every image route would have failed on `import cv2`; it installs the headless bu
 **The API's capability table: C11 corrected 2026-09-23, four more to examine.** C11 read "pending"
 while the propagation proxy and `c11.propagationProxy.test.ts` existed; it reads built now, with
 polling-instead-of-socket recorded as a decision beside it. `api/src/capabilities.ts` still marks
-**C3, C8, C10 and C14** pending, and each needs judgment, not a flip: **C3** has
-`c3.inferenceProxy.test.ts` and is probably stale the same way; **C8** lists "decode, tile, and
+**C8, C10 and C14** pending, and each needs judgment, not a flip (C3 was stale the same way as C11
+and reads built since 2026-09-23: its acceptance test proves the RULE-089 rendered-pixels route it
+listed as missing); **C8** lists "decode, tile, and
 render adjusted pixels for the model" -- rendering exists (`renderForModel`), tiling may genuinely
 not; **C10** lists "sequence and timeline persistence", which the architecture puts in SQLite and
 may be a real gap; **C14** needs its entry read. The coverage test keeps `placeheld.ts` equal to the

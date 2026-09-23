@@ -48,13 +48,11 @@ export const CAPABILITIES: readonly Capability[] = [
   {
     id: "C3",
     summary: "Segment an object by clicking or boxing it with SAM",
+    // Read pending until 2026-09-23 for want of "the rendered-pixels route" (RULE-089). It exists --
+    // the embedding proxy renders the adjusted picture when adjustments are sent -- and
+    // c3.inferenceProxy.test.ts proves it along with the proxy, the handles and the contract.
     builtIn: "P3, P5",
-    apiStatus: "pending",
-    apiPhase: "P3",
-    missing:
-      "the rendered-pixels route, which is what makes Operate On View implementable (RULE-089) and "
-      + "waits for the adjustment pipeline in Phase 5. The proxy, the embedding handles and the "
-      + "contract with the inference service are built",
+    apiStatus: "built",
   },
   {
     id: "C4",
