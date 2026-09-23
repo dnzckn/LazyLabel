@@ -17,6 +17,7 @@ import { toInt32Pixel, toPixel } from "./labels.js";
 import { contourToPolygon, iterObjectContours } from "./objects.js";
 import { pythonJsonDumps } from "../util/pythonJson.js";
 import type { ExportContext, LoadedAnnotations, Segment , RenderOptions } from "../types.js";
+import { assertMaskBudget } from "../limits.js";
 
 /** Split "name.supercategory" dot notation; without a dot the supercategory equals the name. */
 export function parseAlias(alias: string): { name: string; supercategory: string } {
@@ -92,6 +93,19 @@ export function parseCoco(
 
   const segments: Segment[] = [];
   let rejected = 0;
+  /*
+   * SEC-06: count the masks this file would build BEFORE building any. Each polygon below becomes a
+   * full-image mask, and the count is only known by walking annotations the JSON parser has already
+   * paid for -- so this pass costs nothing the file has not already cost, and it is an upper bound
+   * rather than an exact count, which is the safe direction for a limit.
+   */
+  let polygonsToBuild = 0;
+  for (const entry of asArray(root["annotations"])) {
+    const segmentation = (entry as Record<string, unknown> | null)?.["segmentation"];
+    if (Array.isArray(segmentation)) polygonsToBuild += segmentation.length;
+  }
+  assertMaskBudget(polygonsToBuild, height, width);
+
   for (const entry of asArray(root["annotations"])) {
     if (!entry || typeof entry !== "object") {
       rejected += 1;

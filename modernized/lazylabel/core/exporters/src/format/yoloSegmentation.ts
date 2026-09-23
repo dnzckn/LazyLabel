@@ -14,6 +14,7 @@ import { assertText, buildLabelMap, parseFloatLikePython, toInt32Pixel } from ".
 import type { LoadedAnnotations, ExportContext, Segment , RenderOptions } from "../types.js";
 import { contourToPolygon, iterObjectContours } from "./objects.js";
 import { pyRepr } from "./pyRepr.js";
+import { assertMaskBudget } from "../limits.js";
 
 /** Polygon simplification tolerance: 0.1% of the contour's perimeter. */
 const EPSILON_FRACTION = 0.001;
@@ -88,6 +89,11 @@ export function parseYoloSegmentation(
     }
     if (points.length >= 3) polygons.push({ label: parts[0]!, points });
   }
+
+  // SEC-06 -- this parser was the assessment's own example: a 450 KB file of 20,000 polygons
+  // beside a 12-megapixel image asks for about 240 GB, because each polygon below becomes a
+  // full-image mask. Checked after the text is parsed (cheap) and before any mask is built.
+  assertMaskBudget(polygons.length, height, width);
 
   const { labelMap, aliases: newAliases } = buildLabelMap(polygons.map((p) => p.label), existingAliases);
   const segments: Segment[] = [];

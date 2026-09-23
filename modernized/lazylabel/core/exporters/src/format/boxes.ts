@@ -4,6 +4,7 @@
  * Ported from FileManager._add_box_segments (legacy/lazylabel/src/lazylabel/core/file_manager.py:381-410).
  */
 
+import { assertMaskBudget } from "../limits.js";
 import { buildLabelMap } from "./labels.js";
 import type { LoadedAnnotations, Segment } from "../types.js";
 
@@ -29,6 +30,8 @@ export function boxesToSegments(
   existingAliases: ReadonlyMap<number, string> = new Map(),
 ): LoadedAnnotations {
   const [height, width] = imageSize;
+  // SEC-06, once for all three box formats: every box below becomes a full-image mask.
+  assertMaskBudget(boxes.length, height, width);
   const { labelMap, aliases } = buildLabelMap(boxes.map((box) => box.label), existingAliases);
   const segments: Segment[] = [];
 
