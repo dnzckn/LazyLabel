@@ -91,7 +91,8 @@ new code. Three of the five had not been.** Checked 2026-09-23:
 
 Two of the three were the same defect as everything else found here -- a guard that existed and
 that nothing called -- in the two packages NEITHER reach guard scanned: the Python service (which
-now has one) and the formats package (which does not yet). The remaining twelve findings are rated
+now has one) and the formats package (which the TypeScript guard now scans too -- and making it
+catch SEC-06's pattern exposed two more holes in the guard itself, both fixed on 2026-09-23). The remaining twelve findings are rated
 Medium or below for the web, and are the natural next thing to walk.
 
 **If more building is wanted before the data arrives,** the honest answer is that there is no named
