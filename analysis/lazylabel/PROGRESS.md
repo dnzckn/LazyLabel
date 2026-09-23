@@ -10,8 +10,9 @@ Last updated: 2026-09-23.
 **Every capability is built, and the conversion is not finished — because finishing means PROVING
 it, and that needs data only the owner has.**
 
-All fourteen capabilities are built and reachable from the app -- C13's hotkey editor since
-2026-09-23, when widening the reach guard found it had never been built. C11 is included: propagation runs end
+All fourteen capabilities are built and reachable from the app -- C13's hotkey AND settings editors
+since 2026-09-23, when asking what a user can reach, rather than what the code reads, found neither
+had been built; every setting now has a control or a written reason. C11 is included: propagation runs end
 to end, from the browser's reference masks through the API to a SAM 2 video predictor, with a job
 API that cancels without losing committed frames. What is NOT claimed is that its results match
 legacy's. That is Phase 6 exit criterion 2 and it needs a checkpoint, a recorded sequence, and
