@@ -50,7 +50,7 @@ const TEST_ROOTS = [
  */
 const DELIBERATELY_NOT_IMPLEMENTED: Readonly<Record<string, string>> = {
   "RULE-033":
-    "only its Ctrl+Plus/Minus clause diverges, and it is worth the owner's eye. Legacy binds those "
+    "only its Ctrl+Plus/Minus clause diverges, and the owner DECIDED it on 2026-09-23: keep zoom. Legacy binds those "
     + "keys to the annotation-size MULTIPLIER -- the card says '(not image zoom)' -- while the "
     + "settings schema names the same bindings `zoom_in` and `zoom_out`. Wiring them to the "
     + "multiplier would recreate the exact defect `fit_view` had: a key doing something other "

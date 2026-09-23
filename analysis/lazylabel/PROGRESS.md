@@ -484,6 +484,22 @@ configured, so a green CI run says nothing about them — see `Running the live 
 
 ## What to do next
 
+**The owner's answers, 2026-09-23.** Asked as questions, answered as follows:
+- **Ctrl+Plus/Minus keep zooming** (RULE-033). The divergence from legacy's annotation-size
+  shortcut is now a decision, recorded as such in `web/test/rules/p0Coverage.test.ts`.
+- **Image tiles: build them now** (C8). This is the work in progress.
+- **The sequence timeline keeps legacy's behaviour** (C10): rebuilt from the files, nothing new
+  stored.
+- **Python 3.12 goes in a separate venv**, leaving the shared `E:env\lazylabel` alone. The suites
+  run there with PyTorch, and only then are `requires-python` and the torch floor raised.
+- **Propagation goldens come from a synthetic clip** of moving shapes, since no real recording is
+  available.
+- **The acceptance corpus is not available yet**; criterion 4 stays open.
+- **Docker is skipped for now**; the deployment stays unverified, and says so.
+- **The backup refs from stripping co-author trailers are deleted**
+  (`backup/main-web-with-trailers`, `refs/original/refs/heads/main-web`).
+
+
 Everything that can be done without the owner has been done. These five need something only the
 owner can supply: the first two are one command once it arrives, the last three are decisions.
 
