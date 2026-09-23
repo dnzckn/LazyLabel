@@ -19,7 +19,7 @@
  *      rather than leaving the caller to notice a count went down.
  */
 
-import { base64ToBytes, encodeMask, type WireSegment } from "@lazylabel/contracts";
+import { encodeMask, maskRegion, type WireSegment } from "@lazylabel/contracts";
 import { rasterizeSegment, type BinaryMask } from "@lazylabel/annotation-formats";
 
 /** `_split_mask_into_components`' threshold: strictly MORE than ten pixels survives. */
@@ -120,7 +120,7 @@ function maskOf(
   const data = new Uint8Array(image.width * image.height);
   let region: Uint8Array;
   try {
-    region = base64ToBytes(wire.data);
+    region = maskRegion(wire);
   } catch {
     return null;
   }

@@ -7,7 +7,7 @@
 
 import { describe, expect, it } from "vitest";
 
-import { decodeMask, encodeMask, WireFormatError } from "../src/wire.js";
+import { decodeMask, encodeMask, maskRegion, WireFormatError } from "../src/wire.js";
 import { base64ToBytes, bytesToBase64 } from "../src/base64.js";
 
 function mask(height: number, width: number, set: readonly (readonly [number, number])[]) {
@@ -78,5 +78,52 @@ describe("the mask codec", () => {
   it("refuses a negative or non-integer size", () => {
     expect(() => decodeMask({ height: -1, width: 4, box: null, data: "" })).toThrow(WireFormatError);
     expect(() => decodeMask({ height: 2.5, width: 4, box: null, data: "" })).toThrow(WireFormatError);
+  });
+});
+
+describe("one bit per pixel (2026-09-23)", () => {
+  /** A one-row mask from 0/1 values. */
+  function row(values: readonly number[]) {
+    return { height: 1, width: values.length, data: Uint8Array.from(values) };
+  }
+
+  it("packs the first pixel into the most significant bit, as NumPy's packbits does", () => {
+    // Nine pixels: two bytes, the second padded with zeros. Python's test asserts the same bytes.
+    const wire = encodeMask(row([1, 0, 1, 1, 0, 0, 0, 1, 1]));
+
+    expect(wire.packing).toBe("bits");
+    expect([...base64ToBytes(wire.data)]).toEqual([0b10110001, 0b10000000]);
+  });
+
+  it("is an eighth of the size for a large mask", () => {
+    // The reason for the change: at a byte per pixel a large mask was megabytes of base64 a click.
+    const size = 1000;
+    const mask = { height: size, width: size, data: new Uint8Array(size * size).fill(1) };
+
+    const bytes = base64ToBytes(encodeMask(mask).data).length;
+
+    expect(bytes).toBe((size * size) / 8);
+  });
+
+  it("gives every reader the same region, packed or not", () => {
+    const packed = encodeMask(row([1, 0, 1, 1, 0, 0, 0, 1, 1]));
+    // The old form has no `packing` key at all, which is how a pre-2026-09-23 payload arrives.
+    const { packing: _unused, ...plain } = packed;
+    const unpacked = { ...plain, data: bytesToBase64(Uint8Array.from([1, 0, 1, 1, 0, 0, 0, 1, 1])) };
+
+    expect([...maskRegion(packed)]).toEqual([1, 0, 1, 1, 0, 0, 0, 1, 1]);
+    expect([...maskRegion(unpacked)]).toEqual([1, 0, 1, 1, 0, 0, 0, 1, 1]);
+  });
+
+  it("refuses a packed payload whose length disagrees with its box", () => {
+    const wire = encodeMask(row([1, 0, 1, 1, 0, 0, 0, 1, 1]));
+
+    expect(() => maskRegion({ ...wire, data: bytesToBase64(Uint8Array.from([0xff])) })).toThrow(/pack into 2 bytes/);
+  });
+
+  it("refuses a packing no decoder knows, rather than guessing", () => {
+    const wire = encodeMask(row([1, 1]));
+
+    expect(() => maskRegion({ ...wire, packing: "rle" as never })).toThrow(/no decoder knows/);
   });
 });

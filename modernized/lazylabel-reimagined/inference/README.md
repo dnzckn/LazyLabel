@@ -146,6 +146,25 @@ adjustments), so invalidation is structural rather than a step someone must reme
 off-by-one hides: a single pixel, a single row, a single column, a full mask, an empty mask, and two
 blobs whose box is mostly nothing.
 
+## The latency budget, measured
+
+`AI_NATIVE_SPEC.md` sets **p95 of 150 ms from click to mask on a 12-megapixel image with a warm
+embedding**. Nobody had measured it until 2026-09-23, and it was missed: 213 ms in-process and
+342 ms over HTTP through the API, on an RTX 3080 with SAM 2.1 large. The model was not the tail --
+its decoder takes about 55 ms -- the mask's wire encoding was: at a byte per pixel a large mask was
+megabytes of base64 per click. Packed one bit per pixel (`@lazylabel/contracts` says how), the same
+clicks take 94-97 ms in-process and 114 ms over HTTP, and the median response fell from 470 KiB to
+59 KiB.
+
+To take the number on your own hardware, with your own checkpoints:
+
+```bash
+LAZYLABEL_MODEL_DIR=/path/to/checkpoints PYTHONPATH=src python tools/measure_latency.py "SAM 2.1 large"
+```
+
+It exits 0 when the budget is met in-process. What it does not include is the browser: decoding
+the packed mask and drawing it, a few milliseconds more at this size.
+
 ## What this list used to say was still to do
 
 Each of these was open when Phase 3 closed, and each is done. Kept as a list so a reader who

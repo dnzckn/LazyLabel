@@ -106,9 +106,47 @@ class TestDecodingAMask:
         from lazylabel_inference.service import decode_mask
 
         # The only check that catches a box and a payload describing different regions. Without it
-        # numpy either throws somewhere unhelpful or silently reshapes.
-        with pytest.raises(InvalidPromptError, match="needs 12"):
+        # numpy either throws somewhere unhelpful or silently reshapes. The box is 4x3, twelve
+        # pixels: two bytes packed as bits, twelve at a byte each -- and three is neither.
+        with pytest.raises(InvalidPromptError, match="needs 2"):
             decode_mask(self.wire(data="AAAA"))
+        with pytest.raises(InvalidPromptError, match="needs 12"):
+            decode_mask({**self.wire(data="AAAA"), "packing": None})
+
+    def test_it_packs_one_bit_per_pixel_first_pixel_highest(self):
+        # np.packbits' order, which is the order @lazylabel/contracts reads; the TypeScript suite
+        # checks the same bytes from its side (contracts/test/pythonFixture.test.ts).
+        import base64
+
+        import numpy as np
+
+        from lazylabel_inference.service import encode_mask
+
+        row = np.array([[1, 0, 1, 1, 0, 0, 0, 1, 1]], dtype=np.uint8)
+        wire = encode_mask(row)
+
+        assert wire["packing"] == "bits"
+        assert base64.b64decode(wire["data"]) == bytes([0b10110001, 0b10000000])
+
+    def test_a_payload_at_a_byte_per_pixel_still_decodes(self):
+        # What every mask looked like before bit packing, and what an older client still sends.
+        import base64
+
+        import numpy as np
+
+        from lazylabel_inference.service import decode_mask
+
+        wire = {"height": 2, "width": 3, "box": [0, 0, 3, 2], "data": base64.b64encode(bytes([1, 0, 1, 0, 1, 0])).decode()}
+
+        assert decode_mask(wire).tolist() == [[1, 0, 1], [0, 1, 0]]
+        assert decode_mask(wire).dtype == np.uint8
+
+    def test_a_packing_it_does_not_know_is_refused(self):
+        from lazylabel_inference.prompts import InvalidPromptError
+        from lazylabel_inference.service import decode_mask
+
+        with pytest.raises(InvalidPromptError, match="no decoder knows"):
+            decode_mask(self.wire(packing="rle"))
 
     def test_a_box_outside_the_image_is_refused(self):
         from lazylabel_inference.prompts import InvalidPromptError

@@ -15,7 +15,7 @@
 
 import { useEffect, useRef, type ReactNode } from "react";
 
-import { base64ToBytes, type WireSegment } from "@lazylabel/contracts";
+import { maskRegion, type WireSegment } from "@lazylabel/contracts";
 
 import { NEUTRAL, adjustImage, isNeutral, type Adjustments } from "../tools/adjustments.js";
 import { classColor } from "./classColor.js";
@@ -191,7 +191,7 @@ export function segmentPixels(
 
   let region: Uint8Array;
   try {
-    region = base64ToBytes(mask.data);
+    region = maskRegion(mask);
   } catch {
     return null;
   }

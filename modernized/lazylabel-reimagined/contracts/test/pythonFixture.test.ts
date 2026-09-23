@@ -56,6 +56,15 @@ describe("masks encoded by the Python inference service", () => {
     expect(cases.length).toBeGreaterThan(5);
   });
 
+  it("carries bits from Python, apart from the one case kept at a byte per pixel", () => {
+    // Bit packing is what brought the spec's latency tail under budget (2026-09-23). A generator
+    // that stopped packing would still decode, and would quietly put the megabytes back.
+    for (const testCase of cases) {
+      const expected = testCase.name.startsWith("a byte per pixel") || testCase.wire.box === null ? undefined : "bits";
+      expect(testCase.wire.packing, testCase.name).toBe(expected);
+    }
+  });
+
   for (const testCase of cases) {
     it(`decodes "${testCase.name}" to exactly the pixels Python encoded`, () => {
       const decoded = decodeMask(testCase.wire);

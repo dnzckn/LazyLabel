@@ -33,7 +33,7 @@
  * and neither does this — Phase 6 compares the results.
  */
 
-import { encodeMask, type WireMask, type WireSegment } from "@lazylabel/contracts";
+import { encodeMask, maskRegion, type WireMask, type WireSegment } from "@lazylabel/contracts";
 import { rasterizeSegment, type BinaryMask } from "@lazylabel/annotation-formats";
 
 import type { ApiClient } from "../api/client.js";
@@ -82,7 +82,7 @@ function maskOf(
   const data = new Uint8Array(size.width * size.height);
   let region: Uint8Array;
   try {
-    region = Uint8Array.from(atob(segment.mask.data), (c) => c.charCodeAt(0));
+    region = maskRegion(segment.mask);
   } catch {
     return null;
   }

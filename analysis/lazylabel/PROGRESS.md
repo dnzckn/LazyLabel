@@ -35,11 +35,11 @@ missing from this table entirely, which is how a table stops being a census.
 |---|---|---|
 | exporters | 1991 | the seven formats, byte-for-byte against goldens legacy wrote |
 | web | 1130 | C11's placeholder is gone; it has an acceptance test now |
-| inference | 557 | plus 36 skipped: the differentials, which need real checkpoints |
+| inference | 560 | plus 36 skipped: the differentials, which need real checkpoints |
 | api | 414 | plus 4 skipped and 5 todo, all needing a checkpoint or a corpus |
 | settings-schema | 55 | includes the rule-fixed defaults |
 | converter | 30 | the pickled-alias rewrite |
-| contracts | 21 | the wire shapes both sides agree on |
+| contracts | 28 | the wire shapes both sides agree on |
 
 Each figure is read from that package's own run. Four commit messages this week quoted a count
 that had been typed before the run printed it and needed amending, which is why the rule is now
@@ -97,6 +97,20 @@ pointed at a 1.5.0 `settings.json` imported it and served width 1234 and gamma 1
 built by Docker itself; `deploy/README.md` keeps saying so. The inference image lacked OpenCV, so
 every image route would have failed on `import cv2`; it installs the headless build now. A
 `.dockerignore` keeps a developer's `node_modules`, `dist` and checkpoints out of the context.
+
+**The spec's latency budget had never been measured, and it was missed.** `AI_NATIVE_SPEC.md`
+asks for p95 of 150 ms from click to mask on a 12-megapixel image with a warm embedding. Measured on
+2026-09-23 on this machine's RTX 3080 with SAM 2.1 large: 213 ms in-process, 342 ms over HTTP
+through the API. Profiled, the model was not the tail -- its decoder is about 55 ms -- the wire
+mask was: a box plus a BYTE per pixel, base64, so a large mask was megabytes a click to encode,
+serialize, proxy and parse. Masks now travel one BIT per pixel (`packing: "bits"`, NumPy's order,
+old payloads still decoded on both sides): 94-97 ms in-process and 114 ms over HTTP, with the
+median response down from 470 KiB to 59 KiB. The change also found four web modules parsing the
+mask layout themselves rather than through `@lazylabel/contracts` -- the canvas, erase, selection
+and sequence references -- which bit packing would have broken without a type error; all four read
+through one `maskRegion` now. `inference/tools/measure_latency.py` re-takes the number on any
+machine. Not measured: the browser's share, and the median is still mostly the model's 55 ms plus
+choosing among three full-resolution candidates, which has room left if a slower GPU needs it.
 
 **Green suites were not a green CI.** `npm run typecheck` is the web job's first step after
 install, and on 2026-09-23 it failed with 37 type errors in seven test files: mocks declared with

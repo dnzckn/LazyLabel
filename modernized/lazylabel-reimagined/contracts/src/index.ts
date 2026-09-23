@@ -14,6 +14,7 @@ export {
   encodeLoadResponse,
   encodeMask,
   encodeSegment,
+  maskRegion,
   type WireDatasetImage,
   type WireDatasetListing,
   type WireFailure,

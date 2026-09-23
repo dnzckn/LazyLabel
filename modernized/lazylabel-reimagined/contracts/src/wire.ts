@@ -30,14 +30,27 @@ export class WireFormatError extends Error {
   }
 }
 
-/** A mask as a bounding box plus the bytes inside it, base64-encoded row-major. */
+/** A mask as a bounding box plus the pixels inside it, base64-encoded row-major. */
 export interface WireMask {
   readonly height: number;
   readonly width: number;
   /** [x0, y0, x1, y1], half-open on the far edge. Null when the mask is empty. */
   readonly box: readonly [number, number, number, number] | null;
-  /** Base64 of the (y1-y0) x (x1-x0) region, one byte per pixel. Empty when `box` is null. */
+  /**
+   * Base64 of the (y1-y0) x (x1-x0) region, row-major. Empty when `box` is null.
+   *
+   * With `packing: "bits"`, ONE BIT per pixel: the first pixel is the most significant bit of the
+   * first byte -- NumPy's `packbits` order, so Python and TypeScript agree without either
+   * translating -- and the last byte is padded with zeros. Without it, one BYTE per pixel.
+   */
   readonly data: string;
+  /**
+   * How `data` is packed. "bits" since 2026-09-23, when the spec's latency budget was first
+   * measured: a large mask at one byte per pixel was megabytes of base64 per click, and encoding
+   * and serializing it was most of the p95. Absent means one byte per pixel, which every decoder
+   * still accepts, so a payload written before the change still reads.
+   */
+  readonly packing?: "bits";
 }
 
 export interface WireSegment {
@@ -214,12 +227,66 @@ export function encodeMask(mask: BinaryMask): WireMask {
   if (box === null) return { height: mask.height, width: mask.width, box: null, data: "" };
 
   const [x0, y0, x1, y1] = box;
-  const boxWidth = x1 - x0;
-  const region = new Uint8Array(boxWidth * (y1 - y0));
+  const packed = new Uint8Array(Math.ceil(((x1 - x0) * (y1 - y0)) / 8));
+  let bit = 0;
   for (let y = y0; y < y1; y += 1) {
-    region.set(mask.data.subarray(y * mask.width + x0, y * mask.width + x1), (y - y0) * boxWidth);
+    const row = y * mask.width;
+    for (let x = x0; x < x1; x += 1, bit += 1) {
+      if (mask.data[row + x] !== 0) packed[bit >> 3]! |= 0x80 >> (bit & 7);
+    }
   }
-  return { height: mask.height, width: mask.width, box, data: bytesToBase64(region) };
+  return { height: mask.height, width: mask.width, box, data: bytesToBase64(packed), packing: "bits" };
+}
+
+/**
+ * The pixels inside a wire mask's box, one byte each and 0 or 1, however `data` is packed.
+ *
+ * THE ONLY PLACE OUTSIDE THE CODEC THAT KNOWS THE LAYOUT. The canvas, erase, selection and the
+ * sequence references each read `data` themselves until 2026-09-23 -- four implementations of the
+ * binary format this package exists to have one of -- and packing the bits would have broken all
+ * four without a type error, because `data` is a string either way. They call this now.
+ *
+ * Throws `WireFormatError` for a box with negative extent, data that is not base64, a byte count
+ * that disagrees with the box, or a packing it does not know.
+ */
+export function maskRegion(wire: WireMask): Uint8Array {
+  if (wire.box === null || wire.box === undefined) return new Uint8Array(0);
+
+  const [x0, y0, x1, y1] = wire.box;
+  if (!(x1 >= x0 && y1 >= y0)) {
+    throw new WireFormatError(`a mask box ${JSON.stringify(wire.box)} has a negative extent`);
+  }
+  const count = (x1 - x0) * (y1 - y0);
+
+  let bytes: Uint8Array;
+  try {
+    bytes = base64ToBytes(wire.data);
+  } catch {
+    throw new WireFormatError("a mask's pixels are not valid base64");
+  }
+
+  if (wire.packing === undefined) {
+    if (bytes.length !== count) {
+      throw new WireFormatError(`a mask box says ${count} pixels but carries ${bytes.length} bytes`);
+    }
+    // Anything non-zero is a set pixel; the library's masks are strictly 0 or 1.
+    return bytes.map((value) => (value === 0 ? 0 : 1));
+  }
+  if (wire.packing !== "bits") {
+    throw new WireFormatError(`a mask is packed as ${JSON.stringify(wire.packing)}, which no decoder knows`);
+  }
+
+  const expected = Math.ceil(count / 8);
+  if (bytes.length !== expected) {
+    throw new WireFormatError(
+      `a mask box says ${count} pixels, which pack into ${expected} bytes, but it carries ${bytes.length}`,
+    );
+  }
+  const region = new Uint8Array(count);
+  for (let bit = 0; bit < count; bit += 1) {
+    region[bit] = (bytes[bit >> 3]! >> (7 - (bit & 7))) & 1;
+  }
+  return region;
 }
 
 export function decodeMask(wire: WireMask): BinaryMask {
@@ -239,23 +306,9 @@ export function decodeMask(wire: WireMask): BinaryMask {
   }
 
   const boxWidth = x1 - x0;
-  let region: Uint8Array;
-  try {
-    region = base64ToBytes(wire.data);
-  } catch {
-    throw new WireFormatError("a mask's pixels are not valid base64");
-  }
-  if (region.length !== boxWidth * (y1 - y0)) {
-    throw new WireFormatError(
-      `a mask box says ${boxWidth * (y1 - y0)} pixels but carries ${region.length} bytes`,
-    );
-  }
-
+  const region = maskRegion(wire);
   for (let y = y0; y < y1; y += 1) {
-    for (let x = x0; x < x1; x += 1) {
-      // Anything non-zero is a set pixel; the library's masks are strictly 0 or 1.
-      data[y * width + x] = region[(y - y0) * boxWidth + (x - x0)]! === 0 ? 0 : 1;
-    }
+    data.set(region.subarray((y - y0) * boxWidth, (y - y0 + 1) * boxWidth), y * width + x0);
   }
   return { height, width, data };
 }

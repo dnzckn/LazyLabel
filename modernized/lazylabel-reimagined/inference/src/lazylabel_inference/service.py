@@ -14,7 +14,7 @@ different JPEG decoder. The `adjustments` argument already flows into the cache 
 API starts posting rendered pixels, only `_read_image` changes.
 
 THE MASK ON THE WIRE is the bounded form `@lazylabel/contracts` defines: a bounding box plus the
-bytes inside it, base64-encoded. Two implementations of a binary layout is exactly what that shared
+pixels inside it, packed one bit each and base64-encoded. Two implementations of a binary layout is exactly what that shared
 package exists to prevent, so this one is checked against it by a fixture the TypeScript suite
 decodes (`contracts/test/pythonFixture.test.ts`).
 """
@@ -271,6 +271,12 @@ def encode_mask(mask: Any) -> dict[str, Any]:
 
     A bounding box plus the bytes inside it. The obvious encoding - a full-image plane - is what the
     memory NFR forbids: 500 objects on a 50-megapixel image is 25 GB of mostly zeros.
+
+    ONE BIT PER PIXEL, `packing: "bits"`, since 2026-09-23. The spec's interactive budget -- p95 of
+    150 ms from click to mask on a 12-megapixel image, warm -- was measured that day for the first
+    time and missed at 213 ms, and the tail was this function and the JSON after it: a large mask
+    at a byte per pixel was megabytes of base64 per click. `np.packbits` writes the first pixel into
+    the most significant bit, which is the order `@lazylabel/contracts` reads.
     """
     import numpy as np
 
@@ -284,13 +290,14 @@ def encode_mask(mask: Any) -> dict[str, Any]:
 
     y0, y1 = int(np.argmax(rows)), height - int(np.argmax(rows[::-1]))
     x0, x1 = int(np.argmax(cols)), width - int(np.argmax(cols[::-1]))
-    region = (array[y0:y1, x0:x1] != 0).astype(np.uint8)
+    packed = np.packbits(array[y0:y1, x0:x1] != 0, axis=None)
 
     return {
         "height": height,
         "width": width,
         "box": [x0, y0, x1, y1],
-        "data": base64.b64encode(region.tobytes()).decode("ascii"),
+        "data": base64.b64encode(packed.tobytes()).decode("ascii"),
+        "packing": "bits",
     }
 
 
@@ -343,7 +350,14 @@ def decode_mask(wire: Any) -> Any:
     except Exception as cause:  # noqa: BLE001 - any decode failure means the same thing
         raise InvalidPromptError(f"the mask data is not valid base64: {cause}") from cause
 
-    expected = (y1 - y0) * (x1 - x0)
+    # Absent is one byte per pixel, which every mask written before bit packing used and which is
+    # still accepted, so an older client's payload still reads.
+    packing = wire.get("packing")
+    if packing not in (None, "bits"):
+        raise InvalidPromptError(f"the mask is packed as {packing!r}, which no decoder knows")
+
+    pixels = (y1 - y0) * (x1 - x0)
+    expected = (pixels + 7) // 8 if packing == "bits" else pixels
     if len(raw) != expected:
         # Length is the only check that catches a box and a payload describing different regions,
         # and without it numpy would either throw somewhere unhelpful or silently reshape.
@@ -351,8 +365,11 @@ def decode_mask(wire: Any) -> Any:
             f"the mask data is {len(raw)} bytes but its box {list(box)} needs {expected}"
         )
 
-    if expected:
-        mask[y0:y1, x0:x1] = np.frombuffer(raw, dtype=np.uint8).reshape(y1 - y0, x1 - x0)
+    if pixels:
+        region = np.frombuffer(raw, dtype=np.uint8)
+        if packing == "bits":
+            region = np.unpackbits(region, count=pixels)
+        mask[y0:y1, x0:x1] = (region.reshape(y1 - y0, x1 - x0) != 0).astype(np.uint8)
     return mask
 
 

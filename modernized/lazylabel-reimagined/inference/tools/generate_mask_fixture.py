@@ -14,6 +14,7 @@ full-image mask, an empty mask, and two blobs whose bounding box contains mostly
 
 from __future__ import annotations
 
+import base64
 import json
 import pathlib
 
@@ -42,6 +43,14 @@ CASES: list[tuple[str, np.ndarray]] = [
 ]
 
 
+def at_a_byte_per_pixel(array: np.ndarray) -> dict:
+    """The encoding before bit packing, written by hand, which every decoder must still read."""
+    wire = encode_mask(array)
+    x0, y0, x1, y1 = wire["box"]
+    region = (array[y0:y1, x0:x1] != 0).astype(np.uint8)
+    return {**{k: v for k, v in wire.items() if k != "packing"}, "data": base64.b64encode(region.tobytes()).decode("ascii")}
+
+
 def main() -> None:
     cases = []
     for name, array in CASES:
@@ -53,6 +62,18 @@ def main() -> None:
                 "setPixels": sorted([[int(x), int(y)] for y, x in zip(ys, xs)]),
             }
         )
+
+    # One case in the OLD form, so the TypeScript side proves it still decodes a payload written
+    # before bit packing (2026-09-23) -- the compatibility promise, held by evidence, not by comment.
+    legacy = mask(20, 24, [(2, 5, 3, 6), (14, 18, 17, 22)])
+    ys, xs = np.nonzero(legacy)
+    cases.append(
+        {
+            "name": "a byte per pixel, as before bit packing",
+            "wire": at_a_byte_per_pixel(legacy),
+            "setPixels": sorted([[int(x), int(y)] for y, x in zip(ys, xs)]),
+        }
+    )
 
     OUT.parent.mkdir(parents=True, exist_ok=True)
     OUT.write_text(

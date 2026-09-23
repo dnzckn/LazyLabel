@@ -25,7 +25,7 @@
  */
 
 import { rasterizeSegment, type Segment } from "@lazylabel/annotation-formats";
-import { base64ToBytes, type WireSegment } from "@lazylabel/contracts";
+import { maskRegion, type WireSegment } from "@lazylabel/contracts";
 
 import type { Point } from "./polygon.js";
 
@@ -72,7 +72,7 @@ function covers(segment: WireSegment, x: number, y: number): boolean {
 
     let region: Uint8Array;
     try {
-      region = base64ToBytes(mask.data);
+      region = maskRegion(mask);
     } catch {
       // A mask that cannot be decoded is not selectable, and that is better than a click that
       // throws: the canvas has already declined to draw it for the same reason.
