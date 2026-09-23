@@ -92,6 +92,29 @@ export function linkedAdd(source: LinkedSource, target: LinkedTarget): LinkedAdd
   };
 }
 
+/** Where an eraser drawn in one image lands in the other, or why it cannot. */
+export type LinkedErase =
+  | { readonly kind: "linked"; readonly eraser: WireSegment }
+  | { readonly kind: "refused"; readonly reason: string };
+
+/**
+ * An ERASER drawn in one image, carried to the other -- RULE-092's linked erase.
+ *
+ * Legacy mirrors erasing as it mirrors adding: Shift+Space finishes the polygon in both linked
+ * viewers in erase mode, and an AI mask accepted in erase mode is applied to both. Deleting and
+ * merging it does NOT link -- each viewer has its own buttons acting on its own selection -- and
+ * neither does this app.
+ *
+ * The same geometry rules as an addition, so a shape is refused rather than moved when it does not
+ * fit, and a mask only crosses between images of one size. None of the class rules: an eraser
+ * removes pixels whatever class they belong to, so there is no name to agree on.
+ */
+export function linkedErase(eraser: WireSegment, source: ImageSize, target: ImageSize): LinkedErase {
+  const geometry = mirrorGeometry(eraser, source, target);
+  if (geometry.kind === "refused") return geometry;
+  return { kind: "linked", eraser: { ...eraser, ...geometry.parts } };
+}
+
 type Geometry =
   | { readonly kind: "geometry"; readonly parts: Partial<WireSegment> }
   | { readonly kind: "refused"; readonly reason: string };

@@ -36,7 +36,8 @@ import {
   type ReactNode,
 } from "react";
 
-import type { WireDatasetImage, WireImageMetadata, WireSegment } from "@lazylabel/contracts";
+import { decodeMask, type WireDatasetImage, type WireImageMetadata, type WireSegment } from "@lazylabel/contracts";
+import { rasterizeSegment, type BinaryMask } from "@lazylabel/annotation-formats";
 
 import type { AnnotationsResult, ApiClient } from "../api/client.js";
 import { History } from "./history.js";
@@ -44,7 +45,8 @@ import { onNavigateAway, provenanceFromLoad, type ImageState } from "./saveState
 import { toggle } from "../tools/selection.js";
 import type { Crop } from "../tools/crop.js";
 import { NO_PROCESSING, type ImageProcessing } from "./processing.js";
-import { linkedAdd, type LinkedAdd } from "../split/linkedAdd.js";
+import { linkedAdd, linkedErase, type LinkedAdd } from "../split/linkedAdd.js";
+import { erase, type EraseResult } from "../tools/erase.js";
 import type { ImageSize } from "../split/linked.js";
 
 /** Every tool the workspace offers. */
@@ -159,7 +161,23 @@ export function sideScope(side: SideIndex): string {
  */
 export type LinkReport =
   | { readonly kind: "linked"; readonly classId: number; readonly allocated: boolean; readonly image: string }
-  | { readonly kind: "refused"; readonly reason: string };
+  | { readonly kind: "refused"; readonly reason: string; readonly erase?: boolean }
+  | { readonly kind: "erased"; readonly image: string; readonly count: number };
+
+/** What one erase did, so the caller can say it: legacy's "No segments to erase", and the pieces lost. */
+export type EraseOutcome =
+  /** The eraser covers no pixels at all -- a degenerate shape. */
+  | { readonly kind: "empty-shape" }
+  /** It overlapped no annotation, in this image or, when linked, the other. */
+  | { readonly kind: "nothing" }
+  | {
+      readonly kind: "erased";
+      /** Annotations cut, across both images when linked. */
+      readonly erased: number;
+      /** Of those, how many vanished entirely under RULE-009's ten-pixel floor. */
+      readonly vanished: number;
+      readonly bothImages: boolean;
+    };
 
 export interface WorkspaceContextValue {
   /** Both slots, for the split view. Everything below resolves from `sides[activeSide]`. */
@@ -204,6 +222,15 @@ export interface WorkspaceContextValue {
   readonly segments: readonly WireSegment[];
   /** Add an annotation, recording it so it can be undone and marking the image unsaved. */
   readonly addSegment: (segment: WireSegment, label?: string) => void;
+  /**
+   * Erase with a shape or a mask in this image -- and, while linked, at the same pixels in the
+   * other (RULE-092). One recorded step either way, and one undo takes both back.
+   *
+   * The eraser is a SEGMENT for the reason addSegment takes one: a drawn polygon, a box, a circle
+   * and an AI mask accepted in erase mode all arrive in that shape, so linking is decided once,
+   * here, and no tool has to know a pair exists.
+   */
+  readonly eraseWith: (eraser: WireSegment) => EraseOutcome;
   /**
    * Replace one annotation in place, recording it.
    *
@@ -606,6 +633,94 @@ export function WorkspaceProvider({
     [activeSide, updateSide],
   );
 
+  const eraseWith = useCallback(
+    (eraser: WireSegment): EraseOutcome => {
+      const at = activeSide;
+      const other = (at === 0 ? 1 : 0) as SideIndex;
+      const source = sides[at];
+      const target = sides[other];
+      const sourceSize = sizeOf(source);
+      if (sourceSize === null) return { kind: "nothing" };
+
+      const hereMask = maskOf(eraser, sourceSize);
+      if (hereMask === null) return { kind: "empty-shape" };
+      const here = erase(source.segments, hereMask, sourceSize);
+
+      /*
+       * THE LINKED HALF, RULE-092: the same pixels in the other image. Legacy mirrors erasing as it
+       * mirrors adding -- Shift+Space finishes the polygon in both linked viewers, and an AI mask
+       * accepted in erase mode is applied to both. Refused, and said beside the panes, exactly
+       * where an added shape would be: outside the other image, or a mask across two sizes.
+       */
+      const targetSize = sizeOf(target);
+      const plan =
+        linked && target.open !== null && targetSize !== null
+          ? linkedErase(eraser, sourceSize, targetSize)
+          : null;
+      let there: EraseResult | null = null;
+      if (plan !== null && plan.kind === "linked" && targetSize !== null) {
+        const thereMask = maskOf(plan.eraser, targetSize);
+        if (thereMask !== null) there = erase(target.segments, thereMask, targetSize);
+      }
+      setLinkReport(
+        plan === null
+          ? null
+          : plan.kind === "refused"
+            ? { kind: "refused", reason: plan.reason, erase: true }
+            : { kind: "erased", image: target.open?.image.name ?? "", count: there?.erased.length ?? 0 },
+      );
+
+      const hereChanged = here.erased.length > 0;
+      const thereChanged = there !== null && there.erased.length > 0;
+      if (!hereChanged && !thereChanged) return { kind: "nothing" };
+
+      const beforeHere = source.segments;
+      const beforeThere = target.segments;
+      const afterThere = there?.segments ?? beforeThere;
+      const put = (side: SideIndex, value: readonly WireSegment[]) =>
+        updateSide(side, (current) => ({
+          ...current,
+          segments: value,
+          dirty: true,
+          // Cleared rather than remapped, as applySegments does: erase does not keep positions.
+          selected: [],
+        }));
+      const apply = () => {
+        if (hereChanged) put(at, here.segments);
+        if (thereChanged) put(other, afterThere);
+      };
+      const revert = () => {
+        if (hereChanged) put(at, beforeHere);
+        if (thereChanged) put(other, beforeThere);
+      };
+      apply();
+
+      const count = here.erased.length + (there?.erased.length ?? 0);
+      const where = thereChanged ? (hereChanged ? " (both images)" : " (the other image)") : "";
+      const fresh = (next: readonly WireSegment[], previous: readonly WireSegment[]) =>
+        next.reduce((total, segment) => total + (previous.includes(segment) ? 0 : estimateBytes(segment)), 0);
+      history.record({
+        label: `Erase from ${count} annotation${count === 1 ? "" : "s"}${where}`,
+        bytes:
+          (hereChanged ? fresh(here.segments, beforeHere) : 0)
+          + (thereChanged ? fresh(afterThere, beforeThere) : 0),
+        // Scoped to every side it changed, so closing either drops the entry: half an inverse
+        // would restore annotations into an image that is no longer open.
+        scope: [...(hereChanged ? [sideScope(at)] : []), ...(thereChanged ? [sideScope(other)] : [])],
+        undo: revert,
+        redo: apply,
+      });
+
+      return {
+        kind: "erased",
+        erased: count,
+        vanished: here.vanished.length + (there?.vanished.length ?? 0),
+        bothImages: hereChanged && thereChanged,
+      };
+    },
+    [activeSide, history, linked, sides, updateSide],
+  );
+
   const applySegments = useCallback(
     (next: readonly WireSegment[], label: string) => {
       const previous = segments;
@@ -751,6 +866,7 @@ export function WorkspaceProvider({
       imageStates,
       segments,
       addSegment,
+      eraseWith,
       updateSegment,
       history,
       markSaved,
@@ -782,6 +898,7 @@ export function WorkspaceProvider({
       addSegment,
       applyClasses,
       applySegments,
+      eraseWith,
       classAliases,
       clearSelection,
       closeSide,
@@ -819,6 +936,17 @@ export function useWorkspace(): WorkspaceContextValue {
   const value = useContext(WorkspaceContext);
   if (value === null) throw new Error("useWorkspace needs a WorkspaceProvider above it");
   return value;
+}
+
+/** The pixels an eraser covers in an image of this size, or null when it covers none. */
+function maskOf(eraser: WireSegment, size: ImageSize): BinaryMask | null {
+  if (eraser.mask !== undefined) return decodeMask(eraser.mask);
+  if (eraser.vertices === undefined) return null;
+  return rasterizeSegment(
+    { type: eraser.type, classId: null, vertices: eraser.vertices },
+    size.height,
+    size.width,
+  );
 }
 
 /** The pixel size this side has been measured at, or null while it is still loading. */

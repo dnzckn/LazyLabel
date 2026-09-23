@@ -9,7 +9,7 @@
 import { describe, expect, it } from "vitest";
 import type { WireSegment } from "@lazylabel/contracts";
 
-import { linkedAdd } from "../../src/split/linkedAdd.js";
+import { linkedAdd, linkedErase } from "../../src/split/linkedAdd.js";
 
 const SAME = { width: 100, height: 100 };
 const SMALL = { width: 50, height: 100 };
@@ -154,5 +154,40 @@ describe("the rest of the segment", () => {
     if (result.kind !== "linked") return;
     expect(result.segment.type).toBe("Circle");
     expect((result.segment as unknown as Record<string, unknown>)["extra"]).toBe("kept");
+  });
+});
+
+describe("an eraser carried to the other image (RULE-092)", () => {
+  it("lands at the SAME pixels", () => {
+    const result = linkedErase(polygon(null, [[10, 10], [20, 10], [20, 20]]), SAME, SAME);
+
+    expect(result.kind).toBe("linked");
+    if (result.kind !== "linked") return;
+    expect(result.eraser.vertices).toEqual([[10, 10], [20, 10], [20, 20]]);
+  });
+
+  it("needs no class, unlike an annotation", () => {
+    // An eraser removes pixels whatever class they belong to: there is no name to agree on, so the
+    // refusal an unclassified ANNOTATION gets would be wrong here.
+    expect(linkedAdd({ segment: polygon(null, [[1, 1], [5, 1], [5, 5]]), aliases: {}, size: SAME }, empty).kind)
+      .toBe("refused");
+    expect(linkedErase(polygon(null, [[1, 1], [5, 1], [5, 5]]), SAME, SAME).kind).toBe("linked");
+  });
+
+  it("is refused as a unit when it does not fit, rather than moved", () => {
+    const result = linkedErase(polygon(null, [[10, 10], [80, 10], [80, 20]]), SAME, SMALL);
+
+    expect(result.kind).toBe("refused");
+    if (result.kind !== "refused") return;
+    expect(result.reason).toMatch(/does not fit the other image/);
+  });
+
+  it("carries a mask only between images of one size", () => {
+    expect(linkedErase(masked(0), SAME, SAME).kind).toBe("linked");
+
+    const across = linkedErase(masked(0), SAME, SMALL);
+    expect(across.kind).toBe("refused");
+    if (across.kind !== "refused") return;
+    expect(across.reason).toMatch(/different sizes/);
   });
 });

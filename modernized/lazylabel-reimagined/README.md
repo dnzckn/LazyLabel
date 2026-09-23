@@ -111,8 +111,8 @@ All fourteen capabilities are built, each with an acceptance test named for it. 
 propagating an annotation along a sequence, was the last: it runs end to end, from the browser's
 reference masks through the API to a SAM 2 video predictor. What is not yet claimed is that its
 results match legacy's on a real recording -- that needs a golden captured from the owner's frames.
-One refinement is named rather than implied: a linked pair (**C14**) links adding, while erasing,
-merging and deleting act on one image.
+One refinement is named rather than implied: a linked pair (**C14**) links adding and erasing, as
+legacy does, while deleting and merging act on one image, as legacy's per-viewer buttons do.
 
 Every package's `capabilities.ts` lists each capability with the phase that built it,
 and a guard test fails if those tables disagree with the test suites. That guard is worth knowing

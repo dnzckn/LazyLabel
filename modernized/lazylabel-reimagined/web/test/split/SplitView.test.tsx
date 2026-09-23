@@ -313,15 +313,18 @@ describe("saying which of the two you are getting", () => {
   });
 
   it("says what linking does, and what it still does not, once linked", async () => {
-    // The claim stays where the code is. Adding is linked; saving is not, and an EDIT or a DELETE
-    // is not -- a view that implied otherwise would be found out at export.
+    // The claim stays where the code is. Adding and erasing are linked, as legacy links them;
+    // deleting and merging are not, in legacy or here, and saving is not -- a view that implied
+    // otherwise would be found out at export.
     mount();
     await openLeft();
     await pairWith("right.png");
     fireEvent.click(screen.getByLabelText("Link the two images"));
 
-    expect(screen.getByText(/^Linked:/)).toBeTruthy();
-    expect(screen.getByText(/Each side still SAVES separately/)).toBeTruthy();
+    const note = screen.getByText(/^Linked:/);
+    expect(note.textContent).toContain("Erasing links the same way");
+    expect(note.textContent).toContain("Deleting and merging act on the side chosen above");
+    expect(note.textContent).toContain("each side still SAVES separately");
   });
 });
 

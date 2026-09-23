@@ -30,8 +30,10 @@
  * half-migrated feature, and an annotation appearing in an image the user was not looking at is
  * precisely what decision 7 says must follow an explicit act.
  *
- * WHAT IT STILL DOES NOT DO: the two sides SAVE separately, and a linked EDIT or DELETE is not
- * built — only adding. The note at the bottom says which of the two you are getting.
+ * ERASING LINKS TOO, since 2026-09-23 -- the store's `eraseWith`, for the same reason adding is
+ * cheap: every eraser reaches it as one segment. Legacy mirrors both. Deleting and merging do not
+ * link, in legacy or here: each of legacy's viewers has its own buttons acting on its own
+ * selection. The two sides still SAVE separately. The note at the bottom says which you are getting.
  *
  * TWO VIEWERS, not four. Legacy has a four-view setting and only viewers 0 and 1 exist
  * (RULE-092's edge cases); the setting is a control that does nothing, and it is not carried over.
@@ -178,7 +180,15 @@ export function SplitView({ images, pixelsUrl }: SplitViewProps): ReactNode {
           notification list, because a refusal is about the pair the user is looking at. */}
       {linkReport !== null && linkReport.kind === "refused" && (
         <p role="alert" className="banner banner--warning">
-          Added to this image only: {linkReport.reason}
+          {linkReport.erase === true ? "Erased in this image only" : "Added to this image only"}:{" "}
+          {linkReport.reason}
+        </p>
+      )}
+      {linkReport !== null && linkReport.kind === "erased" && (
+        <p role="status" className="panel__missing">
+          {linkReport.count === 0
+            ? `Erased here; nothing was under the same pixels in ${linkReport.image}.`
+            : `Erased in both images: ${linkReport.count} annotation${linkReport.count === 1 ? "" : "s"} in ${linkReport.image} too.`}
         </p>
       )}
       {linkReport !== null && linkReport.kind === "linked" && (
@@ -215,9 +225,10 @@ export function SplitView({ images, pixelsUrl }: SplitViewProps): ReactNode {
           : linked
             ? "Linked: one annotation drawn in either image lands in BOTH, at the same pixel and "
               + "under the same class NAME — each image keeping its own id for it, which is how "
-              + "per-image class ids work. One press of undo takes back both. A shape that falls "
-              + "outside the other image is refused there rather than moved, and said so above. "
-              + "Each side still SAVES separately."
+              + "per-image class ids work. Erasing links the same way. One press of undo takes back "
+              + "both. A shape that falls outside the other image is refused there rather than "
+              + "moved, and said so above. Deleting and merging act on the side chosen above, as "
+              + "they do in the desktop app, and each side still SAVES separately."
             : "Unlinked: the tools, the panels and undo all follow the side chosen above, and "
               + "each side saves separately. Tick Linked to draw into both at once."}
       </p>

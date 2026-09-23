@@ -65,9 +65,10 @@ something nothing handles is how Ctrl+A silently stops selecting text.
 acceptance test named for it. This section said C11 was the one missing, and that stopped being
 true when propagation landed; it was corrected on 2026-09-23, along with every count below.
 
-One refinement is named rather than implied. A linked pair (**C14**) links ADDING: one shape drawn
-once lands in both images. Erasing, merging and deleting still act on the image they are done
-in, where RULE-092 says legacy applies them to both.
+One refinement is named rather than implied. A linked pair (**C14**) links ADDING and ERASING, as
+legacy does: one shape drawn once lands in both images, and one eraser cuts both. Deleting and
+merging act on the image they are done in, as legacy's do -- each of its viewers has its own
+buttons -- and the two images save separately.
 
 **THE GUARDS ANSWER "what else is missing", and they are the ones to read first**, because each
 was built after the same defect was found by hand for the nth time: a thing that works, a test

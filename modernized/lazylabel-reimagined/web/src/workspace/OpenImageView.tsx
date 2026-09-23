@@ -18,6 +18,7 @@ import type {
   WireImageMetadata,
   WireLoadResponse,
   WireSaveResponse,
+  WireSegment,
 } from "@lazylabel/contracts";
 
 import { AnnotationCanvas } from "../canvas/AnnotationCanvas.jsx";
@@ -29,8 +30,6 @@ import { AiTool } from "./AiTool.jsx";
 import { SelectLayer } from "../canvas/SelectLayer.jsx";
 import { ShapeLayer } from "../canvas/ShapeLayer.jsx";
 import { EditLayer } from "../canvas/EditLayer.jsx";
-import { rasterizeSegment, type BinaryMask } from "@lazylabel/annotation-formats";
-import { erase } from "../tools/erase.js";
 import { adjustmentsFrom } from "../tools/adjustments.js";
 import { processingQuery } from "./processing.js";
 import type { ImagePoint } from "../canvas/coordinates.js";
@@ -125,6 +124,7 @@ function OpenedImage({
   const { classAliases } = useWorkspace();
   const { segments, addSegment, updateSegment, activeTool, activeClassId, applySegments, selected, toggleSelected } =
     useWorkspace();
+  const { eraseWith } = useWorkspace();
   // The crop is the store's, not this view's: the SAVE path reads it, so a crop dragged here and
   // held locally would be one the panel showed and the file never saw.
   const { crop, setCrop, zoom } = useWorkspace();
@@ -242,50 +242,47 @@ function OpenedImage({
    * eraser removes is exactly what would have been written -- the alternative is an eraser that
    * agrees with the outline on screen and disagrees with the file.
    */
-  const eraseWithMask = useCallback(
-    (mask: BinaryMask, size: { width: number; height: number }) => {
-      const result = erase(segments, mask, size);
+  const eraseAndSay = useCallback(
+    (eraser: WireSegment) => {
+      // The store erases -- here, and at the same pixels in the other image while a pair is linked
+      // (RULE-092) -- so what is left for this view is saying what happened.
+      const outcome = eraseWith(eraser);
 
-      if (result.erased.length === 0) {
+      if (outcome.kind === "empty-shape") {
+        notify({ severity: "warning", message: "that shape covers no pixels, so nothing was erased" });
+        return;
+      }
+      if (outcome.kind === "nothing") {
         // Legacy says "No segments to erase" here, and saying nothing at all would leave a user
         // wondering whether the gesture registered.
         notify({ severity: "info", message: "No annotations to erase" });
         return;
       }
-
-      applySegments(result.segments, `Erase from ${result.erased.length} annotation${result.erased.length === 1 ? "" : "s"}`);
-
-      if (result.vanished.length > 0) {
+      if (outcome.vanished > 0) {
         // RULE-009 discards every remaining piece of ten pixels or fewer, so an annotation can
         // disappear entirely. Legacy does this silently; a deletion nobody is told about is the
         // shape of defect decision 7 exists to remove.
         notify({
           severity: "warning",
           message:
-            `${result.vanished.length} annotation${result.vanished.length === 1 ? " was" : "s were"} removed completely`,
+            `${outcome.vanished} annotation${outcome.vanished === 1 ? " was" : "s were"} removed completely`,
           detail: "What remained of them was smaller than the 10-pixel minimum, so nothing was kept.",
           irreversible: false,
         });
       }
     },
-    [applySegments, notify, segments],
+    [eraseWith, notify],
   );
 
   /** A drawn shape erases by being rasterized first -- the same path a saved annotation takes. */
   const applyErase = useCallback(
-    (type: "Polygon" | "Circle", vertices: readonly ImagePoint[], size: { width: number; height: number }) => {
-      const mask = rasterizeSegment(
-        { type, classId: null, vertices: vertices.map((v) => [v.x, v.y] as const) },
-        size.height,
-        size.width,
-      );
-      if (mask === null) {
-        notify({ severity: "warning", message: "that shape covers no pixels, so nothing was erased" });
-        return;
-      }
-      eraseWithMask(mask, size);
-    },
-    [eraseWithMask, notify],
+    (type: "Polygon" | "Circle", vertices: readonly ImagePoint[]) =>
+      eraseAndSay({
+        type,
+        classId: null,
+        vertices: vertices.map((v) => [v.x, v.y] as const),
+      } as unknown as WireSegment),
+    [eraseAndSay],
   );
 
   return (
@@ -360,9 +357,7 @@ function OpenedImage({
                       // rectangle, and erasing its box would take out pixels the model never
                       // selected.
                       onErase={(segment) =>
-                        segment.mask === undefined
-                          ? undefined
-                          : eraseWithMask(decodeMask(segment.mask), metadata)
+                        segment.mask === undefined ? undefined : eraseAndSay(segment)
                       }
                     />
                   ))}
@@ -426,7 +421,7 @@ function OpenedImage({
                 joinThreshold={joinThreshold}
                 classId={classForNewSegment(segments, activeClassId)}
                 onComplete={(vertices) => commit("Polygon", vertices, "Add polygon")}
-                onErase={(vertices) => applyErase("Polygon", vertices, metadata)}
+                onErase={(vertices) => applyErase("Polygon", vertices)}
                 onRefused={refuse}
               />
             )}
@@ -448,7 +443,7 @@ function OpenedImage({
                   )
                 }
                 onErase={(vertices) =>
-                  applyErase(activeTool === "box" ? "Polygon" : "Circle", vertices, metadata)
+                  applyErase(activeTool === "box" ? "Polygon" : "Circle", vertices)
                 }
                 onRefused={refuse}
               />

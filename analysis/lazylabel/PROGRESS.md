@@ -34,7 +34,7 @@ missing from this table entirely, which is how a table stops being a census.
 | Package | Passing | Note |
 |---|---|---|
 | exporters | 1991 | the seven formats, byte-for-byte against goldens legacy wrote |
-| web | 1123 | C11's placeholder is gone; it has an acceptance test now |
+| web | 1130 | C11's placeholder is gone; it has an acceptance test now |
 | inference | 557 | plus 36 skipped: the differentials, which need real checkpoints |
 | api | 414 | plus 4 skipped and 5 todo, all needing a checkpoint or a corpus |
 | settings-schema | 55 | includes the rule-fixed defaults |
@@ -648,8 +648,18 @@ needs is already in one store rather than scattered across managers.
    because every export then looks consistent. Whether a pair should have its IDS reconciled as
    well **stays the owner's**; name agreement is well defined either way.
 
-   **Not linked, and named rather than implied:** the two sides SAVE separately, and a linked EDIT
-   or DELETE is not built. Adding is.
+   **Not linked, and named rather than implied:** the two sides SAVE separately, and deleting and
+   merging act on one image. Adding links, and since 2026-09-23 so does erasing.
+
+   **Linked erase, 2026-09-23.** This line used to say "a linked EDIT or DELETE is not built", and
+   the READMEs repeated it as a gap against RULE-092. Reading legacy's source settled what the gap
+   was: legacy mirrors ERASING -- Shift+Space finishes the polygon in both linked viewers in erase
+   mode, and an AI mask accepted in erase mode is applied to both -- and does NOT mirror deleting
+   or merging, which are buttons on each viewer acting on its own selection. So delete and merge
+   were never a gap, and erase was. It links now, through the store's `eraseWith`, for the reason
+   adding was cheap: every eraser, drawn or AI, reaches it as one segment. One undo entry across
+   both images; refused beside the panes exactly where an added shape would be. Seven tests, the
+   linking mutation-checked; web 1130 passed.
 
    **Thirteen of fourteen capabilities are built.** C11, propagation, is the one that is not, and
    it needs the inference service and a recorded sequence.

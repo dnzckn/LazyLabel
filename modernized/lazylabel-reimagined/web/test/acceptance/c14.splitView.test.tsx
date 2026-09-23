@@ -68,12 +68,25 @@ const TRIANGLE: WireSegment = {
   ],
 } as unknown as WireSegment;
 
+/** A square over the triangle: an eraser drawn where the linked shape landed. */
+const OVER_TRIANGLE: WireSegment = {
+  type: "Polygon",
+  classId: null,
+  vertices: [
+    [5, 5],
+    [40, 5],
+    [40, 40],
+    [5, 40],
+  ],
+} as unknown as WireSegment;
+
 function Tools(): React.ReactNode {
-  const { openImage, addSegment, history, classAliases, segments } = useWorkspace();
+  const { openImage, addSegment, eraseWith, history, classAliases, segments } = useWorkspace();
   return (
     <>
       <button type="button" onClick={() => openImage(LEFT)}>open a</button>
       <button type="button" onClick={() => addSegment(TRIANGLE)}>draw</button>
+      <button type="button" onClick={() => eraseWith(OVER_TRIANGLE)}>erase</button>
       <button type="button" onClick={() => history.undo()}>undo</button>
       <button type="button" onClick={() => history.redo()}>redo</button>
       {/* The ACTIVE side's own view of the classes, which is what the class table shows. */}
@@ -204,5 +217,49 @@ describe("C14: annotating both together", () => {
         .map((pane) => pane.querySelector("figcaption")?.textContent);
       expect(captions).toEqual(["a.png — editing (unsaved)", "b.png (unsaved)"]);
     });
+  });
+});
+
+describe("C14: erasing both together (RULE-092)", () => {
+  /*
+   * Legacy mirrors erasing as it mirrors adding: Shift+Space finishes the polygon in both linked
+   * viewers in erase mode, and an AI mask accepted in erase mode is applied to both. Deleting and
+   * merging it does not link -- each viewer has its own buttons -- and neither does this app.
+   */
+  async function drawnInBoth(): Promise<void> {
+    await pair();
+    fireEvent.click(screen.getByLabelText("Link the two images"));
+    fireEvent.click(screen.getByText("draw"));
+    await waitFor(() => expect(canvases()).toEqual(["2 annotations", "2 annotations"]));
+  }
+
+  it("erases at the same pixels in both images while linked, and says so", async () => {
+    await drawnInBoth();
+
+    fireEvent.click(screen.getByText("erase"));
+
+    await waitFor(() => expect(canvases()).toEqual(["1 annotations", "1 annotations"]));
+    expect(screen.getByText(/Erased in both images: 1 annotation in b\.png too/)).toBeTruthy();
+  });
+
+  it("takes both back with one undo", async () => {
+    // One gesture, one entry: an undo that restored one image and not the other would leave the
+    // pair half-changed.
+    await drawnInBoth();
+    fireEvent.click(screen.getByText("erase"));
+    await waitFor(() => expect(canvases()).toEqual(["1 annotations", "1 annotations"]));
+
+    fireEvent.click(screen.getByText("undo"));
+
+    await waitFor(() => expect(canvases()).toEqual(["2 annotations", "2 annotations"]));
+  });
+
+  it("erases only the image being edited while unlinked", async () => {
+    await drawnInBoth();
+    fireEvent.click(screen.getByLabelText("Link the two images"));
+
+    fireEvent.click(screen.getByText("erase"));
+
+    await waitFor(() => expect(canvases()).toEqual(["1 annotations", "2 annotations"]));
   });
 });
