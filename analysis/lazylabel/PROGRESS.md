@@ -99,6 +99,15 @@ built by Docker itself; `deploy/README.md` keeps saying so. The inference image 
 every image route would have failed on `import cv2`; it installs the headless build now. A
 `.dockerignore` keeps a developer's `node_modules`, `dist` and checkpoints out of the context.
 
+**NEXT, small: the API's capability table still calls C11 pending.** `api/src/capabilities.ts`
+says C11 lacks "propagation jobs, the progress socket and staged frame results", and
+`api/test/acceptance/placeheld.ts` holds a todo for it -- while the API has proxied the propagation
+job routes (`POST`/`GET /inference/propagations`, `DELETE /inference/propagations/:id`) and the
+browser polls them. To close it: name an API acceptance test for C11 (the coverage test requires
+one before a capability may read built), mark it built, drop it from `PLACEHELD`, and record that
+polling replaced the progress socket, as a decision with its reason, rather than leave the socket
+reading as unbuilt work.
+
 **The settings half of C13's editor was missing too -- found and built 2026-09-23.** The
 hotkey editor was never built (now it is); the brief's phrase is "web settings AND hotkey editor",
 so the same question was asked of the settings: not "does anything READ this key", which the
