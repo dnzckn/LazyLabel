@@ -30,10 +30,6 @@ const NOT_EDITABLE: Readonly<Record<string, string>> = {
   multi_view_grid_mode: "dropped: only two viewers ever existed behind the four-view setting",
   file_manager_show_name: "the name column is always shown; a file list without names is unusable",
   line_thickness: "import-only, as in legacy, which has no control for it either",
-  // A GAP, not a decision, and named as one. This guard found it the day it was written.
-  stream_window_size:
-    "AWAITING legacy's streaming controls (RULE-026), which are not built: propagation reads the "
-    + "window size and only an import can change it",
 };
 
 const SOURCE = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "src");

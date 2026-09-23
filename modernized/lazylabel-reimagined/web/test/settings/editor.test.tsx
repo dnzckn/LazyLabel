@@ -72,6 +72,25 @@ describe("RULE-050: typed values are clamped when editing finishes", () => {
   });
 });
 
+describe("RULE-026: the streaming window", () => {
+  it("snaps to a multiple of 50 and stays within 50-1000", async () => {
+    const { saved } = mount();
+    const window = await field("Streaming window (frames)");
+
+    fireEvent.change(window, { target: { value: "1234" } });
+    fireEvent.blur(window);
+    await waitFor(() => expect(saved).toHaveLength(1));
+    expect(saved[0]!.values["stream_window_size"]).toBe(1000);
+
+    // Looked up again: the field is keyed on the stored value, so a save replaces it.
+    const again = await field("Streaming window (frames)");
+    fireEvent.change(again, { target: { value: "320" } });
+    fireEvent.blur(again);
+    await waitFor(() => expect(saved).toHaveLength(2));
+    expect(saved[1]!.values["stream_window_size"]).toBe(300);
+  });
+});
+
 describe("the switches a new user could not reach", () => {
   it("turns Operate On View on (RULE-089)", async () => {
     const { saved } = mount();

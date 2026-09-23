@@ -34,7 +34,7 @@ missing from this table entirely, which is how a table stops being a census.
 | Package | Passing | Note |
 |---|---|---|
 | exporters | 1991 | the seven formats, byte-for-byte against goldens legacy wrote |
-| web | 1141 | C11's placeholder is gone; it has an acceptance test now |
+| web | 1144 | C11's placeholder is gone; it has an acceptance test now |
 | inference | 560 | plus 36 skipped: the differentials, which need real checkpoints |
 | api | 414 | plus 4 skipped and 5 todo, all needing a checkpoint or a corpus |
 | settings-schema | 55 | includes the rule-fixed defaults |
@@ -122,7 +122,7 @@ default 250, saved as `stream_window_size`; overlap 5; streaming on by default; 
 12.6 MB per frame. The plumbing exists -- `PropagationControl.tsx` already reads
 `stream_window_size` and sends it, the API forwards a boolean `streaming`, and the inference
 `PropagationRequest` takes `streaming: bool = True`. Missing are only the controls:
-(1) in `SettingsEditor.tsx`, a "Propagation" fieldset with the window as a number clamped to 50-1000
+(1) DONE 2026-09-23 -- in `SettingsEditor.tsx`, a "Propagation" fieldset with the window as a number clamped to 50-1000
 and rounded to a multiple of 50 when editing finishes, then remove `stream_window_size` from
 `NOT_EDITABLE` in `web/test/settings/settable.test.ts`; (2) in `PropagationControl.tsx`, a Streaming
 checkbox, on by default, sent as `streaming`; (3) when it is off, the frame count times 12.6 MB shown

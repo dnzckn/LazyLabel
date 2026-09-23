@@ -39,14 +39,14 @@ export function SettingsEditor(): ReactNode {
     });
   };
 
-  const number = (key: string, label: string, min: number, max: number, integer: boolean) => (
+  const number = (key: string, label: string, min: number, max: number, integer: boolean, step?: number) => (
     <label className="crop__field">
       <span>{label}</span>
       <input
         type="number"
         min={min}
         max={max}
-        step={integer ? 1 : 0.1}
+        step={step ?? (integer ? 1 : 0.1)}
         // Keyed on the stored value, so a save or a reload shows what is in force now.
         key={String(values[key])}
         defaultValue={String(values[key])}
@@ -58,7 +58,8 @@ export function SettingsEditor(): ReactNode {
             event.currentTarget.value = String(values[key]); // RULE-050: non-numeric reverts
             return;
           }
-          const clamped = Math.min(max, Math.max(min, integer ? Math.round(parsed) : parsed));
+          const snapped = step !== undefined ? Math.round(parsed / step) * step : integer ? Math.round(parsed) : parsed;
+          const clamped = Math.min(max, Math.max(min, snapped));
           event.currentTarget.value = String(clamped);
           if (clamped !== values[key]) put(key, clamped);
         }}
@@ -92,6 +93,13 @@ export function SettingsEditor(): ReactNode {
         <legend>Drawing</legend>
         {number("pan_multiplier", "Pan speed", 0.1, 10, false)}
         {number("polygon_join_threshold", "Join threshold (pixels)", 1, 10, true)}
+      </fieldset>
+
+      <fieldset>
+        <legend>Propagation</legend>
+        {/* RULE-026: a window of 50-1000 frames in steps of 50, 250 by default. Longer sequences
+            run in windows of this size, overlapping by five frames. */}
+        {number("stream_window_size", "Streaming window (frames)", 50, 1000, true, 50)}
       </fieldset>
 
       <fieldset>
