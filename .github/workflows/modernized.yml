@@ -116,14 +116,20 @@ jobs:
     runs-on: ubuntu-latest
     env:
       QT_QPA_PLATFORM: offscreen
+      # The legacy package is imported from source rather than installed, since installing it pulls
+      # its whole dependency tree, PyTorch included, to run one file. Without this the import failed
+      # on a clean runner: tests/conftest.py puts the repository ROOT on the path, not src.
+      PYTHONPATH: src
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.10"
+      # scipy because importing the legacy UI package imports its FFT widget. Found by running this
+      # job's exact installs in a fresh venv, 2026-09-23: 13 passed once both were in place.
       - name: Install
         run: |
-          python -m pip install --quiet numpy opencv-python-headless PyQt6 pytest pytest-qt
+          python -m pip install --quiet numpy scipy opencv-python-headless PyQt6 pytest pytest-qt
           sudo apt-get update -qq && sudo apt-get install -y -qq libegl1 libgl1
       - name: Characterize the live image-load path
         run: python -m pytest tests/unit/ui/managers/test_file_navigation_load_by_path.py -q

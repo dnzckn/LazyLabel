@@ -45,7 +45,7 @@ Each figure is read from that package's own run. Four commit messages this week 
 that had been typed before the run printed it and needed amending, which is why the rule is now
 written down: run the suite as its own step, then write the number.
 
-**A clean checkout was not this machine either -- four ways, found 2026-09-23 by running every CI
+**A clean checkout was not this machine either -- six ways, found 2026-09-23 by running every CI
 job on a fresh export of HEAD, one job per export so no install could leak between them:**
 
 1. **The 24 NPZ goldens were never committed.** The root `.gitignore` ignores `*.npz`, and the
@@ -68,6 +68,19 @@ job on a fresh export of HEAD, one job per export so no install could leak betwe
 4. **CI skipped 110 differentials without saying so.** `test_windows.py` runs legacy's own loop and
    needs the legacy snapshot; the inference job never checked it out, while the file's docstring
    said it ran on every commit. The job now materializes it the way the differential job does.
+5. **The analysis job read a file git ignores.** `check_citations.py` loaded `rules_with_ids.json`,
+   an intermediate the pipeline's own `.gitignore` excludes, so it failed on every clean checkout.
+   It reads the committed `BUSINESS_RULES.md` now; the two agreed exactly (94 rules, the same
+   priorities), and a bogus citation still fails it by name.
+6. **The legacy characterization job could not import the legacy package.** `tests/conftest.py` puts
+   the repository root on the path, not `src`, and the job installs dependencies without the app;
+   importing the UI package also needs scipy, which it did not install. With `PYTHONPATH: src` and
+   scipy, in a fresh venv with exactly its packages: 13 passed.
+
+Every CI job except the three image builds has now been run this way and passes: the five Node
+packages, inference, converter (30), characterization (13), analysis, and the differential job
+(all 24 archives match legacy; every reader matches across 12 cases and 7 formats). The image
+builds need Docker, which this machine does not have.
 
 **The API image could not have started.** Its build stage failed at `tsc` for reason 2, and had it
 built, Node resolves `@lazylabel/*` to each library's `dist` at run time, which nothing built, and
