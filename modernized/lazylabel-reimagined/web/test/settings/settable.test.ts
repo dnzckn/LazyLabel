@@ -1,13 +1,19 @@
 /**
  * Can a user SET each setting? -- the question the settings guard (`honoured.ts`) does not ask.
  *
- * That guard checks every key is READ. On 2026-09-23 thirteen keys were read and settable by no one:
+ * That guard checks every key is READ. On 2026-09-23 seven keys were read and settable by no one:
  * they kept their default unless a desktop import brought a value, so a new user could never turn on
- * Operate On View or pixel priority. Twelve got controls (`SettingsEditor.tsx`); the rest are below.
+ * Operate On View or pixel priority. Six got controls (`SettingsEditor.tsx`); the seventh,
+ * `line_thickness`, is below with the other keys that have none on purpose.
  *
  * Every key not listed here must be referenced by a file that saves settings. A key added to the
  * schema with no control fails until it gets one or a reason -- "read and unsettable" is then a
  * decision somebody wrote down, not a gap nobody noticed.
+ *
+ * THE FIRST ANSWER WAS FOURTEEN, and seven were wrong: the file list's format columns ARE set, by
+ * the dataset browser's Columns chooser, through a computed key whose names live in `columns.ts`.
+ * They got a second set of switches before anyone noticed. `NAMED_FOR` is that indirection,
+ * declared and checked, so the guard reads what the writer reads.
  */
 
 import { readFile, readdir } from "node:fs/promises";
@@ -32,6 +38,17 @@ const NOT_EDITABLE: Readonly<Record<string, string>> = {
   line_thickness: "import-only, as in legacy, which has no control for it either",
 };
 
+/**
+ * A file that NAMES setting keys for a writer that saves them through a computed key, and that
+ * writer. The pair is checked: the writer must save settings and import the names.
+ */
+const NAMED_FOR: readonly (readonly [names: string, writer: string])[] = [
+  ["dataset/columns.ts", "dataset/DatasetBrowser.tsx"],
+];
+
+/** A file that writes settings at all: the provider's save, or a panel's own setter over it. */
+const WRITES = /\bsave\(\s*\{|\bsetValue\(|\bput\(/;
+
 const SOURCE = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "src");
 
 async function sources(dir: string, into: string[] = []): Promise<string[]> {
@@ -45,9 +62,9 @@ async function sources(dir: string, into: string[] = []): Promise<string[]> {
 
 it("gives every setting a control, or a reason it has none", async () => {
   const texts = await Promise.all((await sources(SOURCE)).map((file) => readFile(file, "utf-8")));
-  // A file that writes settings at all: the provider's save, or a panel's own setter over it.
-  const writers = texts.filter((text) => /\bsave\(\s*\{|\bsetValue\(|\bput\(/.test(text));
+  const writers = texts.filter((text) => WRITES.test(text));
   expect(writers.length, "found no file that saves settings; the pattern is wrong").toBeGreaterThan(3);
+  for (const [names] of NAMED_FOR) writers.push(await readFile(path.join(SOURCE, names), "utf-8"));
 
   const unsettable = Object.keys(DEFAULT_SETTINGS)
     .filter((key) => NOT_EDITABLE[key] === undefined)
@@ -55,6 +72,16 @@ it("gives every setting a control, or a reason it has none", async () => {
     .sort();
 
   expect(unsettable, "read by the app and settable by no one: add a control or a reason").toEqual([]);
+});
+
+it("counts a file's names only for a writer that saves settings and imports them", async () => {
+  for (const [names, writer] of NAMED_FOR) {
+    const text = await readFile(path.join(SOURCE, writer), "utf-8");
+    const module = `./${path.basename(names).replace(/\.tsx?$/, ".js")}`;
+
+    expect(WRITES.test(text), `${writer} does not save settings`).toBe(true);
+    expect(text, `${writer} does not import ${names}`).toContain(`from "${module}"`);
+  }
 });
 
 it("holds no reason for a key that no longer exists", () => {

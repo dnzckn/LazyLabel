@@ -2,10 +2,15 @@
  * The settings no other control sets -- the settings half of C13's "web settings and hotkey editor".
  *
  * Found 2026-09-23 by asking of every key not "does anything READ it", which the settings guard
- * answers, but "can a user SET it". Twelve could not: each was read by the app and kept its default
+ * answers, but "can a user SET it". Six could not: each was read by the app and kept its default
  * unless a desktop import brought a value, so a new user could never turn on Operate On View
- * (RULE-089) or pixel priority (RULE-012), change pan speed or the join threshold, or choose the
- * file list's columns. Each saves when it changes, as the export formats do.
+ * (RULE-089) or pixel priority (RULE-012), change pan speed, the join threshold or the streaming
+ * window. Each saves when it changes, as the export formats do.
+ *
+ * The file list's seven format columns were reported unsettable in the same sweep and were NOT:
+ * the dataset browser's Columns chooser sets them through a computed key, and their names live in
+ * `columns.ts`, which the sweep did not read. They had a second set of switches here for a few
+ * commits; one control per setting is the rule, and theirs is beside the list they change.
  *
  * RULE-050's clamps apply when editing FINISHES -- "given the user types 25 into Join, when editing
  * finishes, then the join threshold becomes 10" -- and non-numeric input reverts to the value in
@@ -15,17 +20,6 @@
 import { useState, type ReactNode } from "react";
 
 import { useSettings } from "./SettingsProvider.jsx";
-
-/** The file list's columns, with the suffix each one reports on. */
-const COLUMNS: readonly (readonly [key: string, label: string])[] = [
-  ["file_manager_show_npz", ".npz"],
-  ["file_manager_show_cm", "_CM.npz"],
-  ["file_manager_show_txt", ".txt"],
-  ["file_manager_show_seg", "_seg.txt"],
-  ["file_manager_show_coco", "_coco.json"],
-  ["file_manager_show_voc", ".xml"],
-  ["file_manager_show_cml", "_createml.json"],
-];
 
 export function SettingsEditor(): ReactNode {
   const { settings, save } = useSettings();
@@ -115,13 +109,6 @@ export function SettingsEditor(): ReactNode {
           "The lower class id wins",
           values["pixel_priority_enabled"] !== true,
         )}
-      </fieldset>
-
-      <fieldset>
-        <legend>File list columns</legend>
-        {COLUMNS.map(([key, label]) => (
-          <span key={key}>{toggle(key, label)} </span>
-        ))}
       </fieldset>
     </section>
   );

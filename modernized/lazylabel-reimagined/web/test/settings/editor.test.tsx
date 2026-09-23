@@ -1,5 +1,5 @@
 /**
- * The settings editor -- the twelve keys the app read and no control set (found 2026-09-23).
+ * The settings editor -- the six keys the app read and no control set (found 2026-09-23).
  *
  * RULE-050 is the rule with a specification: "given the user types 25 into Join, when editing
  * finishes, then the join threshold becomes 10", and non-numeric input reverts.
@@ -113,14 +113,10 @@ describe("the switches a new user could not reach", () => {
     await waitFor(() => expect(direction.disabled).toBe(false));
   });
 
-  it("hides a file-list column", async () => {
-    const { saved } = mount();
-    const coco = (await screen.findByLabelText("_coco.json")) as HTMLInputElement;
-    const before = coco.checked;
+  it("holds no second switch for a file-list column; the Columns chooser beside the list has it", async () => {
+    mount();
+    await screen.findByLabelText("Pan speed");
 
-    fireEvent.click(coco);
-
-    await waitFor(() => expect(saved).toHaveLength(1));
-    expect(saved[0]!.values["file_manager_show_coco"]).toBe(!before);
+    expect(screen.queryByLabelText("_coco.json")).toBeNull();
   });
 });
