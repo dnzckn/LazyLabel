@@ -222,6 +222,10 @@ and saving again found two bugs:
   a closed tab threw them away. It is now cleared when a run starts and on Clear. Re-run: after
   saving 35, the next run offered Save 129 frames.
 
+Both directions were run too (RULE-025), with the reference moved to frame 65 of the 130. The
+backward pass reached frame 0 and the forward pass frame 129, through windows of 50 each way. All
+129 saved boxes were within 1.0 px, with no drift at any seam.
+
 Each has a test that fails without its fix. The two cancel tests whose fake service answered
 "completed" after a cancel -- which the service never does -- now answer "cancelled", as it does.
 "Stopped after 1 frames" reads "1 frame" now, in the browser and in the service's sentence.
