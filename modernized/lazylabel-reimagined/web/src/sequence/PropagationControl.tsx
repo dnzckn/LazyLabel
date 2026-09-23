@@ -86,6 +86,8 @@ export function PropagationControl({
   /** What could not become a seed, and why. Reported rather than dropped. */
   const [unusable, setUnusable] = useState<readonly { key: string; reason: string }[]>([]);
   const [loading, setLoading] = useState(false);
+  // RULE-026: on by default. Off loads the whole sequence at once, which the estimate below prices.
+  const [streaming, setStreaming] = useState(true);
   /** Object id to class id, from the annotations that seeded the run. */
   const [classes, setClasses] = useState<Readonly<Record<number, number | null>>>({});
   const [saving, setSaving] = useState<{ done: number; total: number } | null>(null);
@@ -141,6 +143,7 @@ export function PropagationControl({
       references,
       objects: seeds.objects,
       ...(Number.isFinite(window) && window > 0 ? { window } : {}),
+      streaming,
     });
   }, [
     client,
@@ -230,6 +233,22 @@ export function PropagationControl({
   return (
     <div className="timeline__propagation">
       <div className="timeline__propagation-actions">
+        <label>
+          <input
+            type="checkbox"
+            checked={streaming}
+            onChange={(event) => setStreaming(event.currentTarget.checked)}
+          />{" "}
+          Streaming
+        </label>
+        {!streaming && frames.length > Number(settings.values["stream_window_size"] ?? 250) && (
+          // RULE-026's warning: 12.6 MB a frame, all held at once without streaming. Said before
+          // the run rather than discovered as an out-of-memory partway through it.
+          <p role="status" className="banner banner--warning">
+            Without streaming, all {frames.length} frames load at once: about{" "}
+            {Math.round(frames.length * 12.6).toLocaleString()} MB.
+          </p>
+        )}
         <button
           type="button"
           onClick={() => void begin()}

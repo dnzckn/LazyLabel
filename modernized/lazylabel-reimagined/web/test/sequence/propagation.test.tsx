@@ -162,6 +162,26 @@ describe("starting one", () => {
     expect(fake.started[0]!.window).toBe(250);
   });
 
+  it("streams by default, and sends Streaming off when it is unticked (RULE-026)", async () => {
+    const fake = fakeClient({});
+    show(fake);
+
+    fireEvent.click(propagate());
+    await waitFor(() => expect(fake.started).toHaveLength(1));
+    expect(fake.started[0]!.streaming).toBe(true);
+  });
+
+  it("sends streaming: false once unticked", async () => {
+    const fake = fakeClient({});
+    show(fake);
+
+    fireEvent.click(screen.getByLabelText("Streaming"));
+    fireEvent.click(propagate());
+
+    await waitFor(() => expect(fake.started).toHaveLength(1));
+    expect(fake.started[0]!.streaming).toBe(false);
+  });
+
   it("refuses with nothing to carry from", async () => {
     // Legacy runs the whole sequence and writes an empty mask over every frame, which is worse
     // than doing nothing because it looks like work.
