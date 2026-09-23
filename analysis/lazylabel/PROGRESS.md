@@ -10,7 +10,8 @@ Last updated: 2026-09-23.
 **Every capability is built, and the conversion is not finished — because finishing means PROVING
 it, and that needs data only the owner has.**
 
-All fourteen capabilities are built and reachable from the app, C11 included: propagation runs end
+All fourteen capabilities are built and reachable from the app, with one gap found on
+2026-09-23 -- C13's hotkey EDITOR; its settings half is complete. C11 is included: propagation runs end
 to end, from the browser's reference masks through the API to a SAM 2 video predictor, with a job
 API that cancels without losing committed frames. What is NOT claimed is that its results match
 legacy's. That is Phase 6 exit criterion 2 and it needs a checkpoint, a recorded sequence, and
@@ -20,9 +21,9 @@ Of Phase 6's five exit criteria: **1, 3 and 5 are met**; **2 and 4 have working 
 on the owner's data**. Both harnesses have now been RUN — see the blocked section — and one of them
 was wrong until today.
 
-Every guard this project uses is closed or its remainder recorded: no unread settings, five
+Every guard this project uses is closed or its remainder recorded: no unread settings, six
 unreached functions across the TypeScript and Python reach guards, each with a written reason
-(one is a library export the formats tests need), 40 of 43 hotkeys live (the other three are mouse
+(one is a library export the formats tests need; one waits for the hotkey editor), 40 of 43 hotkeys live (the other three are mouse
 bindings), and all 94 business rules traceable to a test or recorded as a decision.
 
 ## The suites, as of 2026-09-23
@@ -35,8 +36,8 @@ missing from this table entirely, which is how a table stops being a census.
 | exporters | 1991 | the seven formats, byte-for-byte against goldens legacy wrote |
 | web | 1098 | C11's placeholder is gone; it has an acceptance test now |
 | inference | 557 | plus 36 skipped: the differentials, which need real checkpoints |
-| api | 398 | plus 4 skipped and 5 todo, all needing a checkpoint or a corpus |
-| settings-schema | 41 | includes the rule-fixed defaults |
+| api | 414 | plus 4 skipped and 5 todo, all needing a checkpoint or a corpus |
+| settings-schema | 55 | includes the rule-fixed defaults |
 | converter | 30 | the pickled-alias rewrite |
 | contracts | 21 | the wire shapes both sides agree on |
 
@@ -173,7 +174,36 @@ MobileNetV3 weights with SAM listed first: the embedder verified, loaded, and re
 frames in 2 clusters. The inference README, which still called both job routes 501, was brought
 up to date in the same change.
 
-One remains to walk: SEC-16.
+**SEC-16 is fixed, and the finding under it was bigger than the finding.** Legacy validates
+neither `settings.json` nor `hotkeys.json`, and a file from releases 1.3.8 to 1.5.0 resets every
+preference: those releases wrote `yolo_use_alias`, legacy's migration never learned it, and
+`cls(**data)` refuses the whole file for one key -- reproduced 2026-09-23 with a file the 1.5.0
+code itself wrote (width 1234 and gamma 1.4 load as 1600 and 1.0). The import here already kept
+unknown keys, so preferences survived; `yolo_use_alias` is now dropped as the retired key it is,
+rather than kept as one "a newer version might want".
+
+But **nothing called the import.** `importLegacySettings` was written, tested against
+legacy-written files, and reached by no production code, so a user moving from the desktop app
+started from defaults -- while Phase 4 exit criterion 3 below read MET, because a test of the
+function passed. The reach guard never saw it: it did not scan the settings package. It runs now,
+once, at API startup, while the database holds no settings (`api/src/settings/legacyImport.ts`),
+from legacy's own `~/.config/lazylabel` by default; a file that is not JSON is reported and not
+replaced by defaults, so the one-time window stays open for the fixed file. Widening the reach
+guard to the settings and contracts packages found it -- and one more, below.
+
+The server half of SEC-16 was real too: `PUT /users/me/settings` stored a known key with the
+wrong type (`gamma: "abc"` answered 200) and a `null` binding reached `findConflicts` and answered
+500. Both are 422 now with the reason, through one `shapeProblems` shared with the import, and
+unknown keys are still stored -- that is RULE-088's fix, not a shape problem. Every new behaviour
+was mutation-checked.
+
+**The audit of all seventeen findings is complete.** Held: SEC-01, 04, 05, 07, 09, 10, 13, 14.
+Fixed: SEC-02, 03, 06, 16, 17. Not applicable: SEC-15. Needing the owner: SEC-08, 11, 12.
+
+**What widening the reach guard found last: the hotkey EDITOR is not built.** `checkAssignment`
+is RULE-049's per-keystroke check for a rebinding dialog, and nothing calls it because there is no
+dialog -- the web app shows a read-only reference. The brief maps legacy's hotkey dialog to "web
+settings and hotkey editor" (C13's interface), so this is unbuilt planned work, not a decision.
 
 **If more building is wanted before the data arrives,** the honest answer is that there is no named
 work left: the rule lists, the settings table, the reach sweep and the hotkey reference are all
@@ -256,7 +286,9 @@ All four exit criteria are met:
    legacy's on every golden.
 2. Saving follows decision 7 — nothing is deleted without an explicit user action, and a damaged or
    foreign file never hides or deletes a valid one.
-3. Legacy `settings.json` and `hotkeys.json` import correctly.
+3. Legacy `settings.json` and `hotkeys.json` import correctly. **Corrected 2026-09-23: this was
+   true of the function and of no user.** Nothing called the import until it was wired into the
+   API's startup that day; see SEC-16 above.
 4. Upload limits and content allow-lists are enforced. SEC-02, SEC-06 and SEC-09 were already
    proven; SEC-07 was argued in a comment and tested nowhere until this session.
 
@@ -769,7 +801,7 @@ Component tests prove the component; only an end-to-end path proves it is reacha
 
 **The same shape has a wider form, and it is worth hunting deliberately: A WIRE BETWEEN TWO
 CORRECT PIECES.** Both ends built, both tested, and nothing joining them — which no test catches,
-because a test exercises one side with the other stubbed. Fourteen found:
+because a test exercises one side with the other stubbed. Fifteen found:
 
 | Where | What was missing |
 |---|---|
@@ -787,6 +819,7 @@ because a test exercises one side with the other stubbed. Fourteen found:
 | Rule ↔ navigation | `onNavigateAway` and `onClose` had no caller, so opening another image discarded unsaved work silently |
 | Manifest ↔ load path | `check_checkpoint` guarded one load path of three; the video predictor and the archetype embedder loaded unverified (SEC-17) |
 | Manifest ↔ job | Find Archetypes took the manifest's FIRST entry, so any manifest listing SAM first failed it on every call |
+| Import ↔ startup | `importLegacySettings` was tested against legacy-written files and called by nothing; a user moving from the desktop app started from defaults while Phase 4's criterion read MET |
 
 **A conflict has no recovery yet, and the message says so rather than pretending.** When a save is
 refused because the file moved, the annotations on screen are still the user's — but there is no

@@ -118,6 +118,62 @@ describe("C13: keeping settings and hotkeys across sessions", () => {
     });
   });
 
+  describe("SEC-16: a value the app could not act on is refused, not stored", () => {
+    // Legacy validated neither file, and one malformed hotkey crashed it on every launch. The
+    // browser reads what is stored here on every launch too.
+
+    it("refuses a known key with the wrong type, and says which", async () => {
+      const base = defaultSettings();
+      const response = await app.handle(
+        put("/users/me/settings", { values: { ...base.values, gamma: "abc" }, hotkeys: base.hotkeys }),
+      );
+
+      expect(response.status).toBe(422);
+      expect(jsonBody(response).detail.problems).toEqual(["gamma must be a number, not a string"]);
+    });
+
+    it("refuses a null binding with a 422, where it used to reach findConflicts and answer 500", async () => {
+      const base = defaultSettings();
+      const response = await app.handle(
+        put("/users/me/settings", { values: base.values, hotkeys: { ...base.hotkeys, undo: null } }),
+      );
+
+      expect(response.status).toBe(422);
+      expect(jsonBody(response).detail.problems).toEqual([
+        "the binding for undo must be an object, not null",
+      ]);
+    });
+
+    it("stores nothing when it refuses", async () => {
+      const base = defaultSettings();
+      await app.handle(
+        put("/users/me/settings", { values: { ...base.values, window_width: 999 }, hotkeys: base.hotkeys }),
+      );
+      await app.handle(
+        put("/users/me/settings", {
+          values: { ...base.values, window_width: 1111 },
+          hotkeys: { ...base.hotkeys, undo: { primary: 5, secondary: null } },
+        }),
+      );
+
+      const body = jsonBody((await app.handle(get("/users/me/settings"))));
+      expect(body.values.window_width).toBe(999);
+    });
+
+    it("still stores a key it does not know, which is RULE-088's fix and not a shape problem", async () => {
+      const base = defaultSettings();
+      const response = await app.handle(
+        put("/users/me/settings", {
+          values: { ...base.values, from_a_newer_version: [1, 2, 3] },
+          hotkeys: base.hotkeys,
+        }),
+      );
+
+      expect(response.status).toBe(200);
+      expect(jsonBody(response).values.from_a_newer_version).toEqual([1, 2, 3]);
+    });
+  });
+
   describe("RULE-049: hotkey conflicts", () => {
     it("refuses a save binding one key to two actions, and names both", async () => {
       const base = defaultSettings();

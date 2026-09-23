@@ -55,6 +55,7 @@ import {
   findConflicts,
   normalizeExportFormats,
   SETTINGS_SCHEMA_VERSION,
+  shapeProblems,
   type StoredSettings,
 } from "@lazylabel/settings-schema";
 
@@ -793,6 +794,14 @@ async function putSettings(deps: AppDeps, request: ApiRequest): Promise<ApiRespo
   }
   if (hotkeys === undefined || hotkeys === null || typeof hotkeys !== "object" || Array.isArray(hotkeys)) {
     throw badRequest("settings must carry a `hotkeys` object");
+  }
+
+  // SEC-16. Legacy validated neither file, and one malformed hotkey crashed it on every launch; the
+  // browser reads these back on every launch too, so what it could not act on is refused here. A
+  // `null` binding used to reach `findConflicts` below and answer 500.
+  const problems = shapeProblems(values, hotkeys);
+  if (problems.length > 0) {
+    throw unprocessable("some settings have the wrong shape; nothing was saved", { problems });
   }
 
   const bindings = hotkeys as StoredSettings["hotkeys"];

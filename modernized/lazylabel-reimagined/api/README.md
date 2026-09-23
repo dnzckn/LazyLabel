@@ -38,6 +38,7 @@ LAZYLABEL_DATASET_ROOT=/path/to/your/images npm start
 | `LAZYLABEL_DB` | `<root>/.lazylabel/lazylabel.db` | SQLite file for settings, hotkeys and job records. |
 | `LAZYLABEL_PORT` | `8787` | |
 | `LAZYLABEL_HOST` | `127.0.0.1` | Loopback by default. Decision 3 is one trusted user, so exposing this is a deliberate act behind a reverse proxy, not a default. |
+| `LAZYLABEL_LEGACY_SETTINGS_DIR` | `~/.config/lazylabel` | Where the desktop app kept `settings.json` and `hotkeys.json`. Read once, at startup, while this database holds no settings; after that the stored settings are the truth and these files are never read again. Empty turns the import off. |
 
 ## Shape
 

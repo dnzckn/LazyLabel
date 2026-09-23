@@ -26,6 +26,7 @@ function config(overrides: Partial<Config> = {}): Config {
     port: 8787,
     host: "127.0.0.1",
     inferenceUrl: null,
+    legacySettingsDir: null,
     ...overrides,
   } as Config;
 }

@@ -60,6 +60,17 @@ export const UNREACHED: Readonly<Record<string, Reason>> = {
       + "the tracer on its own.",
   },
 
+  // The settings and contracts packages are scanned too, since 2026-09-23. Widening the sweep to
+  // them found two: `importLegacySettings`, the desktop settings import PROGRESS had recorded as
+  // Phase 4 exit criterion 3 MET while nothing called it -- wired into the API's startup the same
+  // day -- and this one.
+  checkAssignment: awaiting(
+    "the web hotkey editor, which is not built. The brief maps legacy's hotkey dialog to 'web "
+      + "settings and hotkey editor' (C13's interface), and this is RULE-049's per-keystroke check "
+      + "for it: refuse a key another action holds, and say which. The API refuses a conflicting "
+      + "save already; only the editor that would make one is missing",
+  ),
+
   project: awaiting(
     "the image-to-display direction of the coordinate transform. Every drawing path needs only "
       + "`locate`, the other direction; this waits for the first feature that draws a known image "

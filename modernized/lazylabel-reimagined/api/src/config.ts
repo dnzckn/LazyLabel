@@ -6,6 +6,7 @@
  * this is where the choice between them is made, and nothing above it changes.
  */
 
+import * as os from "node:os";
 import * as path from "node:path";
 
 export interface Config {
@@ -24,6 +25,11 @@ export interface Config {
    * to start.
    */
   readonly inferenceUrl: string | null;
+  /**
+   * Where the desktop app kept `settings.json` and `hotkeys.json`, read once while nothing is
+   * stored (Phase 4 exit criterion 3), or null when that import is turned off.
+   */
+  readonly legacySettingsDir: string | null;
 }
 
 /**
@@ -52,6 +58,21 @@ function inferenceUrlFrom(env: NodeJS.ProcessEnv): string | null {
   }
   // Trailing slashes removed here so every caller does not have to think about them.
   return raw.replace(/\/+$/, "");
+}
+
+/**
+ * The desktop app's config directory, for the one-time settings import.
+ *
+ * Legacy's own location by default (`config/paths.py`: `~/.config/lazylabel`), so a user moving to
+ * the web app on the same machine brings their preferences without configuring anything. This is
+ * not the kind of guess the dataset root refuses to make: a wrong one finds no files and imports
+ * nothing, which is exactly what not importing would have done. Empty turns the import off.
+ */
+function legacySettingsDirFrom(env: NodeJS.ProcessEnv): string | null {
+  const raw = env["LAZYLABEL_LEGACY_SETTINGS_DIR"];
+  if (raw === undefined) return path.join(os.homedir(), ".config", "lazylabel");
+  if (raw.trim() === "") return null;
+  return path.resolve(raw);
 }
 
 export class ConfigError extends Error {
@@ -86,5 +107,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     // TLS and authenticates, not a default that quietly exposes someone's images to their network.
     host: env["LAZYLABEL_HOST"] ?? "127.0.0.1",
     inferenceUrl: inferenceUrlFrom(env),
+    legacySettingsDir: legacySettingsDirFrom(env),
   };
 }

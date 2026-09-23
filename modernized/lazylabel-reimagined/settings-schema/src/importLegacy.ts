@@ -17,6 +17,7 @@
  */
 
 import { normalizeExportFormats } from "./exportFormats.js";
+import { describeShape, sameShape } from "./shape.js";
 import { findConflicts } from "./hotkeyConflicts.js";
 import {
   DEFAULT_HOTKEYS,
@@ -30,6 +31,7 @@ import {
 export interface ImportWarning {
   readonly kind:
     | "unknown-key"
+    | "retired-key"
     | "wrong-type"
     | "unparsable"
     | "unknown-hotkey"
@@ -103,7 +105,7 @@ function importValues(
     return {};
   }
 
-  const migrated = migrateSaveFlags(parsed, warnings);
+  const migrated = dropRetiredKeys(migrateSaveFlags(parsed, warnings), warnings);
   const values: Record<string, unknown> = {};
 
   for (const [key, value] of Object.entries(migrated)) {
@@ -126,7 +128,7 @@ function importValues(
       warnings.push({
         kind: "wrong-type",
         key,
-        detail: `expected ${describe(expected)}, found ${describe(value)}; the default was used`,
+        detail: `expected ${describeShape(expected)}, found ${describeShape(value)}; the default was used`,
       });
     }
   }
@@ -161,6 +163,42 @@ function migrateSaveFlags(
     key: "save_npz/save_txt",
     detail: `pre-2.0 save flags migrated to export_formats ${JSON.stringify(out["export_formats"])}`,
   });
+  return out;
+}
+
+/**
+ * Keys an older release wrote that no release reads, with what became of each.
+ *
+ * `yolo_use_alias` is `bb_use_alias` under the name releases 1.3.8 to 1.5.0 wrote. Legacy renamed
+ * it (bf28867) and later dropped `bb_use_alias` in the export-formats migration -- which never
+ * learned the old name. So every settings file from those releases still carries it, and legacy's
+ * `cls(**data)` refuses the whole file for that one key: a 1.5.0 user's preferences reset to
+ * defaults on upgrade, and closing the app saves the reset (SEC-16, RULE-088).
+ *
+ * Dropped rather than kept as unknown. Keeping it would tell the user a newer version might want
+ * it, when it is an older version's name for a switch that has had no effect since.
+ */
+const RETIRED_KEYS: Readonly<Record<string, string>> = {
+  yolo_use_alias:
+    "the name releases 1.3.8 to 1.5.0 wrote for bb_use_alias, which has no equivalent; dropped",
+};
+
+/**
+ * Remove retired keys wherever they appear, independent of the save-flag migration.
+ *
+ * NOT a trigger for `migrateSaveFlags`, deliberately: that migration rewrites `export_formats`, and
+ * a dead key left in a current file must not overwrite the formats the user chose.
+ */
+function dropRetiredKeys(
+  data: Record<string, unknown>,
+  warnings: ImportWarning[],
+): Record<string, unknown> {
+  const out = { ...data };
+  for (const [key, detail] of Object.entries(RETIRED_KEYS)) {
+    if (!(key in out)) continue;
+    delete out[key];
+    warnings.push({ kind: "retired-key", key, detail });
+  }
   return out;
 }
 
@@ -238,23 +276,4 @@ function parseObject(json: string): Record<string, unknown> | null {
   }
   if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) return null;
   return parsed as Record<string, unknown>;
-}
-
-/**
- * Whether a value could stand in for the default.
- *
- * Deliberately loose about numbers: JSON has one number type, and legacy stores `gamma: 1.0` which
- * round-trips as `1`. Refusing an integer where a float is expected would reject a file the legacy
- * app itself wrote.
- */
-function sameShape(value: unknown, expected: unknown): boolean {
-  if (Array.isArray(expected)) return Array.isArray(value);
-  if (typeof expected === "number") return typeof value === "number" && Number.isFinite(value);
-  return typeof value === typeof expected;
-}
-
-function describe(value: unknown): string {
-  if (Array.isArray(value)) return "an array";
-  if (value === null) return "null";
-  return `a ${typeof value}`;
 }

@@ -13,6 +13,7 @@ import { SqliteMetadataStore } from "./adapters/sqliteMetadataStore.js";
 import { loadConfig } from "./config.js";
 import { createLogger } from "./http/log.js";
 import { createServer } from "./server.js";
+import { importDesktopSettingsOnce } from "./settings/legacyImport.js";
 import type { AppDeps } from "./app.js";
 import type { Config } from "./config.js";
 import type { BlobStore } from "./ports/blobStore.js";
@@ -80,6 +81,20 @@ async function main(): Promise<void> {
     await fs.mkdir(path.dirname(config.databasePath), { recursive: true });
   }
   const metadataStore = new SqliteMetadataStore(config.databasePath);
+
+  // Phase 4 exit criterion 3: the desktop app's settings, imported once. Never fatal -- someone
+  // whose old settings cannot be read should still get a working app, with the reason logged.
+  try {
+    await importDesktopSettingsOnce({
+      store: metadataStore,
+      directory: config.legacySettingsDir,
+      logger,
+    });
+  } catch (cause) {
+    logger.log("error", "the desktop app's settings could not be imported", {
+      reason: cause instanceof Error ? cause.message : String(cause),
+    });
+  }
 
   const app = createApp(
     buildDeps(config, {

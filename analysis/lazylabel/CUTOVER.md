@@ -88,6 +88,16 @@ Each of these is checkable, and none of them is an opinion.
 There is no import step and no database to populate. That is the point of decision 5: the
 annotations were always files in a folder, and they still are.
 
+**Your settings and hotkeys come with you, once.** The first time the API starts, it reads the
+desktop app's `settings.json` and `hotkeys.json` from `~/.config/lazylabel` and stores them; from
+then on, what the web app stores is the truth and those files are never read again. Its log lists
+every preference the import changed and why. Two things it does differently from the desktop
+app's own loader, both on purpose: a key it does not recognise is kept rather than resetting every
+preference, which is how a settings file from releases 1.3.8 to 1.5.0 loses everything when the
+desktop app itself upgrades; and a file that is not JSON is reported and not replaced by defaults,
+so fixing it and restarting still works. Running in Docker, the container cannot see your home
+folder, so mount it -- `deploy/README.md` shows how.
+
 ## What is lost, and what is gained
 
 Being straight about both, because a cutover document that only lists gains is an advertisement.

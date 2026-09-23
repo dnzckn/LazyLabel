@@ -8,6 +8,9 @@
  * broken" rather than "this variable is wrong".
  */
 
+import * as os from "node:os";
+import * as path from "node:path";
+
 import { describe, expect, it } from "vitest";
 
 import { ConfigError, loadConfig } from "../src/config.js";
@@ -97,5 +100,21 @@ describe("the host", () => {
 
   it("can be opened up deliberately", () => {
     expect(load({ LAZYLABEL_HOST: "0.0.0.0" }).host).toBe("0.0.0.0");
+  });
+});
+
+describe("the desktop app's settings directory (Phase 4 exit criterion 3)", () => {
+  it("defaults to where legacy keeps them, so moving on the same machine needs no configuration", () => {
+    expect(load({}).legacySettingsDir).toBe(path.join(os.homedir(), ".config", "lazylabel"));
+  });
+
+  it("can point somewhere else, resolved to an absolute path", () => {
+    expect(load({ LAZYLABEL_LEGACY_SETTINGS_DIR: "old-config" }).legacySettingsDir).toBe(
+      path.resolve("old-config"),
+    );
+  });
+
+  it("is turned off by setting it empty", () => {
+    expect(load({ LAZYLABEL_LEGACY_SETTINGS_DIR: "" }).legacySettingsDir).toBeNull();
   });
 });

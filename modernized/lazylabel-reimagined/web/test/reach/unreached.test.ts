@@ -27,11 +27,15 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 /**
  * Every package whose functions ship. The formats package was added on 2026-09-23: SEC-06's object
  * limit had no caller there while the text readers built unbounded masks, and it hid because this
- * list stopped at the app. A guard that does not look somewhere protects nothing there.
+ * list stopped at the app. A guard that does not look somewhere protects nothing there -- which
+ * held again the same day, when adding the settings and contracts packages found the desktop
+ * settings import that nothing called.
  */
 const SOURCES = [
   path.join(HERE, "..", "..", "src"),
   path.join(HERE, "..", "..", "..", "api", "src"),
+  path.join(HERE, "..", "..", "..", "settings-schema", "src"),
+  path.join(HERE, "..", "..", "..", "contracts", "src"),
   path.join(HERE, "..", "..", "..", "..", "lazylabel", "core", "exporters", "src"),
 ];
 
@@ -177,6 +181,6 @@ describe("what the sweep currently finds", () => {
   it("reports the count, so a change in it shows up in the diff", () => {
     // Asserted rather than printed. Wiring one up fails this test, and the person who wired it
     // then removes its entry -- which is the whole mechanism.
-    expect(unreachedNow().length).toBe(2);
+    expect(unreachedNow().length).toBe(3);
   });
 });

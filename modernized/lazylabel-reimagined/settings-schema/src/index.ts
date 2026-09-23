@@ -28,6 +28,8 @@ export {
   type ImportWarning,
 } from "./importLegacy.js";
 
+export { shapeProblems } from "./shape.js";
+
 export {
   KNOWN_EXPORT_FORMATS,
   canRemoveExportFormat,

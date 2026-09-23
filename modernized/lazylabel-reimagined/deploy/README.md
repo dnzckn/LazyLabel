@@ -9,6 +9,22 @@ Then open <http://127.0.0.1:5173>.
 
 For the AI tools, set `MODEL_DIR` and `LAZYLABEL_INFERENCE_URL` in `.env` and add `--profile ai`.
 
+**To bring your desktop app's settings and hotkeys**, let the API see the folder the desktop app
+kept them in. It reads them once, on its first start, and never again once anything is stored. In
+a container the default location is the container's own home, which has none, so mount yours:
+
+```yaml
+# compose.override.yaml, beside compose.yaml
+services:
+  api:
+    environment:
+      LAZYLABEL_LEGACY_SETTINGS_DIR: /desktop-config
+    volumes:
+      - ~/.config/lazylabel:/desktop-config:ro
+```
+
+The API's log lists every preference the import changed and why.
+
 ## What has been built, and what has not
 
 **CI builds the API and web images on every push**, and validates the compose file against
