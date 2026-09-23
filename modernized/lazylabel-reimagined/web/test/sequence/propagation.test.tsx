@@ -540,7 +540,7 @@ describe("RULE-056: not losing propagated work without asking", () => {
   }
 
   it("ASKS before a New timeline throws propagated frames away", async () => {
-    const confirm = vi.fn(() => false);
+    const confirm = vi.fn((_message: string) => false);
     panel(confirm);
     await propagateAndWait();
 
@@ -572,7 +572,7 @@ describe("RULE-056: not losing propagated work without asking", () => {
   it("does NOT ask when there is nothing to lose", async () => {
     // A confirmation that always appears is one people learn to dismiss without reading, which
     // makes it useless on the day it matters.
-    const confirm = vi.fn(() => true);
+    const confirm = vi.fn((_message: string) => true);
     panel(confirm);
     fireEvent.click(screen.getByText("Build timeline"));
     await waitFor(() =>

@@ -48,7 +48,7 @@ function found(overrides: Record<string, unknown> = {}) {
 
 function show(answer: () => unknown) {
   const onArchetypes = vi.fn();
-  const findArchetypes = vi.fn(async () => answer());
+  const findArchetypes = vi.fn(async (_sequence: readonly string[], _model?: string) => answer());
   const client = {
     getSettings: async () => defaultSettings(),
     putSettings: async (next: unknown) => next,

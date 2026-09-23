@@ -145,7 +145,7 @@ describe("preparing the image", () => {
   it("encodes ONCE, however many prompts follow", async () => {
     // The expensive half -- seconds for a cold one -- against a fraction of a second per prompt.
     // Encoding per prompt would make the tool unusable while looking like a slow model.
-    const embed = vi.fn(async () => ({ handle: "h1", cached: true }));
+    const embed = vi.fn(async (_request: unknown) => ({ handle: "h1", cached: true }));
     mount({ embed: embed as never });
     await waitFor(() => expect(embed).toHaveBeenCalledTimes(1));
 
@@ -384,7 +384,7 @@ describe("Auto-Convert", () => {
 describe("Operate On View (RULE-089)", () => {
   it("does NOT send adjustments by default, so the model sees the file", async () => {
     // The rule's default, and the cheaper path: no image crosses the API-to-service wire.
-    const embed = vi.fn(async () => ({ handle: "h1", cached: true }));
+    const embed = vi.fn(async (_request: unknown) => ({ handle: "h1", cached: true }));
     mount({ embed });
 
     await waitFor(() => expect(embed).toHaveBeenCalled());
@@ -392,7 +392,7 @@ describe("Operate On View (RULE-089)", () => {
   });
 
   it("sends them when the setting is on, so the model sees what the USER sees", async () => {
-    const embed = vi.fn(async () => ({ handle: "h1", cached: true }));
+    const embed = vi.fn(async (_request: unknown) => ({ handle: "h1", cached: true }));
     mount({ embed }, { operateOnView: { brightness: 40, contrast: 0, gamma: 1, saturation: 1 } });
 
     await waitFor(() => expect(embed).toHaveBeenCalled());
@@ -407,7 +407,7 @@ describe("Operate On View (RULE-089)", () => {
     // The rule says so, and the adjustments are part of the embedding cache key: a different view
     // is a different encoding, not a stale one. Reusing it would prompt a model that had encoded
     // a picture the user has since changed.
-    const embed = vi.fn(async () => ({ handle: "h1", cached: true }));
+    const embed = vi.fn(async (_request: unknown) => ({ handle: "h1", cached: true }));
     const { rerender } = mount({ embed }, {
       operateOnView: { brightness: 10, contrast: 0, gamma: 1, saturation: 1 },
     });

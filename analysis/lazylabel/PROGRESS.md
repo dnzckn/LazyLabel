@@ -3,7 +3,7 @@
 Where the conversion stands, on branch `main-web`. `MODERNIZATION_BRIEF.md` is the plan and does
 not change as work lands; this file is the log against it, and is the one to read first.
 
-Last updated: 2026-09-21.
+Last updated: 2026-09-23.
 
 ## Short answer
 
@@ -20,19 +20,20 @@ Of Phase 6's five exit criteria: **1, 3 and 5 are met**; **2 and 4 have working 
 on the owner's data**. Both harnesses have now been RUN — see the blocked section — and one of them
 was wrong until today.
 
-Every guard this project uses is closed or its remainder recorded: no unread settings, one
-unreached function with a written reason, 40 of 43 hotkeys live (the other three are mouse
+Every guard this project uses is closed or its remainder recorded: no unread settings, five
+unreached functions across the TypeScript and Python reach guards, each with a written reason
+(one is a library export the formats tests need), 40 of 43 hotkeys live (the other three are mouse
 bindings), and all 94 business rules traceable to a test or recorded as a decision.
 
-## The suites, as of 2026-09-21
+## The suites, as of 2026-09-23
 
-All **seven** green, every one run in a single pass on 2026-09-21. The `contracts` package was
+All **seven** green, every one run on 2026-09-23. The `contracts` package was
 missing from this table entirely, which is how a table stops being a census.
 
 | Package | Passing | Note |
 |---|---|---|
-| exporters | 1979 | the seven formats, byte-for-byte against goldens legacy wrote |
-| web | 1097 | C11's placeholder is gone; it has an acceptance test now |
+| exporters | 1991 | the seven formats, byte-for-byte against goldens legacy wrote |
+| web | 1098 | C11's placeholder is gone; it has an acceptance test now |
 | inference | 557 | plus 36 skipped: the differentials, which need real checkpoints |
 | api | 398 | plus 4 skipped and 5 todo, all needing a checkpoint or a corpus |
 | settings-schema | 41 | includes the rule-fixed defaults |
@@ -42,6 +43,14 @@ missing from this table entirely, which is how a table stops being a census.
 Each figure is read from that package's own run. Four commit messages this week quoted a count
 that had been typed before the run printed it and needed amending, which is why the rule is now
 written down: run the suite as its own step, then write the number.
+
+**Green suites were not a green CI.** `npm run typecheck` is the web job's first step after
+install, and on 2026-09-23 it failed with 37 type errors in seven test files: mocks declared with
+no parameters, so their recorded calls were typed as empty tuples; `saveAll`'s test helper still
+typed for the position-keyed store RULE-077 replaced; unchecked array indexes. vitest does not
+typecheck, so every run above was green. `main-web` has never been pushed, so CI never ran on it --
+it would have stopped at that step on the first push, before the tests or the build. Fixed the
+same day: typecheck and build pass for web and api, and the formats package's typecheck passes.
 
 The skips are the honest part: they skip themselves when no checkpoint is
 configured, so a green CI run says nothing about them — see `Running the live suites`.

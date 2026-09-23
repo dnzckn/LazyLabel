@@ -59,7 +59,7 @@ function fakeClient(onSave?: (key: string, body: unknown) => void) {
 
 function run(
   frames: readonly Frame[],
-  held: Map<number, WirePropagationFrame[]>,
+  held: ReadonlyMap<string, readonly WirePropagationFrame[]>,
   extra: Partial<Parameters<typeof saveAll>[0]> = {},
 ) {
   const fake = fakeClient();

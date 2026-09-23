@@ -62,7 +62,7 @@ function Probe(): React.ReactNode {
 }
 
 function mount(answer: boolean, result: AnnotationsResult = loaded()) {
-  const confirmNavigation = vi.fn(() => answer);
+  const confirmNavigation = vi.fn((_summary: string) => answer);
   const client = {
     imageMetadata: async () => ({ width: 10, height: 10, sourceDepth: 8, sourceFormat: "png" }),
     loadAnnotations: async () => result,

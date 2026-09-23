@@ -74,7 +74,7 @@ function Opener(): React.ReactNode {
 }
 
 function mount() {
-  const saveAnnotations = vi.fn(async () => ({
+  const saveAnnotations = vi.fn(async (_project: string, _key: string, _body: unknown) => ({
     written: { NPZ: "after-write" },
     stale: [] as string[],
     skippedEmpty: [] as string[],
