@@ -56,6 +56,24 @@ function layer(selected: readonly number[] = []) {
   return { onToggle, onMiss, surface: screen.getByLabelText("Selection tool") };
 }
 
+describe("an outline drawn before any click", () => {
+  it("is sized in screen pixels from the first paint", () => {
+    // The layer was measured only during render, and the first render comes before the surface
+    // exists. At the image's own size that cannot show; this harness displays it at double size,
+    // where a measured outline is half as wide in image units.
+    const OWN = { left: 0, top: 0, width: 40, height: 20, right: 40, bottom: 20, x: 0, y: 0 };
+    vi.spyOn(Element.prototype, "getBoundingClientRect").mockReturnValue({ ...OWN, toJSON: () => OWN } as DOMRect);
+    layer([0]);
+    const atOwnSize = Number(screen.getByTestId("outline-0").getAttribute("stroke-width"));
+    cleanup();
+
+    vi.spyOn(Element.prototype, "getBoundingClientRect").mockReturnValue({ ...RECT, toJSON: () => RECT } as DOMRect);
+    layer([0]);
+
+    expect(Number(screen.getByTestId("outline-0").getAttribute("stroke-width"))).toBeCloseTo(atOwnSize / 2, 5);
+  });
+});
+
 /** Click at an IMAGE coordinate, converted through the display box as the DOM would. */
 function clickAt(surface: Element, x: number, y: number, init: Record<string, unknown> = {}) {
   fireEvent.pointerDown(surface, {

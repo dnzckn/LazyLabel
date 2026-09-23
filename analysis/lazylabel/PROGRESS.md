@@ -59,7 +59,7 @@ missing from this table entirely, which is how a table stops being a census.
 | Package | Passing | Note |
 |---|---|---|
 | exporters | 1991 | the seven formats, byte-for-byte against goldens legacy wrote |
-| web | 1171 | C11's placeholder is gone; it has an acceptance test now |
+| web | 1172 | C11's placeholder is gone; it has an acceptance test now |
 | inference | 574 | plus 38 skipped: the differentials, which need real checkpoints |
 | api | 422 | plus 4 skipped (SEC-09's symlink tests, where the OS will not make a link, as on this machine) and 1 todo (C8's placeholder) |
 | settings-schema | 55 | includes the rule-fixed defaults |

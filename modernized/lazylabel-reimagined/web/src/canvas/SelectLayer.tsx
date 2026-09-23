@@ -10,7 +10,7 @@
  * button, which is also the only thing that can be undone by pressing it again.
  */
 
-import { useCallback, useRef, type ReactNode } from "react";
+import { useCallback, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 
 import type { WireSegment } from "@lazylabel/contracts";
 
@@ -48,6 +48,20 @@ export function SelectLayer({
     return { left: rect.left, top: rect.top, width: rect.width, height: rect.height };
   }, []);
 
+  // Measured after mount and on resize, as the edit layer's handles are: measuring only during
+  // render read nothing on the first one, so a selection already made when this tool was chosen
+  // was outlined at image-unit width until the next click (see `EditLayer.tsx`).
+  const [measured, setMeasured] = useState<DisplayBox | null>(null);
+  useLayoutEffect(() => {
+    const update = () => setMeasured(boxOf());
+    update();
+    const surface = surfaceRef.current;
+    if (surface === null || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(update);
+    observer.observe(surface);
+    return () => observer.disconnect();
+  }, [boxOf]);
+
   const onPointerDown = useCallback(
     (event: React.PointerEvent<SVGSVGElement>) => {
       if (event.button !== 0) return;
@@ -64,7 +78,7 @@ export function SelectLayer({
     [boxOf, image, onMiss, onToggle, segments],
   );
 
-  const box = boxOf();
+  const box = measured ?? boxOf();
   const perPixel = box === null ? { x: 1, y: 1 } : scale(box, image);
 
   return (
