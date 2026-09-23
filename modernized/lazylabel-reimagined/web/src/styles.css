@@ -750,6 +750,71 @@ fieldset input {
   color: var(--muted);
 }
 
+/* A key field in the editor: sized to a key name rather than to a sentence, and marked as the thing
+   to click. It is a read-only text input so the dispatcher ignores the keystroke it captures. */
+/* The modal the hotkey editor opens in. Wide enough for the table legacy's 800-pixel dialog held,
+   and never taller than the window: the table scrolls inside it, the page behind does not. */
+.dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: rgb(0 0 0 / 0.45);
+}
+
+.dialog {
+  width: min(52rem, 100%);
+  max-height: calc(100vh - 2rem);
+  overflow: auto;
+  padding: 1rem 1.25rem;
+  border: 1px solid var(--rule);
+  border-radius: 0.5rem;
+  background: var(--ground);
+  color: var(--ink);
+  box-sizing: border-box;
+}
+
+.dialog:focus {
+  outline: none;
+}
+
+.dialog__actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 1rem;
+}
+
+/* The field and its Clear stay on one line; wrapping put every Clear under its field and doubled
+   the height of all forty-odd rows. */
+.hotkeys__slot {
+  white-space: nowrap;
+}
+
+.hotkeys__clear {
+  font-size: 0.8rem;
+  padding: 0 0.35rem;
+}
+
+.hotkeys__key {
+  width: 7rem;
+  margin-right: 0.25rem;
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+  background: var(--ground);
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  padding: 0.1rem 0.3rem;
+  cursor: pointer;
+}
+
+.hotkeys__key:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
 /* The crop preview: what is being REMOVED, dimmed, rather than an outline around what is kept.
    A crop blanks every mask pixel outside it on save, so showing the removal is showing the save. */
 .crop-layer__surround rect {

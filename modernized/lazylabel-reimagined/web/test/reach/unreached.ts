@@ -61,15 +61,10 @@ export const UNREACHED: Readonly<Record<string, Reason>> = {
   },
 
   // The settings and contracts packages are scanned too, since 2026-09-23. Widening the sweep to
-  // them found two: `importLegacySettings`, the desktop settings import PROGRESS had recorded as
-  // Phase 4 exit criterion 3 MET while nothing called it -- wired into the API's startup the same
-  // day -- and this one.
-  checkAssignment: awaiting(
-    "the web hotkey editor, which is not built. The brief maps legacy's hotkey dialog to 'web "
-      + "settings and hotkey editor' (C13's interface), and this is RULE-049's per-keystroke check "
-      + "for it: refuse a key another action holds, and say which. The API refuses a conflicting "
-      + "save already; only the editor that would make one is missing",
-  ),
+  // them found two, and both are wired now: `importLegacySettings`, the desktop settings import
+  // PROGRESS had recorded as Phase 4 exit criterion 3 MET while nothing called it, and
+  // `checkAssignment`, RULE-049's check for a hotkey editor nobody had built. The editor exists now
+  // (`hotkeys/HotkeyEditor.tsx`) and calls it on every key a user presses to rebind.
 
   project: awaiting(
     "the image-to-display direction of the coordinate transform. Every drawing path needs only "

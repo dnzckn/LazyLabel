@@ -35,7 +35,9 @@ import { Panel, Workspace } from "./Panel.jsx";
 import { StatusBar } from "./StatusBar.jsx";
 import { applyTheme, nextTheme, themeFor } from "./theme.js";
 import { useSettings } from "../settings/SettingsProvider.jsx";
-import { useHotkey, useHotkeyContext } from "../hotkeys/HotkeyProvider.jsx";
+import { HotkeyEditor } from "../hotkeys/HotkeyEditor.jsx";
+import { Dialog } from "./Dialog.jsx";
+import { useHotkey } from "../hotkeys/HotkeyProvider.jsx";
 import type { ApiClient, ApiHealth } from "../api/client.js";
 import { enterEditMode } from "../tools/edit.js";
 import { useNotifications } from "../notifications/NotificationProvider.jsx";
@@ -143,7 +145,9 @@ export function App({ client }: { readonly client: ApiClient }): ReactNode {
   useHotkey("load_previous_image", () => step(-1));
 
   return (
-    <main className="app">
+    // Inert behind the hotkey dialog, so Tab cannot walk out of it into a page that would then
+    // take the keystrokes the dialog exists to capture.
+    <main className="app" inert={showHotkeys}>
       <NotificationHost />
       {/* Renders nothing. It asks `onClose` whether closing this tab would lose work, and arms the
           browser's own dialog when it would -- decision 7's last silent path. */}
@@ -226,10 +230,16 @@ export function App({ client }: { readonly client: ApiClient }): ReactNode {
                   {Object.keys(state.settings.hotkeys).length} hotkeys.
                 </p>
               )}
-              <button type="button" onClick={() => setShowHotkeys((open) => !open)}>
-                {showHotkeys ? "Hide" : "Show"} hotkeys
+              <button type="button" onClick={() => setShowHotkeys(true)}>
+                Show hotkeys
               </button>
-              {showHotkeys && <HotkeyReference />}
+              {/* In a dialog, because the editor needs the width legacy's gave it and this column
+                  is a quarter of that. It renders into document.body, outside the inert page. */}
+              {showHotkeys && (
+                <Dialog title="Hotkeys" onClose={() => setShowHotkeys(false)}>
+                  <HotkeyEditor />
+                </Dialog>
+              )}
             </Panel>
           </>
         }
@@ -467,49 +477,3 @@ function systemPrefersDark(): boolean {
   );
 }
 
-/** The bindings in force, grouped the way the legacy hotkey dialog groups them. */
-function HotkeyReference(): ReactNode {
-  const { bindings, isLive } = useHotkeyContext();
-  const entries = Object.entries(bindings);
-  const liveCount = entries.filter(([action]) => isLive(action)).length;
-
-  return (
-    <section>
-      <h2>Hotkeys</h2>
-      {/* THE TABLE USED TO PROMISE ALL FORTY-THREE. Forty had no handler anywhere, so it named a
-          key for each and pressing it did nothing -- a worse failure than a missing feature,
-          because the user is told exactly where to find it. The state comes from the dispatcher
-          itself rather than a list someone keeps, so it cannot go stale. */}
-      {/* The count moves with what is MOUNTED, deliberately: the save keys belong to the opened
-          image and the frame keys to the sequence panel, so this answers "will this do something
-          if I press it now" rather than "does a handler exist somewhere". It used to under-report
-          as well -- Space finished a shape through a raw listener the dispatcher never saw -- and
-          that is fixed: every action that does anything is registered here. */}
-      <p className="panel__missing">
-        {liveCount} of {entries.length} do something today. The rest are the desktop app&rsquo;s
-        bindings, kept so your remapping survives, and marked below until the action behind them is
-        built.
-      </p>
-      <table className="hotkeys">
-        <thead>
-          <tr>
-            <th scope="col">Action</th>
-            <th scope="col">Key</th>
-            <th scope="col">Alternate</th>
-            <th scope="col">Works</th>
-          </tr>
-        </thead>
-        <tbody>
-          {entries.map(([action, binding]) => (
-            <tr key={action} className={isLive(action) ? undefined : "hotkeys__pending"}>
-              <th scope="row">{action}</th>
-              <td>{binding.primary}</td>
-              <td>{binding.secondary ?? ""}</td>
-              <td>{isLive(action) ? "yes" : "not yet"}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </section>
-  );
-}

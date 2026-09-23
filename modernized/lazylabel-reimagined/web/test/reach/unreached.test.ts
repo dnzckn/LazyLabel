@@ -181,6 +181,6 @@ describe("what the sweep currently finds", () => {
   it("reports the count, so a change in it shows up in the diff", () => {
     // Asserted rather than printed. Wiring one up fails this test, and the person who wired it
     // then removes its entry -- which is the whole mechanism.
-    expect(unreachedNow().length).toBe(3);
+    expect(unreachedNow().length).toBe(2);
   });
 });

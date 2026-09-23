@@ -10,8 +10,8 @@ Last updated: 2026-09-23.
 **Every capability is built, and the conversion is not finished — because finishing means PROVING
 it, and that needs data only the owner has.**
 
-All fourteen capabilities are built and reachable from the app, with one gap found on
-2026-09-23 -- C13's hotkey EDITOR; its settings half is complete. C11 is included: propagation runs end
+All fourteen capabilities are built and reachable from the app -- C13's hotkey editor since
+2026-09-23, when widening the reach guard found it had never been built. C11 is included: propagation runs end
 to end, from the browser's reference masks through the API to a SAM 2 video predictor, with a job
 API that cancels without losing committed frames. What is NOT claimed is that its results match
 legacy's. That is Phase 6 exit criterion 2 and it needs a checkpoint, a recorded sequence, and
@@ -21,9 +21,9 @@ Of Phase 6's five exit criteria: **1, 3 and 5 are met**; **2 and 4 have working 
 on the owner's data**. Both harnesses have now been RUN — see the blocked section — and one of them
 was wrong until today.
 
-Every guard this project uses is closed or its remainder recorded: no unread settings, six
+Every guard this project uses is closed or its remainder recorded: no unread settings, five
 unreached functions across the TypeScript and Python reach guards, each with a written reason
-(one is a library export the formats tests need; one waits for the hotkey editor), 40 of 43 hotkeys live (the other three are mouse
+(one is a library export the formats tests need), 40 of 43 hotkeys live (the other three are mouse
 bindings), and all 94 business rules traceable to a test or recorded as a decision.
 
 ## The suites, as of 2026-09-23
@@ -34,7 +34,7 @@ missing from this table entirely, which is how a table stops being a census.
 | Package | Passing | Note |
 |---|---|---|
 | exporters | 1991 | the seven formats, byte-for-byte against goldens legacy wrote |
-| web | 1098 | C11's placeholder is gone; it has an acceptance test now |
+| web | 1120 | C11's placeholder is gone; it has an acceptance test now |
 | inference | 557 | plus 36 skipped: the differentials, which need real checkpoints |
 | api | 414 | plus 4 skipped and 5 todo, all needing a checkpoint or a corpus |
 | settings-schema | 55 | includes the rule-fixed defaults |
@@ -251,6 +251,18 @@ Fixed: SEC-02, 03, 06, 16, 17. Not applicable: SEC-15. Needing the owner: SEC-08
 is RULE-049's per-keystroke check for a rebinding dialog, and nothing calls it because there is no
 dialog -- the web app shows a read-only reference. The brief maps legacy's hotkey dialog to "web
 settings and hotkey editor" (C13's interface), so this is unbuilt planned work, not a decision.
+
+**Built the same day** (`web/src/hotkeys/HotkeyEditor.tsx`), in a modal because the editor needs
+the width legacy's 800-pixel dialog gave it and the settings column is 254 pixels -- measured, after
+the first version ran across the canvas. Legacy's behaviour is kept: click a key and press the new
+one, Escape cancels, a modifier alone is not a binding, mouse actions cannot be rebound, and a key
+another action holds is refused naming that action while the field reverts (RULE-049). Three
+things differ on purpose: each accepted change saves at once, as the export formats do; an
+alternate key can be cleared, which legacy's model allows and its dialog gave no way to do; and
+the capture field is a text input, so pressing M to bind it does not also merge. Checked in the
+browser against the real API: F9 saved and took effect, Ctrl+Z on Delete was refused naming Undo,
+and closing returned focus to the button -- which it first did not, because making the page inert
+blurred the opener before the dialog could record it. 22 tests; every behaviour mutation-checked.
 
 **If more building is wanted before the data arrives,** the honest answer is that there is no named
 work left: the rule lists, the settings table, the reach sweep and the hotkey reference are all
@@ -848,7 +860,7 @@ Component tests prove the component; only an end-to-end path proves it is reacha
 
 **The same shape has a wider form, and it is worth hunting deliberately: A WIRE BETWEEN TWO
 CORRECT PIECES.** Both ends built, both tested, and nothing joining them — which no test catches,
-because a test exercises one side with the other stubbed. Fifteen found:
+because a test exercises one side with the other stubbed. Sixteen found:
 
 | Where | What was missing |
 |---|---|
@@ -867,6 +879,7 @@ because a test exercises one side with the other stubbed. Fifteen found:
 | Manifest ↔ load path | `check_checkpoint` guarded one load path of three; the video predictor and the archetype embedder loaded unverified (SEC-17) |
 | Manifest ↔ job | Find Archetypes took the manifest's FIRST entry, so any manifest listing SAM first failed it on every call |
 | Import ↔ startup | `importLegacySettings` was tested against legacy-written files and called by nothing; a user moving from the desktop app started from defaults while Phase 4's criterion read MET |
+| Check ↔ dialog | `checkAssignment`, RULE-049's check for a hotkey editor, was tested and called by nothing, because the editor had never been built |
 
 **A conflict has no recovery yet, and the message says so rather than pretending.** When a save is
 refused because the file moved, the annotations on screen are still the user's — but there is no
