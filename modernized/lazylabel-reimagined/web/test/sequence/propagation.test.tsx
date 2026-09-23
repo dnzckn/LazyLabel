@@ -13,6 +13,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import type { WireMask } from "@lazylabel/contracts";
 import { defaultSettings } from "@lazylabel/settings-schema";
 
 import type {
@@ -29,7 +30,7 @@ import type { Frame } from "../../src/sequence/timeline.js";
 
 afterEach(cleanup);
 
-const MASK = { height: 2, width: 2, box: [0, 0, 1, 1], data: "AQE=" };
+const MASK: WireMask = { height: 2, width: 2, box: [0, 0, 1, 1], data: "AQE=" };
 /** One annotation on a reference frame: a square the user drew. */
 const SQUARE = {
   type: "Polygon",
@@ -41,8 +42,13 @@ const SQUARE = {
     [1, 6],
   ],
 };
-/** A mask with no pixels: RULE-016 scores it, RULE-060 refuses to commit it. */
-const EMPTY_MASK = { height: 2, width: 2, box: [0, 0, -1, -1], data: "" };
+/**
+ * A mask with no pixels, in the CONTRACT's form -- `box: null` -- which is what the service sends.
+ * RULE-016 scores it, RULE-060 refuses to commit it. This was `box: [0, 0, -1, -1]` until
+ * 2026-09-23, a shape nothing produces, so the form the browser actually receives went untested and
+ * crashed the poll the first time an object vanished from a real sequence.
+ */
+const EMPTY_MASK: WireMask = { height: 2, width: 2, box: null, data: "" };
 
 function frame(index: number, isReference = false): Frame {
   return {

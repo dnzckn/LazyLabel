@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import threading
 import time
+from dataclasses import dataclass
 
 import pytest
 
@@ -39,6 +40,14 @@ def yields(*values):
         yield from values
 
     return work
+
+
+@dataclass(frozen=True)
+class Found:
+    """One object on one frame, as a propagation yields it."""
+
+    source: str
+    object_id: int
 
 
 def registry(**kwargs) -> JobRegistry:
@@ -194,6 +203,45 @@ class TestCancelling:
         job.wait(5)
 
         assert job.error == "cancelled after 1 frame; that frame is kept"
+
+    def test_counts_FRAMES_not_objects(self):
+        # Two objects over two frames read "4 frames" until 2026-09-23 -- found with two objects
+        # over forty frames, which said eighty.
+        def two_objects(_cancel):
+            for frame in ("f0", "f1"):
+                for object_id in (1, 2):
+                    yield Found(frame, object_id)
+
+        job = registry().start(two_objects, run=inline)
+
+        assert job.completed == 2
+
+    def test_a_cancel_between_two_objects_keeps_the_frame_WHOLE(self):
+        # Half a frame is worse than none: Save All writes it as that frame's entire annotation.
+        jobs = registry()
+        between = threading.Event()
+        proceed = threading.Event()
+
+        def two_objects(_cancel):
+            yield Found("f0", 1)
+            yield Found("f0", 2)
+            yield Found("f1", 1)
+            between.set()
+            proceed.wait(5)
+            yield Found("f1", 2)
+            yield Found("f2", 1)
+            yield Found("f2", 2)
+
+        job = jobs.start(two_objects, total=3)
+        between.wait(5)
+        jobs.cancel(job.id)
+        proceed.set()
+        job.wait(5)
+
+        kept = [(each.source, each.object_id) for each in job.results_since(0)[0]]
+        assert kept == [("f0", 1), ("f0", 2), ("f1", 1), ("f1", 2)]
+        assert job.completed == 2
+        assert job.error == "cancelled after 2 frames; those frames are kept"
 
     def test_cancel_stops_the_worker_being_pulled(self):
         # Not merely "the state says cancelled": the generator must stop being advanced, because

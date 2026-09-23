@@ -295,6 +295,7 @@ def _run_window(
     # be read leaves the staging shorter, and asking SAM 2 to track more frames than exist is how a
     # skipped image turns into a result attributed past the end of the sequence.
     available = len(staged.frames) - (first or 0)
+    in_flight: str | None = None
     for result in propagate(
         predictor,
         state,
@@ -310,9 +311,15 @@ def _run_window(
         # was produced with temporal memory behind it rather than from a standing start.
         if position is None or position not in novel:
             continue
-        yield result
         if cancel is not None and cancel.is_set():
-            return
+            # The frame in flight finishes WHOLE, every object on it (RULE-063). This returned
+            # after any object until 2026-09-23, so a cancel between two objects of one frame kept
+            # half of that frame.
+            if in_flight is None:
+                in_flight = result.source
+            if result.source != in_flight:
+                return
+        yield result
 
 
 def _position_of(source: str, sequence: list[str]) -> int | None:

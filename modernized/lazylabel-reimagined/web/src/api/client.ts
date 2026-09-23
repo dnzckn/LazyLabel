@@ -139,7 +139,12 @@ export interface WirePropagationStart {
 export interface WirePropagationFrame {
   readonly source: string;
   readonly objectId: number;
-  readonly mask: { readonly height: number; readonly width: number; readonly box: readonly number[]; readonly data: string };
+  /**
+   * The contract's mask, whose `box` is NULL for an empty mask. This was a hand-written shape with
+   * a box that could not be null until 2026-09-23, so nothing warned that an object gone from a
+   * frame -- confidence 0, no pixels -- would stop the timeline dead at that frame.
+   */
+  readonly mask: WireMask;
   /** RULE-016. What RULE-060 flags a frame on. */
   readonly confidence: number;
 }

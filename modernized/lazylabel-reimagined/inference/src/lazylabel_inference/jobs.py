@@ -181,14 +181,31 @@ class JobRegistry:
 
         def drive() -> None:
             try:
+                # A propagation yields each OBJECT on each frame, and a frame is the unit: it is
+                # what `completed` counts -- it counted objects until 2026-09-23, so two objects
+                # over 40 frames read "80 frames" -- and it is what a cancel keeps whole.
+                current: object = None
+                in_flight: object = None
                 for result in work(job._cancel):
+                    frame = getattr(result, "source", None)
+                    if frame is not None and job._cancel.is_set():
+                        # RULE-063: the frame in flight when the cancel arrived finishes, WHOLE.
+                        # Stopping between two objects of one frame kept half of it, which Save All
+                        # would then write as that frame's entire annotation.
+                        if in_flight is None:
+                            in_flight = frame
+                        if frame != in_flight:
+                            break
                     with job._lock:
                         job._results.append(result)
                         job._next_cursor += 1
-                        job.completed += 1
-                    # Checked AFTER appending, so the frame in flight when cancel arrived is kept.
-                    # Losing it would be the opposite of what RULE-063 asks for.
-                    if job._cancel.is_set():
+                        if frame is None or frame != current:
+                            job.completed += 1
+                    current = frame
+                    # A result with no frame is its own unit. Checked AFTER appending, so the one
+                    # in flight when cancel arrived is kept -- losing it would be the opposite of
+                    # what RULE-063 asks for.
+                    if frame is None and job._cancel.is_set():
                         break
                 self._finish(job, JobState.CANCELLED if job._cancel.is_set() else JobState.COMPLETED)
             except BaseException as cause:  # noqa: BLE001 - the boundary; a dead worker must show

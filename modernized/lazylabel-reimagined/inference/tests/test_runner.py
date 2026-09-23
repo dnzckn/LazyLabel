@@ -333,6 +333,21 @@ class TestCancelling:
         assert results == []
         assert predictor.states == []
 
+    def test_a_cancel_after_one_object_still_finishes_that_FRAME(self, tmp_path: pathlib.Path) -> None:
+        # The first check is before the window; the cancel lands with the second, after the first
+        # object of the first frame. That frame must come back with both of its objects.
+        predictor = FakePredictor(object_ids=(1, 2))
+
+        results = run(
+            predictor, request(4), [reference(0, 1), reference(0, 2)], tmp_path, cancel=self.Flag(after=1)
+        )
+
+        by_frame: dict[str, list[int]] = {}
+        for result in results:
+            by_frame.setdefault(result.source, []).append(result.object_id)
+        assert by_frame, "the frame in flight was not kept at all"
+        assert all(sorted(objects) == [1, 2] for objects in by_frame.values()), by_frame
+
     def test_it_is_checked_BETWEEN_windows_not_only_at_the_end(
         self, tmp_path: pathlib.Path
     ) -> None:

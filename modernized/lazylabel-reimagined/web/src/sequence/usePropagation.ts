@@ -234,11 +234,11 @@ export function usePropagation(client: ApiClient): UsePropagation {
  * is dropped from the frame's minimum, a real object scoring 0 drags the frame to 0 and flags it.
  */
 function scoreOf(result: WirePropagationFrame): ObjectScore {
+  // The contract's empty mask is `box: null`. Reading its length threw inside the poll until
+  // 2026-09-23, and the poll's error path stopped polling: an object that vanished for a frame
+  // ended the whole timeline at that frame, under "Propagated N frames".
   const box = result.mask.box;
-  const empty =
-    box.length !== 4
-    || (box[2] ?? 0) < (box[0] ?? 0)
-    || (box[3] ?? 0) < (box[1] ?? 0);
+  const empty = box === null || box[2] < box[0] || box[3] < box[1];
   return { empty, score: result.confidence };
 }
 

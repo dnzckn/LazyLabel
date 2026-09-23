@@ -43,7 +43,7 @@ missing from this table entirely, which is how a table stops being a census.
 |---|---|---|
 | exporters | 1991 | the seven formats, byte-for-byte against goldens legacy wrote |
 | web | 1168 | C11's placeholder is gone; it has an acceptance test now |
-| inference | 570 | plus 38 skipped: the differentials, which need real checkpoints |
+| inference | 573 | plus 38 skipped: the differentials, which need real checkpoints |
 | api | 422 | plus 4 skipped (SEC-09's symlink tests, where the OS will not make a link, as on this machine) and 1 todo (C8's placeholder) |
 | settings-schema | 55 | includes the rule-fixed defaults |
 | converter | 30 | the pickled-alias rewrite |
@@ -184,6 +184,27 @@ Mutations caught:
 - rendering only for adjustments fails one;
 - a key without processing fails one;
 - the view sending an empty chain fails one.
+
+**Two objects, one of which vanishes -- three bugs found against the real stack and fixed
+2026-09-23.** Forty frames: a class-0 disc moving right, and a class-2 disc moving left that is gone
+in frames 20-25. Both were seeded from two polygons on frame 0. The service produced every result
+right: the second disc was empty with confidence 0 while gone, and picked up again at frame 26. The
+bugs were in what carried the results:
+- **The browser crashed on the contract's empty mask.** An empty mask is `box: null` (`WireMask`),
+  and `scoreOf` read `box.length`. The throw landed in the poll's error path, which stops polling,
+  so the timeline ended at frame 19 under "Propagated 38 frames". Its own copy of the result type
+  declared a box that could not be null, which is why the compiler never said so; it now uses the
+  contract's type. The test's "empty" mask was `box: [0, 0, -1, -1]`, a shape nothing produces, and
+  is now the contract's form: the two existing empty-mask tests fail without the null check.
+- **`completed` counted objects, `total` frames.** Two objects over 40 frames read "80 frames". The
+  job counts frames now.
+- **A cancel between two objects of one frame kept half of it.** Save All would have written that
+  half as the frame's whole annotation. RULE-063's frame in flight now finishes whole, in the job
+  and in the runner, which returned after any object. Results with no frame key keep the old rule
+  exactly.
+
+Three service tests fail without their fixes. Re-run: "Propagated 40 frames", and all 39 saved files
+right. Class 0 is at its disc in every frame; class 2 is at its disc, absent in exactly frames 20-25.
 
 **Propagation over a long sequence, run against the real stack -- two bugs found and fixed
 2026-09-23.** The run had 130 frames and the streaming window set to 50 in the settings editor, so
