@@ -61,34 +61,36 @@ something nothing handles is how Ctrl+A silently stops selecting text.
 
 ## What is not built
 
-**One of the fourteen capabilities**: **C11**, propagating an annotation along a sequence, which
-needs the inference service and a recorded sequence to be proven against.
+**All fourteen capabilities are built** -- `src/capabilities.ts` marks every one, and each has an
+acceptance test named for it. This section said C11 was the one missing, and that stopped being
+true when propagation landed; it was corrected on 2026-09-23, along with every count below.
 
-Inside the thirteen that are built, two refinements are named rather than implied. A linked pair
-(**C14**) saves each side separately, and a linked EDIT or DELETE is not built -- adding is. And
-**RULE-089**'s Operate On View, which would send the adjusted pixels to the model rather than the
-decoded ones, is a setting nothing reads.
+One refinement is named rather than implied. A linked pair (**C14**) links ADDING: one shape drawn
+once lands in both images. Erasing, merging and deleting still act on the image they are done
+in, where RULE-092 says legacy applies them to both.
 
-**THREE GUARDS ANSWER "what else is missing", and they are the ones to read first**, because each
+**THE GUARDS ANSWER "what else is missing", and they are the ones to read first**, because each
 was built after the same defect was found by hand for the nth time: a thing that works, a test
 that proves it works, and nothing calling it.
 
-- `test/reach/unreached.ts` — every exported FUNCTION no production code calls, with why. Two left,
-  both waiting on C11. A new one fails the test, and so does wiring one up without removing its
-  entry.
-- `test/settings/honoured.ts` — every setting, classified read, dropped or gap, checked against the
-  source in both directions. TWO gaps left, and both are blocked on work larger than a wiring job:
-  `operate_on_view` is RULE-089, and `stream_window_size` is C11. The counts in that file are
-  asserted, so closing a gap fails the test and prompts whoever closed it to move the entry —
-  which is how these two numbers stayed true while the rest of this paragraph went stale once.
-- The hotkey reference in the app itself. It marks each action live or "not yet" from the
-  DISPATCHER's own registrations rather than a list someone keeps, so it cannot drift — open the
-  app and press Show hotkeys. The count moves with what is mounted, deliberately: it answers "will
-  this do something if I press it now".
+- `test/reach/unreached.ts` -- every exported FUNCTION no production code calls, with why, across
+  this app, the API, the formats package and the two shared libraries. Two left, neither a gap: a
+  border tracer the formats tests need on its own, and the image-to-screen half of the coordinate
+  transform, which no feature needs yet. The inference service has its own
+  (`inference/tests/test_reach.py`). A new one fails the test, and so does wiring one up without
+  removing its entry.
+- `test/settings/honoured.ts` -- every setting, classified read, dropped or gap, checked against the
+  source in both directions. No gaps left. The counts are asserted, so a change moves an entry.
+- `test/rules/p0Coverage.test.ts` -- every P0, P1 and P2 rule named by a test or recorded as a
+  deliberate divergence with the decision behind it.
+- The hotkey editor in the app itself (Settings, Show hotkeys). It marks each action live or "not
+  yet" from the DISPATCHER's own registrations rather than a list someone keeps, so it cannot drift.
+  The count moves with what is mounted, deliberately: it answers "will this do something if I press
+  it now".
 
-`src/capabilities.ts` lists every capability with its state, `test/acceptance/pending.test.ts`
-holds a tagged placeholder for each unbuilt one, and `coverage.test.ts` fails if those disagree —
-or if a capability is marked built with no acceptance test named for it.
+`src/capabilities.ts` lists every capability with its state, `test/acceptance/placeheld.ts` holds a
+tagged placeholder for each unbuilt one -- none now -- and `coverage.test.ts` fails if those
+disagree, or if a capability is marked built with no acceptance test named for it.
 
 **That guard went stale once and it is worth knowing how.** It kept listing eight built
 capabilities as pending, and every check still passed, because the checks compare the table with

@@ -55,10 +55,18 @@ changes, and look here first:
    configurations pip silently picks the CPU wheel and the service then starts, reports no
    accelerator, and runs at a tenth of the speed with nothing obviously wrong — which sends a user
    looking at their GPU configuration instead of at their image. What remains to watch is whether
-   the install resolves at all against the CUDA base.
-2. **`npm install` against `file:` dependencies inside a container.** The API and web images copy
-   the local packages in and let npm link them. npm's handling of `file:` paths in a fresh
-   container has been known to differ from a warm developer machine.
+   the install resolves at all against the CUDA base. Since 2026-09-23 it also installs SAM 2 from
+   its repository by commit (which is why `git` is in the image) and OpenCV's headless build, which
+   every image route needed and the image never had. SAM 2 builds from source, and pip's build
+   isolation may fetch a second PyTorch just to build it: slow, not wrong.
+2. **`npm install` against `file:` dependencies inside a container.** This was the warning, and it
+   was right, and it was found before Docker ever ran: on a clean export, npm linked the libraries
+   without their own dependencies, so `tsc` could not follow contracts' import of the format
+   library; and at run time Node resolves each library to its `dist`, which nothing built, through
+   `file:` links the runtime stage did not copy. The images now install the libraries first -- and
+   the API's builds them and keeps the whole tree -- and those steps, run on a clean export, gave
+   an API that answered `/health`. Still only reasoned: that npm on Linux makes those links
+   relative, which is what keeps them valid after the tree is copied into the runtime stage.
 3. **sharp's platform binaries.** The API image reuses the build stage's `node_modules` rather than
    reinstalling, specifically so the binaries match — but the two stages must stay the same base
    image for that to hold.

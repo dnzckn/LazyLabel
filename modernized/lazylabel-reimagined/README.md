@@ -100,16 +100,21 @@ architecture review killed a segment table duplicating the file chain, and it st
 ## Deploying it
 
 [`deploy/`](deploy) holds a compose file for a self-hosted install: the web app, the API, and an
-opt-in inference service. **Nothing in it has been built** — Docker is not installed on the machine
-it was written on — and its README says so first and names what to check.
+opt-in inference service. **Docker has never built it** — Docker is not installed on the machine it
+was written on — and its README says so first and names what to check. The API image's build steps
+were run by hand on a clean export of the repository on 2026-09-23, and the result started and
+answered `/health`; that is the nearest thing to a build this machine can do.
 
 ## What works today
 
-Thirteen of the fourteen capabilities are built, each with an acceptance test named for it. The one
-that is not is **C11**, propagating an annotation along a sequence, which needs the inference
-service and a recorded sequence to be proven against.
+All fourteen capabilities are built, each with an acceptance test named for it. **C11**,
+propagating an annotation along a sequence, was the last: it runs end to end, from the browser's
+reference masks through the API to a SAM 2 video predictor. What is not yet claimed is that its
+results match legacy's on a real recording -- that needs a golden captured from the owner's frames.
+One refinement is named rather than implied: a linked pair (**C14**) links adding, while erasing,
+merging and deleting act on one image.
 
-Every package's `capabilities.ts` lists the rest with the phase that builds it and what is missing,
+Every package's `capabilities.ts` lists each capability with the phase that built it,
 and a guard test fails if those tables disagree with the test suites. That guard is worth knowing
 about: it went stale once, listing eight built capabilities as pending, and nothing was prompted to
 notice because a table nobody updates still passes its own shape checks.
