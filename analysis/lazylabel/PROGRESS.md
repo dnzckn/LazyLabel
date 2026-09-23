@@ -78,6 +78,14 @@ owner can supply, and each is one command once it arrives.
    list that follows from no numbered decision. Recorded in
    `web/test/rules/p0Coverage.test.ts`.
 
+**The security findings are being audited against the new code, in progress.** `ASSESSMENT.md`
+section 6 lists seventeen, and the brief says SEC-01, 02, 03, 04 and 06 must be designed out
+rather than ported. **SEC-03 was not.** Its runtime guard existed and only a test ever called it;
+with `TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD` set, a SAM 1 checkpoint would have executed code in
+production. Fixed and reproduced both ways on 2026-09-23. Still to check, in the brief's order:
+SEC-01 (pickle), SEC-02 (Pillow decoder chosen by content), SEC-04 (a failed load deleting
+sidecars), SEC-06 (no limits on pixels, objects or array shapes).
+
 **If more building is wanted before the data arrives,** the honest answer is that there is no named
 work left: the rule lists, the settings table, the reach sweep and the hotkey reference are all
 empty or recorded. The way more work has been FOUND, every time, is to take a list nobody has
