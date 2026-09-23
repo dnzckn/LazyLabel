@@ -261,7 +261,10 @@ export async function readImageMetadata(bytes: Uint8Array): Promise<ImageMetadat
  * That is the point of having one pipeline: what the user looks at is the same 8-bit RGB the model
  * is given, so a 16-bit image cannot look one way on screen and arrive at SAM another.
  */
-export async function renderPng(image: DecodedImage): Promise<Uint8Array> {
+/** Any RGB raster as PNG: a decoded image, or one tile of it. */
+export async function renderPng(
+  image: Pick<DecodedImage, "width" | "height" | "data">,
+): Promise<Uint8Array> {
   const png = await sharp(Buffer.from(image.data), {
     raw: { width: image.width, height: image.height, channels: 3 },
   })

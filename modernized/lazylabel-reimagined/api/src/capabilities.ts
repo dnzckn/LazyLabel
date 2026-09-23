@@ -82,15 +82,16 @@ export const CAPABILITIES: readonly Capability[] = [
     id: "C8",
     summary: "Adjust the displayed image, threshold channels, rescale and crop",
     builtIn: "P5",
-    // Decode, the 16-bit conversion, the processing chain, thumbnails and the rendered pixels for
-    // the model (RULE-089) are all built; what the spec's API sketch has and this does not is TILES.
-    // Measured 2026-09-23 on a noisy 50-megapixel 16-bit TIFF, the supported working size: one
-    // 41 MB PNG, 2.4 s from click to pixels cold, 0.8 s to a painted canvas warm, a 0.5 s decode
-    // stall. Enough on a local install; whether a hosted one on a slow link needs tiles is the owner's call.
+    // Decode, the 16-bit conversion, the processing chain, thumbnails, the rendered pixels for the
+    // model (RULE-089) and, since 2026-09-23, TILES are all built: `/tiles/{z}/{x}/{y}` serves the
+    // processed view a piece at a time, held to `/pixels` pixel for pixel by `c8.tiles.test.ts`.
+    // The owner chose to build tiles (2026-09-23) after the measurement: a noisy 50-megapixel
+    // 16-bit TIFF sent whole is a 41 MB PNG, 2.4 s from click to pixels cold, and a 0.5 s stall.
+    // Pending until the browser draws them, because a route nothing calls is not a capability.
     apiStatus: "pending",
     apiPhase: "P5",
     missing:
-      "tiles (`/images/{imagePath}/tiles/{z}/{x}/{y}` in the spec): not needed at 50 megapixels on a local install, measured; the owner decides for a hosted one",
+      "the web canvas drawing tiles: the API serves them (`/images/{imagePath}/tiles/{z}/{x}/{y}`), and the browser still loads each image whole",
   },
   {
     id: "C9",

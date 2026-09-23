@@ -7,6 +7,8 @@
 
 export { bytesToBase64, base64ToBytes } from "./base64.js";
 
+export { TILE_SIZE, levelCount, levelFor, levelSize, tileGrid, type Size } from "./tiles.js";
+
 export {
   WireFormatError,
   decodeMask,

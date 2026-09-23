@@ -42,6 +42,7 @@ import {
 } from "./images/processing.js";
 import { isNeutral, type Adjustments } from "@lazylabel/annotation-formats";
 import { RenderCache } from "./images/renderCache.js";
+import { PyramidCache, tileOf } from "./images/tiles.js";
 import { RevisionConflictError, type BlobStore } from "./ports/blobStore.js";
 import {
   InferenceError,
@@ -138,6 +139,11 @@ export function createApp(deps: AppDeps): App {
       method: "GET",
       pattern: "/projects/:projectId/images/*imagePath/thumbnail",
       handler: (request, params) => imageThumbnail(deps, request, params),
+    },
+    {
+      method: "GET",
+      pattern: "/projects/:projectId/images/*imagePath/tiles/:z/:x/:y",
+      handler: (request, params) => imageTile(deps, request, params),
     },
     {
       method: "GET",
@@ -685,6 +691,68 @@ function cacheFor(deps: AppDeps): RenderCache {
   if (existing !== undefined) return existing;
   const made = new RenderCache();
   caches.set(deps, made);
+  return made;
+}
+
+/**
+ * One tile of the image at one level of the pyramid -- the spec's `/tiles/{z}/{x}/{y}`, C8.
+ *
+ * The same pixels as `/pixels`, through the same processing chain, a piece at a time: tile (x, y)
+ * of level 0 IS that region of `/pixels`, and each level above is the one below averaged in 2x2
+ * blocks (`images/tiles.ts`). Display adjustments are not taken, because the browser applies them
+ * to what it draws; `/pixels` takes them only to render the picture a MODEL is given.
+ */
+async function imageTile(
+  deps: AppDeps,
+  request: ApiRequest,
+  params: Readonly<Record<string, string>>,
+): Promise<ApiResponse> {
+  const key = params["imagePath"]!;
+  const [z, x, y] = (["z", "x", "y"] as const).map((name) => {
+    const text = params[name]!;
+    // Digits only. `Number` also accepts "1e3", " 1" and "0x1", and a tile named three ways is a
+    // tile cached three times.
+    if (!/^\d{1,6}$/.test(text)) throw badRequest(`tile ${name} must be a whole number, got "${text}"`);
+    return Number(text);
+  }) as [number, number, number];
+
+  let processing;
+  try {
+    processing = processingFromQuery(request.query);
+  } catch (cause) {
+    throw badRequest(cause instanceof Error ? cause.message : String(cause));
+  }
+
+  // By revision, as the pixels cache is, so a file edited under the app cannot answer from the
+  // pyramid of the bytes it had before.
+  const stat = await deps.blobStore.stat(key);
+  const view = [key, stat?.revision ?? "absent", request.query.toString()].join("\n");
+  const levels = await pyramidsFor(deps).get(view, () => decodeView(deps, key, processing));
+
+  const level = levels[z];
+  const tile = level === undefined ? null : tileOf(level, x, y);
+  if (tile === null) {
+    throw notFound(
+      `tile ${z}/${x}/${y} is outside ${key}: it has ${levels.length} level${levels.length === 1 ? "" : "s"}`,
+    );
+  }
+
+  const bytes = await renderPng(tile);
+  return png(bytes, {
+    "x-image-width": String(levels[0]!.width),
+    "x-image-height": String(levels[0]!.height),
+    "x-tile-levels": String(levels.length),
+  });
+}
+
+/** The tile pyramids belonging to one app, for the reason `cacheFor` gives. */
+const pyramids = new WeakMap<AppDeps, PyramidCache>();
+
+function pyramidsFor(deps: AppDeps): PyramidCache {
+  const existing = pyramids.get(deps);
+  if (existing !== undefined) return existing;
+  const made = new PyramidCache();
+  pyramids.set(deps, made);
   return made;
 }
 

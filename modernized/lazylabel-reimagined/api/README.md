@@ -78,7 +78,10 @@ dead.
 
 Routes: `GET /projects/{projectId}/images` (the dataset listing),
 `GET`/`PUT /projects/{projectId}/images/{imagePath}/annotations`,
-`GET .../metadata`, `GET .../pixels`, `GET .../thumbnail`,
+`GET .../metadata`, `GET .../pixels`, `GET .../thumbnail`, `GET .../tiles/{z}/{x}/{y}` (the
+processed view as 512-pixel tiles; level 0 is the image's own pixels and each level above is the
+one below averaged in 2x2 blocks, the geometry shared with the browser through
+`@lazylabel/contracts`),
 `GET`/`PUT /users/me/settings`, `GET /health`.
 
 ## The image pipeline
