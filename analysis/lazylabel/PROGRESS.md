@@ -214,8 +214,9 @@ import-only on purpose: legacy offers no control for it either. Seven tests; rem
 fails three. The guard now exists too, `web/test/settings/settable.test.ts`: every key needs a control or a
 written reason, so "read and unsettable" cannot recur silently, as "exported and uncalled" once
 could. It found one more the day it was written, `stream_window_size`, which propagation reads and
-only an import can change. It is recorded as a GAP, awaiting legacy's streaming controls (RULE-026),
-which are not built -- the one piece of C11's settings surface still missing.
+only an import can change. It was recorded as a GAP, awaiting legacy's streaming controls
+(RULE-026), and closed the same day by the three steps below: the window in the settings editor,
+the Streaming checkbox and the memory estimate.
 
 **The plan for it, so it can be built as written.** RULE-026's card: window 50-1000 in steps of 50,
 default 250, saved as `stream_window_size`; overlap 5; streaming on by default; memory estimate
