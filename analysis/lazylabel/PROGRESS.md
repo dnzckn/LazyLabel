@@ -127,7 +127,11 @@ for SEC-03 catches the environment variable, not that CVE. All three are pins to
 SEC-08 the environment should move first: install and test the pinned versions, then write them
 down. `sam2` wants a commit pin, since it is installed from git.
 
-Five remain to walk: SEC-13 through SEC-17.
+SEC-13 holds, checked against both loggers with a filename carrying an ANSI escape and a newline:
+the JSON encoding escapes both, so a crafted name cannot colour the console or FORGE a second log
+line. Both write to stdout, leaving rotation to the host rather than to an unrotated file.
+
+Four remain to walk: SEC-14 through SEC-17.
 
 **If more building is wanted before the data arrives,** the honest answer is that there is no named
 work left: the rule lists, the settings table, the reach sweep and the hotkey reference are all
