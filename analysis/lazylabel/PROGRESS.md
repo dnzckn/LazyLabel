@@ -185,13 +185,16 @@ commit. The workflow's header says how to move one forward. What remains is the 
 `tests.yml` still carries all three of SEC-11's problems, including codecov-action v3, and
 Dependabot would keep the pins fresh but opens pull requests on its own.
 
-**SEC-12 is NOT addressed, and it has a SEC-03 residual.** `inference/pyproject.toml` lists
-`segment-anything` with no version at all, and does not declare `sam2` -- so a fresh install
-resolves whatever those are that day. And its torch floor is `>=2.7.1`, which still admits the
-torch whose weights-only unpickler has CVE-2026-24747 (fixed in 2.10.0). The runtime guard added
-for SEC-03 catches the environment variable, not that CVE. All three are pins to raise, and like
-SEC-08 the environment should move first: install and test the pinned versions, then write them
-down. `sam2` wants a commit pin, since it is installed from git.
+**SEC-12 is two-thirds done, and the third needs the owner.** On 2026-09-23 the `ai` extra pinned
+`segment-anything==1.0` (its only release) and declared SAM 2 -- which it had NOT declared at all,
+so the inference image could never have loaded a SAM 2 model -- by the exact commit this
+environment's install record names, `2b90b9f5`, the one every differential suite ran against. The
+image gains `git` to fetch it and `SAM2_BUILD_CUDA=0`, because that optional extension fills holes in
+masks and the tested environment never had it: building it would change masks relative to every
+equivalence result. What remains is the torch floor: `>=2.7.1` still admits the torch whose
+weights-only unpickler has CVE-2026-24747 (fixed in 2.10.0), and the SEC-03 guard catches the
+environment variable, not that CVE. Raising it means installing and testing a new CUDA torch in the
+shared venv first -- the order SEC-08 needs too.
 
 SEC-13 holds, checked against both loggers with a filename carrying an ANSI escape and a newline:
 the JSON encoding escapes both, so a crafted name cannot colour the console or FORGE a second log
@@ -254,7 +257,7 @@ was mutation-checked.
 
 **The audit of all seventeen findings is complete.** Held: SEC-01, 04, 05, 07, 09, 10, 13, 14.
 Fixed: SEC-02, 03, 06, 16, 17, and SEC-11 for the new app's CI. Not applicable: SEC-15. Needing
-the owner: SEC-08, SEC-12, and SEC-11's legacy half (`tests.yml`).
+the owner: SEC-08, SEC-12's torch floor, and SEC-11's legacy half (`tests.yml`).
 
 **What widening the reach guard found last: the hotkey EDITOR is not built.** `checkAssignment`
 is RULE-049's per-keystroke check for a rebinding dialog, and nothing calls it because there is no

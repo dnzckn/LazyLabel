@@ -13,9 +13,15 @@ FROM nvidia/cuda:12.4.1-runtime-ubuntu22.04
 
 # `requires-python = ">=3.10"`, and 22.04 ships 3.10 — so the distribution's own Python is used
 # rather than a PPA or a source build. One fewer thing to keep current.
+# git because SAM 2 is installed from its repository by commit (pyproject.toml says why).
 RUN apt-get update \
-    && apt-get install --no-install-recommends -y python3 python3-pip python3-venv \
+    && apt-get install --no-install-recommends -y python3 python3-pip python3-venv git \
     && rm -rf /var/lib/apt/lists/*
+
+# SAM 2's optional CUDA extension fills holes in its masks. The environment every equivalence result
+# was measured in never had it, so building it here would change masks relative to all of them. The
+# runtime image has no compiler for it anyway; this makes that a decision rather than a build error.
+ENV SAM2_BUILD_CUDA=0
 
 # A venv rather than installing into the system Python: Ubuntu's pip refuses to touch the system
 # site-packages by default (PEP 668), and defeating that guard with --break-system-packages is
