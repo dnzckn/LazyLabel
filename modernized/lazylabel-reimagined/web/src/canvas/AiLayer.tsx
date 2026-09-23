@@ -163,17 +163,24 @@ export function AiLayer({
       }
 
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "z") {
+        // With nothing placed there is nothing here to take back, and Ctrl+Z is the app's Undo:
+        // left alone, it reaches the history.
+        if (pending(prompt) === "nothing") return;
         // Takes back the last thing PLACED, which is the box when there is one -- the same
-        // precedence Space uses, so undo removes what Space would have accepted.
+        // precedence Space uses, so undo removes what Space would have accepted. STOPPED here,
+        // because the dispatcher's Undo also hears Ctrl+Z and used to take back the previous
+        // annotation as well (found 2026-09-23, the same race as the polygon layer's).
         event.preventDefault();
+        event.stopPropagation();
         const back = undoLast(prompt);
         setPrompt(back);
         if (pending(back) !== "nothing") onPrompt(back);
       }
     };
 
-    document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
+    // CAPTURE, so this runs before the dispatcher's listener, which bubbles.
+    document.addEventListener("keydown", onKeyDown, true);
+    return () => document.removeEventListener("keydown", onKeyDown, true);
   }, [onAccept, onPrompt, onRefused, prompt]);
 
   const box = boxOf();

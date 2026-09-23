@@ -34,7 +34,7 @@ missing from this table entirely, which is how a table stops being a census.
 | Package | Passing | Note |
 |---|---|---|
 | exporters | 1991 | the seven formats, byte-for-byte against goldens legacy wrote |
-| web | 1133 | C11's placeholder is gone; it has an acceptance test now |
+| web | 1135 | C11's placeholder is gone; it has an acceptance test now |
 | inference | 560 | plus 36 skipped: the differentials, which need real checkpoints |
 | api | 414 | plus 4 skipped and 5 todo, all needing a checkpoint or a corpus |
 | settings-schema | 55 | includes the rule-fixed defaults |
@@ -112,7 +112,10 @@ and crop it wrote are still what is on screen, so an edit made while any save is
 unsaved. `web/test/canvas/keysWhileDrawing.test.tsx` reproduces all three against the old code;
 each part of the fix is mutation-checked. Rerun in the browser: the file held the polygon (28,200
 pixels where it was drawn), and reopened from disk it came back as a bit-packed mask the canvas
-drew exactly. jsdom had never caught this because no test pressed Enter with a save listening.
+drew exactly. jsdom had never caught this because no test pressed Enter with a save listening. Asking the same question of every
+raw key listener found one more: the AI layer's Ctrl+Z, taking back a placed point, also undid the
+previous annotation. Fixed the same way, and with nothing placed Ctrl+Z still reaches Undo. The other
+raw listeners share only Escape with the dispatcher, where both mean cancel.
 
 **The spec's latency budget had never been measured, and it was missed.** `AI_NATIVE_SPEC.md`
 asks for p95 of 150 ms from click to mask on a 12-megapixel image with a warm embedding. Measured on
