@@ -25,6 +25,23 @@ at RULE-022's minimum of five. What is NOT claimed is that its results match
 legacy's. That is Phase 6 exit criterion 2 and it needs a checkpoint, a recorded sequence, and
 golden outputs.
 
+**Running the whole stack with the real models found what 3,000 component tests had not.** That
+means the browser, the API, and the inference service on the GPU, as a user would run them. From
+2026-09-23, the AI tool, propagation and Find Archetypes have each been run that way, and the runs
+found seven defects, with the code reading they prompted, all of them now fixed. All but one were
+silent; the load race showed as a 500:
+- a click answered from another image's encoding;
+- a cancel dropping frames, or keeping half of one;
+- re-propagated frames counted as saved;
+- an object leaving the frame ending the timeline;
+- progress counted in objects;
+- two first requests racing to load one model.
+
+Two more came from comparing against legacy's code and measuring payloads: Operate On View
+segmenting an unprocessed picture, and large colour images refused. Each is below with its test. The latency budget holds from the browser too: 82-128 ms per click on
+12 megapixels, warm. Anything touching the inference path is worth one more such run; the note on
+running the stack says how.
+
 Of Phase 6's five exit criteria: **1, 3 and 5 are met**; **2 and 4 have working harnesses and wait
 on the owner's data**. Both harnesses have now been RUN — see the blocked section — and one of them
 was wrong until today.
