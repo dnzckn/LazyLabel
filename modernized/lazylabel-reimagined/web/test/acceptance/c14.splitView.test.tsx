@@ -124,7 +124,7 @@ async function pair(): Promise<void> {
   fireEvent.click(screen.getByText("open a"));
   await waitFor(() => expect(screen.getByLabelText("Second image")).toBeTruthy());
   fireEvent.change(screen.getByLabelText("Second image"), { target: { value: "frames/b.png" } });
-  await waitFor(() => expect(canvases()).toEqual(["1 annotations", "1 annotations"]));
+  await waitFor(() => expect(canvases()).toEqual(["1 annotation", "1 annotation"]));
 }
 
 describe("C14: two images, compared", () => {
@@ -184,7 +184,7 @@ describe("C14: annotating both together", () => {
     await waitFor(() => expect(canvases()).toEqual(["2 annotations", "2 annotations"]));
 
     fireEvent.click(screen.getByText("undo"));
-    await waitFor(() => expect(canvases()).toEqual(["1 annotations", "1 annotations"]));
+    await waitFor(() => expect(canvases()).toEqual(["1 annotation", "1 annotation"]));
 
     fireEvent.click(screen.getByText("redo"));
     await waitFor(() => expect(canvases()).toEqual(["2 annotations", "2 annotations"]));
@@ -238,7 +238,7 @@ describe("C14: erasing both together (RULE-092)", () => {
 
     fireEvent.click(screen.getByText("erase"));
 
-    await waitFor(() => expect(canvases()).toEqual(["1 annotations", "1 annotations"]));
+    await waitFor(() => expect(canvases()).toEqual(["1 annotation", "1 annotation"]));
     expect(screen.getByText(/Erased in both images: 1 annotation in b\.png too/)).toBeTruthy();
   });
 
@@ -247,7 +247,7 @@ describe("C14: erasing both together (RULE-092)", () => {
     // pair half-changed.
     await drawnInBoth();
     fireEvent.click(screen.getByText("erase"));
-    await waitFor(() => expect(canvases()).toEqual(["1 annotations", "1 annotations"]));
+    await waitFor(() => expect(canvases()).toEqual(["1 annotation", "1 annotation"]));
 
     fireEvent.click(screen.getByText("undo"));
 
@@ -260,6 +260,6 @@ describe("C14: erasing both together (RULE-092)", () => {
 
     fireEvent.click(screen.getByText("erase"));
 
-    await waitFor(() => expect(canvases()).toEqual(["1 annotations", "2 annotations"]));
+    await waitFor(() => expect(canvases()).toEqual(["1 annotation", "2 annotations"]));
   });
 });

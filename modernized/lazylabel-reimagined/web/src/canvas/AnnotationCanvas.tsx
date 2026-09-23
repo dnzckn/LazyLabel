@@ -127,7 +127,7 @@ export function AnnotationCanvas({
             },
           })}
       role="img"
-      aria-label={`${segments.length} annotations`}
+      aria-label={`${segments.length} ${segments.length === 1 ? "annotation" : "annotations"}`}
     />
   );
 }

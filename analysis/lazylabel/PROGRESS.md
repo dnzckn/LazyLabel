@@ -214,6 +214,15 @@ Mutations caught:
 - a key without processing fails one;
 - the view sending an empty chain fails one.
 
+**Linked editing in the split view, checked in a real browser 2026-09-23.** With two same-sized
+images linked, a polygon drawn on the left landed on both: "Added to both images, as class 0 in
+other.tif". A rectangle closed with Shift+Enter erased from both: "Erased in both images". One Ctrl+Z
+took an addition back from both sides. Erasing is decided when the shape CLOSES (Shift+Enter,
+Shift+Space, or a shift-click on the first vertex), so a shape drawn with Shift and closed by a
+plain Enter is added; the tool's hint, "hold Shift while drawing", is right as long as Shift is
+still held at the close. The only defect was the panes' accessible label, "1 annotations", which
+the split-view tests had pinned; it reads "1 annotation" now.
+
 **The AI model picker offered the archetype embedder -- found against the real stack and fixed
 2026-09-23.** The manifest lists MobileNetV3 beside the SAM checkpoints, for Find Archetypes. The
 picker offered it for the AI tool, and choosing it failed with "no backend for family 'embedder'".

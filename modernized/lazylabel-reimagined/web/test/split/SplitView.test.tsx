@@ -360,11 +360,11 @@ describe("drawing into both at once", () => {
     mount({ counts: { "frames/left.png": 1, "frames/right.png": 1 } });
     await openLeft();
     await pairWith("right.png");
-    await waitFor(() => expect(canvases()).toEqual(["1 annotations", "1 annotations"]));
+    await waitFor(() => expect(canvases()).toEqual(["1 annotation", "1 annotation"]));
 
     fireEvent.click(screen.getByText("draw"));
 
-    await waitFor(() => expect(canvases()).toEqual(["2 annotations", "1 annotations"]));
+    await waitFor(() => expect(canvases()).toEqual(["2 annotations", "1 annotation"]));
     expect((screen.getByLabelText("Link the two images") as HTMLInputElement).checked).toBe(false);
   });
 
@@ -389,7 +389,7 @@ describe("drawing into both at once", () => {
 
     fireEvent.click(screen.getByText("undo"));
 
-    await waitFor(() => expect(canvases()).toEqual(["1 annotations", "1 annotations"]));
+    await waitFor(() => expect(canvases()).toEqual(["1 annotation", "1 annotation"]));
   });
 
   it("says which class the other image used", async () => {
@@ -414,7 +414,7 @@ describe("drawing into both at once", () => {
 
     await waitFor(() => expect(screen.getByText(/Added to this image only/)).toBeTruthy());
     // The active side still got it: a refusal is about the OTHER image, not about the stroke.
-    await waitFor(() => expect(canvases()).toEqual(["1 annotations", "0 annotations"]));
+    await waitFor(() => expect(canvases()).toEqual(["1 annotation", "0 annotations"]));
   });
 
   it("does nothing different when there is no second image", async () => {
@@ -423,7 +423,7 @@ describe("drawing into both at once", () => {
 
     fireEvent.click(screen.getByText("draw"));
 
-    await waitFor(() => expect(canvases()).toEqual(["1 annotations"]));
+    await waitFor(() => expect(canvases()).toEqual(["1 annotation"]));
     expect(screen.queryByText(/Added to both images/)).toBeNull();
   });
 });
