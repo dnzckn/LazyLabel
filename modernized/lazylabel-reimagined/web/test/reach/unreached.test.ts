@@ -24,9 +24,15 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { UNREACHED } from "./unreached.js";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
+/**
+ * Every package whose functions ship. The formats package was added on 2026-09-23: SEC-06's object
+ * limit had no caller there while the text readers built unbounded masks, and it hid because this
+ * list stopped at the app. A guard that does not look somewhere protects nothing there.
+ */
 const SOURCES = [
   path.join(HERE, "..", "..", "src"),
   path.join(HERE, "..", "..", "..", "api", "src"),
+  path.join(HERE, "..", "..", "..", "..", "lazylabel", "core", "exporters", "src"),
 ];
 
 /** Exported function name to the file that declares it. */
@@ -64,7 +70,42 @@ async function walk(dir: string): Promise<void> {
  * satisfy stops working precisely when someone documents carefully, which is backwards.
  */
 function withoutComments(text: string): string {
-  return text.replace(/\/\*[\s\S]*?\*\//g, " ").replace(/\/\/[^\n]*/g, " ");
+  /*
+   * STRING-AWARE, because the first version was not and it swallowed seventy-seven lines of
+   * `app.ts`. The route pattern "/projects/:projectId/images/*imagePath/metadata" contains the two
+   * characters that open a block comment, INSIDE A STRING, and a bare comment regex ran from there
+   * to the next close -- taking every route handler with it, including the one call to
+   * `matchRoute`. It went unnoticed because an import line kept the count above zero; stripping
+   * imports is what exposed it.
+   *
+   * Strings are matched first in one alternation and kept, so a comment marker inside a literal is
+   * never mistaken for one. Regex literals are not protected: a comment marker inside one would
+   * still cut its line short, which can only make something look LESS reached -- the loud
+   * direction, which fails this test rather than hiding a defect behind it.
+   */
+  return text.replace(
+    /("(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\\n])*'|`(?:\\.|[^`\\])*`)|\/\*[\s\S]*?\*\/|\/\/[^\n]*/g,
+    (_whole, literal: string | undefined) => literal ?? " ",
+  );
+}
+
+/**
+ * IMPORTS AND RE-EXPORTS DO NOT COUNT EITHER — the second hole, found the same way as the first.
+ *
+ * A mutation that commented out every call to `assertMaskBudget` still passed this guard, because
+ * the three `import { assertMaskBudget }` lines were still there and each one mentioned the name.
+ * An import is a promise to call something, not a call. A function imported everywhere and called
+ * nowhere is exactly the defect this file exists to find, and it was invisible to it.
+ */
+function withoutImports(text: string): string {
+  // `[^;]` rather than `[\s\S]`, so a match cannot leave the statement it started in. The first
+  // version used a lazy match over anything, and a local `export { a, b };` -- which has no `from`
+  // -- let it run on to the NEXT `} from "..."` in the file, swallowing every line between. That
+  // reported `matchRoute` unreached, while app.ts calls it on every request.
+  return text
+    .replace(/^[ 	]*import\s[^;]*?from\s*["'][^"']+["'];?/gm, " ")
+    .replace(/^[ 	]*import\s*["'][^"']+["'];?/gm, " ")
+    .replace(/^[ 	]*export\s*(?:type\s*)?\{[^;}]*\}\s*from\s*["'][^"']+["'];?/gm, " ");
 }
 
 function callsTo(name: string): number {
@@ -72,7 +113,7 @@ function callsTo(name: string): number {
   const ownDeclaration = new RegExp(`^export\\s+(?:async\\s+)?function\\s+${name}\\b`, "gm");
   let total = 0;
   for (const [, text] of texts) {
-    const code = withoutComments(text);
+    const code = withoutImports(withoutComments(text));
     total += (code.match(word) ?? []).length;
   }
   // Its own declaration is one of those matches, wherever it lives.
@@ -136,6 +177,6 @@ describe("what the sweep currently finds", () => {
   it("reports the count, so a change in it shows up in the diff", () => {
     // Asserted rather than printed. Wiring one up fails this test, and the person who wired it
     // then removes its entry -- which is the whole mechanism.
-    expect(unreachedNow().length).toBe(1);
+    expect(unreachedNow().length).toBe(2);
   });
 });

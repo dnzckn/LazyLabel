@@ -48,6 +48,18 @@ export const UNREACHED: Readonly<Record<string, Reason>> = {
   // guard strips comments now; these are what was behind it, and each is a real gap rather than
   // dead code. `resetForPropagation` came off the list in the same commit, wired into the start of
   // a propagation run where RULE-075 says it belongs.
+  // The formats package is scanned too, since 2026-09-23. SEC-06's object limit sat there with no
+  // caller while the text readers allocated one full-image mask per line, and neither reach guard
+  // looked at that package. Widening the sweep found this one entry, and it is not a defect.
+  findExternalContoursDense: {
+    kind: "library",
+    who:
+      "the formats package's own tests. It is cv2's CHAIN_APPROX_NONE -- every border pixel -- and "
+      + "exists to pin the border tracer down independently of CHAIN_APPROX_SIMPLE's corner "
+      + "compression, which is what the writers use. Deleting it would remove the only way to test "
+      + "the tracer on its own.",
+  },
+
   project: awaiting(
     "the image-to-display direction of the coordinate transform. Every drawing path needs only "
       + "`locate`, the other direction; this waits for the first feature that draws a known image "

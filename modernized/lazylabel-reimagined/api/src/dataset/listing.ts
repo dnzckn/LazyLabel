@@ -17,7 +17,7 @@ import { FORMAT_SUFFIX, LOAD_PRIORITY, stripExtension } from "@lazylabel/annotat
 import type { AnnotationFormat } from "@lazylabel/annotation-formats";
 
 import type { BlobStore } from "../ports/blobStore.js";
-import { isImageKey, isSidecarKey, sidecarKeysFor } from "../annotations/sidecars.js";
+import { isImageKey, isSidecarKey, sidecarCollisions, sidecarKeysFor } from "../annotations/sidecars.js";
 
 export interface DatasetImage {
   /** Store key, e.g. "frames/frame_012.png". */
@@ -98,14 +98,15 @@ export async function listDataset(
     else if (!isSidecarKey(key)) unrecognized += 1;
   }
 
-  // RULE-080's collision, grouped before the rows are built so each side can name the other.
-  const byBase = new Map<string, string[]>();
-  for (const key of images) {
-    const base = stripExtension(key);
-    const group = byBase.get(base);
-    if (group) group.push(key);
-    else byBase.set(base, [key]);
-  }
+  /*
+   * RULE-080's collision, grouped before the rows are built so each side can name the other.
+   *
+   * Through `sidecarCollisions` rather than a second copy of it. This used to be the same grouping
+   * written out again inline, while the named, tested function sat with no caller -- found when the
+   * reach guard stopped counting import lines as uses. Two implementations of one rule are two
+   * chances for the listing and anything else asking "do these share sidecars?" to disagree.
+   */
+  const collisions = sidecarCollisions(images);
 
   const rows = images.map((key) => {
     const sidecars = {} as Record<AnnotationFormat, boolean>;
@@ -121,7 +122,7 @@ export async function listDataset(
       name: baseName(key),
       sidecars,
       annotated,
-      sharesSidecarsWith: (byBase.get(stripExtension(key)) ?? []).filter((other) => other !== key).sort(),
+      sharesSidecarsWith: (collisions.get(stripExtension(key)) ?? []).filter((other) => other !== key),
     };
   });
 
