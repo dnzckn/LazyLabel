@@ -176,12 +176,14 @@ SEC-10 holds: there is no `atexit` registration anywhere, and the backend cache 
 model name, so re-selecting a model reuses it -- memory is bounded by the manifest, where
 legacy's grew on every switch.
 
-SEC-11 is HALF done. `.github/workflows/modernized.yml` -- the new app's CI -- has a
-`permissions:` block, but pins `actions/checkout@v4`, `setup-node@v4` and `setup-python@v5` by
-mutable TAG rather than commit SHA. Not changed here, because the SHAs must be looked up rather
-than guessed: a wrong one breaks CI, and a plausible-looking wrong one pins code nobody
-reviewed. `gh api repos/actions/checkout/git/ref/tags/v4` and its siblings give them. The legacy
-`tests.yml` still carries all three of SEC-11's problems, including codecov-action v3.
+SEC-11 is done for the new app's CI. `.github/workflows/modernized.yml` has a `permissions:` block
+and, since 2026-09-23, every action pinned to a commit with its release in a comment -- 18 uses of
+five actions (checkout v4.4.0, setup-node v4.4.0, setup-python v5.6.0, setup-buildx v4.4.1,
+build-push v7.4.0). The SHAs were looked up, not guessed: `git ls-remote --tags` against each
+action's repository, taking the commit its major tag pointed to and the release tag at that same
+commit. The workflow's header says how to move one forward. What remains is the owner's: the legacy
+`tests.yml` still carries all three of SEC-11's problems, including codecov-action v3, and
+Dependabot would keep the pins fresh but opens pull requests on its own.
 
 **SEC-12 is NOT addressed, and it has a SEC-03 residual.** `inference/pyproject.toml` lists
 `segment-anything` with no version at all, and does not declare `sam2` -- so a fresh install
@@ -251,7 +253,8 @@ unknown keys are still stored -- that is RULE-088's fix, not a shape problem. Ev
 was mutation-checked.
 
 **The audit of all seventeen findings is complete.** Held: SEC-01, 04, 05, 07, 09, 10, 13, 14.
-Fixed: SEC-02, 03, 06, 16, 17. Not applicable: SEC-15. Needing the owner: SEC-08, 11, 12.
+Fixed: SEC-02, 03, 06, 16, 17, and SEC-11 for the new app's CI. Not applicable: SEC-15. Needing
+the owner: SEC-08, SEC-12, and SEC-11's legacy half (`tests.yml`).
 
 **What widening the reach guard found last: the hotkey EDITOR is not built.** `checkAssignment`
 is RULE-049's per-keystroke check for a rebinding dialog, and nothing calls it because there is no

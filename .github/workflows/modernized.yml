@@ -20,6 +20,14 @@ on:
 permissions:
   contents: read
 
+# SEC-11: every action is pinned to a COMMIT, with its release in a comment. A tag can be moved to
+# different code by whoever controls the action's repository; a commit cannot. Resolved on
+# 2026-09-23 from what each major tag pointed to then, with
+#   git ls-remote --tags https://github.com/<owner>/<action>
+# which is also how to move one forward: find the release's commit, change both the SHA and the
+# comment. Nothing updates these automatically -- Dependabot would, and enabling it is the owner's
+# call, because it opens pull requests on its own.
+
 jobs:
   services:
     name: ${{ matrix.service }}
@@ -47,9 +55,9 @@ jobs:
         working-directory: ${{ matrix.path }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: "22"
           cache: npm
@@ -85,7 +93,7 @@ jobs:
       run:
         working-directory: modernized/lazylabel-reimagined/inference
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           # The legacy snapshot is an older commit, so the shallow default cannot reach it.
           fetch-depth: 0
@@ -95,7 +103,7 @@ jobs:
       - name: Check out the legacy snapshot
         working-directory: .
         run: git worktree add --detach legacy/lazylabel 2a7d5d8
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
           python-version: "3.10"
       # No [ai] extra, on purpose: PyTorch is gigabytes, and every test that needs it also needs a
@@ -121,8 +129,8 @@ jobs:
       # on a clean runner: tests/conftest.py puts the repository ROOT on the path, not src.
       PYTHONPATH: src
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
           python-version: "3.10"
       # scipy because importing the legacy UI package imports its FFT widget. Found by running this
@@ -141,8 +149,8 @@ jobs:
       run:
         working-directory: modernized/lazylabel-reimagined/converter
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
           python-version: "3.10"
       - name: Install
@@ -156,8 +164,8 @@ jobs:
     name: analysis documents
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
           python-version: "3.10"
       # Every rule id cited in an analysis document must exist, and every P0 rule must have a home.
@@ -174,18 +182,18 @@ jobs:
     name: differential against legacy
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           # The legacy snapshot is an older commit, so the shallow default cannot reach it.
           fetch-depth: 0
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: "22"
           cache: npm
           cache-dependency-path: modernized/lazylabel/core/exporters/package-lock.json
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
           python-version: "3.10"
 
@@ -235,7 +243,7 @@ jobs:
     name: deployment images
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       # Checked on 2026-09-20: setup-buildx is on v4 (4.4.1) and build-push on v7 (7.4.0), so the
       # versions first written here -- v3 and v6 -- were each a major behind. v7's breaking changes
@@ -244,13 +252,13 @@ jobs:
       # `context`, `file`, `push`, `load`, `cache-from` or `cache-to` changed. Buildx is used with
       # no inputs at all, which is the lowest-risk usage there is.
       - name: Set up Buildx
-        uses: docker/setup-buildx-action@v4
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
       # The context is `modernized/`, not the rebuild directory: both Node images depend on the
       # exporters package, which is a SIBLING of the rebuild, and Docker refuses COPY paths outside
       # the context.
       - name: Build the API image
-        uses: docker/build-push-action@v7
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: modernized
           file: modernized/lazylabel-reimagined/deploy/api.Dockerfile
@@ -260,7 +268,7 @@ jobs:
           cache-to: type=gha,mode=max,scope=api
 
       - name: Build the web image
-        uses: docker/build-push-action@v7
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: modernized
           file: modernized/lazylabel-reimagined/deploy/web.Dockerfile
@@ -274,7 +282,7 @@ jobs:
       # every push, so a two-line change to the web app does not pull a CUDA runtime.
       - name: Build the inference image
         if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
-        uses: docker/build-push-action@v7
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: modernized
           file: modernized/lazylabel-reimagined/deploy/inference.Dockerfile
