@@ -31,7 +31,9 @@ import { PropagationControl } from "./PropagationControl.jsx";
 import {
   buildTimeline,
   clearFlags,
+  clearReferences,
   colourOf,
+  markAllBefore,
   markReference,
   markReferences,
   markSaved,
@@ -450,6 +452,17 @@ export function TimelinePanel({
         </button>
         <button type="button" onClick={markCurrent}>
           Mark as reference
+        </button>
+        {/* Legacy's other three reference buttons (`sequence_widget.py:228-253`). "Before" means
+            to the left ON SCREEN, so a sorted timeline adds what the user sees to the left. */}
+        <button type="button" onClick={() => setOverrides(markAllBefore(frames, current, order))}>
+          + All before
+        </button>
+        <button type="button" onClick={() => setOverrides(markReferences(frames, annotated))}>
+          + All labeled
+        </button>
+        <button type="button" onClick={() => setOverrides(clearReferences(frames))}>
+          Clear references
         </button>
         {client !== undefined && (
           <button type="button" onClick={() => void find()} disabled={finding}>

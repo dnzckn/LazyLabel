@@ -458,3 +458,40 @@ describe("trimming the timeline — RULE-077", () => {
     expect(labels.filter((label) => label?.includes("reference"))).toHaveLength(2);
   });
 });
+
+describe("legacy's other reference buttons (sequence_widget.py:228-253)", () => {
+  const roles = () => [...cells()].map((cell) => cell.getAttribute("aria-label")!.split(", ").at(-1));
+
+  it("Clear references leaves no frame a reference", async () => {
+    show();
+    build("0", "4");
+    await waitFor(() => expect(roles().filter((role) => role === "reference")).toHaveLength(2));
+
+    fireEvent.click(screen.getByRole("button", { name: "Clear references" }));
+
+    expect(roles().filter((role) => role === "reference")).toHaveLength(0);
+  });
+
+  it("+ All labeled makes every annotated frame a reference again", async () => {
+    show();
+    build("0", "4");
+    await waitFor(() => expect(cells()).toHaveLength(5));
+    fireEvent.click(screen.getByRole("button", { name: "Clear references" }));
+
+    fireEvent.click(screen.getByRole("button", { name: "+ All labeled" }));
+
+    expect(roles()).toEqual(["pending", "reference", "pending", "pending", "reference"]);
+  });
+
+  it("+ All before makes every frame left of the current one a reference", async () => {
+    show();
+    build("0", "4");
+    await waitFor(() => expect(cells()).toHaveLength(5));
+    fireEvent.click(screen.getByRole("button", { name: "Clear references" }));
+    fireEvent.click(cells()[3]!);
+
+    fireEvent.click(screen.getByRole("button", { name: "+ All before" }));
+
+    expect(roles()).toEqual(["reference", "reference", "reference", "pending", "pending"]);
+  });
+});

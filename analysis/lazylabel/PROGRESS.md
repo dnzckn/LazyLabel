@@ -61,7 +61,7 @@ missing from this table entirely, which is how a table stops being a census.
 | Package | Passing | Note |
 |---|---|---|
 | exporters | 1991 | the seven formats, byte-for-byte against goldens legacy wrote |
-| web | 1218 | includes the four propagation-golden scenarios (16 tests against legacy's own sequence mode) and the tile planning |
+| web | 1225 | includes the four propagation-golden scenarios (16 tests against legacy's own sequence mode), the tile planning and legacy's reference buttons |
 | inference | 605 | plus 43 skipped: the differentials and the golden comparison, which need real checkpoints. With them: 648 passed, 0 skipped. Both on CPython 3.12.11 with PyTorch 2.10, which the package has required since 2026-09-23 |
 | api | 440 | plus 4 skipped (SEC-09's symlink tests, where the OS will not make a link, as on this machine); no todo left, since C8 is built |
 | settings-schema | 55 | includes the rule-fixed defaults |
@@ -571,8 +571,11 @@ configured, so a green CI run says nothing about them — see `Running the live 
    from existing annotations", and C10's test pins it. Legacy never marks one on its own: the user
    presses "+ Add Current", "+ All Before" or "+ All Labeled", and can "Clear All". The difference
    shows on a rebuilt timeline: every frame an earlier Save All wrote becomes a seed, and each of
-   its annotations is tracked as its own object. The web has "+ Add Current" only. Adding the other
-   three, and not marking at build, would match legacy.
+   its annotations is tracked as its own object. **Legacy's other three buttons now exist**
+   (2026-09-23): "+ All before", which goes by display order as legacy's does; "+ All labeled"; and
+   "Clear references", which also clears the size-mismatch skips, as legacy's does. A user can
+   therefore reach legacy's setup: clear, then mark. Not marking at build, the one remaining
+   difference, is the owner's call.
 
 Everything else that can be done without the owner has been done. One item needs something only
 the owner can supply, and it is one command once it arrives:

@@ -183,6 +183,46 @@ export function resetForPropagation(frames: readonly Frame[]): readonly Frame[] 
 }
 
 /**
+ * "+ All Before": every frame before the current one, as the timeline is SHOWN, becomes a reference.
+ *
+ * In display order, as legacy does it (`main_window.py:3910-3930`): with the timeline sorted,
+ * "before" is to the left of the current frame on screen, not a lower index -- the frames a user is
+ * looking at, which is the only reading of "before" they can act on.
+ */
+export function markAllBefore(
+  frames: readonly Frame[],
+  current: number,
+  order: readonly number[],
+): readonly Frame[] {
+  const at = order.indexOf(current);
+  if (at <= 0) return frames;
+  const before = new Set(order.slice(0, at));
+  return frames.map((frame) =>
+    before.has(frame.index) && !frame.isReference && frame.state !== "skipped"
+      ? { ...frame, isReference: true }
+      : frame,
+  );
+}
+
+/**
+ * "Clear All": no frame is a reference any more — `_on_clear_sequence_references`.
+ *
+ * The frames skipped for a size mismatch go back to pending with them, as in legacy: the size
+ * they failed to match was the first reference's, and with no reference there is nothing to fail.
+ * A cleared reference keeps its STATE, which is where this departs from legacy on purpose (RULE-055's
+ * answer): a reference that was saved is still a saved frame when it stops being a reference, and
+ * legacy's repaint to pending forgets that its file is on disk.
+ */
+export function clearReferences(frames: readonly Frame[]): readonly Frame[] {
+  if (!frames.some((frame) => frame.isReference || frame.state === "skipped")) return frames;
+  return frames.map((frame) => {
+    if (frame.isReference) return { ...frame, isReference: false };
+    if (frame.state === "skipped") return { ...frame, state: "pending" as const };
+    return frame;
+  });
+}
+
+/**
  * The frames Save All wrote, marked `saved` — what legacy's `mark_frame_saved` paints cyan.
  *
  * Until 2026-09-23 nothing did this: a Save All wrote the files and the timeline went on calling

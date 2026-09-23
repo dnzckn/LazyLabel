@@ -17,7 +17,9 @@ import { describe, expect, it } from "vitest";
 import {
   buildTimeline,
   clearFlags,
+  clearReferences,
   colourOf,
+  markAllBefore,
   markReference,
   markReferences,
   markSaved,
@@ -384,5 +386,41 @@ describe("the frames Skip Labeled kept (RULE-081)", () => {
     const frames = timeline("reference");
 
     expect(showKeptLabels(frames, new Set(["0.png"]))[0]).toEqual(frames[0]);
+  });
+});
+
+
+describe("+ All Before and Clear All (legacy's reference buttons)", () => {
+  it("adds the frames before the current one IN THE ORDER SHOWN", () => {
+    // Sorted, frame 3 is shown first: "before" frame 1 on screen is frame 3 alone, not frame 0.
+    const frames = timeline("pending", "pending", "pending", "pending");
+
+    const marked = markAllBefore(frames, 1, [3, 1, 0, 2]);
+
+    expect(marked.map((f) => f.isReference)).toEqual([false, false, false, true]);
+  });
+
+  it("does not make a size-mismatched frame a reference, as legacy refuses it", () => {
+    const frames = timeline("skipped", "pending", "pending");
+
+    expect(markAllBefore(frames, 2, [0, 1, 2]).map((f) => f.isReference)).toEqual([false, true, false]);
+  });
+
+  it("clears every reference, and the size-mismatch skips that depended on them", () => {
+    const frames = timeline("reference", "skipped", "propagated");
+
+    const cleared = clearReferences(frames);
+
+    expect(cleared.map((f) => [f.isReference, f.state])).toEqual([
+      [false, "pending"],
+      [false, "pending"],
+      [false, "propagated"],
+    ]);
+  });
+
+  it("keeps a saved reference saved when it stops being a reference (RULE-055)", () => {
+    const frames: readonly Frame[] = [{ index: 0, key: "0.png", state: "saved", isReference: true }];
+
+    expect(clearReferences(frames)[0]).toEqual({ index: 0, key: "0.png", state: "saved", isReference: false });
   });
 });
