@@ -1551,9 +1551,9 @@ about them. Run them locally, deliberately:
 cd modernized/lazylabel-reimagined/inference && LAZYLABEL_TEST_SAM1_CHECKPOINT=/path/to/sam_vit_h_4b8939.pth LAZYLABEL_TEST_CHECKPOINT=/path/to/sam2.1_hiera_large.pt LAZYLABEL_TEST_EMBEDDER=/path/to/mobilenetv3_small_tv.pth PYTHONPATH=/path/to/legacy/lazylabel/src python -m pytest tests/ -q
 ```
 
-With all three set, the last run on 2026-09-23 was **607 passed, 0 skipped**, in 56 s on this
-machine, after that day's encoding-cache fix. It was 600 earlier the same day, before the fix's
-tests. Any `skipped` count above zero means a
+With all three set, the last run on 2026-09-23 was **611 passed, 0 skipped**, in 57 s on this
+machine. That run followed the frame-unit fix to the job and the runner. It was 600 earlier the same
+day, before that day's fixes and their tests. Any `skipped` count above zero means a
 checkpoint was not found and that suite did not actually run. This section said "255 passed, 1
 xfailed" until then. The xfail was C11's placeholder, removed on 2026-09-21 when the job API
 landed, and the suite has grown since. The count here is the one the last run printed, not a target.
