@@ -29,7 +29,19 @@ export interface PanelProps {
 
 export function Panel({ title, initiallyCollapsed, pending, children }: PanelProps): ReactNode {
   const [collapsed, setCollapsed] = useState(initiallyCollapsed ?? pending !== undefined);
-  const toggle = useCallback(() => setCollapsed((open) => !open), []);
+  /*
+   * COLLAPSING HIDES; IT DOES NOT UNMOUNT. It did until 2026-09-23, and collapsing is something
+   * people do for room: collapsing the Sequence panel threw away an unsaved propagation -- minutes
+   * of GPU time -- without a word, and collapsing Drawing tools took Ctrl+Z away, because Undo's
+   * hotkey lives in the history controls inside it. Legacy's cards hide their widgets too.
+   *
+   * What a panel holds is built the first time it opens, so a panel nobody opens costs nothing.
+   */
+  const [opened, setOpened] = useState(!collapsed);
+  const toggle = useCallback(() => {
+    setCollapsed((open) => !open);
+    setOpened(true);
+  }, []);
 
   return (
     <section className="panel">
@@ -47,8 +59,8 @@ export function Panel({ title, initiallyCollapsed, pending, children }: PanelPro
         {pending !== undefined && <span className="panel__pending">{pending.phase}</span>}
       </h3>
 
-      {!collapsed && (
-        <div className="panel__body">
+      {opened && (
+        <div className="panel__body" hidden={collapsed}>
           {pending === undefined ? (
             children
           ) : (

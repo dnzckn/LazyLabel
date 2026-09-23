@@ -35,7 +35,7 @@ missing from this table entirely, which is how a table stops being a census.
 | Package | Passing | Note |
 |---|---|---|
 | exporters | 1991 | the seven formats, byte-for-byte against goldens legacy wrote |
-| web | 1146 | C11's placeholder is gone; it has an acceptance test now |
+| web | 1153 | C11's placeholder is gone; it has an acceptance test now |
 | inference | 560 | plus 36 skipped: the differentials, which need real checkpoints |
 | api | 414 | plus 4 skipped and 5 todo, all needing a checkpoint or a corpus |
 | settings-schema | 55 | includes the rule-fixed defaults |
@@ -111,20 +111,39 @@ may be a real gap; **C14** needs its entry read. The coverage test keeps `placeh
 pending set, so each correction is: confirm, write or name its acceptance test, flip, drop the
 placeholder.
 
+**Collapsing a panel threw away what it held -- found and fixed 2026-09-23.** A panel UNMOUNTED
+its contents when collapsed, and collapsing is what people do for room. Collapsing Sequence after a
+propagation discarded every unsaved propagated frame, minutes of GPU time, without the question New
+timeline asks (RULE-056); collapsing Drawing tools took Ctrl+Z and Ctrl+Y away, because Undo's
+hotkey lives in the history controls inside it; collapsing Segments took Delete, Merge and Select
+all. A panel now builds its contents the first time it opens and afterwards HIDES them, which is
+what legacy's cards do. Closing the TAB lost the same propagation too, since `CloseGuard` asks
+about open images only: the timeline panel now arms the browser's own dialog while propagated
+frames are unsaved. Seven tests: six failed before the fix, and the seventh holds the other side
+(no question when nothing is waiting to be saved). Checked in a real browser (Ctrl+Z
+restores a deleted annotation with Drawing tools collapsed; the split view's canvases return at
+the same size and place after a collapse). Found while examining C10, below: nothing persists a
+timeline anywhere, so the question became what else could lose one.
+
 **The settings half of C13's editor was missing too -- found and built 2026-09-23.** The
 hotkey editor was never built (now it is); the brief's phrase is "web settings AND hotkey editor",
 so the same question was asked of the settings: not "does anything READ this key", which the
-settings guard answers, but "can a user SET it". Of 39 keys, 17 have a control. Nine of the rest are
-deliberate (window and panel geometry, the dropped legacy keys, the name column). **Thirteen are read
-by the app and settable by no one** -- they keep their default unless a desktop import brings a
+settings guard answers, but "can a user SET it". Nine keys have no control on purpose (window and
+panel geometry, the dropped legacy keys, the name column). **Six were read
+by the app and settable by no one** -- they kept their default unless a desktop import brought a
 value: `line_thickness`, `pan_multiplier` and `polygon_join_threshold` (RULE-050 clamps typed values
 for pan speed and join threshold, which presumes the inputs exist), `operate_on_view` (RULE-089, so a
-new user can never turn it on), `pixel_priority_enabled` and `pixel_priority_ascending` (RULE-012,
-same), and the seven `file_manager_show_*` column toggles. Built: Settings, Edit settings opens
+new user could never turn it on), and `pixel_priority_enabled` and `pixel_priority_ascending`
+(RULE-012, same). **The sweep first said thirteen, and was wrong about seven:** the
+`file_manager_show_*` column toggles ARE set, by the dataset browser's Columns chooser through a
+computed key whose names live in `columns.ts`, which the sweep did not read. They got a second set
+of switches in the editor, removed the same day once a real-browser check showed both; the guard
+now declares that indirection (`NAMED_FOR`) and checks the writer imports it, and removing the
+declaration makes it report exactly those seven. Built: Settings, Edit settings opens
 `web/src/settings/SettingsEditor.tsx` in the same dialog as the hotkeys, with RULE-050's clamps
 applied when editing finishes (25 in Join becomes 10; non-numeric reverts). `line_thickness` stays
-import-only on purpose: legacy offers no control for it either. Six tests; removing the clamp fails
-two. The guard now exists too, `web/test/settings/settable.test.ts`: every key needs a control or a
+import-only on purpose: legacy offers no control for it either. Seven tests; removing the clamp
+fails three. The guard now exists too, `web/test/settings/settable.test.ts`: every key needs a control or a
 written reason, so "read and unsettable" cannot recur silently, as "exported and uncalled" once
 could. It found one more the day it was written, `stream_window_size`, which propagation reads and
 only an import can change. It is recorded as a GAP, awaiting legacy's streaming controls (RULE-026),

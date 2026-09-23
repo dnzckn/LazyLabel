@@ -131,6 +131,20 @@ export function TimelinePanel({
    * user this protects is the one who propagates and immediately clicks New timeline.
    */
   const unsavedRef = useRef(0);
+  /*
+   * And before the TAB closes. `CloseGuard` asks about open images only, so a propagation's
+   * unsaved frames went with a closed tab without a question until 2026-09-23. Registered here
+   * because this panel is what knows the count; the browser shows its own wording either way.
+   */
+  useEffect(() => {
+    const ask = (event: BeforeUnloadEvent): void => {
+      if (unsavedRef.current === 0) return;
+      event.preventDefault();
+      event.returnValue = ""; // older engines arm the dialog on this, as CloseGuard notes
+    };
+    window.addEventListener("beforeunload", ask);
+    return () => window.removeEventListener("beforeunload", ask);
+  }, []);
   const [finding, setFinding] = useState(false);
   const [foundNote, setFoundNote] = useState<string | null>(null);
   /*

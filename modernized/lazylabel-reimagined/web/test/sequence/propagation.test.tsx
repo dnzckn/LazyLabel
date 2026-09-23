@@ -21,6 +21,7 @@ import type {
   WirePropagationStart,
 } from "../../src/api/client.js";
 import { HotkeyProvider } from "../../src/hotkeys/HotkeyProvider.jsx";
+import { Panel } from "../../src/shell/Panel.jsx";
 import { TimelinePanel } from "../../src/sequence/TimelinePanel.jsx";
 import { PropagationControl } from "../../src/sequence/PropagationControl.jsx";
 import { SettingsProvider } from "../../src/settings/SettingsProvider.jsx";
@@ -509,7 +510,7 @@ describe("RULE-056: not losing propagated work without asking", () => {
     vertices: [[1, 1], [6, 1], [6, 6], [1, 6]],
   };
 
-  function panel(confirmDiscard: (message: string) => boolean) {
+  function panel(confirmDiscard: (message: string) => boolean, inPanel = false) {
     const client = {
       getSettings: async () => defaultSettings(),
       putSettings: async (next: unknown) => next,
@@ -541,13 +542,21 @@ describe("RULE-056: not losing propagated work without asking", () => {
         }),
     } as unknown as ApiClient;
 
+    const timeline = <TimelinePanel images={FOLDER as never} client={client} confirmDiscard={confirmDiscard} />;
     render(
       <SettingsProvider client={client}>
         <HotkeyProvider bindings={defaultSettings().hotkeys}>
-          <TimelinePanel images={FOLDER as never} client={client} confirmDiscard={confirmDiscard} />
+          {inPanel ? <Panel title="Sequence">{timeline}</Panel> : timeline}
         </HotkeyProvider>
       </SettingsProvider>,
     );
+  }
+
+  /** What the browser does before a tab closes: returns true when the page asked it to ask. */
+  function closeTab(): boolean {
+    const event = new Event("beforeunload", { cancelable: true });
+    window.dispatchEvent(event);
+    return event.defaultPrevented;
   }
 
   async function propagateAndWait() {
@@ -602,5 +611,39 @@ describe("RULE-056: not losing propagated work without asking", () => {
     fireEvent.click(screen.getByText("New timeline"));
 
     expect(confirm).not.toHaveBeenCalled();
+  });
+
+  /*
+   * The two ways the work was lost with no question at all (found 2026-09-23). The close guard
+   * looked only at open images, and a panel UNMOUNTED what it held when collapsed -- so closing
+   * the tab, or collapsing the Sequence panel for room, threw the whole propagation away.
+   */
+
+  it("asks before the TAB closes on propagated frames", async () => {
+    panel(() => false);
+    await propagateAndWait();
+
+    expect(closeTab()).toBe(true);
+  });
+
+  it("lets the tab close without asking when nothing propagated is waiting to be saved", async () => {
+    panel(() => true);
+    fireEvent.click(screen.getByText("Build timeline"));
+    await waitFor(() =>
+      expect(screen.getByLabelText("Timeline").querySelectorAll("button")).toHaveLength(3),
+    );
+
+    expect(closeTab()).toBe(false);
+  });
+
+  it("keeps propagated frames when the Sequence panel is collapsed and opened again", async () => {
+    panel(() => false, true);
+    await propagateAndWait();
+    const header = screen.getByRole("button", { name: /Sequence/ });
+
+    fireEvent.click(header);
+    fireEvent.click(header);
+
+    expect(screen.getByRole("button", { name: /Save 1 frame/ })).toBeTruthy();
   });
 });

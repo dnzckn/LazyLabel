@@ -3,8 +3,12 @@
  */
 
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { useState, type ReactNode } from "react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { defaultSettings } from "@lazylabel/settings-schema";
+
+import { HotkeyProvider, useHotkey } from "../../src/hotkeys/HotkeyProvider.jsx";
 import { Panel, Workspace } from "../../src/shell/Panel.jsx";
 
 afterEach(cleanup);
@@ -19,10 +23,10 @@ describe("collapsing", () => {
     render(<Panel title="Classes"><p>inside</p></Panel>);
 
     fireEvent.click(screen.getByRole("button", { name: /Classes/ }));
-    expect(screen.queryByText("inside")).toBeNull();
+    expect(screen.getByText("inside").closest("[hidden]")).not.toBeNull();
 
     fireEvent.click(screen.getByRole("button", { name: /Classes/ }));
-    expect(screen.getByText("inside")).toBeTruthy();
+    expect(screen.getByText("inside").closest("[hidden]")).toBeNull();
   });
 
   it("says whether it is open, not only which way the arrow points", () => {
@@ -39,6 +43,60 @@ describe("collapsing", () => {
   it("can start closed when asked", () => {
     render(<Panel title="Classes" initiallyCollapsed><p>inside</p></Panel>);
     expect(screen.queryByText("inside")).toBeNull();
+  });
+});
+
+/*
+ * Collapsing is for ROOM, and it used to unmount what the panel held (found 2026-09-23). Collapsing
+ * the Sequence panel threw away a whole unsaved propagation without a word, and collapsing Drawing
+ * tools took Ctrl+Z away, because Undo's hotkey lives in the history controls inside it.
+ */
+describe("what a collapsed panel keeps", () => {
+  function Counter(): ReactNode {
+    const [count, setCount] = useState(0);
+    return <button type="button" onClick={() => setCount(count + 1)}>{`clicked ${count}`}</button>;
+  }
+
+  it("keeps the state of what it holds", () => {
+    render(<Panel title="Sequence"><Counter /></Panel>);
+    fireEvent.click(screen.getByText("clicked 0"));
+    const header = screen.getByRole("button", { name: /Sequence/ });
+
+    fireEvent.click(header);
+    fireEvent.click(header);
+
+    expect(screen.getByText("clicked 1")).toBeTruthy();
+  });
+
+  it("keeps the hotkeys of what it holds working while collapsed", () => {
+    const undo = vi.fn();
+    function Undo(): ReactNode {
+      useHotkey("undo", undo);
+      return null;
+    }
+    render(
+      <HotkeyProvider bindings={defaultSettings().hotkeys}>
+        <Panel title="Drawing tools"><Undo /></Panel>
+      </HotkeyProvider>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /Drawing tools/ }));
+    fireEvent.keyDown(document.body, { key: "z", code: "KeyZ", ctrlKey: true });
+
+    expect(undo).toHaveBeenCalledTimes(1);
+  });
+
+  it("builds a panel that starts closed only when it is first opened", () => {
+    // A panel nobody opens costs nothing; one that has been opened keeps what it built.
+    render(<Panel title="Sequence" initiallyCollapsed><Counter /></Panel>);
+    expect(screen.queryByText("clicked 0")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: /Sequence/ }));
+    fireEvent.click(screen.getByText("clicked 0"));
+    fireEvent.click(screen.getByRole("button", { name: /Sequence/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Sequence/ }));
+
+    expect(screen.getByText("clicked 1")).toBeTruthy();
   });
 });
 
