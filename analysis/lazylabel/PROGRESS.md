@@ -98,8 +98,17 @@ Medium or below for the web, and are the natural next thing to walk. Two are che
 stays literal text and there is nothing to expand or fetch; and SEC-09, because the directory
 store `lstat`s every key and refuses a symbolic link. SEC-05 holds too: the service contains no
 network call at all -- every mention of downloading is prose saying it does not -- and each
-checkpoint's SHA-256 is verified against the manifest before it loads. Nine remain: SEC-08 and
-SEC-10 through SEC-17.
+checkpoint's SHA-256 is verified against the manifest before it loads.
+
+**SEC-08 is NOT addressed, and it needs the owner.** Both Python packages declare
+`requires-python = ">=3.10"`, and on 2026-09-23 their suites ran on CPython 3.10.11 with expat
+2.5.0 and OpenSSL 1.1.1t -- the Microsoft Store build, and exactly the versions SEC-08 names.
+**CPython 3.10 reaches end of life in October 2026.** Raising the requirement to 3.12 is a one-line
+change in each `pyproject.toml`, and it was not made, because it would make both suites
+uninstallable on the interpreter they currently run on. The order is: move the uv venv at
+`E:\venv\lazylabel` to CPython 3.12 or 3.13, re-run both suites, THEN raise `requires-python`.
+
+Eight remain to walk: SEC-10 through SEC-17.
 
 **If more building is wanted before the data arrives,** the honest answer is that there is no named
 work left: the rule lists, the settings table, the reach sweep and the hotkey reference are all
