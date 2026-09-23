@@ -172,6 +172,13 @@ change in each `pyproject.toml`, and it was not made, because it would make both
 uninstallable on the interpreter they currently run on. The order is: move the uv venv at
 `E:\venv\lazylabel` to CPython 3.12 or 3.13, re-run both suites, THEN raise `requires-python`.
 
+**The first half of that is now evidenced, without touching the shared venv.** On 2026-09-23 both
+suites ran in scratch venvs on CPython 3.12.11 and 3.13.5, with CI's non-PyTorch packages: inference
+476 passed and 84 skipped (the same PyTorch and checkpoint skips as CI), converter 30 of 30, on
+either version. Those interpreters bring expat 2.7.1 and OpenSSL 3.0.16, which retire the two
+versions SEC-08 names. What is not evidenced is the PyTorch half on 3.12 or 3.13, and moving a venv
+that LazyLabelText shares is not this project's call.
+
 SEC-10 holds: there is no `atexit` registration anywhere, and the backend cache is keyed by
 model name, so re-selecting a model reuses it -- memory is bounded by the manifest, where
 legacy's grew on every switch.
