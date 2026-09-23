@@ -63,6 +63,34 @@ describe("showing handles", () => {
     expect(handle(3)).toBeNull();
   });
 
+  it("sizes them in SCREEN pixels from the first paint, not after the first drag", () => {
+    /*
+     * Found in a real browser on 2026-09-23. The surface was measured during the first render,
+     * before it existed, and nothing rendered the layer again: a 1024-pixel image shown 366 wide
+     * got handles 1.8 CSS pixels across. This harness shows the image at its own size, where that
+     * cannot show; here it is shown at a quarter, so a handle is four times larger in image units.
+     */
+    layer(triangle);
+    const atOwnSize = Number(handle(0)!.getAttribute("rx"));
+    cleanup();
+
+    const QUARTER = { ...RECT, width: 50, height: 25, right: 50, bottom: 25 };
+    vi.spyOn(Element.prototype, "getBoundingClientRect").mockReturnValue({
+      ...QUARTER,
+      toJSON: () => QUARTER,
+    } as DOMRect);
+    layer(triangle);
+
+    expect(Number(handle(0)!.getAttribute("rx"))).toBeCloseTo(4 * atOwnSize, 5);
+  });
+
+  it("takes a press on the whole disc, not only its outline", () => {
+    // A hollow SVG shape is hit only where it is painted -- its outline -- unless told otherwise.
+    layer(triangle);
+
+    expect(handle(0)!.getAttribute("pointer-events")).toBe("all");
+  });
+
   it("reports a shape with no handles rather than showing an empty canvas", () => {
     const { onNoHandles } = layer({
       type: "Polygon",

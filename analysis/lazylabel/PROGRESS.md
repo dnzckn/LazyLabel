@@ -59,7 +59,7 @@ missing from this table entirely, which is how a table stops being a census.
 | Package | Passing | Note |
 |---|---|---|
 | exporters | 1991 | the seven formats, byte-for-byte against goldens legacy wrote |
-| web | 1169 | C11's placeholder is gone; it has an acceptance test now |
+| web | 1171 | C11's placeholder is gone; it has an acceptance test now |
 | inference | 574 | plus 38 skipped: the differentials, which need real checkpoints |
 | api | 422 | plus 4 skipped (SEC-09's symlink tests, where the OS will not make a link, as on this machine) and 1 todo (C8's placeholder) |
 | settings-schema | 55 | includes the rule-fixed defaults |
@@ -213,6 +213,22 @@ Mutations caught:
 - rendering only for adjustments fails one;
 - a key without processing fails one;
 - the view sending an empty chain fails one.
+
+**Vertex handles could not be grabbed -- found in a real browser and fixed 2026-09-23.** With a
+polygon selected and no tool active, its handles appeared at its vertices, and a drag on one did
+nothing. Two causes, both invisible to jsdom, which fires events at an element without
+hit-testing:
+- **The handles were 3.6 CSS pixels across.** The layer measured its surface during render, and
+  the first render comes before the surface exists; nothing rendered it again, so the handles
+  kept image-unit size on a 1024-pixel image shown 366 wide. The file's own header says "a handle
+  too small to hit is a handle that does not exist". It now measures after mount and whenever the
+  surface changes size, which zoom does: 10 px, as designed.
+- **They had no fill.** SVG hit-tests a hollow shape only on its outline. The whole disc takes the
+  press now.
+
+Re-run: the vertex went where it was dragged, the image read unsaved, and undo offered "Move
+vertex", one entry for the gesture. Two tests, both failing without the fix; the harness shows
+the image at its own size, where the first could not show, so the test shows it at a quarter.
 
 **Linked editing in the split view, checked in a real browser 2026-09-23.** With two same-sized
 images linked, a polygon drawn on the left landed on both: "Added to both images, as class 0 in

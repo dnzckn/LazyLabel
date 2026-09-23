@@ -15,7 +15,7 @@
  * vanish when zoomed out, and a handle too small to hit is a handle that does not exist.
  */
 
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 
 import type { WireSegment } from "@lazylabel/contracts";
 
@@ -74,6 +74,23 @@ export function EditLayer({
     return { left: rect.left, top: rect.top, width: rect.width, height: rect.height };
   }, []);
 
+  /*
+   * MEASURED AFTER MOUNT, and again whenever the surface changes size -- which zoom does. Measuring
+   * only during render read nothing on the first one, before the surface existed, and nothing else
+   * made this layer render again: the handles kept image-unit size, 1.8 CSS pixels on a 1024-pixel
+   * image shown 366 wide. Found in a real browser on 2026-09-23, where they could not be grabbed.
+   */
+  const [measured, setMeasured] = useState<DisplayBox | null>(null);
+  useLayoutEffect(() => {
+    const update = () => setMeasured(boxOf());
+    update();
+    const surface = surfaceRef.current;
+    if (surface === null || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(update);
+    observer.observe(surface);
+    return () => observer.disconnect();
+  }, [boxOf]);
+
   const onPointerDown = useCallback(
     (event: React.PointerEvent<SVGEllipseElement>, handle: number) => {
       if (event.button !== 0) return;
@@ -131,7 +148,7 @@ export function EditLayer({
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [dragging]);
 
-  const box = boxOf();
+  const box = measured ?? boxOf();
   const colour = classColor(segment.classId);
   const stroke = `rgb(${colour.r}, ${colour.g}, ${colour.b})`;
   const perPixel = box === null ? { x: 1, y: 1 } : scale(box, image);
@@ -160,6 +177,9 @@ export function EditLayer({
             stroke={stroke}
             strokeWidth={Math.max(perPixel.x, perPixel.y) * sizing.line}
             onPointerDown={(event) => onPointerDown(event, handle)}
+            // The whole disc takes the press. With no fill, SVG hit-tests only the outline, and a
+            // handle that answers only to its one-pixel ring is a handle nobody can grab.
+            pointerEvents="all"
             style={{ cursor: "grab" }}
           />
         ))}
