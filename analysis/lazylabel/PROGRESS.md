@@ -34,7 +34,7 @@ missing from this table entirely, which is how a table stops being a census.
 | Package | Passing | Note |
 |---|---|---|
 | exporters | 1991 | the seven formats, byte-for-byte against goldens legacy wrote |
-| web | 1135 | C11's placeholder is gone; it has an acceptance test now |
+| web | 1141 | C11's placeholder is gone; it has an acceptance test now |
 | inference | 560 | plus 36 skipped: the differentials, which need real checkpoints |
 | api | 414 | plus 4 skipped and 5 todo, all needing a checkpoint or a corpus |
 | settings-schema | 55 | includes the rule-fixed defaults |
@@ -98,7 +98,7 @@ built by Docker itself; `deploy/README.md` keeps saying so. The inference image 
 every image route would have failed on `import cv2`; it installs the headless build now. A
 `.dockerignore` keeps a developer's `node_modules`, `dist` and checkpoints out of the context.
 
-**NEXT: the settings half of C13's editor is missing too -- found 2026-09-23, not yet built.** The
+**The settings half of C13's editor was missing too -- found and built 2026-09-23.** The
 hotkey editor was never built (now it is); the brief's phrase is "web settings AND hotkey editor",
 so the same question was asked of the settings: not "does anything READ this key", which the
 settings guard answers, but "can a user SET it". Of 39 keys, 17 have a control. Nine of the rest are
@@ -107,10 +107,13 @@ by the app and settable by no one** -- they keep their default unless a desktop 
 value: `line_thickness`, `pan_multiplier` and `polygon_join_threshold` (RULE-050 clamps typed values
 for pan speed and join threshold, which presumes the inputs exist), `operate_on_view` (RULE-089, so a
 new user can never turn it on), `pixel_priority_enabled` and `pixel_priority_ascending` (RULE-012,
-same), and the seven `file_manager_show_*` column toggles. What to build: a settings dialog beside
-the hotkey one, with RULE-050's clamps on the numbers, and a guard that classifies every key as
-editable, geometry, dropped with its decision, or import-only with a reason -- so "read and
-unsettable" cannot recur silently, as "exported and uncalled" once could.
+same), and the seven `file_manager_show_*` column toggles. Built: Settings, Edit settings opens
+`web/src/settings/SettingsEditor.tsx` in the same dialog as the hotkeys, with RULE-050's clamps
+applied when editing finishes (25 in Join becomes 10; non-numeric reverts). `line_thickness` stays
+import-only on purpose: legacy offers no control for it either. Six tests; removing the clamp fails
+two. **Still to do:** a guard that classifies every key as editable, geometry, dropped with its
+decision, or import-only with a reason, so "read and unsettable" cannot recur silently, as "exported
+and uncalled" once could.
 
 **Enter wrote an empty file and said "saved" -- found in a real browser, 2026-09-23.** Drawing a
 polygon and pressing Enter, legacy's "finish the polygon and then save", left `photo.npz` with zero

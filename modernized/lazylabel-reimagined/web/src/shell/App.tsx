@@ -37,6 +37,7 @@ import { applyTheme, nextTheme, themeFor } from "./theme.js";
 import { useSettings } from "../settings/SettingsProvider.jsx";
 import { HotkeyEditor } from "../hotkeys/HotkeyEditor.jsx";
 import { Dialog } from "./Dialog.jsx";
+import { SettingsEditor } from "../settings/SettingsEditor.jsx";
 import { useHotkey } from "../hotkeys/HotkeyProvider.jsx";
 import type { ApiClient, ApiHealth } from "../api/client.js";
 import { enterEditMode } from "../tools/edit.js";
@@ -50,6 +51,7 @@ export function App({ client }: { readonly client: ApiClient }): ReactNode {
   const [health, setHealth] = useState<Health | null>(null);
   const [healthError, setHealthError] = useState<string | null>(null);
   const [showHotkeys, setShowHotkeys] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
   // From the store, not held here: the status bar is one reader of this among several.
   const { imageState, openImage, open, crop } = useWorkspace();
   // The folder as the browser listed it, so the sequence timeline builds from the same answer
@@ -147,7 +149,7 @@ export function App({ client }: { readonly client: ApiClient }): ReactNode {
   return (
     // Inert behind the hotkey dialog, so Tab cannot walk out of it into a page that would then
     // take the keystrokes the dialog exists to capture.
-    <main className="app" inert={showHotkeys}>
+    <main className="app" inert={showHotkeys || showSettings}>
       <NotificationHost />
       {/* Renders nothing. It asks `onClose` whether closing this tab would lose work, and arms the
           browser's own dialog when it would -- decision 7's last silent path. */}
@@ -230,9 +232,17 @@ export function App({ client }: { readonly client: ApiClient }): ReactNode {
                   {Object.keys(state.settings.hotkeys).length} hotkeys.
                 </p>
               )}
+              <button type="button" onClick={() => setShowSettings(true)}>
+                Edit settings
+              </button>{" "}
               <button type="button" onClick={() => setShowHotkeys(true)}>
                 Show hotkeys
               </button>
+              {showSettings && (
+                <Dialog title="Settings" onClose={() => setShowSettings(false)}>
+                  <SettingsEditor />
+                </Dialog>
+              )}
               {/* In a dialog, because the editor needs the width legacy's gave it and this column
                   is a quarter of that. It renders into document.body, outside the inert page. */}
               {showHotkeys && (
