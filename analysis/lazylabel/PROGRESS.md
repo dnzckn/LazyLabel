@@ -309,8 +309,12 @@ unreadable rather than treated as absent, so a dataset does not quietly lose its
 
 ### Phase 2 — architecture and scaffolds (complete)
 
-All four exit criteria met. API, web app and inference service scaffolded, with the wire contract
-shared rather than duplicated. Settings schema shared between API and web (37 tests).
+All four exit criteria met. **Corrected 2026-09-23: criterion 4 -- "CI builds and tests all services
+on every push to main-web" -- was met in configuration only.** The branch has never been pushed, so
+no job has ever run, and run one by one on a clean export of the repository, six of them failed for
+reasons only a fresh environment shows (see "A clean checkout was not this machine either" above).
+All but the image builds pass that way now; none has yet run on GitHub. API, web app and inference
+service scaffolded, with the wire contract shared rather than duplicated. Settings schema shared between API and web (37 tests).
 
 Storage settled as **local-first behind two ports** (decision 5, owner-confirmed): a blob port
 defaulting to a mounted directory, and a metadata port defaulting to SQLite. A hosted deployment
@@ -326,13 +330,17 @@ every adapter, so a dataset stays readable by the desktop app and by hand.
    threshold — `test_differential_propagation.py`.
 3. **Checkpoints load only through the manifest**, hash-checked and weights-only (SEC-03, SEC-05,
    SEC-17). Nothing downloads a model at runtime, including the Find Archetypes embedder, which
-   legacy fetched from torchvision on first use.
+   legacy fetched from torchvision on first use. **Corrected 2026-09-23: "hash-checked" was true of
+   one load path in three.** The video predictor a propagation builds and the archetype embedder
+   loaded without the check until SEC-17's walk; see SEC-17 above.
 4. **Failures are typed errors, never success** — the pattern `ASSESSMENT.md` 5.4 records, where
    legacy returns `None` for "the model raised", "no points were given" and "the object has no
    pixels" alike.
 
 Find Archetypes is complete: MobileNetV3-small embedding, HDBSCAN clustering, medoid selection, and
-the allocation arithmetic RULE-022 specifies to the frame.
+the allocation arithmetic RULE-022 specifies to the frame. **Corrected 2026-09-23: complete as a
+module, and unusable as a route** -- it chose its model by position in the manifest, so every
+manifest listing SAM first, the example included, failed it on every call. Fixed that day.
 
 255 tests. The live suites skip without a checkpoint, so **a green CI run is not evidence they
 ran** — see "Running the live suites" below.
@@ -368,7 +376,10 @@ All four exit criteria are met:
    true of the function and of no user.** Nothing called the import until it was wired into the
    API's startup that day; see SEC-16 above.
 4. Upload limits and content allow-lists are enforced. SEC-02, SEC-06 and SEC-09 were already
-   proven; SEC-07 was argued in a comment and tested nowhere until this session.
+   proven; SEC-07 was argued in a comment and tested nowhere until this session. **Corrected
+   2026-09-23: SEC-02 and SEC-06 were not, when this was written.** The inference service read the
+   dataset with `cv2.imread`, around the API's allow-list, and the text readers built one full-image
+   mask per line while the object limit had no caller. Both were fixed in the security audit above.
 
 **Pop-out panels are deliberately not built.** Legacy detaches its left and right panels into
 separate windows (`panel_popout_manager.py`). Four reasons for leaving it out rather than porting
