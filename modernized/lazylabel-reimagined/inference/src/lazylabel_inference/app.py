@@ -51,7 +51,15 @@ from .service import (
 )
 from .windows import DEFAULT_WINDOW, effective, novel_frames, plan
 
-MAX_BODY_BYTES = 64 * 1024 * 1024
+# The largest body the service accepts: refused before it is read (server.py), and checked here.
+#
+# Sized for the largest body its one client legitimately sends, which is RULE-089's rendered picture:
+# the API posts it as a base64 PNG inside JSON. At the spec's supported working size of 50 megapixels,
+# an incompressible 8-bit RGB picture is 150 MB as PNG and 200 MB as base64. The cap was 64 MiB until
+# 2026-09-23, and a 50-megapixel colour photograph -- measured at 112 MB as PNG, 149 MB as base64 --
+# was refused, so Operate On View failed on exactly the images the spec calls supported. It is still
+# a bound, which is what SEC-06 asks of an allocation; nothing asks that the bound be small.
+MAX_BODY_BYTES = 256 * 1024 * 1024
 
 
 @dataclass(frozen=True)

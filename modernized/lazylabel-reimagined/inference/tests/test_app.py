@@ -9,7 +9,8 @@ from pathlib import Path
 
 import pytest
 
-from lazylabel_inference.app import Deps, Request, create_app
+from lazylabel_inference import app as app_module
+from lazylabel_inference.app import MAX_BODY_BYTES, Deps, Request, create_app
 from lazylabel_inference.availability import Availability
 from lazylabel_inference.log import Logger
 from lazylabel_inference.manifest import ManifestError, parse_manifest
@@ -227,10 +228,24 @@ class TestTheEnvelope:
         status, body = call(deps, "POST", "/health")
         assert status == 405 and body["code"] == "method_not_allowed"
 
-    def test_refuses_an_oversized_body(self, tmp_path: Path) -> None:
+    def test_refuses_an_oversized_body(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        # The mechanism, at a size a test can afford to allocate; the next test holds the value.
+        monkeypatch.setattr(app_module, "MAX_BODY_BYTES", 1024)
         deps = Deps(model_dir=tmp_path, availability=available)
-        status, body = call(deps, "POST", "/inference/segment", body=b"x" * (64 * 1024 * 1024 + 1))
-        assert status == 413
+        status, body = call(deps, "POST", "/inference/segment", body=b"x" * 1025)
+        assert status == 413 and body["code"] == "payload_too_large"
+
+    def test_the_cap_admits_operate_on_view_at_the_supported_working_size(self) -> None:
+        """The largest body the API legitimately sends is RULE-089's rendered picture.
+
+        At 64 MiB a 50-megapixel colour photograph was refused -- measured at a 112 MB PNG, 149 MB
+        as base64 -- while the spec calls 50 megapixels the supported working size. The worst case
+        is a picture PNG cannot compress at all: three bytes a pixel, one filter byte a row, base64.
+        """
+        working_size = 50_000_000  # pixels: AI_NATIVE_SPEC's NFR table
+        worst_png = working_size * 3 + 50_000  # plus row filters and zlib's framing, generously
+        worst_body = -(-worst_png // 3) * 4 + 64 * 1024  # base64, and the JSON around it
+        assert MAX_BODY_BYTES >= worst_body
 
     def test_an_unexpected_error_is_a_typed_500_not_a_stack_trace(self, tmp_path: Path) -> None:
         def explode() -> Availability:

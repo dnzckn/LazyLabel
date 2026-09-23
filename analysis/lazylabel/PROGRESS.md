@@ -36,7 +36,7 @@ missing from this table entirely, which is how a table stops being a census.
 |---|---|---|
 | exporters | 1991 | the seven formats, byte-for-byte against goldens legacy wrote |
 | web | 1165 | C11's placeholder is gone; it has an acceptance test now |
-| inference | 564 | plus 36 skipped: the differentials, which need real checkpoints |
+| inference | 565 | plus 36 skipped: the differentials, which need real checkpoints |
 | api | 422 | plus 4 skipped (SEC-09's symlink tests, where the OS will not make a link, as on this machine) and 1 todo (C8's placeholder) |
 | settings-schema | 55 | includes the rule-fixed defaults |
 | converter | 30 | the pickled-alias rewrite |
@@ -177,6 +177,24 @@ Mutations caught:
 - rendering only for adjustments fails one;
 - a key without processing fails one;
 - the view sending an empty chain fails one.
+
+**Operate On View refused large colour images -- found and fixed 2026-09-23.** The inference
+service capped request bodies at 64 MiB, a number with no recorded reason. The API posts RULE-089's
+rendered picture as a base64 PNG inside JSON. Measured with the API's own encoder at 50 megapixels,
+the spec's supported working size:
+
+| picture | PNG | as base64 |
+| --- | --- | --- |
+| colour, camera-like noise (sigma 3) | 112.0 MB | 149.4 MB |
+| colour, faint noise (sigma 1) | 72.0 MB | 96.0 MB |
+| grayscale | 38.9 MB | 51.9 MB |
+
+Both colour pictures were refused with a 413, so the tool failed on colour photographs above roughly
+22 to 35 megapixels. The cap is now 256 MiB, which covers an incompressible 50-megapixel picture
+(200 MB as base64). A test derives that requirement from the working size and fails at the old
+value. The 413 test no longer allocates 64 MB to prove the mechanism: it patches a 1 KiB cap. It is
+still a bound, which is what SEC-06 asks. The service's only client is the API, which refuses
+images above 100 megapixels before it renders anything.
 
 **RULE-058, a P0 rule, was traced by the P0 guard's own comment -- found and fixed 2026-09-23.**
 The guard (`web/test/rules/p0Coverage.test.ts`) passes a rule when any test file names it, and it
