@@ -131,7 +131,13 @@ SEC-13 holds, checked against both loggers with a filename carrying an ANSI esca
 the JSON encoding escapes both, so a crafted name cannot colour the console or FORGE a second log
 line. Both write to stdout, leaving rotation to the host rather than to an unrotated file.
 
-Four remain to walk: SEC-14 through SEC-17.
+SEC-14 holds for the new code. Propagation stages its frames in `tempfile.mkdtemp` -- private and
+uniquely named, never a fixed shared directory -- and removes it in a `finally`, which runs on a
+CANCELLED job too, because breaking out of the loop over the generator closes it. Only a hard
+kill leaves frames behind, and then in a directory nothing trusts. The theme-icon half was
+PyQt's and has no browser counterpart.
+
+Three remain to walk: SEC-15, SEC-16 and SEC-17.
 
 **If more building is wanted before the data arrives,** the honest answer is that there is no named
 work left: the rule lists, the settings table, the reach sweep and the hotkey reference are all
