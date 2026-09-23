@@ -29,6 +29,25 @@
       "note": "RULE-089. The browser sends this body; the API renders the adjusted image and adds `pixels`, a base64 PNG, before forwarding. It is listed rather than written out because its value comes from the image on disk -- the TypeScript suite checks it is present and non-empty, and the Python suite posts this body without it, which is the path where the service reads the file itself."
     },
     {
+      "name": "embed the processed view",
+      "path": "/inference/embeddings",
+      "method": "POST",
+      "body": {
+        "image": "frames/frame_012.png",
+        "model": "SAM 2.1 large",
+        "adjustments": {
+          "brightness": 40.0,
+          "contrast": 0.0,
+          "gamma": 1.0
+        },
+        "processing": "markers_r=128"
+      },
+      "addedByApi": [
+        "pixels"
+      ],
+      "note": "RULE-089 with the processing chain. Legacy's rescale, thresholds and FFT replace the image its adjustments apply to, so Operate On View segments the PROCESSED view. `processing` is the pixels route's own query string: the API renders through it and forwards it, because the service keys its encodings on the whole view. Opaque to the service."
+    },
+    {
       "name": "one positive point",
       "path": "/inference/segment",
       "method": "POST",

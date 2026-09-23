@@ -121,6 +121,7 @@ class InferenceService:
         model_name: str,
         adjustments: dict[str, float] | None = None,
         pixels: str | None = None,
+        processing: str | None = None,
     ) -> tuple[str, bool]:
         """Encode an image, or recognise that it is already encoded.
 
@@ -134,7 +135,7 @@ class InferenceService:
         key = EmbeddingKey(
             image=image_identity(path),
             model=model_identity(entry.sha256),
-            adjustments=adjustment_identity(adjustments),
+            adjustments=adjustment_identity(adjustments, processing),
         )
         handle = key.as_handle()
 

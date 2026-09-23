@@ -21,7 +21,7 @@ import { createApp, type App } from "../../src/app.js";
 import { HttpInferenceClient } from "../../src/adapters/httpInference.js";
 import { MemoryBlobStore } from "../../src/adapters/memoryBlobStore.js";
 import { SqliteMetadataStore } from "../../src/adapters/sqliteMetadataStore.js";
-import { get, jsonBody, post } from "../helpers/request.js";
+import { get, jsonBody, post, request } from "../helpers/request.js";
 import sharp from "sharp";
 
 const HEALTHY_INFERENCE = {
@@ -285,6 +285,78 @@ describe("C3: the API's inference proxy", () => {
    * The Python suite asserts its routes ACCEPT these bodies; this asserts the client PRODUCES them.
    * If either side drifts, one of the two fails.
    */
+  describe("RULE-089: the model is given the view the user sees", () => {
+    /*
+     * Legacy's rescale, thresholds and FFT replace the image its brightness and contrast apply to,
+     * so its Operate On View segments the PROCESSED view. Until 2026-09-23 this proxy rendered the
+     * adjustments over the unprocessed image, and posted nothing when only processing was on -- a
+     * mask of a picture the user was not looking at, under the setting that promises otherwise.
+     */
+    const FIXTURE = path.join(
+      path.dirname(fileURLToPath(import.meta.url)), "..", "fixtures", "images", "gradient8.png",
+    );
+    const KEY = "frames/gradient8.png";
+    // A channel threshold: processing that changes a colour image (rescale is grayscale-only).
+    const PROCESSING = "markers_r=128";
+
+    async function setUp() {
+      const store = new MemoryBlobStore();
+      await store.writeAtomic(KEY, new Uint8Array(await readFile(FIXTURE)));
+      const service = fakeService(() => jsonResponse(200, { handle: "h", cached: false }));
+      return { app: appWith(service, store), service };
+    }
+
+    it("renders the processed, adjusted view: byte for byte what the pixels route shows", async () => {
+      const { app, service } = await setUp();
+
+      const embedded = await app.handle(post("/inference/embeddings", {
+        image: KEY,
+        model: "m",
+        adjustments: { brightness: 40, contrast: 0, gamma: 1, saturation: 1 },
+        processing: PROCESSING,
+      }));
+      const shown = await app.handle(request("GET", `/projects/p1/images/${KEY}/pixels`, {
+        query: { markers_r: "128", adjust: "40,0,1,1" },
+      }));
+
+      expect(embedded.status).toBe(200);
+      expect(shown.status).toBe(200);
+      const sent = service.calls[0]!.body as { pixels: string; processing: string };
+      // Forwarded too: the service keys its encodings on the whole view.
+      expect(sent.processing).toBe(PROCESSING);
+      expect([...Buffer.from(sent.pixels, "base64")]).toEqual([...(shown.body as Uint8Array)]);
+    });
+
+    it("renders processing alone, with no adjustments at all", async () => {
+      const { app, service } = await setUp();
+
+      await app.handle(post("/inference/embeddings", { image: KEY, model: "m", processing: PROCESSING }));
+      const unprocessed = await app.handle(get(`/projects/p1/images/${KEY}/pixels`));
+
+      const sent = service.calls[0]!.body as { pixels?: string };
+      expect(sent.pixels).toBeTruthy();
+      expect([...Buffer.from(sent.pixels!, "base64")]).not.toEqual([...(unprocessed.body as Uint8Array)]);
+    });
+
+    it("treats an empty processing chain as none, and posts no picture", async () => {
+      const { app, service } = await setUp();
+
+      await app.handle(post("/inference/embeddings", { image: KEY, model: "m", processing: "" }));
+
+      expect(service.calls[0]!.body).toEqual({ image: KEY, model: "m" });
+    });
+
+    it("refuses a malformed processing chain before a model is involved", async () => {
+      const { app, service } = await setUp();
+
+      for (const processing of ["rescaleMin=50", 7]) {
+        const response = await app.handle(post("/inference/embeddings", { image: KEY, model: "m", processing }));
+        expect(response.status, String(processing)).toBe(400);
+      }
+      expect(service.calls).toHaveLength(0);
+    });
+  });
+
   describe("the shared contract", () => {
     const CONTRACT = path.join(
       path.dirname(fileURLToPath(import.meta.url)),

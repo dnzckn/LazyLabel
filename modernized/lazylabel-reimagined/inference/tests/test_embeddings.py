@@ -64,6 +64,18 @@ class TestTheKey:
         assert adjustment_identity({"brightness": 40.0}) != off
         assert adjustment_identity({"brightness": 40.0}) != adjustment_identity({"brightness": 41.0})
 
+    def test_the_processing_chain_is_part_of_the_key(self) -> None:
+        # Legacy's processing replaces the image the adjustments apply to, so a new rescale is a
+        # new picture under the same adjustments. Absent processing keeps the old identity exactly.
+        adjusted = adjustment_identity({"brightness": 40.0})
+        assert adjustment_identity({"brightness": 40.0}, None) == adjusted
+        assert adjustment_identity({"brightness": 40.0}, "") == adjusted
+        assert adjustment_identity({"brightness": 40.0}, "rescaleMin=10&rescaleMax=200") != adjusted
+        assert adjustment_identity(None, "rescaleMin=10&rescaleMax=200") != adjustment_identity(None)
+        assert adjustment_identity(None, "rescaleMin=10&rescaleMax=200") != adjustment_identity(
+            None, "rescaleMin=20&rescaleMax=200"
+        )
+
     def test_adjustment_identity_does_not_depend_on_key_order(self) -> None:
         assert adjustment_identity({"brightness": 1.0, "gamma": 2.0}) == adjustment_identity(
             {"gamma": 2.0, "brightness": 1.0}

@@ -31,7 +31,7 @@ import { SelectLayer } from "../canvas/SelectLayer.jsx";
 import { ShapeLayer } from "../canvas/ShapeLayer.jsx";
 import { EditLayer } from "../canvas/EditLayer.jsx";
 import { adjustmentsFrom } from "../tools/adjustments.js";
-import { processingQuery } from "./processing.js";
+import { processingParams, processingQuery } from "./processing.js";
 import type { ImagePoint } from "../canvas/coordinates.js";
 import { classForNewSegment } from "./classes.js";
 import { useNotifications } from "../notifications/NotificationProvider.jsx";
@@ -127,7 +127,7 @@ function OpenedImage({
   const { eraseWith } = useWorkspace();
   // The crop is the store's, not this view's: the SAVE path reads it, so a crop dragged here and
   // held locally would be one the panel showed and the file never saw.
-  const { crop, setCrop, zoom } = useWorkspace();
+  const { crop, setCrop, zoom, processing } = useWorkspace();
 
   /*
    * PANNING THE ZOOMED IMAGE FROM THE KEYBOARD -- the four `pan_*` keys, which the reference has
@@ -350,7 +350,7 @@ function OpenedImage({
                       fragmentThreshold={fragmentThreshold}
                       autoPolygon={autoPolygon}
                       {...(settings.values["operate_on_view"] === true
-                        ? { operateOnView: { ...adjustments } }
+                        ? { operateOnView: { adjustments: { ...adjustments }, processing: processingParams(processing) } }
                         : {})}
                       onAccept={(segment) => addSegment(segment, "Accept AI mask")}
                       // The MASK erases, not its bounding box: an AI mask is rarely a

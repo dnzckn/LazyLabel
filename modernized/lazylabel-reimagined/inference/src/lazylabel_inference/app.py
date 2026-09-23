@@ -265,8 +265,14 @@ def _embeddings(deps: Deps, request: Request) -> Response:
     if pixels is not None and not isinstance(pixels, str):
         raise HttpError(400, "bad_request", "'pixels' must be a base64 PNG string")
 
+    # The processing chain those pixels went through. Part of the view, so part of the cache key:
+    # without it, a changed rescale with unchanged adjustments answered from the old encoding.
+    processing = body.get("processing")
+    if processing is not None and not isinstance(processing, str):
+        raise HttpError(400, "bad_request", "'processing' must be the pixels route's query string")
+
     try:
-        handle, cached = _service(deps).embed(image, model, adjustments, pixels)
+        handle, cached = _service(deps).embed(image, model, adjustments, pixels, processing)
     except InferenceError as cause:
         raise _inference_error(cause) from cause
 

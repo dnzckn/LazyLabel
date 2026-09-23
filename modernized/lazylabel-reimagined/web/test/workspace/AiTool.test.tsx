@@ -393,7 +393,7 @@ describe("Operate On View (RULE-089)", () => {
 
   it("sends them when the setting is on, so the model sees what the USER sees", async () => {
     const embed = vi.fn(async (_request: unknown) => ({ handle: "h1", cached: true }));
-    mount({ embed }, { operateOnView: { brightness: 40, contrast: 0, gamma: 1, saturation: 1 } });
+    mount({ embed }, { operateOnView: { adjustments: { brightness: 40, contrast: 0, gamma: 1, saturation: 1 }, processing: "" } });
 
     await waitFor(() => expect(embed).toHaveBeenCalled());
     expect(embed.mock.calls[0]![0]).toEqual({
@@ -409,13 +409,61 @@ describe("Operate On View (RULE-089)", () => {
     // a picture the user has since changed.
     const embed = vi.fn(async (_request: unknown) => ({ handle: "h1", cached: true }));
     const { rerender } = mount({ embed }, {
-      operateOnView: { brightness: 10, contrast: 0, gamma: 1, saturation: 1 },
+      operateOnView: { adjustments: { brightness: 10, contrast: 0, gamma: 1, saturation: 1 }, processing: "" },
     });
     await waitFor(() => expect(embed).toHaveBeenCalledTimes(1));
 
-    rerender({ operateOnView: { brightness: 60, contrast: 0, gamma: 1, saturation: 1 } });
+    rerender({
+      operateOnView: { adjustments: { brightness: 60, contrast: 0, gamma: 1, saturation: 1 }, processing: "" },
+    });
 
     await waitFor(() => expect(embed).toHaveBeenCalledTimes(2));
+  });
+
+  /*
+   * The PROCESSING chain is part of the view. Legacy's rescale, thresholds and FFT replace the
+   * image its adjustments apply to, so Operate On View segments the processed picture; until
+   * 2026-09-23 only the adjustments were sent, and the model segmented a picture nobody could see.
+   */
+  const NEUTRAL = { brightness: 0, contrast: 0, gamma: 1, saturation: 1 };
+
+  it("sends the processing chain with the view", async () => {
+    const embed = vi.fn(async (_request: unknown) => ({ handle: "h1", cached: true }));
+    mount({ embed }, { operateOnView: { adjustments: NEUTRAL, processing: "rescaleMin=10&rescaleMax=200" } });
+
+    await waitFor(() => expect(embed).toHaveBeenCalled());
+    expect(embed.mock.calls[0]![0]).toEqual({
+      image: "frames/a.png",
+      model: "SAM 2.1 large",
+      adjustments: NEUTRAL,
+      processing: "rescaleMin=10&rescaleMax=200",
+    });
+  });
+
+  it("RE-ENCODES when only the processing changes", async () => {
+    const embed = vi.fn(async (_request: unknown) => ({ handle: "h1", cached: true }));
+    const { rerender } = mount({ embed }, {
+      operateOnView: { adjustments: NEUTRAL, processing: "rescaleMin=10&rescaleMax=200" },
+    });
+    await waitFor(() => expect(embed).toHaveBeenCalledTimes(1));
+
+    rerender({ operateOnView: { adjustments: NEUTRAL, processing: "rescaleMin=20&rescaleMax=200" } });
+
+    await waitFor(() => expect(embed).toHaveBeenCalledTimes(2));
+    expect((embed.mock.calls[1]![0] as { processing: string }).processing).toBe("rescaleMin=20&rescaleMax=200");
+  });
+
+  it("prefetches neighbours with the adjustments alone, since each opens with no processing", async () => {
+    // Decision 9: the processing chain does not carry to the next image. A neighbour encoded
+    // through THIS image's rescale would be keyed on a view it will never be shown in.
+    const embed = vi.fn(async (_request: unknown) => ({ handle: "h1", cached: false }));
+    mount({ embed }, {
+      folderKeys: ["frames/a.png", "frames/b.png"],
+      operateOnView: { adjustments: NEUTRAL, processing: "rescaleMin=10&rescaleMax=200" },
+    });
+
+    await waitFor(() => expect(embed).toHaveBeenCalledTimes(2), { timeout: 3000 });
+    expect(embed.mock.calls[1]![0]).toEqual({ image: "frames/b.png", model: "SAM 2.1 large", adjustments: NEUTRAL });
   });
 });
 

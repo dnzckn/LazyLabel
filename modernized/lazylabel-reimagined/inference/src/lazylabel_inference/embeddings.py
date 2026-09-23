@@ -73,16 +73,23 @@ def model_identity(sha256: str) -> str:
     return f"model:{sha256}"
 
 
-def adjustment_identity(adjustments: dict[str, float] | None) -> str:
+def adjustment_identity(adjustments: dict[str, float] | None, processing: str | None = None) -> str:
     """Identity of the display pipeline that produced the pixels.
 
     A constant when Operate On View is off, because the model then sees the original file and the
     adjustments cannot matter. A hash of the parameters when it is on, because they decide the
     pixels (RULE-089).
+
+    The PROCESSING chain -- rescale, channel thresholds, FFT, the histogram presets -- is part of
+    that pipeline too: legacy's processing replaces the image the adjustments are applied to, so
+    its Operate On View segments the processed view. It is the pixels route's query string, opaque
+    here. Absent, the identity is exactly what it was before processing was part of it.
     """
-    if not adjustments:
+    if not adjustments and not processing:
         return "original"
-    parts = ",".join(f"{name}={value!r}" for name, value in sorted(adjustments.items()))
+    parts = ",".join(f"{name}={value!r}" for name, value in sorted((adjustments or {}).items()))
+    if processing:
+        parts += "|processing=" + processing
     return "view:" + hashlib.sha256(parts.encode()).hexdigest()[:16]
 
 

@@ -65,16 +65,23 @@ export interface AiToolProps {
    */
   readonly autoPolygon?: { readonly enabled: boolean; readonly resolution: number };
   /**
-   * RULE-089: the display adjustments to segment THROUGH, or absent for the original file.
+   * RULE-089: the view to segment THROUGH, or absent for the original file.
    *
    * Absent rather than neutral when the setting is off, because the two are different requests:
    * neutral would still ask the API to render and post an image, and the rule's default is that
    * no image crosses that wire at all.
    *
-   * Changing it re-encodes, which the rule says too -- the adjustments are part of the embedding
-   * cache key, so a different view is a different encoding rather than a stale one.
+   * The PROCESSING chain is part of the view, in the pixels route's query form: legacy's rescale,
+   * thresholds and FFT replace the image its adjustments apply to, so its Operate On View segments
+   * the processed picture. Until 2026-09-23 only the adjustments were sent.
+   *
+   * Changing it re-encodes, which the rule says too -- the view is part of the embedding cache key,
+   * so a different view is a different encoding rather than a stale one.
    */
-  readonly operateOnView?: Readonly<Record<string, number>>;
+  readonly operateOnView?: {
+    readonly adjustments: Readonly<Record<string, number>>;
+    readonly processing: string;
+  };
   readonly onAccept: (segment: WireSegment) => void;
   readonly onErase: (mask: WireSegment) => void;
 }
@@ -139,10 +146,14 @@ export function AiTool({
       .embed({
         image: imageKey,
         model,
-        // RULE-089's Operate On View. Sending the adjustments is what makes the API render the
-        // picture the user is looking at and post it to the model; omitting them is the rule's
-        // default, where the model segments the original file.
-        ...(operateOnView === undefined ? {} : { adjustments: operateOnView }),
+        // RULE-089's Operate On View. Sending the view is what makes the API render the picture
+        // the user is looking at and post it to the model; omitting it is the rule's default,
+        // where the model segments the original file. An empty chain is no processing.
+        ...(operateOnView === undefined
+          ? {}
+          : operateOnView.processing === ""
+            ? { adjustments: operateOnView.adjustments }
+            : { adjustments: operateOnView.adjustments, processing: operateOnView.processing }),
       })
       .then((response) => {
         if (cancelled) return;
@@ -208,7 +219,9 @@ export function AiTool({
             await client.embed({
               image: next,
               model,
-              ...(operateOnView === undefined ? {} : { adjustments: operateOnView }),
+              // The adjustments alone: decision 9 opens every image with no processing, so a
+              // neighbour's view, when it is opened, is the adjustments over its own file.
+              ...(operateOnView === undefined ? {} : { adjustments: operateOnView.adjustments }),
             });
           } catch {
             // Silent on purpose -- see above. Recorded as done either way, so one unreadable image

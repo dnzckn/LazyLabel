@@ -30,12 +30,15 @@ import {
   renderPng,
   renderThumbnail,
   UnsupportedImageError,
+  type DecodedImage,
 } from "./images/pipeline.js";
 import {
   ImageTooLargeError,
   adjustmentsFromQuery,
   applyAdjustments,
+  isEmpty,
   processingFromQuery,
+  type Processing,
 } from "./images/processing.js";
 import { isNeutral, type Adjustments } from "@lazylabel/annotation-formats";
 import { RenderCache } from "./images/renderCache.js";
@@ -342,16 +345,36 @@ async function proxyEmbed(deps: AppDeps, request: ApiRequest): Promise<ApiRespon
   }
 
   /*
-   * RULE-089. Adjustments present means the user asked the model to segment what they can SEE, so
-   * the API renders them and posts the bytes; absent means the service reads the original file,
-   * which is the rule's default and puts no image on this wire.
+   * The processing chain the user is looking at, in the pixels route's own query form. Legacy's
+   * rescale, thresholds and FFT REPLACE the image its adjustments apply to, so its Operate On View
+   * segments the processed view; until 2026-09-23 this rendered the adjustments over the
+   * unprocessed image, and sent nothing at all when only processing was on.
+   */
+  const processingText = body["processing"];
+  if (processingText !== undefined && typeof processingText !== "string") {
+    throw badRequest("'processing' must be the pixels route's query string");
+  }
+  let processing: Processing | undefined;
+  try {
+    processing = processingText === undefined ? undefined : processingFromQuery(new URLSearchParams(processingText));
+  } catch (cause) {
+    throw badRequest(cause instanceof Error ? cause.message : String(cause));
+  }
+  if (isEmpty(processing)) processing = undefined;
+
+  /*
+   * RULE-089. A view present means the user asked the model to segment what they can SEE, so the
+   * API renders it and posts the bytes; absent means the service reads the original file, which
+   * is the rule's default and puts no image on this wire.
    *
-   * NEUTRAL ADJUSTMENTS SEND NOTHING, and that is not an optimisation. An image adjusted by
-   * nothing IS the original, so rendering it would put a re-encoded PNG on the wire for a picture
-   * identical to the file already beside the service.
+   * A NEUTRAL VIEW SENDS NOTHING, and that is not an optimisation. An image adjusted and processed
+   * by nothing IS the original, so rendering it would put a re-encoded PNG on the wire for a
+   * picture identical to the file already beside the service.
    */
   const wanted = adjustmentsOf(adjustments as Record<string, number> | undefined);
-  const pixels = wanted === null ? undefined : await renderForModel(deps, image, wanted);
+  const pixels = wanted === null && processing === undefined
+    ? undefined
+    : await renderForModel(deps, image, processing, wanted);
 
   const correlationId = request.headers["x-correlation-id"] ?? "";
   return json(
@@ -361,6 +384,9 @@ async function proxyEmbed(deps: AppDeps, request: ApiRequest): Promise<ApiRespon
         image,
         model,
         ...(adjustments === undefined ? {} : { adjustments: adjustments as Record<string, number> }),
+        // Forwarded because the service keys its encodings on the whole view: the same
+        // adjustments over a different rescale are a different picture.
+        ...(processing === undefined ? {} : { processing: processingText as string }),
         ...(pixels === undefined ? {} : { pixels }),
       },
       correlationId,
@@ -627,17 +653,7 @@ async function imagePixels(
   const cached = cache.get(cacheKey);
   if (cached !== undefined) return png(cached.bytes, { ...cached.headers, "x-image-cached": "hit" });
 
-  let decoded;
-  try {
-    decoded = await decodeImage(await imageBytes(deps, key), processing);
-  } catch (cause) {
-    if (cause instanceof ImageTooLargeError) {
-      // 413, not a 500 and not a long wait: the filter refuses rather than holding the request
-      // open for a minute, and the message says how big the image is and what the limit is.
-      throw new HttpError(413, "image_too_large", cause.message);
-    }
-    throw cause;
-  }
+  const decoded = await decodeView(deps, key, processing);
 
   applyAdjustments(decoded.data, adjustments);
 
@@ -1066,13 +1082,35 @@ function adjustmentsOf(raw: Record<string, number> | undefined): Adjustments | n
   return isNeutral(wanted) ? null : wanted;
 }
 
-/** The image as the user sees it, base64 PNG, for a model to encode. */
+/**
+ * An image through RULE-032's processing chain, the one path both the pixels route and the model's
+ * picture take -- so what a model is given is what the user is shown, down to the byte.
+ */
+async function decodeView(
+  deps: AppDeps,
+  key: string,
+  processing: Processing | undefined,
+): Promise<DecodedImage> {
+  try {
+    return await decodeImage(await imageBytes(deps, key), processing);
+  } catch (cause) {
+    if (cause instanceof ImageTooLargeError) {
+      // 413, not a 500 and not a long wait: the filter refuses rather than holding the request
+      // open for a minute, and the message says how big the image is and what the limit is.
+      throw new HttpError(413, "image_too_large", cause.message);
+    }
+    throw cause;
+  }
+}
+
+/** The image as the user sees it -- processed, then adjusted -- base64 PNG, for a model to encode. */
 async function renderForModel(
   deps: AppDeps,
   key: string,
-  adjustments: Adjustments,
+  processing: Processing | undefined,
+  adjustments: Adjustments | null,
 ): Promise<string> {
-  const decoded = await decodeImage(await imageBytes(deps, key), undefined);
-  applyAdjustments(decoded.data, adjustments);
+  const decoded = await decodeView(deps, key, processing);
+  if (adjustments !== null) applyAdjustments(decoded.data, adjustments);
   return Buffer.from(await renderPng(decoded)).toString("base64");
 }

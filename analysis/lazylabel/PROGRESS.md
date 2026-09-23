@@ -35,9 +35,9 @@ missing from this table entirely, which is how a table stops being a census.
 | Package | Passing | Note |
 |---|---|---|
 | exporters | 1991 | the seven formats, byte-for-byte against goldens legacy wrote |
-| web | 1160 | C11's placeholder is gone; it has an acceptance test now |
-| inference | 560 | plus 36 skipped: the differentials, which need real checkpoints |
-| api | 418 | plus 4 skipped (SEC-09's symlink tests, where the OS will not make a link, as on this machine) and 1 todo (C8's placeholder) |
+| web | 1165 | C11's placeholder is gone; it has an acceptance test now |
+| inference | 564 | plus 36 skipped: the differentials, which need real checkpoints |
+| api | 422 | plus 4 skipped (SEC-09's symlink tests, where the OS will not make a link, as on this machine) and 1 todo (C8's placeholder) |
 | settings-schema | 55 | includes the rule-fixed defaults |
 | converter | 30 | the pickled-alias rewrite |
 | contracts | 28 | the wire shapes both sides agree on |
@@ -154,6 +154,29 @@ propagated frames. These did not:
 Both now ask first, through the same question New timeline asks, and neither asks when nothing is
 unsaved. Six tests: removing the question fails the four that expect it, and two hold the other
 side.
+
+**Operate On View segmented a picture nobody could see -- found and fixed 2026-09-23.** With the
+setting on, the API rendered the model's picture from the decoded file plus brightness, contrast
+and gamma. Legacy's rescale, channel thresholds and FFT REPLACE the image those adjustments apply
+to (`image_adjustment_manager.py` calls `set_photo` with the processed image), so its Operate On
+View segments the processed view. Here, a rescaled 16-bit image was segmented unrescaled. When only
+processing was on, no picture was sent at all, and the model read the original file.
+- **Web.** The embed request carries the chain as `processing`: the pixels route's own query
+  string, from the same builder that makes the pixels URL.
+- **API.** Renders the model's picture through the same decode step the pixels route uses. A test
+  holds the two byte for byte.
+- **Inference.** Keys its encodings on the processing as well as the adjustments. Otherwise a new
+  rescale under unchanged adjustments would have answered from the old encoding.
+- **Neighbour prefetch.** Still sends the adjustments alone, because decision 9 opens each image
+  with no processing.
+
+The shared contract has the new example, and both sides pass it. Thirteen new tests: four in
+the inference suite (one is the contract example), four in the API and five in the web app.
+Mutations caught:
+- a render that ignores processing fails two;
+- rendering only for adjustments fails one;
+- a key without processing fails one;
+- the view sending an empty chain fails one.
 
 **RULE-058, a P0 rule, was traced by the P0 guard's own comment -- found and fixed 2026-09-23.**
 The guard (`web/test/rules/p0Coverage.test.ts`) passes a rule when any test file names it, and it
@@ -607,12 +630,12 @@ needs is already in one store rather than scattered across managers.
    - **Display adjustments** (C8), including legacy's negative-brightness fold, reproduced because
      in legacy those pixels are what SAM segments with Operate On View on.
 
-     **Operate On View itself is NOT built**, and the panel now says so rather than repeating
-     legacy's sentence. `operate_on_view` exists in the settings schema and nothing reads it, so a
-     model prompted here sees the image as it was decoded. Building it means the embed request
-     carrying the processing parameters so the inference service encodes the same pixels the user
-     is looking at — a wire change and an API change, not a setting to honour. Claiming otherwise
-     would have a user adjust the contrast to help SAM and wonder why the mask did not move.
+     **Operate On View is built** -- this paragraph said otherwise until 2026-09-23, long after
+     it was. The embed request carries the view and the API renders it for the model. Until
+     that day the view meant the display adjustments ALONE, which is where the paragraph's own
+     warning came true: legacy's processing (rescale, thresholds, FFT) replaces the image its
+     adjustments apply to, so it segments the processed picture, and a rescaled 16-bit image was
+     segmented here unrescaled. See "Operate On View segmented a picture nobody could see".
 
    - **Image processing** (`tools/imageProcessing.ts`, `tools/adjustments.ts`, `tools/crop.ts`):
      rescale, channel thresholding, the contrast-stretch and equalization presets, the display
@@ -755,8 +778,9 @@ needs is already in one store rather than scattered across managers.
    draw into a pair when it landed, for want of a store that could hold two open images — the
    slice below built that and rewired the view onto it, so both panes are now editable and each
    pane's size, processing and live segments come from the store rather than from a second loading
-   path of its own. **C14 stays pending in the capability table** either way: two editable panes
-   is not one action applying to both, and marking it built would put the table back to lying.
+   path of its own. C14 stayed pending in the capability table until one action applied to both:
+   linked adds and linked erase have since done so, and the API's table reads `not-this-service`
+   (2026-09-23), since each side saves through the ordinary per-image route.
 
    Three smaller decisions taken with it: two viewers rather than legacy's dead four-view setting;
    the same image on both sides allowed and announced; an unmeasured image says "measuring" rather

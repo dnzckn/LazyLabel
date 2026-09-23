@@ -71,13 +71,16 @@ function response(): WireSegmentResponse {
 }
 
 function Harness(): React.ReactNode {
-  const { openImage, segments, imageState, history, setActiveTool } = useWorkspace();
+  const { openImage, segments, imageState, history, setActiveTool, processing, setProcessing } = useWorkspace();
 
   return (
     <>
       <button type="button" onClick={() => openImage(imageRow("a.png"))}>open a</button>
       <button type="button" onClick={() => openImage(imageRow("b.png"))}>open b</button>
       <button type="button" onClick={() => setActiveTool("ai")}>ai tool</button>
+      <button type="button" onClick={() => setProcessing({ ...processing, rescale: { min: 10, max: 200 } })}>
+        rescale
+      </button>
       <p data-testid="count">{segments.length}</p>
       <p data-testid="class">{segments.map((s) => s.classId).join(",")}</p>
       <p data-testid="types">{segments.map((s) => s.type).join(",")}</p>
@@ -279,5 +282,43 @@ describe("flow 1, step 6: moving to the next image", () => {
     await waitFor(() => expect(shown("count")).toBe("0"));
 
     expect(saveAnnotations).not.toHaveBeenCalled();
+  });
+});
+
+describe("RULE-089 through the view: Operate On View segments what is on screen", () => {
+  /*
+   * Driven through the image view, because the wire from the setting to the tool is what was
+   * missing: legacy's processing replaces the image its adjustments apply to, and until 2026-09-23
+   * the view sent the adjustments alone, so a rescaled 16-bit image was segmented unrescaled.
+   */
+  it("sends the rescale the user is looking at, with the adjustments", async () => {
+    const settings = defaultSettings();
+    const { embed } = mount({
+      getSettings: async () => ({ ...settings, values: { ...settings.values, operate_on_view: true } }),
+    });
+    fireEvent.click(screen.getByText("open a"));
+    await waitFor(() => expect(screen.getAllByText("a.png").length).toBeGreaterThan(0));
+    fireEvent.click(screen.getByText("rescale"));
+    fireEvent.click(await screen.findByRole("radio", { name: new RegExp(MODEL) }));
+
+    fireEvent.click(screen.getByText("ai tool"));
+
+    await waitFor(() => expect(embed).toHaveBeenCalled());
+    const sent = (embed.mock.calls.at(-1) as unknown as [{ adjustments?: unknown; processing?: string }])[0];
+    expect(sent.processing).toBe("rescaleMin=10&rescaleMax=200");
+    expect(sent.adjustments).toBeDefined();
+  });
+
+  it("sends neither with the setting off, which is the rule's default", async () => {
+    const { embed } = mount();
+    fireEvent.click(screen.getByText("open a"));
+    await waitFor(() => expect(screen.getAllByText("a.png").length).toBeGreaterThan(0));
+    fireEvent.click(screen.getByText("rescale"));
+    fireEvent.click(await screen.findByRole("radio", { name: new RegExp(MODEL) }));
+
+    fireEvent.click(screen.getByText("ai tool"));
+
+    await waitFor(() => expect(embed).toHaveBeenCalled());
+    expect((embed.mock.calls.at(-1) as unknown as [object])[0]).toEqual({ image: "a.png", model: MODEL });
   });
 });

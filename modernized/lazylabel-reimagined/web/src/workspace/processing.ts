@@ -105,6 +105,15 @@ export function rescaleApplies(sourceChannels: number): boolean {
  * has always been — which is what keeps the browser's own image cache working for the common case.
  */
 export function processingQuery(processing: ImageProcessing): string {
+  const text = processingParams(processing);
+  return text === "" ? "" : `?${text}`;
+}
+
+/**
+ * The same parameters without the "?", as Operate On View sends them in an embed request's body
+ * (RULE-089). One builder for both, so the model is asked for exactly the view the pixels show.
+ */
+export function processingParams(processing: ImageProcessing): string {
   const query = new URLSearchParams();
 
   // A preset and a manual window are exclusive, and the API refuses a request carrying both --
@@ -149,6 +158,5 @@ export function processingQuery(processing: ImageProcessing): string {
     query.set("crop", `${crop.x1},${crop.y1},${crop.x2},${crop.y2}`);
   }
 
-  const text = query.toString();
-  return text === "" ? "" : `?${text}`;
+  return query.toString();
 }

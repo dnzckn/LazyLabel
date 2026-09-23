@@ -113,8 +113,9 @@ None remain. The last one, for propagation, came off when the job API was built.
 ## What Phase 3 built, and how it is proven
 
 **The prompt path.** `POST /inference/embeddings` encodes an image and returns a handle derived from
-the cache key, so asking twice for the same image, model and adjustments gives the same handle and a
-`cached: true`. `POST /inference/segment` takes points and a box and returns the winning mask.
+the cache key, so asking twice for the same image, model and view gives the same handle and a
+`cached: true`. With Operate On View on (RULE-089), the API posts the rendered picture as `pixels`
+with the `adjustments` and the `processing` chain it went through, and both are in the key. `POST /inference/segment` takes points and a box and returns the winning mask.
 
 **Proven against the legacy model, not asserted.** `tests/test_differential_sam2.py` runs six point
 prompts, a box prompt and the candidate choice through both this backend and the legacy
@@ -136,8 +137,10 @@ for an empty prompt, and this raises `InvalidPromptError` saying what was wrong 
 **The embedding cache key is the design** (RULE-091). Legacy keys on a hash of the image *path*,
 which is wrong three ways, and the middle one is not a near miss: every SAM 1 variant emits a
 256 × 64 × 64 embedding, so `vit_b` features handed to a `vit_h` decoder are shape-compatible. No
-exception, no warning, a wrong mask. The key here is (image identity, model SHA-256, display
-adjustments), so invalidation is structural rather than a step someone must remember.
+exception, no warning, a wrong mask. The key here is (image identity, model SHA-256, the view:
+display adjustments and processing chain), so invalidation is structural rather than a step someone
+must remember. The processing joined it on 2026-09-23: without it, a new rescale under unchanged
+adjustments answered from the old encoding.
 
 **The mask on the wire is checked across the language boundary.** The format is
 `@lazylabel/contracts`' bounded form, which now has two implementations because one side is Python.

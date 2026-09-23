@@ -31,6 +31,48 @@ def test_posted_pixels_are_used_instead_of_the_file(tmp_path, monkeypatch):
     assert tuple(int(v) for v in decoded[0][0]) == (10, 200, 30)
 
 
+def test_a_changed_processing_chain_is_a_new_encoding_not_a_cached_one(tmp_path):
+    """RULE-089 with the processing chain.
+
+    Legacy segments the PROCESSED view, so a new rescale is a new picture. Until 2026-09-23 the key
+    held the adjustments alone, and a changed rescale under unchanged adjustments answered from the
+    old encoding: a mask of a picture no longer on screen, with no sign anything was wrong.
+    """
+    import base64
+    import io
+
+    from PIL import Image
+
+    from lazylabel_inference.manifest import ModelEntry
+    from lazylabel_inference.service import InferenceService
+
+    class Encoder:
+        """Stands where SAM does; counts what it is asked to encode."""
+
+        encoded = 0
+
+        def set_image(self, image) -> None:
+            Encoder.encoded += 1
+
+    buffer = io.BytesIO()
+    Image.new("RGB", (4, 4), (10, 200, 30)).save(buffer, format="PNG")
+    (tmp_path / "a.png").write_bytes(buffer.getvalue())
+    posted = base64.b64encode(buffer.getvalue()).decode()
+
+    entry = ModelEntry(name="m", family="sam2", size="tiny", filename="m.pt", sha256="0" * 64, bytes=1)
+    service = InferenceService(models=[entry], model_dir=tmp_path, dataset_root=tmp_path)
+    service._backends["m"] = Encoder()
+
+    view = {"brightness": 40.0}
+    first, first_cached = service.embed("a.png", "m", view, posted, "rescaleMin=10&rescaleMax=200")
+    again, again_cached = service.embed("a.png", "m", view, posted, "rescaleMin=10&rescaleMax=200")
+    other, other_cached = service.embed("a.png", "m", view, posted, "rescaleMin=20&rescaleMax=200")
+
+    assert (first_cached, again_cached, other_cached) == (False, True, False)
+    assert first == again != other
+    assert Encoder.encoded == 2
+
+
 def test_unreadable_posted_pixels_are_refused_rather_than_guessed(tmp_path):
     """A base64 string that is not an image must fail loudly.
 

@@ -79,6 +79,8 @@ export interface WireEmbedRequest {
   /** A manifest model NAME, never a file path -- the service will not load anything unlisted. */
   readonly model: string;
   readonly adjustments?: Readonly<Record<string, number>>;
+  /** The processing chain in the pixels route's query form, when Operate On View is on (RULE-089). */
+  readonly processing?: string;
 }
 
 export interface WireEmbedResponse {

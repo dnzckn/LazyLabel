@@ -149,6 +149,15 @@ class TestThePromptRoutes:
             status, _ = call(deps, "POST", "/inference/embeddings", body=payload)
             assert status == 400, payload
 
+    def test_refuses_a_processing_chain_that_is_not_the_query_string(self, tmp_path: Path) -> None:
+        deps = Deps(model_dir=tmp_path, availability=available)
+        for payload in [
+            b'{"image":"a.png","model":"m","processing":5}',
+            b'{"image":"a.png","model":"m","processing":{"rescaleMin":1}}',
+        ]:
+            status, body = call(deps, "POST", "/inference/embeddings", body=payload)
+            assert status == 400 and "processing" in body["message"], payload
+
     def test_refuses_a_segment_request_with_no_handle(self, tmp_path: Path) -> None:
         deps = Deps(model_dir=tmp_path, availability=available)
         status, _ = call(deps, "POST", "/inference/segment", body=b'{"points":[]}')
