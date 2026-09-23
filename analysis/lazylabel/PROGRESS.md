@@ -238,7 +238,14 @@ Then the class table, merge and crop, read back from the files written:
 - "Merge into class 1" put both boxes in class 1, leaving two mask channels;
 - a crop over the top-left blanked what fell outside. The triangle was cut at the crop edge, and
   a box wholly outside was gone from both the NPZ and the YOLO file, as the warning said it would
-  be ("Saving will blank 553,972 pixels outside this rectangle"). Two tests, both failing without the fix; the harness shows
+  be ("Saving will blank 553,972 pixels outside this rectangle").
+
+Accepting an AI mask, the step every AI annotation ends with, had not been driven in a browser,
+because the browser tool cannot send Space, which is what accepts. With `save_segment` rebound to
+J, a click on a disc and J accepted it through SAM 2.1 ("Undo: Accept AI mask"). With Auto-Convert
+on, the mask became a polygon, and the saved box was centre (500, 381), 299 x 298, for a disc
+centred at (500, 380) with diameter 300. It has more than 200 vertices, so it offers no handles,
+which is legacy's limit; the notice saying so is a transient one. Two tests, both failing without the fix; the harness shows
 the image at its own size, where the first could not show, so the test shows it at a quarter.
 
 **Linked editing in the split view, checked in a real browser 2026-09-23.** With two same-sized
