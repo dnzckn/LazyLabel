@@ -200,10 +200,13 @@ export function App({ client }: { readonly client: ApiClient }): ReactNode {
             <Panel title="Drawing tools">
               <ToolPicker />
               <HistoryControls />
-              {/* Shift-drag erases with whichever shape is active, which is legacy's gesture and
-                  is not discoverable by looking at the picker. */}
+              {/* Shift erases with whichever shape is active, which is legacy's gesture and is not
+                  discoverable by looking at the picker. It is read when the shape is FINISHED -- a
+                  box or circle released, a polygon closed -- so "while drawing" misled: a polygon
+                  drawn with Shift and closed by a plain Enter is added (found 2026-09-23). */}
               <p className="panel__missing">
-                Hold Shift while drawing to erase with the shape instead of adding it.
+                Hold Shift as you finish a shape to erase with it instead of adding it: release a
+                box or circle with Shift held, or close a polygon with Shift+Enter.
               </p>
             </Panel>
             <Panel title="AI tools">
