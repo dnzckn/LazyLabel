@@ -11,6 +11,7 @@ import json
 from pathlib import Path
 
 import pytest
+from dataclasses import replace
 
 from lazylabel_inference.backends import SAM2_CONFIGS, load_backend, load_video_predictor
 from lazylabel_inference.manifest import ManifestError, parse_manifest
@@ -160,3 +161,64 @@ class TestTheVideoPredictor:
 
         with pytest.raises(ModelNotLoadedError, match="model.pth is not in"):
             load_video_predictor(entry, tmp_path)
+
+
+class TestTheWeightsOnlyGuardRunsInProduction:
+    """SEC-03, and a guard that only ever ran in CI.
+
+    `assert_weights_only_loading` round-trips a payload through `torch.load` and fails if the
+    payload runs. Its only caller was the test above -- so it proved the torch in CI was safe, and
+    production trusted whatever torch and environment it was handed.
+
+    The case that breaks is specific and it is the assessment's own: `TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD`
+    flips `torch.load`'s DEFAULT at call time. An explicit `weights_only=True` still holds (SAM 2's
+    builder and the archetype embedder pass one), but segment_anything's builder calls a bare
+    `torch.load` -- so with that variable set, a SAM 1 checkpoint executes whatever it carries.
+    """
+
+    @pytest.fixture(autouse=True)
+    def fresh_process(self, monkeypatch):
+        # The check runs once per process; each test here is a new "process".
+        import lazylabel_inference.backends as backends
+
+        monkeypatch.setattr(backends, "_WEIGHTS_ONLY_VERIFIED", False)
+
+    def test_a_sam1_load_is_REFUSED_when_the_environment_disables_weights_only(
+        self, tmp_path: Path, monkeypatch
+    ) -> None:
+        pytest.importorskip("torch")
+        monkeypatch.setenv("TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD", "1")
+        (tmp_path / "model.pth").write_bytes(b"not a real checkpoint")
+        sam1 = replace(entry(family="sam1", size="vit_h"), filename="model.pth")
+
+        with pytest.raises(ModelNotLoadedError, match="TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD"):
+            load_backend(sam1, tmp_path)
+
+    def test_the_refusal_comes_BEFORE_anything_is_built(
+        self, tmp_path: Path, monkeypatch
+    ) -> None:
+        # The order is the whole point. A check after the builder ran would be checking the lock
+        # after walking through the door.
+        pytest.importorskip("torch")
+        import lazylabel_inference.backends as backends
+
+        built: list[str] = []
+        monkeypatch.setattr(backends, "_load_sam1", lambda *args, **kwargs: built.append("built"))
+        monkeypatch.setenv("TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD", "1")
+        (tmp_path / "model.pth").write_bytes(b"not a real checkpoint")
+        sam1 = replace(entry(family="sam1", size="vit_h"), filename="model.pth")
+
+        with pytest.raises(ModelNotLoadedError):
+            load_backend(sam1, tmp_path)
+
+        assert built == []
+
+    def test_an_ordinary_environment_is_let_through(self, monkeypatch) -> None:
+        # The guard must not refuse the safe case, or it would be switched off the first time it
+        # got in someone's way.
+        pytest.importorskip("torch")
+        from lazylabel_inference.backends import ensure_weights_only_loading
+
+        monkeypatch.delenv("TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD", raising=False)
+
+        ensure_weights_only_loading()

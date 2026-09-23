@@ -159,6 +159,7 @@ def load_backend(entry: ModelEntry, model_dir: Path, *, device: str | None = Non
         ) from cause
 
     resolved = device or ("cuda" if torch.cuda.is_available() else "cpu")
+    ensure_weights_only_loading()
 
     if entry.family == "sam1":
         return PredictorBackend(_entry=entry, _predictor=_load_sam1(entry, checkpoint, resolved))
@@ -246,6 +247,37 @@ def assert_weights_only_loading() -> None:
     )
 
 
+_WEIGHTS_ONLY_VERIFIED = False
+
+
+def ensure_weights_only_loading() -> None:
+    """Run `assert_weights_only_loading` once per process, before the first checkpoint loads.
+
+    THE GUARD EXISTED AND NOTHING RAN IT. Two docstrings in this module called it "what keeps that
+    true rather than assumed", and its only caller was a test -- so it proved the torch in CI was
+    safe, and production trusted whatever torch it was handed. SEC-03 names the exact case that
+    breaks: `TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1` in the environment turns every `torch.load` into a
+    full pickle load at CALL time, and segment_anything's builder calls a bare `torch.load`. With
+    that variable set, a SAM 1 checkpoint executes whatever it carries.
+
+    Once rather than per load: the check is a tiny in-memory round trip, but it is a round trip on
+    the path of every model switch, and the answer cannot change inside one process.
+    """
+    global _WEIGHTS_ONLY_VERIFIED
+    if _WEIGHTS_ONLY_VERIFIED:
+        return
+    try:
+        assert_weights_only_loading()
+    except RuntimeError as cause:
+        # A ModelNotLoadedError, so the route answers with a reason rather than a 500 -- and so the
+        # operator is told what to change, which is the environment rather than the checkpoint.
+        raise ModelNotLoadedError(
+            f"refusing to load any checkpoint: {cause} Check that TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD "
+            "is not set in this service's environment."
+        ) from cause
+    _WEIGHTS_ONLY_VERIFIED = True
+
+
 # The class was called Sam2Backend when SAM 2 was the only family it served.
 Sam2Backend = PredictorBackend
 
@@ -290,6 +322,7 @@ def load_video_predictor(entry: ModelEntry, model_dir: Path, *, device: str | No
         ) from cause
 
     resolved = device or ("cuda" if torch.cuda.is_available() else "cpu")
+    ensure_weights_only_loading()
     try:
         return build_sam2_video_predictor(config, str(checkpoint), device=resolved)
     except Exception as cause:
