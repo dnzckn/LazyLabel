@@ -204,6 +204,12 @@ Five unit tests with a one-image fake predictor, each failing without its fix. T
 per SAM family, pass with the real checkpoints and fail with the restore removed. The whole inference
 suite with all three checkpoints: **607 passed, 0 skipped**. Without them: 569 passed, 38 skipped.
 
+Then checked the way it was found, in the browser pane against the real stack, with a second
+same-sized image in the folder. Two concurrent first encodes now both answer 200; before the lock,
+one was the 500. The prefetch encoded the neighbour, which leaves the predictor holding it. A click
+on the open image's disc then came back as that disc: box (351, 232)-(650, 530) for a disc centred
+at (500, 380) with radius 150, in 144 ms. That view was also rescaled, with Operate On View on.
+
 **Operate On View refused large colour images -- found and fixed 2026-09-23.** The inference
 service capped request bodies at 64 MiB, a number with no recorded reason. The API posts RULE-089's
 rendered picture as a base64 PNG inside JSON. Measured with the API's own encoder at 50 megapixels,
