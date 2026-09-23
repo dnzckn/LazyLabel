@@ -62,6 +62,33 @@ class Backend(Protocol):
     def predict(self, prompt: Prompt) -> Prediction:
         """Run one prompt against the encoded image."""
 
+    def export_state(self) -> Any:
+        """The encoded image, detached, so another can be encoded and this one put back."""
+
+    def restore_state(self, state: Any) -> None:
+        """Put back an encoding `export_state` returned, without running the encoder."""
+
+
+# What `set_image` leaves on each family's predictor, and all a prediction reads back. The same fields
+# legacy's `get_embeddings` saves, plus SAM 2's batch flag, which `set_image` also resets.
+_SAM1_STATE = ("features", "original_size", "input_size", "is_image_set")
+_SAM2_STATE = ("_features", "_orig_hw", "_is_image_set", "_is_batch")
+
+
+def _state_fields(predictor: Any) -> tuple[str, ...]:
+    return _SAM2_STATE if hasattr(predictor, "_features") else _SAM1_STATE
+
+
+def _moved(value: Any, device: Any) -> Any:
+    """Tensors -- alone, or in a list, tuple or dict -- cloned to the CPU, or moved to `device`."""
+    if hasattr(value, "detach"):
+        return value.detach().cpu().clone() if device is None else value.to(device)
+    if isinstance(value, dict):
+        return {key: _moved(item, device) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return type(value)(_moved(item, device) for item in value)
+    return value
+
 
 @dataclass
 class PredictorBackend:
@@ -93,6 +120,31 @@ class PredictorBackend:
         except Exception as cause:
             raise PredictionFailedError(f"the image could not be encoded: {cause}") from cause
         self._image_shape = (int(image.shape[0]), int(image.shape[1]))
+
+    def export_state(self) -> Any:
+        """The encoded image, detached from the predictor.
+
+        A predictor holds ONE image. The service caches several -- RULE-091 encodes the neighbours
+        before anyone asks -- so a click on the open image must be answered from ITS encoding, not
+        from whichever neighbour was encoded last. Until 2026-09-23 the cache held a marker and the
+        predictor held the last image, and the only check was the image's SIZE: in a folder of
+        same-sized images a click on one was answered from another's encoding, with no error.
+
+        Legacy caches exactly this -- `get_embeddings` in both of its model wrappers -- and puts it
+        back on a hit. Held on the CPU, as legacy holds it: ten SAM 2 encodings are ~160 MB of RAM,
+        and would be the same again of GPU memory beside the model.
+        """
+        if self._image_shape is None:
+            raise ImageNotSetError("no image has been encoded; call set_image first")
+        fields = _state_fields(self._predictor)
+        return (self._image_shape, {name: _moved(getattr(self._predictor, name), None) for name in fields})
+
+    def restore_state(self, state: Any) -> None:
+        shape, values = state
+        device = self._predictor.device
+        for name, value in values.items():
+            setattr(self._predictor, name, _moved(value, device))
+        self._image_shape = shape
 
     def predict(self, prompt: Prompt) -> Prediction:
         if self._image_shape is None:

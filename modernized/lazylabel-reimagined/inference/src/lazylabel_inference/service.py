@@ -22,6 +22,7 @@ decodes (`contracts/test/pythonFixture.test.ts`).
 from __future__ import annotations
 
 import base64
+import threading
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -36,7 +37,6 @@ from .embeddings import (
 )
 from .manifest import ModelEntry, check_checkpoint
 from .prompts import (
-    ImageNotSetError,
     InferenceError,
     InvalidPromptError,
     ModelNotLoadedError,
@@ -76,6 +76,13 @@ class InferenceService:
     device: str | None = None
     _backends: dict[str, Backend] = field(default_factory=dict)
     _sessions: dict[str, _Session] = field(default_factory=dict)
+    # Which encoding each backend's predictor holds right now, by model name.
+    _holding: dict[str, EmbeddingKey] = field(default_factory=dict)
+    # The server is threaded, and a predictor is ONE mutable image: loading a model, encoding and
+    # predicting are serialised. Two first requests loading the same model at once failed on
+    # 2026-09-23 inside torch; an encode landing between another request's restore and its predict
+    # would answer that click from the wrong image. One GPU does one of these at a time regardless.
+    _lock: threading.RLock = field(default_factory=threading.RLock, repr=False)
 
     def model(self, name: str) -> ModelEntry:
         for entry in self.models:
@@ -90,13 +97,14 @@ class InferenceService:
         The checkpoint is verified against the manifest BEFORE it is loaded, every time a backend is
         created. Verifying after loading would be checking the lock after walking through the door.
         """
-        if name in self._backends:
-            return self._backends[name]
+        with self._lock:
+            if name in self._backends:
+                return self._backends[name]
 
-        entry = self.verified(self.model(name))
-        backend = load_backend(entry, self.model_dir, device=self.device)
-        self._backends[name] = backend
-        return backend
+            entry = self.verified(self.model(name))
+            backend = load_backend(entry, self.model_dir, device=self.device)
+            self._backends[name] = backend
+            return backend
 
     def verified(self, entry: ModelEntry) -> ModelEntry:
         """The entry back, once its checkpoint is proven to be the file the manifest vouches for.
@@ -139,40 +147,47 @@ class InferenceService:
         )
         handle = key.as_handle()
 
-        if self.cache.get(key) is not None and handle in self._sessions:
-            return handle, True
+        with self._lock:
+            if self.cache.get(key) is not None and handle in self._sessions:
+                return handle, True
 
-        backend = self.backend(model_name)
-        image = self._read_image(path, pixels)
-        backend.set_image(image)
+            backend = self.backend(model_name)
+            image = self._read_image(path, pixels)
+            # Forgotten BEFORE encoding: an encode that fails partway has already reset the
+            # predictor, and a record still naming the previous image would skip its restore.
+            self._holding.pop(model_name, None)
+            backend.set_image(image)
 
-        # The cached value is a marker, not the tensor: the predictor holds the encoded state
-        # internally, and copying it out would double the memory for no benefit while this service
-        # runs one image at a time. The KEY is what does the work - it is what decides that a
-        # different model or different pixels are a different encoding.
-        self.cache.put(key, True)
-        self._sessions[handle] = _Session(key=key, backend=backend, shape=(image.shape[0], image.shape[1]))
-        self._prune_sessions()
-        return handle, False
+            # The cached value is the ENCODING, detached from the predictor, which holds only the
+            # image encoded last. Until 2026-09-23 it was a marker, and a click on one image was
+            # answered from whichever image RULE-091's prefetch had encoded after it.
+            self.cache.put(key, backend.export_state())
+            self._holding[model_name] = key
+            self._sessions[handle] = _Session(key=key, backend=backend, shape=(image.shape[0], image.shape[1]))
+            self._prune_sessions()
+            return handle, False
 
     def segment(self, handle: str, prompt: Prompt) -> Prediction:
-        session = self._sessions.get(handle)
-        if session is None or self.cache.get(session.key) is None:
-            # Expiry and an invented handle are the same answer to the client: ask for an embedding
-            # again. Distinguishing them would leak which handles once existed.
-            self._sessions.pop(handle, None)
-            raise UnknownHandleError(
-                "that embedding handle is unknown or has expired; request an embedding again"
-            )
+        with self._lock:
+            session = self._sessions.get(handle)
+            encoded = None if session is None else self.cache.get(session.key)
+            if session is None or encoded is None:
+                # Expiry and an invented handle are the same answer to the client: ask for an
+                # embedding again. Distinguishing them would leak which handles once existed.
+                self._sessions.pop(handle, None)
+                raise UnknownHandleError(
+                    "that embedding handle is unknown or has expired; request an embedding again"
+                )
 
-        # A backend serves one image at a time, so a handle for an image it is no longer holding has
-        # to re-encode. Without this, two clients alternating between images would silently prompt
-        # against each other's pixels.
-        if getattr(session.backend, "_image_shape", None) != session.shape:
-            raise ImageNotSetError(
-                "the model is holding a different image; request an embedding again"
-            )
-        return session.backend.predict(prompt)
+            # A predictor holds one image, so a handle for another has its encoding PUT BACK first,
+            # from the cache -- no encoder run. This was a check on the image's SIZE until
+            # 2026-09-23, which every same-sized neighbour passed: the click was answered from the
+            # neighbour's encoding, silently.
+            name = session.backend.entry.name
+            if self._holding.get(name) != session.key:
+                session.backend.restore_state(encoded)
+                self._holding[name] = session.key
+            return session.backend.predict(prompt)
 
     def read_image(self, image_key: str) -> Any:
         """One image by its dataset key, decoded as RGB uint8.

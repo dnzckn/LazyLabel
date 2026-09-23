@@ -142,6 +142,18 @@ display adjustments and processing chain), so invalidation is structural rather 
 must remember. The processing joined it on 2026-09-23: without it, a new rescale under unchanged
 adjustments answered from the old encoding.
 
+**The cache holds the ENCODING, and a click puts its own image back first.** A predictor holds one
+encoded image; the service caches ten, and RULE-091 encodes the open image's neighbours before
+anyone asks. Until 2026-09-23 the cache held a marker, and the only check on a click was the image's
+size. In a folder of same-sized images, a click was therefore answered from whichever neighbour had
+been encoded last. Reproduced with SAM 2.1 large: a disc's 20,031 pixels became 286,131 of the
+neighbour's background, with no error, and asking again said `cached` and changed nothing. Each
+family's encoding is now exported after encoding, and put back when a click is for another image.
+They are the fields legacy's `get_embeddings` saves, held on the CPU as legacy holds them.
+`tests/test_live_encoding_cache.py` proves the round trip for both families with real checkpoints.
+Model loading, encoding and prediction are serialised: the server is threaded, and two first
+requests loading one model at once failed inside torch.
+
 **The mask on the wire is checked across the language boundary.** The format is
 `@lazylabel/contracts`' bounded form, which now has two implementations because one side is Python.
 `tools/generate_mask_fixture.py` writes what this encodes and

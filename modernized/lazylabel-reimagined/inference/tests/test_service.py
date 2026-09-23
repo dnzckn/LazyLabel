@@ -50,9 +50,16 @@ def test_a_changed_processing_chain_is_a_new_encoding_not_a_cached_one(tmp_path)
         """Stands where SAM does; counts what it is asked to encode."""
 
         encoded = 0
+        entry = ModelEntry(name="m", family="sam2", size="tiny", filename="m.pt", sha256="0" * 64, bytes=1)
 
         def set_image(self, image) -> None:
             Encoder.encoded += 1
+
+        def export_state(self):
+            return object()
+
+        def restore_state(self, state) -> None:
+            pass
 
     buffer = io.BytesIO()
     Image.new("RGB", (4, 4), (10, 200, 30)).save(buffer, format="PNG")
@@ -71,6 +78,140 @@ def test_a_changed_processing_chain_is_a_new_encoding_not_a_cached_one(tmp_path)
     assert (first_cached, again_cached, other_cached) == (False, True, False)
     assert first == again != other
     assert Encoder.encoded == 2
+
+
+class OneImagePredictor:
+    """Stands where SAM does, with the property that matters here: it holds ONE encoded image.
+
+    A prediction reports the image it was answered from, so answering from the wrong one shows.
+    """
+
+    def __init__(self) -> None:
+        from lazylabel_inference.manifest import ModelEntry
+
+        self.entry = ModelEntry(name="m", family="sam2", size="tiny", filename="m.pt", sha256="0" * 64, bytes=1)
+        self.holding = None
+        self.encoded = 0
+
+    def set_image(self, image) -> None:
+        self.holding = int(image[0, 0, 0])
+        self.encoded += 1
+
+    def export_state(self):
+        return self.holding
+
+    def restore_state(self, state) -> None:
+        self.holding = state
+
+    def predict(self, prompt):
+        from lazylabel_inference.prompts import Prediction
+
+        return Prediction(mask=None, score=float(self.holding))
+
+
+def _same_sized_pair(tmp_path, service_for):
+    """Two images of one size and different content -- a folder's normal case."""
+    from PIL import Image
+
+    Image.new("RGB", (8, 6), (10, 10, 10)).save(tmp_path / "a.png")
+    Image.new("RGB", (8, 6), (200, 200, 200)).save(tmp_path / "b.png")
+    predictor = OneImagePredictor()
+    service = service_for(tmp_path)
+    service._backends["m"] = predictor
+    return service, predictor
+
+
+def _service_for(root):
+    from lazylabel_inference.manifest import ModelEntry
+    from lazylabel_inference.service import InferenceService
+
+    entry = ModelEntry(name="m", family="sam2", size="tiny", filename="m.pt", sha256="0" * 64, bytes=1)
+    return InferenceService(models=[entry], model_dir=root, dataset_root=root)
+
+
+def test_a_click_is_answered_from_its_own_image_after_a_neighbour_is_encoded(tmp_path):
+    """RULE-091 encodes the neighbours; a click on the open image must still be about THAT image.
+
+    Reproduced on 2026-09-23 with SAM 2.1 large: a click on a disc gave the disc (20,031 pixels)
+    until a same-sized neighbour was encoded, then 286,131 -- the neighbour's background. The check
+    was on the image's size, which every neighbour in a folder of one size passes.
+    """
+    from lazylabel_inference.prompts import Point, Prompt
+
+    service, predictor = _same_sized_pair(tmp_path, _service_for)
+    click = Prompt(points=(Point(1, 1),))
+
+    a, _ = service.embed("a.png", "m")
+    service.embed("b.png", "m")  # what the prefetch does next
+
+    assert service.segment(a, click).score == 10.0
+    # Put back from the cache, not encoded again: RULE-091's whole point is not paying for it twice.
+    assert predictor.encoded == 2
+
+
+def test_asking_again_for_an_image_that_is_cached_still_answers_from_it(tmp_path):
+    """The client's recovery path. It said `cached` and changed nothing until 2026-09-23."""
+    from lazylabel_inference.prompts import Point, Prompt
+
+    service, predictor = _same_sized_pair(tmp_path, _service_for)
+    click = Prompt(points=(Point(1, 1),))
+
+    service.embed("a.png", "m")
+    b, _ = service.embed("b.png", "m")
+    again, cached = service.embed("a.png", "m")
+
+    assert cached is True
+    assert service.segment(again, click).score == 10.0
+    assert service.segment(b, click).score == 200.0
+    assert predictor.encoded == 2
+
+
+def test_an_encode_that_fails_partway_does_not_leave_a_stale_record(tmp_path):
+    """A failed encode has already reset the predictor. The next click on the image it held must
+    put that image back, not trust a record saying it is still there."""
+    from lazylabel_inference.prompts import Point, Prompt
+
+    service, predictor = _same_sized_pair(tmp_path, _service_for)
+    click = Prompt(points=(Point(1, 1),))
+    a, _ = service.embed("a.png", "m")
+
+    def fails_partway(image) -> None:
+        predictor.holding = None  # what a real predictor's reset leaves
+        raise RuntimeError("out of memory")
+
+    predictor.set_image = fails_partway
+    with pytest.raises(RuntimeError):
+        service.embed("b.png", "m")
+
+    assert service.segment(a, click).score == 10.0
+
+
+def test_two_first_requests_load_the_model_once(tmp_path, monkeypatch):
+    """The server is threaded. Two first requests loading one model at once failed inside torch on
+    2026-09-23 -- a 500 the browser showed as "the AI tools could not prepare this image"."""
+    import threading
+    import time
+
+    from lazylabel_inference import service as service_module
+
+    loads = []
+
+    def slow_load(entry, model_dir, device=None):
+        loads.append(entry.name)
+        time.sleep(0.2)
+        return OneImagePredictor()
+
+    monkeypatch.setattr(service_module, "load_backend", slow_load)
+    service = _service_for(tmp_path)
+    monkeypatch.setattr(service, "verified", lambda entry: entry)
+
+    threads = [threading.Thread(target=service.backend, args=("m",)) for _ in range(2)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    assert loads == ["m"]
 
 
 def test_unreadable_posted_pixels_are_refused_rather_than_guessed(tmp_path):

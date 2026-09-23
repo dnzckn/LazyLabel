@@ -36,7 +36,7 @@ missing from this table entirely, which is how a table stops being a census.
 |---|---|---|
 | exporters | 1991 | the seven formats, byte-for-byte against goldens legacy wrote |
 | web | 1165 | C11's placeholder is gone; it has an acceptance test now |
-| inference | 565 | plus 36 skipped: the differentials, which need real checkpoints |
+| inference | 569 | plus 38 skipped: the differentials, which need real checkpoints |
 | api | 422 | plus 4 skipped (SEC-09's symlink tests, where the OS will not make a link, as on this machine) and 1 todo (C8's placeholder) |
 | settings-schema | 55 | includes the rule-fixed defaults |
 | converter | 30 | the pickled-alias rewrite |
@@ -177,6 +177,32 @@ Mutations caught:
 - rendering only for adjustments fails one;
 - a key without processing fails one;
 - the view sending an empty chain fails one.
+
+**A click could be answered from ANOTHER image's encoding -- found in a real browser and fixed
+2026-09-23.** It was found in the first full-stack run with a real model: the browser pane, the API,
+and the inference service on the RTX 3080 with SAM 2.1 large. That run showed a 500 from two
+requests loading the model at once. Reading why found something worse:
+- **The predictor.** It holds ONE encoded image, and the service caches ten; RULE-091 encodes the
+  open image's neighbours before anyone asks.
+- **The cache.** It held a marker, not the encoding.
+- **The check.** The only check on a click was the image's SIZE, and every neighbour in a folder of
+  one size passes it.
+
+Reproduced with the real model: a click on a disc gave the disc, 20,031 pixels. After a same-sized
+neighbour was encoded, the same click gave 286,131 pixels: the neighbour's background, with no
+error. Asking for the embedding again said `cached` and changed nothing.
+
+So every AI click after the prefetch ran could be answered from the wrong picture. The prefetch
+starts within a second of an image being ready. Legacy caches the encoding itself (`get_embeddings`
+/ `set_embeddings`) and puts it back on a hit, and the service now does the same:
+- the cache holds each family's encoded state, on the CPU as legacy holds it;
+- a click for another image puts its own back first, without running the encoder;
+- loading, encoding and predicting are serialised, because the server is threaded;
+- an encode that fails partway forgets what the predictor held.
+
+Five unit tests with a one-image fake predictor, each failing without its fix. Two live tests, one
+per SAM family, pass with the real checkpoints and fail with the restore removed. The whole inference
+suite with all three checkpoints: **607 passed, 0 skipped**. Without them: 569 passed, 38 skipped.
 
 **Operate On View refused large colour images -- found and fixed 2026-09-23.** The inference
 service capped request bodies at 64 MiB, a number with no recorded reason. The API posts RULE-089's
@@ -1471,8 +1497,9 @@ about them. Run them locally, deliberately:
 cd modernized/lazylabel-reimagined/inference && LAZYLABEL_TEST_SAM1_CHECKPOINT=/path/to/sam_vit_h_4b8939.pth LAZYLABEL_TEST_CHECKPOINT=/path/to/sam2.1_hiera_large.pt LAZYLABEL_TEST_EMBEDDER=/path/to/mobilenetv3_small_tv.pth PYTHONPATH=/path/to/legacy/lazylabel/src python -m pytest tests/ -q
 ```
 
-With all three set, the result on 2026-09-23 was **600 passed, 0 skipped**, in 2 min 44 s on this
-machine, after that day's change to the embedding key. Any `skipped` count above zero means a
+With all three set, the last run on 2026-09-23 was **607 passed, 0 skipped**, in 56 s on this
+machine, after that day's encoding-cache fix. It was 600 earlier the same day, before the fix's
+tests. Any `skipped` count above zero means a
 checkpoint was not found and that suite did not actually run. This section said "255 passed, 1
 xfailed" until then. The xfail was C11's placeholder, removed on 2026-09-21 when the job API
 landed, and the suite has grown since. The count here is the one the last run printed, not a target.
