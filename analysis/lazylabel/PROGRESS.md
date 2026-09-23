@@ -53,6 +53,18 @@ Each figure is read from that package's own run. Four commit messages this week 
 that had been typed before the run printed it and needed amending, which is why the rule is now
 written down: run the suite as its own step, then write the number.
 
+**Rerun on fresh exports after the day's fixes, 2026-09-23, and all green.** Each job ran on its
+own export of HEAD, as CI would:
+
+| job | result |
+| --- | --- |
+| contracts | install, typecheck, 28 tests and build pass |
+| API | 422 passed, 4 skipped, 1 todo; typecheck and build pass |
+| web | 1168 passed; typecheck and build pass |
+| inference | 491 passed, 87 skipped, with CI's package set |
+
+The inference skips are more than a local run's 38 because CI installs no PyTorch.
+
 **A clean checkout was not this machine either -- six ways, found 2026-09-23 by running every CI
 job on a fresh export of HEAD, one job per export so no install could leak between them:**
 
