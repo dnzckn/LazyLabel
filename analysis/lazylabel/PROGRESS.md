@@ -119,7 +119,15 @@ than guessed: a wrong one breaks CI, and a plausible-looking wrong one pins code
 reviewed. `gh api repos/actions/checkout/git/ref/tags/v4` and its siblings give them. The legacy
 `tests.yml` still carries all three of SEC-11's problems, including codecov-action v3.
 
-Six remain to walk: SEC-12 through SEC-17.
+**SEC-12 is NOT addressed, and it has a SEC-03 residual.** `inference/pyproject.toml` lists
+`segment-anything` with no version at all, and does not declare `sam2` -- so a fresh install
+resolves whatever those are that day. And its torch floor is `>=2.7.1`, which still admits the
+torch whose weights-only unpickler has CVE-2026-24747 (fixed in 2.10.0). The runtime guard added
+for SEC-03 catches the environment variable, not that CVE. All three are pins to raise, and like
+SEC-08 the environment should move first: install and test the pinned versions, then write them
+down. `sam2` wants a commit pin, since it is installed from git.
+
+Five remain to walk: SEC-13 through SEC-17.
 
 **If more building is wanted before the data arrives,** the honest answer is that there is no named
 work left: the rule lists, the settings table, the reach sweep and the hotkey reference are all
