@@ -227,7 +227,7 @@ export function AiTool({
     // encode effect keys on the adjustment numbers: a caller building the array fresh each render
     // would restart the prefetch continuously.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [handle, imageKey, model, viewKey, folderKeys.join(" "), archetypes.join(" ")]);
+  }, [handle, imageKey, model, viewKey, folderKeys.join("\u0000"), archetypes.join("\u0000")]);
 
 
   const onPrompt = useCallback(
