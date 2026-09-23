@@ -110,7 +110,16 @@ uninstallable on the interpreter they currently run on. The order is: move the u
 
 SEC-10 holds: there is no `atexit` registration anywhere, and the backend cache is keyed by
 model name, so re-selecting a model reuses it -- memory is bounded by the manifest, where
-legacy's grew on every switch. Seven remain to walk: SEC-11 through SEC-17.
+legacy's grew on every switch.
+
+SEC-11 is HALF done. `.github/workflows/modernized.yml` -- the new app's CI -- has a
+`permissions:` block, but pins `actions/checkout@v4`, `setup-node@v4` and `setup-python@v5` by
+mutable TAG rather than commit SHA. Not changed here, because the SHAs must be looked up rather
+than guessed: a wrong one breaks CI, and a plausible-looking wrong one pins code nobody
+reviewed. `gh api repos/actions/checkout/git/ref/tags/v4` and its siblings give them. The legacy
+`tests.yml` still carries all three of SEC-11's problems, including codecov-action v3.
+
+Six remain to walk: SEC-12 through SEC-17.
 
 **If more building is wanted before the data arrives,** the honest answer is that there is no named
 work left: the rule lists, the settings table, the reach sweep and the hotkey reference are all
