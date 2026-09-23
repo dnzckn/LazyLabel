@@ -111,9 +111,11 @@ same), and the seven `file_manager_show_*` column toggles. Built: Settings, Edit
 `web/src/settings/SettingsEditor.tsx` in the same dialog as the hotkeys, with RULE-050's clamps
 applied when editing finishes (25 in Join becomes 10; non-numeric reverts). `line_thickness` stays
 import-only on purpose: legacy offers no control for it either. Six tests; removing the clamp fails
-two. **Still to do:** a guard that classifies every key as editable, geometry, dropped with its
-decision, or import-only with a reason, so "read and unsettable" cannot recur silently, as "exported
-and uncalled" once could.
+two. The guard now exists too, `web/test/settings/settable.test.ts`: every key needs a control or a
+written reason, so "read and unsettable" cannot recur silently, as "exported and uncalled" once
+could. It found one more the day it was written, `stream_window_size`, which propagation reads and
+only an import can change. It is recorded as a GAP, awaiting legacy's streaming controls (RULE-026),
+which are not built -- the one piece of C11's settings surface still missing.
 
 **Enter wrote an empty file and said "saved" -- found in a real browser, 2026-09-23.** Drawing a
 polygon and pressing Enter, legacy's "finish the polygon and then save", left `photo.npz` with zero
