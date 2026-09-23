@@ -207,14 +207,15 @@ describe("with no inference service", () => {
     expect(screen.queryByText(/^Propagate/)).toBeNull();
   });
 
-  it("still says agreement with legacy is unproven", async () => {
-    // Propagation runs now. What has NOT been shown is that it matches legacy frame for frame, and
-    // silence there would be read as confidence.
+  it("says how far agreement with legacy has been shown, and where it stops", async () => {
+    // Frame for frame on the synthetic-shapes golden since 2026-09-23; not past one streaming
+    // window, which no golden covers. Silence about that would be read as confidence.
     show();
     build("0", "4");
 
     await waitFor(() => expect(cells()).toHaveLength(5));
-    expect(screen.getByText(/has not been proved/)).toBeTruthy();
+    expect(screen.getByText(/agrees with legacy frame for frame/)).toBeTruthy();
+    expect(screen.getByText(/longer than the streaming window/)).toBeTruthy();
   });
 });
 

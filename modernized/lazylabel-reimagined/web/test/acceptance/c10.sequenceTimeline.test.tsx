@@ -156,14 +156,14 @@ describe("C10: build a timeline and mark reference frames", () => {
   it("offers Propagate now that there is a job API behind it", async () => {
     // This test used to assert the OPPOSITE -- that no button was offered, because nothing was
     // behind one. That was the right assertion while it was true, and changing it is what closing
-    // the slice looks like. What has NOT changed is the claim underneath: the panel still says
-    // plainly that agreement with legacy is unproven, because it is.
+    // the slice looks like. The panel says how far agreement with legacy has been shown -- on the
+    // synthetic-shapes golden since 2026-09-23 -- and where it stops.
     await openSequence();
     fireEvent.click(screen.getByText("Build timeline"));
 
     await waitFor(() => expect(cells()).toHaveLength(4));
     expect(screen.getByRole("button", { name: /^Propagate/ })).toBeTruthy();
-    expect(screen.getByText(/has not been proved/)).toBeTruthy();
+    expect(screen.getByText(/longer than the streaming window/)).toBeTruthy();
   });
 
   it("will not propagate with nothing to carry from", async () => {

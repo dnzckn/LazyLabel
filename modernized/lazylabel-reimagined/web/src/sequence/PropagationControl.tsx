@@ -20,14 +20,24 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { WireSegment } from "@lazylabel/contracts";
 
-import type { ApiClient } from "../api/client.js";
+import type { ApiClient, WirePropagationFrame } from "../api/client.js";
 import { useSettings } from "../settings/SettingsProvider.jsx";
 import { useHotkey } from "../hotkeys/HotkeyProvider.jsx";
 
+import { commitFrame, type CommitPolicy, type Committed } from "./commit.js";
+import { clampThreshold, DEFAULT_THRESHOLD } from "./confidence.js";
 import { usePropagation } from "./usePropagation.js";
 import { referenceMasks } from "./references.js";
 import { plannedSave, saveAll, segmentsFor } from "./saveAll.js";
 import type { Frame } from "./timeline.js";
+
+/** The folder a dataset key sits in, as the listing API names it: "" for the dataset's root. */
+function folderOf(key: string): string {
+  const slash = key.lastIndexOf("/");
+  return slash < 0 ? "" : key.slice(0, slash);
+}
+
+const NO_POLICY: CommitPolicy = { keepFlagged: false, skip: new Set(), references: new Set() };
 
 export interface PropagationControlProps {
   readonly client: ApiClient;
@@ -71,6 +81,13 @@ export interface PropagationControlProps {
   readonly onSegments?: (byKey: ReadonlyMap<string, readonly WireSegment[]>) => void;
   /** Asks before a new run discards unsaved frames. Injected so a test can answer it. */
   readonly confirmDiscard?: (message: string) => boolean;
+  /**
+   * The frames Skip Labeled kept this run and the model produced a mask for -- legacy's brown
+   * cells (RULE-081). Handed up because the timeline's colours belong to the panel.
+   */
+  readonly onSkipped?: (keys: ReadonlySet<string>) => void;
+  /** The frames a Save All wrote, so the timeline can show them saved. */
+  readonly onSaved?: (keys: readonly string[]) => void;
 }
 
 export function PropagationControl({
@@ -82,6 +99,8 @@ export function PropagationControl({
   onRunStart,
   onSegments,
   confirmDiscard = (message) => window.confirm(message),
+  onSkipped,
+  onSaved,
   projectId = "default",
 }: PropagationControlProps): ReactNode {
   const { settings } = useSettings();
@@ -91,6 +110,27 @@ export function PropagationControl({
   const [loading, setLoading] = useState(false);
   // RULE-026: on by default. Off loads the whole sequence at once, which the estimate below prices.
   const [streaming, setStreaming] = useState(true);
+  /*
+   * RULE-060 and RULE-081, at legacy's defaults (`sequence_widget.py:333-354`): a flagged frame's
+   * masks are discarded, and a frame that already has labels is left alone. Neither is persisted,
+   * as legacy persists neither. Until 2026-09-23 this app had neither control: it kept every
+   * flagged frame's masks, and it re-propagated and re-saved over frames written since the
+   * timeline was built.
+   */
+  const [keepFlagged, setKeepFlagged] = useState(false);
+  const [skipLabeled, setSkipLabeled] = useState(true);
+  /** This run's policy, fixed when it starts, as legacy fixes its labelled set. */
+  const [policy, setPolicy] = useState<CommitPolicy>(NO_POLICY);
+  /** Why a run was refused before it started, when it was. */
+  const [refused, setRefused] = useState<string | null>(null);
+  /**
+   * Each frame's commit, by image key, frozen once all its objects are in.
+   *
+   * Frozen because RULE-060 says so: masks Keep Flagged discarded are gone, and lowering Min Conf
+   * later "cannot recover them". A ref rather than state, because it is a cache of a pure function
+   * of what has arrived -- filled during render, never read before it is filled.
+   */
+  const committed = useRef(new Map<string, Committed>());
   /** Object id to class id, from the annotations that seeded the run. */
   const [classes, setClasses] = useState<Readonly<Record<number, number | null>>>({});
   const [saving, setSaving] = useState<{ done: number; total: number } | null>(null);
@@ -134,13 +174,37 @@ export function PropagationControl({
      * re-clicking an object someone already drew gives a mask close to theirs and not theirs.
      */
     setLoading(true);
+    setRefused(null);
     let seeds;
+    let labelled: ReadonlySet<string> = new Set();
     try {
       seeds = await referenceMasks(
         client,
         projectId,
         references.map((index) => ({ position: index, key: frames[index]!.key })),
       );
+      if (skipLabeled) {
+        /*
+         * RULE-081's snapshot, taken NOW rather than when the timeline was built. The frames it
+         * matters most for are the ones written since -- by an earlier Save All, or a flagged frame
+         * fixed by hand -- and the listing the timeline was built from has never heard of them.
+         * Legacy probes the disk at the same moment (`main_window.py:4219-4231`).
+         */
+        try {
+          const listing = await client.listImages(projectId, folderOf(frames[0]!.key));
+          labelled = new Set(
+            listing.images.filter((image) => image.annotated).map((image) => image.key),
+          );
+        } catch (cause) {
+          // Refused, not run unprotected: a run that could not see which frames have labels could
+          // overwrite every one of them at the next Save All.
+          setRefused(
+            "Nothing was propagated: Skip Labeled could not read which frames already have labels "
+              + `(${cause instanceof Error ? cause.message : String(cause)}).`,
+          );
+          return;
+        }
+      }
     } finally {
       setLoading(false);
     }
@@ -155,6 +219,14 @@ export function PropagationControl({
     // was never cleared, so a frame saved once counted as saved for every later run: no Save button
     // for its new mask, and no question before anything threw that mask away.
     setWritten(new Set());
+    committed.current = new Map();
+    const referenceKeys = new Set(references.map((index) => frames[index]!.key));
+    setPolicy({
+      keepFlagged,
+      // Legacy never counts a reference as labelled (`main_window.py:4222-4224`).
+      skip: new Set([...labelled].filter((key) => !referenceKeys.has(key))),
+      references: referenceKeys,
+    });
     if (seeds.objects.length === 0) {
       // Every reference failed. Starting anyway is what legacy does, and it writes an empty mask
       // over every frame in the sequence -- work that looks like work and undoes the user's.
@@ -178,6 +250,7 @@ export function PropagationControl({
   }, [
     client,
     frames,
+    keepFlagged,
     loading,
     mayDiscard,
     onRunStart,
@@ -185,6 +258,7 @@ export function PropagationControl({
     projectId,
     references,
     settings.values,
+    skipLabeled,
     start,
   ]);
 
@@ -197,15 +271,79 @@ export function PropagationControl({
    * In an EFFECT, not during render. Calling a parent's setter while rendering is a state update
    * inside another component's render, which React warns about and which can loop.
    */
-  const scores = progress.scores;
+  const threshold = clampThreshold(
+    Number(settings.values["propagation_confidence_threshold"] ?? DEFAULT_THRESHOLD),
+  );
+
+  /*
+   * COMMIT each frame whose objects are all in: every frame but the newest while the job runs --
+   * SAM 2 finishes one frame's objects before starting the next, and the job keeps frames whole --
+   * and all of them once it stops. Legacy commits at the same two moments, when the next frame
+   * arrives and at finish (`main_window.py:4483-4487, 4596-4602`).
+   */
+  const arrived = [...progress.masks.keys()];
+  for (const key of progress.running ? arrived.slice(0, -1) : arrived) {
+    if (!committed.current.has(key)) {
+      committed.current.set(key, commitFrame(key, progress.masks.get(key) ?? [], policy, threshold));
+    }
+  }
+
+  /*
+   * What the commits add up to, by the frames' CURRENT positions -- a trim moves them.
+   *
+   * Keyed on the frames' KEYS, not on the array: the panel hands down new frames whenever a status
+   * changes, and a view rebuilt for each would hand up new review segments, which re-render the
+   * panel, which hands down new frames. Only a trim or a new timeline changes the positions.
+   */
+  const framesKey = frames.map((frame) => frame.key).join("|");
+  const view = useMemo(() => {
+    const position = new Map(frames.map((frame) => [frame.key, frame.index]));
+    const scores: Record<number, number> = {};
+    const empty: number[] = [];
+    const painted = new Set<string>();
+    const kept = new Map<string, readonly WirePropagationFrame[]>();
+    const known = new Map<string, string>();
+
+    for (const [key, result] of committed.current) {
+      const at = position.get(key);
+      if (at === undefined) continue; // trimmed off the timeline
+      if (result.kind === "scored") {
+        scores[at] = result.score;
+        if (result.kept.length > 0) kept.set(key, result.kept);
+        else known.set(key, "its masks were discarded when it was flagged, with Keep Flagged Masks off");
+      } else if (result.kind === "skipped") {
+        if (result.painted) painted.add(key);
+        known.set(key, "it already has labels, and Skip Labeled leaves them alone");
+      } else if (result.kind === "empty") {
+        empty.push(at);
+      }
+      // A reference contributes nothing: it is the user's own drawing, never shown or saved from
+      // the run. Legacy's engine does not even report it (`propagation_manager.py:744-749`).
+    }
+    return { scores, empty: empty.sort((a, b) => a - b), painted, kept, known };
+    // `committed` is a ref, filled just above from these same inputs, and `frames` is read only
+    // for its keys and positions, which `framesKey` stands for.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [framesKey, policy, progress.masks, progress.running, threshold]);
+
+  // Keyed by CONTENT: `view` is rebuilt whenever the frames change, and a parent handed a new
+  // object each time would re-render, hand down new frames and ask again, without end.
+  const scoresKey = JSON.stringify(view.scores);
   useEffect(() => {
-    onScores?.(scores);
-  }, [onScores, scores]);
+    onScores?.(view.scores);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [onScores, scoresKey]);
+
+  const paintedKey = [...view.painted].sort().join("|");
+  useEffect(() => {
+    onSkipped?.(view.painted);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [onSkipped, paintedKey]);
 
   const job = progress.job;
   const done = job !== null && !progress.running;
 
-  const { writable, withheld } = plannedSave(frames, progress.masks);
+  const { writable, withheld } = plannedSave(frames, view.kept, view.known);
   const unsaved = writable.filter((frame) => !written.has(frame.key));
 
   // Written during render, read by a click handler. The same "latest value" pattern the AI tool
@@ -224,12 +362,12 @@ export function PropagationControl({
   // that would be two chances to disagree.
   const segmentsByFrame = useMemo(() => {
     const built = new Map<string, readonly WireSegment[]>();
-    for (const [key, results] of progress.masks) {
+    for (const [key, results] of view.kept) {
       const segments = segmentsFor(results, classes);
       if (segments.length > 0) built.set(key, segments);
     }
     return built;
-  }, [classes, progress.masks]);
+  }, [classes, view.kept]);
 
   useEffect(() => {
     onSegments?.(segmentsByFrame);
@@ -243,7 +381,8 @@ export function PropagationControl({
         client,
         projectId,
         frames,
-        masks: progress.masks,
+        masks: view.kept,
+        known: view.known,
         classes,
         // Decision 7: an explicit act writes, and it writes the formats the user chose. A default
         // invented here would put files on disk in a format nobody asked for.
@@ -251,6 +390,7 @@ export function PropagationControl({
         onProgress: (doneCount, total) => setSaving({ done: doneCount, total }),
       });
       setWritten((previous) => new Set([...previous, ...outcome.written]));
+      onSaved?.(outcome.written);
       setSaved(
         `Saved ${outcome.written.length} frame${outcome.written.length === 1 ? "" : "s"}`
           + (outcome.failed.length > 0
@@ -260,7 +400,7 @@ export function PropagationControl({
     } finally {
       setSaving(null);
     }
-  }, [classes, client, frames, progress.masks, projectId, settings.values, writable.length]);
+  }, [classes, client, frames, onSaved, projectId, settings.values, view.kept, view.known, writable.length]);
 
   return (
     <div className="timeline__propagation">
@@ -272,6 +412,22 @@ export function PropagationControl({
             onChange={(event) => setStreaming(event.currentTarget.checked)}
           />{" "}
           Streaming
+        </label>
+        <label title="Off (legacy's default): a frame where any object scores below Min Conf keeps no masks at all. On: its masks are kept so you can review them. Save All writes a flagged frame either way — never.">
+          <input
+            type="checkbox"
+            checked={keepFlagged}
+            onChange={(event) => setKeepFlagged(event.currentTarget.checked)}
+          />{" "}
+          Keep flagged masks
+        </label>
+        <label title="On (legacy's default): a frame that already has annotation files when you press Propagate keeps them, and Save All does not overwrite it.">
+          <input
+            type="checkbox"
+            checked={skipLabeled}
+            onChange={(event) => setSkipLabeled(event.currentTarget.checked)}
+          />{" "}
+          Skip labeled
         </label>
         {!streaming && frames.length > Number(settings.values["stream_window_size"] ?? 250) && (
           // RULE-026's warning: 12.6 MB a frame, all held at once without streaming. Said before
@@ -339,6 +495,12 @@ export function PropagationControl({
         </p>
       )}
 
+      {refused !== null && (
+        <p className="timeline__propagation-error" role="alert">
+          {refused}
+        </p>
+      )}
+
       {progress.error !== null && (
         <p className="timeline__propagation-error" role="alert">
           {progress.error}
@@ -374,12 +536,12 @@ export function PropagationControl({
         </p>
       )}
 
-      {progress.empty.length > 0 && (
+      {view.empty.length > 0 && (
         // RULE-060: a frame where every object came out empty is never committed and keeps its
         // previous status. Saying so is the difference between "the model lost the object here"
         // and "this frame scored badly", which look identical on a grey timeline.
         <p className="timeline__propagation-empty">
-          {progress.empty.length} frame{progress.empty.length === 1 ? "" : "s"} produced no mask at
+          {view.empty.length} frame{view.empty.length === 1 ? "" : "s"} produced no mask at
           all and were not committed.
         </p>
       )}

@@ -33,6 +33,8 @@ export interface SaveAllRequest {
   readonly frames: readonly Frame[];
   /** Propagated results by IMAGE KEY — see the note on `PropagationProgress.masks`. */
   readonly masks: ReadonlyMap<string, readonly WirePropagationFrame[]>;
+  /** Why a frame is held back, when only the commit knows -- see `plannedSave`. */
+  readonly known?: ReadonlyMap<string, string>;
   /** Object id to class id, from the annotations that seeded the run. */
   readonly classes: Readonly<Record<number, number | null>>;
   readonly formats: readonly string[];
@@ -63,10 +65,18 @@ function segmentOf(
   };
 }
 
-/** Which frames this save will write, and which RULE-060 holds back, without writing anything. */
+/**
+ * Which frames this save will write, and which RULE-060 holds back, without writing anything.
+ *
+ * `known` carries the reasons only the commit knows, by image key: that Skip Labeled kept a frame's
+ * own labels, or that Keep Flagged Masks was off when the frame was flagged and its masks went.
+ * Without them both would read "it is skipped" or "the propagation produced nothing for it", and
+ * the second is false -- it produced masks, and they were discarded on purpose.
+ */
 export function plannedSave(
   frames: readonly Frame[],
   masks: ReadonlyMap<string, readonly WirePropagationFrame[]>,
+  known: ReadonlyMap<string, string> = new Map(),
 ): { writable: readonly Frame[]; withheld: readonly { key: string; reason: string }[] } {
   const saveable = new Set(saveableFrames(frames).map((frame) => frame.index));
   const writable: Frame[] = [];
@@ -84,12 +94,15 @@ export function plannedSave(
         reason:
           frame.state === "flagged"
             ? "it is flagged for review, and Save All never writes a flagged frame"
-            : `it is ${frame.state}`,
+            : (known.get(frame.key) ?? `it is ${frame.state}`),
       });
       continue;
     }
     if ((masks.get(frame.key) ?? []).length === 0) {
-      withheld.push({ key: frame.key, reason: "the propagation produced nothing for it" });
+      withheld.push({
+        key: frame.key,
+        reason: known.get(frame.key) ?? "the propagation produced nothing for it",
+      });
       continue;
     }
     writable.push(frame);
@@ -115,7 +128,7 @@ export function segmentsFor(
 }
 
 export async function saveAll(request: SaveAllRequest): Promise<SaveAllResult> {
-  const { writable, withheld } = plannedSave(request.frames, request.masks);
+  const { writable, withheld } = plannedSave(request.frames, request.masks, request.known);
   const written: string[] = [];
   const failed: { key: string; reason: string }[] = [];
 

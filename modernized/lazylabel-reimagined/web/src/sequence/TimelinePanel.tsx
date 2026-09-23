@@ -34,9 +34,11 @@ import {
   colourOf,
   markReference,
   markReferences,
+  markSaved,
   markSuggested,
   trim,
   resetForPropagation,
+  showKeptLabels,
   sortedOrder,
   step,
   summarize,
@@ -121,6 +123,8 @@ export function TimelinePanel({
   const [propagated, setPropagated] = useState<ReadonlyMap<string, readonly WireSegment[]>>(
     new Map(),
   );
+  /** RULE-081: the frames Skip Labeled kept this run, by image key -- shown brown, never stored. */
+  const [keptLabels, setKeptLabels] = useState<ReadonlySet<string>>(new Set());
   /** RULE-077's two trim bounds, as positions in the timeline. Order between them does not matter. */
   const [bounds, setBounds] = useState<readonly [number | null, number | null]>([null, null]);
   const [trimNote, setTrimNote] = useState<string | null>(null);
@@ -172,6 +176,14 @@ export function TimelinePanel({
     // which is the propagation slice's problem and not the pilot's.
     return markReferences(buildTimeline(keys, range.from, range.to), annotated);
   }, [annotated, keys, overrides, range]);
+
+  /*
+   * What the timeline SHOWS: the stored frames with this run's kept labels painted over them.
+   * Memoized, and not for speed: the propagation control is handed these frames, and a new array on
+   * every render made it rebuild its view, hand up new review segments, and re-render this panel --
+   * a loop that ran until the test runner ran out of memory.
+   */
+  const shown = useMemo(() => showKeptLabels(frames, keptLabels), [frames, keptLabels]);
 
   const build = useCallback(
     (from: number, to: number) => {
@@ -307,6 +319,7 @@ export function TimelinePanel({
     }
     setRange(null);
     setOverrides(null);
+    setKeptLabels(new Set());
     unsavedRef.current = 0;
   };
 
@@ -341,7 +354,7 @@ export function TimelinePanel({
   };
 
   const counts = summarize(frames);
-  const order = sorted ? sortedOrder(frames) : frames.map((frame) => frame.index);
+  const order = sorted ? sortedOrder(shown) : shown.map((frame) => frame.index);
   const allScores = { ...scores, ...ownScores };
 
   return (
@@ -349,13 +362,16 @@ export function TimelinePanel({
       {client !== undefined && (
         <PropagationControl
           client={client}
-          frames={frames}
+          frames={shown}
           onScores={setOwnScores}
           unsavedRef={unsavedRef}
           confirmDiscard={confirmDiscard}
           onSegments={setPropagated}
+          onSkipped={setKeptLabels}
+          onSaved={(keys) => setOverrides((previous) => markSaved(previous ?? frames, keys))}
           onRunStart={() => {
             setOwnScores({});
+            setKeptLabels(new Set());
             setOverrides((previous) => resetForPropagation(previous ?? frames));
           }}
         />
@@ -374,11 +390,21 @@ export function TimelinePanel({
             </span>
           </>
         )}
+        {keptLabels.size > 0 && (
+          // Brown too, as in legacy, so the colour alone cannot say which kind of skip it is.
+          <>
+            {" — "}
+            <span role="status">
+              {keptLabels.size} kept {keptLabels.size === 1 ? "its" : "their"} existing labels
+              (Skip labeled)
+            </span>
+          </>
+        )}
       </p>
 
       <ol className="timeline__frames" aria-label="Timeline">
         {order.map((index) => {
-          const frame = frames[index];
+          const frame = shown[index];
           if (frame === undefined) return null;
           const [r, g, b] = colourOf(frame);
           const role = frame.isReference ? "reference" : frame.state;
@@ -393,7 +419,15 @@ export function TimelinePanel({
                 // glance and it is the only thing legacy offers; a screen reader gets nothing
                 // from it, and neither does anyone who cannot separate the red from the brown.
                 aria-label={`Frame ${index + 1}, ${frame.key}, ${role}`}
-                title={`${frame.key} — ${role}`}
+                // The score, as legacy's tooltip gives it (`timeline_widget.py:486-487`): four
+                // decimals, because at Min Conf 0.99 the difference between 0.9899 and 0.99 is the
+                // difference between a frame that is reviewed and one that is saved.
+                title={
+                  `${frame.key} — ${role}`
+                  + (allScores[index] === undefined
+                    ? ""
+                    : ` — confidence ${allScores[index]!.toFixed(4)}`)
+                }
                 onClick={() => {
                   setCurrent(index);
                   onOpen?.(frame.key, propagatedFor(frame));
@@ -479,9 +513,9 @@ export function TimelinePanel({
       />
 
       <p className="panel__missing">
-        Propagation runs here, and what has not been proved is that it agrees with legacy frame for
-        frame. That needs a recorded sequence with legacy's outputs captured as golden data — see
-        `capture_propagation_goldens.py`.
+        Propagation agrees with legacy frame for frame on a recorded test clip: the masks, the
+        flags, Keep flagged masks, Skip labeled and Save All. What has not been shown is the same
+        for a sequence longer than the streaming window, which no recording covers yet.
       </p>
     </div>
   );

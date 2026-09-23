@@ -183,6 +183,36 @@ export function resetForPropagation(frames: readonly Frame[]): readonly Frame[] 
 }
 
 /**
+ * The frames Save All wrote, marked `saved` — what legacy's `mark_frame_saved` paints cyan.
+ *
+ * Until 2026-09-23 nothing did this: a Save All wrote the files and the timeline went on calling
+ * the frames `propagated`, so a user looking at it could not tell written work from unwritten --
+ * the one thing the colour is for. The synthetic-shapes golden compares the timeline after a save.
+ */
+export function markSaved(frames: readonly Frame[], keys: Iterable<string>): readonly Frame[] {
+  const written = new Set(keys);
+  if (written.size === 0) return frames;
+  return frames.map((frame) =>
+    written.has(frame.key) && !frame.isReference ? { ...frame, state: "saved" as const } : frame,
+  );
+}
+
+/**
+ * The frames Skip Labeled kept this run, SHOWN as `skipped` without being stored that way — RULE-081.
+ *
+ * Shown, not stored, because the protection belongs to the run: the next run takes a new snapshot
+ * of which frames are labelled, and a stored `skipped` would outlive it (`resetForPropagation`
+ * keeps skipped frames, since a size mismatch does outlive a run). Legacy does the same thing the
+ * other way round: it paints the cell brown and leaves the frame's stored status pending.
+ */
+export function showKeptLabels(frames: readonly Frame[], keys: ReadonlySet<string>): readonly Frame[] {
+  if (keys.size === 0) return frames;
+  return frames.map((frame) =>
+    keys.has(frame.key) && !frame.isReference ? { ...frame, state: "skipped" as const } : frame,
+  );
+}
+
+/**
  * Clear Flags — RULE-076, and it is NOT the same as `resetForPropagation`.
  *
  * It resets every non-reference frame to pending, including saved AND SKIPPED ones. Skipped is the

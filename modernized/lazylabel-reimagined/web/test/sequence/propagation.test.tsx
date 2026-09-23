@@ -90,6 +90,13 @@ function fakeClient(script: {
   /** What each reference frame's sidecar holds. A key with no entry has no annotations. */
   annotations?: Record<string, readonly unknown[]>;
   metadata?: () => never;
+  /**
+   * Which images have sidecars when Propagate is pressed -- what Skip Labeled reads (RULE-081).
+   * Defaults to the references alone, which is what a folder looks like before any Save All.
+   */
+  labelled?: readonly string[];
+  /** Makes that listing fail. */
+  listing?: () => never;
 }): Fake {
   const started: WirePropagationStart[] = [];
   const polls: { id: string; cursor: number }[] = [];
@@ -99,6 +106,26 @@ function fakeClient(script: {
   const client = {
     getSettings: async () => defaultSettings(),
     putSettings: async (next: unknown) => next,
+    listImages: async () => {
+      if (script.listing) script.listing();
+      const labelled = new Set(
+        script.labelled ?? FRAMES.filter((each) => each.isReference).map((each) => each.key),
+      );
+      return {
+        folder: "frames",
+        folders: [],
+        annotatedCount: labelled.size,
+        unrecognized: 0,
+        columns: [],
+        images: [...FRAMES, frame(4), frame(5)].map((each) => ({
+          key: each.key,
+          name: each.key.slice("frames/".length),
+          sidecars: {},
+          annotated: labelled.has(each.key),
+          sharesSidecarsWith: [],
+        })),
+      };
+    },
     imageMetadata: async () => {
       if (script.metadata) script.metadata();
       return { width: 8, height: 8, sourceDepth: 8, sourceChannels: 3, sourceFormat: "png" };
@@ -144,6 +171,51 @@ function show(fake: Fake, frames: readonly Frame[] = FRAMES) {
 }
 
 const propagate = () => screen.getByRole("button", { name: /^Propagate/ });
+
+describe("Keep Flagged Masks and Skip Labeled (RULE-060, RULE-081)", () => {
+  /*
+   * Neither control existed until 2026-09-23, when the synthetic-shapes golden held this app to
+   * legacy's own sequence mode. `acceptance/c11.goldens.test.tsx` compares every frame; these pin
+   * what the controls themselves do.
+   */
+  it("start at legacy's defaults: flagged masks discarded, labelled frames left alone", () => {
+    show(fakeClient({}));
+
+    expect((screen.getByLabelText("Keep flagged masks") as HTMLInputElement).checked).toBe(false);
+    expect((screen.getByLabelText("Skip labeled") as HTMLInputElement).checked).toBe(true);
+  });
+
+  it("REFUSES to propagate when Skip Labeled cannot tell which frames have labels", async () => {
+    // Run unprotected, the next Save All could overwrite every labelled frame in the sequence.
+    const fake = fakeClient({
+      listing: () => {
+        throw new Error("the dataset is unreachable");
+      },
+    });
+    show(fake);
+
+    fireEvent.click(propagate());
+
+    expect((await screen.findByRole("alert")).textContent).toMatch(
+      /Nothing was propagated: Skip Labeled could not read which frames already have labels/,
+    );
+    expect(fake.started).toHaveLength(0);
+  });
+
+  it("does not need the listing at all once Skip Labeled is off", async () => {
+    const fake = fakeClient({
+      listing: () => {
+        throw new Error("the dataset is unreachable");
+      },
+    });
+    show(fake);
+
+    fireEvent.click(screen.getByLabelText("Skip labeled"));
+    fireEvent.click(propagate());
+
+    await waitFor(() => expect(fake.started).toHaveLength(1));
+  });
+});
 
 describe("starting one", () => {
   it("sends the frame keys and which of them are references", async () => {
@@ -605,6 +677,15 @@ describe("RULE-056: not losing propagated work without asking", () => {
           classAliases: {},
           failures: [],
         },
+      }),
+      // What Skip Labeled reads when Propagate is pressed: the folder as it stands then.
+      listImages: async () => ({
+        folder: "frames",
+        folders: [],
+        annotatedCount: 1,
+        unrecognized: 0,
+        columns: [],
+        images: FOLDER,
       }),
       startPropagation: async () => job({ state: "running" }),
       propagationState: async () =>

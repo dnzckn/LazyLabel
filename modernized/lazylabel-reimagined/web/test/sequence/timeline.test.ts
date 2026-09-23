@@ -20,7 +20,9 @@ import {
   colourOf,
   markReference,
   markReferences,
+  markSaved,
   resetForPropagation,
+  showKeptLabels,
   sortedOrder,
   step,
   summarize,
@@ -327,5 +329,60 @@ describe("marking one frame as a reference by hand", () => {
 
     expect(markReference(once, 1)).toBe(once);
     expect(markReference(frames, 99)).toBe(frames);
+  });
+});
+
+
+describe("what Save All leaves on the timeline", () => {
+  it("marks each written frame saved -- which nothing did until 2026-09-23", () => {
+    // Legacy paints them cyan (`mark_frame_saved`). Without it the timeline went on calling written
+    // frames `propagated`, and written work looked exactly like unwritten work.
+    const frames = timeline("propagated", "flagged", "propagated");
+
+    expect(markSaved(frames, ["0.png", "2.png"]).map((f) => f.state)).toEqual([
+      "saved",
+      "flagged",
+      "saved",
+    ]);
+  });
+
+  it("never marks a reference, which Save All never writes", () => {
+    const frames = timeline("reference", "propagated");
+
+    expect(markSaved(frames, ["0.png", "1.png"])[0]).toEqual(frames[0]);
+  });
+
+  it("returns the same timeline when nothing was written", () => {
+    const frames = timeline("propagated");
+
+    expect(markSaved(frames, [])).toBe(frames);
+  });
+});
+
+describe("the frames Skip Labeled kept (RULE-081)", () => {
+  it("are shown skipped -- brown, as legacy paints them", () => {
+    const frames = timeline("pending", "propagated", "pending");
+
+    expect(showKeptLabels(frames, new Set(["0.png"])).map((f) => f.state)).toEqual([
+      "skipped",
+      "propagated",
+      "pending",
+    ]);
+  });
+
+  it("are SHOWN that way and not stored: the next run starts from what they were", () => {
+    // `resetForPropagation` keeps stored skipped frames, because a size mismatch outlives a run.
+    // Skip Labeled's protection is for one run, and the next takes its own snapshot.
+    const frames = timeline("pending");
+
+    showKeptLabels(frames, new Set(["0.png"]));
+
+    expect(frames[0]!.state).toBe("pending");
+  });
+
+  it("never touch a reference", () => {
+    const frames = timeline("reference");
+
+    expect(showKeptLabels(frames, new Set(["0.png"]))[0]).toEqual(frames[0]);
   });
 });

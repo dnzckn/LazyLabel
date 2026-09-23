@@ -21,9 +21,11 @@ YOLO files whose boxes follow the disc to within about a pixel in every frame. T
 rewritten. Find Archetypes ran the same way with the real MobileNetV3 embedder. Eight near-identical frames
 came back as "too uniform to suggest frames", which is a result, and the page showed it as one.
 Thirty frames in three distinct scenes gave "5 frames suggested from 3 scenes": two, two and one,
-at RULE-022's minimum of five. What is NOT claimed is that its results match
-legacy's. That is Phase 6 exit criterion 2 and it needs a checkpoint, a recorded sequence, and
-golden outputs.
+at RULE-022's minimum of five. **Propagation now matches legacy's frame for frame** on a golden
+captured from legacy's own sequence mode (2026-09-23; "What to do next" has the detail). That
+covers the masks, the scores and the flags, and what Keep Flagged Masks, Skip Labeled and Save All
+do with them. It holds for sequences that fit in one streaming window; nothing covers a longer one
+yet. Archetype suggestions are not yet compared with legacy's.
 
 **Running the whole stack with the real models found what 3,000 component tests had not.** That
 means the browser, the API, and the inference service on the GPU, as a user would run them. From
@@ -42,9 +44,9 @@ segmenting an unprocessed picture, and large colour images refused. Each is belo
 12 megapixels, warm. Anything touching the inference path is worth one more such run; the note on
 running the stack says how.
 
-Of Phase 6's five exit criteria: **1, 3 and 5 are met**; **2 and 4 have working harnesses and wait
-on the owner's data**. Both harnesses have now been RUN — see the blocked section — and one of them
-was wrong until today.
+Of Phase 6's five exit criteria: **1, 2, 3 and 5 are met**. Criterion 2 is met on the synthetic
+clip the owner chose in place of a recording. **Criterion 4 waits on the acceptance corpus**, and
+its harness has been run: exit 2 says nothing was compared, which is not a pass.
 
 Every guard this project uses is closed or its remainder recorded: no unread settings, five
 unreached functions across the TypeScript and Python reach guards, each with a written reason
@@ -59,7 +61,7 @@ missing from this table entirely, which is how a table stops being a census.
 | Package | Passing | Note |
 |---|---|---|
 | exporters | 1991 | the seven formats, byte-for-byte against goldens legacy wrote |
-| web | 1172 | C11's placeholder is gone; it has an acceptance test now |
+| web | 1208 | includes the four propagation-golden scenarios, 16 tests against legacy's own sequence mode |
 | inference | 604 | plus 43 skipped: the differentials and the golden comparison, which need real checkpoints. With them: 647 passed, 0 skipped |
 | api | 422 | plus 4 skipped (SEC-09's symlink tests, where the OS will not make a link, as on this machine) and 1 todo (C8's placeholder) |
 | settings-schema | 55 | includes the rule-fixed defaults |
@@ -529,22 +531,35 @@ configured, so a green CI run says nothing about them — see `Running the live 
    twice, so a mid-sequence reference no longer leaves the bar one short.
    `inference/tests/test_propagation_goldens.py` needs only a checkpoint, not legacy.
 
-   **What remains is the behaviour half, and it belongs to the web app.** That means which frames
-   the timeline flags, what Keep Flagged Masks keeps, what Skip Labeled leaves alone and what Save
-   All writes. The golden records all four per scenario. Held against it, the web app has three
-   gaps, and all three are legacy losing or keeping work in ways the port does not reproduce:
-   - It has **no Keep Flagged Masks**. Legacy's default discards every mask on a frame where any
-     object fails, so the user reviews that frame from scratch.
-   - It has **no Skip Labeled**. Legacy's default, RULE-081 and P0, leaves a frame that already has
-     a sidecar alone. The web's Save All writes with no revision check, so re-running and saving
-     overwrites a frame saved since the timeline was built. That includes a flagged frame the user
-     fixed by hand, which is the workflow the option exists for.
-   - It **marks every annotated frame as a reference** when a timeline is built. Legacy never marks
-     one by itself: references come from "+ Reference", "+ All Before" and "+ All Labeled". Marking
-     them automatically is what leaves Skip Labeled nothing to protect, and a rebuilt timeline turns
-     every frame an earlier Save All wrote into a seed.
+   **The behaviour half is met too, and it belonged to the web app.** That half covers which frames
+   the timeline flags, what Keep Flagged Masks keeps, what Skip Labeled leaves alone, and what Save
+   All writes. `web/test/acceptance/c11.goldens.test.tsx` runs each of the golden's four scenarios
+   through the real timeline and propagation control. The fake service answers with legacy's own
+   model output, in the port runner's order. It then compares four things frame by frame: the
+   timeline after the run and after Save All, the confidence each frame shows, the masks it offers
+   for review, and the frames, objects and classes Save All writes. All 16 tests pass; on the web
+   code before this change, 15 of 16 failed. Three gaps were found and closed:
+   - **No Keep Flagged Masks.** Every flagged frame kept its masks for review. Legacy's default
+     discards all of them, the passing objects' too. `web/src/sequence/commit.ts` now decides that
+     when a frame's objects are all in, and keeps the decision, because RULE-060 says lowering Min
+     Conf afterwards "cannot recover them".
+   - **No Skip Labeled.** Legacy's default is on (RULE-081, P0). The web's Save All writes with no
+     revision check, so a re-run and a save overwrote every frame labelled since the timeline was
+     built. That included flagged frames fixed by hand, which is the workflow the option exists
+     for. The labelled set is now snapshotted from a fresh listing when Propagate is pressed, as
+     legacy probes the disk then. If the listing cannot be read, the run is refused rather than
+     run unprotected.
+   - **Written frames were never shown as saved.** Legacy paints them cyan. Frames now also show
+     their confidence to four decimals, as legacy's tooltip does, and the reference frame's own
+     result from the run is ignored. Legacy's engine never reports that result.
 
-   This is the work in progress.
+   **One divergence is kept, and it is the owner's to decide.** This app marks every frame that is
+   annotated when a timeline is built as a reference. That is the brief's pilot, "mark references
+   from existing annotations", and C10's test pins it. Legacy never marks one on its own: the user
+   presses "+ Add Current", "+ All Before" or "+ All Labeled", and can "Clear All". The difference
+   shows on a rebuilt timeline: every frame an earlier Save All wrote becomes a seed, and each of
+   its annotations is tracked as its own object. The web has "+ Add Current" only. Adding the other
+   three, and not marking at build, would match legacy.
 
 Everything else that can be done without the owner has been done. One item needs something only
 the owner can supply, and it is one command once it arrives:

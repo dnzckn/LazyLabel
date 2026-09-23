@@ -9,8 +9,9 @@
  * The distinction has earned its place repeatedly here — vertex editing, the adjustment sliders and
  * undo/redo were each implemented, tested and unreachable, with every component test passing.
  *
- * What is NOT claimed is that the masks match legacy's. That needs a checkpoint and golden outputs,
- * and the panel says so on screen rather than leaving the silence to be read as confidence.
+ * That the results match legacy's is `c11.goldens.test.tsx`'s claim, against legacy's own sequence
+ * mode, and the panel says on screen how far it reaches rather than leaving silence to be read as
+ * confidence.
  */
 
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
@@ -241,13 +242,14 @@ describe("C11: propagate labels through a sequence", () => {
     expect(screen.queryByLabelText(/Select AI/)).toBeNull();
   });
 
-  it("still says agreement with legacy is unproven", async () => {
-    // Propagation runs. That its results match the old app has not been shown, and silence there
-    // would be read as confidence.
+  it("says how far agreement with legacy has been shown, and where it stops", async () => {
+    // Shown on the synthetic-shapes golden since 2026-09-23 (`c11.goldens.test.tsx`), and only
+    // for sequences that fit in one window. Silence about the rest would be read as confidence.
     mount();
     await openTimeline();
 
-    expect(screen.getByText(/has not been proved/)).toBeTruthy();
+    expect(screen.getByText(/agrees with legacy frame for frame/)).toBeTruthy();
+    expect(screen.getByText(/longer than the streaming window/)).toBeTruthy();
   });
 });
 
