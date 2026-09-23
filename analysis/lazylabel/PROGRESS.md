@@ -99,14 +99,16 @@ built by Docker itself; `deploy/README.md` keeps saying so. The inference image 
 every image route would have failed on `import cv2`; it installs the headless build now. A
 `.dockerignore` keeps a developer's `node_modules`, `dist` and checkpoints out of the context.
 
-**NEXT, small: the API's capability table still calls C11 pending.** `api/src/capabilities.ts`
-says C11 lacks "propagation jobs, the progress socket and staged frame results", and
-`api/test/acceptance/placeheld.ts` holds a todo for it -- while the API has proxied the propagation
-job routes (`POST`/`GET /inference/propagations`, `DELETE /inference/propagations/:id`) and the
-browser polls them. To close it: name an API acceptance test for C11 (the coverage test requires
-one before a capability may read built), mark it built, drop it from `PLACEHELD`, and record that
-polling replaced the progress socket, as a decision with its reason, rather than leave the socket
-reading as unbuilt work.
+**The API's capability table: C11 corrected 2026-09-23, four more to examine.** C11 read "pending"
+while the propagation proxy and `c11.propagationProxy.test.ts` existed; it reads built now, with
+polling-instead-of-socket recorded as a decision beside it. `api/src/capabilities.ts` still marks
+**C3, C8, C10 and C14** pending, and each needs judgment, not a flip: **C3** has
+`c3.inferenceProxy.test.ts` and is probably stale the same way; **C8** lists "decode, tile, and
+render adjusted pixels for the model" -- rendering exists (`renderForModel`), tiling may genuinely
+not; **C10** lists "sequence and timeline persistence", which the architecture puts in SQLite and
+may be a real gap; **C14** needs its entry read. The coverage test keeps `placeheld.ts` equal to the
+pending set, so each correction is: confirm, write or name its acceptance test, flip, drop the
+placeholder.
 
 **The settings half of C13's editor was missing too -- found and built 2026-09-23.** The
 hotkey editor was never built (now it is); the brief's phrase is "web settings AND hotkey editor",
