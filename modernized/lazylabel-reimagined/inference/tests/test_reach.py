@@ -33,9 +33,9 @@ UNREACHED: dict[str, str] = {
         "whose files have no trustworthy mtime, where content is the only identity left."
     ),
     "estimate_megabytes": (
-        "RULE-026's warning when Streaming is turned off on a long sequence. Nothing in the web app "
-        "offers a streaming toggle, so there is nothing yet to warn about -- the day one is added, "
-        "the estimate is what makes turning it off a choice rather than an out-of-memory."
+        "RULE-026's warning when Streaming is turned off on a long sequence. The web app has the "
+        "switch since 2026-09-23 and prices the run itself, frames times the card's 12.6 MB, "
+        "before it starts; this is the service's copy, for a client that asks it instead."
     ),
     "seed_points": (
         "propagation seeded from CLICKS rather than from a mask the user already drew. Legacy has "
