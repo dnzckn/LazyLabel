@@ -1448,8 +1448,17 @@ about them. Run them locally, deliberately:
 cd modernized/lazylabel-reimagined/inference && LAZYLABEL_TEST_SAM1_CHECKPOINT=/path/to/sam_vit_h_4b8939.pth LAZYLABEL_TEST_CHECKPOINT=/path/to/sam2.1_hiera_large.pt LAZYLABEL_TEST_EMBEDDER=/path/to/mobilenetv3_small_tv.pth PYTHONPATH=/path/to/legacy/lazylabel/src python -m pytest tests/ -q
 ```
 
-With all three set, the expected result is **255 passed, 1 xfailed, 0 skipped**. Any `skipped`
-count above zero means a checkpoint was not found and that suite did not actually run.
+With all three set, the result on 2026-09-23 was **600 passed, 0 skipped**, in 2 min 44 s on this
+machine, after that day's change to the embedding key. Any `skipped` count above zero means a
+checkpoint was not found and that suite did not actually run. This section said "255 passed, 1
+xfailed" until then. The xfail was C11's placeholder, removed on 2026-09-21 when the job API
+landed, and the suite has grown since. The count here is the one the last run printed, not a target.
+
+Four warnings are expected, and none is a failure being hidden:
+- two come from the weights-only guard's tests, which set `TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD` on
+  purpose, to prove the refusal;
+- two come from SAM 2's optional `_C` extension, whose absence skips only a hole-filling
+  post-process.
 
 `MODEL_MANIFEST.md` lists the checkpoints and their verified hashes.
 
