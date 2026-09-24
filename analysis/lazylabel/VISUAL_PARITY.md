@@ -188,6 +188,14 @@ Solid colours with black bold text (sequence_widget.py:173-202, 268-305, 517-550
    - Move the filename and metadata into the status bar's right label (photo_viewer.py:42-54;
      status_bar.py:131-136).
    - Files: styles.css:228-238, 863-866; OpenImageView.tsx:297-311.
+   - **Done 2026-09-24, with two changes to the plan.**
+     - The name and size went into a one-line strip under the picture, with the Write button and
+       what the load found, instead of the status bar. Legacy never fills that right-hand label
+       (`set_permanent_message` has no caller), and the status bar already names the file. Many
+       tests mount the image view without a status bar and wait for its name.
+     - Fitting scales up as well as down, as `fitInView` does (`canvas/fit.ts`). The zoom buttons
+       now step from the fitted scale, which the view reports to the store as `fitted`. Stepping
+       from 1:1 would have made "zoom in" shrink a small image that fitting had enlarged.
 3. **Centre tabs Single | Multi | Sequence.**
    - Move SplitView and TimelinePanel out of the right column (App.tsx:272-302) and lay them out as
      in §1 (main_window.py:3069-3119, 3263-3321).

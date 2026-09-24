@@ -368,12 +368,13 @@ export function App({ client }: { readonly client: ApiClient }): ReactNode {
  * a large scan shows one corner of it.
  */
 function ZoomControl(): ReactNode {
-  const { zoom, setZoom, open } = useWorkspace();
+  const { zoom, setZoom, open, fitted } = useWorkspace();
 
   // Powers of two from an eighth to eight. A linear slider spends most of its travel between
-  // sizes nobody wants, and legacy's own steps double.
+  // sizes nobody wants, and legacy's own steps double. From Fit, the steps start at the size the
+  // image is shown at: fitting enlarges a small image, and doubling from 1 would shrink it.
   const step = (by: 1 | -1) => {
-    const from = zoom ?? 1;
+    const from = zoom ?? fitted ?? 1;
     setZoom(Math.min(8, Math.max(0.125, by === 1 ? from * 2 : from / 2)));
   };
 

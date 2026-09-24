@@ -328,6 +328,72 @@ fieldset input {
 .workspace__centre {
   border-left: 1px solid var(--rule);
   border-right: 1px solid var(--rule);
+  /* No margins: the picture runs to the pane's edges, as legacy's single view does
+     (main_window.py:677-685). */
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.open-image__empty {
+  margin: 0;
+  padding: 8px;
+}
+
+/* The open image: the picture takes whatever the strip under it leaves. */
+.open-image {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Sized by the pane, never by the picture, so the fitted scale measured from it is stable. */
+.open-image .canvas-scroll {
+  flex: 1 1 0;
+  min-height: 12rem;
+  max-height: none;
+  display: flex;
+}
+
+.open-image .canvas-scroll--fit {
+  overflow: hidden;
+}
+
+/* Centred while it fits, and scrollable to every edge once zoomed past the pane: auto margins give
+   way when there is no room, where `place-items: center` would put the top and left out of reach.
+   No border, as legacy draws none; the drawing surface is still exactly the picture. */
+.open-image .canvas-stack {
+  margin: auto;
+  border: none;
+  border-radius: 0;
+}
+
+/* The size, the save button and what the load found, in one line under the picture. */
+.open-image__info {
+  flex: none;
+  max-height: 40%;
+  overflow: auto;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 1rem;
+  padding: 4px 8px;
+  border-top: 1px solid var(--rule);
+  font-size: 0.85rem;
+}
+
+.open-image__info p {
+  margin: 0;
+}
+
+.open-image__name {
+  font-weight: 600;
+}
+
+.open-image__info .banner {
+  flex-basis: 100%;
+  margin: 0;
 }
 
 /* One column and one page scroll. The status bar stays in view at the bottom of the window. */
@@ -348,6 +414,12 @@ fieldset input {
 
   .workspace__centre {
     border: none;
+  }
+
+  /* The page scrolls here, so the picture gets a height of its own to fit into. */
+  .open-image .canvas-scroll {
+    flex: none;
+    height: 60vh;
   }
 
   .status-bar {

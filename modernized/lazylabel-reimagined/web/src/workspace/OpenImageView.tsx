@@ -10,7 +10,7 @@
  * other things ask the same question and a prop chain would make this one the owner by accident.
  */
 
-import { useCallback, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 import { normalizeExportFormats } from "@lazylabel/settings-schema";
 import type {
@@ -42,6 +42,7 @@ import { useHotkey } from "../hotkeys/HotkeyProvider.jsx";
 import { CropLayer } from "../canvas/CropLayer.jsx";
 import { canSave } from "./saveState.js";
 import { PanLayer } from "../canvas/PanLayer.jsx";
+import { fitScale, type Size } from "../canvas/fit.js";
 
 /**
  * What a save sends when the image had no annotation file.
@@ -135,7 +136,7 @@ function OpenedImage({
   const { eraseWith } = useWorkspace();
   // The crop is the store's, not this view's: the SAVE path reads it, so a crop dragged here and
   // held locally would be one the panel showed and the file never saw.
-  const { crop, setCrop, zoom, processing } = useWorkspace();
+  const { crop, setCrop, zoom, processing, setFitted } = useWorkspace();
 
   /*
    * PANNING THE ZOOMED IMAGE FROM THE KEYBOARD -- the four `pan_*` keys, which the reference has
@@ -151,6 +152,37 @@ function OpenedImage({
    * cross it.
    */
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  /*
+   * FITTED, AS LEGACY FITS: the whole image, as large as the pane allows, smaller images enlarged
+   * too (photo_viewer.py:42-54). The pane is measured whenever it changes size, which is also when
+   * the window does, and the scale goes to the store so the zoom buttons step from what is shown.
+   *
+   * A callback ref, because the pane exists only once the metadata has arrived; an effect keyed
+   * on anything else would measure before it existed or keep observing one that had gone.
+   */
+  const [pane, setPane] = useState<Size | null>(null);
+  const attachPane = useCallback((element: HTMLDivElement | null) => {
+    scrollRef.current = element;
+    if (element === null || typeof ResizeObserver === "undefined") return undefined;
+    const measure = () => {
+      const width = element.clientWidth;
+      const height = element.clientHeight;
+      setPane((was) =>
+        was !== null && was.width === width && was.height === height ? was : { width, height },
+      );
+    };
+    const observer = new ResizeObserver(measure);
+    observer.observe(element);
+    measure();
+    return () => {
+      observer.disconnect();
+      scrollRef.current = null;
+    };
+  }, []);
+  const fitted = pane === null || metadata === null ? null : fitScale(pane, metadata);
+  useEffect(() => setFitted(fitted), [fitted, setFitted]);
+  useEffect(() => () => setFitted(null), [setFitted]);
   const rawPan = Number(settings.values["pan_multiplier"]);
   const panStep = 64 * (Number.isFinite(rawPan) && rawPan > 0 ? Math.min(10, rawPan) : 1);
   const pan = useCallback(
@@ -294,21 +326,11 @@ function OpenedImage({
   );
 
   return (
-    <section>
-      <h3>{image.name}</h3>
-
+    // No heading: legacy's viewer has none. The picture takes the pane; its name, its size and
+    // everything else are in the strip under it.
+    <section className="open-image">
       {metadata !== null && (
         <>
-          <p className="provisional">
-            {metadata.width} x {metadata.height}, {metadata.sourceFormat}
-            {metadata.sourceDepth === 16 && (
-              <>
-                {" "}
-                &mdash; 16-bit, shown and sent to the model as <code>value / 256</code> truncated
-                (RULE-024)
-              </>
-            )}
-          </p>
           {/* The API re-encodes every image, so what is shown here is the same 8-bit RGB the model
               is given. A 16-bit file cannot look one way on screen and arrive at SAM another.
 
@@ -326,7 +348,12 @@ function OpenedImage({
 
               The `<img>` survives as the fallback for a browser that gives no 2D context, where
               the canvas can show nothing at all. */}
-          <div className="canvas-scroll" ref={scrollRef}>
+          {/* Fitted, nothing overflows, so no scrollbar can appear and shrink the pane it was
+              measured from. Zoomed, it scrolls. */}
+          <div
+            className={zoom === null ? "canvas-scroll canvas-scroll--fit" : "canvas-scroll"}
+            ref={attachPane}
+          >
           <div className="canvas-stack">
             {canvasFailed ? (
               <img className="preview" src={pixelsUrl} alt={image.name} />
@@ -337,7 +364,7 @@ function OpenedImage({
                 height={metadata.height}
                 segments={segments}
                 adjustments={adjustments}
-                zoom={zoom}
+                zoom={zoom ?? fitted}
                 onError={onCanvasError}
                 {...(tileUrl === undefined ? {} : { tileUrl, pane: scrollRef })}
               />
@@ -472,6 +499,22 @@ function OpenedImage({
           `annotations` is what the file HELD, which is nothing here. The live segments and class
           names come from the store, as they have to -- anything drawn or renamed since loading
           would otherwise be dropped on save. */}
+      <div className="open-image__info">
+      {/* A caption, not a heading: it names the picture without taking space above it. */}
+      <span className="open-image__name">{image.name}</span>
+      {metadata !== null && (
+        <p className="provisional">
+          {metadata.width} x {metadata.height}, {metadata.sourceFormat}
+          {metadata.sourceDepth === 16 && (
+            <>
+              {" "}
+              &mdash; 16-bit, shown and sent to the model as <code>value / 256</code> truncated
+              (RULE-024)
+            </>
+          )}
+        </p>
+      )}
+
       {metadata !== null && (
         <ConvertButton
           /* KEYED ON THE IMAGE, so everything this button remembers is forgotten when a different
@@ -560,6 +603,7 @@ function OpenedImage({
 
         </>
       )}
+      </div>
     </section>
   );
 }

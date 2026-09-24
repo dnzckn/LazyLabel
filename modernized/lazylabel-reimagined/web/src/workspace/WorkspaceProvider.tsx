@@ -337,6 +337,16 @@ export interface WorkspaceContextValue {
    */
   readonly zoom: number | null;
   readonly setZoom: (zoom: number | null) => void;
+  /**
+   * The scale the open image is drawn at while `zoom` is null: the pane's size over the image's,
+   * scaling up as well as down, as legacy's `fitInView` does. Null until the view has measured its
+   * pane.
+   *
+   * The zoom buttons step from this. Stepping from 1 instead would make "zoom in" SHRINK a small
+   * image that fitting had enlarged past 200%.
+   */
+  readonly fitted: number | null;
+  readonly setFitted: (scale: number | null) => void;
 }
 
 const WorkspaceContext = createContext<WorkspaceContextValue | null>(null);
@@ -385,6 +395,8 @@ export function WorkspaceProvider({
   const toggleRecentClass = useCallback(() => setActiveClassId(previousClassId.current), [setActiveClassId]);
   const [linked, setLinked] = useState(false);
   const [linkReport, setLinkReport] = useState<LinkReport | null>(null);
+  // Measured by the view, which is the only thing that knows the pane's size.
+  const [fitted, setFitted] = useState<number | null>(null);
 
   // One History for the session, scoped per side: RULE-052 scopes undo to the open image, so an
   // undo after switching must not reach back into the previous one's edits. With two sides that
@@ -920,6 +932,8 @@ export function WorkspaceProvider({
       setProcessing,
       zoom,
       setZoom,
+      fitted,
+      setFitted,
     }),
     [
       activeClassId,
@@ -930,6 +944,7 @@ export function WorkspaceProvider({
       applySegments,
       eraseWith,
       classAliases,
+      fitted,
       clearSelection,
       closeSide,
       crop,
