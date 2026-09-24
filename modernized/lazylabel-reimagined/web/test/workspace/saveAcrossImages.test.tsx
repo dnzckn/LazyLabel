@@ -1,9 +1,9 @@
 /**
- * Saving after switching images.
+ * Saving after switching images, and after the view remounts.
  *
- * The save button holds two pieces of state that belong to ONE image: the revision its write is
- * conditional on, and the outcome of the last write. Both are `useState`, so neither is re-derived
- * when a different image opens — which looked like two quiet defects. A carried-over revision
+ * Two pieces of state belong to ONE image: the revision its write is conditional on, and the
+ * outcome of the last write. The button held both as `useState`, so neither was re-derived when a
+ * different image opened — which looked like two quiet defects. A carried-over revision
  * would refuse a save that should succeed and blame a file that did not change; a carried-over
  * success message would tell the user their work is on disk under the name of an image it was
  * never written to.
@@ -17,8 +17,14 @@
  * keeping the previous metadata on screen while the next loads would break all three of these and
  * have no reason to suspect it. The call site now states it with `key={image.key}` instead, and
  * these tests hold it there.
+ *
+ * THE REVISION MOVED TO THE STORE on 2026-09-24, per side, beside `dirty`. The button remounts
+ * whenever the view moves between the centre tabs, and when the other side of a pair is made
+ * active and then this one again; each remount re-read the LOAD's revision, so the next save was
+ * refused as a conflict with the app's own previous write.
  */
 
+import { useState } from "react";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { WireDatasetImage } from "@lazylabel/contracts";
@@ -54,9 +60,14 @@ function at(revision: string): AnnotationsResult {
 }
 
 function Opener(): React.ReactNode {
-  const { openImage, addSegment, imageState } = useWorkspace();
+  const { openImage, openImageOn, setActiveSide, addSegment, imageState } = useWorkspace();
   return (
     <>
+      <button type="button" onClick={() => openImageOn(1, datasetImage("frames/b.png"))}>
+        pair with b
+      </button>
+      <button type="button" onClick={() => setActiveSide(0)}>edit left</button>
+      <button type="button" onClick={() => setActiveSide(1)}>edit right</button>
       <button
         type="button"
         onClick={() => addSegment({ type: "Polygon", classId: 0, vertices: [[1, 1]] } as never)}
@@ -69,6 +80,19 @@ function Opener(): React.ReactNode {
           go {key}
         </button>
       ))}
+    </>
+  );
+}
+
+/** The view, with a button that mounts a fresh one, as moving it to another tab does. */
+function Remountable({ client }: { readonly client: ApiClient }): React.ReactNode {
+  const [generation, setGeneration] = useState(0);
+  return (
+    <>
+      <button type="button" onClick={() => setGeneration((g) => g + 1)}>
+        remount the view
+      </button>
+      <OpenImageView key={generation} client={client} projectId="default" />
     </>
   );
 }
@@ -107,7 +131,7 @@ function mount() {
         <HotkeyProvider bindings={defaultSettings().hotkeys}>
           <WorkspaceProvider client={client} projectId="default">
             <Opener />
-            <OpenImageView client={client} projectId="default" />
+            <Remountable client={client} />
           </WorkspaceProvider>
         </HotkeyProvider>
       </SettingsProvider>
@@ -165,6 +189,43 @@ describe("saving after switching images", () => {
     await open("frames/b.png");
 
     expect(screen.queryByText(/^Wrote /)).toBeNull();
+  });
+});
+
+describe("saving again after the view remounts", () => {
+  it("cites the revision the last save produced, not the load's", async () => {
+    const { saveAnnotations } = mount();
+    await open("frames/a.png");
+    fireEvent.click(writeButton());
+    await waitFor(() => expect(saveAnnotations).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(screen.getByText(/^Wrote /)).toBeTruthy());
+
+    fireEvent.click(screen.getByText("remount the view"));
+    fireEvent.click(writeButton());
+
+    await waitFor(() => expect(saveAnnotations).toHaveBeenCalledTimes(2));
+    const body = saveAnnotations.mock.calls.at(-1)![2] as Record<string, unknown>;
+    // "rev-A" here is a conflict with the file this app wrote a moment ago.
+    expect(body["expectedRevisions"]).toEqual({ NPZ: "after-write" });
+  });
+
+  it("keeps each side's revision when the other side is edited in between", async () => {
+    const { saveAnnotations } = mount();
+    await open("frames/a.png");
+    fireEvent.click(writeButton());
+    await waitFor(() => expect(saveAnnotations).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(screen.getByText(/^Wrote /)).toBeTruthy());
+
+    fireEvent.click(screen.getByText("pair with b"));
+    fireEvent.click(screen.getByText("edit right"));
+    await waitFor(() => expect(screen.getByText("b.png")).toBeTruthy());
+    fireEvent.click(screen.getByText("edit left"));
+    await waitFor(() => expect(screen.getByText("a.png")).toBeTruthy());
+    fireEvent.click(writeButton());
+
+    await waitFor(() => expect(saveAnnotations).toHaveBeenCalledTimes(2));
+    const body = saveAnnotations.mock.calls.at(-1)![2] as Record<string, unknown>;
+    expect(body["expectedRevisions"]).toEqual({ NPZ: "after-write" });
   });
 });
 

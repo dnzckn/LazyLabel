@@ -16,7 +16,6 @@ import { normalizeExportFormats } from "@lazylabel/settings-schema";
 import type {
   WireDatasetImage,
   WireImageMetadata,
-  WireLoadResponse,
   WireSaveResponse,
   WireSegment,
 } from "@lazylabel/contracts";
@@ -43,22 +42,6 @@ import { CropLayer } from "../canvas/CropLayer.jsx";
 import { canSave } from "./saveState.js";
 import { PanLayer } from "../canvas/PanLayer.jsx";
 import { fitScale, type Size } from "../canvas/fit.js";
-
-/**
- * What a save sends when the image had no annotation file.
- *
- * Not null and not a special case: the save path takes the file's PREVIOUS contents only to report
- * on them, and "there was nothing" is a perfectly good answer. Making the button conditional on a
- * file existing is what hid it from every new dataset.
- */
-const EMPTY_ANNOTATIONS = {
-  segments: [],
-  classAliases: {},
-  failures: [],
-  rejected: 0,
-  sourceFile: "",
-  sourceFormat: "",
-} as unknown as WireLoadResponse;
 
 /** Reads the store and hands the parts to the presentation below. */
 export function OpenImageView({
@@ -517,24 +500,16 @@ function OpenedImage({
 
       {metadata !== null && (
         <ConvertButton
-          /* KEYED ON THE IMAGE, so everything this button remembers is forgotten when a different
-             one opens: the revision its next write is conditional on, and the outcome of the last.
-             Both belong to one image and neither is re-derived.
-
-             It already behaved this way, but by accident -- the button renders behind
-             `metadata !== null` and opening an image clears the side before fetching, so it
-             unmounts for as long as the load is in flight. A conditional write should not depend
-             on a loading gap nobody wrote down; removing the flicker would silently turn every
-             save after a switch into a refusal citing a file that had not changed. */
+          /* KEYED ON THE IMAGE, so the outcome of the last save is forgotten when a different one
+             opens. The revision the next write is conditional on is NOT kept here any more: the
+             store holds it per side, because this button remounts whenever the view moves between
+             the centre tabs, and a revision it forgot turned the next save into a conflict with the
+             app's own previous write. It is shown for every image, including one with no
+             annotation file, which is how a dataset starts. */
           key={image.key}
           client={client}
           projectId={projectId}
           image={image}
-          annotations={
-            result?.kind === "loaded"
-              ? result.annotations
-              : EMPTY_ANNOTATIONS
-          }
           size={[metadata.height, metadata.width]}
         />
       )}
@@ -624,13 +599,11 @@ function ConvertButton({
   client,
   projectId,
   image,
-  annotations,
   size,
 }: {
   readonly client: ApiClient;
   readonly projectId: string;
   readonly image: WireDatasetImage;
-  readonly annotations: WireLoadResponse;
   readonly size: readonly [number, number];
 }): ReactNode {
   const { settings } = useSettings();
@@ -638,7 +611,8 @@ function ConvertButton({
   // drawn since loading has to be written as it now stands, or the edit is lost on the next save.
   // The crop comes from the store for the same reason: it is part of what a save WRITES, and a
   // crop the request leaves out is a crop the panel showed and the file never saw.
-  const { classAliases, segments, crop, activeSide, markSavedOn, imageState } = useWorkspace();
+  const { classAliases, segments, crop, activeSide, markSavedOn, imageState, revisions } =
+    useWorkspace();
   const [state, setState] = useState<
     | { readonly status: "idle" }
     | { readonly status: "saving" }
@@ -658,10 +632,9 @@ function ConvertButton({
    * ONLY THE SOURCE FORMAT IS PROTECTED, and that is honest rather than lazy: it is the one file
    * whose contents the user is editing, and it is the only revision the client has. Claiming to
    * guard the other six would need revisions the load never returned.
+   *
+   * The revisions are the store's (`revisions` above), set by the load and moved on by each save.
    */
-  const [revisions, setRevisions] = useState<Readonly<Record<string, string | null>>>(() =>
-    annotations.sourceFormat === "" ? {} : { [annotations.sourceFormat]: annotations.revision },
-  );
 
   const formats = normalizeExportFormats(settings.values["export_formats"]).formats;
 
@@ -716,11 +689,11 @@ function ConvertButton({
          * round trip and the user can switch panes during it; marking whichever side happens to be
          * active on return would tell them the image they just moved to is saved when it is not.
          */
-        markSavedOn(side, written);
         // The revisions this write produced become the ones the NEXT write is conditional on.
         // Without this, saving twice would compare against the load's revision the second time and
-        // conflict with the app's own previous save.
-        setRevisions((current) => ({ ...current, ...result.written }));
+        // conflict with the app's own previous save. The store keeps them, not this button, which
+        // remounts whenever the view moves.
+        markSavedOn(side, { ...written, key: image.key, revisions: result.written });
       })
       .catch((cause: unknown) => {
         const reason = cause instanceof Error ? cause.message : String(cause);

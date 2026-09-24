@@ -128,6 +128,16 @@ export interface SideState {
    * is what a user wants on opening an image; 1:1 on a large scan shows a corner of it.
    */
   readonly zoom: number | null;
+  /**
+   * The revision each annotation file was last read or written at, which the next save is
+   * conditional on.
+   *
+   * Here rather than in the save button, which held it until 2026-09-24. The button remounts --
+   * when the view moves between the centre tabs, or the other side of a pair is made active and
+   * then this one again -- and a revision forgotten there turned the next save into a conflict
+   * with the app's own previous write.
+   */
+  readonly revisions: Readonly<Record<string, string | null>>;
 }
 
 const EMPTY_SIDE: SideState = {
@@ -139,6 +149,7 @@ const EMPTY_SIDE: SideState = {
   crop: null,
   processing: NO_PROCESSING,
   zoom: null,
+  revisions: {},
 };
 
 /**
@@ -164,6 +175,9 @@ export interface WrittenState {
   readonly segments: readonly WireSegment[];
   readonly classAliases: Readonly<Record<string, string>>;
   readonly crop: Crop | null;
+  /** Which image the save was of, and the revisions it produced, once the server has said. */
+  readonly key?: string;
+  readonly revisions?: Readonly<Record<string, string>>;
 }
 
 export type LinkReport =
@@ -258,6 +272,8 @@ export interface WorkspaceContextValue {
    * an empty file on disk and the word "saved" on screen.
    */
   readonly markSavedOn: (side: SideIndex, written?: WrittenState) => void;
+  /** The active side's file revisions, which its next save is conditional on. */
+  readonly revisions: Readonly<Record<string, string | null>>;
   /**
    * Which drawing tool is in force.
    *
@@ -480,6 +496,12 @@ export function WorkspaceProvider({
               segments:
                 options?.segments ?? (result.kind === "loaded" ? result.annotations.segments : []),
               classAliases: result.kind === "loaded" ? result.annotations.classAliases : {},
+              // Only the file the annotations came from: it is the one whose contents the user is
+              // editing, and the only revision the load returns.
+              revisions:
+                result.kind === "loaded" && result.annotations.sourceFormat !== ""
+                  ? { [result.annotations.sourceFormat]: result.annotations.revision }
+                  : {},
               // Propagated masks are UNSAVED work the moment they are shown, so the status bar,
               // the close guard and the navigation guard all count them -- which is the whole of
               // decision 7 applied to a mask the user did not draw by hand.
@@ -525,7 +547,8 @@ export function WorkspaceProvider({
   );
 
   // What the single-image components read. Flat, exactly as they read it when there was one image.
-  const { open, segments, classAliases, selected, crop, processing, zoom } = sides[activeSide];
+  const { open, segments, classAliases, selected, crop, processing, zoom, revisions } =
+    sides[activeSide];
   const imageState = imageStates[activeSide];
 
   const addSegment = useCallback(
@@ -879,14 +902,22 @@ export function WorkspaceProvider({
 
   const markSavedOn = useCallback(
     (at: SideIndex, written?: WrittenState) =>
-      updateSide(at, (current) =>
-        written !== undefined
-        && (current.segments !== written.segments
-          || current.classAliases !== written.classAliases
-          || current.crop !== written.crop)
-          ? current
-          : { ...current, dirty: false },
-      ),
+      updateSide(at, (current) => {
+        // The revisions are the FILE's, so they move on even when an edit landed during the
+        // round trip: the next write is conditional on what is on disk now. Only for the image
+        // the save was of -- a side that has since opened another keeps that one's.
+        const revisions =
+          written?.revisions !== undefined && current.open?.image.key === written.key
+            ? { ...current.revisions, ...written.revisions }
+            : current.revisions;
+        const editedSince =
+          written !== undefined
+          && (current.segments !== written.segments
+            || current.classAliases !== written.classAliases
+            || current.crop !== written.crop);
+        if (editedSince) return revisions === current.revisions ? current : { ...current, revisions };
+        return { ...current, revisions, dirty: false };
+      }),
     [updateSide],
   );
 
@@ -913,6 +944,7 @@ export function WorkspaceProvider({
       history,
       markSaved,
       markSavedOn,
+      revisions,
       activeTool,
       setActiveTool,
       activeClassId,
@@ -959,6 +991,7 @@ export function WorkspaceProvider({
       openImage,
       openImageOn,
       processing,
+      revisions,
       segments,
       selected,
       setClassAlias,
