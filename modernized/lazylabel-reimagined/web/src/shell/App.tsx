@@ -2,8 +2,8 @@
  * The application shell.
  *
  * Phase 2 built the shell, Phase 4 the dataset browser and the three-pane layout, Phase 5 the
- * tools that fill the panels. The subtitle used to name the phase the tools were coming in; it
- * names what the app is for now, because a user is not reading a plan.
+ * tools that fill the panels. It fills the window the way legacy's does
+ * (analysis/lazylabel/VISUAL_PARITY.md), so there is no visible title or subtitle any more.
  *
  * What it genuinely exercises: the API client against a real server, the settings provider
  * including its degraded state, the hotkey system end to end, and the capability table.
@@ -155,10 +155,9 @@ export function App({ client }: { readonly client: ApiClient }): ReactNode {
           browser's own dialog when it would -- decision 7's last silent path. */}
       <CloseGuard />
 
-      <header>
-        <h1>LazyLabel</h1>
-        <p className="subtitle">Annotate a folder of images, in the browser</p>
-      </header>
+      {/* Named for a screen reader, not shown. Legacy's window has no heading and the image gets
+          the space; the browser tab already says what the page is. */}
+      <h1 className="visually-hidden">LazyLabel</h1>
 
       {healthError !== null && (
         <p role="alert" className="banner banner--error">

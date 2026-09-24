@@ -13,6 +13,11 @@ Paths:
   `config/`).
 - **W** is `modernized/lazylabel-reimagined/web/`.
 
+**Comparing screenshots.** `analysis/lazylabel/grab_legacy.py` renders the legacy window at its
+default 1600x900 to a PNG, with a folder and image open if asked. It never shows a window or
+touches the user's settings; its docstring has the usage. For the React app, set the Browser pane
+to 1600x900 with `resize_window`, open the same image, and take a screenshot.
+
 ## 1. Legacy layout
 
 - **Frame:** no menu bar or toolbar.
@@ -175,6 +180,9 @@ Solid colours with black bold text (sequence_widget.py:173-202, 268-305, 517-550
    - `.app` becomes 100vh: the workspace, then a 25px status bar.
    - Columns 320px | 1fr | 350px, each scrolling on its own (main_window.py:662-703, 769-775).
    - Files: styles.css `.app` and `.workspace`, App.tsx:158-161.
+   - **Done 2026-09-24.** Notifications also moved: they float above the status bar instead of
+     sitting at the top of the page, where each new one pushed the panes and the image down. Below
+     60rem the panes still stack in one scrolling column, with the status bar sticky at the bottom.
 2. **The image fills the centre pane.**
    - Fit to the pane, not to 24rem.
    - Move the filename and metadata into the status bar's right label (photo_viewer.py:42-54;

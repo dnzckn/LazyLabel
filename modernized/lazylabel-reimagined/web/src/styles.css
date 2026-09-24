@@ -64,20 +64,22 @@ body {
   color: var(--ink);
 }
 
+/* The whole window, as legacy's is: the three panes, then a status bar pinned below them
+   (main_window.py:662-710). Only the panes scroll, each on its own, so the image stays where it is
+   while the file list under it moves. */
 .app {
-  max-width: 62rem;
-  margin: 0 auto;
-  padding: 2rem 1rem;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
 }
 
-h1 {
+/* The page-level banners (server unreachable, folder unreadable, settings down) sit above the
+   panes. They are state that stays, not events, so pushing the panes down is acceptable. */
+.app > .banner {
+  flex: none;
   margin: 0;
-  font-size: 1.5rem;
-}
-
-.subtitle {
-  margin: 0.25rem 0 1.5rem;
-  color: var(--muted);
+  border-radius: 0;
 }
 
 .banner {
@@ -100,14 +102,30 @@ h1 {
    notification a loud background is how the loud ones stop reading as loud. */
 .banner--success,
 .banner--info {
-  background: var(--surface, transparent);
+  background: var(--ground);
   border: 1px solid var(--muted);
 }
 
+/* Over the panes, just above the status bar, where legacy shows its messages (status_bar.py:87-95).
+   In the flow they pushed the whole workspace down each time one arrived, moving the image under
+   the pointer mid-stroke. */
 .notifications {
+  position: fixed;
+  bottom: calc(25px + 0.5rem);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 50;
+  width: min(40rem, calc(100vw - 2rem));
+  max-height: 50vh;
+  overflow: auto;
   list-style: none;
-  margin: 0 0 1rem;
+  margin: 0;
   padding: 0;
+}
+
+.notifications .banner {
+  margin: 0.5rem 0 0;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.3);
 }
 
 .notifications p {
@@ -253,14 +271,25 @@ fieldset input {
 /* Continuous state, pinned below the content. Events belong in .notifications, which is the split
    legacy's status bar does not make -- and why its "Deleted: ..." notice expires. */
 .status-bar {
+  flex: none;
   display: flex;
   align-items: center;
   gap: 1rem;
-  margin-top: 2rem;
-  padding: 0.4rem 0.75rem;
-  border-top: 1px solid var(--muted);
+  /* Legacy's fixed height (status_bar.py:107). One line: what does not fit is cut, not wrapped. */
+  height: 25px;
+  box-sizing: border-box;
+  padding: 0 0.5rem;
+  border-top: 1px solid var(--rule);
   font-size: 0.85rem;
   color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.status-bar__image {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .status-bar__spacer {
@@ -275,19 +304,56 @@ fieldset input {
   color: var(--error-ink);
 }
 
-/* Legacy's arrangement: tools left, image centre, dataset right. A grid rather than draggable
-   splitters -- splitters are Qt's answer to a fixed window, and a browser already reflows. The
-   panes stack on a narrow screen without anything having to be dragged. */
+/* Legacy's arrangement: tools left, image centre, dataset right, at legacy's widths -- the side
+   columns hold their minimums (320 and 350) and only the centre stretches (main_window.py:703,
+   769-775). A grid rather than draggable splitters -- splitters are Qt's answer to a fixed window,
+   and a browser already reflows. The panes stack on a narrow screen without anything having to be
+   dragged. */
 .workspace {
+  flex: 1;
+  min-height: 0;
   display: grid;
-  grid-template-columns: minmax(12rem, 16rem) minmax(0, 1fr) minmax(14rem, 20rem);
-  gap: 1.5rem;
-  align-items: start;
+  grid-template-columns: 320px minmax(0, 1fr) 350px;
+  grid-template-rows: minmax(0, 1fr);
 }
 
+/* Each pane scrolls on its own, with legacy's 8-pixel margins (control_panel.py:185-187). */
+.workspace > * {
+  min-height: 0;
+  overflow: auto;
+  padding: 8px;
+  box-sizing: border-box;
+}
+
+.workspace__centre {
+  border-left: 1px solid var(--rule);
+  border-right: 1px solid var(--rule);
+}
+
+/* One column and one page scroll. The status bar stays in view at the bottom of the window. */
 @media (max-width: 60rem) {
+  .app {
+    height: auto;
+    overflow: visible;
+  }
+
   .workspace {
     grid-template-columns: 1fr;
+    grid-template-rows: none;
+  }
+
+  .workspace > * {
+    overflow: visible;
+  }
+
+  .workspace__centre {
+    border: none;
+  }
+
+  .status-bar {
+    position: sticky;
+    bottom: 0;
+    background: var(--ground);
   }
 }
 
