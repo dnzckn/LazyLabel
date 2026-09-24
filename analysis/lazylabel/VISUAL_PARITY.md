@@ -248,9 +248,9 @@ Solid colours with black bold text (sequence_widget.py:173-202, 268-305, 517-550
 - **Fixed pixel sizes.** Treat 90px, 320px and 350px as defaults, and keep React's single-column
   layout for narrow screens.
 
-## Open questions for the owner
+## The owner's answers, 2026-09-23
 
-- **Default theme:** if settings cannot be reached, default to dark as legacy does (settings.py:55),
-  or keep React's fallback to the OS preference (theme.ts:34-39)?
-- **Multi-view:** is legacy's 4-view Multi mode (ui_layout_manager.py:119-120) in scope, or only
-  the 2-view split?
+- **Default theme:** follow the OS, as React does now (theme.ts:34-39). Adopt legacy's colours,
+  not its dark default: when there is no saved preference, the system's light/dark setting decides.
+- **Multi-view:** two views are enough. Restyle the existing split view as legacy's Multi tab (two
+  viewers with bold headers and the Linked toggle between them). Do not build the 4-view layout.
