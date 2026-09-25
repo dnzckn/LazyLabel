@@ -241,8 +241,9 @@ export function AiLayer({
           rx={POINT_RADIUS * perPixel.x * sizing.point}
           ry={POINT_RADIUS * perPixel.y * sizing.point}
           // Green for include, red for exclude: the two mean opposite things, and a shape or size
-          // difference alone is a distinction nobody reads at a glance.
-          fill={point.positive ? "rgb(60, 200, 90)" : "rgb(230, 70, 70)"}
+          // difference alone is a distinction nobody reads at a glance. Legacy's pure green and red
+          // at alpha 150 (ai_segment_manager.py:452).
+          fill={point.positive ? "rgba(0, 255, 0, 0.59)" : "rgba(255, 0, 0, 0.59)"}
           stroke="rgba(0, 0, 0, 0.6)"
           strokeWidth={Math.max(perPixel.x, perPixel.y) * sizing.line}
         />

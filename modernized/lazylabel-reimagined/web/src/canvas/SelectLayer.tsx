@@ -14,7 +14,6 @@ import { useCallback, useLayoutEffect, useRef, useState, type ReactNode } from "
 
 import type { WireSegment } from "@lazylabel/contracts";
 
-import { classColor } from "./classColor.js";
 import { locate, scale, type DisplayBox } from "./coordinates.js";
 import { hitTest } from "../tools/selection.js";
 import { useSizing } from "./useSizing.js";
@@ -92,22 +91,21 @@ export function SelectLayer({
       onPointerDown={onPointerDown}
       style={{ cursor: "pointer" }}
     >
-      {/* Only the SELECTED shapes are outlined. Outlining everything would repeat what the canvas
-          underneath already draws, and hide the one thing this layer exists to show. */}
+      {/* Only the SELECTED shapes are marked, in legacy's yellow overlay (255, 255, 0, 180) --
+          segment_display_manager.py:515. Marking everything would repeat what the canvas underneath
+          already draws, and hide the one thing this layer exists to show. */}
       {selected.map((index) => {
         const segment = segments[index];
         if (segment?.vertices === undefined || segment.vertices.length === 0) return null;
-        const { r, g, b } = classColor(segment.classId);
 
         return (
           <polygon
             key={index}
             data-testid={`outline-${index}`}
             points={segment.vertices.map(([x, y]) => `${x},${y}`).join(" ")}
-            fill="none"
-            stroke={`rgb(${r}, ${g}, ${b})`}
+            fill="rgba(255, 255, 0, 0.7)"
+            stroke="rgb(255, 255, 0)"
             strokeWidth={Math.max(perPixel.x, perPixel.y) * 2 * sizing.line}
-            strokeDasharray={`${perPixel.x * 5} ${perPixel.x * 3}`}
           />
         );
       })}

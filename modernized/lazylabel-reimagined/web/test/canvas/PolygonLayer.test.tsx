@@ -44,7 +44,6 @@ function layer(
     <PolygonLayer
       width={IMAGE.width}
       height={IMAGE.height}
-      classId={props.classId ?? 1}
       {...(props.joinThreshold === undefined ? {} : { joinThreshold: props.joinThreshold })}
       onComplete={onComplete}
       onErase={onErase}

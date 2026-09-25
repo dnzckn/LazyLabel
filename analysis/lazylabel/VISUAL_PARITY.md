@@ -307,6 +307,10 @@ Solid colours with black bold text (sequence_widget.py:173-202, 268-305, 517-550
     - Cyan lines and blue points for a polygon being drawn.
     - Pure green and red AI points.
     - Files: SelectLayer.tsx:97-113, PolygonLayer.tsx:209-237, AiLayer.tsx:245.
+    - **Done 2026-09-25.** A selection is legacy's yellow overlay (255, 255, 0, 180). A polygon in
+      progress draws in cyan with blue points and, once the pointer would close it, a faint cyan
+      fill of the shape, the same for every class. `PolygonLayer` lost its `classId` prop, which
+      existed only to colour the preview. AI points are pure green and red at legacy's alpha 150.
 
 ## Visual but tied to Qt: do not copy literally
 

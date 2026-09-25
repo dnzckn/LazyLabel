@@ -22,7 +22,6 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { flushSync } from "react-dom";
 
-import { classColor } from "./classColor.js";
 import { locate, scale, type DisplayBox, type ImagePoint } from "./coordinates.js";
 import {
   EMPTY_DRAFT,
@@ -41,8 +40,6 @@ export interface PolygonLayerProps {
   readonly height: number;
   /** In image pixels, from settings. */
   readonly joinThreshold?: number;
-  /** The colour the finished polygon will take, so the preview is not a surprise. */
-  readonly classId: number;
   /** Called with the vertices when the polygon closes. */
   readonly onComplete: (vertices: readonly ImagePoint[]) => void;
   /** Called when the polygon closes with shift held: erase what it overlaps. */
@@ -58,7 +55,6 @@ export function PolygonLayer({
   width,
   height,
   joinThreshold,
-  classId,
   onComplete,
   onErase,
   onRefused,
@@ -206,8 +202,11 @@ export function PolygonLayer({
   }, [complete, draft, onRefused]);
 
   const box = boxOf();
-  const colour = classColor(classId);
-  const stroke = `rgb(${colour.r}, ${colour.g}, ${colour.b})`;
+  // Legacy draws a polygon in progress in cyan, with blue points and a faint cyan fill of the
+  // shape it would close into (polygon_drawing_manager.py:97-157) -- the same for every class, so
+  // the shape being drawn never looks like one already made.
+  const stroke = "rgb(0, 255, 255)";
+  const point = "rgb(0, 0, 255)";
 
   // In image units, because the SVG's viewBox is the image: one screen pixel is this many of them.
   // Read during render from a ref, so the first paint uses 1:1 and corrects on the next render --
@@ -228,6 +227,14 @@ export function PolygonLayer({
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
     >
+      {closing && draft.vertices.length > 2 && (
+        <polygon
+          points={draft.vertices.map((v) => `${v.x},${v.y}`).join(" ")}
+          fill="rgba(0, 255, 255, 0.39)"
+          stroke="none"
+        />
+      )}
+
       {draft.vertices.length > 1 && (
         <polyline
           points={draft.vertices.map((v) => `${v.x},${v.y}`).join(" ")}
@@ -258,9 +265,8 @@ export function PolygonLayer({
           cy={vertex.y}
           rx={(index === 0 && closing ? CLOSE_HINT_RADIUS : VERTEX_RADIUS) * perPixel.x * sizing.point}
           ry={(index === 0 && closing ? CLOSE_HINT_RADIUS : VERTEX_RADIUS) * perPixel.y * sizing.point}
-          fill={index === 0 && closing ? stroke : "none"}
-          stroke={stroke}
-          strokeWidth={Math.max(perPixel.x, perPixel.y) * sizing.line}
+          fill={index === 0 && closing ? stroke : point}
+          stroke="none"
         />
       ))}
     </svg>

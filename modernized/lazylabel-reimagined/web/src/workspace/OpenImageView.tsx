@@ -418,7 +418,6 @@ function OpenedImage({
                 width={metadata.width}
                 height={metadata.height}
                 joinThreshold={joinThreshold}
-                classId={classForNewSegment(segments, activeClassId)}
                 onComplete={(vertices) => commit("Polygon", vertices, "Add polygon")}
                 onErase={(vertices) => applyErase("Polygon", vertices)}
                 onRefused={refuse}
