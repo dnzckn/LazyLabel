@@ -203,6 +203,9 @@ describe("the application shell", () => {
 
     // By role: "Image" also names the left column's Image tab panel.
     expect(screen.getByRole("main", { name: "Image" })).toBeTruthy();
+    // And only one: the page wrapper was a second <main> around it, which is invalid and gave a
+    // screen reader two regions called main.
+    expect(screen.getAllByRole("main")).toHaveLength(1);
     expect(screen.getByLabelText("Dataset").textContent).toMatch(/Segments/);
   });
 

@@ -153,7 +153,9 @@ export function App({ client }: { readonly client: ApiClient }): ReactNode {
   return (
     // Inert behind the hotkey dialog, so Tab cannot walk out of it into a page that would then
     // take the keystrokes the dialog exists to capture.
-    <main className="app" inert={showHotkeys || showSettings || showAbout}>
+    // A <div>, not a second <main>: the image pane is the page's main landmark, and a <main>
+    // inside a <main> is invalid and gives a screen reader two regions called main.
+    <div className="app" inert={showHotkeys || showSettings || showAbout}>
       <NotificationHost />
       {/* Renders nothing. It asks `onClose` whether closing this tab would lose work, and arms the
           browser's own dialog when it would -- decision 7's last silent path. */}
@@ -368,7 +370,7 @@ export function App({ client }: { readonly client: ApiClient }): ReactNode {
         healthError={healthError}
         theme={{ switchesTo, onToggle: toggleTheme }}
       />
-    </main>
+    </div>
   );
 }
 
