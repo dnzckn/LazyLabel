@@ -34,9 +34,16 @@ export interface CentreTabsProps {
   readonly multi: (viewer: ReactNode) => ReactNode;
   /** The Sequence tab's controls, shown under the view. */
   readonly sequence: ReactNode;
+  /** What the Sequence tab's header says after "Sequence Mode:", as legacy's does. */
+  readonly sequenceStatus?: string;
 }
 
-export function CentreTabs({ viewer, multi, sequence }: CentreTabsProps): ReactNode {
+export function CentreTabs({
+  viewer,
+  multi,
+  sequence,
+  sequenceStatus = "No sequence loaded",
+}: CentreTabsProps): ReactNode {
   const [tab, setTab] = useState<CentreTab>("single");
   // Built the first time it is opened, then kept: see the module comment.
   const [sequenceOpened, setSequenceOpened] = useState(false);
@@ -64,6 +71,9 @@ export function CentreTabs({ viewer, multi, sequence }: CentreTabsProps): ReactN
         aria-labelledby={`centre-tab-${tab}`}
         className={`centre__panel centre__panel--${tab}`}
       >
+        {/* Always in the same place in the list, rendered or not, so the view after it keeps its
+            place -- and is not rebuilt -- when the tab changes. */}
+        {tab === "sequence" && <p className="centre__header">Sequence Mode: {sequenceStatus}</p>}
         {tab === "multi" ? multi(viewer) : <div className="centre__viewer">{viewer}</div>}
 
         {sequenceOpened && (

@@ -106,6 +106,22 @@ describe("the centre tabs", () => {
     expect(tab("Single").getAttribute("aria-selected")).toBe("true");
   });
 
+  it("heads the Sequence tab with legacy's Sequence Mode line, and only that tab", () => {
+    render(
+      <CentreTabs
+        viewer={<View />}
+        multi={(viewer) => <div>{viewer}</div>}
+        sequence={<Counter />}
+        sequenceStatus="f03.png (3/23) -- Conf: 0.9876"
+      />,
+    );
+    expect(screen.queryByText(/Sequence Mode/)).toBeNull();
+
+    fireEvent.click(tab("Sequence"));
+
+    expect(screen.getByText("Sequence Mode: f03.png (3/23) -- Conf: 0.9876")).toBeTruthy();
+  });
+
   it("puts only the chosen tab in the Tab order", () => {
     mount();
 

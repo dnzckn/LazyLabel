@@ -68,6 +68,8 @@ export function App({ client }: { readonly client: ApiClient }): ReactNode {
    * first uncached one ahead of the neighbours. The shell is the only place that can see both.
    */
   const [archetypes, setArchetypes] = useState<readonly string[]>([]);
+  // Legacy's "Sequence Mode: ..." line: the timeline knows the frame, the shell draws the header.
+  const [sequenceStatus, setSequenceStatus] = useState("No sequence loaded");
 
   // A preference the user chose wins; a default they never chose yields to the operating system.
   // That matters most when settings are UNREACHABLE: dark_mode defaults to true, so honouring the
@@ -330,11 +332,13 @@ export function App({ client }: { readonly client: ApiClient }): ReactNode {
                 }
               />
             )}
+            sequenceStatus={sequenceStatus}
             sequence={
               <TimelinePanel
                 client={client}
                 images={listed}
                 onArchetypes={setArchetypes}
+                onStatus={setSequenceStatus}
                 onOpen={(key, segments) => {
                   const image = listed.find((entry) => entry.key === key);
                   // RULE-090: a frame the propagation produced masks for shows those masks.

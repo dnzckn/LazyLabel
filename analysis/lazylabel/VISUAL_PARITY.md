@@ -215,6 +215,9 @@ Solid colours with black bold text (sequence_widget.py:173-202, 268-305, 517-550
      - Moving the view remounts it, which exposed a real bug: the save button kept the file
        revision in local state, so a save after a remount was refused as a conflict with the
        app's own previous write. Revisions now live in the store (fixed first, as its own commit).
+     - 2026-09-25: the Sequence tab gained legacy's bold "Sequence Mode: name (i/n) -- Conf: x"
+       header over the view, and the timeline bar now sits directly under the view with the
+       controls after it, as legacy orders them (main_window.py:3274-3321).
 4. **Palette.**
    - Use the §2 table for both modes, adding tokens for inputs, tables, the status bar and
      selection.

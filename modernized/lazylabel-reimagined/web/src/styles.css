@@ -1391,8 +1391,8 @@ fieldset input[type="text"] {
 }
 
 /*
- * Propagation. At the TOP of the panel because it is the action the timeline exists for, and
- * because its progress line has to be visible without scrolling past six hundred cells.
+ * Propagation, right under the timeline bar. It used to sit above the frames so its progress line
+ * stayed in view over six hundred wrapping cells; the bar is one line now, as legacy's is.
  */
 .timeline__propagation {
   border: 1px solid var(--rule);
@@ -1487,6 +1487,14 @@ fieldset input[type="text"] {
   min-height: 0;
   display: flex;
   flex-direction: column;
+}
+
+/* Legacy's bold "Sequence Mode: ..." line over the sequence view (main_window.py:3274-3276). */
+.centre__header {
+  flex: none;
+  margin: 0;
+  padding: 4px;
+  font-weight: 600;
 }
 
 /* The sequence controls under the view, in a box that scrolls on its own, as legacy's do

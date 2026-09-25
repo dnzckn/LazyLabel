@@ -98,6 +98,11 @@ export interface TimelinePanelProps {
    * from unsaved annotations -- one mechanism for "you are about to lose work", not two.
    */
   readonly confirmDiscard?: (message: string) => boolean;
+  /**
+   * Legacy's header over the sequence view, "name (3/23) -- Conf: 0.9876" (main_window.py:3274,
+   * 3544-3548), handed up because the shell draws it above the view, which the shell owns.
+   */
+  readonly onStatus?: (status: string) => void;
 }
 
 export function TimelinePanel({
@@ -107,6 +112,7 @@ export function TimelinePanel({
   client,
   onArchetypes,
   confirmDiscard = (message) => window.confirm(message),
+  onStatus,
 }: TimelinePanelProps): ReactNode {
   const [range, setRange] = useState<{ from: number; to: number } | null>(null);
   const [overrides, setOverrides] = useState<readonly Frame[] | null>(null);
@@ -258,6 +264,15 @@ export function TimelinePanel({
   useHotkey("next_suggested_frame", () => navigate("suggested", 1));
   useHotkey("prev_suggested_frame", () => navigate("suggested", -1));
 
+  const currentFrame = shown[current];
+  const currentScore = currentFrame === undefined ? undefined : { ...scores, ...ownScores }[current];
+  const status =
+    currentFrame === undefined
+      ? "No sequence loaded"
+      : `${currentFrame.key.split("/").pop()} (${current + 1}/${shown.length})`
+        + (currentScore === undefined ? "" : ` -- Conf: ${currentScore.toFixed(4)}`);
+  useEffect(() => onStatus?.(status), [onStatus, status]);
+
   if (images.length === 0) {
     return <p className="panel__missing">A sequence is built from a folder of images.</p>;
   }
@@ -363,24 +378,8 @@ export function TimelinePanel({
 
   return (
     <div className="timeline">
-      {client !== undefined && (
-        <PropagationControl
-          client={client}
-          frames={shown}
-          onScores={setOwnScores}
-          unsavedRef={unsavedRef}
-          confirmDiscard={confirmDiscard}
-          onSegments={setPropagated}
-          onSkipped={setKeptLabels}
-          onSaved={(keys) => setOverrides((previous) => markSaved(previous ?? frames, keys))}
-          onRunStart={() => {
-            setOwnScores({});
-            setKeptLabels(new Set());
-            setOverrides((previous) => resetForPropagation(previous ?? frames));
-          }}
-        />
-      )}
-
+      {/* The bar first, directly under the view, as legacy's sequence tab has it
+          (main_window.py:3283-3307); the controls follow. */}
       <p className="timeline__counts">
         {counts.total} frames, {counts.references} reference
         {counts.references === 1 ? "" : "s"}
@@ -451,6 +450,25 @@ export function TimelinePanel({
           );
         })}
       </ol>
+
+      {client !== undefined && (
+        <PropagationControl
+          client={client}
+          frames={shown}
+          onScores={setOwnScores}
+          unsavedRef={unsavedRef}
+          confirmDiscard={confirmDiscard}
+          onSegments={setPropagated}
+          onSkipped={setKeptLabels}
+          onSaved={(keys) => setOverrides((previous) => markSaved(previous ?? frames, keys))}
+          onRunStart={() => {
+            setOwnScores({});
+            setKeptLabels(new Set());
+            setOverrides((previous) => resetForPropagation(previous ?? frames));
+          }}
+        />
+      )}
+
 
       <div className="timeline__controls">
         <button type="button" onClick={() => setSorted((on) => !on)}>

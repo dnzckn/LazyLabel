@@ -152,6 +152,19 @@ describe("building one", () => {
     expect(reference.style.backgroundColor).toBe("rgb(255, 193, 7)");
   });
 
+  it("reports legacy's header for the frame in view: its name, its place and its score", async () => {
+    const onStatus = vi.fn();
+    render(withSettings(<TimelinePanel images={FOLDER} onStatus={onStatus} />));
+    expect(onStatus).toHaveBeenLastCalledWith("No sequence loaded");
+
+    build("0", "2");
+    await waitFor(() => expect(cells()).toHaveLength(3));
+    expect(onStatus).toHaveBeenLastCalledWith("f01.png (1/3)");
+
+    fireEvent.click(cells()[2]!);
+    expect(onStatus).toHaveBeenLastCalledWith("f03.png (3/3)");
+  });
+
   it("counts the frames and the references", async () => {
     show();
 
