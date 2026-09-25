@@ -339,6 +339,7 @@ export function App({ client }: { readonly client: ApiClient }): ReactNode {
                 images={listed}
                 onArchetypes={setArchetypes}
                 onStatus={setSequenceStatus}
+                {...(open === null ? {} : { openKey: open.image.key })}
                 onOpen={(key, segments) => {
                   const image = listed.find((entry) => entry.key === key);
                   // RULE-090: a frame the propagation produced masks for shows those masks.

@@ -165,6 +165,21 @@ describe("building one", () => {
     expect(onStatus).toHaveBeenLastCalledWith("f03.png (3/3)");
   });
 
+  it("follows the image the view shows, when it is one of the timeline's frames", async () => {
+    // Legacy moves its timeline to a file opened from the list when the file is in the sequence,
+    // so the header, the marker and the picture never disagree.
+    const onStatus = vi.fn();
+    render(
+      withSettings(<TimelinePanel images={FOLDER} onStatus={onStatus} openKey="frames/f03.png" />),
+    );
+
+    build("0", "4");
+    await waitFor(() => expect(cells()).toHaveLength(5));
+
+    expect(onStatus).toHaveBeenLastCalledWith("f03.png (3/5)");
+    expect(cells()[2]!.className).toContain("timeline__frame--current");
+  });
+
   it("counts the frames and the references", async () => {
     show();
 

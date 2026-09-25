@@ -103,6 +103,12 @@ export interface TimelinePanelProps {
    * 3544-3548), handed up because the shell draws it above the view, which the shell owns.
    */
   readonly onStatus?: (status: string) => void;
+  /**
+   * The image the view shows. When it is one of the timeline's frames, that frame becomes the
+   * current one -- legacy moves its timeline to a file opened from the list when the file is in the
+   * sequence (main_window.py:1447-1455) -- so the header, the marker and the picture agree.
+   */
+  readonly openKey?: string;
 }
 
 export function TimelinePanel({
@@ -113,6 +119,7 @@ export function TimelinePanel({
   onArchetypes,
   confirmDiscard = (message) => window.confirm(message),
   onStatus,
+  openKey,
 }: TimelinePanelProps): ReactNode {
   const [range, setRange] = useState<{ from: number; to: number } | null>(null);
   const [overrides, setOverrides] = useState<readonly Frame[] | null>(null);
@@ -265,6 +272,12 @@ export function TimelinePanel({
   useHotkey("find_archetypes", () => void find());
   useHotkey("next_suggested_frame", () => navigate("suggested", 1));
   useHotkey("prev_suggested_frame", () => navigate("suggested", -1));
+
+  useEffect(() => {
+    if (openKey === undefined) return;
+    const at = shown.findIndex((frame) => frame.key === openKey);
+    if (at >= 0) setCurrent(at);
+  }, [openKey, shown]);
 
   const currentFrame = shown[current];
   const currentScore = currentFrame === undefined ? undefined : { ...scores, ...ownScores }[current];
