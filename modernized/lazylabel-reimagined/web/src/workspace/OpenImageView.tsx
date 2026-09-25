@@ -41,7 +41,7 @@ import { useHotkey } from "../hotkeys/HotkeyProvider.jsx";
 import { CropLayer } from "../canvas/CropLayer.jsx";
 import { canSave } from "./saveState.js";
 import { PanLayer } from "../canvas/PanLayer.jsx";
-import { fitScale, type Size } from "../canvas/fit.js";
+import { useFittedPane } from "../canvas/useFittedPane.js";
 
 /** Reads the store and hands the parts to the presentation below. */
 export function OpenImageView({
@@ -141,29 +141,9 @@ function OpenedImage({
    * too (photo_viewer.py:42-54). The pane is measured whenever it changes size, which is also when
    * the window does, and the scale goes to the store so the zoom buttons step from what is shown.
    *
-   * A callback ref, because the pane exists only once the metadata has arrived; an effect keyed
-   * on anything else would measure before it existed or keep observing one that had gone.
+   * Measured through a callback ref, because the pane exists only once the metadata has arrived.
    */
-  const [pane, setPane] = useState<Size | null>(null);
-  const attachPane = useCallback((element: HTMLDivElement | null) => {
-    scrollRef.current = element;
-    if (element === null || typeof ResizeObserver === "undefined") return undefined;
-    const measure = () => {
-      const width = element.clientWidth;
-      const height = element.clientHeight;
-      setPane((was) =>
-        was !== null && was.width === width && was.height === height ? was : { width, height },
-      );
-    };
-    const observer = new ResizeObserver(measure);
-    observer.observe(element);
-    measure();
-    return () => {
-      observer.disconnect();
-      scrollRef.current = null;
-    };
-  }, []);
-  const fitted = pane === null || metadata === null ? null : fitScale(pane, metadata);
+  const { attach: attachPane, scale: fitted } = useFittedPane(metadata, scrollRef);
   useEffect(() => setFitted(fitted), [fitted, setFitted]);
   useEffect(() => () => setFitted(null), [setFitted]);
   const rawPan = Number(settings.values["pan_multiplier"]);

@@ -32,6 +32,7 @@ import { SegmentTable } from "../workspace/SegmentTable.jsx";
 import { processingQuery } from "../workspace/processing.js";
 import { useWorkspace, type Tool } from "../workspace/WorkspaceProvider.jsx";
 import { Panel, Workspace } from "./Panel.jsx";
+import { CentreTabs } from "./CentreTabs.jsx";
 import { StatusBar } from "./StatusBar.jsx";
 import { applyTheme, nextTheme, themeFor } from "./theme.js";
 import { useSettings } from "../settings/SettingsProvider.jsx";
@@ -256,26 +257,25 @@ export function App({ client }: { readonly client: ApiClient }): ReactNode {
           </>
         }
         centre={
-          <OpenImageView
-            client={client}
-            projectId="default"
-            // RULE-091's prefetch needs the folder in the order the user steps through it.
-            folderKeys={listed.map((image) => image.key)}
-            archetypes={archetypes}
-          />
-        }
-        right={
-          <>
-            <DatasetBrowser client={client} projectId="default" onListed={setListed} />
-
-            <Panel title="Split view" initiallyCollapsed>
+          // Legacy's centre tabs. The Multi and Sequence tabs were collapsed panels in the right
+          // column until 2026-09-24, a quarter of the window wide.
+          <CentreTabs
+            viewer={
+              <OpenImageView
+                client={client}
+                projectId="default"
+                // RULE-091's prefetch needs the folder in the order the user steps through it.
+                folderKeys={listed.map((image) => image.key)}
+                archetypes={archetypes}
+              />
+            }
+            multi={(viewer) => (
               <SplitView
                 images={listed}
-                // Both panes' sizes and annotations now come from the workspace store, which holds
-                // two open images. The measuring and loading that used to happen in the view were
-                // there only because it held one, and they were a second copy of an ordering the
-                // store already gets right: the size has to land before the annotations, or the
-                // normalized coordinates rescale.
+                viewer={viewer}
+                // Both panes' sizes and annotations come from the workspace store, which holds two
+                // open images. The size has to land before the annotations, or the normalized
+                // coordinates rescale, and the store already gets that order right.
                 pixelsUrl={(key, processing) =>
                   client.pixelsUrl("default", key, processingQuery(processing))
                 }
@@ -283,9 +283,8 @@ export function App({ client }: { readonly client: ApiClient }): ReactNode {
                   client.tileUrl("default", key, z, x, y, processingQuery(processing))
                 }
               />
-            </Panel>
-
-            <Panel title="Sequence" initiallyCollapsed>
+            )}
+            sequence={
               <TimelinePanel
                 client={client}
                 images={listed}
@@ -298,7 +297,12 @@ export function App({ client }: { readonly client: ApiClient }): ReactNode {
                   }
                 }}
               />
-            </Panel>
+            }
+          />
+        }
+        right={
+          <>
+            <DatasetBrowser client={client} projectId="default" onListed={setListed} />
 
             <Panel title="Segments">
               <SegmentTable />

@@ -422,6 +422,21 @@ fieldset input {
     height: 60vh;
   }
 
+  /* The two viewers stack, and the sequence controls take the height they need. */
+  .split__panes {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: none;
+  }
+
+  .split__picture {
+    flex: none;
+    height: 40vh;
+  }
+
+  .centre__sequence {
+    max-height: none;
+  }
+
   .status-bar {
     position: sticky;
     bottom: 0;
@@ -781,48 +796,149 @@ fieldset input {
   font-size: 0.85rem;
 }
 
-/* The split view: two images side by side. */
+/* The centre's tabs, legacy's Single | Multi | Sequence (main_window.py:673-691). */
+.centre {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.centre__tabs {
+  flex: none;
+  display: flex;
+  gap: 2px;
+  padding: 0 4px;
+  border-bottom: 1px solid var(--rule);
+}
+
+.centre__tab {
+  border: none;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  padding: 3px 6px;
+  font-size: 0.85rem;
+}
+
+/* The chosen tab: the accent, underlined, as legacy draws it. */
+.centre__tab[aria-selected="true"] {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+.centre__panel,
+.centre__viewer {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* The sequence controls under the view, in a box that scrolls on its own, as legacy's do
+   (main_window.py:3310-3321). No `display` here, so `hidden` still hides it. */
+.centre__sequence {
+  flex: none;
+  max-height: 45%;
+  overflow: auto;
+  padding: 8px;
+  border-top: 1px solid var(--rule);
+}
+
+/* The Multi tab: two viewers with the Linked toggle between them (main_window.py:3069-3119). */
+.split {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 4px 8px 8px;
+}
+
+.split > .panel__missing,
+.split > .banner {
+  flex: none;
+  margin: 0;
+}
+
 .split__controls {
+  flex: none;
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem;
   align-items: flex-end;
-  margin-bottom: 0.4rem;
 }
 
 .split__panes {
+  flex: 1;
+  min-height: 12rem;
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0.4rem;
+  grid-template-columns: minmax(0, 1fr) 90px minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
 }
 
 .split__pane {
   margin: 0;
   min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--rule);
 }
 
-.split__pane canvas,
-.split__pane img {
-  max-width: 100%;
-  height: auto;
+/* Legacy's bold "Viewer N: name" header. The number comes from here, so the caption's own text
+   stays the image's name. */
+.split__header {
+  flex: none;
+  margin: 0;
+  padding: 2px 4px;
+  font-size: 0.85rem;
+  font-weight: 600;
 }
 
-.split__pane figcaption {
-  font-size: 0.8rem;
-  color: var(--muted);
+.split__pane:first-child .split__header::before {
+  content: "Viewer 1: ";
+}
+
+.split__pane:last-child .split__header::before {
+  content: "Viewer 2: ";
+}
+
+.split__middle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* The active half holds the interactive view; the other holds its picture, fitted the same way. */
+.split__view {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.split__picture {
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+  overflow: hidden;
+  cursor: pointer;
+}
+
+.split__picture .canvas {
+  margin: auto;
+  border: none;
+  border-radius: 0;
+  max-height: 100%;
 }
 
 /* Which pane the tools are pointed at. An outline rather than a colour swap, because the panes
    hold photographs and tinting one changes what the user is comparing. The caption says
    "editing" too -- an outline alone is a colour-only cue, and this is exactly the distinction a
-   user must not get wrong. */
+   user must not get wrong. Inset, because the halves fill the tab and an outer outline is cut. */
 .split__pane--active {
   outline: 2px solid var(--accent);
-  outline-offset: 2px;
-}
-
-.split__pane--active figcaption {
-  color: var(--ink);
+  outline-offset: -2px;
 }
 
 /* The editing radios, beside the picker rather than under it. */

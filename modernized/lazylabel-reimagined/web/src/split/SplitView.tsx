@@ -44,6 +44,7 @@ import { useMemo, type ReactNode } from "react";
 import type { WireDatasetImage, WireSegment } from "@lazylabel/contracts";
 
 import { AnnotationCanvas } from "../canvas/AnnotationCanvas.jsx";
+import { useFittedPane } from "../canvas/useFittedPane.js";
 import type { ImageProcessing } from "../workspace/processing.js";
 import {
   useWorkspace,
@@ -68,9 +69,16 @@ export interface SplitViewProps {
    * each image -- two 50-megapixel images side by side were two 41 MB downloads before tiles.
    */
   readonly tileUrl?: (key: string, processing: ImageProcessing, z: number, x: number, y: number) => string;
+  /**
+   * The interactive view, drawn in the ACTIVE side's half in place of its picture, so either image
+   * can be drawn on where it is shown -- as in legacy's Multi tab, where both viewers are live.
+   * Clicking the other half makes that side active and moves the view there. Without it, both
+   * halves are pictures only.
+   */
+  readonly viewer?: ReactNode;
 }
 
-export function SplitView({ images, pixelsUrl, tileUrl }: SplitViewProps): ReactNode {
+export function SplitView({ images, pixelsUrl, tileUrl, viewer }: SplitViewProps): ReactNode {
   const { sides, activeSide, setActiveSide, openImageOn, closeSide, linked, setLinked, linkReport } =
     useWorkspace();
   const [left, right] = sides;
@@ -129,18 +137,6 @@ export function SplitView({ images, pixelsUrl, tileUrl }: SplitViewProps): React
             ))}
           </select>
         </label>
-
-        {right.open !== null && (
-          <label className="split__link">
-            <input
-              type="checkbox"
-              checked={linked}
-              aria-label="Link the two images"
-              onChange={(event) => setLinked(event.target.checked)}
-            />{" "}
-            Linked
-          </label>
-        )}
 
         {right.open !== null && (
           <fieldset className="split__link">
@@ -206,22 +202,59 @@ export function SplitView({ images, pixelsUrl, tileUrl }: SplitViewProps): React
         </p>
       )}
 
+      {/* Legacy's Multi tab: two viewers, each under a bold "Viewer N:" header, with the Linked
+          toggle in a narrow column between them (main_window.py:3069-3119). The header's
+          "Viewer N:" is drawn by the stylesheet, so the caption's text stays the image's name. */}
       <div className="split__panes">
-        {([0, 1] as const).map((side) =>
-          sides[side].open === null ? null : (
-            <figure
-              key={side}
-              className={`split__pane${activeSide === side ? " split__pane--active" : ""}`}
-            >
-              <Pane side={sides[side]} pixelsUrl={pixelsUrl} {...(tileUrl === undefined ? {} : { tileUrl })} />
-              <figcaption>
-                {sides[side].open.image.name}
-                {activeSide === side && right.open !== null ? " — editing" : ""}
-                {sides[side].dirty ? " (unsaved)" : ""}
-              </figcaption>
-            </figure>
-          ),
-        )}
+        {([0, 1] as const).map((side) => {
+          const open = sides[side].open;
+          const live = viewer !== undefined && activeSide === side;
+          const half =
+            open === null ? (
+              // Legacy's empty viewer: its header and nothing else. The note below says what to do.
+              <div key={side} className="split__pane split__pane--empty">
+                <p className="split__header">No image</p>
+              </div>
+            ) : (
+              <figure
+                key={side}
+                className={`split__pane${activeSide === side ? " split__pane--active" : ""}`}
+                // The other half is a picture; clicking it moves the tools, and the view, there.
+                {...(viewer !== undefined && !live ? { onClick: () => setActiveSide(side) } : {})}
+              >
+                <figcaption className="split__header">
+                  {open.image.name}
+                  {activeSide === side && right.open !== null ? " — editing" : ""}
+                  {sides[side].dirty ? " (unsaved)" : ""}
+                </figcaption>
+                {live ? (
+                  <div className="split__view">{viewer}</div>
+                ) : (
+                  <Pane side={sides[side]} pixelsUrl={pixelsUrl} {...(tileUrl === undefined ? {} : { tileUrl })} />
+                )}
+              </figure>
+            );
+          return side === 0 ? (
+            [
+              half,
+              <div key="link" className="split__middle">
+                {right.open !== null && (
+                  <label className="split__link">
+                    <input
+                      type="checkbox"
+                      checked={linked}
+                      aria-label="Link the two images"
+                      onChange={(event) => setLinked(event.target.checked)}
+                    />{" "}
+                    Linked
+                  </label>
+                )}
+              </div>,
+            ]
+          ) : (
+            half
+          );
+        })}
       </div>
 
       <p className="panel__missing">
@@ -275,17 +308,37 @@ function Pane({
     return <p className="panel__missing">Measuring {open.image.name}…</p>;
   }
 
+  return <FittedPicture side={side} size={size} pixelsUrl={pixelsUrl} {...(tileUrl === undefined ? {} : { tileUrl })} />;
+}
+
+/** One half's picture, fitted to its half as the view is fitted to the pane. */
+function FittedPicture({
+  side,
+  size,
+  pixelsUrl,
+  tileUrl,
+}: {
+  readonly side: SideState;
+  readonly size: ImageSize;
+  readonly pixelsUrl: (key: string, processing: ImageProcessing) => string;
+  readonly tileUrl?: (key: string, processing: ImageProcessing, z: number, x: number, y: number) => string;
+}): ReactNode {
+  const { attach, scale } = useFittedPane(size);
+  const key = side.open?.image.key ?? "";
   return (
-    <AnnotationCanvas
-      imageUrl={pixelsUrl(open.image.key, side.processing)}
-      {...(tileUrl === undefined
-        ? {}
-        : { tileUrl: (z: number, x: number, y: number) => tileUrl(open.image.key, side.processing, z, x, y) })}
-      width={size.width}
-      height={size.height}
-      // The LIVE segments, straight from the store, so an edit made in the centre view appears
-      // here as it happens rather than at the next reload.
-      segments={side.segments satisfies readonly WireSegment[]}
-    />
+    <div className="split__picture" ref={attach}>
+      <AnnotationCanvas
+        imageUrl={pixelsUrl(key, side.processing)}
+        {...(tileUrl === undefined
+          ? {}
+          : { tileUrl: (z: number, x: number, y: number) => tileUrl(key, side.processing, z, x, y) })}
+        width={size.width}
+        height={size.height}
+        zoom={scale}
+        // The LIVE segments, straight from the store, so an edit made in the view appears here as
+        // it happens rather than at the next reload.
+        segments={side.segments satisfies readonly WireSegment[]}
+      />
+    </div>
   );
 }

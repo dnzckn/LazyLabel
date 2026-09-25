@@ -586,9 +586,11 @@ function RangePicker({
       <button type="button" onClick={() => onBuild(from, to)}>
         Build timeline
       </button>
+      {/* Said here because it changed on 2026-09-23, to legacy's behaviour: building used to mark
+          every annotated frame as a reference. */}
       <p className="panel__missing">
-        Frames that already have annotations become references — propagation runs from them rather
-        than over them.
+        Building marks no references. Mark the frames propagation runs from afterwards: click a
+        frame and Mark as reference, or + All labeled for every annotated one.
       </p>
     </div>
   );

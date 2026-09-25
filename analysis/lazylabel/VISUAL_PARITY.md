@@ -201,6 +201,20 @@ Solid colours with black bold text (sequence_widget.py:173-202, 268-305, 517-550
      in §1 (main_window.py:3069-3119, 3263-3321).
    - Tests that open "Sequence" as a button need updating: c10.sequenceTimeline.test.tsx:95-96 and
      c11.propagate.test.tsx:155-156.
+   - **Done 2026-09-24** (`shell/CentreTabs.tsx`). How it works:
+     - There is one interactive view. Single and Sequence show it in the same place, so it is kept
+       between them. Multi hands it to the split view, which draws it in the active half; the
+       other half is that image's picture, fitted the same way, and clicking it moves the view
+       there, much as legacy's two live viewers work.
+     - The headers read "Viewer 1: name" and "Viewer 2: No image". The number comes from CSS, so
+       the caption text the tests read is unchanged. Linked sits in a 90px column between the
+       halves.
+     - The sequence controls sit under the view in a box that scrolls on its own. They stay
+       mounted after first use, so a built timeline and unsaved propagated masks survive leaving
+       the tab.
+     - Moving the view remounts it, which exposed a real bug: the save button kept the file
+       revision in local state, so a save after a remount was refused as a conflict with the
+       app's own previous write. Revisions now live in the store (fixed first, as its own commit).
 4. **Palette.**
    - Use the §2 table for both modes, adding tokens for inputs, tables, the status bar and
      selection.

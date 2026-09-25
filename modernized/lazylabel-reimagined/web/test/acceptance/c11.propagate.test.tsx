@@ -152,8 +152,7 @@ function mount() {
 }
 
 async function openTimeline() {
-  await waitFor(() => expect(screen.getByRole("button", { name: /Sequence/ })).toBeTruthy());
-  fireEvent.click(screen.getByRole("button", { name: /Sequence/ }));
+  fireEvent.click(await screen.findByRole("tab", { name: "Sequence" }));
   await waitFor(() => expect(screen.getByText("Build timeline")).toBeTruthy());
   fireEvent.click(screen.getByText("Build timeline"));
   // Building marks nothing since 2026-09-23, as in legacy: the reference is marked as a user marks it.

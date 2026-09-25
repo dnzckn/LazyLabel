@@ -89,11 +89,10 @@ function mount() {
   );
 }
 
-/** Open the Sequence panel, which starts collapsed because it is not the common task. */
+/** Open the Sequence tab over the image, as in legacy. */
 async function openSequence() {
   mount();
-  await waitFor(() => expect(screen.getByRole("button", { name: /Sequence/ })).toBeTruthy());
-  fireEvent.click(screen.getByRole("button", { name: /Sequence/ }));
+  fireEvent.click(await screen.findByRole("tab", { name: "Sequence" }));
   await waitFor(() => expect(screen.getByText("Build timeline")).toBeTruthy());
 }
 

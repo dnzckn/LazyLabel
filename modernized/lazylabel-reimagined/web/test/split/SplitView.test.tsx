@@ -95,11 +95,13 @@ function mount({
   counts = {} as Record<string, number>,
   metadata,
   confirm,
+  viewer,
 }: {
   images?: readonly WireDatasetImage[];
   counts?: Record<string, number>;
   metadata?: ApiClient["imageMetadata"];
   confirm?: (summary: string) => boolean;
+  viewer?: React.ReactNode;
 } = {}) {
   const pixelsUrl = vi.fn((key: string, processing: Parameters<typeof processingQuery>[0]) => {
     const query = processingQuery(processing);
@@ -123,7 +125,7 @@ function mount({
   render(
     <WorkspaceProvider client={client} projectId="default" {...(confirm ? { confirmNavigation: confirm } : {})}>
       <Opener />
-      <SplitView images={images} pixelsUrl={pixelsUrl} />
+      <SplitView images={images} pixelsUrl={pixelsUrl} {...(viewer === undefined ? {} : { viewer })} />
     </WorkspaceProvider>,
   );
 
@@ -426,5 +428,42 @@ describe("drawing into both at once", () => {
 
     await waitFor(() => expect(canvases()).toEqual(["1 annotation"]));
     expect(screen.queryByText(/Added to both images/)).toBeNull();
+  });
+});
+
+/*
+ * In the Multi tab the interactive view is drawn in the ACTIVE half, as legacy's two viewers are
+ * both live: either image is drawn on where it is shown. The other half is its picture.
+ */
+describe("the view in the active half", () => {
+  it("draws the view where the active image is, and the other image as a picture", async () => {
+    mount({ viewer: <p>the view</p> });
+    await openLeft();
+    await pairWith("right.png");
+
+    const [left, right] = screen.getAllByRole("figure");
+    expect(left!.textContent).toContain("the view");
+    expect(right!.textContent).not.toContain("the view");
+    expect(right!.querySelector("canvas")).not.toBeNull();
+  });
+
+  it("moves the view, and the tools, to the half that is clicked", async () => {
+    mount({ viewer: <p>the view</p> });
+    await openLeft();
+    await pairWith("right.png");
+
+    fireEvent.click(screen.getAllByRole("figure")[1]!);
+
+    await waitFor(() => expect(panes()).toEqual(["left.png", "right.png — editing"]));
+    const [left, right] = screen.getAllByRole("figure");
+    expect(right!.textContent).toContain("the view");
+    expect(left!.textContent).not.toContain("the view");
+  });
+
+  it("shows legacy's empty second viewer until a second image is chosen", async () => {
+    mount({ viewer: <p>the view</p> });
+    await openLeft();
+
+    expect(document.querySelector(".split__pane--empty")?.textContent).toBe("No image");
   });
 });
