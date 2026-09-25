@@ -3,7 +3,7 @@
 Where the conversion stands, on branch `main-web`. `MODERNIZATION_BRIEF.md` is the plan and does
 not change as work lands; this file is the log against it, and is the one to read first.
 
-Last updated: 2026-09-23.
+Last updated: 2026-09-25.
 
 ## Short answer
 
@@ -57,6 +57,22 @@ unreached functions across the TypeScript and Python reach guards, each with a w
 (one is a library export the formats tests need), 40 of 43 hotkeys live (the other three are mouse
 bindings), and all 94 business rules traceable to a test or recorded as a decision.
 
+**The web app now looks like the PyQt6 app** (the owner's direction of 2026-09-23). All fourteen
+items in `VISUAL_PARITY.md` §4 were done on 2026-09-24 and 25, each compared against the legacy
+window rendered at 1600x900 by `analysis/lazylabel/grab_legacy.py`:
+- **Layout:** the full-window frame, the image fitted to its pane, and the Single, Multi and
+  Sequence tabs.
+- **Look:** legacy's palette in both themes, 9pt type and its controls; the Mode Controls card with
+  Global and Image tabs; tinted section strips; the status bar; class-coloured segment and class
+  tables; the file list; the timeline bar; and the canvas colours.
+
+It found two real defects on the way, both fixed with tests:
+- A save after the view remounted was refused as a conflict with the app's own previous write,
+  because the file revision lived in the save button.
+- Nothing on screen could set the active class.
+
+Where the web app departs from legacy's look, the reason is written next to the item.
+
 ## The suites, as of 2026-09-23
 
 All **seven** green, every one run on 2026-09-23. The `contracts` package was
@@ -65,7 +81,7 @@ missing from this table entirely, which is how a table stops being a census.
 | Package | Passing | Note |
 |---|---|---|
 | exporters | 1991 | the seven formats, byte-for-byte against goldens legacy wrote |
-| web | 1225 | includes the four propagation-golden scenarios (16 tests against legacy's own sequence mode), the tile planning and legacy's reference buttons |
+| web | 1260 | rerun 2026-09-25 after the visual parity work (104 files); includes the four propagation-golden scenarios (16 tests against legacy's own sequence mode), the tile planning and legacy's reference buttons |
 | inference | 605 | plus 45 skipped: the differentials and the golden comparison, which need real checkpoints. With them: 650 passed, 0 skipped. Both on CPython 3.12.11 with PyTorch 2.10, which the package has required since 2026-09-23 |
 | api | 440 | plus 4 skipped (SEC-09's symlink tests, where the OS will not make a link, as on this machine); no todo left, since C8 is built |
 | settings-schema | 55 | includes the rule-fixed defaults |
