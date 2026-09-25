@@ -105,6 +105,11 @@ on its own export of HEAD, as CI would. The Python jobs ran on 3.12, which CI no
 
 The inference skips are more than a local run's 45 because CI installs no PyTorch.
 
+**2026-09-25, after the visual parity work:** the web job was rerun on a fresh export of HEAD
+(`fb7403f`), with the linked libraries installed first as CI does. Install, typecheck, 1260 tests
+and the build pass. No other package has changed since the run above, except the inference
+README.
+
 **A clean checkout was not this machine either -- six ways, found 2026-09-23 by running every CI
 job on a fresh export of HEAD, one job per export so no install could leak between them:**
 
