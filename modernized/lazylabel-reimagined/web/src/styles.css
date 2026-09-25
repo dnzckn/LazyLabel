@@ -44,6 +44,8 @@
   --scroll-thumb: rgb(0 0 0 / 0.251);
   --scroll-thumb-hover: rgb(0 0 0 / 0.314);
   --slider-rest: rgb(77 81 87 / 0.2);
+  --timeline-ground: rgb(215 215 220);
+  --frame-pending: #b9b9be;
   /* The status bar's colours (status_bar.py:87-95, 131-143). */
   --message: #c47600;
   --good: #2e7d32;
@@ -94,6 +96,8 @@
     --scroll-thumb: rgb(255 255 255 / 0.188);
     --scroll-thumb-hover: rgb(255 255 255 / 0.271);
     --slider-rest: rgb(228 231 235 / 0.1);
+    --timeline-ground: rgb(50 50 50);
+    --frame-pending: #646464;
     --message: #ffa500;
     --good: #51cf66;
     --bad: #ff6b6b;
@@ -140,6 +144,8 @@
   --scroll-thumb: rgb(255 255 255 / 0.188);
   --scroll-thumb-hover: rgb(255 255 255 / 0.271);
   --slider-rest: rgb(228 231 235 / 0.1);
+  --timeline-ground: rgb(50 50 50);
+  --frame-pending: #646464;
   --message: #ffa500;
   --good: #51cf66;
   --bad: #ff6b6b;
@@ -1241,18 +1247,26 @@ fieldset input[type="text"] {
   font-weight: 700;
 }
 
+/* Legacy's slider row (adjustments_widget.py:41-61): the name right-aligned in 80px, the value in
+   45px, then the slider taking the rest. The label's span steps aside (`display: contents`) so its
+   text and its value are the row's first two cells. */
 .adjustment {
-  display: block;
-  margin-bottom: 0.4rem;
+  display: grid;
+  grid-template-columns: 80px 45px minmax(0, 1fr);
+  align-items: center;
+  column-gap: 4px;
+  margin-bottom: 4px;
+  text-align: right;
 }
 
 .adjustment__label {
-  display: flex;
-  justify-content: space-between;
+  display: contents;
 }
 
 .adjustment__value {
   color: var(--muted);
+  text-align: center;
+  font-variant-numeric: tabular-nums;
 }
 
 .adjustment input[type="range"] {
@@ -1341,32 +1355,76 @@ fieldset input[type="text"] {
   margin: 0 0 0.4rem;
 }
 
+/* Legacy's timeline bar (timeline_widget.py:77-78, 233-237, 294-339): one continuous 34px strip
+   on a dark (light) ground, radius 3, a frame per slice with a 1px separator, and the current
+   frame marked by a blue triangle above it (422-451). */
 .timeline__frames {
   display: flex;
-  flex-wrap: wrap;
-  gap: 2px;
-  list-style: none;
-  margin: 0 0 0.5rem;
+  flex-wrap: nowrap;
+  gap: 0;
+  height: 34px;
+  margin: 10px 0 6px;
   padding: 0;
+  list-style: none;
+  background: var(--timeline-ground);
+  border-radius: 3px;
 }
 
-.timeline__frame {
-  width: 14px;
-  height: 22px;
-  border: 1px solid transparent;
+.timeline__frames > li {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+}
+
+.timeline__frame,
+.timeline__frame:hover:not(:disabled),
+.timeline__frame:active:not(:disabled) {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  height: 100%;
   padding: 0;
+  border: none;
+  border-radius: 0;
+  box-shadow: inset -1px 0 0 rgb(0 0 0 / 0.35);
   cursor: pointer;
 }
 
-.timeline__frame--current {
-  border-color: var(--ink);
+.timeline__frames--dense .timeline__frame {
+  box-shadow: none;
 }
 
+.timeline__frames > li:first-child .timeline__frame {
+  border-radius: 3px 0 0 3px;
+}
+
+.timeline__frames > li:last-child .timeline__frame {
+  border-radius: 0 3px 3px 0;
+}
+
+.timeline__frame--current::after {
+  content: "";
+  position: absolute;
+  top: -9px;
+  left: 50%;
+  transform: translateX(-50%);
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-top: 7px solid #2196f3;
+}
+
+/* Legacy's control row under the bar: small bold buttons (timeline_widget.py:516-611). */
 .timeline__controls {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.3rem;
-  margin-bottom: 0.5rem;
+  gap: 4px;
+  margin-bottom: 6px;
+}
+
+.timeline__controls button {
+  padding: 1px 6px;
+  font-size: 11px;
+  font-weight: 700;
 }
 
 /*
@@ -1590,6 +1648,33 @@ fieldset input[type="text"] {
   color: var(--muted);
   padding: 0 0.2rem;
 }
+
+/* Legacy's sequence buttons: solid colours and bold text, black on the light ones and white on the
+   dark ones, exactly as sequence_widget.py sets them (176-201, 269, 304, 518-548, 639, 746). */
+.seq-button,
+.seq-button:hover:not(:disabled),
+.seq-button:active:not(:disabled) {
+  border: none;
+  background: var(--seq);
+  color: var(--seq-ink, #000000);
+  font-weight: 700;
+}
+
+.seq-button:hover:not(:disabled) {
+  background: var(--seq-hover, var(--seq));
+}
+
+.seq-button:disabled {
+  opacity: 0.45;
+}
+
+.seq-button--green { --seq: #4caf50; }
+.seq-button--blue { --seq: #2196f3; }
+.seq-button--amber { --seq: #ffc107; }
+.seq-button--red { --seq: #f44336; --seq-ink: #ffffff; }
+.seq-button--purple { --seq: #9c27b0; --seq-hover: #ab47bc; --seq-ink: #ffffff; }
+.seq-button--brown { --seq: #8b4513; --seq-hover: #a0522d; --seq-ink: #ffffff; }
+.seq-button--dark-green { --seq: #2e7d32; --seq-hover: #388e3c; --seq-ink: #ffffff; }
 
 /* The confidence histogram: fifty bars and the threshold line, in the sequence panel. */
 .confidence {

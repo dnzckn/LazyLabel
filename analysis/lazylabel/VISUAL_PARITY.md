@@ -282,6 +282,10 @@ Solid colours with black bold text (sequence_widget.py:173-202, 268-305, 517-550
     - Pending #646464 dark / #b9b9be light.
     - Keep the per-frame aria-labels. Files: styles.css:566-592, timeline.ts:85-93,
       TimelinePanel.tsx:409-443.
+    - **Done 2026-09-25.** One 34px strip, separators only while frames are wider than about 4px
+      (over 230 frames they stop), a #2196f3 triangle over the current frame, pending in the
+      theme's grey from the stylesheet, and a compact bold control row. Each frame is still a
+      named button.
 11. **File list.** A search box, striped rows, the open row highlighted in rgba(100,100,200,.5), bold
     headers, ✓ marks, and a totals footer.
     - **Done 2026-09-25.** Search, sort order and a Columns dropdown in one toolbar row; ✓ where a
@@ -290,7 +294,14 @@ Solid colours with black bold text (sequence_widget.py:173-202, 268-305, 517-550
       without scrolling sideways. The heading is for screen readers only.
 12. **Slider rows.** A right-aligned 80px label, a 45px editable value, then the slider
     (adjustments_widget.py:41-61). Files: AdjustmentsPanel.tsx:151-153, styles.css:460-477.
+    - **Done 2026-09-25**, in CSS only. The value is plain text, not an input box: a field that
+      looks editable and is not would invite a click that does nothing.
 13. **Sequence buttons** in the §2 colours. Files: PropagationControl.tsx, TimelinePanel.tsx:445-470.
+    - **Done 2026-09-25.** Build timeline blue, Find archetypes purple, Propagate green (amber
+      while it reads the references), Cancel red, New timeline and Cut brown, Keep dark green,
+      with legacy's black or white text on each; Save N frames is the green positive button.
+      React has no Set Start/Set End buttons (the range is two pickers), so those colours are
+      unused.
 14. **Canvas.**
     - A yellow selection fill instead of a dashed outline in the class colour.
     - Cyan lines and blue points for a polygon being drawn.

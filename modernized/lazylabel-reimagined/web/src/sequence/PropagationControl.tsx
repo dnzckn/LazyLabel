@@ -437,8 +437,11 @@ export function PropagationControl({
             {Math.round(frames.length * 12.6).toLocaleString()} MB.
           </p>
         )}
+        {/* Legacy's colours (sequence_widget.py:304, 639, 746): Propagate green, amber while it
+            starts, and a red Abort. */}
         <button
           type="button"
+          className={`seq-button ${loading ? "seq-button--amber" : "seq-button--green"}`}
           onClick={() => void begin()}
           disabled={references.length === 0 || progress.running || loading}
           title={
@@ -451,13 +454,24 @@ export function PropagationControl({
         </button>
 
         {progress.running && (
-          <button type="button" onClick={() => void cancel()} disabled={job?.cancelling === true}>
+          <button
+            type="button"
+            className="seq-button seq-button--red"
+            onClick={() => void cancel()}
+            disabled={job?.cancelling === true}
+          >
             {job?.cancelling === true ? "Stopping…" : "Cancel"}
           </button>
         )}
 
         {done && unsaved.length > 0 && (
-          <button type="button" onClick={() => void write()} disabled={saving !== null}>
+          // Legacy's green Save All (theme.py positiveButton).
+          <button
+            type="button"
+            className="button--positive"
+            onClick={() => void write()}
+            disabled={saving !== null}
+          >
             {saving === null
               ? `Save ${unsaved.length} frame${unsaved.length === 1 ? "" : "s"}`
               : `Saving ${saving.done} of ${saving.total}…`}

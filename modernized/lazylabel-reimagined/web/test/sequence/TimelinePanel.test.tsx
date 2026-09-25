@@ -139,6 +139,19 @@ describe("building one", () => {
     expect(cells()[0]!.getAttribute("aria-label")).toBe("Frame 1, frames/f01.png, pending");
   });
 
+  it("paints a pending frame in the theme's grey, and the others in legacy's one colour", async () => {
+    // Legacy's pending is #646464 dark and #b9b9be light (timeline_widget.py:316); the stylesheet
+    // holds both, so the cell names the token rather than a colour.
+    show();
+    build("0", "1");
+
+    await waitFor(() => expect(cells()).toHaveLength(2));
+    const pending = [...cells()].find((cell) => cell.getAttribute("aria-label")?.endsWith("pending"))!;
+    const reference = [...cells()].find((cell) => cell.getAttribute("aria-label")?.endsWith("reference"))!;
+    expect(pending.getAttribute("style")).toContain("var(--frame-pending)");
+    expect(reference.style.backgroundColor).toBe("rgb(255, 193, 7)");
+  });
+
   it("counts the frames and the references", async () => {
     show();
 

@@ -406,7 +406,12 @@ export function TimelinePanel({
         )}
       </p>
 
-      <ol className="timeline__frames" aria-label="Timeline">
+      {/* Legacy's bar (timeline_widget.py:233-339): one strip, a frame per slice, separators only
+          while a frame is at least 4px wide -- about 230 frames across the centre pane. */}
+      <ol
+        className={`timeline__frames${order.length > 230 ? " timeline__frames--dense" : ""}`}
+        aria-label="Timeline"
+      >
         {order.map((index) => {
           const frame = shown[index];
           if (frame === undefined) return null;
@@ -418,7 +423,12 @@ export function TimelinePanel({
               <button
                 type="button"
                 className={`timeline__frame${index === current ? " timeline__frame--current" : ""}`}
-                style={{ backgroundColor: `rgb(${r}, ${g}, ${b})` }}
+                // Pending is legacy's grey for the theme in force (timeline_widget.py:316), so it
+                // comes from the stylesheet; every other state has one colour in both.
+                style={{
+                  backgroundColor:
+                    role === "pending" ? "var(--frame-pending)" : `rgb(${r}, ${g}, ${b})`,
+                }}
                 // Named, not coloured only. The colour is how a user reads the timeline at a
                 // glance and it is the only thing legacy offers; a screen reader gets nothing
                 // from it, and neither does anyone who cannot separate the red from the brown.
@@ -467,14 +477,19 @@ export function TimelinePanel({
           Clear references
         </button>
         {client !== undefined && (
-          <button type="button" onClick={() => void find()} disabled={finding}>
+          <button
+            type="button"
+            className="seq-button seq-button--purple"
+            onClick={() => void find()}
+            disabled={finding}
+          >
             {finding ? "Finding…" : "Find archetypes"}
           </button>
         )}
         <button type="button" onClick={() => setOverrides(clearFlags(frames))}>
           Clear flags
         </button>
-        <button type="button" onClick={startOver}>
+        <button type="button" className="seq-button seq-button--brown" onClick={startOver}>
           New timeline
         </button>
       </div>
@@ -488,10 +503,10 @@ export function TimelinePanel({
         <button type="button" onClick={() => setBounds([bounds[0], current])}>
           Trim to here
         </button>
-        <button type="button" onClick={() => applyTrim("cut")}>
+        <button type="button" className="seq-button seq-button--brown" onClick={() => applyTrim("cut")}>
           Cut
         </button>
-        <button type="button" onClick={() => applyTrim("keep")}>
+        <button type="button" className="seq-button seq-button--dark-green" onClick={() => applyTrim("keep")}>
           Keep
         </button>
         <span className="field__value">
@@ -583,7 +598,7 @@ function RangePicker({
           ))}
         </select>
       </label>
-      <button type="button" onClick={() => onBuild(from, to)}>
+      <button type="button" className="seq-button seq-button--blue" onClick={() => onBuild(from, to)}>
         Build timeline
       </button>
       {/* Said here because it changed on 2026-09-23, to legacy's behaviour: building used to mark
