@@ -189,10 +189,11 @@ describe("the application shell", () => {
     await waitFor(() => expect(screen.getByLabelText("Tools")).toBeTruthy());
 
     const tools = screen.getByLabelText("Tools");
-    expect(tools.textContent).toMatch(/Drawing tools/);
-    expect(tools.textContent).toMatch(/AI tools/);
-    expect(tools.textContent).toMatch(/Image adjustments/);
-    expect(tools.textContent).toMatch(/Crop/);
+    // Legacy's left column: the Mode Controls card, then its sections under Global and Image.
+    expect(tools.textContent).toMatch(/Mode Controls/);
+    expect(tools.textContent).toMatch(/AI Model Selection/);
+    expect(tools.textContent).toMatch(/Image Adjustments/);
+    expect(tools.textContent).toMatch(/Border Crop/);
     expect(tools.textContent).not.toMatch(/still to come/);
   });
 
@@ -200,7 +201,8 @@ describe("the application shell", () => {
     mount({});
     await waitFor(() => expect(screen.getByLabelText("Dataset")).toBeTruthy());
 
-    expect(screen.getByLabelText("Image")).toBeTruthy();
+    // By role: "Image" also names the left column's Image tab panel.
+    expect(screen.getByRole("main", { name: "Image" })).toBeTruthy();
     expect(screen.getByLabelText("Dataset").textContent).toMatch(/Segments/);
   });
 
@@ -211,9 +213,9 @@ describe("the application shell", () => {
     // that name, with its key beside it, that opens a list of keys instead of fitting the image is
     // worse than one that does nothing: a user presses it once and stops trusting the table.
     mount({});
-    await waitFor(() => expect(screen.getByText(/Show hotkeys/)).toBeTruthy());
+    await waitFor(() => expect(screen.getByRole("button", { name: "Show hotkeys" })).toBeTruthy());
 
-    fireEvent.click(screen.getByText(/Show hotkeys/));
+    fireEvent.click(screen.getByRole("button", { name: "Show hotkeys" }));
 
     await waitFor(() => expect(screen.getByRole("heading", { name: "Hotkeys" })).toBeTruthy());
     expect(screen.getByText("merge_segments")).toBeTruthy();
@@ -222,7 +224,7 @@ describe("the application shell", () => {
   it("does NOT open the reference on the fit_view key", async () => {
     // The specific regression. "." fits the image now, and must not do this.
     mount({});
-    await waitFor(() => expect(screen.getByText(/Show hotkeys/)).toBeTruthy());
+    await waitFor(() => expect(screen.getByRole("button", { name: "Show hotkeys" })).toBeTruthy());
 
     document.dispatchEvent(
       new KeyboardEvent("keydown", { code: "Period", key: ".", bubbles: true, cancelable: true }),

@@ -23,7 +23,7 @@ import { cropFrom, excludedPixels, isWholeImage, parseRange, type ImageSize } fr
 import { useWorkspace } from "./WorkspaceProvider.jsx";
 
 export function CropPanel(): ReactNode {
-  const { open, crop, setCrop } = useWorkspace();
+  const { open, crop, setCrop, activeTool, setActiveTool } = useWorkspace();
   const [x, setX] = useState("");
   const [y, setY] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -59,6 +59,17 @@ export function CropPanel(): ReactNode {
 
   return (
     <div className="crop">
+      {/* Drawing a crop is chosen here, as legacy's Border Crop section offers it
+          (control_panel.py:500), rather than among the annotation modes: a crop decides which
+          pixels reach the FILE (RULE-018), and it is not an annotation. */}
+      <button
+        type="button"
+        aria-pressed={activeTool === "crop"}
+        onClick={() => setActiveTool(activeTool === "crop" ? "none" : "crop")}
+      >
+        Draw crop
+      </button>
+
       <label className="crop__field">
         <span>X range</span>
         <input

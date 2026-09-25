@@ -54,7 +54,9 @@ export function Panel({ title, initiallyCollapsed, pending, children }: PanelPro
           // says the state; the label says what pressing it does.
           aria-expanded={!collapsed}
         >
-          <span aria-hidden="true">{collapsed ? "▸" : "▾"}</span> {title}
+          {/* Legacy's glyphs, in a 16px column of their own (control_panel.py:47-55). */}
+          <span className="panel__arrow" aria-hidden="true">{collapsed ? "▶" : "▼"}</span>
+          {title}
         </button>
         {pending !== undefined && <span className="panel__pending">{pending.phase}</span>}
       </h3>

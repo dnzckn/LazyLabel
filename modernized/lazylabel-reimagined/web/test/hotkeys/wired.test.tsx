@@ -66,7 +66,7 @@ function mount() {
 
 const chosen = () =>
   screen
-    .getAllByRole("radio", { name: /^(None|Select|Polygon|Box|Circle|AI)$/ })
+    .getAllByRole("radio", { name: /^(AI|Poly|Box|Circle|Select|Edit|Pan) \(.\)$/ })
     .find((radio) => (radio as HTMLInputElement).checked)
     ?.closest("label")
     ?.textContent?.trim();
@@ -76,17 +76,17 @@ const keyFor = (action: string) => defaultSettings().hotkeys[action]!.primary;
 
 describe("the tool keys", () => {
   const cases: readonly (readonly [string, string])[] = [
-    ["polygon_mode", "Polygon"],
-    ["bbox_mode", "Box"],
-    ["circle_mode", "Circle"],
-    ["sam_mode", "AI"],
-    ["selection_mode", "Select"],
+    ["polygon_mode", "Poly (2)"],
+    ["bbox_mode", "Box (3)"],
+    ["circle_mode", "Circle (4)"],
+    ["sam_mode", "AI (1)"],
+    ["selection_mode", "Select (E)"],
   ];
 
   for (const [action, label] of cases) {
     it(`${action} picks ${label}`, async () => {
       mount();
-      await waitFor(() => expect(screen.getByText("Tool")).toBeTruthy());
+      await waitFor(() => expect(screen.getByText("Mode Controls")).toBeTruthy());
 
       fireEvent.keyDown(document, { key: keyFor(action) });
 
@@ -98,13 +98,13 @@ describe("the tool keys", () => {
     // "Edit" is not a tool here. The vertex editor appears when exactly one annotation is selected
     // and no drawing tool is active, so R means "no tool".
     mount();
-    await waitFor(() => expect(screen.getByText("Tool")).toBeTruthy());
+    await waitFor(() => expect(screen.getByText("Mode Controls")).toBeTruthy());
     fireEvent.keyDown(document, { key: keyFor("polygon_mode") });
-    await waitFor(() => expect(chosen()).toBe("Polygon"));
+    await waitFor(() => expect(chosen()).toBe("Poly (2)"));
 
     fireEvent.keyDown(document, { key: keyFor("edit_mode") });
 
-    await waitFor(() => expect(chosen()).toBe("None"));
+    await waitFor(() => expect(chosen()).toBe("Edit (R)"));
   });
 
   it("edit_mode SAYS WHY when there is nothing to edit", async () => {
@@ -112,7 +112,7 @@ describe("the tool keys", () => {
     // tool is all that visibly happens -- and legacy's own words are the only thing separating
     // "the key is not bound" from "this shape has no vertices to drag".
     mount();
-    await waitFor(() => expect(screen.getByText("Tool")).toBeTruthy());
+    await waitFor(() => expect(screen.getByText("Mode Controls")).toBeTruthy());
 
     fireEvent.keyDown(document, { key: keyFor("edit_mode") });
 
@@ -125,19 +125,19 @@ describe("the tool keys", () => {
     // pressing 1. The card calls it a defect. A tool key that sometimes does something else is
     // worse than one that always does the same thing.
     mount();
-    await waitFor(() => expect(screen.getByText("Tool")).toBeTruthy());
+    await waitFor(() => expect(screen.getByText("Mode Controls")).toBeTruthy());
 
     fireEvent.keyDown(document, { key: keyFor("sam_mode") });
-    await waitFor(() => expect(chosen()).toBe("AI"));
+    await waitFor(() => expect(chosen()).toBe("AI (1)"));
     fireEvent.keyDown(document, { key: keyFor("selection_mode") });
-    await waitFor(() => expect(chosen()).toBe("Select"));
+    await waitFor(() => expect(chosen()).toBe("Select (E)"));
     fireEvent.keyDown(document, { key: keyFor("edit_mode") });
-    await waitFor(() => expect(chosen()).toBe("None"));
+    await waitFor(() => expect(chosen()).toBe("Edit (R)"));
 
     // The fourth press in legacy's sequence. Selection, every time, not "back to AI".
     fireEvent.keyDown(document, { key: keyFor("selection_mode") });
 
-    await waitFor(() => expect(chosen()).toBe("Select"));
+    await waitFor(() => expect(chosen()).toBe("Select (E)"));
   });
 });
 
@@ -158,8 +158,8 @@ function rowFor(table: HTMLElement, action: string): HTMLElement {
 describe("the hotkey reference", () => {
   async function openReference(): Promise<HTMLElement> {
     mount();
-    await waitFor(() => expect(screen.getByText(/Show hotkeys/)).toBeTruthy());
-    fireEvent.click(screen.getByText(/Show hotkeys/));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Show hotkeys" })).toBeTruthy());
+    fireEvent.click(screen.getByRole("button", { name: "Show hotkeys" }));
     return await screen.findByRole("table");
   }
 

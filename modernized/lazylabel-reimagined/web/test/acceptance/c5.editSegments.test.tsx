@@ -20,7 +20,7 @@ afterEach(cleanup);
 describe("C5: erasing", () => {
   it("cuts the drawn shape out of the annotations under it", async () => {
     await openImage();
-    chooseTool("Polygon");
+    chooseTool("Poly (2)");
     drawTriangle(10, 10);
     await waitFor(() => expect(selectBoxes()).toHaveLength(1));
 
@@ -35,7 +35,7 @@ describe("C5: erasing", () => {
     // Legacy says "No segments to erase". Saying nothing leaves a user wondering whether the
     // gesture registered at all.
     await openImage();
-    chooseTool("Polygon");
+    chooseTool("Poly (2)");
 
     drawTriangle(10, 10, true);
 
@@ -48,7 +48,7 @@ describe("C5: merging and deleting", () => {
     // "Merge into class 0", not "Merge". For an action that rewrites several annotations at once,
     // finding out what it did by looking at the result is too late.
     await openImage();
-    chooseTool("Polygon");
+    chooseTool("Poly (2)");
     drawTriangle(10, 10);
     drawTriangle(100, 10);
     await waitFor(() => expect(selectBoxes()).toHaveLength(2));
@@ -62,7 +62,7 @@ describe("C5: merging and deleting", () => {
 
   it("deletes the selected annotations, and counts them on the button", async () => {
     await openImage();
-    chooseTool("Polygon");
+    chooseTool("Poly (2)");
     drawTriangle(10, 10);
     drawTriangle(100, 10);
     await waitFor(() => expect(selectBoxes()).toHaveLength(2));
@@ -79,7 +79,7 @@ describe("C5: reclassing", () => {
     // The LIVE aliases, not the ones the file held. A rename that only reached the loaded response
     // would be dropped on the next save — a mistake this codebase has made.
     const { saveAnnotations } = await openImage();
-    chooseTool("Polygon");
+    chooseTool("Poly (2)");
     drawTriangle(10, 10);
 
     const field = await screen.findByLabelText(/Name for class 0/);

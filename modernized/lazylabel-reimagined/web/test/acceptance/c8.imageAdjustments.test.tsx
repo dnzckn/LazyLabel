@@ -97,7 +97,13 @@ async function openImage(sourceChannels = 1) {
   return handles;
 }
 
+/** The Image tab of the left column, which holds these sections as legacy's does. */
+function openImageTab(): void {
+  fireEvent.click(screen.getByRole("tab", { name: "Image" }));
+}
+
 async function openPanel(name: RegExp) {
+  openImageTab();
   fireEvent.click(screen.getByRole("button", { name }));
   await waitFor(() => expect(screen.getByRole("button", { name })).toBeTruthy());
 }
@@ -142,7 +148,7 @@ describe("C8: rescale and channel thresholds, which run on the server", () => {
 
   it("puts a channel marker on the pixels URL", async () => {
     const { pixelsUrl } = await openImage();
-    await openPanel(/Rescale and thresholds/);
+    await openPanel(/Rescale and Channel Threshold/);
 
     fireEvent.change(screen.getByLabelText("Marker value"), { target: { value: "128" } });
     fireEvent.click(screen.getByText("Add marker"));
@@ -152,7 +158,7 @@ describe("C8: rescale and channel thresholds, which run on the server", () => {
 
   it("puts a rescale window on it", async () => {
     const { pixelsUrl } = await openImage();
-    await openPanel(/Rescale and thresholds/);
+    await openPanel(/Rescale and Channel Threshold/);
 
     fireEvent.change(screen.getByLabelText("Rescale low"), { target: { value: "50" } });
 
@@ -161,7 +167,7 @@ describe("C8: rescale and channel thresholds, which run on the server", () => {
 
   it("does NOT offer rescale on a colour image, and says why (RULE-032)", async () => {
     await openImage(3);
-    await openPanel(/Rescale and thresholds/);
+    await openPanel(/Rescale and Channel Threshold/);
 
     expect(screen.queryByLabelText("Rescale low")).toBeNull();
     expect(screen.getByText(/grayscale images only/)).toBeTruthy();
@@ -169,7 +175,7 @@ describe("C8: rescale and channel thresholds, which run on the server", () => {
 
   it("puts a frequency cutoff on it (RULE-030)", async () => {
     const { pixelsUrl } = await openImage();
-    await openPanel(/Rescale and thresholds/);
+    await openPanel(/Rescale and Channel Threshold/);
 
     fireEvent.change(screen.getByLabelText("Frequency cutoff"), { target: { value: "1000" } });
 
@@ -182,7 +188,7 @@ describe("C8: the crop, which is carried to the save", () => {
     // The crop does not narrow the view; it blanks what falls outside on WRITE. A crop the save
     // request leaves out is a crop the panel showed and the file never saw.
     const { saveAnnotations } = await openImage();
-    await openPanel(/Crop$/);
+    openImageTab();
 
     fireEvent.change(screen.getByLabelText("X range"), { target: { value: "0:500" } });
     fireEvent.change(screen.getByLabelText("Y range"), { target: { value: "0:400" } });
@@ -201,7 +207,7 @@ describe("C8: the crop, which is carried to the save", () => {
     // Legacy blanks them with no warning and nothing in the exported file records that a crop was
     // involved.
     await openImage();
-    await openPanel(/Crop$/);
+    openImageTab();
 
     fireEvent.change(screen.getByLabelText("X range"), { target: { value: "0:500" } });
     fireEvent.change(screen.getByLabelText("Y range"), { target: { value: "0:400" } });

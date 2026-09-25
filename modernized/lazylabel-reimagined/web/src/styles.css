@@ -1,20 +1,60 @@
-/* Scaffold styling: legible defaults, nothing the Phase 4 workspace would have to undo. */
+/*
+ * THE LOOK IS LEGACY'S (analysis/lazylabel/VISUAL_PARITY.md, section 2): PyQtDarkTheme 2.1.0 with
+ * LazyLabel's own stylesheet on top (legacy theme_data.py lines 18 and 21, theme.py:215-359). The
+ * values were read from those stylesheets and checked against pixels of the legacy window rendered
+ * at 1600x900 by analysis/lazylabel/grab_legacy.py.
+ *
+ * Light is written first and dark is applied from two places below, so the operating system
+ * decides when the user has not chosen -- the owner's answer of 2026-09-23. Legacy's colours, not
+ * its dark default.
+ */
 :root {
-  color-scheme: light dark;
-  --ground: #ffffff;
-  --ink: #1a1a1a;
-  --muted: #5a5a5a;
-  --rule: #d8d8d8;
-  /* Links, and the border on whatever is current. Used in four places and defined in none until
-     now, so `var(--accent)` fell back to the inherited colour and a breadcrumb looked like plain
-     text -- and `--text`, which one rule used for the timeline's CURRENT-FRAME border, is spelled
-     `--ink` here, so that border rendered as currentColor and the marker showed nothing at all. */
-  --accent: #1a5fb4;
+  color-scheme: light;
+  --ground: #f8f9fa;
+  --ink: #4d5157;
+  --muted: rgb(77 81 87 / 0.7);
+  --faint: rgb(77 81 87 / 0.4);
+  /* Borders, splitters, table headers and the line under a group -- one colour in legacy. */
+  --rule: #dadce0;
+  --input: #f8f9fa;
+  --accent: #1a73e8;
+  --accent-hover: rgb(23 112 227 / 0.1);
+  --accent-press: rgb(23 112 227 / 0.24);
+  --selection: rgb(73 144 237 / 0.35);
+  --table: #ffffff;
+  --stripe: rgb(0 0 0 / 0.035);
+  --status: #dfe1e5;
+  --popup: #ffffff;
+  --hover: rgb(0 0 0 / 0.082);
+  /* LazyLabel's own: the Mode Controls card, the collapsible section strip, the mode buttons'
+     checked state, the purple accent toggle and the green positive buttons (theme.py). */
+  --card: rgb(0 0 0 / 0.03);
+  --card-rule: rgb(0 0 0 / 0.08);
+  --strip: rgb(0 0 0 / 0.04);
+  --strip-hover: rgb(0 0 0 / 0.08);
+  --mode-on: rgb(46 109 164 / 0.9);
+  --mode-on-rule: rgb(74 142 194);
+  --mode-on-hover: rgb(60 125 180 / 0.95);
+  --toggle-on: rgb(107 63 160 / 0.9);
+  --toggle-on-rule: rgb(140 95 195);
+  --positive: rgb(56 142 60 / 0.9);
+  --positive-rule: rgb(76 165 80 / 0.95);
+  --positive-hover: rgb(70 158 74 / 0.95);
+  --scroll-track: rgb(0 0 0 / 0.063);
+  --scroll-thumb: rgb(0 0 0 / 0.251);
+  --scroll-thumb-hover: rgb(0 0 0 / 0.314);
+  --slider-rest: rgb(77 81 87 / 0.2);
+  /* The status bar's colours (status_bar.py:87-95, 131-143). */
+  --message: #c47600;
+  --good: #2e7d32;
+  --bad: #c62828;
+  --caution: #b8860b;
   --warning-ground: #fff4e0;
   --warning-ink: #6b4800;
   --error-ground: #ffe9e6;
   --error-ink: #8a1c10;
-  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  /* No application font is set in legacy, so Windows draws Segoe UI at 9pt: 12px. */
+  font: 12px "Segoe UI", system-ui, -apple-system, sans-serif;
 }
 
 /* The dark values, written once and applied from two places below. */
@@ -22,11 +62,42 @@
   /* The system's preference, but only while the user has not chosen otherwise. Without the
      :not(), a user who picked light on a dark desktop would get dark anyway. */
   :root:not([data-theme="light"]) {
-    --ground: #1c1c1c;
-    --ink: #ececec;
-    --muted: #a0a0a0;
-    --rule: #3a3a3a;
-    --accent: #78aeff;
+    color-scheme: dark;
+    --ground: #202124;
+    --ink: #e4e7eb;
+    --muted: rgb(228 231 235 / 0.65);
+    --faint: rgb(228 231 235 / 0.4);
+    --rule: #3f4042;
+    --input: #3f4042;
+    --accent: #8ab4f7;
+    --accent-hover: rgb(102 159 245 / 0.11);
+    --accent-press: rgb(87 150 244 / 0.23);
+    --selection: rgb(66 136 242 / 0.4);
+    --table: #101012;
+    --stripe: rgb(255 255 255 / 0.03);
+    --status: #2a2b2e;
+    --popup: #2a2b2f;
+    --hover: rgb(255 255 255 / 0.094);
+    --card: rgb(255 255 255 / 0.03);
+    --card-rule: rgb(255 255 255 / 0.07);
+    --strip: rgb(255 255 255 / 0.04);
+    --strip-hover: rgb(255 255 255 / 0.08);
+    --mode-on: rgb(92 143 191 / 0.9);
+    --mode-on-rule: rgb(122 175 212);
+    --mode-on-hover: rgb(110 160 210 / 0.95);
+    --toggle-on: rgb(123 94 167 / 0.9);
+    --toggle-on-rule: rgb(155 126 199);
+    --positive: rgb(76 175 80 / 0.85);
+    --positive-rule: rgb(100 200 104 / 0.9);
+    --positive-hover: rgb(92 190 96 / 0.9);
+    --scroll-track: rgb(255 255 255 / 0.063);
+    --scroll-thumb: rgb(255 255 255 / 0.188);
+    --scroll-thumb-hover: rgb(255 255 255 / 0.271);
+    --slider-rest: rgb(228 231 235 / 0.1);
+    --message: #ffa500;
+    --good: #51cf66;
+    --bad: #ff6b6b;
+    --caution: #ffd43b;
     --warning-ground: #3a2d10;
     --warning-ink: #f0cd8a;
     --error-ground: #3a1a16;
@@ -37,25 +108,46 @@
 /* An explicit choice, which must also win on a light desktop -- so it cannot live inside the
    media query above. */
 :root[data-theme="dark"] {
-  --ground: #1c1c1c;
-  --ink: #ececec;
-  --muted: #a0a0a0;
-  --rule: #3a3a3a;
-  --accent: #78aeff;
+  color-scheme: dark;
+  --ground: #202124;
+  --ink: #e4e7eb;
+  --muted: rgb(228 231 235 / 0.65);
+  --faint: rgb(228 231 235 / 0.4);
+  --rule: #3f4042;
+  --input: #3f4042;
+  --accent: #8ab4f7;
+  --accent-hover: rgb(102 159 245 / 0.11);
+  --accent-press: rgb(87 150 244 / 0.23);
+  --selection: rgb(66 136 242 / 0.4);
+  --table: #101012;
+  --stripe: rgb(255 255 255 / 0.03);
+  --status: #2a2b2e;
+  --popup: #2a2b2f;
+  --hover: rgb(255 255 255 / 0.094);
+  --card: rgb(255 255 255 / 0.03);
+  --card-rule: rgb(255 255 255 / 0.07);
+  --strip: rgb(255 255 255 / 0.04);
+  --strip-hover: rgb(255 255 255 / 0.08);
+  --mode-on: rgb(92 143 191 / 0.9);
+  --mode-on-rule: rgb(122 175 212);
+  --mode-on-hover: rgb(110 160 210 / 0.95);
+  --toggle-on: rgb(123 94 167 / 0.9);
+  --toggle-on-rule: rgb(155 126 199);
+  --positive: rgb(76 175 80 / 0.85);
+  --positive-rule: rgb(100 200 104 / 0.9);
+  --positive-hover: rgb(92 190 96 / 0.9);
+  --scroll-track: rgb(255 255 255 / 0.063);
+  --scroll-thumb: rgb(255 255 255 / 0.188);
+  --scroll-thumb-hover: rgb(255 255 255 / 0.271);
+  --slider-rest: rgb(228 231 235 / 0.1);
+  --message: #ffa500;
+  --good: #51cf66;
+  --bad: #ff6b6b;
+  --caution: #ffd43b;
   --warning-ground: #3a2d10;
   --warning-ink: #f0cd8a;
   --error-ground: #3a1a16;
   --error-ink: #f5a99c;
-}
-
-.theme-toggle {
-  background: none;
-  border: 1px solid var(--rule);
-  border-radius: 0.25rem;
-  color: inherit;
-  cursor: pointer;
-  font: inherit;
-  padding: 0.1rem 0.5rem;
 }
 
 body {
@@ -63,6 +155,231 @@ body {
   background: var(--ground);
   color: var(--ink);
 }
+
+/* Legacy's thin rounded scrollbars (14px, a translucent handle on a translucent track). */
+* {
+  scrollbar-color: var(--scroll-thumb) var(--scroll-track);
+}
+
+::-webkit-scrollbar {
+  width: 14px;
+  height: 14px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--scroll-track);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--scroll-thumb);
+  border: 4px solid transparent;
+  border-radius: 7px;
+  background-clip: padding-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: var(--scroll-thumb-hover);
+  border-width: 2px;
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  font-size: 13px;
+  margin: 0 0 4px;
+}
+
+p {
+  margin: 0 0 6px;
+}
+
+a {
+  color: var(--accent);
+}
+
+code {
+  font-size: 11px;
+}
+
+/* ---- Controls, as QPushButton, QLineEdit, QComboBox, QCheckBox, QSlider and QGroupBox draw them. */
+
+/* Legacy's buttons: accent text, a hairline border, 4px 8px, radius 4; tinted by the accent on hover
+   and more on press or when checked. */
+button {
+  font: inherit;
+  padding: 4px 8px;
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--accent);
+  cursor: pointer;
+}
+
+button:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+
+button:active:not(:disabled),
+button[aria-pressed="true"] {
+  background: var(--accent-press);
+}
+
+button:disabled {
+  color: var(--faint);
+  cursor: default;
+}
+
+:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* The green action buttons: Load, Save All (theme.py:276-288, 331-343). */
+.button--positive {
+  background: var(--positive);
+  border-color: var(--positive-rule);
+  color: #ffffff;
+  font-weight: 600;
+}
+
+.button--positive:hover:not(:disabled) {
+  background: var(--positive-hover);
+}
+
+.button--positive:disabled {
+  opacity: 0.4;
+  color: #ffffff;
+}
+
+/* Line edits, spin boxes and combo boxes: filled, radius 4, the accent border on focus. */
+input[type="text"],
+input[type="search"],
+input[type="number"],
+input:not([type]),
+select,
+textarea {
+  font: inherit;
+  color: var(--ink);
+  background: var(--input);
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  padding: 3px 4px;
+  box-sizing: border-box;
+}
+
+select {
+  padding: 2px 4px;
+  min-height: 22px;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+/* Checkboxes and radios in the accent, with 8px before their label (QCheckBox spacing). */
+input[type="checkbox"],
+input[type="radio"] {
+  accent-color: var(--accent);
+  margin: 0 6px 0 0;
+  vertical-align: -2px;
+  width: 14px;
+  height: 14px;
+}
+
+/* A 4px groove, filled in the accent up to a round 16px accent handle (QSlider). */
+input[type="range"] {
+  accent-color: var(--accent);
+  -webkit-appearance: none;
+  appearance: none;
+  height: 16px;
+  background: transparent;
+  cursor: pointer;
+}
+
+input[type="range"]::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--slider-rest);
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  margin-top: -6px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+input[type="range"]::-moz-range-track {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--slider-rest);
+}
+
+input[type="range"]::-moz-range-progress {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--accent);
+}
+
+input[type="range"]::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border: none;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+/* A group box: a hairline border, radius 4, a bold title set into the top edge. */
+fieldset {
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  margin: 8px 0;
+  padding: 4px 6px 6px;
+}
+
+legend {
+  font-weight: 600;
+  padding: 0 3px;
+}
+
+fieldset label {
+  margin-right: 10px;
+}
+
+/* ---- Tables, as QTableView draws them: a dark well, hairline grid, filled header. */
+table {
+  border-collapse: collapse;
+  width: 100%;
+  background: var(--table);
+}
+
+th,
+td {
+  text-align: left;
+  padding: 3px 4px;
+  border: 1px solid var(--rule);
+  font-weight: normal;
+  vertical-align: top;
+}
+
+thead th {
+  background: var(--rule);
+  font-weight: normal;
+}
+
+/* ---- The frame. */
 
 /* The whole window, as legacy's is: the three panes, then a status bar pinned below them
    (main_window.py:662-710). Only the panes scroll, each on its own, so the image stays where it is
@@ -83,9 +400,9 @@ body {
 }
 
 .banner {
-  padding: 0.75rem 1rem;
-  border-radius: 0.375rem;
-  margin: 0 0 1rem;
+  padding: 6px 8px;
+  border-radius: 4px;
+  margin: 0 0 8px;
 }
 
 .banner--warning {
@@ -102,8 +419,8 @@ body {
    notification a loud background is how the loud ones stop reading as loud. */
 .banner--success,
 .banner--info {
-  background: var(--ground);
-  border: 1px solid var(--muted);
+  background: var(--popup);
+  border: 1px solid var(--rule);
 }
 
 /* Over the panes, just above the status bar, where legacy shows its messages (status_bar.py:87-95).
@@ -135,30 +452,10 @@ body {
 /* Two class selectors, so it beats `.notifications p` above without reaching for !important. */
 .notifications .notifications__detail {
   margin-top: 0.35rem;
-  font-size: 0.9em;
 }
 
 .notifications__count {
   color: var(--muted);
-}
-
-table {
-  border-collapse: collapse;
-  width: 100%;
-  font-size: 0.9rem;
-}
-
-th,
-td {
-  text-align: left;
-  padding: 0.375rem 0.5rem;
-  border-bottom: 1px solid var(--rule);
-  font-weight: normal;
-  vertical-align: top;
-}
-
-thead th {
-  font-weight: 600;
 }
 
 .health {
@@ -176,26 +473,38 @@ thead th {
   margin: 0;
 }
 
-button {
-  font: inherit;
-  padding: 0.375rem 0.75rem;
-  border: 1px solid var(--rule);
-  border-radius: 0.25rem;
-  background: transparent;
-  color: inherit;
-  cursor: pointer;
-}
-
 /* Dataset browser */
 .dataset th[scope="row"] {
   font-weight: normal;
 }
 
-.dataset button {
+/* A name reads as the row's text, as in legacy's file table; the whole name is still a button. */
+.dataset button,
+.dataset button:hover:not(:disabled),
+.dataset button:active:not(:disabled) {
   border: none;
   padding: 0;
+  background: none;
+  color: var(--ink);
+  text-align: left;
+}
+
+.dataset button:hover:not(:disabled) {
   text-decoration: underline;
-  text-underline-offset: 0.2em;
+}
+
+/* Legacy's file table: bold headers, striped rows, the open image in blue-violet
+   (fast_file_manager.py:1069-1086). */
+.dataset thead th {
+  font-weight: 600;
+}
+
+.dataset tbody tr:nth-child(even) {
+  background: var(--stripe);
+}
+
+.dataset tbody tr[aria-selected="true"] {
+  background: rgb(100 100 200 / 0.5);
 }
 
 .dataset td {
@@ -209,28 +518,15 @@ button {
 
 .provisional {
   color: var(--muted);
-  font-size: 0.85rem;
   margin-top: 0;
 }
 
-fieldset {
-  border: 1px solid var(--rule);
-  border-radius: 0.25rem;
-  margin: 1.5rem 0;
-}
-
-fieldset label {
-  margin-right: 1rem;
-}
-
-fieldset input {
-  font: inherit;
+/* Number fields in a group are sized to a number. Only those: the width once applied to every input
+   in a fieldset, radios and checkboxes included, which spread the tool list and the format list
+   across the whole column. */
+fieldset input[type="number"],
+fieldset input[type="text"] {
   width: 6rem;
-  padding: 0.2rem 0.35rem;
-  border: 1px solid var(--rule);
-  border-radius: 0.2rem;
-  background: transparent;
-  color: inherit;
 }
 
 .preview {
@@ -274,34 +570,95 @@ fieldset input {
   flex: none;
   display: flex;
   align-items: center;
-  gap: 1rem;
-  /* Legacy's fixed height (status_bar.py:107). One line: what does not fit is cut, not wrapped. */
+  gap: 10px;
+  /* Legacy's fixed height and fill (status_bar.py:107; QStatusBar). One line: what does not fit is
+     cut, not wrapped. */
   height: 25px;
   box-sizing: border-box;
-  padding: 0 0.5rem;
-  border-top: 1px solid var(--rule);
-  font-size: 0.85rem;
-  color: var(--muted);
+  padding: 0 8px 0 6px;
+  background: var(--status);
+  color: var(--ink);
   white-space: nowrap;
   overflow: hidden;
 }
 
+/* The middle, stretched and centred, as legacy's message label is. */
 .status-bar__image {
+  flex: 1;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
+  text-align: center;
+  color: var(--muted);
 }
 
-.status-bar__spacer {
-  flex: 1;
+.status-bar__image--saved {
+  color: var(--good);
+}
+
+.status-bar__image--unsaved {
+  color: var(--message);
+}
+
+.status-bar__image--failed,
+.status-bar__item--error {
+  color: var(--bad);
 }
 
 .status-bar__item--warning {
-  color: var(--warning-ink);
+  color: var(--caution);
 }
 
-.status-bar__item--error {
-  color: var(--error-ink);
+/* The device label: 8pt, green on a GPU. */
+.status-bar__device {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.status-bar__item--good {
+  color: var(--good);
+}
+
+/* Legacy's pill switch (status_bar.py:20-76): a 36x20 track with a round knob that carries the
+   theme in force -- a moon on the right on a dark track, a sun on the left on a light one. */
+.theme-toggle,
+.theme-toggle:hover:not(:disabled),
+.theme-toggle:active:not(:disabled) {
+  position: relative;
+  flex: none;
+  width: 36px;
+  height: 20px;
+  padding: 0;
+  border: none;
+  border-radius: 10px;
+  background: #cccccc;
+}
+
+.theme-toggle--dark,
+.theme-toggle--dark:hover:not(:disabled),
+.theme-toggle--dark:active:not(:disabled) {
+  background: #555555;
+}
+
+.theme-toggle__knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #ffd43b;
+  color: #666666;
+  font-size: 11px;
+  line-height: 16px;
+  text-align: center;
+  transition: left 0.15s ease-out;
+}
+
+.theme-toggle--dark .theme-toggle__knob {
+  left: 18px;
+  background: #1a1a2e;
+  color: #ffd43b;
 }
 
 /* Legacy's arrangement: tools left, image centre, dataset right, at legacy's widths -- the side
@@ -380,7 +737,6 @@ fieldset input {
   gap: 0.25rem 1rem;
   padding: 4px 8px;
   border-top: 1px solid var(--rule);
-  font-size: 0.85rem;
 }
 
 .open-image__info p {
@@ -444,10 +800,11 @@ fieldset input {
   }
 }
 
+/* A collapsible section as legacy draws one (control_panel.py:44-76; theme.py:239-242, 297-302):
+   no card around it, a 20px tinted strip for a header with a 16px arrow and a 10pt bold title, and
+   the content under it. */
 .panel {
-  border: 1px solid var(--rule);
-  border-radius: 0.375rem;
-  margin-bottom: 0.75rem;
+  margin-bottom: 6px;
 }
 
 .panel__header {
@@ -455,31 +812,49 @@ fieldset input {
   align-items: center;
   justify-content: space-between;
   margin: 0;
-  font-size: 0.95rem;
+  font-size: 13px;
   font-weight: 600;
+  background: var(--strip);
+  border-radius: 3px;
 }
 
-.panel__toggle {
-  background: none;
-  border: none;
-  color: inherit;
-  cursor: pointer;
-  font: inherit;
-  padding: 0.5rem 0.75rem;
-  text-align: left;
+.panel__header:hover {
+  background: var(--strip-hover);
+}
+
+.panel__toggle,
+.panel__toggle:hover:not(:disabled),
+.panel__toggle:active:not(:disabled) {
   flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 20px;
+  padding: 1px 2px;
+  border: none;
+  border-radius: 3px;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+}
+
+.panel__arrow {
+  width: 16px;
+  flex: none;
+  font-size: 10px;
+  text-align: center;
 }
 
 .panel__pending {
   color: var(--muted);
-  font-size: 0.8rem;
+  font-size: 11px;
   font-weight: 400;
   padding-right: 0.75rem;
 }
 
 .panel__body {
-  border-top: 1px solid var(--rule);
-  padding: 0.75rem;
+  padding: 6px 2px 2px 4px;
 }
 
 .panel__missing {
@@ -529,30 +904,122 @@ fieldset input {
   touch-action: none; /* a drag on a touch screen draws, it does not scroll the page */
 }
 
-/*
- * WRAPS, because the number of tools grew. Six of them in a row overflowed the left panel and
- * spilled the last three across the canvas -- a row that looked fine when there were three.
- */
-.tool-picker {
+/* Legacy's Mode Controls card (control_panel.py:242-338; theme.py:233-236): a faint raised card,
+   radius 6, holding a 3x2 grid of 28px mode buttons and the Hotkeys row. */
+.mode-card {
+  margin: 0 0 8px;
+  padding: 8px;
+  background: var(--card);
+  border: 1px solid var(--card-rule);
+  border-radius: 6px;
+}
+
+.mode-card__modes {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  margin: 0;
+  padding: 0;
   border: none;
-  margin: 0 0 0.5rem;
+}
+
+.mode-card__title {
+  grid-column: 1 / -1;
+  float: left;
+  width: 100%;
+  margin: 0 0 6px;
   padding: 0;
+  font-weight: 600;
+}
+
+/* A radio drawn as legacy's mode button: bold 11px accent text in a bordered 28px box; checked, a
+   filled blue with a 2px border and white text (theme.py:217-222, 255-259, 310-314). */
+.mode-button {
+  position: relative;
   display: flex;
-  flex-wrap: wrap;
-  gap: 0.35rem 0.75rem;
-}
-
-/* So a two-word tool name breaks between tools rather than inside one. */
-.tool-picker label {
+  align-items: center;
+  justify-content: center;
+  height: 28px;
+  margin: 0;
+  box-sizing: border-box;
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 700;
   white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
 }
 
-.tool-picker legend {
-  padding: 0;
+.mode-button:hover {
+  background: var(--accent-hover);
+}
+
+.mode-button--on,
+.mode-button--on:hover {
+  background: var(--mode-on);
+  border: 2px solid var(--mode-on-rule);
+  color: #ffffff;
+}
+
+.mode-button--on:hover {
+  background: var(--mode-on-hover);
+}
+
+/* The radio itself is invisible but still focusable, so the keyboard moves through the modes. */
+.mode-button__input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.mode-button:focus-within {
+  outline: 1px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.mode-card__row {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.mode-button--small {
+  width: 90px;
+}
+
+.mode-card__hotkeys {
+  height: 28px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.mode-card .history {
+  justify-content: center;
+  margin: 6px 0 0;
+}
+
+.mode-card__hint {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+/* Legacy's centred bold "Settings" over the tabs (control_panel.py:216-222). */
+.settings-label {
+  margin: 4px 0 2px;
+  font-size: 13px;
+  font-weight: 600;
+  text-align: center;
 }
 
 .segments {
-  font-size: 0.85rem;
 }
 
 .segments__actions {
@@ -584,7 +1051,6 @@ fieldset input {
   list-style: none;
   margin: 0;
   padding: 0;
-  font-size: 0.85rem;
 }
 
 .models__detail {
@@ -594,11 +1060,10 @@ fieldset input {
 .models__why {
   margin: 0 0 0.5rem 1.4rem;
   color: var(--warning-ink);
-  font-size: 0.8rem;
+  font-size: 11px;
 }
 
 .classes {
-  font-size: 0.85rem;
 }
 
 .classes input[type="text"] {
@@ -613,7 +1078,6 @@ fieldset input {
 .adjustment {
   display: block;
   margin-bottom: 0.4rem;
-  font-size: 0.85rem;
 }
 
 .adjustment__label {
@@ -633,7 +1097,6 @@ fieldset input {
 .crop__field {
   display: block;
   margin-bottom: 0.4rem;
-  font-size: 0.85rem;
 }
 
 .crop__field span {
@@ -649,7 +1112,7 @@ fieldset input {
 /* Rescale and channel thresholds. Numbered steps, because RULE-032 fixes their order. */
 .channel__step {
   margin: 0.8rem 0 0.3rem;
-  font-size: 0.8rem;
+  font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: var(--muted);
@@ -665,7 +1128,6 @@ fieldset input {
   list-style: none;
   margin: 0.4rem 0;
   padding: 0;
-  font-size: 0.85rem;
 }
 
 .channel__markers li {
@@ -676,7 +1138,6 @@ fieldset input {
 
 /* Where in the dataset we are, and the folders below it. */
 .crumbs {
-  font-size: 0.85rem;
   margin-bottom: 0.3rem;
 }
 
@@ -698,7 +1159,6 @@ fieldset input {
   list-style: none;
   margin: 0 0 0.5rem;
   padding: 0;
-  font-size: 0.85rem;
 }
 
 .crumbs__folders button {
@@ -712,7 +1172,6 @@ fieldset input {
 
 /* The sequence timeline. Colour is how it is read at a glance; every cell is also named. */
 .timeline__counts {
-  font-size: 0.85rem;
   margin: 0 0 0.4rem;
 }
 
@@ -765,7 +1224,6 @@ fieldset input {
 .timeline__propagation-state,
 .timeline__propagation-empty,
 .timeline__propagation-error {
-  font-size: 0.85rem;
   margin: 0.4rem 0 0;
 }
 
@@ -776,7 +1234,6 @@ fieldset input {
 
 /* References that could not seed. A list, because each one names a different file. */
 .timeline__propagation-skipped {
-  font-size: 0.85rem;
   color: var(--muted);
   margin: 0.4rem 0 0;
   padding-left: 1.1rem;
@@ -793,7 +1250,6 @@ fieldset input {
   flex-wrap: wrap;
   gap: 0.3rem;
   margin: 0.4rem 0;
-  font-size: 0.85rem;
 }
 
 /* The centre's tabs, legacy's Single | Multi | Sequence (main_window.py:673-691). */
@@ -804,26 +1260,38 @@ fieldset input {
   flex-direction: column;
 }
 
-.centre__tabs {
+/* Tabs as QTabBar draws them: plain text, 3px of padding, the chosen one in the accent over a 2px
+   accent underline, a faint tint on hover. Shared by the centre and the left column. */
+.tabs__list {
   flex: none;
   display: flex;
-  gap: 2px;
-  padding: 0 4px;
+  gap: 6px;
+  padding: 0 2px;
   border-bottom: 1px solid var(--rule);
 }
 
-.centre__tab {
+.tabs__tab,
+.tabs__tab:active:not(:disabled) {
+  margin-top: 3px;
+  padding: 3px;
   border: none;
   border-bottom: 2px solid transparent;
-  border-radius: 0;
-  padding: 3px 6px;
-  font-size: 0.85rem;
+  border-radius: 2px 2px 0 0;
+  background: none;
+  color: var(--ink);
 }
 
-/* The chosen tab: the accent, underlined, as legacy draws it. */
-.centre__tab[aria-selected="true"] {
+.tabs__tab:hover:not(:disabled) {
+  background: var(--hover);
+}
+
+.tabs__tab[aria-selected="true"] {
   color: var(--accent);
   border-bottom-color: var(--accent);
+}
+
+.tabs__panel {
+  padding-top: 6px;
 }
 
 .centre__panel,
@@ -891,7 +1359,6 @@ fieldset input {
   flex: none;
   margin: 0;
   padding: 2px 4px;
-  font-size: 0.85rem;
   font-weight: 600;
 }
 
@@ -950,11 +1417,10 @@ fieldset input {
   border: 1px solid var(--rule);
   border-radius: 4px;
   padding: 0.2rem 0.5rem;
-  font-size: 0.85rem;
 }
 
 .split__link legend {
-  font-size: 0.75rem;
+  font-size: 11px;
   color: var(--muted);
   padding: 0 0.2rem;
 }
@@ -992,7 +1458,7 @@ fieldset input {
   justify-content: space-between;
   gap: 0.5rem;
   margin: 0;
-  font-size: 0.8rem;
+  font-size: 11px;
   color: var(--muted);
   font-variant-numeric: tabular-nums;
 }
@@ -1047,7 +1513,7 @@ fieldset input {
 }
 
 .hotkeys__clear {
-  font-size: 0.8rem;
+  font-size: 11px;
   padding: 0 0.35rem;
 }
 
@@ -1080,13 +1546,11 @@ fieldset input {
 .field__value {
   font-variant-numeric: tabular-nums;
   color: var(--muted);
-  font-size: 0.85rem;
 }
 
 /* The column switches, folded away above the dataset table. A <details> rather than a row of
    checkboxes: seven switches above a table push the table itself below the fold. */
 .dataset__columns {
-  font-size: 0.85rem;
   margin-bottom: 0.4rem;
 }
 
@@ -1108,7 +1572,6 @@ fieldset input {
   display: flex;
   align-items: center;
   gap: 0.4rem;
-  font-size: 0.85rem;
   margin-bottom: 0.5rem;
 }
 

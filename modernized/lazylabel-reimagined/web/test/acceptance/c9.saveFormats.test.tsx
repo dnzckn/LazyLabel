@@ -67,7 +67,7 @@ describe("C9: choosing the formats", () => {
 
   it("writes exactly the formats that were chosen", async () => {
     const { saveAnnotations } = await openImage();
-    chooseTool("Polygon");
+    chooseTool("Poly (2)");
     drawTriangle(10, 10);
 
     fireEvent.click(writeButton());
@@ -82,7 +82,7 @@ describe("C9: choosing the formats", () => {
 describe("C9: reporting what happened", () => {
   it("says what was written, by name", async () => {
     await openImage();
-    chooseTool("Polygon");
+    chooseTool("Poly (2)");
     drawTriangle(10, 10);
 
     fireEvent.click(writeButton());
@@ -94,7 +94,7 @@ describe("C9: reporting what happened", () => {
     // Decision 15f: report and offer removal, never delete. A stale Pascal VOC file beside a fresh
     // NPZ is two different answers about the same image, and only one of them is current.
     await openImage();
-    chooseTool("Polygon");
+    chooseTool("Poly (2)");
     drawTriangle(10, 10);
 
     fireEvent.click(writeButton());
@@ -128,7 +128,7 @@ describe("C9: a file that changed underneath", () => {
     );
 
     await openImageWithThatClient();
-    chooseTool("Polygon");
+    chooseTool("Poly (2)");
     drawTriangle(10, 10);
 
     fireEvent.click(writeButton());

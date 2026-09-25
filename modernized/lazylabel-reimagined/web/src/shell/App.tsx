@@ -19,7 +19,6 @@ import { NotificationHost } from "../notifications/NotificationProvider.jsx";
 import { OpenImageView } from "../workspace/OpenImageView.jsx";
 import { AdjustmentsPanel } from "../workspace/AdjustmentsPanel.jsx";
 import { ClassTable } from "../workspace/ClassTable.jsx";
-import { HistoryControls } from "../workspace/HistoryControls.jsx";
 import { ChannelPanel } from "../workspace/ChannelPanel.jsx";
 import { SplitView } from "../split/SplitView.jsx";
 import { CloseGuard } from "../workspace/CloseGuard.jsx";
@@ -30,9 +29,11 @@ import { AutoPolygonPanel } from "../workspace/AutoPolygonPanel.jsx";
 import { FragmentPanel } from "../workspace/FragmentPanel.jsx";
 import { SegmentTable } from "../workspace/SegmentTable.jsx";
 import { processingQuery } from "../workspace/processing.js";
-import { useWorkspace, type Tool } from "../workspace/WorkspaceProvider.jsx";
+import { useWorkspace } from "../workspace/WorkspaceProvider.jsx";
 import { Panel, Workspace } from "./Panel.jsx";
 import { CentreTabs } from "./CentreTabs.jsx";
+import { ModeControls } from "./ModeControls.jsx";
+import { Tabs } from "./Tabs.jsx";
 import { StatusBar } from "./StatusBar.jsx";
 import { applyTheme, nextTheme, themeFor } from "./theme.js";
 import { useSettings } from "../settings/SettingsProvider.jsx";
@@ -41,8 +42,6 @@ import { Dialog } from "./Dialog.jsx";
 import { SettingsEditor } from "../settings/SettingsEditor.jsx";
 import { useHotkey } from "../hotkeys/HotkeyProvider.jsx";
 import type { ApiClient, ApiHealth } from "../api/client.js";
-import { enterEditMode } from "../tools/edit.js";
-import { useNotifications } from "../notifications/NotificationProvider.jsx";
 
 /** The client already names this shape; re-declaring it here is how the two drift apart. */
 type Health = ApiHealth;
@@ -194,66 +193,77 @@ export function App({ client }: { readonly client: ApiClient }): ReactNode {
       <Workspace
         left={
           <>
-            {/* Legacy's mode buttons live here: SAM, polygon, bbox, circle, selection, edit. They
-                are named rather than mocked -- a row of disabled buttons that look real invites a
-                user to press one, and saying where the work stands does not. */}
-            <Panel title="Drawing tools">
-              <ToolPicker />
-              <HistoryControls />
-              {/* Shift erases with whichever shape is active, which is legacy's gesture and is not
-                  discoverable by looking at the picker. It is read when the shape is FINISHED -- a
-                  box or circle released, a polygon closed -- so "while drawing" misled: a polygon
-                  drawn with Shift and closed by a plain Enter is added (found 2026-09-23). */}
-              <p className="panel__missing">
-                Hold Shift as you finish a shape to erase with it instead of adding it: release a
-                box or circle with Shift held, or close a polygon with Shift+Enter.
-              </p>
-            </Panel>
-            <Panel title="AI tools">
-              <ModelPicker client={client} />
-              <AutoPolygonPanel />
-              <FragmentPanel />
-            </Panel>
-            <Panel title="Image adjustments">
-              <ZoomControl />
-              <AdjustmentsPanel />
-            </Panel>
-            <Panel title="Rescale and thresholds" initiallyCollapsed>
-              <ChannelPanel />
-            </Panel>
-            <Panel title="Crop" initiallyCollapsed>
-              <CropPanel />
-            </Panel>
-
-            <Panel title="Settings">
-              {state.status === "loading" ? (
-                <p>Loading…</p>
-              ) : (
-                <p>
-                  Schema version {state.settings.schemaVersion},{" "}
-                  {Object.keys(state.settings.values).length} settings and{" "}
-                  {Object.keys(state.settings.hotkeys).length} hotkeys.
-                </p>
-              )}
-              <button type="button" onClick={() => setShowSettings(true)}>
-                Edit settings
-              </button>{" "}
-              <button type="button" onClick={() => setShowHotkeys(true)}>
-                Show hotkeys
-              </button>
-              {showSettings && (
-                <Dialog title="Settings" onClose={() => setShowSettings(false)}>
-                  <SettingsEditor />
-                </Dialog>
-              )}
-              {/* In a dialog, because the editor needs the width legacy's gave it and this column
-                  is a quarter of that. It renders into document.body, outside the inert page. */}
-              {showHotkeys && (
-                <Dialog title="Hotkeys" onClose={() => setShowHotkeys(false)}>
-                  <HotkeyEditor />
-                </Dialog>
-              )}
-            </Panel>
+            {/* Legacy's left column (control_panel.py:185-240): the Mode Controls card, a centred
+                bold "Settings" label, then Global and Image tabs holding its sections in its
+                order (385-531). Both tabs stay mounted: Image Adjustments holds the zoom keys. */}
+            <ModeControls onHotkeys={() => setShowHotkeys(true)} />
+            <p className="settings-label">Settings</p>
+            <Tabs
+              label="Settings"
+              tabs={[
+                {
+                  id: "global",
+                  label: "Global",
+                  content: (
+                    <>
+                      <Panel title="AI Model Selection">
+                        <ModelPicker client={client} />
+                      </Panel>
+                      <Panel title="AI Fragment Filter">
+                        <FragmentPanel />
+                      </Panel>
+                      <Panel title="AI → Polygon Conversion">
+                        <AutoPolygonPanel />
+                      </Panel>
+                      <Panel title="Application Settings">
+                        {state.status === "loading" ? (
+                          <p>Loading…</p>
+                        ) : (
+                          <p>
+                            Schema version {state.settings.schemaVersion},{" "}
+                            {Object.keys(state.settings.values).length} settings and{" "}
+                            {Object.keys(state.settings.hotkeys).length} hotkeys.
+                          </p>
+                        )}
+                        <button type="button" onClick={() => setShowSettings(true)}>
+                          Edit settings
+                        </button>
+                      </Panel>
+                    </>
+                  ),
+                },
+                {
+                  id: "image",
+                  label: "Image",
+                  content: (
+                    <>
+                      <Panel title="Border Crop">
+                        <CropPanel />
+                      </Panel>
+                      <Panel title="Rescale and Channel Threshold" initiallyCollapsed>
+                        <ChannelPanel />
+                      </Panel>
+                      <Panel title="Image Adjustments">
+                        <ZoomControl />
+                        <AdjustmentsPanel />
+                      </Panel>
+                    </>
+                  ),
+                },
+              ]}
+            />
+            {showSettings && (
+              <Dialog title="Settings" onClose={() => setShowSettings(false)}>
+                <SettingsEditor />
+              </Dialog>
+            )}
+            {/* In a dialog, because the editor needs the width legacy's gave it and this column is
+                a quarter of that. It renders into document.body, outside the inert page. */}
+            {showHotkeys && (
+              <Dialog title="Hotkeys" onClose={() => setShowHotkeys(false)}>
+                <HotkeyEditor />
+              </Dialog>
+            )}
           </>
         }
         centre={
@@ -353,14 +363,6 @@ export function App({ client }: { readonly client: ApiClient }): ReactNode {
 }
 
 /**
- * Choosing a drawing tool.
- *
- * Radio buttons rather than toggle buttons, because the tools are exclusive and a radio group says
- * so to a screen reader and to the keyboard without any code. "None" is a real option and the
- * default: a canvas that starts in a drawing mode turns the first click of a session -- often a
- * click to look at something -- into an annotation.
- */
-/**
  * How far in the image is drawn — the thing a browser's own zoom cannot do.
  *
  * Ctrl+= scales the whole PAGE, panels included; an annotator wants the picture larger and the
@@ -408,84 +410,6 @@ function ZoomControl(): ReactNode {
       </button>
       <button type="button" onClick={() => setZoom(1)}>1:1</button>
     </div>
-  );
-}
-
-function ToolPicker(): ReactNode {
-  const { activeTool, setActiveTool, segments, selected, toggleRecentClass } = useWorkspace();
-  const { notify } = useNotifications();
-
-  const tools: readonly { readonly value: Tool; readonly label: string }[] = [
-    { value: "none", label: "None" },
-    { value: "select", label: "Select" },
-    { value: "polygon", label: "Polygon" },
-    { value: "box", label: "Box" },
-    { value: "circle", label: "Circle" },
-    { value: "ai", label: "AI" },
-    // Not an annotation tool: a crop decides which pixels reach the FILE (RULE-018), and it sits
-    // here because it is chosen and drawn the same way the others are.
-    { value: "crop", label: "Crop" },
-    // Also not an annotation tool: it moves the VIEW, and nothing it does can be lost.
-    { value: "pan", label: "Pan" },
-  ];
-
-  /*
-   * THE KEYS, which the hotkey reference has been promising since Phase 2 while nothing listened.
-   * 1/2/3/4 pick a tool directly, E selects, R edits -- legacy's own bindings, imported with the
-   * settings so a user's remapping is honoured.
-   *
-   * SET DIRECTLY, NOT TOGGLED. RULE-070 is a defect card: legacy means Selection and Edit to
-   * toggle back to the previous mode, and the view-model records the mode just left every time, so
-   * E R R E leaves you in selection unable to get back to AI without pressing 1. Reproducing that
-   * would be reproducing the bug -- the card says so -- and a tool key that sometimes does
-   * something else is worse than one that always does the same thing.
-   *
-   * "edit" is not a tool here: the vertex editor appears when exactly one annotation is selected
-   * and no drawing tool is active, so R means "no tool", which is the state that shows the
-   * handles.
-   */
-  useHotkey("sam_mode", () => setActiveTool("ai"));
-  useHotkey("polygon_mode", () => setActiveTool("polygon"));
-  useHotkey("bbox_mode", () => setActiveTool("box"));
-  useHotkey("circle_mode", () => setActiveTool("circle"));
-  useHotkey("selection_mode", () => setActiveTool("select"));
-  /*
-   * EDIT SAYS WHY IT DID NOTHING. The vertex editor opens when exactly one editable annotation is
-   * selected and no drawing tool is active, so R clears the tool -- and with nothing selected, or
-   * with an AI mask selected, clearing the tool is all that visibly happens. `enterEditMode`
-   * carries legacy's own words for that, and they are the only thing separating "the key is not
-   * bound" from "this shape has no vertices to drag": a user whose selection is a mask will
-   * otherwise press R repeatedly.
-   *
-   * The tool is still cleared on a refusal. The key means "stop drawing and edit"; refusing the
-   * second half is not a reason to ignore the first, and leaving the polygon tool armed would put
-   * the next click into a new shape.
-   */
-  useHotkey("pan_mode", () => setActiveTool("pan"));
-  // Legacy's X. It lives beside the tool keys because it is the same kind of thing: what the next
-  // stroke will be, chosen without reaching for a panel.
-  useHotkey("toggle_recent_class", toggleRecentClass);
-  useHotkey("edit_mode", () => {
-    setActiveTool("none");
-    const outcome = enterEditMode(segments, selected);
-    if (outcome.kind === "refused") notify({ severity: "info", message: outcome.reason });
-  });
-
-  return (
-    <fieldset className="tool-picker">
-      <legend>Tool</legend>
-      {tools.map((tool) => (
-        <label key={tool.value}>
-          <input
-            type="radio"
-            name="tool"
-            checked={activeTool === tool.value}
-            onChange={() => setActiveTool(tool.value)}
-          />{" "}
-          {tool.label}
-        </label>
-      ))}
-    </fieldset>
   );
 }
 

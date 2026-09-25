@@ -106,7 +106,10 @@ export async function openImage(loaded?: AnnotationsResult) {
   return handles;
 }
 
-/** Choose a drawing tool from the shell's picker, the way a user does. */
+/**
+ * Choose a drawing tool from the Mode Controls card, the way a user does -- by the button's label,
+ * which is legacy's with the key in brackets: "Poly (2)", "Box (3)".
+ */
 export function chooseTool(label: string): void {
   fireEvent.click(screen.getByRole("radio", { name: label }));
 }

@@ -219,10 +219,19 @@ Solid colours with black bold text (sequence_widget.py:173-202, 268-305, 517-550
    - Use the §2 table for both modes, adding tokens for inputs, tables, the status bar and
      selection.
    - Keep the `data-theme` mechanism in theme.ts. File: styles.css:2-49.
+   - **Done 2026-09-25.** Every colour in the §2 table is a token, in both modes, checked against
+     pixels of the legacy window: window, text, rules, inputs, accent, selection, tables, status
+     bar, popups, the Mode card, the section strip, the mode, toggle and positive buttons, and the
+     scrollbars. The OS still decides until the user chooses.
 5. **Density and buttons.**
    - A 12px base (about 9pt) and 13px bold section titles.
    - Buttons get accent text, padding 4px 8px, radius 4, and accent tints for hover and checked.
    - Add mode, accent and positive button classes from theme.py:215-359. File: styles.css:161-169.
+   - **Done 2026-09-25**, as legacy's QPushButton, QLineEdit, QComboBox, QCheckBox, QSlider,
+     QGroupBox, QTableView and QScrollBar rules. Base 12px Segoe UI (1rem is now 12px, so spacing
+     tightened to legacy's density). Radios and checkboxes had been stretched 6rem wide by a
+     `fieldset input` rule, which is what spread the tool and format lists across the column.
+     `.button--positive` exists; the Load and Save All buttons adopt it in step 13.
 6. **Left column.**
    - A Mode Controls card: a 3x2 grid of 90x28 toggles with legacy's labels, then Hotkeys.
    - A "Settings" label, then Global and Image tabs with legacy's section names and order
@@ -231,6 +240,11 @@ Solid colours with black bold text (sequence_widget.py:173-202, 268-305, 517-550
    - The labels change, so test/acceptance/harness.tsx:111 and test/hotkeys/wired.test.tsx:69 need
      updating.
    - Crop moves into Border Crop (control_panel.py:500). Pan and None have no legacy button.
+   - **Done 2026-09-25** (`shell/ModeControls.tsx`, `shell/Tabs.tsx`). Keys in the labels come from
+     the user's bindings. Edit (R) is "no drawing tool", which is also the starting state. Pan
+     sits beside Hotkeys; Draw crop is in Border Crop. Undo and Redo stay in the card: legacy
+     has no buttons for them, but the labelled buttons say what would be undone. Both tabs stay
+     mounted, because Image Adjustments holds the zoom keys.
 7. **Right column.**
    - In order: file list, segments, then classes (right_panel.py:106-201).
    - Segments: "Filter Class:", columns Segment ID/Class ID/Alias, whole rows in the class colour,
@@ -241,10 +255,14 @@ Solid colours with black bold text (sequence_widget.py:173-202, 268-305, 517-550
 8. **Section chrome.**
    - A 20px strip header: the text colour at .04, .08 on hover, radius 3, and no card border.
    - Only the Mode card has a border, radius 6. Files: Panel.tsx, styles.css:294-330.
+   - **Done 2026-09-25**, with legacy's ▼/▶ in a 16px column.
 9. **Status bar.**
    - Pinned at 25px on the legacy background.
    - A pill toggle that keeps its "Switch to …" label, and the device name in green when on the GPU
      (status_bar.py:20-76, 87-143, 234-254).
+   - **Done 2026-09-25.** The summary is centred, green when saved, orange while unsaved and red
+     when the load failed. The AI label is green when the model can run. The pill shows the theme
+     in force; its accessible name still says what pressing it does.
 10. **Timeline.**
     - One gapless 30-40px bar on the §2 background, with a #2196f3 current-frame triangle.
     - A zoom/pan/Clear Flags/Sort row below it.

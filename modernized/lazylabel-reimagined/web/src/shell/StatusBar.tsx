@@ -72,23 +72,26 @@ export function StatusBar({
 }: StatusBarProps): ReactNode {
   return (
     <footer className="status-bar" aria-label="Status">
-      {/* Far left, where legacy puts it. */}
+      {/* Far left, where legacy puts it, and drawn as legacy's pill: the knob shows the theme IN
+          FORCE (a moon on the right when dark), which is what a glance at a switch reads. */}
       {theme !== undefined && (
         <button
           type="button"
-          className="theme-toggle"
+          className={`theme-toggle theme-toggle--${theme.switchesTo === "light" ? "dark" : "light"}`}
           onClick={theme.onToggle}
           // The label says what pressing it DOES, not what is currently showing. "Dark mode" on a
           // button is ambiguous about which way it goes, and a screen-reader user cannot glance.
           aria-label={`Switch to ${theme.switchesTo} theme`}
         >
-          {theme.switchesTo === "light" ? "☀" : "☾"}
+          <span className="theme-toggle__knob" aria-hidden="true">
+            {theme.switchesTo === "light" ? "☾" : "☀"}
+          </span>
         </button>
       )}
 
-      <span className="status-bar__image">{summarize(image, cropped)}</span>
-
-      <span className="status-bar__spacer" />
+      {/* Centred and coloured, where legacy shows "Loaded: ..." -- green once saved, orange while
+          there is unsaved work (status_bar.py:87-95). */}
+      <span className={`status-bar__image${imageTone(image)}`}>{summarize(image, cropped)}</span>
 
       {healthError != null ? (
         <span className="status-bar__item status-bar__item--error">Server unreachable</span>
@@ -110,11 +113,23 @@ export function StatusBar({
             </span>
           )}
 
-          <span className="status-bar__item">{describeAi(health.ai)}</span>
+          {/* Legacy's device label: green on a GPU, grey without one (status_bar.py:234-254). */}
+          <span
+            className={`status-bar__item status-bar__device${health.ai.available ? " status-bar__item--good" : ""}`}
+          >
+            {describeAi(health.ai)}
+          </span>
         </>
       )}
     </footer>
   );
+}
+
+/** The summary's colour: none with no image, then failed, unsaved or saved. */
+function imageTone(image: ImageState | null): string {
+  if (image === null) return "";
+  if (image.provenance === "failed") return " status-bar__image--failed";
+  return image.dirty ? " status-bar__image--unsaved" : " status-bar__image--saved";
 }
 
 /**

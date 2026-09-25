@@ -23,7 +23,7 @@ describe("C7: classes and names", () => {
   it("gives a new annotation the next free class id", async () => {
     // Zero on an empty image, which is why LazyLabel datasets are zero-based.
     await openImage();
-    chooseTool("Polygon");
+    chooseTool("Poly (2)");
 
     drawTriangle(10, 10);
 
@@ -32,7 +32,7 @@ describe("C7: classes and names", () => {
 
   it("names a class, and the name reaches the save", async () => {
     const { saveAnnotations } = await openImage();
-    chooseTool("Polygon");
+    chooseTool("Poly (2)");
     drawTriangle(10, 10);
 
     const field = await screen.findByLabelText(/Name for class 0/);
@@ -48,7 +48,7 @@ describe("C7: classes and names", () => {
     // A blank alias would export as "" where the id belongs, which looks like a name and is not.
     // Legacy stores the blank.
     const { saveAnnotations } = await openImage();
-    chooseTool("Polygon");
+    chooseTool("Poly (2)");
     drawTriangle(10, 10);
 
     const field = await screen.findByLabelText(/Name for class 0/);
@@ -71,7 +71,7 @@ describe("C7: classes and names", () => {
     // Sent explicitly rather than omitted, for the same reason as the crop: a field the client
     // leaves out is a decision it has silently handed to the server's default.
     const { saveAnnotations } = await openImage();
-    chooseTool("Polygon");
+    chooseTool("Poly (2)");
     drawTriangle(10, 10);
 
     fireEvent.click(writeButton());
@@ -88,7 +88,7 @@ describe("C7: classes and names", () => {
     // segments present. It is a content rule, so the client does not get to state it — and the
     // way to be sure of that is that the field is not in the request at all.
     const { saveAnnotations } = await openImage();
-    chooseTool("Polygon");
+    chooseTool("Poly (2)");
     drawTriangle(10, 10);
 
     fireEvent.click(writeButton());

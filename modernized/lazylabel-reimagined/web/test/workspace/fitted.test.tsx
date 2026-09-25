@@ -138,6 +138,8 @@ describe("the open image fills its pane", () => {
     const canvas = await openedCanvas();
     await waitFor(() => expect(shown(canvas)[0]).toBeCloseTo(928));
 
+    // The zoom buttons are in Image Adjustments, on the left column's Image tab.
+    fireEvent.click(screen.getByRole("tab", { name: "Image" }));
     fireEvent.click(screen.getByRole("button", { name: "Zoom in" }));
 
     await waitFor(() => expect(shown(canvas)[0]).toBeCloseTo(1856));
