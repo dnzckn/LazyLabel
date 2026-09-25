@@ -48,9 +48,9 @@ segmenting an unprocessed picture, and large colour images refused. Each is belo
 12 megapixels, warm. Anything touching the inference path is worth one more such run; the note on
 running the stack says how.
 
-Of Phase 6's five exit criteria: **1, 2, 3 and 5 are met**. Criterion 2 is met on the synthetic
-clip the owner chose in place of a recording. **Criterion 4 waits on the acceptance corpus**, and
-its harness has been run: exit 2 says nothing was compared, which is not a pass.
+**All five of Phase 6's exit criteria are met.** Two are met on synthetic data the owner chose in
+place of real data: criterion 2 on a clip of moving shapes, and criterion 4 on a generated
+acceptance corpus (2026-09-25; "What to do next", item 2, has the detail).
 
 Every guard this project uses is closed or its remainder recorded: no unread settings, five
 unreached functions across the TypeScript and Python reach guards, each with a written reason
@@ -80,10 +80,10 @@ missing from this table entirely, which is how a table stops being a census.
 
 | Package | Passing | Note |
 |---|---|---|
-| exporters | 1991 | the seven formats, byte-for-byte against goldens legacy wrote |
+| exporters | 1991 | the seven formats, byte-for-byte against goldens legacy wrote; rerun 2026-09-25 |
 | web | 1260 | rerun 2026-09-25 after the visual parity work (104 files); includes the four propagation-golden scenarios (16 tests against legacy's own sequence mode), the tile planning and legacy's reference buttons |
 | inference | 605 | plus 45 skipped: the differentials and the golden comparison, which need real checkpoints. With them: 650 passed, 0 skipped. Both on CPython 3.12.11 with PyTorch 2.10, which the package has required since 2026-09-23 |
-| api | 440 | plus 4 skipped (SEC-09's symlink tests, where the OS will not make a link, as on this machine); no todo left, since C8 is built |
+| api | 478 | rerun 2026-09-25 with the acceptance corpus (36 files); plus 4 skipped (SEC-09's symlink tests, where the OS will not make a link, as on this machine); no todo left, since C8 is built |
 | settings-schema | 55 | includes the rule-fixed defaults |
 | converter | 30 | the pickled-alias rewrite |
 | contracts | 36 | the wire shapes both sides agree on, and the tile pyramid's geometry |
@@ -523,7 +523,15 @@ configured, so a green CI run says nothing about them — see `Running the live 
   every suite passed on 3.12.11 with PyTorch 2.10.0, and both floors are raised (SEC-08, below).
 - **Propagation goldens come from a synthetic clip** of moving shapes, since no real recording is
   available.
-- **The acceptance corpus is not available yet**; criterion 4 stays open.
+- **The acceptance corpus is simulated** (2026-09-25): "simulate the round trip, have multiple
+  shapes/segments/classes and play with the priority setting to ensure expected behaviors across
+  the variety of save formats". **Done**, item 2 below.
+- **Two mains for now** (2026-09-25): "i want to maintain support to both, pyqt6 and react/node
+  architectures so we have effectively two mains for now". `main` stays the PyQt6 app and
+  `main-web` the React/Node app. Nothing is merged, and `main-web` has not been pushed.
+- **Backups and pickled datasets: not needed**, the owner's answer of 2026-09-25. That answer
+  predates a finding, though: every NPZ the desktop app writes pickles its class names (item 2), so
+  any dataset the PyQt6 app saves needs the converter before the web app can read its names.
 - **Docker is skipped for now**; the deployment stays unverified, and says so.
 - **The backup refs from stripping co-author trailers are deleted**
   (`backup/main-web-with-trailers`, `refs/original/refs/heads/main-web`).
@@ -601,18 +609,45 @@ configured, so a green CI run says nothing about them — see `Running the live 
    The golden's web test now sets up exactly what legacy's capture did: the labelled frames have
    their sidecars from the start, and frame 8 is marked by hand.
 
-Everything else that can be done without the owner has been done. One item needs something only
-the owner can supply, and it is one command once it arrives:
+2. **The acceptance corpus: Phase 6 exit criterion 4, met on a synthetic corpus (2026-09-25).**
+   The owner chose this in place of real datasets.
+   `api/tools/generate_acceptance_corpus.py` writes ten randomized images:
+   - polygons, circles, AI masks and loaded masks over two to five classes;
+   - shapes overlapping on purpose, with 8 of the 10 images having overlapping classes;
+   - names for some classes, non-ASCII among them.
 
-2. **Run the acceptance corpus** — Phase 6 exit criterion 4. Needs a folder whose immediate
-   subfolders are datasets with their sidecars beside their images.
+   Legacy's own save path writes them once per pixel-priority setting (off, ascending,
+   descending), in all seven formats. The same script records what legacy writes when it opens
+   each image and saves it again: the oracle. Every archive is then converted by the real
+   converter, in-process, because a dataset reaches the web app converted.
+   `api/test/acceptance/corpus.test.ts` holds the port to two claims, over every image, format and
+   setting:
+   - **The same annotations saved give what legacy wrote.** 30 of 30. With priority forced off,
+     exactly the 16 cases where priority changes the answer fail, so the test can see it.
+   - **Opening an image and saving it again gives what legacy writes.** 30 of 30, all seven
+     formats. So does the command: `npm run acceptance -- <corpus> --oracle <legacy re-saves>`
+     exits 0.
 
-   ```
-   cd modernized/lazylabel-reimagined/api && npm run acceptance -- <corpus-root>
-   ```
+   **Three findings on the way.**
+   - **Legacy's own files do not survive legacy's own round trip.** Its NPZ holds one mask per
+     class, so opening an image merges a class's instances. On the corpus, all 150 instance-format
+     files (YOLO, YOLO segmentation, COCO, Pascal VOC, CreateML) change, and one NPZ loses a class
+     that priority had covered completely. So "re-exports identically" was never true of the
+     desktop app, and the claim that matters is the one above: the web app does exactly what the
+     desktop app does. The harness compared against the original files and could never have passed
+     on a dataset with more than one shape per image; `--oracle` fixes that.
+   - **Every NPZ the desktop app writes pickles its class names**, not only old ones:
+     `np.savez_compressed(..., class_aliases=dict)` stores a dict as an object array. Every dataset
+     the PyQt6 app saves therefore needs `lazylabel-convert-aliases` before the web app can read
+     its names. The masks load either way.
+   - **The harness compared NPZ bytes**, which cannot match by design: the port stores the names as
+     JSON. It now compares every member's dtype, shape and values, and the names as JSON, which is
+     how Phase 1's goldens were always compared. Its advice named a command that does not exist
+     (`python -m lazylabel_converter`); it now names `lazylabel-convert-aliases`.
 
-   Exit 0 is a pass and reports how many files were compared; exit 1 means files differed; **exit 2
-   means nothing was compared at all**, which is not a pass and was reported as one until today.
+   For a real corpus, if one ever comes: convert its archives into a copy of it, then run the same
+   command. Without `--oracle`, differences in the instance formats on images with several shapes
+   are legacy's behaviour, not the port's.
 
 The three decisions this list used to end with are answered, above: Ctrl+Plus keeps zooming, the
 timeline keeps legacy's behaviour, and image tiles get built. The measurement that framed the tiles

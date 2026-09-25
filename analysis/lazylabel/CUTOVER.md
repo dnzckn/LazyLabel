@@ -59,21 +59,30 @@ cd modernized/lazylabel-reimagined/api && npm run acceptance -- /path/to/corpus
 
 Each of these is checkable, and none of them is an opinion.
 
-- [ ] **Every Phase 6 exit criterion is met.** They are listed in `MODERNIZATION_BRIEF.md` §3 and
-      tracked in `PROGRESS.md`. This document assumes that and does not restate it.
-- [ ] **The acceptance corpus round-trips.** `npm run acceptance` over the real datasets, with
-      zero differences, zero unreadable files and zero needing the converter. Anything it reports
-      is a dataset that would change on its first save in the new app.
+- [x] **Every Phase 6 exit criterion is met.** They are listed in `MODERNIZATION_BRIEF.md` §3 and
+      tracked in `PROGRESS.md`. This document assumes that and does not restate it. Met
+      2026-09-25, criteria 2 and 4 on synthetic data the owner chose.
+- [x] **The acceptance corpus round-trips.** Met 2026-09-25 on the synthetic corpus the owner
+      chose (`api/test/fixtures/acceptance-corpus`, run by `api/test/acceptance/corpus.test.ts`):
+      every file the web app writes, on a fresh save or on opening and saving again, is what the
+      desktop app writes. For real datasets: `npm run acceptance -- <corpus> --oracle
+      <legacy re-saves>`. Without the oracle, instance-format differences on images with several
+      shapes are the desktop app's own behaviour on reopening, not the web app's.
 - [ ] **Every dataset with pickled aliases has been converted**, and the converted copies are the
       ones in use. The round-trip above is what proves it; the converter's own summary is what
-      tells you which files it refused.
+      tells you which files it refused. **Every NPZ the desktop app writes pickles its class
+      names**, so this means every dataset it has saved, and every one it saves while both apps are
+      in use (the owner keeps both, 2026-09-25). The owner answered "not needed" before that was
+      known.
 - [ ] **The live differential suites have been run with real checkpoints**, not just CI. They skip
       themselves when no checkpoint is configured, so a green CI run says nothing about them —
       `PROGRESS.md` has the command and the expected counts.
-- [ ] **The deployment has been built and run.** Everything under `modernized/lazylabel-reimagined/
+- [ ] **The deployment has been built and run.** Skipped for now, the owner's choice
+      (2026-09-23, confirmed 2026-09-25). Everything under `modernized/lazylabel-reimagined/
       deploy/` is currently reasoned rather than observed; its README says so and names what to
       check first. That has to stop being true before anyone depends on it.
-- [ ] **A backup of the dataset folder exists.** Not because the web app deletes anything — decision
+- [x] **A backup of the dataset folder exists.** The owner's answer, 2026-09-25: not needed, the
+      backups exist. Not because the web app deletes anything — decision
       7 is a list of things that must not happen without an explicit act — but because this is the
       first time a different program will write these files, and the cheapest insurance against
       being wrong about that is a copy.
