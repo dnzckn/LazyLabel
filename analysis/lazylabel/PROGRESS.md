@@ -1370,6 +1370,20 @@ expensive to be wrong about.
 
 ## What running the app found that the tests did not
 
+**2026-09-25, propagation through the restyled Sequence tab, against the real stack** (SAM 2.1
+large on the GPU, the synthetic clip). The result matched the golden:
+- frame 8 was the reference, frames 2 and 11 were flagged, and 21 frames propagated;
+- "Save 21 frames" sat beside the bar and wrote 21 NPZ and 21 YOLO files;
+- nothing was written for the flagged frames, and the reference was untouched.
+
+It found one defect. The new "Sequence Mode:" header named the timeline's first frame while the
+view showed the open image. The timeline now follows the open image when that image is one of its
+frames, as legacy's does (6679e27).
+
+It also found that the Vite dev server can keep a stale transform when a file is written twice in
+quick succession: the page ran code without the Save portal. That is not a code defect, since the
+tests and the build read the file itself. Touching the file fixes it.
+
 Eight defects in one session, none of which a unit test could have caught, and it is worth being
 explicit about the shapes because they keep recurring — three of them turned up in Phase 6 work
 after the lesson had been written down.
