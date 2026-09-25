@@ -478,6 +478,73 @@ thead th {
   font-weight: normal;
 }
 
+/* Legacy's file manager header row: search, then the list's controls (fast_file_manager.py:58,
+   1143-1213). */
+.dataset__toolbar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0 0 4px;
+}
+
+.dataset__search {
+  flex: 1;
+  min-width: 0;
+}
+
+.dataset__sort select {
+  max-width: 8.5rem;
+}
+
+.dataset__columns {
+  position: relative;
+}
+
+.dataset__columns > summary {
+  list-style: none;
+  padding: 3px 8px;
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  color: var(--accent);
+  cursor: pointer;
+}
+
+.dataset__columns > summary::-webkit-details-marker {
+  display: none;
+}
+
+.dataset__columns-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 2px);
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 11rem;
+  padding: 6px;
+  background: var(--popup);
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.3);
+}
+
+.dataset__columns-menu label {
+  margin: 0;
+  white-space: nowrap;
+}
+
+/* The totals row under the list (fast_file_manager.py:1110). */
+.dataset tfoot th,
+.dataset tfoot td {
+  border-top: 2px solid var(--rule);
+  font-weight: 600;
+}
+
+.dataset__unrecognized {
+  color: var(--caution);
+}
+
 /* A name reads as the row's text, as in legacy's file table; the whole name is still a button. */
 .dataset button,
 .dataset button:hover:not(:disabled),
@@ -1645,16 +1712,6 @@ fieldset input[type="text"] {
 .field__value {
   font-variant-numeric: tabular-nums;
   color: var(--muted);
-}
-
-/* The column switches, folded away above the dataset table. A <details> rather than a row of
-   checkboxes: seven switches above a table push the table itself below the fold. */
-.dataset__columns {
-  margin-bottom: 0.4rem;
-}
-
-.dataset__columns label {
-  margin-right: 0.75rem;
 }
 
 /* The Modified and Size cells: right-aligned and tabular, so dates and sizes line up down the

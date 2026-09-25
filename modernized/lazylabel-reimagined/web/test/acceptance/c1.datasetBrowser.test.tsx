@@ -6,7 +6,7 @@
  * legacy never told anyone, and opening an image so its annotations actually load.
  */
 
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { WireDatasetListing } from "@lazylabel/contracts";
 
@@ -120,6 +120,34 @@ describe("C1: the dataset browser", () => {
   it("says how many images are already annotated", async () => {
     show();
     await waitFor(() => expect(screen.getByText(/2 images, 1 already annotated/)).toBeTruthy());
+  });
+
+  it("totals each format under the list, as legacy's footer does", async () => {
+    show();
+    await waitFor(() => expect(screen.getByText("a.png")).toBeTruthy());
+
+    const footer = document.querySelector(".dataset tfoot tr")!;
+    expect(footer.querySelector("th")?.textContent).toBe("2 images, 1 already annotated");
+    // .npz and .txt, then the Modified and Size columns, which have nothing to total.
+    expect([...footer.querySelectorAll("td")].map((cell) => cell.textContent)).toEqual([
+      "1",
+      "0",
+      "",
+      "",
+    ]);
+  });
+
+  it("narrows the list to the names that match the search, as legacy's Search files does", async () => {
+    show();
+    await waitFor(() => expect(screen.getByText("a.png")).toBeTruthy());
+
+    fireEvent.change(screen.getByLabelText("Search files"), { target: { value: "B.P" } });
+
+    expect(screen.queryByRole("button", { name: "a.png" })).toBeNull();
+    expect(screen.getByRole("button", { name: "b.png" })).toBeTruthy();
+
+    fireEvent.change(screen.getByLabelText("Search files"), { target: { value: "" } });
+    expect(screen.getByRole("button", { name: "a.png" })).toBeTruthy();
   });
 
   it("marks present and absent sidecars so a screen reader can tell them apart", async () => {

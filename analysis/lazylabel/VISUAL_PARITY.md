@@ -284,6 +284,10 @@ Solid colours with black bold text (sequence_widget.py:173-202, 268-305, 517-550
       TimelinePanel.tsx:409-443.
 11. **File list.** A search box, striped rows, the open row highlighted in rgba(100,100,200,.5), bold
     headers, ✓ marks, and a totals footer.
+    - **Done 2026-09-25.** Search, sort order and a Columns dropdown in one toolbar row; ✓ where a
+      file is and nothing where it is not (the marks keep their present/absent labels); a footer
+      with the image and annotated counts and a total per format. The table fits the 350px column
+      without scrolling sideways. The heading is for screen readers only.
 12. **Slider rows.** A right-aligned 80px label, a 45px editable value, then the slider
     (adjustments_widget.py:41-61). Files: AdjustmentsPanel.tsx:151-153, styles.css:460-477.
 13. **Sequence buttons** in the §2 colours. Files: PropagationControl.tsx, TimelinePanel.tsx:445-470.

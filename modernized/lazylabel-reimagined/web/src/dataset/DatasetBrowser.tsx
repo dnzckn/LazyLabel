@@ -135,8 +135,8 @@ export function DatasetBrowser({
   const folders = listing.folders ?? [];
 
   return (
-    <section>
-      <h2>Images</h2>
+    <section className="dataset-browser">
+      <h2 className="visually-hidden">Images</h2>
 
       <nav className="crumbs" aria-label="Folder">
         <button type="button" onClick={() => setHere("")} disabled={here === ""}>
@@ -168,18 +168,12 @@ export function DatasetBrowser({
         </ul>
       )}
 
-      <p>
-        {listing.images.length} images, {listing.annotatedCount} already annotated
-        {listing.unrecognized > 0 && (
-          <>
-            {" — "}
-            <span role="status">
-              {listing.unrecognized} file{listing.unrecognized === 1 ? "" : "s"} were not recognized
-              as images or annotations
-            </span>
-          </>
-        )}
-      </p>
+      {listing.unrecognized > 0 && (
+        <p role="status" className="dataset__unrecognized">
+          {listing.unrecognized} file{listing.unrecognized === 1 ? "" : "s"} were not recognized as
+          images or annotations
+        </p>
+      )}
 
       {listing.images.length === 0 ? (
         <p>
@@ -220,7 +214,12 @@ function ColumnedTable({
 
   const rawOrder = Number(settings.values["file_manager_sort_order"]);
   const order = Number.isInteger(rawOrder) ? rawOrder : 0;
-  const rows = sortImages(listing.images, order);
+  // Legacy's "Search files..." (fast_file_manager.py:1143-1213): a view of the list, by name.
+  const [query, setQuery] = useState("");
+  const needle = query.trim().toLowerCase();
+  const rows = sortImages(listing.images, order).filter(
+    (image) => needle === "" || image.name.toLowerCase().includes(needle),
+  );
   const showModified = settings.values["file_manager_show_modified"] !== false;
   const showSize = settings.values["file_manager_show_size"] !== false;
 
@@ -229,8 +228,17 @@ function ColumnedTable({
         {/* RULE-036's ten column settings, none of which had a reader -- the table showed every
             format the API reported and a user could not hide one. On a folder whose images carry
             two of the seven formats, five columns are a field of dots. */}
-        <label className="crop__field dataset__sort">
-          <span>Order</span>
+        <div className="dataset__toolbar">
+        <input
+          type="search"
+          className="dataset__search"
+          value={query}
+          placeholder="Search files…"
+          aria-label="Search files"
+          onChange={(event) => setQuery(event.target.value)}
+        />
+        <label className="dataset__sort">
+          <span className="visually-hidden">Order</span>
           <select
             value={order}
             aria-label="Sort order"
@@ -252,6 +260,8 @@ function ColumnedTable({
 
         <details className="dataset__columns">
           <summary>Columns</summary>
+          {/* A dropdown, as legacy's 30px column menu is, so opening it does not push the list. */}
+          <div className="dataset__columns-menu">
           {/* The two detail columns sit with the format ones: to a user they are all "columns",
               and separating them by what they cost the server would be exposing an implementation
               detail as a category. */}
@@ -290,7 +300,9 @@ function ColumnedTable({
               {column.suffix}
             </label>
           ))}
+          </div>
         </details>
+        </div>
 
         <table className="dataset">
           <thead>
@@ -325,7 +337,7 @@ function ColumnedTable({
                 {shown.map((column) => (
                   <td key={column.format}>
                     <span aria-label={image.sidecars[column.format] ? "present" : "absent"}>
-                      {image.sidecars[column.format] ? "●" : "·"}
+                      {image.sidecars[column.format] ? "✓" : ""}
                     </span>
                   </td>
                 ))}
@@ -334,6 +346,21 @@ function ColumnedTable({
               </tr>
             ))}
           </tbody>
+          {/* Legacy's totals row: how many images, and how many have each format. */}
+          <tfoot>
+            <tr>
+              <th scope="row">
+                {listing.images.length} images, {listing.annotatedCount} already annotated
+              </th>
+              {shown.map((column) => (
+                <td key={column.format}>
+                  {listing.images.filter((image) => image.sidecars[column.format]).length}
+                </td>
+              ))}
+              {showModified && <td />}
+              {showSize && <td />}
+            </tr>
+          </tfoot>
         </table>
     </>
   );
