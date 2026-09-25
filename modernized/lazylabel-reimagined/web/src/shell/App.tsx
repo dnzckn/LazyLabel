@@ -15,6 +15,7 @@ import type { WireDatasetImage } from "@lazylabel/contracts";
 
 import { CAPABILITIES } from "../capabilities.js";
 import { DatasetBrowser } from "../dataset/DatasetBrowser.jsx";
+import { ExportFormats } from "../dataset/ExportFormats.jsx";
 import { NotificationHost } from "../notifications/NotificationProvider.jsx";
 import { OpenImageView } from "../workspace/OpenImageView.jsx";
 import { AdjustmentsPanel } from "../workspace/AdjustmentsPanel.jsx";
@@ -52,6 +53,9 @@ export function App({ client }: { readonly client: ApiClient }): ReactNode {
   const [healthError, setHealthError] = useState<string | null>(null);
   const [showHotkeys, setShowHotkeys] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  // The capability table: for whoever is checking this build, not for labelling, so it lives in a
+  // dialog rather than a panel beside the work (legacy has none).
+  const [showAbout, setShowAbout] = useState(false);
   // From the store, not held here: the status bar is one reader of this among several.
   const { imageState, openImage, open, crop } = useWorkspace();
   // The folder as the browser listed it, so the sequence timeline builds from the same answer
@@ -149,7 +153,7 @@ export function App({ client }: { readonly client: ApiClient }): ReactNode {
   return (
     // Inert behind the hotkey dialog, so Tab cannot walk out of it into a page that would then
     // take the keystrokes the dialog exists to capture.
-    <main className="app" inert={showHotkeys || showSettings}>
+    <main className="app" inert={showHotkeys || showSettings || showAbout}>
       <NotificationHost />
       {/* Renders nothing. It asks `onClose` whether closing this tab would lose work, and arms the
           browser's own dialog when it would -- decision 7's last silent path. */}
@@ -225,8 +229,12 @@ export function App({ client }: { readonly client: ApiClient }): ReactNode {
                             {Object.keys(state.settings.hotkeys).length} hotkeys.
                           </p>
                         )}
+                        <ExportFormats />
                         <button type="button" onClick={() => setShowSettings(true)}>
                           Edit settings
+                        </button>{" "}
+                        <button type="button" onClick={() => setShowAbout(true)}>
+                          What is built
                         </button>
                       </Panel>
                     </>
@@ -255,6 +263,32 @@ export function App({ client }: { readonly client: ApiClient }): ReactNode {
             {showSettings && (
               <Dialog title="Settings" onClose={() => setShowSettings(false)}>
                 <SettingsEditor />
+              </Dialog>
+            )}
+            {showAbout && (
+              <Dialog title="What is built" onClose={() => setShowAbout(false)}>
+                <table className="capabilities">
+                  <thead>
+                    <tr>
+                      <th scope="col">Capability</th>
+                      <th scope="col">In the web app</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {CAPABILITIES.map((entry) => (
+                      <tr key={entry.id}>
+                        <th scope="row">
+                          {entry.id} · {entry.summary}
+                        </th>
+                        <td>
+                          {entry.webStatus === "built" && "built"}
+                          {entry.webStatus === "not-this-service" && "not the web app's"}
+                          {entry.webStatus === "pending" && `${entry.webPhase}: ${entry.missing}`}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </Dialog>
             )}
             {/* In a dialog, because the editor needs the width legacy's gave it and this column is
@@ -321,30 +355,6 @@ export function App({ client }: { readonly client: ApiClient }): ReactNode {
               <ClassTable />
             </Panel>
 
-            <Panel title="What is built" initiallyCollapsed>
-        <table className="capabilities">
-          <thead>
-            <tr>
-              <th scope="col">Capability</th>
-              <th scope="col">In the web app</th>
-            </tr>
-          </thead>
-          <tbody>
-            {CAPABILITIES.map((entry) => (
-              <tr key={entry.id}>
-                <th scope="row">
-                  {entry.id} · {entry.summary}
-                </th>
-                <td>
-                  {entry.webStatus === "built" && "built"}
-                  {entry.webStatus === "not-this-service" && "not the web app's"}
-                  {entry.webStatus === "pending" && `${entry.webPhase}: ${entry.missing}`}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-            </Panel>
           </>
         }
       />

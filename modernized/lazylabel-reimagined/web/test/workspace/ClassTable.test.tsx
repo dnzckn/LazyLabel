@@ -30,13 +30,14 @@ const of = (...ids: number[]): WireSegment[] =>
   ids.map((classId) => ({ type: "Polygon", classId, vertices: [[0, 0], [1, 0], [1, 1]] }) as WireSegment);
 
 function Probe(): React.ReactNode {
-  const { openImage, segments, classAliases, history } = useWorkspace();
+  const { openImage, segments, classAliases, history, activeClassId } = useWorkspace();
   return (
     <>
       <button type="button" onClick={() => openImage(IMAGE_ROW)}>open</button>
       <button type="button" onClick={() => history.undo()}>undo</button>
       <p data-testid="classes">{segments.map((s) => s.classId).join(",")}</p>
       <p data-testid="aliases">{JSON.stringify(classAliases)}</p>
+      <p data-testid="active">{String(activeClassId)}</p>
     </>
   );
 }
@@ -193,5 +194,32 @@ describe("renumbering", () => {
 
     await waitFor(() => expect(shown("classes")).toBe("1,0"));
     expect(screen.queryByText(/more than one meaning/)).toBeNull();
+  });
+});
+
+/* Legacy sets the class new annotations get by clicking it in this table, and shows it in bold with
+   a marker. Until 2026-09-25 nothing on screen could set it; only the X key toggled it. */
+describe("the active class", () => {
+  const use = (classId: number) =>
+    screen.getByRole("button", { name: `Draw new annotations as class ${classId}` });
+
+  it("is chosen by clicking a class, and marked", async () => {
+    await mount(of(2, 5));
+
+    fireEvent.click(use(5));
+
+    expect(shown("active")).toBe("5");
+    expect(use(5).getAttribute("aria-pressed")).toBe("true");
+    expect(use(5).closest("tr")?.className).toContain("classes__row--active");
+    expect(use(2).getAttribute("aria-pressed")).toBe("false");
+  });
+
+  it("goes back to the next free id when the active class is clicked again", async () => {
+    await mount(of(2, 5));
+    fireEvent.click(use(5));
+
+    fireEvent.click(use(5));
+
+    expect(shown("active")).toBe("null");
   });
 });

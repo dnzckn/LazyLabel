@@ -19,7 +19,8 @@ import { useNotifications } from "../notifications/NotificationProvider.jsx";
 import { useWorkspace } from "./WorkspaceProvider.jsx";
 
 export function ClassTable(): ReactNode {
-  const { segments, classAliases, setClassAlias, applyClasses } = useWorkspace();
+  const { segments, classAliases, setClassAlias, applyClasses, activeClassId, setActiveClassId } =
+    useWorkspace();
   const { notify } = useNotifications();
 
   /** The user's arrangement, or null while they have not moved anything. */
@@ -84,25 +85,29 @@ export function ClassTable(): ReactNode {
 
   return (
     <>
+      <p className="classes__label">Class Order:</p>
+      {/* Legacy's class table (right_panel.py:172-201): the name, then the id, each row in its
+          class's colour, and the ACTIVE class -- the one new annotations get -- in bold with a
+          marker (295-314). Clicking a class makes it active, as in legacy; clicking it again goes
+          back to the next free id. */}
       <table className="classes">
         <thead>
           <tr>
-            <th scope="col">Class</th>
-            <th scope="col">Name</th>
-            <th scope="col">Order</th>
+            <th scope="col">Alias</th>
+            <th scope="col">Class ID</th>
+            <th scope="col">
+              <span className="visually-hidden">Order</span>
+            </th>
           </tr>
         </thead>
         <tbody>
           {shown.map((classId, position) => (
-            <tr key={classId}>
-              <th scope="row">
-                <span className="swatch" style={{ background: swatch(classId) }} aria-hidden="true" />{" "}
-                {classId}
-                {/* What Reassign would make it. Shown only when it differs, so the column is a
-                    warning rather than a repetition. */}
-                {classId !== position && <span className="classes__to"> → {position}</span>}
-              </th>
-              <td>
+            <tr
+              key={classId}
+              className={`class-row${activeClassId === classId ? " classes__row--active" : ""}`}
+              style={{ backgroundColor: swatch(classId) }}
+            >
+              <td className="classes__alias">
                 <input
                   type="text"
                   value={classAliases[String(classId)] ?? ""}
@@ -111,7 +116,21 @@ export function ClassTable(): ReactNode {
                   onChange={(event) => setClassAlias(classId, event.target.value)}
                 />
               </td>
-              <td>
+              <th scope="row">
+                <button
+                  type="button"
+                  className="classes__use"
+                  aria-pressed={activeClassId === classId}
+                  aria-label={`Draw new annotations as class ${classId}`}
+                  onClick={() => setActiveClassId(activeClassId === classId ? null : classId)}
+                >
+                  {classId}
+                </button>
+                {/* What Reassign would make it. Shown only when it differs, so the column is a
+                    warning rather than a repetition. */}
+                {classId !== position && <span className="classes__to"> → {position}</span>}
+              </th>
+              <td className="classes__order">
                 {/* Buttons rather than drag-and-drop: a reorder that only works with a mouse is a
                     reorder half the users cannot perform, and this one changes the exported file. */}
                 <button

@@ -166,8 +166,8 @@ describe("the application shell", () => {
     mount({});
     await waitFor(() => expect(screen.getByRole("button", { name: /What is built/ })).toBeTruthy());
 
-    // The table lives in a panel that starts closed, so the reference is out of the way without
-    // being gone.
+    // The table lives in a dialog opened from Application Settings, so the reference is out of the
+    // way of the work without being gone.
     screen.getByRole("button", { name: /What is built/ }).click();
 
     await waitFor(() =>

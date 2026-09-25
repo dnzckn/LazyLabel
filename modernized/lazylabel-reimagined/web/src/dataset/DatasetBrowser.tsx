@@ -28,7 +28,6 @@ import type {
 } from "@lazylabel/contracts";
 
 import { useWorkspace } from "../workspace/WorkspaceProvider.jsx";
-import { ExportFormats } from "./ExportFormats.jsx";
 
 import type { AnnotationsResult, ApiClient } from "../api/client.js";
 import { useSettings } from "../settings/SettingsProvider.jsx";
@@ -193,8 +192,7 @@ export function DatasetBrowser({
       ) : (
         <ColumnedTable listing={listing} openState={openState} openImage={openImage} />
       )}
-
-      <ExportFormats />
+      {/* The formats to write are in Application Settings, where legacy's Export Formats is. */}
     </section>
   );
 }

@@ -14,7 +14,7 @@
  * its target is not the active class the tooltip claims (RULE-019).
  */
 
-import { useCallback, type ReactNode } from "react";
+import { useCallback, useState, type ReactNode } from "react";
 
 import type { WireSegment } from "@lazylabel/contracts";
 
@@ -24,8 +24,11 @@ import { useWorkspace } from "./WorkspaceProvider.jsx";
 import { useHotkey } from "../hotkeys/HotkeyProvider.jsx";
 
 export function SegmentTable(): ReactNode {
-  const { segments, selected, toggleSelected, setSelection, clearSelection, applySegments } =
+  const { segments, selected, toggleSelected, setSelection, clearSelection, applySegments, classAliases } =
     useWorkspace();
+  // Legacy's "Filter Class:" (right_panel.py:126-140). A view of the list, not a selection: the
+  // positions every action takes are still positions in the whole list.
+  const [filter, setFilter] = useState("all");
 
   const onMerge = useCallback(() => {
     applySegments(merge(segments, selected).segments, "Merge");
@@ -74,21 +77,56 @@ export function SegmentTable(): ReactNode {
 
   const target = selected.length > 0 ? mergeTarget(segments, selected) : null;
 
+  const classes = [...new Set(segments.map((segment) => segment.classId ?? null))].sort(
+    (a, b) => (a ?? -1) - (b ?? -1),
+  );
+  // A class that has gone (merged away, deleted) no longer filters anything out of sight.
+  const filtering = filter !== "all" && classes.some((classId) => String(classId) === filter);
+  const rows = segments
+    .map((segment, index) => ({ segment, index }))
+    .filter(({ segment }) => !filtering || String(segment.classId ?? null) === filter);
+
   return (
     <>
+      <label className="segments__filter">
+        <span>Filter Class:</span>
+        <select value={filtering ? filter : "all"} onChange={(event) => setFilter(event.target.value)}>
+          <option value="all">All Classes</option>
+          {classes.map((classId) => (
+            <option key={String(classId)} value={String(classId)}>
+              {classId === null ? "Unclassified" : aliasOf(classAliases, classId)}
+            </option>
+          ))}
+        </select>
+      </label>
+
+      {/* Legacy's columns, with the row in its class's colour (segment_table_manager.py:149-152).
+          The Type column is this app's: see the module comment. */}
       <table className="segments">
         <thead>
           <tr>
             <th scope="col">
               <span className="visually-hidden">Selected</span>
             </th>
-            <th scope="col">Class</th>
+            <th scope="col">Segment ID</th>
+            <th scope="col">Class ID</th>
+            <th scope="col">Alias</th>
             <th scope="col">Type</th>
           </tr>
         </thead>
         <tbody>
-          {segments.map((segment, index) => (
-            <tr key={index} aria-selected={selected.includes(index)}>
+          {rows.map(({ segment, index }) => (
+            <tr
+              key={index}
+              className="class-row"
+              style={{ backgroundColor: swatch(segment) }}
+              aria-selected={selected.includes(index)}
+              // A click anywhere on the row selects it, as in legacy; the checkbox is the same
+              // choice for the keyboard and for a screen reader.
+              onClick={(event) => {
+                if ((event.target as HTMLElement).closest("input") === null) toggleSelected(index);
+              }}
+            >
               <td>
                 <input
                   type="checkbox"
@@ -97,10 +135,9 @@ export function SegmentTable(): ReactNode {
                   aria-label={`Select ${describe(segment, index)}`}
                 />
               </td>
-              <th scope="row">
-                <span className="swatch" style={{ background: swatch(segment) }} aria-hidden="true" />{" "}
-                {segment.classId ?? "unclassified"}
-              </th>
+              <td>{index + 1}</td>
+              <th scope="row">{segment.classId ?? "unclassified"}</th>
+              <td>{segment.classId === null ? "" : aliasOf(classAliases, segment.classId)}</td>
               <td>{segment.type}</td>
             </tr>
           ))}
@@ -141,4 +178,9 @@ function describe(segment: WireSegment, index: number): string {
 function swatch(segment: WireSegment): string {
   const { r, g, b } = classColor(segment.classId);
   return `rgb(${r}, ${g}, ${b})`;
+}
+
+/** A class's name, or its id where it has none -- which is what legacy's alias column shows. */
+function aliasOf(aliases: Readonly<Record<string, string>>, classId: number): string {
+  return aliases[String(classId)] ?? String(classId);
 }

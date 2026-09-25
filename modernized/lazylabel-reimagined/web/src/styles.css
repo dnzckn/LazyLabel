@@ -1019,13 +1019,59 @@ fieldset input[type="text"] {
   text-align: center;
 }
 
-.segments {
+/* Legacy's "Filter Class:" row above the segment table. */
+.segments__filter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  margin: 0 0 4px;
+}
+
+.segments__filter select {
+  min-width: 10rem;
 }
 
 .segments__actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.4rem;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.segments__actions button {
+  flex: 1 1 auto;
+  white-space: nowrap;
+}
+
+/* A segment or class row in its class's colour, as legacy fills them (HSV(h, 220, 220)); the
+   selection tints over it rather than replacing it, so the class stays readable. */
+/* White text in both themes: legacy's dark mode draws near-white on these rows, and its light
+   mode's dark grey on a saturated red is hard to read. */
+.class-row {
+  cursor: pointer;
+  color: #ffffff;
+  text-shadow: 0 1px 1px rgb(0 0 0 / 0.45);
+}
+
+.class-row button,
+.class-row button:hover:not(:disabled) {
+  color: inherit;
+  border-color: rgb(255 255 255 / 0.45);
+}
+
+.class-row button:disabled {
+  color: rgb(255 255 255 / 0.45);
+}
+
+.class-row > th,
+.class-row > td {
+  border-color: rgb(0 0 0 / 0.25);
+}
+
+.class-row[aria-selected="true"] > th,
+.class-row[aria-selected="true"] > td {
+  box-shadow: inset 0 0 0 999px var(--selection);
 }
 
 .swatch {
@@ -1063,16 +1109,69 @@ fieldset input[type="text"] {
   font-size: 11px;
 }
 
-.classes {
+/* Legacy's "Class Order:" over the class table. */
+.classes__label {
+  margin: 8px 0 2px;
 }
 
+/* The name is edited in place, as a table cell is in legacy: no box until it has focus. */
 .classes input[type="text"] {
-  width: 100%;
+  width: calc(100% - 14px);
+  padding: 1px 2px;
+  background: transparent;
+  border-color: transparent;
+  color: inherit;
   font: inherit;
 }
 
+.classes input[type="text"]:focus {
+  background: var(--input);
+  border-color: var(--accent);
+  color: var(--ink);
+}
+
+/* The id is the button that makes a class active. It reads as the cell's text. */
+.classes__use,
+.classes__use:hover:not(:disabled),
+.classes__use:active:not(:disabled) {
+  padding: 0 2px;
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+}
+
+.classes__use:hover:not(:disabled) {
+  text-decoration: underline;
+}
+
+/* The active class: bold, with legacy's orange marker -- a mark drawn here rather than an emoji
+   written into the name, which is where legacy puts it (right_panel.py:305-314). */
+.classes__row--active {
+  font-weight: 700;
+}
+
+.classes__alias::before {
+  content: "";
+  display: inline-block;
+  width: 12px;
+}
+
+.classes__row--active .classes__alias::before {
+  content: "◆";
+  color: #ffa500;
+}
+
+.classes__order {
+  white-space: nowrap;
+}
+
+.classes__order button {
+  padding: 0 4px;
+}
+
 .classes__to {
-  color: var(--warning-ink);
+  font-weight: 700;
 }
 
 .adjustment {

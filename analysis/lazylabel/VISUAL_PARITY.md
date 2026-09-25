@@ -252,6 +252,19 @@ Solid colours with black bold text (sequence_widget.py:173-202, 268-305, 517-550
    - Classes: "Class Order:", columns Alias/Class ID, rows in the class colour, the active class in
      bold, and Reassign Class IDs.
    - Take "What is built" out of the working UI; App.test.tsx:167-171 needs updating.
+   - **Done 2026-09-25.** Differences from legacy, each kept on purpose:
+     - The Type column stays: whether a row is a polygon or a mask decides what can be done to it.
+     - The segment ids are 1-based as legacy's are; Filter Class only hides rows, and every action
+       still takes positions in the whole list.
+     - A click on a row selects it, as in legacy; the checkbox is the same choice for the keyboard.
+     - Clicking a class id makes that class ACTIVE (bold, with an orange ◆), and clicking it again
+       goes back to the next free id. Nothing on screen could set the active class before; only
+       the X key toggled it.
+     - Row text is white in both themes. Legacy's light mode puts dark grey on the saturated
+       colours, which is hard to read.
+     - The merge, delete and renumber buttons keep their descriptive labels.
+     - "What is built" opens from Application Settings as a dialog. "Formats to write" moved into
+       Application Settings too, where legacy's Export Formats is.
 8. **Section chrome.**
    - A 20px strip header: the text colour at .04, .08 on hover, radius 3, and no card border.
    - Only the Mode card has a border, radius 6. Files: Panel.tsx, styles.css:294-330.

@@ -215,3 +215,47 @@ describe("the selection after an action", () => {
     await waitFor(() => expect(screen.getByRole("status").textContent).toBe("2 annotations"));
   });
 });
+
+/* Legacy's table: Segment ID, Class ID and Alias, each row in its class's colour, a class filter
+   above it, and a click on a row selecting it. */
+describe("as legacy's table", () => {
+  const rowsShown = () =>
+    [...screen.getByRole("table").querySelectorAll("tbody tr")].map((row) =>
+      [...row.querySelectorAll("td, th")].slice(1, 3).map((cell) => cell.textContent).join(":"),
+    );
+
+  it("numbers the segments from 1 and gives each its class", async () => {
+    await mount([polygon(2), polygon(5)]);
+
+    expect(rowsShown()).toEqual(["1:2", "2:5"]);
+  });
+
+  it("shows only the class the filter names, and every class again on All Classes", async () => {
+    await mount([polygon(2), polygon(5), polygon(2)]);
+
+    fireEvent.change(screen.getByLabelText("Filter Class:"), { target: { value: "2" } });
+    // The ids stay the ones in the whole list: actions take positions in it.
+    expect(rowsShown()).toEqual(["1:2", "3:2"]);
+
+    fireEvent.change(screen.getByLabelText("Filter Class:"), { target: { value: "all" } });
+    expect(rowsShown()).toEqual(["1:2", "2:5", "3:2"]);
+  });
+
+  it("selects a row when it is clicked, as legacy's does", async () => {
+    await mount([polygon(2), polygon(5)]);
+
+    fireEvent.click(screen.getByRole("table").querySelectorAll("tbody tr")[1]!.querySelector("td:nth-child(2)")!);
+
+    await waitFor(() => expect(screen.getByRole("status").textContent).toBe("1 of 2 selected"));
+    expect((row(1) as HTMLInputElement).checked).toBe(true);
+  });
+
+  it("paints each row in its class's colour", async () => {
+    await mount([polygon(0)]);
+
+    const painted = (screen.getByRole("table").querySelector("tbody tr") as HTMLElement).style
+      .backgroundColor;
+    // Class 0 is legacy's HSV(0, 220, 220).
+    expect(painted).toBe("rgb(220, 30, 30)");
+  });
+});

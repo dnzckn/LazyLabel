@@ -14,6 +14,7 @@ import { defaultSettings } from "@lazylabel/settings-schema";
 import type { WireDatasetListing } from "@lazylabel/contracts";
 
 import { DatasetBrowser } from "../../src/dataset/DatasetBrowser.jsx";
+import { ExportFormats } from "../../src/dataset/ExportFormats.jsx";
 import { OpenImageView } from "../../src/workspace/OpenImageView.jsx";
 import { WorkspaceProvider } from "../../src/workspace/WorkspaceProvider.jsx";
 import { NotificationProvider } from "../../src/notifications/NotificationProvider.jsx";
@@ -80,6 +81,8 @@ function show(overrides: Record<string, unknown> = {}) {
         <HotkeyProvider bindings={defaultSettings().hotkeys}>
           <WorkspaceProvider client={api} projectId="p1">
           <DatasetBrowser client={api} projectId="p1" folder="frames" />
+          {/* In Application Settings in the app, where legacy's Export Formats is. */}
+          <ExportFormats />
           <OpenImageView client={api} projectId="p1" />
         </WorkspaceProvider>
       </HotkeyProvider>
