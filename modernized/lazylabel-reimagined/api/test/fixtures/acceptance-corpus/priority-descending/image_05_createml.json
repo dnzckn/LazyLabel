@@ -1,0 +1,52 @@
+[
+  {
+    "image": "image_05.png",
+    "annotations": [
+      {
+        "label": "5",
+        "coordinates": {
+          "x": 23.0,
+          "y": 65.5,
+          "width": 36,
+          "height": 33
+        }
+      },
+      {
+        "label": "4",
+        "coordinates": {
+          "x": 3.0,
+          "y": 66.5,
+          "width": 4,
+          "height": 29
+        }
+      },
+      {
+        "label": "\u7d30\u80de",
+        "coordinates": {
+          "x": 18.5,
+          "y": 80.5,
+          "width": 33,
+          "height": 31
+        }
+      },
+      {
+        "label": "person",
+        "coordinates": {
+          "x": 22.5,
+          "y": 93.0,
+          "width": 45,
+          "height": 34
+        }
+      },
+      {
+        "label": "person",
+        "coordinates": {
+          "x": 100.0,
+          "y": 39.5,
+          "width": 8,
+          "height": 33
+        }
+      }
+    ]
+  }
+]

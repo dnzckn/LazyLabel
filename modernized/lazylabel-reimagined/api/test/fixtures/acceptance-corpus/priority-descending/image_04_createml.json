@@ -1,0 +1,52 @@
+[
+  {
+    "image": "image_04.png",
+    "annotations": [
+      {
+        "label": "1",
+        "coordinates": {
+          "x": 36.5,
+          "y": 12.5,
+          "width": 43,
+          "height": 25
+        }
+      },
+      {
+        "label": "4",
+        "coordinates": {
+          "x": 25.0,
+          "y": 46.0,
+          "width": 26,
+          "height": 22
+        }
+      },
+      {
+        "label": "1",
+        "coordinates": {
+          "x": 112.5,
+          "y": 21.5,
+          "width": 7,
+          "height": 7
+        }
+      },
+      {
+        "label": "vehicle",
+        "coordinates": {
+          "x": 104.5,
+          "y": 19.0,
+          "width": 7,
+          "height": 4
+        }
+      },
+      {
+        "label": "1",
+        "coordinates": {
+          "x": 129.5,
+          "y": 9.5,
+          "width": 31,
+          "height": 19
+        }
+      }
+    ]
+  }
+]

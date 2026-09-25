@@ -1,0 +1,34 @@
+[
+  {
+    "image": "image_09.png",
+    "annotations": [
+      {
+        "label": "tree",
+        "coordinates": {
+          "x": 74.5,
+          "y": 24.0,
+          "width": 21,
+          "height": 26
+        }
+      },
+      {
+        "label": "cell",
+        "coordinates": {
+          "x": 63.0,
+          "y": 34.0,
+          "width": 38,
+          "height": 22
+        }
+      },
+      {
+        "label": "nucleus",
+        "coordinates": {
+          "x": 79.5,
+          "y": 40.5,
+          "width": 5,
+          "height": 5
+        }
+      }
+    ]
+  }
+]

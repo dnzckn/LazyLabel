@@ -7,9 +7,10 @@
  * whose whole job is byte equality must never do.
  */
 
-import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import * as path from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
@@ -17,7 +18,9 @@ import {
   comparedCount,
   normalizeEol,
   roundTripFolder,
+  sameArchive,
   sameBytes,
+  sameFile,
   sidecarPathFor,
   summarize,
 } from "../tools/acceptanceRoundTrip.js";
@@ -47,6 +50,48 @@ describe("comparing bytes", () => {
 
   it("leaves a lone newline alone", () => {
     expect([...normalizeEol(bytes("a\nb"))]).toEqual([...bytes("a\nb")]);
+  });
+});
+
+/*
+ * The archives are compared array by array: the port stores class names as JSON where legacy
+ * pickles them, so equal bytes were never the claim. These use archives legacy wrote for the
+ * acceptance corpus (converted, as a real dataset would be).
+ */
+describe("comparing archives", () => {
+  const corpus = path.resolve(
+    path.dirname(fileURLToPath(import.meta.url)),
+    "fixtures",
+    "acceptance-corpus",
+    "priority-off",
+  );
+  const archive = async (name: string) => new Uint8Array(await readFile(path.join(corpus, name)));
+
+  it("finds an archive the same as itself, for both NPZ formats", async () => {
+    const npz = await archive("image_00.npz");
+    const classMap = await archive("image_00_CM.npz");
+
+    expect(await sameArchive(npz, npz)).toBe(true);
+    // The class map is uint16, which the library's own decoder does not take: compared all the same.
+    expect(await sameFile("NPZ_CLASS_MAP", classMap, classMap)).toBe(true);
+  });
+
+  it("finds two different images' archives different", async () => {
+    expect(await sameArchive(await archive("image_00.npz"), await archive("image_01.npz"))).toBe(false);
+    expect(
+      await sameFile("NPZ_CLASS_MAP", await archive("image_00_CM.npz"), await archive("image_01_CM.npz")),
+    ).toBe(false);
+  });
+
+  it("never finds an unreadable archive the same as anything", async () => {
+    const npz = await archive("image_00.npz");
+
+    expect(await sameArchive(bytes("not a zip"), npz)).toBe(false);
+    expect(await sameArchive(npz, npz.subarray(0, npz.length - 10))).toBe(false);
+  });
+
+  it("compares the text formats as bytes after line endings, as before", async () => {
+    expect(await sameFile("YOLO_DETECTION", bytes("0 0.5 0.5\r\n"), bytes("0 0.5 0.5\n"))).toBe(true);
   });
 });
 

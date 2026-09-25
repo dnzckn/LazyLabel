@@ -24,6 +24,10 @@ export { pyRepr } from "./format/pyRepr.js";
 export { MalformedAnnotationError } from "./format/labels.js";
 export { MalformedXmlError } from "./format/xml.js";
 export { CompressionError } from "./util/zip.js";
+// The archive reader, for comparing two NPZ files ARRAY BY ARRAY: the API's acceptance tool holds
+// the port's archives to legacy's that way, since the two zips are laid out differently by design
+// (the alias table is JSON here, pickled there) and equal bytes were never the claim.
+export { readZip } from "./util/zip.js";
 
 // Choosing which annotation file wins, and reporting the ones that cannot be read.
 export {

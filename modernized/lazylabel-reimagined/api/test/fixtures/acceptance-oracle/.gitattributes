@@ -1,0 +1,2 @@
+# Exact legacy output, including CRLF line endings. Never convert them.
+* -text

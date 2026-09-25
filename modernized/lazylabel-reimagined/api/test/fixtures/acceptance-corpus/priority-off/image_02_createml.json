@@ -1,0 +1,52 @@
+[
+  {
+    "image": "image_02.png",
+    "annotations": [
+      {
+        "label": "0",
+        "coordinates": {
+          "x": 41.5,
+          "y": 65.0,
+          "width": 29,
+          "height": 20
+        }
+      },
+      {
+        "label": "0",
+        "coordinates": {
+          "x": 15.0,
+          "y": 19.5,
+          "width": 12,
+          "height": 13
+        }
+      },
+      {
+        "label": "Zelle",
+        "coordinates": {
+          "x": 24.0,
+          "y": 24.0,
+          "width": 8,
+          "height": 10
+        }
+      },
+      {
+        "label": "Zelle",
+        "coordinates": {
+          "x": 22.5,
+          "y": 19.0,
+          "width": 19,
+          "height": 34
+        }
+      },
+      {
+        "label": "nucleus",
+        "coordinates": {
+          "x": 14.5,
+          "y": 12.5,
+          "width": 23,
+          "height": 25
+        }
+      }
+    ]
+  }
+]

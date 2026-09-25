@@ -1,0 +1,70 @@
+[
+  {
+    "image": "image_03.png",
+    "annotations": [
+      {
+        "label": "nucleus",
+        "coordinates": {
+          "x": 18.0,
+          "y": 14.0,
+          "width": 12,
+          "height": 10
+        }
+      },
+      {
+        "label": "bo\u00eete",
+        "coordinates": {
+          "x": 32.5,
+          "y": 10.5,
+          "width": 21,
+          "height": 21
+        }
+      },
+      {
+        "label": "nucleus",
+        "coordinates": {
+          "x": 31.0,
+          "y": 10.0,
+          "width": 26,
+          "height": 20
+        }
+      },
+      {
+        "label": "bo\u00eete",
+        "coordinates": {
+          "x": 22.0,
+          "y": 21.5,
+          "width": 24,
+          "height": 25
+        }
+      },
+      {
+        "label": "nucleus",
+        "coordinates": {
+          "x": 17.0,
+          "y": 18.0,
+          "width": 28,
+          "height": 22
+        }
+      },
+      {
+        "label": "bo\u00eete",
+        "coordinates": {
+          "x": 62.0,
+          "y": 43.5,
+          "width": 34,
+          "height": 37
+        }
+      },
+      {
+        "label": "bo\u00eete",
+        "coordinates": {
+          "x": 73.5,
+          "y": 53.5,
+          "width": 19,
+          "height": 11
+        }
+      }
+    ]
+  }
+]

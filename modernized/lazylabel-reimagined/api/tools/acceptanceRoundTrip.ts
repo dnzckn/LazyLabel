@@ -22,7 +22,23 @@
  *
  * DECISION 10's EOL NORMALIZATION APPLIES. The text formats are compared after normalising line
  * endings, because a file written on Windows and one written on Linux differ by bytes that mean
- * nothing — the same normalisation Phase 1's goldens use. The binary formats are compared exactly.
+ * nothing — the same normalisation Phase 1's goldens use.
+ *
+ * THE NPZ FORMATS ARE COMPARED ARRAY BY ARRAY, every member's dtype, shape and values, and the
+ * class names as JSON. Byte equality was never the claim: the port's archives hold the names as
+ * JSON where legacy's pickle them (decision 4, SEC-01), so the two zips are laid out differently
+ * even when every array in them is the same. Phase 1's NPZ goldens are held to legacy the same way.
+ *
+ * LEGACY'S OWN FILES DO NOT SURVIVE LEGACY'S OWN ROUND TRIP, found 2026-09-25 on the synthetic
+ * corpus. The NPZ holds one mask per CLASS, so opening an image merges every instance of a class,
+ * and the instance formats written after that -- YOLO, COCO, Pascal VOC, CreateML -- list one entry
+ * per class region, in class order, where the file had one per drawn shape. Comparing the port's
+ * rewrite with the original therefore fails wherever an image has more than one shape, for legacy
+ * too. `--oracle <folder>` compares with what LEGACY writes when it opens and saves the same image
+ * instead (tools/generate_acceptance_corpus.py writes one), which is the claim that matters: the web
+ * app does to a dataset exactly what the desktop app does.
+ *
+ *     npm run acceptance -- /path/to/corpus --oracle /path/to/legacy-resaves
  */
 
 import { mkdtemp, rm } from "node:fs/promises";
@@ -32,6 +48,7 @@ import * as path from "node:path";
 import {
   createFinalMaskTensor,
   createInstanceContours,
+  readZip,
   type ExportContext,
 } from "@lazylabel/annotation-formats";
 
@@ -71,6 +88,112 @@ export function sameBytes(format: string, before: Uint8Array, after: Uint8Array)
   if (a.length !== b.length) return false;
   for (let i = 0; i < a.length; i += 1) if (a[i] !== b[i]) return false;
   return true;
+}
+
+/** The archive formats, compared array by array rather than byte by byte. */
+const ARCHIVE_FORMATS = new Set(["NPZ", "NPZ_CLASS_MAP"]);
+
+/** One .npy member, split into what its header declares and the raw values after it. */
+interface NpyParts {
+  readonly descr: string;
+  readonly shape: string;
+  readonly fortran: string;
+  readonly body: Uint8Array;
+}
+
+/**
+ * Read an .npy header without decoding the values: any dtype can then be compared, including the
+ * class map's uint16, which the library's decoder does not take because no reader needs it to.
+ */
+function npyParts(bytes: Uint8Array): NpyParts {
+  if (bytes.length < 10 || bytes[0] !== 0x93 || String.fromCharCode(...bytes.subarray(1, 6)) !== "NUMPY") {
+    throw new Error("not an .npy member");
+  }
+  const major = bytes[6]!;
+  const lengthBytes = major === 1 ? 2 : 4;
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const headerLength = lengthBytes === 2 ? view.getUint16(8, true) : view.getUint32(8, true);
+  const start = 8 + lengthBytes;
+  const header = new TextDecoder("latin1").decode(bytes.subarray(start, start + headerLength));
+  const field = (pattern: RegExp) => pattern.exec(header)?.[1]?.replace(/\s+/g, "") ?? "";
+  return {
+    descr: field(/'descr':\s*'([^']+)'/),
+    shape: field(/'shape':\s*\(([^)]*)\)/),
+    fortran: field(/'fortran_order':\s*(True|False)/),
+    body: bytes.subarray(start + headerLength),
+  };
+}
+
+/** Every member of an NPZ, split. */
+async function archiveMembers(archive: Uint8Array): Promise<Map<string, NpyParts>> {
+  const members = new Map<string, NpyParts>();
+  for (const entry of await readZip(archive)) {
+    members.set(entry.name.replace(/\.npy$/, ""), npyParts(entry.data));
+  }
+  return members;
+}
+
+/**
+ * Whether two NPZ archives hold the same arrays: the same members, each with the same dtype, shape
+ * and memory order and the same values, and the same class names. An archive that cannot be read
+ * is never the same as anything.
+ */
+export async function sameArchive(before: Uint8Array, after: Uint8Array): Promise<boolean> {
+  let a: Map<string, NpyParts>;
+  let b: Map<string, NpyParts>;
+  try {
+    [a, b] = await Promise.all([archiveMembers(before), archiveMembers(after)]);
+  } catch {
+    return false;
+  }
+  if (a.size !== b.size) return false;
+  for (const [name, x] of a) {
+    const y = b.get(name);
+    if (y === undefined) return false;
+    if (name === "class_aliases_json") {
+      // The class names: the same table, however the JSON is spaced or escaped. The dtype's width
+      // follows the text's length, so it is not compared.
+      if (!sameJson(unicodeScalar(x), unicodeScalar(y))) return false;
+      continue;
+    }
+    if (x.descr !== y.descr || x.shape !== y.shape || x.fortran !== y.fortran) return false;
+    if (x.body.length !== y.body.length) return false;
+    for (let i = 0; i < x.body.length; i += 1) if (x.body[i] !== y.body[i]) return false;
+  }
+  return true;
+}
+
+/** A NumPy unicode scalar's text: UTF-32, little-endian, NUL-padded. */
+function unicodeScalar(parts: NpyParts): string {
+  if (!/^[<|=]?U\d+$/.test(parts.descr)) return "";
+  const view = new DataView(parts.body.buffer, parts.body.byteOffset, parts.body.byteLength);
+  let text = "";
+  for (let i = 0; i + 4 <= parts.body.length; i += 4) {
+    const code = view.getUint32(i, true);
+    if (code === 0) break;
+    text += String.fromCodePoint(code);
+  }
+  return text;
+}
+
+function sameJson(a: string, b: string): boolean {
+  try {
+    return JSON.stringify(sortedKeys(JSON.parse(a))) === JSON.stringify(sortedKeys(JSON.parse(b)));
+  } catch {
+    return false;
+  }
+}
+
+function sortedKeys(value: unknown): unknown {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return value;
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>).sort(([x], [y]) => (x < y ? -1 : x > y ? 1 : 0)),
+  );
+}
+
+/** The comparison each format gets: arrays for the archives, bytes after EOL for the rest. */
+export async function sameFile(format: string, before: Uint8Array, after: Uint8Array): Promise<boolean> {
+  return ARCHIVE_FORMATS.has(format) ? sameArchive(before, after) : sameBytes(format, before, after);
 }
 
 /** A one-line summary per dataset, and the exit code that follows from it. */
@@ -131,8 +254,14 @@ export function summarize(outcomes: readonly DatasetOutcome[]): {
  * files being rewritten are placed. The original store is opened read-only in the sense that
  * nothing here calls a write on it.
  */
-export async function roundTripFolder(root: string, folder: string): Promise<DatasetOutcome> {
+export async function roundTripFolder(
+  root: string,
+  folder: string,
+  /** Where legacy's own re-saves are, at the same paths, when the rewrite is held to those. */
+  oracleRoot?: string,
+): Promise<DatasetOutcome> {
   const source = new DirectoryBlobStore(root);
+  const expected = oracleRoot === undefined ? source : new DirectoryBlobStore(oracleRoot);
   const listing = await listDataset(source, folder);
   const images: ImageOutcome[] = [];
 
@@ -157,7 +286,7 @@ export async function roundTripFolder(root: string, folder: string): Promise<Dat
         const present = Object.entries(row.sidecars)
           .filter(([, exists]) => exists === true)
           .map(([format]) => format);
-        outcome = await roundTripImage(source, scratch, row.key, present);
+        outcome = await roundTripImage(source, scratch, row.key, present, expected);
       } catch (cause) {
         outcome = {
           key: row.key,
@@ -181,6 +310,8 @@ async function roundTripImage(
   scratch: DirectoryBlobStore,
   key: string,
   present: readonly string[],
+  /** What the rewrite should equal: the source itself, or legacy's re-save of it. */
+  expected: DirectoryBlobStore,
 ): Promise<ImageOutcome> {
   // The size comes from the IMAGE, not from a guess: the text formats store normalised
   // coordinates and reading them back at the wrong size rescales every polygon silently.
@@ -209,10 +340,12 @@ async function roundTripImage(
     return {
       key,
       status: "needs-converter",
+      // The command as the converter installs it. It writes the converted ARCHIVES only, to a new
+      // folder, so the images and the other annotation files are copied beside them after.
       detail:
-        "its class names are stored in the old pickled format and were not read. Run the "
-        + "converter over this dataset first: "
-        + "`python -m lazylabel_converter <source> <destination>`",
+        "its class names are stored in the old pickled format and were not read. Convert the "
+        + "dataset's archives into a new folder with `lazylabel-convert-aliases <dataset> "
+        + "<new folder>`, then copy the images and the other annotation files beside them",
       formats: [...present],
       differing: [],
     };
@@ -247,9 +380,9 @@ async function roundTripImage(
   for (const format of formats) {
     const sidecar = sidecarPathFor(key, format);
     if (sidecar === null) continue;
-    const before = await source.read(sidecar);
+    const before = await expected.read(sidecar);
     const after = await scratch.read(sidecar);
-    if (before === null || after === null || !sameBytes(format, before, after)) {
+    if (before === null || after === null || !(await sameFile(format, before, after))) {
       differing.push(format);
     }
   }
@@ -300,11 +433,14 @@ export function sidecarPathFor(imageKey: string, format: string): string | null 
  * Exits non-zero when anything differed or could not be read, so it can gate a release.
  */
 export async function main(argv: readonly string[]): Promise<number> {
-  const root = argv[0];
-  if (root === undefined) {
-    console.error("usage: acceptance-round-trip <corpus-root>");
+  const at = argv.indexOf("--oracle");
+  const oracleRoot = at < 0 ? undefined : argv[at + 1];
+  const root = argv.find((arg, index) => !arg.startsWith("--") && (at < 0 || index !== at + 1));
+  if (root === undefined || (at >= 0 && oracleRoot === undefined)) {
+    console.error("usage: acceptance-round-trip <corpus-root> [--oracle <legacy re-saves>]");
     console.error("");
     console.error("Every immediate subfolder is one dataset. Nothing is written into the corpus.");
+    console.error("With --oracle, each rewrite is compared with legacy's re-save of the same image.");
     return 2;
   }
 
@@ -322,7 +458,7 @@ export async function main(argv: readonly string[]): Promise<number> {
   const outcomes: DatasetOutcome[] = [];
   for (const folder of targets) {
     process.stdout.write(`${folder === "" ? "(root)" : folder}… `);
-    const outcome = await roundTripFolder(root, folder);
+    const outcome = await roundTripFolder(root, folder, oracleRoot);
     outcomes.push({ ...outcome, folder: folder === "" ? "(root)" : folder });
     process.stdout.write(`${outcome.images.length} images\n`);
   }

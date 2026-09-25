@@ -41,6 +41,28 @@ LAZYLABEL_DATASET_ROOT=/path/to/your/images npm start
 | `LAZYLABEL_HOST` | `127.0.0.1` | Loopback by default. Decision 3 is one trusted user, so exposing this is a deliberate act behind a reverse proxy, not a default. |
 | `LAZYLABEL_LEGACY_SETTINGS_DIR` | `~/.config/lazylabel` | Where the desktop app kept `settings.json` and `hotkeys.json`. Read once, at startup, while this database holds no settings; after that the stored settings are the truth and these files are never read again. Empty turns the import off. |
 
+### The acceptance round trip (Phase 6's exit criterion 4)
+
+`npm run acceptance -- <corpus> --oracle <legacy re-saves>` opens every annotated image under the
+corpus, saves it again the way the web app does, and compares every file with what the DESKTOP app
+writes when it opens and saves the same image. Both paths must be absolute. Text formats are compared
+after normalising line endings; the NPZ formats array by array, with the class names as JSON,
+because the web app stores the names as JSON where the desktop app pickles them. Exit 0 is a pass,
+1 means files differed, and 2 means nothing was compared.
+
+- **The oracle matters.** The desktop app does not reproduce its own files either. Its NPZ holds
+  one mask per class, so opening an image merges a class's instances, and the YOLO, COCO, Pascal
+  VOC and CreateML files it writes afterwards differ from the ones it wrote first. Without
+  `--oracle`, the files are compared with the originals, and those differences show up as failures
+  that are the desktop app's behaviour, not this app's.
+- **The class names need the converter.** Every NPZ the desktop app writes pickles its class names,
+  which nothing here will unpickle (SEC-01). Convert the archives into a copy of the corpus first
+  with `lazylabel-convert-aliases`, from `../converter`.
+
+`tools/generate_acceptance_corpus.py` writes the synthetic corpus the owner chose, and its oracle,
+with the desktop app's own code. `test/acceptance/corpus.test.ts` runs both checks over it on every
+test run. Its docstring gives the command, which needs the legacy app's Python environment.
+
 ## Shape
 
 Two ports, one adapter each, per [architecture §3.1](../../../analysis/lazylabel/REIMAGINED_ARCHITECTURE.md):

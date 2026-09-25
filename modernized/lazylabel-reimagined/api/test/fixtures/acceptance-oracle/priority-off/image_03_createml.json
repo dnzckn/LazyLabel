@@ -1,0 +1,34 @@
+[
+  {
+    "image": "image_03.png",
+    "annotations": [
+      {
+        "label": "nucleus",
+        "coordinates": {
+          "x": 23.5,
+          "y": 14.5,
+          "width": 41,
+          "height": 29
+        }
+      },
+      {
+        "label": "bo\u00eete",
+        "coordinates": {
+          "x": 64.0,
+          "y": 43.5,
+          "width": 38,
+          "height": 37
+        }
+      },
+      {
+        "label": "bo\u00eete",
+        "coordinates": {
+          "x": 26.5,
+          "y": 17.0,
+          "width": 33,
+          "height": 34
+        }
+      }
+    ]
+  }
+]

@@ -1,0 +1,45 @@
+<?xml version='1.0' encoding='utf-8'?>
+<annotation>
+  <filename>image_00.png</filename>
+  <size>
+    <width>97</width>
+    <height>90</height>
+    <depth>3</depth>
+  </size>
+  <object>
+    <name>細胞</name>
+    <pose>Unspecified</pose>
+    <truncated>0</truncated>
+    <difficult>0</difficult>
+    <bndbox>
+      <xmin>44</xmin>
+      <ymin>40</ymin>
+      <xmax>59</xmax>
+      <ymax>77</ymax>
+    </bndbox>
+  </object>
+  <object>
+    <name>細胞</name>
+    <pose>Unspecified</pose>
+    <truncated>0</truncated>
+    <difficult>0</difficult>
+    <bndbox>
+      <xmin>5</xmin>
+      <ymin>0</ymin>
+      <xmax>48</xmax>
+      <ymax>23</ymax>
+    </bndbox>
+  </object>
+  <object>
+    <name>boîte</name>
+    <pose>Unspecified</pose>
+    <truncated>0</truncated>
+    <difficult>0</difficult>
+    <bndbox>
+      <xmin>21</xmin>
+      <ymin>64</ymin>
+      <xmax>60</xmax>
+      <ymax>90</ymax>
+    </bndbox>
+  </object>
+</annotation>

@@ -1,0 +1,52 @@
+[
+  {
+    "image": "image_08.png",
+    "annotations": [
+      {
+        "label": "4",
+        "coordinates": {
+          "x": 67.5,
+          "y": 34.5,
+          "width": 25,
+          "height": 39
+        }
+      },
+      {
+        "label": "cell",
+        "coordinates": {
+          "x": 97.0,
+          "y": 66.5,
+          "width": 12,
+          "height": 11
+        }
+      },
+      {
+        "label": "cell",
+        "coordinates": {
+          "x": 148.5,
+          "y": 80.5,
+          "width": 71,
+          "height": 65
+        }
+      },
+      {
+        "label": "6",
+        "coordinates": {
+          "x": 52.5,
+          "y": 49.5,
+          "width": 39,
+          "height": 39
+        }
+      },
+      {
+        "label": "6",
+        "coordinates": {
+          "x": 116.5,
+          "y": 35.5,
+          "width": 33,
+          "height": 33
+        }
+      }
+    ]
+  }
+]

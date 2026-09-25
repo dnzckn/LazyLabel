@@ -1,0 +1,52 @@
+[
+  {
+    "image": "image_07.png",
+    "annotations": [
+      {
+        "label": "tree",
+        "coordinates": {
+          "x": 18.0,
+          "y": 36.0,
+          "width": 36,
+          "height": 44
+        }
+      },
+      {
+        "label": "bo\u00eete",
+        "coordinates": {
+          "x": 24.5,
+          "y": 78.5,
+          "width": 45,
+          "height": 45
+        }
+      },
+      {
+        "label": "\u7d30\u80de",
+        "coordinates": {
+          "x": 21.0,
+          "y": 62.5,
+          "width": 42,
+          "height": 23
+        }
+      },
+      {
+        "label": "\u7d30\u80de",
+        "coordinates": {
+          "x": 56.5,
+          "y": 10.5,
+          "width": 27,
+          "height": 21
+        }
+      },
+      {
+        "label": "9",
+        "coordinates": {
+          "x": 32.0,
+          "y": 40.0,
+          "width": 64,
+          "height": 48
+        }
+      }
+    ]
+  }
+]

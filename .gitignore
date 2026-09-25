@@ -63,6 +63,9 @@ test_images/
 !/modernized/lazylabel/core/exporters/goldens/**/*.npz
 # And legacy's propagation, captured on the synthetic clip: the masks behind Phase 6's exit criterion 2.
 !/modernized/lazylabel-reimagined/inference/tests/goldens/**/*.npz
+# And the acceptance corpus legacy wrote, with legacy's own re-saves: Phase 6's exit criterion 4.
+!/modernized/lazylabel-reimagined/api/test/fixtures/acceptance-corpus/**/*.npz
+!/modernized/lazylabel-reimagined/api/test/fixtures/acceptance-oracle/**/*.npz
 node_modules/
 coverage/
 *.onnx

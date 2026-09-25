@@ -1,0 +1,52 @@
+[
+  {
+    "image": "image_01.png",
+    "annotations": [
+      {
+        "label": "6",
+        "coordinates": {
+          "x": 88.5,
+          "y": 17.0,
+          "width": 17,
+          "height": 14
+        }
+      },
+      {
+        "label": "nucleus",
+        "coordinates": {
+          "x": 19.0,
+          "y": 12.0,
+          "width": 28,
+          "height": 22
+        }
+      },
+      {
+        "label": "nucleus",
+        "coordinates": {
+          "x": 93.5,
+          "y": 60.5,
+          "width": 9,
+          "height": 9
+        }
+      },
+      {
+        "label": "6",
+        "coordinates": {
+          "x": 97.5,
+          "y": 61.5,
+          "width": 7,
+          "height": 7
+        }
+      },
+      {
+        "label": "6",
+        "coordinates": {
+          "x": 79.0,
+          "y": 67.0,
+          "width": 28,
+          "height": 18
+        }
+      }
+    ]
+  }
+]

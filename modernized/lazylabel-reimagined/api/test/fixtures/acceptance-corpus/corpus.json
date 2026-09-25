@@ -1,0 +1,3780 @@
+{
+ "note": "Written by api/tools/generate_acceptance_corpus.py with legacy/lazylabel at 2a7d5d8. Rects are [x1, y1, x2, y2] with x2/y2 exclusive; vertices are [x, y] in pixels; imageSize is [height, width], as in fixtures.json.",
+ "seed": 20260925,
+ "cases": [
+  {
+   "id": "priority-off/image_00",
+   "file": "priority-off/image_00.png",
+   "imageSize": [
+    90,
+    97
+   ],
+   "pixelPriority": {
+    "enabled": false,
+    "ascending": true
+   },
+   "aliases": {
+    "3": "細胞",
+    "6": "boîte"
+   },
+   "segments": [
+    {
+     "type": "Polygon",
+     "classId": 3,
+     "vertices": [
+      [
+       45.1,
+       9.1
+      ],
+      [
+       34.1,
+       22.0
+      ],
+      [
+       13.1,
+       19.3
+      ],
+      [
+       13.4,
+       8.4
+      ],
+      [
+       18.4,
+       0.9
+      ],
+      [
+       32.6,
+       0.0
+      ],
+      [
+       47.0,
+       0.0
+      ]
+     ]
+    },
+    {
+     "type": "Polygon",
+     "classId": 3,
+     "vertices": [
+      [
+       6.9,
+       20.0
+      ],
+      [
+       5.7,
+       11.1
+      ],
+      [
+       5.3,
+       8.7
+      ],
+      [
+       30.0,
+       0.0
+      ]
+     ]
+    },
+    {
+     "type": "Polygon",
+     "classId": 3,
+     "vertices": [
+      [
+       53.9,
+       74.1
+      ],
+      [
+       51.5,
+       80.0
+      ],
+      [
+       48.2,
+       77.2
+      ],
+      [
+       43.3,
+       74.2
+      ],
+      [
+       46.7,
+       63.4
+      ],
+      [
+       54.2,
+       64.8
+      ],
+      [
+       53.7,
+       66.2
+      ]
+     ]
+    },
+    {
+     "type": "Polygon",
+     "classId": 6,
+     "vertices": [
+      [
+       59.3,
+       89.0
+      ],
+      [
+       30.2,
+       89.0
+      ],
+      [
+       21.3,
+       89.0
+      ],
+      [
+       34.9,
+       64.6
+      ],
+      [
+       52.4,
+       77.3
+      ]
+     ]
+    },
+    {
+     "type": "Loaded",
+     "classId": 3,
+     "rects": [
+      [
+       49,
+       40,
+       59,
+       47
+      ],
+      [
+       46,
+       41,
+       53,
+       58
+      ],
+      [
+       47,
+       43,
+       54,
+       67
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "id": "priority-off/image_01",
+   "file": "priority-off/image_01.png",
+   "imageSize": [
+    76,
+    122
+   ],
+   "pixelPriority": {
+    "enabled": false,
+    "ascending": true
+   },
+   "aliases": {
+    "0": "nucleus",
+    "1": "Zelle",
+    "3": "road",
+    "9": "tree"
+   },
+   "segments": [
+    {
+     "type": "Polygon",
+     "classId": 6,
+     "vertices": [
+      [
+       96.0,
+       22.3
+      ],
+      [
+       80.6,
+       23.7
+      ],
+      [
+       80.5,
+       16.1
+      ],
+      [
+       85.8,
+       11.4
+      ],
+      [
+       88.9,
+       10.2
+      ]
+     ]
+    },
+    {
+     "type": "AI",
+     "classId": 0,
+     "rects": [
+      [
+       5,
+       6,
+       33,
+       23
+      ],
+      [
+       10,
+       1,
+       17,
+       22
+      ]
+     ]
+    },
+    {
+     "type": "Circle",
+     "classId": 0,
+     "vertices": [
+      [
+       93.3,
+       60.3
+      ],
+      [
+       97.4,
+       60.3
+      ]
+     ]
+    },
+    {
+     "type": "AI",
+     "classId": 6,
+     "rects": [
+      [
+       65,
+       62,
+       74,
+       76
+      ],
+      [
+       67,
+       58,
+       101,
+       65
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "id": "priority-off/image_02",
+   "file": "priority-off/image_02.png",
+   "imageSize": [
+    101,
+    73
+   ],
+   "pixelPriority": {
+    "enabled": false,
+    "ascending": true
+   },
+   "aliases": {
+    "3": "vehicle",
+    "4": "Zelle",
+    "6": "nucleus"
+   },
+   "segments": [
+    {
+     "type": "Polygon",
+     "classId": 0,
+     "vertices": [
+      [
+       49.3,
+       70.5
+      ],
+      [
+       49.1,
+       73.3
+      ],
+      [
+       46.6,
+       74.5
+      ],
+      [
+       40.1,
+       72.0
+      ],
+      [
+       30.1,
+       64.7
+      ],
+      [
+       27.7,
+       55.2
+      ],
+      [
+       55.4,
+       56.6
+      ]
+     ]
+    },
+    {
+     "type": "Polygon",
+     "classId": 0,
+     "vertices": [
+      [
+       9.6,
+       25.5
+      ],
+      [
+       10.5,
+       13.5
+      ],
+      [
+       20.5,
+       14.9
+      ]
+     ]
+    },
+    {
+     "type": "Polygon",
+     "classId": 4,
+     "vertices": [
+      [
+       25.9,
+       26.6
+      ],
+      [
+       27.0,
+       28.8
+      ],
+      [
+       20.2,
+       19.4
+      ],
+      [
+       21.5,
+       19.6
+      ],
+      [
+       25.1,
+       20.7
+      ]
+     ]
+    },
+    {
+     "type": "AI",
+     "classId": 4,
+     "rects": [
+      [
+       14,
+       31,
+       29,
+       36
+      ],
+      [
+       25,
+       6,
+       32,
+       24
+      ],
+      [
+       13,
+       2,
+       25,
+       31
+      ]
+     ]
+    },
+    {
+     "type": "AI",
+     "classId": 6,
+     "rects": [
+      [
+       8,
+       0,
+       26,
+       23
+      ],
+      [
+       3,
+       14,
+       16,
+       25
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "id": "priority-off/image_03",
+   "file": "priority-off/image_03.png",
+   "imageSize": [
+    79,
+    83
+   ],
+   "pixelPriority": {
+    "enabled": false,
+    "ascending": true
+   },
+   "aliases": {
+    "1": "nucleus",
+    "7": "boîte",
+    "9": "héron"
+   },
+   "segments": [
+    {
+     "type": "AI",
+     "classId": 1,
+     "rects": [
+      [
+       12,
+       9,
+       24,
+       19
+      ]
+     ]
+    },
+    {
+     "type": "Circle",
+     "classId": 7,
+     "vertices": [
+      [
+       32.4,
+       10.5
+      ],
+      [
+       42.7,
+       10.5
+      ]
+     ]
+    },
+    {
+     "type": "Loaded",
+     "classId": 1,
+     "rects": [
+      [
+       18,
+       0,
+       44,
+       20
+      ],
+      [
+       20,
+       2,
+       31,
+       6
+      ]
+     ]
+    },
+    {
+     "type": "AI",
+     "classId": 7,
+     "rects": [
+      [
+       10,
+       9,
+       34,
+       34
+      ]
+     ]
+    },
+    {
+     "type": "Polygon",
+     "classId": 1,
+     "vertices": [
+      [
+       3.0,
+       28.0
+      ],
+      [
+       4.5,
+       24.3
+      ],
+      [
+       20.3,
+       7.8
+      ],
+      [
+       30.4,
+       17.9
+      ]
+     ]
+    },
+    {
+     "type": "Polygon",
+     "classId": 7,
+     "vertices": [
+      [
+       75.7,
+       46.9
+      ],
+      [
+       69.0,
+       60.4
+      ],
+      [
+       59.7,
+       61.0
+      ],
+      [
+       45.5,
+       54.6
+      ],
+      [
+       61.6,
+       31.9
+      ],
+      [
+       72.9,
+       25.9
+      ],
+      [
+       78.0,
+       31.5
+      ]
+     ]
+    },
+    {
+     "type": "Loaded",
+     "classId": 7,
+     "rects": [
+      [
+       64,
+       48,
+       83,
+       59
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "id": "priority-off/image_04",
+   "file": "priority-off/image_04.png",
+   "imageSize": [
+    62,
+    157
+   ],
+   "pixelPriority": {
+    "enabled": false,
+    "ascending": true
+   },
+   "aliases": {
+    "0": "person",
+    "3": "vehicle"
+   },
+   "segments": [
+    {
+     "type": "AI",
+     "classId": 1,
+     "rects": [
+      [
+       15,
+       0,
+       49,
+       18
+      ],
+      [
+       39,
+       12,
+       58,
+       18
+      ],
+      [
+       24,
+       10,
+       51,
+       25
+      ]
+     ]
+    },
+    {
+     "type": "Polygon",
+     "classId": 4,
+     "vertices": [
+      [
+       32.7,
+       47.1
+      ],
+      [
+       34.0,
+       56.1
+      ],
+      [
+       26.3,
+       55.1
+      ],
+      [
+       21.9,
+       55.3
+      ],
+      [
+       12.2,
+       54.8
+      ],
+      [
+       21.0,
+       35.8
+      ],
+      [
+       37.2,
+       42.8
+      ]
+     ]
+    },
+    {
+     "type": "Circle",
+     "classId": 1,
+     "vertices": [
+      [
+       111.7,
+       21.4
+      ],
+      [
+       115.0,
+       21.4
+      ]
+     ]
+    },
+    {
+     "type": "AI",
+     "classId": 3,
+     "rects": [
+      [
+       101,
+       17,
+       108,
+       21
+      ]
+     ]
+    },
+    {
+     "type": "AI",
+     "classId": 1,
+     "rects": [
+      [
+       114,
+       0,
+       145,
+       12
+      ],
+      [
+       120,
+       5,
+       125,
+       19
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "id": "priority-off/image_05",
+   "file": "priority-off/image_05.png",
+   "imageSize": [
+    127,
+    185
+   ],
+   "pixelPriority": {
+    "enabled": false,
+    "ascending": true
+   },
+   "aliases": {
+    "0": "person",
+    "9": "細胞"
+   },
+   "segments": [
+    {
+     "type": "AI",
+     "classId": 5,
+     "rects": [
+      [
+       5,
+       50,
+       41,
+       82
+      ],
+      [
+       7,
+       49,
+       22,
+       76
+      ]
+     ]
+    },
+    {
+     "type": "AI",
+     "classId": 4,
+     "rects": [
+      [
+       1,
+       52,
+       29,
+       81
+      ],
+      [
+       11,
+       73,
+       19,
+       82
+      ],
+      [
+       6,
+       74,
+       18,
+       81
+      ]
+     ]
+    },
+    {
+     "type": "AI",
+     "classId": 9,
+     "rects": [
+      [
+       8,
+       84,
+       35,
+       90
+      ],
+      [
+       2,
+       88,
+       21,
+       96
+      ],
+      [
+       10,
+       65,
+       25,
+       84
+      ]
+     ]
+    },
+    {
+     "type": "AI",
+     "classId": 0,
+     "rects": [
+      [
+       0,
+       76,
+       45,
+       110
+      ]
+     ]
+    },
+    {
+     "type": "Loaded",
+     "classId": 0,
+     "rects": [
+      [
+       96,
+       23,
+       104,
+       56
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "id": "priority-off/image_06",
+   "file": "priority-off/image_06.png",
+   "imageSize": [
+    153,
+    95
+   ],
+   "pixelPriority": {
+    "enabled": false,
+    "ascending": true
+   },
+   "aliases": {
+    "1": "nucleus",
+    "8": "héron"
+   },
+   "segments": [
+    {
+     "type": "Loaded",
+     "classId": 8,
+     "rects": [
+      [
+       38,
+       87,
+       42,
+       105
+      ]
+     ]
+    },
+    {
+     "type": "Circle",
+     "classId": 3,
+     "vertices": [
+      [
+       59.4,
+       65.2
+      ],
+      [
+       76.6,
+       65.2
+      ]
+     ]
+    },
+    {
+     "type": "Polygon",
+     "classId": 3,
+     "vertices": [
+      [
+       91.2,
+       78.8
+      ],
+      [
+       74.2,
+       74.0
+      ],
+      [
+       67.5,
+       58.0
+      ],
+      [
+       89.4,
+       40.0
+      ],
+      [
+       92.2,
+       48.4
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "id": "priority-off/image_07",
+   "file": "priority-off/image_07.png",
+   "imageSize": [
+    103,
+    214
+   ],
+   "pixelPriority": {
+    "enabled": false,
+    "ascending": true
+   },
+   "aliases": {
+    "0": "person",
+    "2": "tree",
+    "3": "boîte",
+    "7": "細胞"
+   },
+   "segments": [
+    {
+     "type": "Polygon",
+     "classId": 7,
+     "vertices": [
+      [
+       56.8,
+       20.8
+      ],
+      [
+       50.0,
+       17.0
+      ],
+      [
+       43.8,
+       12.4
+      ],
+      [
+       57.7,
+       0.0
+      ],
+      [
+       64.8,
+       7.2
+      ],
+      [
+       69.3,
+       7.8
+      ],
+      [
+       65.3,
+       9.3
+      ]
+     ]
+    },
+    {
+     "type": "Polygon",
+     "classId": 2,
+     "vertices": [
+      [
+       32.0,
+       50.2
+      ],
+      [
+       30.8,
+       53.4
+      ],
+      [
+       24.8,
+       54.5
+      ],
+      [
+       9.2,
+       57.0
+      ],
+      [
+       17.5,
+       14.5
+      ],
+      [
+       21.8,
+       21.6
+      ]
+     ]
+    },
+    {
+     "type": "Loaded",
+     "classId": 9,
+     "rects": [
+      [
+       1,
+       21,
+       7,
+       50
+      ],
+      [
+       0,
+       31,
+       64,
+       39
+      ],
+      [
+       0,
+       16,
+       36,
+       41
+      ]
+     ]
+    },
+    {
+     "type": "Loaded",
+     "classId": 2,
+     "rects": [
+      [
+       0,
+       39,
+       36,
+       48
+      ]
+     ]
+    },
+    {
+     "type": "AI",
+     "classId": 9,
+     "rects": [
+      [
+       0,
+       45,
+       35,
+       49
+      ],
+      [
+       10,
+       38,
+       18,
+       56
+      ],
+      [
+       12,
+       35,
+       24,
+       64
+      ]
+     ]
+    },
+    {
+     "type": "AI",
+     "classId": 7,
+     "rects": [
+      [
+       0,
+       51,
+       42,
+       74
+      ]
+     ]
+    },
+    {
+     "type": "Circle",
+     "classId": 3,
+     "vertices": [
+      [
+       24.1,
+       77.7
+      ],
+      [
+       45.6,
+       77.7
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "id": "priority-off/image_08",
+   "file": "priority-off/image_08.png",
+   "imageSize": [
+    120,
+    188
+   ],
+   "pixelPriority": {
+    "enabled": false,
+    "ascending": true
+   },
+   "aliases": {
+    "5": "cell"
+   },
+   "segments": [
+    {
+     "type": "Circle",
+     "classId": 6,
+     "vertices": [
+      [
+       52.1,
+       48.8
+      ],
+      [
+       70.7,
+       48.8
+      ]
+     ]
+    },
+    {
+     "type": "Polygon",
+     "classId": 5,
+     "vertices": [
+      [
+       102.7,
+       71.4
+      ],
+      [
+       100.1,
+       69.6
+      ],
+      [
+       98.9,
+       68.9
+      ],
+      [
+       97.3,
+       68.9
+      ],
+      [
+       96.0,
+       68.7
+      ],
+      [
+       92.6,
+       70.0
+      ],
+      [
+       91.9,
+       61.8
+      ]
+     ]
+    },
+    {
+     "type": "Circle",
+     "classId": 6,
+     "vertices": [
+      [
+       116.0,
+       34.9
+      ],
+      [
+       131.9,
+       34.9
+      ]
+     ]
+    },
+    {
+     "type": "Loaded",
+     "classId": 4,
+     "rects": [
+      [
+       55,
+       16,
+       72,
+       44
+      ],
+      [
+       63,
+       15,
+       80,
+       54
+      ]
+     ]
+    },
+    {
+     "type": "Polygon",
+     "classId": 5,
+     "vertices": [
+      [
+       164.6,
+       95.0
+      ],
+      [
+       158.1,
+       105.1
+      ],
+      [
+       139.5,
+       112.8
+      ],
+      [
+       120.1,
+       101.1
+      ],
+      [
+       113.1,
+       80.3
+      ],
+      [
+       146.9,
+       48.9
+      ],
+      [
+       175.6,
+       53.8
+      ],
+      [
+       183.5,
+       73.2
+      ]
+     ]
+    },
+    {
+     "type": "Polygon",
+     "classId": 5,
+     "vertices": [
+      [
+       155.7,
+       100.8
+      ],
+      [
+       144.6,
+       106.1
+      ],
+      [
+       135.1,
+       101.4
+      ],
+      [
+       137.4,
+       75.2
+      ],
+      [
+       139.4,
+       63.4
+      ],
+      [
+       146.4,
+       63.0
+      ],
+      [
+       152.0,
+       71.0
+      ],
+      [
+       160.8,
+       84.9
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "id": "priority-off/image_09",
+   "file": "priority-off/image_09.png",
+   "imageSize": [
+    78,
+    106
+   ],
+   "pixelPriority": {
+    "enabled": false,
+    "ascending": true
+   },
+   "aliases": {
+    "2": "nucleus",
+    "3": "cell",
+    "9": "tree"
+   },
+   "segments": [
+    {
+     "type": "AI",
+     "classId": 9,
+     "rects": [
+      [
+       64,
+       18,
+       81,
+       37
+      ],
+      [
+       72,
+       11,
+       85,
+       30
+      ]
+     ]
+    },
+    {
+     "type": "Polygon",
+     "classId": 3,
+     "vertices": [
+      [
+       81.3,
+       44.0
+      ],
+      [
+       44.3,
+       42.0
+      ],
+      [
+       49.1,
+       33.8
+      ],
+      [
+       57.2,
+       23.0
+      ]
+     ]
+    },
+    {
+     "type": "Polygon",
+     "classId": 2,
+     "vertices": [
+      [
+       81.6,
+       38.8
+      ],
+      [
+       80.3,
+       40.7
+      ],
+      [
+       80.3,
+       42.2
+      ],
+      [
+       77.4,
+       40.9
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "id": "priority-ascending/image_00",
+   "file": "priority-ascending/image_00.png",
+   "imageSize": [
+    90,
+    97
+   ],
+   "pixelPriority": {
+    "enabled": true,
+    "ascending": true
+   },
+   "aliases": {
+    "3": "細胞",
+    "6": "boîte"
+   },
+   "segments": [
+    {
+     "type": "Polygon",
+     "classId": 3,
+     "vertices": [
+      [
+       45.1,
+       9.1
+      ],
+      [
+       34.1,
+       22.0
+      ],
+      [
+       13.1,
+       19.3
+      ],
+      [
+       13.4,
+       8.4
+      ],
+      [
+       18.4,
+       0.9
+      ],
+      [
+       32.6,
+       0.0
+      ],
+      [
+       47.0,
+       0.0
+      ]
+     ]
+    },
+    {
+     "type": "Polygon",
+     "classId": 3,
+     "vertices": [
+      [
+       6.9,
+       20.0
+      ],
+      [
+       5.7,
+       11.1
+      ],
+      [
+       5.3,
+       8.7
+      ],
+      [
+       30.0,
+       0.0
+      ]
+     ]
+    },
+    {
+     "type": "Polygon",
+     "classId": 3,
+     "vertices": [
+      [
+       53.9,
+       74.1
+      ],
+      [
+       51.5,
+       80.0
+      ],
+      [
+       48.2,
+       77.2
+      ],
+      [
+       43.3,
+       74.2
+      ],
+      [
+       46.7,
+       63.4
+      ],
+      [
+       54.2,
+       64.8
+      ],
+      [
+       53.7,
+       66.2
+      ]
+     ]
+    },
+    {
+     "type": "Polygon",
+     "classId": 6,
+     "vertices": [
+      [
+       59.3,
+       89.0
+      ],
+      [
+       30.2,
+       89.0
+      ],
+      [
+       21.3,
+       89.0
+      ],
+      [
+       34.9,
+       64.6
+      ],
+      [
+       52.4,
+       77.3
+      ]
+     ]
+    },
+    {
+     "type": "Loaded",
+     "classId": 3,
+     "rects": [
+      [
+       49,
+       40,
+       59,
+       47
+      ],
+      [
+       46,
+       41,
+       53,
+       58
+      ],
+      [
+       47,
+       43,
+       54,
+       67
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "id": "priority-ascending/image_01",
+   "file": "priority-ascending/image_01.png",
+   "imageSize": [
+    76,
+    122
+   ],
+   "pixelPriority": {
+    "enabled": true,
+    "ascending": true
+   },
+   "aliases": {
+    "0": "nucleus",
+    "1": "Zelle",
+    "3": "road",
+    "9": "tree"
+   },
+   "segments": [
+    {
+     "type": "Polygon",
+     "classId": 6,
+     "vertices": [
+      [
+       96.0,
+       22.3
+      ],
+      [
+       80.6,
+       23.7
+      ],
+      [
+       80.5,
+       16.1
+      ],
+      [
+       85.8,
+       11.4
+      ],
+      [
+       88.9,
+       10.2
+      ]
+     ]
+    },
+    {
+     "type": "AI",
+     "classId": 0,
+     "rects": [
+      [
+       5,
+       6,
+       33,
+       23
+      ],
+      [
+       10,
+       1,
+       17,
+       22
+      ]
+     ]
+    },
+    {
+     "type": "Circle",
+     "classId": 0,
+     "vertices": [
+      [
+       93.3,
+       60.3
+      ],
+      [
+       97.4,
+       60.3
+      ]
+     ]
+    },
+    {
+     "type": "AI",
+     "classId": 6,
+     "rects": [
+      [
+       65,
+       62,
+       74,
+       76
+      ],
+      [
+       67,
+       58,
+       101,
+       65
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "id": "priority-ascending/image_02",
+   "file": "priority-ascending/image_02.png",
+   "imageSize": [
+    101,
+    73
+   ],
+   "pixelPriority": {
+    "enabled": true,
+    "ascending": true
+   },
+   "aliases": {
+    "3": "vehicle",
+    "4": "Zelle",
+    "6": "nucleus"
+   },
+   "segments": [
+    {
+     "type": "Polygon",
+     "classId": 0,
+     "vertices": [
+      [
+       49.3,
+       70.5
+      ],
+      [
+       49.1,
+       73.3
+      ],
+      [
+       46.6,
+       74.5
+      ],
+      [
+       40.1,
+       72.0
+      ],
+      [
+       30.1,
+       64.7
+      ],
+      [
+       27.7,
+       55.2
+      ],
+      [
+       55.4,
+       56.6
+      ]
+     ]
+    },
+    {
+     "type": "Polygon",
+     "classId": 0,
+     "vertices": [
+      [
+       9.6,
+       25.5
+      ],
+      [
+       10.5,
+       13.5
+      ],
+      [
+       20.5,
+       14.9
+      ]
+     ]
+    },
+    {
+     "type": "Polygon",
+     "classId": 4,
+     "vertices": [
+      [
+       25.9,
+       26.6
+      ],
+      [
+       27.0,
+       28.8
+      ],
+      [
+       20.2,
+       19.4
+      ],
+      [
+       21.5,
+       19.6
+      ],
+      [
+       25.1,
+       20.7
+      ]
+     ]
+    },
+    {
+     "type": "AI",
+     "classId": 4,
+     "rects": [
+      [
+       14,
+       31,
+       29,
+       36
+      ],
+      [
+       25,
+       6,
+       32,
+       24
+      ],
+      [
+       13,
+       2,
+       25,
+       31
+      ]
+     ]
+    },
+    {
+     "type": "AI",
+     "classId": 6,
+     "rects": [
+      [
+       8,
+       0,
+       26,
+       23
+      ],
+      [
+       3,
+       14,
+       16,
+       25
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "id": "priority-ascending/image_03",
+   "file": "priority-ascending/image_03.png",
+   "imageSize": [
+    79,
+    83
+   ],
+   "pixelPriority": {
+    "enabled": true,
+    "ascending": true
+   },
+   "aliases": {
+    "1": "nucleus",
+    "7": "boîte",
+    "9": "héron"
+   },
+   "segments": [
+    {
+     "type": "AI",
+     "classId": 1,
+     "rects": [
+      [
+       12,
+       9,
+       24,
+       19
+      ]
+     ]
+    },
+    {
+     "type": "Circle",
+     "classId": 7,
+     "vertices": [
+      [
+       32.4,
+       10.5
+      ],
+      [
+       42.7,
+       10.5
+      ]
+     ]
+    },
+    {
+     "type": "Loaded",
+     "classId": 1,
+     "rects": [
+      [
+       18,
+       0,
+       44,
+       20
+      ],
+      [
+       20,
+       2,
+       31,
+       6
+      ]
+     ]
+    },
+    {
+     "type": "AI",
+     "classId": 7,
+     "rects": [
+      [
+       10,
+       9,
+       34,
+       34
+      ]
+     ]
+    },
+    {
+     "type": "Polygon",
+     "classId": 1,
+     "vertices": [
+      [
+       3.0,
+       28.0
+      ],
+      [
+       4.5,
+       24.3
+      ],
+      [
+       20.3,
+       7.8
+      ],
+      [
+       30.4,
+       17.9
+      ]
+     ]
+    },
+    {
+     "type": "Polygon",
+     "classId": 7,
+     "vertices": [
+      [
+       75.7,
+       46.9
+      ],
+      [
+       69.0,
+       60.4
+      ],
+      [
+       59.7,
+       61.0
+      ],
+      [
+       45.5,
+       54.6
+      ],
+      [
+       61.6,
+       31.9
+      ],
+      [
+       72.9,
+       25.9
+      ],
+      [
+       78.0,
+       31.5
+      ]
+     ]
+    },
+    {
+     "type": "Loaded",
+     "classId": 7,
+     "rects": [
+      [
+       64,
+       48,
+       83,
+       59
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "id": "priority-ascending/image_04",
+   "file": "priority-ascending/image_04.png",
+   "imageSize": [
+    62,
+    157
+   ],
+   "pixelPriority": {
+    "enabled": true,
+    "ascending": true
+   },
+   "aliases": {
+    "0": "person",
+    "3": "vehicle"
+   },
+   "segments": [
+    {
+     "type": "AI",
+     "classId": 1,
+     "rects": [
+      [
+       15,
+       0,
+       49,
+       18
+      ],
+      [
+       39,
+       12,
+       58,
+       18
+      ],
+      [
+       24,
+       10,
+       51,
+       25
+      ]
+     ]
+    },
+    {
+     "type": "Polygon",
+     "classId": 4,
+     "vertices": [
+      [
+       32.7,
+       47.1
+      ],
+      [
+       34.0,
+       56.1
+      ],
+      [
+       26.3,
+       55.1
+      ],
+      [
+       21.9,
+       55.3
+      ],
+      [
+       12.2,
+       54.8
+      ],
+      [
+       21.0,
+       35.8
+      ],
+      [
+       37.2,
+       42.8
+      ]
+     ]
+    },
+    {
+     "type": "Circle",
+     "classId": 1,
+     "vertices": [
+      [
+       111.7,
+       21.4
+      ],
+      [
+       115.0,
+       21.4
+      ]
+     ]
+    },
+    {
+     "type": "AI",
+     "classId": 3,
+     "rects": [
+      [
+       101,
+       17,
+       108,
+       21
+      ]
+     ]
+    },
+    {
+     "type": "AI",
+     "classId": 1,
+     "rects": [
+      [
+       114,
+       0,
+       145,
+       12
+      ],
+      [
+       120,
+       5,
+       125,
+       19
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "id": "priority-ascending/image_05",
+   "file": "priority-ascending/image_05.png",
+   "imageSize": [
+    127,
+    185
+   ],
+   "pixelPriority": {
+    "enabled": true,
+    "ascending": true
+   },
+   "aliases": {
+    "0": "person",
+    "9": "細胞"
+   },
+   "segments": [
+    {
+     "type": "AI",
+     "classId": 5,
+     "rects": [
+      [
+       5,
+       50,
+       41,
+       82
+      ],
+      [
+       7,
+       49,
+       22,
+       76
+      ]
+     ]
+    },
+    {
+     "type": "AI",
+     "classId": 4,
+     "rects": [
+      [
+       1,
+       52,
+       29,
+       81
+      ],
+      [
+       11,
+       73,
+       19,
+       82
+      ],
+      [
+       6,
+       74,
+       18,
+       81
+      ]
+     ]
+    },
+    {
+     "type": "AI",
+     "classId": 9,
+     "rects": [
+      [
+       8,
+       84,
+       35,
+       90
+      ],
+      [
+       2,
+       88,
+       21,
+       96
+      ],
+      [
+       10,
+       65,
+       25,
+       84
+      ]
+     ]
+    },
+    {
+     "type": "AI",
+     "classId": 0,
+     "rects": [
+      [
+       0,
+       76,
+       45,
+       110
+      ]
+     ]
+    },
+    {
+     "type": "Loaded",
+     "classId": 0,
+     "rects": [
+      [
+       96,
+       23,
+       104,
+       56
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "id": "priority-ascending/image_06",
+   "file": "priority-ascending/image_06.png",
+   "imageSize": [
+    153,
+    95
+   ],
+   "pixelPriority": {
+    "enabled": true,
+    "ascending": true
+   },
+   "aliases": {
+    "1": "nucleus",
+    "8": "héron"
+   },
+   "segments": [
+    {
+     "type": "Loaded",
+     "classId": 8,
+     "rects": [
+      [
+       38,
+       87,
+       42,
+       105
+      ]
+     ]
+    },
+    {
+     "type": "Circle",
+     "classId": 3,
+     "vertices": [
+      [
+       59.4,
+       65.2
+      ],
+      [
+       76.6,
+       65.2
+      ]
+     ]
+    },
+    {
+     "type": "Polygon",
+     "classId": 3,
+     "vertices": [
+      [
+       91.2,
+       78.8
+      ],
+      [
+       74.2,
+       74.0
+      ],
+      [
+       67.5,
+       58.0
+      ],
+      [
+       89.4,
+       40.0
+      ],
+      [
+       92.2,
+       48.4
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "id": "priority-ascending/image_07",
+   "file": "priority-ascending/image_07.png",
+   "imageSize": [
+    103,
+    214
+   ],
+   "pixelPriority": {
+    "enabled": true,
+    "ascending": true
+   },
+   "aliases": {
+    "0": "person",
+    "2": "tree",
+    "3": "boîte",
+    "7": "細胞"
+   },
+   "segments": [
+    {
+     "type": "Polygon",
+     "classId": 7,
+     "vertices": [
+      [
+       56.8,
+       20.8
+      ],
+      [
+       50.0,
+       17.0
+      ],
+      [
+       43.8,
+       12.4
+      ],
+      [
+       57.7,
+       0.0
+      ],
+      [
+       64.8,
+       7.2
+      ],
+      [
+       69.3,
+       7.8
+      ],
+      [
+       65.3,
+       9.3
+      ]
+     ]
+    },
+    {
+     "type": "Polygon",
+     "classId": 2,
+     "vertices": [
+      [
+       32.0,
+       50.2
+      ],
+      [
+       30.8,
+       53.4
+      ],
+      [
+       24.8,
+       54.5
+      ],
+      [
+       9.2,
+       57.0
+      ],
+      [
+       17.5,
+       14.5
+      ],
+      [
+       21.8,
+       21.6
+      ]
+     ]
+    },
+    {
+     "type": "Loaded",
+     "classId": 9,
+     "rects": [
+      [
+       1,
+       21,
+       7,
+       50
+      ],
+      [
+       0,
+       31,
+       64,
+       39
+      ],
+      [
+       0,
+       16,
+       36,
+       41
+      ]
+     ]
+    },
+    {
+     "type": "Loaded",
+     "classId": 2,
+     "rects": [
+      [
+       0,
+       39,
+       36,
+       48
+      ]
+     ]
+    },
+    {
+     "type": "AI",
+     "classId": 9,
+     "rects": [
+      [
+       0,
+       45,
+       35,
+       49
+      ],
+      [
+       10,
+       38,
+       18,
+       56
+      ],
+      [
+       12,
+       35,
+       24,
+       64
+      ]
+     ]
+    },
+    {
+     "type": "AI",
+     "classId": 7,
+     "rects": [
+      [
+       0,
+       51,
+       42,
+       74
+      ]
+     ]
+    },
+    {
+     "type": "Circle",
+     "classId": 3,
+     "vertices": [
+      [
+       24.1,
+       77.7
+      ],
+      [
+       45.6,
+       77.7
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "id": "priority-ascending/image_08",
+   "file": "priority-ascending/image_08.png",
+   "imageSize": [
+    120,
+    188
+   ],
+   "pixelPriority": {
+    "enabled": true,
+    "ascending": true
+   },
+   "aliases": {
+    "5": "cell"
+   },
+   "segments": [
+    {
+     "type": "Circle",
+     "classId": 6,
+     "vertices": [
+      [
+       52.1,
+       48.8
+      ],
+      [
+       70.7,
+       48.8
+      ]
+     ]
+    },
+    {
+     "type": "Polygon",
+     "classId": 5,
+     "vertices": [
+      [
+       102.7,
+       71.4
+      ],
+      [
+       100.1,
+       69.6
+      ],
+      [
+       98.9,
+       68.9
+      ],
+      [
+       97.3,
+       68.9
+      ],
+      [
+       96.0,
+       68.7
+      ],
+      [
+       92.6,
+       70.0
+      ],
+      [
+       91.9,
+       61.8
+      ]
+     ]
+    },
+    {
+     "type": "Circle",
+     "classId": 6,
+     "vertices": [
+      [
+       116.0,
+       34.9
+      ],
+      [
+       131.9,
+       34.9
+      ]
+     ]
+    },
+    {
+     "type": "Loaded",
+     "classId": 4,
+     "rects": [
+      [
+       55,
+       16,
+       72,
+       44
+      ],
+      [
+       63,
+       15,
+       80,
+       54
+      ]
+     ]
+    },
+    {
+     "type": "Polygon",
+     "classId": 5,
+     "vertices": [
+      [
+       164.6,
+       95.0
+      ],
+      [
+       158.1,
+       105.1
+      ],
+      [
+       139.5,
+       112.8
+      ],
+      [
+       120.1,
+       101.1
+      ],
+      [
+       113.1,
+       80.3
+      ],
+      [
+       146.9,
+       48.9
+      ],
+      [
+       175.6,
+       53.8
+      ],
+      [
+       183.5,
+       73.2
+      ]
+     ]
+    },
+    {
+     "type": "Polygon",
+     "classId": 5,
+     "vertices": [
+      [
+       155.7,
+       100.8
+      ],
+      [
+       144.6,
+       106.1
+      ],
+      [
+       135.1,
+       101.4
+      ],
+      [
+       137.4,
+       75.2
+      ],
+      [
+       139.4,
+       63.4
+      ],
+      [
+       146.4,
+       63.0
+      ],
+      [
+       152.0,
+       71.0
+      ],
+      [
+       160.8,
+       84.9
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "id": "priority-ascending/image_09",
+   "file": "priority-ascending/image_09.png",
+   "imageSize": [
+    78,
+    106
+   ],
+   "pixelPriority": {
+    "enabled": true,
+    "ascending": true
+   },
+   "aliases": {
+    "2": "nucleus",
+    "3": "cell",
+    "9": "tree"
+   },
+   "segments": [
+    {
+     "type": "AI",
+     "classId": 9,
+     "rects": [
+      [
+       64,
+       18,
+       81,
+       37
+      ],
+      [
+       72,
+       11,
+       85,
+       30
+      ]
+     ]
+    },
+    {
+     "type": "Polygon",
+     "classId": 3,
+     "vertices": [
+      [
+       81.3,
+       44.0
+      ],
+      [
+       44.3,
+       42.0
+      ],
+      [
+       49.1,
+       33.8
+      ],
+      [
+       57.2,
+       23.0
+      ]
+     ]
+    },
+    {
+     "type": "Polygon",
+     "classId": 2,
+     "vertices": [
+      [
+       81.6,
+       38.8
+      ],
+      [
+       80.3,
+       40.7
+      ],
+      [
+       80.3,
+       42.2
+      ],
+      [
+       77.4,
+       40.9
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "id": "priority-descending/image_00",
+   "file": "priority-descending/image_00.png",
+   "imageSize": [
+    90,
+    97
+   ],
+   "pixelPriority": {
+    "enabled": true,
+    "ascending": false
+   },
+   "aliases": {
+    "3": "細胞",
+    "6": "boîte"
+   },
+   "segments": [
+    {
+     "type": "Polygon",
+     "classId": 3,
+     "vertices": [
+      [
+       45.1,
+       9.1
+      ],
+      [
+       34.1,
+       22.0
+      ],
+      [
+       13.1,
+       19.3
+      ],
+      [
+       13.4,
+       8.4
+      ],
+      [
+       18.4,
+       0.9
+      ],
+      [
+       32.6,
+       0.0
+      ],
+      [
+       47.0,
+       0.0
+      ]
+     ]
+    },
+    {
+     "type": "Polygon",
+     "classId": 3,
+     "vertices": [
+      [
+       6.9,
+       20.0
+      ],
+      [
+       5.7,
+       11.1
+      ],
+      [
+       5.3,
+       8.7
+      ],
+      [
+       30.0,
+       0.0
+      ]
+     ]
+    },
+    {
+     "type": "Polygon",
+     "classId": 3,
+     "vertices": [
+      [
+       53.9,
+       74.1
+      ],
+      [
+       51.5,
+       80.0
+      ],
+      [
+       48.2,
+       77.2
+      ],
+      [
+       43.3,
+       74.2
+      ],
+      [
+       46.7,
+       63.4
+      ],
+      [
+       54.2,
+       64.8
+      ],
+      [
+       53.7,
+       66.2
+      ]
+     ]
+    },
+    {
+     "type": "Polygon",
+     "classId": 6,
+     "vertices": [
+      [
+       59.3,
+       89.0
+      ],
+      [
+       30.2,
+       89.0
+      ],
+      [
+       21.3,
+       89.0
+      ],
+      [
+       34.9,
+       64.6
+      ],
+      [
+       52.4,
+       77.3
+      ]
+     ]
+    },
+    {
+     "type": "Loaded",
+     "classId": 3,
+     "rects": [
+      [
+       49,
+       40,
+       59,
+       47
+      ],
+      [
+       46,
+       41,
+       53,
+       58
+      ],
+      [
+       47,
+       43,
+       54,
+       67
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "id": "priority-descending/image_01",
+   "file": "priority-descending/image_01.png",
+   "imageSize": [
+    76,
+    122
+   ],
+   "pixelPriority": {
+    "enabled": true,
+    "ascending": false
+   },
+   "aliases": {
+    "0": "nucleus",
+    "1": "Zelle",
+    "3": "road",
+    "9": "tree"
+   },
+   "segments": [
+    {
+     "type": "Polygon",
+     "classId": 6,
+     "vertices": [
+      [
+       96.0,
+       22.3
+      ],
+      [
+       80.6,
+       23.7
+      ],
+      [
+       80.5,
+       16.1
+      ],
+      [
+       85.8,
+       11.4
+      ],
+      [
+       88.9,
+       10.2
+      ]
+     ]
+    },
+    {
+     "type": "AI",
+     "classId": 0,
+     "rects": [
+      [
+       5,
+       6,
+       33,
+       23
+      ],
+      [
+       10,
+       1,
+       17,
+       22
+      ]
+     ]
+    },
+    {
+     "type": "Circle",
+     "classId": 0,
+     "vertices": [
+      [
+       93.3,
+       60.3
+      ],
+      [
+       97.4,
+       60.3
+      ]
+     ]
+    },
+    {
+     "type": "AI",
+     "classId": 6,
+     "rects": [
+      [
+       65,
+       62,
+       74,
+       76
+      ],
+      [
+       67,
+       58,
+       101,
+       65
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "id": "priority-descending/image_02",
+   "file": "priority-descending/image_02.png",
+   "imageSize": [
+    101,
+    73
+   ],
+   "pixelPriority": {
+    "enabled": true,
+    "ascending": false
+   },
+   "aliases": {
+    "3": "vehicle",
+    "4": "Zelle",
+    "6": "nucleus"
+   },
+   "segments": [
+    {
+     "type": "Polygon",
+     "classId": 0,
+     "vertices": [
+      [
+       49.3,
+       70.5
+      ],
+      [
+       49.1,
+       73.3
+      ],
+      [
+       46.6,
+       74.5
+      ],
+      [
+       40.1,
+       72.0
+      ],
+      [
+       30.1,
+       64.7
+      ],
+      [
+       27.7,
+       55.2
+      ],
+      [
+       55.4,
+       56.6
+      ]
+     ]
+    },
+    {
+     "type": "Polygon",
+     "classId": 0,
+     "vertices": [
+      [
+       9.6,
+       25.5
+      ],
+      [
+       10.5,
+       13.5
+      ],
+      [
+       20.5,
+       14.9
+      ]
+     ]
+    },
+    {
+     "type": "Polygon",
+     "classId": 4,
+     "vertices": [
+      [
+       25.9,
+       26.6
+      ],
+      [
+       27.0,
+       28.8
+      ],
+      [
+       20.2,
+       19.4
+      ],
+      [
+       21.5,
+       19.6
+      ],
+      [
+       25.1,
+       20.7
+      ]
+     ]
+    },
+    {
+     "type": "AI",
+     "classId": 4,
+     "rects": [
+      [
+       14,
+       31,
+       29,
+       36
+      ],
+      [
+       25,
+       6,
+       32,
+       24
+      ],
+      [
+       13,
+       2,
+       25,
+       31
+      ]
+     ]
+    },
+    {
+     "type": "AI",
+     "classId": 6,
+     "rects": [
+      [
+       8,
+       0,
+       26,
+       23
+      ],
+      [
+       3,
+       14,
+       16,
+       25
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "id": "priority-descending/image_03",
+   "file": "priority-descending/image_03.png",
+   "imageSize": [
+    79,
+    83
+   ],
+   "pixelPriority": {
+    "enabled": true,
+    "ascending": false
+   },
+   "aliases": {
+    "1": "nucleus",
+    "7": "boîte",
+    "9": "héron"
+   },
+   "segments": [
+    {
+     "type": "AI",
+     "classId": 1,
+     "rects": [
+      [
+       12,
+       9,
+       24,
+       19
+      ]
+     ]
+    },
+    {
+     "type": "Circle",
+     "classId": 7,
+     "vertices": [
+      [
+       32.4,
+       10.5
+      ],
+      [
+       42.7,
+       10.5
+      ]
+     ]
+    },
+    {
+     "type": "Loaded",
+     "classId": 1,
+     "rects": [
+      [
+       18,
+       0,
+       44,
+       20
+      ],
+      [
+       20,
+       2,
+       31,
+       6
+      ]
+     ]
+    },
+    {
+     "type": "AI",
+     "classId": 7,
+     "rects": [
+      [
+       10,
+       9,
+       34,
+       34
+      ]
+     ]
+    },
+    {
+     "type": "Polygon",
+     "classId": 1,
+     "vertices": [
+      [
+       3.0,
+       28.0
+      ],
+      [
+       4.5,
+       24.3
+      ],
+      [
+       20.3,
+       7.8
+      ],
+      [
+       30.4,
+       17.9
+      ]
+     ]
+    },
+    {
+     "type": "Polygon",
+     "classId": 7,
+     "vertices": [
+      [
+       75.7,
+       46.9
+      ],
+      [
+       69.0,
+       60.4
+      ],
+      [
+       59.7,
+       61.0
+      ],
+      [
+       45.5,
+       54.6
+      ],
+      [
+       61.6,
+       31.9
+      ],
+      [
+       72.9,
+       25.9
+      ],
+      [
+       78.0,
+       31.5
+      ]
+     ]
+    },
+    {
+     "type": "Loaded",
+     "classId": 7,
+     "rects": [
+      [
+       64,
+       48,
+       83,
+       59
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "id": "priority-descending/image_04",
+   "file": "priority-descending/image_04.png",
+   "imageSize": [
+    62,
+    157
+   ],
+   "pixelPriority": {
+    "enabled": true,
+    "ascending": false
+   },
+   "aliases": {
+    "0": "person",
+    "3": "vehicle"
+   },
+   "segments": [
+    {
+     "type": "AI",
+     "classId": 1,
+     "rects": [
+      [
+       15,
+       0,
+       49,
+       18
+      ],
+      [
+       39,
+       12,
+       58,
+       18
+      ],
+      [
+       24,
+       10,
+       51,
+       25
+      ]
+     ]
+    },
+    {
+     "type": "Polygon",
+     "classId": 4,
+     "vertices": [
+      [
+       32.7,
+       47.1
+      ],
+      [
+       34.0,
+       56.1
+      ],
+      [
+       26.3,
+       55.1
+      ],
+      [
+       21.9,
+       55.3
+      ],
+      [
+       12.2,
+       54.8
+      ],
+      [
+       21.0,
+       35.8
+      ],
+      [
+       37.2,
+       42.8
+      ]
+     ]
+    },
+    {
+     "type": "Circle",
+     "classId": 1,
+     "vertices": [
+      [
+       111.7,
+       21.4
+      ],
+      [
+       115.0,
+       21.4
+      ]
+     ]
+    },
+    {
+     "type": "AI",
+     "classId": 3,
+     "rects": [
+      [
+       101,
+       17,
+       108,
+       21
+      ]
+     ]
+    },
+    {
+     "type": "AI",
+     "classId": 1,
+     "rects": [
+      [
+       114,
+       0,
+       145,
+       12
+      ],
+      [
+       120,
+       5,
+       125,
+       19
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "id": "priority-descending/image_05",
+   "file": "priority-descending/image_05.png",
+   "imageSize": [
+    127,
+    185
+   ],
+   "pixelPriority": {
+    "enabled": true,
+    "ascending": false
+   },
+   "aliases": {
+    "0": "person",
+    "9": "細胞"
+   },
+   "segments": [
+    {
+     "type": "AI",
+     "classId": 5,
+     "rects": [
+      [
+       5,
+       50,
+       41,
+       82
+      ],
+      [
+       7,
+       49,
+       22,
+       76
+      ]
+     ]
+    },
+    {
+     "type": "AI",
+     "classId": 4,
+     "rects": [
+      [
+       1,
+       52,
+       29,
+       81
+      ],
+      [
+       11,
+       73,
+       19,
+       82
+      ],
+      [
+       6,
+       74,
+       18,
+       81
+      ]
+     ]
+    },
+    {
+     "type": "AI",
+     "classId": 9,
+     "rects": [
+      [
+       8,
+       84,
+       35,
+       90
+      ],
+      [
+       2,
+       88,
+       21,
+       96
+      ],
+      [
+       10,
+       65,
+       25,
+       84
+      ]
+     ]
+    },
+    {
+     "type": "AI",
+     "classId": 0,
+     "rects": [
+      [
+       0,
+       76,
+       45,
+       110
+      ]
+     ]
+    },
+    {
+     "type": "Loaded",
+     "classId": 0,
+     "rects": [
+      [
+       96,
+       23,
+       104,
+       56
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "id": "priority-descending/image_06",
+   "file": "priority-descending/image_06.png",
+   "imageSize": [
+    153,
+    95
+   ],
+   "pixelPriority": {
+    "enabled": true,
+    "ascending": false
+   },
+   "aliases": {
+    "1": "nucleus",
+    "8": "héron"
+   },
+   "segments": [
+    {
+     "type": "Loaded",
+     "classId": 8,
+     "rects": [
+      [
+       38,
+       87,
+       42,
+       105
+      ]
+     ]
+    },
+    {
+     "type": "Circle",
+     "classId": 3,
+     "vertices": [
+      [
+       59.4,
+       65.2
+      ],
+      [
+       76.6,
+       65.2
+      ]
+     ]
+    },
+    {
+     "type": "Polygon",
+     "classId": 3,
+     "vertices": [
+      [
+       91.2,
+       78.8
+      ],
+      [
+       74.2,
+       74.0
+      ],
+      [
+       67.5,
+       58.0
+      ],
+      [
+       89.4,
+       40.0
+      ],
+      [
+       92.2,
+       48.4
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "id": "priority-descending/image_07",
+   "file": "priority-descending/image_07.png",
+   "imageSize": [
+    103,
+    214
+   ],
+   "pixelPriority": {
+    "enabled": true,
+    "ascending": false
+   },
+   "aliases": {
+    "0": "person",
+    "2": "tree",
+    "3": "boîte",
+    "7": "細胞"
+   },
+   "segments": [
+    {
+     "type": "Polygon",
+     "classId": 7,
+     "vertices": [
+      [
+       56.8,
+       20.8
+      ],
+      [
+       50.0,
+       17.0
+      ],
+      [
+       43.8,
+       12.4
+      ],
+      [
+       57.7,
+       0.0
+      ],
+      [
+       64.8,
+       7.2
+      ],
+      [
+       69.3,
+       7.8
+      ],
+      [
+       65.3,
+       9.3
+      ]
+     ]
+    },
+    {
+     "type": "Polygon",
+     "classId": 2,
+     "vertices": [
+      [
+       32.0,
+       50.2
+      ],
+      [
+       30.8,
+       53.4
+      ],
+      [
+       24.8,
+       54.5
+      ],
+      [
+       9.2,
+       57.0
+      ],
+      [
+       17.5,
+       14.5
+      ],
+      [
+       21.8,
+       21.6
+      ]
+     ]
+    },
+    {
+     "type": "Loaded",
+     "classId": 9,
+     "rects": [
+      [
+       1,
+       21,
+       7,
+       50
+      ],
+      [
+       0,
+       31,
+       64,
+       39
+      ],
+      [
+       0,
+       16,
+       36,
+       41
+      ]
+     ]
+    },
+    {
+     "type": "Loaded",
+     "classId": 2,
+     "rects": [
+      [
+       0,
+       39,
+       36,
+       48
+      ]
+     ]
+    },
+    {
+     "type": "AI",
+     "classId": 9,
+     "rects": [
+      [
+       0,
+       45,
+       35,
+       49
+      ],
+      [
+       10,
+       38,
+       18,
+       56
+      ],
+      [
+       12,
+       35,
+       24,
+       64
+      ]
+     ]
+    },
+    {
+     "type": "AI",
+     "classId": 7,
+     "rects": [
+      [
+       0,
+       51,
+       42,
+       74
+      ]
+     ]
+    },
+    {
+     "type": "Circle",
+     "classId": 3,
+     "vertices": [
+      [
+       24.1,
+       77.7
+      ],
+      [
+       45.6,
+       77.7
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "id": "priority-descending/image_08",
+   "file": "priority-descending/image_08.png",
+   "imageSize": [
+    120,
+    188
+   ],
+   "pixelPriority": {
+    "enabled": true,
+    "ascending": false
+   },
+   "aliases": {
+    "5": "cell"
+   },
+   "segments": [
+    {
+     "type": "Circle",
+     "classId": 6,
+     "vertices": [
+      [
+       52.1,
+       48.8
+      ],
+      [
+       70.7,
+       48.8
+      ]
+     ]
+    },
+    {
+     "type": "Polygon",
+     "classId": 5,
+     "vertices": [
+      [
+       102.7,
+       71.4
+      ],
+      [
+       100.1,
+       69.6
+      ],
+      [
+       98.9,
+       68.9
+      ],
+      [
+       97.3,
+       68.9
+      ],
+      [
+       96.0,
+       68.7
+      ],
+      [
+       92.6,
+       70.0
+      ],
+      [
+       91.9,
+       61.8
+      ]
+     ]
+    },
+    {
+     "type": "Circle",
+     "classId": 6,
+     "vertices": [
+      [
+       116.0,
+       34.9
+      ],
+      [
+       131.9,
+       34.9
+      ]
+     ]
+    },
+    {
+     "type": "Loaded",
+     "classId": 4,
+     "rects": [
+      [
+       55,
+       16,
+       72,
+       44
+      ],
+      [
+       63,
+       15,
+       80,
+       54
+      ]
+     ]
+    },
+    {
+     "type": "Polygon",
+     "classId": 5,
+     "vertices": [
+      [
+       164.6,
+       95.0
+      ],
+      [
+       158.1,
+       105.1
+      ],
+      [
+       139.5,
+       112.8
+      ],
+      [
+       120.1,
+       101.1
+      ],
+      [
+       113.1,
+       80.3
+      ],
+      [
+       146.9,
+       48.9
+      ],
+      [
+       175.6,
+       53.8
+      ],
+      [
+       183.5,
+       73.2
+      ]
+     ]
+    },
+    {
+     "type": "Polygon",
+     "classId": 5,
+     "vertices": [
+      [
+       155.7,
+       100.8
+      ],
+      [
+       144.6,
+       106.1
+      ],
+      [
+       135.1,
+       101.4
+      ],
+      [
+       137.4,
+       75.2
+      ],
+      [
+       139.4,
+       63.4
+      ],
+      [
+       146.4,
+       63.0
+      ],
+      [
+       152.0,
+       71.0
+      ],
+      [
+       160.8,
+       84.9
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "id": "priority-descending/image_09",
+   "file": "priority-descending/image_09.png",
+   "imageSize": [
+    78,
+    106
+   ],
+   "pixelPriority": {
+    "enabled": true,
+    "ascending": false
+   },
+   "aliases": {
+    "2": "nucleus",
+    "3": "cell",
+    "9": "tree"
+   },
+   "segments": [
+    {
+     "type": "AI",
+     "classId": 9,
+     "rects": [
+      [
+       64,
+       18,
+       81,
+       37
+      ],
+      [
+       72,
+       11,
+       85,
+       30
+      ]
+     ]
+    },
+    {
+     "type": "Polygon",
+     "classId": 3,
+     "vertices": [
+      [
+       81.3,
+       44.0
+      ],
+      [
+       44.3,
+       42.0
+      ],
+      [
+       49.1,
+       33.8
+      ],
+      [
+       57.2,
+       23.0
+      ]
+     ]
+    },
+    {
+     "type": "Polygon",
+     "classId": 2,
+     "vertices": [
+      [
+       81.6,
+       38.8
+      ],
+      [
+       80.3,
+       40.7
+      ],
+      [
+       80.3,
+       42.2
+      ],
+      [
+       77.4,
+       40.9
+      ]
+     ]
+    }
+   ]
+  }
+ ]
+}

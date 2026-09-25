@@ -1,0 +1,34 @@
+[
+  {
+    "image": "image_06.png",
+    "annotations": [
+      {
+        "label": "h\u00e9ron",
+        "coordinates": {
+          "x": 40.0,
+          "y": 96.0,
+          "width": 4,
+          "height": 18
+        }
+      },
+      {
+        "label": "3",
+        "coordinates": {
+          "x": 59.5,
+          "y": 65.5,
+          "width": 35,
+          "height": 35
+        }
+      },
+      {
+        "label": "3",
+        "coordinates": {
+          "x": 80.0,
+          "y": 59.5,
+          "width": 26,
+          "height": 39
+        }
+      }
+    ]
+  }
+]
