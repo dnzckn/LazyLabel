@@ -649,6 +649,23 @@ configured, so a green CI run says nothing about them — see `Running the live 
    command. Without `--oracle`, differences in the instance formats on images with several shapes
    are legacy's behaviour, not the port's.
 
+3. **Open, the owner's call: class names in `.npz` files (asked 2026-09-25).** The owner's datasets
+   are ordinary: images with txt, npz and json files. But every `.npz` the desktop app writes
+   holds its class-name table as a pickle, which numpy does automatically for a dict. The table is
+   there even when it is empty. The web app refuses that member (SEC-01;
+   `exporters/src/format/aliases.ts`), with three consequences:
+   - every desktop-saved `.npz` shows a "names could not be read" warning in the web app, even
+     with no names;
+   - names given in the desktop app are missing in the web app;
+   - the desktop app ignores the web app's JSON table (`class_aliases_json`), so web-saved names
+     are missing there.
+
+   The proposed fix, not started: the web app reads the pickled table as plain data. That is safe
+   because Node cannot execute a Python pickle. It would accept only the one shape legacy writes,
+   a numpy object array holding a dict of int to str, and refuse anything else. It would also write
+   the table in legacy's format, so both apps read each other's files unchanged. The security rule
+   would become "nothing ever executes a pickle". Waiting on a yes.
+
 The three decisions this list used to end with are answered, above: Ctrl+Plus keeps zooming, the
 timeline keeps legacy's behaviour, and image tiles get built. The measurement that framed the tiles
 question stays here, because the tile work is judged against it. On 2026-09-23 a noisy
