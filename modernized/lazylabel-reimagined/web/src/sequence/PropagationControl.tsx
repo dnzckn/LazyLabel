@@ -18,6 +18,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import type { WireSegment } from "@lazylabel/contracts";
 
 import type { ApiClient, WirePropagationFrame } from "../api/client.js";
@@ -88,6 +89,12 @@ export interface PropagationControlProps {
   readonly onSkipped?: (keys: ReadonlySet<string>) => void;
   /** The frames a Save All wrote, so the timeline can show them saved. */
   readonly onSaved?: (keys: readonly string[]) => void;
+  /**
+   * Where the Save button is drawn: beside the timeline bar, as legacy's Save All is
+   * (main_window.py:3296-3305). A portal, so the button is still this control's -- its saving
+   * state, its guard and its keys stay here -- while it sits where a user looks for it.
+   */
+  readonly saveSlot?: HTMLElement | null;
 }
 
 export function PropagationControl({
@@ -101,6 +108,7 @@ export function PropagationControl({
   confirmDiscard = (message) => window.confirm(message),
   onSkipped,
   onSaved,
+  saveSlot,
   projectId = "default",
 }: PropagationControlProps): ReactNode {
   const { settings } = useSettings();
@@ -464,19 +472,22 @@ export function PropagationControl({
           </button>
         )}
 
-        {done && unsaved.length > 0 && (
-          // Legacy's green Save All (theme.py positiveButton).
-          <button
-            type="button"
-            className="button--positive"
-            onClick={() => void write()}
-            disabled={saving !== null}
-          >
-            {saving === null
-              ? `Save ${unsaved.length} frame${unsaved.length === 1 ? "" : "s"}`
-              : `Saving ${saving.done} of ${saving.total}…`}
-          </button>
-        )}
+        {done && unsaved.length > 0 && (() => {
+          // Legacy's green Save All (theme.py positiveButton), beside the bar when there is a slot.
+          const save = (
+            <button
+              type="button"
+              className="button--positive"
+              onClick={() => void write()}
+              disabled={saving !== null}
+            >
+              {saving === null
+                ? `Save ${unsaved.length} frame${unsaved.length === 1 ? "" : "s"}`
+                : `Saving ${saving.done} of ${saving.total}…`}
+            </button>
+          );
+          return saveSlot === undefined || saveSlot === null ? save : createPortal(save, saveSlot);
+        })()}
 
         {done && (
           <button

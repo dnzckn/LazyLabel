@@ -118,6 +118,8 @@ export function TimelinePanel({
   const [overrides, setOverrides] = useState<readonly Frame[] | null>(null);
   const [sorted, setSorted] = useState(false);
   const [current, setCurrent] = useState(0);
+  // Where the propagation's Save button is drawn: beside the bar, as legacy's Save All is.
+  const [saveSlot, setSaveSlot] = useState<HTMLDivElement | null>(null);
   /*
    * Scores a propagation produced HERE, merged over whatever the caller passed.
    *
@@ -407,6 +409,7 @@ export function TimelinePanel({
 
       {/* Legacy's bar (timeline_widget.py:233-339): one strip, a frame per slice, separators only
           while a frame is at least 4px wide -- about 230 frames across the centre pane. */}
+      <div className="timeline__bar-row">
       <ol
         className={`timeline__frames${order.length > 230 ? " timeline__frames--dense" : ""}`}
         aria-label="Timeline"
@@ -450,11 +453,15 @@ export function TimelinePanel({
           );
         })}
       </ol>
+        {/* Legacy's Save All sits here, right of the bar (main_window.py:3296-3305). */}
+        <div className="timeline__save" ref={setSaveSlot} />
+      </div>
 
       {client !== undefined && (
         <PropagationControl
           client={client}
           frames={shown}
+          saveSlot={saveSlot}
           onScores={setOwnScores}
           unsavedRef={unsavedRef}
           confirmDiscard={confirmDiscard}

@@ -800,6 +800,16 @@ describe("RULE-056: not losing propagated work without asking", () => {
     expect(screen.getByRole("button", { name: /Save 1 frame/ })).toBeTruthy();
   });
 
+  it("offers the Save beside the timeline bar, where legacy's Save All is", async () => {
+    panel(() => true);
+    await propagateAndWait();
+
+    const save = screen.getByRole("button", { name: /Save 1 frame/ });
+    // Drawn into the bar's row through a portal: still the propagation control's button.
+    expect(save.closest(".timeline__bar-row")).not.toBeNull();
+    expect(save.closest(".timeline__bar-row")?.querySelector("[aria-label='Timeline']")).not.toBeNull();
+  });
+
   it("ASKS before Clear throws unsaved frames away, and keeps them on a no", async () => {
     const confirm = vi.fn((_message: string) => false);
     panel(confirm);

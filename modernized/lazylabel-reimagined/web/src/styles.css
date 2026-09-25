@@ -1333,6 +1333,27 @@ fieldset input[type="text"] {
   border-radius: 3px;
 }
 
+/* The bar and, right of it, the Save button, as legacy's row is (main_window.py:3286-3307). */
+.timeline__bar-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.timeline__bar-row > .timeline__frames {
+  flex: 1;
+  min-width: 0;
+}
+
+.timeline__save:empty {
+  display: none;
+}
+
+.timeline__save button {
+  min-width: 80px;
+  margin-top: 4px;
+}
+
 .timeline__frames > li {
   flex: 1 1 0;
   min-width: 0;
