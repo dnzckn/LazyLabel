@@ -43,7 +43,6 @@
   --scroll-track: rgb(0 0 0 / 0.063);
   --scroll-thumb: rgb(0 0 0 / 0.251);
   --scroll-thumb-hover: rgb(0 0 0 / 0.314);
-  --slider-rest: rgb(77 81 87 / 0.2);
   --timeline-ground: rgb(215 215 220);
   --frame-pending: #b9b9be;
   /* The status bar's colours (status_bar.py:87-95, 131-143). */
@@ -95,7 +94,6 @@
     --scroll-track: rgb(255 255 255 / 0.063);
     --scroll-thumb: rgb(255 255 255 / 0.188);
     --scroll-thumb-hover: rgb(255 255 255 / 0.271);
-    --slider-rest: rgb(228 231 235 / 0.1);
     --timeline-ground: rgb(50 50 50);
     --frame-pending: #646464;
     --message: #ffa500;
@@ -143,7 +141,6 @@
   --scroll-track: rgb(255 255 255 / 0.063);
   --scroll-thumb: rgb(255 255 255 / 0.188);
   --scroll-thumb-hover: rgb(255 255 255 / 0.271);
-  --slider-rest: rgb(228 231 235 / 0.1);
   --timeline-ground: rgb(50 50 50);
   --frame-pending: #646464;
   --message: #ffa500;
@@ -301,50 +298,12 @@ input[type="radio"] {
   height: 14px;
 }
 
-/* A 4px groove, filled in the accent up to a round 16px accent handle (QSlider). */
+/* QSlider: a thin groove filled in the accent up to a round accent handle. The browser's own
+   slider draws exactly that from `accent-color`; restyling its track would lose the fill, which
+   no stylesheet can draw up to the handle without script. */
 input[type="range"] {
   accent-color: var(--accent);
-  -webkit-appearance: none;
-  appearance: none;
-  height: 16px;
-  background: transparent;
   cursor: pointer;
-}
-
-input[type="range"]::-webkit-slider-runnable-track {
-  height: 4px;
-  border-radius: 2px;
-  background: var(--slider-rest);
-}
-
-input[type="range"]::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 16px;
-  height: 16px;
-  margin-top: -6px;
-  border-radius: 50%;
-  background: var(--accent);
-}
-
-input[type="range"]::-moz-range-track {
-  height: 4px;
-  border-radius: 2px;
-  background: var(--slider-rest);
-}
-
-input[type="range"]::-moz-range-progress {
-  height: 4px;
-  border-radius: 2px;
-  background: var(--accent);
-}
-
-input[type="range"]::-moz-range-thumb {
-  width: 16px;
-  height: 16px;
-  border: none;
-  border-radius: 50%;
-  background: var(--accent);
 }
 
 /* A group box: a hairline border, radius 4, a bold title set into the top edge. */
@@ -1121,8 +1080,11 @@ fieldset input[type="text"] {
    selection tints over it rather than replacing it, so the class stays readable. */
 /* White text in both themes: legacy's dark mode draws near-white on these rows, and its light
    mode's dark grey on a saturated red is hard to read. */
-.class-row {
+.segments .class-row {
   cursor: pointer;
+}
+
+.class-row {
   color: #ffffff;
   text-shadow: 0 1px 1px rgb(0 0 0 / 0.45);
 }
@@ -1205,6 +1167,7 @@ fieldset input[type="text"] {
 
 /* The id is the button that makes a class active. It reads as the cell's text. */
 .classes__use,
+.classes__use[aria-pressed="true"],
 .classes__use:hover:not(:disabled),
 .classes__use:active:not(:disabled) {
   padding: 0 2px;
