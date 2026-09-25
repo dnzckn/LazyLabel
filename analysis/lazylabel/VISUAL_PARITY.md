@@ -217,7 +217,8 @@ Solid colours with black bold text (sequence_widget.py:173-202, 268-305, 517-550
        app's own previous write. Revisions now live in the store (fixed first, as its own commit).
      - 2026-09-25: the Sequence tab gained legacy's bold "Sequence Mode: name (i/n) -- Conf: x"
        header over the view, and the timeline bar now sits directly under the view with the
-       controls after it, as legacy orders them (main_window.py:3274-3321).
+       controls after it, as legacy orders them (main_window.py:3274-3321). "Save N frames" is drawn
+       beside the bar, where legacy's Save All is, through a portal from the propagation control.
 4. **Palette.**
    - Use the §2 table for both modes, adding tokens for inputs, tables, the status bar and
      selection.
