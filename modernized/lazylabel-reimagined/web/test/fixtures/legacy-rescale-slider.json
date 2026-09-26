@@ -1,0 +1,1961 @@
+{
+ "scenarios": [
+  {
+   "name": "drag: the max handle stops at the min handle",
+   "maximum": 255,
+   "width": 296,
+   "start": [
+    50,
+    200
+   ],
+   "steps": [
+    {
+     "event": "press",
+     "x": 221,
+     "y": 23,
+     "min": 50,
+     "max": 200,
+     "dragging": "max",
+     "emitted": []
+    },
+    {
+     "event": "move",
+     "x": 100,
+     "y": 23,
+     "min": 50,
+     "max": 78,
+     "dragging": "max",
+     "emitted": [
+      [
+       50,
+       78
+      ]
+     ]
+    },
+    {
+     "event": "move",
+     "x": 30,
+     "y": 23,
+     "min": 50,
+     "max": 50,
+     "dragging": "max",
+     "emitted": [
+      [
+       50,
+       50
+      ]
+     ]
+    },
+    {
+     "event": "move",
+     "x": 0,
+     "y": 60,
+     "min": 50,
+     "max": 50,
+     "dragging": "max",
+     "emitted": [
+      [
+       50,
+       50
+      ]
+     ]
+    },
+    {
+     "event": "release",
+     "x": 0,
+     "y": 60,
+     "min": 50,
+     "max": 50,
+     "dragging": null,
+     "emitted": []
+    },
+    {
+     "event": "move",
+     "x": 200,
+     "y": 23,
+     "min": 50,
+     "max": 50,
+     "dragging": null,
+     "emitted": []
+    }
+   ]
+  },
+  {
+   "name": "drag: the min handle stops at the max handle",
+   "maximum": 255,
+   "width": 296,
+   "start": [
+    50,
+    200
+   ],
+   "steps": [
+    {
+     "event": "press",
+     "x": 68,
+     "y": 20,
+     "min": 50,
+     "max": 200,
+     "dragging": "min",
+     "emitted": []
+    },
+    {
+     "event": "move",
+     "x": 150,
+     "y": 20,
+     "min": 131,
+     "max": 200,
+     "dragging": "min",
+     "emitted": [
+      [
+       131,
+       200
+      ]
+     ]
+    },
+    {
+     "event": "move",
+     "x": 260,
+     "y": 20,
+     "min": 200,
+     "max": 200,
+     "dragging": "min",
+     "emitted": [
+      [
+       200,
+       200
+      ]
+     ]
+    },
+    {
+     "event": "move",
+     "x": 400,
+     "y": 0,
+     "min": 200,
+     "max": 200,
+     "dragging": "min",
+     "emitted": [
+      [
+       200,
+       200
+      ]
+     ]
+    },
+    {
+     "event": "release",
+     "x": 400,
+     "y": 0,
+     "min": 200,
+     "max": 200,
+     "dragging": null,
+     "emitted": []
+    }
+   ]
+  },
+  {
+   "name": "drag: a handle follows the pointer from where it was grabbed, to the ends of the track",
+   "maximum": 255,
+   "width": 296,
+   "start": [
+    100,
+    150
+   ],
+   "steps": [
+    {
+     "event": "press",
+     "x": 124,
+     "y": 29,
+     "min": 100,
+     "max": 150,
+     "dragging": "min",
+     "emitted": []
+    },
+    {
+     "event": "move",
+     "x": 118,
+     "y": 29,
+     "min": 93,
+     "max": 150,
+     "dragging": "min",
+     "emitted": [
+      [
+       93,
+       150
+      ]
+     ]
+    },
+    {
+     "event": "move",
+     "x": -50,
+     "y": 29,
+     "min": 0,
+     "max": 150,
+     "dragging": "min",
+     "emitted": [
+      [
+       0,
+       150
+      ]
+     ]
+    },
+    {
+     "event": "release",
+     "x": -50,
+     "y": 29,
+     "min": 0,
+     "max": 150,
+     "dragging": null,
+     "emitted": []
+    },
+    {
+     "event": "press",
+     "x": 175,
+     "y": 16,
+     "min": 0,
+     "max": 150,
+     "dragging": "max",
+     "emitted": []
+    },
+    {
+     "event": "move",
+     "x": 181,
+     "y": 16,
+     "min": 0,
+     "max": 155,
+     "dragging": "max",
+     "emitted": [
+      [
+       0,
+       155
+      ]
+     ]
+    },
+    {
+     "event": "move",
+     "x": 900,
+     "y": 16,
+     "min": 0,
+     "max": 255,
+     "dragging": "max",
+     "emitted": [
+      [
+       0,
+       255
+      ]
+     ]
+    },
+    {
+     "event": "release",
+     "x": 900,
+     "y": 16,
+     "min": 0,
+     "max": 255,
+     "dragging": null,
+     "emitted": []
+    }
+   ]
+  },
+  {
+   "name": "overlap: the max handle takes the press, so it can only move up",
+   "maximum": 255,
+   "width": 296,
+   "start": [
+    128,
+    128
+   ],
+   "steps": [
+    {
+     "event": "press",
+     "x": 148,
+     "y": 23,
+     "min": 128,
+     "max": 128,
+     "dragging": "max",
+     "emitted": []
+    },
+    {
+     "event": "move",
+     "x": 100,
+     "y": 23,
+     "min": 128,
+     "max": 128,
+     "dragging": "max",
+     "emitted": [
+      [
+       128,
+       128
+      ]
+     ]
+    },
+    {
+     "event": "move",
+     "x": 180,
+     "y": 23,
+     "min": 128,
+     "max": 159,
+     "dragging": "max",
+     "emitted": [
+      [
+       128,
+       159
+      ]
+     ]
+    },
+    {
+     "event": "release",
+     "x": 180,
+     "y": 23,
+     "min": 128,
+     "max": 159,
+     "dragging": null,
+     "emitted": []
+    },
+    {
+     "event": "press",
+     "x": 148,
+     "y": 23,
+     "min": 128,
+     "max": 159,
+     "dragging": "min",
+     "emitted": []
+    },
+    {
+     "event": "move",
+     "x": 90,
+     "y": 23,
+     "min": 69,
+     "max": 159,
+     "dragging": "min",
+     "emitted": [
+      [
+       69,
+       159
+      ]
+     ]
+    },
+    {
+     "event": "release",
+     "x": 90,
+     "y": 23,
+     "min": 69,
+     "max": 159,
+     "dragging": null,
+     "emitted": []
+    }
+   ]
+  },
+  {
+   "name": "press: off the handles, above and below them, and on their edges",
+   "maximum": 255,
+   "width": 296,
+   "start": [
+    0,
+    255
+   ],
+   "steps": [
+    {
+     "event": "press",
+     "x": 148,
+     "y": 23,
+     "min": 0,
+     "max": 255,
+     "dragging": null,
+     "emitted": []
+    },
+    {
+     "event": "move",
+     "x": 100,
+     "y": 23,
+     "min": 0,
+     "max": 255,
+     "dragging": null,
+     "emitted": []
+    },
+    {
+     "event": "release",
+     "x": 100,
+     "y": 23,
+     "min": 0,
+     "max": 255,
+     "dragging": null,
+     "emitted": []
+    },
+    {
+     "event": "press",
+     "x": 20,
+     "y": 14,
+     "min": 0,
+     "max": 255,
+     "dragging": null,
+     "emitted": []
+    },
+    {
+     "event": "release",
+     "x": 20,
+     "y": 14,
+     "min": 0,
+     "max": 255,
+     "dragging": null,
+     "emitted": []
+    },
+    {
+     "event": "press",
+     "x": 20,
+     "y": 31,
+     "min": 0,
+     "max": 255,
+     "dragging": null,
+     "emitted": []
+    },
+    {
+     "event": "release",
+     "x": 20,
+     "y": 31,
+     "min": 0,
+     "max": 255,
+     "dragging": null,
+     "emitted": []
+    },
+    {
+     "event": "press",
+     "x": 14,
+     "y": 15,
+     "min": 0,
+     "max": 255,
+     "dragging": "min",
+     "emitted": []
+    },
+    {
+     "event": "move",
+     "x": 40,
+     "y": 15,
+     "min": 25,
+     "max": 255,
+     "dragging": "min",
+     "emitted": [
+      [
+       25,
+       255
+      ]
+     ]
+    },
+    {
+     "event": "release",
+     "x": 40,
+     "y": 15,
+     "min": 25,
+     "max": 255,
+     "dragging": null,
+     "emitted": []
+    },
+    {
+     "event": "press",
+     "x": 281,
+     "y": 30,
+     "min": 25,
+     "max": 255,
+     "dragging": "max",
+     "emitted": []
+    },
+    {
+     "event": "move",
+     "x": 250,
+     "y": 30,
+     "min": 25,
+     "max": 224,
+     "dragging": "max",
+     "emitted": [
+      [
+       25,
+       224
+      ]
+     ]
+    },
+    {
+     "event": "release",
+     "x": 250,
+     "y": 30,
+     "min": 25,
+     "max": 224,
+     "dragging": null,
+     "emitted": []
+    },
+    {
+     "event": "press",
+     "x": 282,
+     "y": 30,
+     "min": 25,
+     "max": 224,
+     "dragging": null,
+     "emitted": []
+    },
+    {
+     "event": "move",
+     "x": 200,
+     "y": 30,
+     "min": 25,
+     "max": 224,
+     "dragging": null,
+     "emitted": []
+    },
+    {
+     "event": "release",
+     "x": 200,
+     "y": 30,
+     "min": 25,
+     "max": 224,
+     "dragging": null,
+     "emitted": []
+    }
+   ]
+  },
+  {
+   "name": "16-bit: 0 to 65535 over the same track",
+   "maximum": 65535,
+   "width": 296,
+   "start": [
+    0,
+    65535
+   ],
+   "steps": [
+    {
+     "event": "press",
+     "x": 276,
+     "y": 23,
+     "min": 0,
+     "max": 65535,
+     "dragging": "max",
+     "emitted": []
+    },
+    {
+     "event": "move",
+     "x": 148,
+     "y": 23,
+     "min": 0,
+     "max": 32767,
+     "dragging": "max",
+     "emitted": [
+      [
+       0,
+       32767
+      ]
+     ]
+    },
+    {
+     "event": "move",
+     "x": 149,
+     "y": 23,
+     "min": 0,
+     "max": 33023,
+     "dragging": "max",
+     "emitted": [
+      [
+       0,
+       33023
+      ]
+     ]
+    },
+    {
+     "event": "release",
+     "x": 149,
+     "y": 23,
+     "min": 0,
+     "max": 33023,
+     "dragging": null,
+     "emitted": []
+    },
+    {
+     "event": "press",
+     "x": 20,
+     "y": 23,
+     "min": 0,
+     "max": 33023,
+     "dragging": "min",
+     "emitted": []
+    },
+    {
+     "event": "move",
+     "x": 77,
+     "y": 23,
+     "min": 14591,
+     "max": 33023,
+     "dragging": "min",
+     "emitted": [
+      [
+       14591,
+       33023
+      ]
+     ]
+    },
+    {
+     "event": "release",
+     "x": 77,
+     "y": 23,
+     "min": 14591,
+     "max": 33023,
+     "dragging": null,
+     "emitted": []
+    }
+   ]
+  },
+  {
+   "name": "narrow: at 200 px a pixel is more than a level",
+   "maximum": 255,
+   "width": 200,
+   "start": [
+    0,
+    255
+   ],
+   "steps": [
+    {
+     "event": "press",
+     "x": 180,
+     "y": 23,
+     "min": 0,
+     "max": 255,
+     "dragging": "max",
+     "emitted": []
+    },
+    {
+     "event": "move",
+     "x": 101,
+     "y": 23,
+     "min": 0,
+     "max": 129,
+     "dragging": "max",
+     "emitted": [
+      [
+       0,
+       129
+      ]
+     ]
+    },
+    {
+     "event": "move",
+     "x": 102,
+     "y": 23,
+     "min": 0,
+     "max": 130,
+     "dragging": "max",
+     "emitted": [
+      [
+       0,
+       130
+      ]
+     ]
+    },
+    {
+     "event": "release",
+     "x": 102,
+     "y": 23,
+     "min": 0,
+     "max": 130,
+     "dragging": null,
+     "emitted": []
+    },
+    {
+     "event": "press",
+     "x": 21,
+     "y": 23,
+     "min": 0,
+     "max": 130,
+     "dragging": "min",
+     "emitted": []
+    },
+    {
+     "event": "move",
+     "x": 57,
+     "y": 23,
+     "min": 57,
+     "max": 130,
+     "dragging": "min",
+     "emitted": [
+      [
+       57,
+       130
+      ]
+     ]
+    },
+    {
+     "event": "release",
+     "x": 57,
+     "y": 23,
+     "min": 57,
+     "max": 130,
+     "dragging": null,
+     "emitted": []
+    }
+   ]
+  },
+  {
+   "name": "a press and release with no move reports nothing",
+   "maximum": 255,
+   "width": 296,
+   "start": [
+    60,
+    180
+   ],
+   "steps": [
+    {
+     "event": "press",
+     "x": 80,
+     "y": 23,
+     "min": 60,
+     "max": 180,
+     "dragging": "min",
+     "emitted": []
+    },
+    {
+     "event": "release",
+     "x": 80,
+     "y": 23,
+     "min": 60,
+     "max": 180,
+     "dragging": null,
+     "emitted": []
+    },
+    {
+     "event": "press",
+     "x": 80,
+     "y": 23,
+     "min": 60,
+     "max": 180,
+     "dragging": "min",
+     "emitted": []
+    },
+    {
+     "event": "move",
+     "x": 80,
+     "y": 23,
+     "min": 59,
+     "max": 180,
+     "dragging": "min",
+     "emitted": [
+      [
+       59,
+       180
+      ]
+     ]
+    },
+    {
+     "event": "release",
+     "x": 80,
+     "y": 23,
+     "min": 59,
+     "max": 180,
+     "dragging": null,
+     "emitted": []
+    }
+   ]
+  }
+ ],
+ "paints": [
+  {
+   "name": "full range, light",
+   "maximum": 255,
+   "width": 296,
+   "values": [
+    0,
+    255
+   ],
+   "dragging": null,
+   "dark": false,
+   "calls": [
+    {
+     "op": "roundedRect",
+     "x": 20,
+     "y": 18,
+     "width": 256,
+     "height": 10,
+     "radius": [
+      5,
+      5
+     ],
+     "pen": {
+      "rgba": [
+       180,
+       180,
+       180,
+       255
+      ],
+      "width": 2
+     },
+     "brush": {
+      "rgba": [
+       230,
+       230,
+       230,
+       255
+      ]
+     }
+    },
+    {
+     "op": "roundedRect",
+     "x": 20,
+     "y": 18,
+     "width": 256,
+     "height": 10,
+     "radius": [
+      5,
+      5
+     ],
+     "pen": null,
+     "brush": {
+      "rgba": [
+       100,
+       180,
+       255,
+       140
+      ]
+     }
+    },
+    {
+     "op": "roundedRect",
+     "x": 14,
+     "y": 15,
+     "width": 12,
+     "height": 16,
+     "radius": [
+      3,
+      3
+     ],
+     "pen": {
+      "rgba": [
+       120,
+       120,
+       120,
+       255
+      ],
+      "width": 1
+     },
+     "brush": {
+      "rgba": [
+       255,
+       255,
+       255,
+       255
+      ]
+     }
+    },
+    {
+     "op": "roundedRect",
+     "x": 270,
+     "y": 15,
+     "width": 12,
+     "height": 16,
+     "radius": [
+      3,
+      3
+     ],
+     "pen": {
+      "rgba": [
+       120,
+       120,
+       120,
+       255
+      ],
+      "width": 1
+     },
+     "brush": {
+      "rgba": [
+       255,
+       255,
+       255,
+       255
+      ]
+     }
+    },
+    {
+     "op": "font",
+     "pointSize": 8
+    },
+    {
+     "op": "text",
+     "x": 5,
+     "y": 41,
+     "text": "0",
+     "pen": {
+      "rgba": [
+       30,
+       30,
+       30,
+       255
+      ],
+      "width": 1
+     }
+    },
+    {
+     "op": "text",
+     "x": 261,
+     "y": 41,
+     "text": "255",
+     "pen": {
+      "rgba": [
+       30,
+       30,
+       30,
+       255
+      ],
+      "width": 1
+     }
+    }
+   ]
+  },
+  {
+   "name": "full range, dark",
+   "maximum": 255,
+   "width": 296,
+   "values": [
+    0,
+    255
+   ],
+   "dragging": null,
+   "dark": true,
+   "calls": [
+    {
+     "op": "roundedRect",
+     "x": 20,
+     "y": 18,
+     "width": 256,
+     "height": 10,
+     "radius": [
+      5,
+      5
+     ],
+     "pen": {
+      "rgba": [
+       100,
+       100,
+       100,
+       255
+      ],
+      "width": 2
+     },
+     "brush": {
+      "rgba": [
+       50,
+       50,
+       50,
+       255
+      ]
+     }
+    },
+    {
+     "op": "roundedRect",
+     "x": 20,
+     "y": 18,
+     "width": 256,
+     "height": 10,
+     "radius": [
+      5,
+      5
+     ],
+     "pen": null,
+     "brush": {
+      "rgba": [
+       100,
+       180,
+       255,
+       140
+      ]
+     }
+    },
+    {
+     "op": "roundedRect",
+     "x": 14,
+     "y": 15,
+     "width": 12,
+     "height": 16,
+     "radius": [
+      3,
+      3
+     ],
+     "pen": {
+      "rgba": [
+       150,
+       150,
+       150,
+       255
+      ],
+      "width": 1
+     },
+     "brush": {
+      "rgba": [
+       255,
+       255,
+       255,
+       255
+      ]
+     }
+    },
+    {
+     "op": "roundedRect",
+     "x": 270,
+     "y": 15,
+     "width": 12,
+     "height": 16,
+     "radius": [
+      3,
+      3
+     ],
+     "pen": {
+      "rgba": [
+       150,
+       150,
+       150,
+       255
+      ],
+      "width": 1
+     },
+     "brush": {
+      "rgba": [
+       255,
+       255,
+       255,
+       255
+      ]
+     }
+    },
+    {
+     "op": "font",
+     "pointSize": 8
+    },
+    {
+     "op": "text",
+     "x": 5,
+     "y": 41,
+     "text": "0",
+     "pen": {
+      "rgba": [
+       255,
+       255,
+       255,
+       255
+      ],
+      "width": 1
+     }
+    },
+    {
+     "op": "text",
+     "x": 261,
+     "y": 41,
+     "text": "255",
+     "pen": {
+      "rgba": [
+       255,
+       255,
+       255,
+       255
+      ],
+      "width": 1
+     }
+    }
+   ]
+  },
+  {
+   "name": "a window, light",
+   "maximum": 255,
+   "width": 296,
+   "values": [
+    50,
+    200
+   ],
+   "dragging": null,
+   "dark": false,
+   "calls": [
+    {
+     "op": "roundedRect",
+     "x": 20,
+     "y": 18,
+     "width": 256,
+     "height": 10,
+     "radius": [
+      5,
+      5
+     ],
+     "pen": {
+      "rgba": [
+       180,
+       180,
+       180,
+       255
+      ],
+      "width": 2
+     },
+     "brush": {
+      "rgba": [
+       230,
+       230,
+       230,
+       255
+      ]
+     }
+    },
+    {
+     "op": "roundedRect",
+     "x": 70,
+     "y": 18,
+     "width": 150,
+     "height": 10,
+     "radius": [
+      5,
+      5
+     ],
+     "pen": null,
+     "brush": {
+      "rgba": [
+       100,
+       180,
+       255,
+       140
+      ]
+     }
+    },
+    {
+     "op": "roundedRect",
+     "x": 64,
+     "y": 15,
+     "width": 12,
+     "height": 16,
+     "radius": [
+      3,
+      3
+     ],
+     "pen": {
+      "rgba": [
+       120,
+       120,
+       120,
+       255
+      ],
+      "width": 1
+     },
+     "brush": {
+      "rgba": [
+       255,
+       255,
+       255,
+       255
+      ]
+     }
+    },
+    {
+     "op": "roundedRect",
+     "x": 214,
+     "y": 15,
+     "width": 12,
+     "height": 16,
+     "radius": [
+      3,
+      3
+     ],
+     "pen": {
+      "rgba": [
+       120,
+       120,
+       120,
+       255
+      ],
+      "width": 1
+     },
+     "brush": {
+      "rgba": [
+       255,
+       255,
+       255,
+       255
+      ]
+     }
+    },
+    {
+     "op": "font",
+     "pointSize": 8
+    },
+    {
+     "op": "text",
+     "x": 55,
+     "y": 41,
+     "text": "50",
+     "pen": {
+      "rgba": [
+       30,
+       30,
+       30,
+       255
+      ],
+      "width": 1
+     }
+    },
+    {
+     "op": "text",
+     "x": 205,
+     "y": 41,
+     "text": "200",
+     "pen": {
+      "rgba": [
+       30,
+       30,
+       30,
+       255
+      ],
+      "width": 1
+     }
+    }
+   ]
+  },
+  {
+   "name": "the min handle dragged, dark",
+   "maximum": 255,
+   "width": 296,
+   "values": [
+    50,
+    200
+   ],
+   "dragging": "min",
+   "dark": true,
+   "calls": [
+    {
+     "op": "roundedRect",
+     "x": 20,
+     "y": 18,
+     "width": 256,
+     "height": 10,
+     "radius": [
+      5,
+      5
+     ],
+     "pen": {
+      "rgba": [
+       100,
+       100,
+       100,
+       255
+      ],
+      "width": 2
+     },
+     "brush": {
+      "rgba": [
+       50,
+       50,
+       50,
+       255
+      ]
+     }
+    },
+    {
+     "op": "roundedRect",
+     "x": 70,
+     "y": 18,
+     "width": 150,
+     "height": 10,
+     "radius": [
+      5,
+      5
+     ],
+     "pen": null,
+     "brush": {
+      "rgba": [
+       100,
+       180,
+       255,
+       140
+      ]
+     }
+    },
+    {
+     "op": "roundedRect",
+     "x": 64,
+     "y": 15,
+     "width": 12,
+     "height": 16,
+     "radius": [
+      3,
+      3
+     ],
+     "pen": {
+      "rgba": [
+       200,
+       200,
+       50,
+       255
+      ],
+      "width": 2
+     },
+     "brush": {
+      "rgba": [
+       255,
+       255,
+       100,
+       255
+      ]
+     }
+    },
+    {
+     "op": "roundedRect",
+     "x": 214,
+     "y": 15,
+     "width": 12,
+     "height": 16,
+     "radius": [
+      3,
+      3
+     ],
+     "pen": {
+      "rgba": [
+       150,
+       150,
+       150,
+       255
+      ],
+      "width": 1
+     },
+     "brush": {
+      "rgba": [
+       255,
+       255,
+       255,
+       255
+      ]
+     }
+    },
+    {
+     "op": "font",
+     "pointSize": 8
+    },
+    {
+     "op": "text",
+     "x": 55,
+     "y": 41,
+     "text": "50",
+     "pen": {
+      "rgba": [
+       255,
+       255,
+       255,
+       255
+      ],
+      "width": 1
+     }
+    },
+    {
+     "op": "text",
+     "x": 205,
+     "y": 41,
+     "text": "200",
+     "pen": {
+      "rgba": [
+       255,
+       255,
+       255,
+       255
+      ],
+      "width": 1
+     }
+    }
+   ]
+  },
+  {
+   "name": "the max handle dragged, light",
+   "maximum": 255,
+   "width": 296,
+   "values": [
+    50,
+    200
+   ],
+   "dragging": "max",
+   "dark": false,
+   "calls": [
+    {
+     "op": "roundedRect",
+     "x": 20,
+     "y": 18,
+     "width": 256,
+     "height": 10,
+     "radius": [
+      5,
+      5
+     ],
+     "pen": {
+      "rgba": [
+       180,
+       180,
+       180,
+       255
+      ],
+      "width": 2
+     },
+     "brush": {
+      "rgba": [
+       230,
+       230,
+       230,
+       255
+      ]
+     }
+    },
+    {
+     "op": "roundedRect",
+     "x": 70,
+     "y": 18,
+     "width": 150,
+     "height": 10,
+     "radius": [
+      5,
+      5
+     ],
+     "pen": null,
+     "brush": {
+      "rgba": [
+       100,
+       180,
+       255,
+       140
+      ]
+     }
+    },
+    {
+     "op": "roundedRect",
+     "x": 64,
+     "y": 15,
+     "width": 12,
+     "height": 16,
+     "radius": [
+      3,
+      3
+     ],
+     "pen": {
+      "rgba": [
+       120,
+       120,
+       120,
+       255
+      ],
+      "width": 1
+     },
+     "brush": {
+      "rgba": [
+       255,
+       255,
+       255,
+       255
+      ]
+     }
+    },
+    {
+     "op": "roundedRect",
+     "x": 214,
+     "y": 15,
+     "width": 12,
+     "height": 16,
+     "radius": [
+      3,
+      3
+     ],
+     "pen": {
+      "rgba": [
+       200,
+       200,
+       50,
+       255
+      ],
+      "width": 2
+     },
+     "brush": {
+      "rgba": [
+       255,
+       255,
+       100,
+       255
+      ]
+     }
+    },
+    {
+     "op": "font",
+     "pointSize": 8
+    },
+    {
+     "op": "text",
+     "x": 55,
+     "y": 41,
+     "text": "50",
+     "pen": {
+      "rgba": [
+       30,
+       30,
+       30,
+       255
+      ],
+      "width": 1
+     }
+    },
+    {
+     "op": "text",
+     "x": 205,
+     "y": 41,
+     "text": "200",
+     "pen": {
+      "rgba": [
+       30,
+       30,
+       30,
+       255
+      ],
+      "width": 1
+     }
+    }
+   ]
+  },
+  {
+   "name": "16-bit, dark",
+   "maximum": 65535,
+   "width": 296,
+   "values": [
+    1000,
+    60000
+   ],
+   "dragging": null,
+   "dark": true,
+   "calls": [
+    {
+     "op": "roundedRect",
+     "x": 20,
+     "y": 18,
+     "width": 256,
+     "height": 10,
+     "radius": [
+      5,
+      5
+     ],
+     "pen": {
+      "rgba": [
+       100,
+       100,
+       100,
+       255
+      ],
+      "width": 2
+     },
+     "brush": {
+      "rgba": [
+       50,
+       50,
+       50,
+       255
+      ]
+     }
+    },
+    {
+     "op": "roundedRect",
+     "x": 23,
+     "y": 18,
+     "width": 231,
+     "height": 10,
+     "radius": [
+      5,
+      5
+     ],
+     "pen": null,
+     "brush": {
+      "rgba": [
+       100,
+       180,
+       255,
+       140
+      ]
+     }
+    },
+    {
+     "op": "roundedRect",
+     "x": 17,
+     "y": 15,
+     "width": 12,
+     "height": 16,
+     "radius": [
+      3,
+      3
+     ],
+     "pen": {
+      "rgba": [
+       150,
+       150,
+       150,
+       255
+      ],
+      "width": 1
+     },
+     "brush": {
+      "rgba": [
+       255,
+       255,
+       255,
+       255
+      ]
+     }
+    },
+    {
+     "op": "roundedRect",
+     "x": 248,
+     "y": 15,
+     "width": 12,
+     "height": 16,
+     "radius": [
+      3,
+      3
+     ],
+     "pen": {
+      "rgba": [
+       150,
+       150,
+       150,
+       255
+      ],
+      "width": 1
+     },
+     "brush": {
+      "rgba": [
+       255,
+       255,
+       255,
+       255
+      ]
+     }
+    },
+    {
+     "op": "font",
+     "pointSize": 8
+    },
+    {
+     "op": "text",
+     "x": 8,
+     "y": 41,
+     "text": "1000",
+     "pen": {
+      "rgba": [
+       255,
+       255,
+       255,
+       255
+      ],
+      "width": 1
+     }
+    },
+    {
+     "op": "text",
+     "x": 239,
+     "y": 41,
+     "text": "60000",
+     "pen": {
+      "rgba": [
+       255,
+       255,
+       255,
+       255
+      ],
+      "width": 1
+     }
+    }
+   ]
+  },
+  {
+   "name": "handles together, light",
+   "maximum": 255,
+   "width": 296,
+   "values": [
+    128,
+    128
+   ],
+   "dragging": null,
+   "dark": false,
+   "calls": [
+    {
+     "op": "roundedRect",
+     "x": 20,
+     "y": 18,
+     "width": 256,
+     "height": 10,
+     "radius": [
+      5,
+      5
+     ],
+     "pen": {
+      "rgba": [
+       180,
+       180,
+       180,
+       255
+      ],
+      "width": 2
+     },
+     "brush": {
+      "rgba": [
+       230,
+       230,
+       230,
+       255
+      ]
+     }
+    },
+    {
+     "op": "roundedRect",
+     "x": 148,
+     "y": 18,
+     "width": 0,
+     "height": 10,
+     "radius": [
+      5,
+      5
+     ],
+     "pen": null,
+     "brush": {
+      "rgba": [
+       100,
+       180,
+       255,
+       140
+      ]
+     }
+    },
+    {
+     "op": "roundedRect",
+     "x": 142,
+     "y": 15,
+     "width": 12,
+     "height": 16,
+     "radius": [
+      3,
+      3
+     ],
+     "pen": {
+      "rgba": [
+       120,
+       120,
+       120,
+       255
+      ],
+      "width": 1
+     },
+     "brush": {
+      "rgba": [
+       255,
+       255,
+       255,
+       255
+      ]
+     }
+    },
+    {
+     "op": "roundedRect",
+     "x": 142,
+     "y": 15,
+     "width": 12,
+     "height": 16,
+     "radius": [
+      3,
+      3
+     ],
+     "pen": {
+      "rgba": [
+       120,
+       120,
+       120,
+       255
+      ],
+      "width": 1
+     },
+     "brush": {
+      "rgba": [
+       255,
+       255,
+       255,
+       255
+      ]
+     }
+    },
+    {
+     "op": "font",
+     "pointSize": 8
+    },
+    {
+     "op": "text",
+     "x": 133,
+     "y": 41,
+     "text": "128",
+     "pen": {
+      "rgba": [
+       30,
+       30,
+       30,
+       255
+      ],
+      "width": 1
+     }
+    },
+    {
+     "op": "text",
+     "x": 133,
+     "y": 41,
+     "text": "128",
+     "pen": {
+      "rgba": [
+       30,
+       30,
+       30,
+       255
+      ],
+      "width": 1
+     }
+    }
+   ]
+  },
+  {
+   "name": "narrow, light",
+   "maximum": 255,
+   "width": 200,
+   "values": [
+    64,
+    192
+   ],
+   "dragging": null,
+   "dark": false,
+   "calls": [
+    {
+     "op": "roundedRect",
+     "x": 20,
+     "y": 18,
+     "width": 160,
+     "height": 10,
+     "radius": [
+      5,
+      5
+     ],
+     "pen": {
+      "rgba": [
+       180,
+       180,
+       180,
+       255
+      ],
+      "width": 2
+     },
+     "brush": {
+      "rgba": [
+       230,
+       230,
+       230,
+       255
+      ]
+     }
+    },
+    {
+     "op": "roundedRect",
+     "x": 60,
+     "y": 18,
+     "width": 80,
+     "height": 10,
+     "radius": [
+      5,
+      5
+     ],
+     "pen": null,
+     "brush": {
+      "rgba": [
+       100,
+       180,
+       255,
+       140
+      ]
+     }
+    },
+    {
+     "op": "roundedRect",
+     "x": 54,
+     "y": 15,
+     "width": 12,
+     "height": 16,
+     "radius": [
+      3,
+      3
+     ],
+     "pen": {
+      "rgba": [
+       120,
+       120,
+       120,
+       255
+      ],
+      "width": 1
+     },
+     "brush": {
+      "rgba": [
+       255,
+       255,
+       255,
+       255
+      ]
+     }
+    },
+    {
+     "op": "roundedRect",
+     "x": 134,
+     "y": 15,
+     "width": 12,
+     "height": 16,
+     "radius": [
+      3,
+      3
+     ],
+     "pen": {
+      "rgba": [
+       120,
+       120,
+       120,
+       255
+      ],
+      "width": 1
+     },
+     "brush": {
+      "rgba": [
+       255,
+       255,
+       255,
+       255
+      ]
+     }
+    },
+    {
+     "op": "font",
+     "pointSize": 8
+    },
+    {
+     "op": "text",
+     "x": 45,
+     "y": 41,
+     "text": "64",
+     "pen": {
+      "rgba": [
+       30,
+       30,
+       30,
+       255
+      ],
+      "width": 1
+     }
+    },
+    {
+     "op": "text",
+     "x": 125,
+     "y": 41,
+     "text": "192",
+     "pen": {
+      "rgba": [
+       30,
+       30,
+       30,
+       255
+      ],
+      "width": 1
+     }
+    }
+   ]
+  }
+ ]
+}

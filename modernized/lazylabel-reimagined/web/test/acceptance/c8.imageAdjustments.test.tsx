@@ -177,20 +177,32 @@ describe("C8: rescale and channel thresholds, which run on the server", () => {
     }
   });
 
-  it("puts a rescale window on it", async () => {
-    const { pixelsUrl } = await openImage();
-    await openPanel("Rescale");
+  it("puts a rescale window on it, from a drag of the slider's min handle", async () => {
+    // jsdom lays nothing out: the slider is given 296 px, a 256 px track from x=20.
+    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(
+      () =>
+        ({ x: 0, y: 0, left: 0, top: 0, width: 296, height: 50, right: 296, bottom: 50, toJSON: () => ({}) }) as DOMRect,
+    );
+    try {
+      const { pixelsUrl } = await openImage();
+      await openPanel("Rescale");
 
-    fireEvent.change(screen.getByLabelText("Rescale low"), { target: { value: "50" } });
+      const slider = screen.getByRole("group", { name: "Rescale range" });
+      fireEvent.pointerDown(slider, { clientX: 20, clientY: 23, button: 0, pointerId: 1 });
+      fireEvent.pointerMove(slider, { clientX: 70, clientY: 23, buttons: 1, pointerId: 1 });
+      fireEvent.pointerUp(slider, { clientX: 70, clientY: 23, button: 0, pointerId: 1 });
 
-    await waitFor(() => expect(lastQuery(pixelsUrl)).toContain("rescaleMin=50"));
+      await waitFor(() => expect(lastQuery(pixelsUrl)).toBe("?rescaleMin=49&rescaleMax=255"));
+    } finally {
+      vi.restoreAllMocks();
+    }
   });
 
   it("does NOT offer rescale on a colour image, and says so in legacy's words (RULE-032)", async () => {
     await openImage(3);
     await openPanel("Rescale");
 
-    expect(screen.queryByLabelText("Rescale low")).toBeNull();
+    expect(screen.getByRole("group", { name: "Rescale range" }).getAttribute("aria-disabled")).toBe("true");
     expect(screen.getByText("RGB image — rescale disabled")).toBeTruthy();
   });
 

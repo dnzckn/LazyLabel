@@ -1,14 +1,15 @@
 /**
  * The Rescale section — RULE-032's window and RULE-031's presets, asked of the server.
  *
- * What is tested is what it OFFERS and what it asks for: a grayscale image gets the window and the
- * presets, a colour one gets legacy's one-line refusal, and Reset clears the window and any
- * preset, as legacy's does (`rescale_widget.py:320-328`). No paragraphs: what it says is legacy's
- * own info line.
+ * What is tested is what it OFFERS and what it asks for. The widget is laid out as legacy's
+ * `RescaleWidget` is (`rescale_widget.py:204-250`): a bold title with its buttons, ONE slider with
+ * two handles, and one status line. A grayscale image enables it; before one, or on a colour image,
+ * it is there and disabled, and the status line says why in legacy's words. Reset clears the window
+ * and any preset, as legacy's does (lines 320-328). No paragraphs.
  */
 
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { WireDatasetImage } from "@lazylabel/contracts";
 
 import type { ApiClient } from "../../src/api/client.js";
@@ -16,7 +17,18 @@ import { RescalePanel } from "../../src/workspace/RescalePanel.jsx";
 import { processingQuery } from "../../src/workspace/processing.js";
 import { WorkspaceProvider, useWorkspace } from "../../src/workspace/WorkspaceProvider.jsx";
 
-afterEach(cleanup);
+beforeEach(() => {
+  // jsdom lays nothing out: the slider is 296 px wide, a 256 px track from x=20.
+  vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(
+    () =>
+      ({ x: 0, y: 0, left: 0, top: 0, width: 296, height: 50, right: 296, bottom: 50, toJSON: () => ({}) }) as DOMRect,
+  );
+});
+
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+});
 
 const IMAGE: WireDatasetImage = {
   key: "a.png",
@@ -64,57 +76,90 @@ const COLOUR8 = { sourceChannels: 3, sourceDepth: 8 } as const;
 const GRAY16 = { sourceChannels: 1, sourceDepth: 16 } as const;
 
 const query = () => screen.getByTestId("query").textContent;
+const slider = () => screen.getByRole("group", { name: "Rescale range" });
+const info = (container: HTMLElement) => container.querySelector(".rescale .processing__info")?.textContent;
+const values = () =>
+  [...slider().querySelectorAll<SVGRectElement>("[data-handle]")].map((h) => Number(h.dataset["value"]));
 
-describe("what it says, in legacy's words", () => {
-  it("asks for a grayscale image before one is open", () => {
-    mount(GRAY8);
-    expect(screen.getByText("Load a grayscale image to enable")).toBeTruthy();
+/** Press a handle at `from`, move to `to`, let go: the way a user drags it. */
+function drag(from: number, to: number) {
+  fireEvent.pointerDown(slider(), { clientX: from, clientY: 23, button: 0, pointerId: 1 });
+  fireEvent.pointerMove(slider(), { clientX: to, clientY: 23, buttons: 1, pointerId: 1 });
+  fireEvent.pointerUp(slider(), { clientX: to, clientY: 23, button: 0, pointerId: 1 });
+}
+
+describe("what it shows, in legacy's words", () => {
+  it("is there before an image is open, disabled, asking for a grayscale image", () => {
+    const { container } = mount(GRAY8);
+
+    expect(screen.getByText("Rescale (Min/Max)")).toBeTruthy();
+    expect(info(container)).toBe("Load a grayscale image to enable");
+    expect(slider().getAttribute("aria-disabled")).toBe("true");
+    expect((screen.getByRole("button", { name: "Reset" }) as HTMLButtonElement).disabled).toBe(true);
   });
 
-  it("names a colour image as legacy does, with no controls", async () => {
-    // RULE-032 disables rescale for colour; legacy's info line says so (rescale_widget.py:276-281).
-    await open(COLOUR8);
+  it("names a colour image as legacy does, with the slider and Reset disabled", async () => {
+    // RULE-032 disables rescale for colour; legacy's info line says so (rescale_widget.py:278-283).
+    const { container } = await open(COLOUR8);
 
-    expect(screen.getByText("RGB image — rescale disabled")).toBeTruthy();
-    expect(screen.queryByLabelText("Rescale low")).toBeNull();
+    expect(info(container)).toBe("RGB image — rescale disabled");
+    expect(slider().getAttribute("aria-disabled")).toBe("true");
+    expect((screen.getByRole("button", { name: "Reset" }) as HTMLButtonElement).disabled).toBe(true);
   });
 
-  it("gives a grayscale image the window and legacy's range line, and no paragraphs", async () => {
+  it("gives a grayscale image one two-handled slider and legacy's range line, and no paragraphs", async () => {
     const { container } = await open(GRAY8);
     const rescale = container.querySelector(".rescale")!;
 
-    expect(screen.getByLabelText("Rescale low")).toBeTruthy();
-    // Exactly legacy's string, double spaces and all (rescale_widget.py:285-287).
-    expect(rescale.querySelector(".processing__info")?.textContent).toBe(
-      "Range: 0–255  |  Drag handles to rescale",
-    );
+    expect(slider().getAttribute("aria-disabled")).toBe("false");
+    expect(values()).toEqual([0, 255]);
+    // Exactly legacy's string, double spaces and all (rescale_widget.py:297-299).
+    expect(info(container)).toBe("Range: 0–255  |  Drag handles to rescale");
     expect(rescale.querySelectorAll("p, [role=alert], [role=status]")).toHaveLength(0);
+    // One slider, not two range inputs that could be set past each other.
+    expect(rescale.querySelectorAll('input[type="range"]')).toHaveLength(0);
   });
 
-  it("runs the window to 65535 on a 16-bit image", async () => {
+  it("runs the slider to 65535 on a 16-bit image", async () => {
     const { container } = await open(GRAY16);
 
-    expect(screen.getByLabelText("Rescale low").getAttribute("max")).toBe("65535");
-    expect(container.querySelector(".rescale .processing__info")?.textContent).toBe(
-      "Range: 0–65535  |  Drag handles to rescale",
-    );
+    expect(values()).toEqual([0, 65535]);
+    expect(info(container)).toBe("Range: 0–65535  |  Drag handles to rescale");
   });
 });
 
 describe("what it asks the server for", () => {
-  it("puts the window on the query", async () => {
+  it("puts the window on the query when a handle is let go", async () => {
     await open(GRAY8);
 
-    fireEvent.change(screen.getByLabelText("Rescale low"), { target: { value: "20" } });
+    // The min handle sits at x=20; 148 is level 127 (legacy's truncation, rescale_widget.py:80-84).
+    drag(20, 148);
 
-    await waitFor(() => expect(query()).toBe("?rescaleMin=20&rescaleMax=255"));
+    await waitFor(() => expect(query()).toBe("?rescaleMin=127&rescaleMax=255"));
   });
 
-  it("asks for nothing when the handles cross, rather than blanking the image", async () => {
+  it("cannot cross the handles: the max handle stops at the min one", async () => {
     await open(GRAY8);
+    drag(20, 148);
+    await waitFor(() => expect(query()).toBe("?rescaleMin=127&rescaleMax=255"));
 
-    fireEvent.change(screen.getByLabelText("Rescale high"), { target: { value: "0" } });
+    // Drag the max handle (x=276) all the way left, past the min handle.
+    drag(276, 0);
 
+    // It stops ON the min handle rather than passing it, so the window is empty and nothing is
+    // asked for: legacy leaves the image alone when max <= min (rescale_widget.py:377-378).
+    await waitFor(() => expect(values()).toEqual([127, 127]));
+    expect(query()).toBe("");
+  });
+
+  it("asks for nothing when both handles are back at the ends", async () => {
+    await open(GRAY8);
+    drag(20, 148);
+    await waitFor(() => expect(query()).toBe("?rescaleMin=127&rescaleMax=255"));
+
+    drag(147, -100);
+
+    await waitFor(() => expect(values()).toEqual([0, 255]));
     expect(query()).toBe("");
   });
 
@@ -124,12 +169,13 @@ describe("what it asks the server for", () => {
     fireEvent.click(screen.getByLabelText("Equalize"));
     await waitFor(() => expect(query()).toBe("?preset=equalize"));
 
-    fireEvent.change(screen.getByLabelText("Rescale low"), { target: { value: "30" } });
-    await waitFor(() => expect(query()).toBe("?rescaleMin=30&rescaleMax=255"));
+    drag(20, 50);
+    await waitFor(() => expect(query()).toBe("?rescaleMin=29&rescaleMax=255"));
   });
 
   it("resets the window AND a preset, with legacy's tooltip", async () => {
     await open(GRAY8);
+    drag(20, 60);
     fireEvent.click(screen.getByLabelText("CLAHE"));
     await waitFor(() => expect(query()).toContain("preset=clahe"));
 
@@ -138,5 +184,6 @@ describe("what it asks the server for", () => {
     fireEvent.click(reset);
 
     await waitFor(() => expect(query()).toBe(""));
+    expect(values()).toEqual([0, 255]);
   });
 });

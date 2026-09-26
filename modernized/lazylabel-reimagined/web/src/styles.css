@@ -1389,11 +1389,74 @@ fieldset input[type="text"] {
   font-style: italic;
 }
 
-.rescale__foot {
+/* Rescale: legacy's RescaleWidget, 5 px margins and 4 px apart (rescale_widget.py:204-250). */
+.rescale {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 5px;
+}
+
+/* The title row: the bold name, a stretch, then the small buttons (lines 209-237). */
+.rescale__title {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 4px;
+  gap: 6px;
+}
+
+.rescale__name {
+  flex: 1;
+  font-weight: bold;
+  font-size: 11px;
+}
+
+/* Reset: 40 by 20, 9px text (lines 229-235). */
+.rescale__reset {
+  width: 40px;
+  height: 20px;
+  padding: 0;
+  font-size: 9px;
+}
+
+/* The slider: 50 px tall, at least 200 wide (lines 41-44). It is drawn from the same colours as the
+   channel threshold bar, which legacy also shares (lines 95-138). */
+.rescale-slider {
+  min-width: 200px;
+  height: 50px;
+  user-select: none;
+  touch-action: none;
+}
+
+.rescale-slider--dragging {
+  cursor: grabbing;
+}
+
+.rescale-slider__drawing {
+  display: block;
+}
+
+.rescale-slider__track {
+  fill: var(--threshold-track);
+  stroke: var(--threshold-track-rule);
+  stroke-width: 2px;
+}
+
+.rescale-slider__handle {
+  fill: rgb(255 255 255);
+  stroke: var(--threshold-handle-rule);
+  stroke-width: 1px;
+}
+
+.rescale-slider__handle--dragging {
+  fill: rgb(255 255 100);
+  stroke: rgb(200 200 50);
+  stroke-width: 2px;
+}
+
+/* Legacy's 8 pt (line 130). */
+.rescale-slider__text {
+  fill: var(--threshold-ink);
+  font-size: 8pt;
 }
 
 /* Channel Threshold: legacy's rows of [checkbox | bar], 5 px apart inside a 5 px margin
