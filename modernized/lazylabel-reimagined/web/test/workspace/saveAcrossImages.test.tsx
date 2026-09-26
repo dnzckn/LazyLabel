@@ -43,12 +43,17 @@ function datasetImage(key: string): WireDatasetImage {
   return { key, name: key.split("/").pop()!, sidecars: {}, annotated: false, sharesSidecarsWith: [] };
 }
 
-/** An image whose NPZ sidecar is at a known revision, which is what a conditional write cites. */
+/**
+ * An image whose NPZ sidecar is at a known revision, which is what a conditional write cites.
+ *
+ * With one segment, so a save WRITES: with none it deletes the image's files, as legacy's save does
+ * (RULE-083, `emptySave.test.tsx`), and a deletion cites no revision.
+ */
 function at(revision: string): AnnotationsResult {
   return {
     kind: "loaded",
     annotations: {
-      segments: [],
+      segments: [{ type: "Polygon", classId: 0, vertices: [[1, 1], [9, 1], [9, 9]] }],
       classAliases: { "0": "car" },
       failures: [],
       rejected: 0,

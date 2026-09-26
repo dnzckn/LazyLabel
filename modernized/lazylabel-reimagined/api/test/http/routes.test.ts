@@ -33,9 +33,9 @@ describe("the API envelope", () => {
   });
 
   it("answers 405 and names the methods that are allowed", async () => {
-    const response = await app.handle(request("DELETE", "/projects/p1/images/a.png/annotations"));
+    const response = await app.handle(request("POST", "/projects/p1/images/a.png/annotations"));
     expect(response.status).toBe(405);
-    expect(response.headers["Allow"]?.split(", ").sort()).toEqual(["GET", "PUT"]);
+    expect(response.headers["Allow"]?.split(", ").sort()).toEqual(["DELETE", "GET", "PUT"]);
   });
 
   it("returns a correlation id on every response", async () => {
@@ -246,7 +246,8 @@ describe("the API envelope", () => {
       const body = jsonBody(response);
 
       // "A save with zero segments writes nothing" is what let the next load resurrect deleted
-      // work. Decision 7 forbids deleting the file, so the answer is an empty one.
+      // work, so a WRITE of nothing writes an empty file. A write never deletes; the app deletes
+      // with its own request, where legacy's save finds no segments (c9's DELETE cases).
       expect(Object.keys(body.written)).toEqual(["YOLO_DETECTION"]);
       expect(body.skippedEmpty).toEqual([]);
       expect(store.keys()).toEqual(["a.txt"]);

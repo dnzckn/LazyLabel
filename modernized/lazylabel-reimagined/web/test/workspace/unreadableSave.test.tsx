@@ -46,6 +46,8 @@ function mount(result: AnnotationsResult) {
     stale: [] as string[],
     skippedEmpty: [] as string[],
   }));
+  // What a save with no segments sends instead, as legacy's does (RULE-083). Nothing was there.
+  const deleteAnnotations = vi.fn(async () => ({ deleted: [] as string[] }));
   const client = {
     getSettings: async () => defaultSettings(),
     putSettings: async (next: unknown) => next,
@@ -61,6 +63,7 @@ function mount(result: AnnotationsResult) {
     pixelsUrl: () => "/pixels",
     tileUrl: () => "/tile",
     saveAnnotations,
+    deleteAnnotations,
   } as unknown as ApiClient;
 
   render(
@@ -77,7 +80,7 @@ function mount(result: AnnotationsResult) {
       </SettingsProvider>
     </NotificationProvider>,
   );
-  return { saveAnnotations };
+  return { saveAnnotations, deleteAnnotations };
 }
 
 const unreadable = { kind: "unreadable", reason: "the npz is truncated" } as unknown as AnnotationsResult;
@@ -112,18 +115,22 @@ describe("an image whose annotations could not be read", () => {
   });
 
   it("writes nothing even if the button is pressed", async () => {
-    const { saveAnnotations } = mount(unreadable);
+    const { saveAnnotations, deleteAnnotations } = mount(unreadable);
     await open();
 
     fireEvent.click(writeButton());
 
     expect(saveAnnotations).not.toHaveBeenCalled();
+    expect(deleteAnnotations).not.toHaveBeenCalled();
   });
 
   it("writes nothing when the SAVE KEY is pressed either, and says why", async () => {
     // Enter reached the write directly while the button was disabled, so the key the user holds
     // down put an empty file over the damaged one -- unconditionally, with no revision to check.
-    const { saveAnnotations } = mount(unreadable);
+    // Since the owner's decision of 2026-09-26 an empty save DELETES, as legacy's does (RULE-083),
+    // and an image whose annotations could not be read has an empty list: it deletes nothing either
+    // (ASSESSMENT.md SEC-04), where legacy deletes.
+    const { saveAnnotations, deleteAnnotations } = mount(unreadable);
     await open();
 
     // Pressed inside the wait: the key's handler registers in an effect after the button renders,
@@ -135,21 +142,25 @@ describe("an image whose annotations could not be read", () => {
       expect(screen.getAllByText(/Nothing was written/).length).toBeGreaterThan(0);
     });
     expect(saveAnnotations).not.toHaveBeenCalled();
+    expect(deleteAnnotations).not.toHaveBeenCalled();
   });
 });
 
 describe("an image with no annotation file at all", () => {
-  it("is still writable, because there is nothing to lose", async () => {
+  it("is still savable, because there is nothing to lose: with no segments, its save deletes", async () => {
     // The distinction `provenance` exists for: "no file" and "could not read the file" both have
-    // zero segments, and only one of them is dangerous to write over. Getting this wrong the other
-    // way would take the save button away from the first image of every new dataset.
-    const { saveAnnotations } = mount(empty);
+    // zero segments, and only one of them is dangerous to save. Getting this wrong the other way
+    // would take the save button away from the first image of every new dataset. With nothing drawn
+    // the save is legacy's empty save (RULE-083): a deletion, which here finds nothing.
+    const { saveAnnotations, deleteAnnotations } = mount(empty);
     await open();
 
     expect(writeButton().disabled).toBe(false);
 
     fireEvent.click(writeButton());
-    await waitFor(() => expect(saveAnnotations).toHaveBeenCalled());
+    await waitFor(() => expect(deleteAnnotations).toHaveBeenCalled());
+    expect(await screen.findByText("No segments to save.")).toBeTruthy();
+    expect(saveAnnotations).not.toHaveBeenCalled();
   });
 });
 

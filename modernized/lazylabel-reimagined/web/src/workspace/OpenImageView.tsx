@@ -48,7 +48,7 @@ import { RESOLUTION_DEFAULT } from "../tools/autoPolygon.js";
 import { clampZoom } from "../canvas/fit.js";
 import { useHotkey, useKeyHint } from "../hotkeys/HotkeyProvider.jsx";
 import { CropLayer } from "../canvas/CropLayer.jsx";
-import { canSave } from "./saveState.js";
+import { canSave, deletionNotice } from "./saveState.js";
 import { PanLayer } from "../canvas/PanLayer.jsx";
 import { panPane } from "../canvas/panStep.js";
 import { useFittedPane } from "../canvas/useFittedPane.js";
@@ -657,7 +657,9 @@ function OpenedImage({
 }
 
 /**
- * Persona flow 4's last step: write the chosen formats beside the image.
+ * Persona flow 4's last step: write the chosen formats beside the image -- or, for an image with no
+ * segments, delete all seven of its sidecar formats, as legacy's save does (RULE-083; the owner's
+ * decision of 2026-09-26).
  *
  * Three things the response says that the button has to pass on rather than swallow, because each
  * of them is a way a save can be less than it looks:
@@ -710,7 +712,13 @@ function ConvertButton({
     | { readonly status: "idle" }
     | { readonly status: "saving" }
     | { readonly status: "saved"; readonly result: WireSaveResponse }
-    | { readonly status: "failed"; readonly reason: string; readonly conflicted?: boolean }
+    | {
+        readonly status: "failed";
+        readonly reason: string;
+        readonly conflicted?: boolean;
+        /** It was a deletion that failed, which may have removed some of the files first. */
+        readonly deleting?: boolean;
+      }
   >({ status: "idle" });
 
   /*
@@ -750,6 +758,40 @@ function ConvertButton({
     const side = activeSide;
     const written = { segments, classAliases, crop };
     setState({ status: "saving" });
+    /*
+     * NO SEGMENTS: THE SAVE DELETES, as legacy's does -- all seven sidecar formats, whatever formats
+     * are selected, then "Deleted: ..." or, with nothing there, "No segments to save."
+     * (`save_export_manager.py:106-109, 523-542`; RULE-083). The owner's decision of 2026-09-26,
+     * "Match the desktop app exactly", reversing "write empty files instead". By Enter, by this
+     * button and on leaving the image, since all three are this save. Never for annotations that
+     * could not be read: `saveNow` refuses those first, and this button is disabled for them.
+     *
+     * The image is then as its files are, so it is no longer unsaved -- but it is not SAVED for the
+     * sequence timeline, which keeps an emptied frame's status and masks, as legacy's does (SP-58).
+     */
+    if (segments.length === 0) {
+      const erase = client
+        .deleteAnnotations(projectId, image.key)
+        .then((result) => {
+          notify(deletionNotice(result.deleted));
+          setState({ status: "idle" });
+          markSavedOn(side, { ...written, key: image.key, deleted: true });
+          return true;
+        })
+        .catch((cause: unknown) => {
+          setState({
+            status: "failed",
+            deleting: true,
+            reason: cause instanceof Error ? cause.message : String(cause),
+          });
+          return false;
+        })
+        .finally(() => {
+          if (writing.current === erase) writing.current = null;
+        });
+      writing.current = erase;
+      return erase;
+    }
     const write = client
       .saveAnnotations(projectId, image.key, {
         imageSize: size,
@@ -846,6 +888,7 @@ function ConvertButton({
     formats,
     image.key,
     markSavedOn,
+    notify,
     projectId,
     revisions,
     segments,
@@ -924,7 +967,8 @@ function ConvertButton({
               ? { title: "The annotations on screen are still yours; reopening the image replaces them with the file" }
               : {})}
           >
-            Nothing was written: {state.reason}
+            {state.deleting === true ? "Could not delete: " : "Nothing was written: "}
+            {state.reason}
           </p>
 
           {/* Offered only after a refusal, and only for a conflict: an unconditional write is the

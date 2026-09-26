@@ -14,6 +14,7 @@ import { describe as group, expect, it } from "vitest";
 
 import {
   canSave,
+  deletionNotice,
   describe,
   onClose,
   onNavigateAway,
@@ -61,11 +62,11 @@ group("navigating away", () => {
     expect(onNavigateAway(null, ON)).toEqual({ kind: "proceed" });
   });
 
-  it("SAVES an empty image rather than deleting its files", () => {
-    // The clause that costs the most. In two-viewer mode legacy deletes ALL annotation files of a
-    // viewer image that has no segments, on every pair change, regardless of the setting -- so a
-    // user who opens a pair to look at it and moves on destroys whatever those images carried.
-    // Zero segments is a legitimate state that writes empty files; it is never a deletion.
+  it("saves an empty image like any other: its save is what deletes its files (RULE-083)", () => {
+    // Legacy's leaving save of an image with no segments deletes all seven sidecar formats
+    // (save_export_manager.py:106-109). The owner's decision of 2026-09-26 made the web's do the
+    // same, where it wrote empty files; the save button carries that out, and this decision is
+    // "save" either way, so there is no separate empty-image path to decide differently.
     expect(onNavigateAway(image({ segmentCount: 0 }), ON)).toEqual({
       kind: "save",
       image: "img_005.png",
@@ -204,6 +205,23 @@ group("whether the save button is available", () => {
   });
 });
 
+group("what a save that deleted says (RULE-083)", () => {
+  it("names the files it deleted, by name, in the order they went: legacy's notice", () => {
+    // save_export_manager.py:536-538, with delete_all_outputs' order (core/exporters/__init__.py:
+    // 209-215, 224-230): COCO before NPZ before YOLO, whatever order they were written in.
+    expect(deletionNotice(["frames/a_coco.json", "frames/a.npz", "frames/a.txt"])).toEqual({
+      severity: "info",
+      message: "Deleted: a_coco.json, a.npz, a.txt",
+      irreversible: true,
+    });
+  });
+
+  it("warns \"No segments to save.\" when there was nothing to delete, as legacy does", () => {
+    // save_export_manager.py:541-542.
+    expect(deletionNotice([])).toEqual({ severity: "warning", message: "No segments to save." });
+  });
+});
+
 group("reading provenance from a load result", () => {
   it("keeps \"no file\" and \"could not be read\" apart", () => {
     // The whole safety property rests on this distinction, and it is exactly the one a later tidy
@@ -258,8 +276,8 @@ group("the status line", () => {
   });
 
   it("says ZERO out loud rather than smoothing it away", () => {
-    // "0 segments, unsaved" is precisely the state a user needs to see before a save writes empty
-    // files over an image that had annotations.
+    // "0 segments, unsaved" is precisely the state a user needs to see before a save deletes the
+    // files of an image that had annotations.
     expect(summarize(state({ segmentCount: 0, dirty: true }))).toBe(
       "frames/a.png — 0 segments, unsaved.",
     );

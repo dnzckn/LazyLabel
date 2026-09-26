@@ -3,9 +3,10 @@
  *
  * The anchor case is RULE-083: legacy announces deleting every annotation file for an image — no
  * prompt, no undo — as a neutral notice on a five-second timer, visually identical to "Saved". The
- * rewrite does not delete like that at all, but the notification rule it exposes outlives the
- * specific bug: severity has to track consequence, and anything a user might need to act on has to
- * survive them looking away.
+ * rewrite deletes like that too since the owner's decision of 2026-09-26, in legacy's words
+ * (`saveState.ts` `deletionNotice`), and the notification rule it exposes is why its notice stays:
+ * severity has to track consequence, and anything a user might need to act on has to survive them
+ * looking away.
  */
 
 import { describe, expect, it } from "vitest";

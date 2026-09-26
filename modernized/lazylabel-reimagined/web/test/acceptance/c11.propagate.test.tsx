@@ -72,6 +72,8 @@ function job(overrides: Record<string, unknown> = {}) {
 function mount() {
   const started: unknown[] = [];
   const saved: string[] = [];
+  /** The images whose sidecars were deleted: a save with no segments (RULE-083). */
+  const deleted: string[] = [];
 
   const client = {
     getSettings: async () => defaultSettings(),
@@ -130,6 +132,11 @@ function mount() {
       saved.push(key);
       return { written: [], stale: [], skippedEmpty: [] };
     },
+    // Only f01 has a sidecar; a frame the run produced a mask for has none to delete.
+    deleteAnnotations: async (_project: string, key: string) => {
+      deleted.push(key);
+      return { deleted: key.endsWith("f01.png") ? ["frames/f01.npz"] : [] };
+    },
     models: async () => [],
     pixelsUrl: () => "/pixels",
     tileUrl: () => "/tile",
@@ -148,7 +155,7 @@ function mount() {
     </NotificationProvider>,
   );
 
-  return { started, saved, client };
+  return { started, saved, deleted, client };
 }
 
 async function openTimeline() {
@@ -267,6 +274,62 @@ describe("C11: propagate labels through a sequence", () => {
       ),
     ).toBeTruthy();
     expect(screen.queryByText(/agrees with legacy frame for frame/)).toBeNull();
+  });
+});
+
+describe("SP-58: a propagated frame emptied by hand", () => {
+  /*
+   * Legacy's save of a frame with no segments deletes its seven sidecar formats and does NOT mark it
+   * saved, so the frame keeps its status and its propagated masks, and Save All writes them back
+   * (main_window.py:3499-3515; save_export_manager.py:106-109, 523-542). The owner's decision of
+   * 2026-09-26: "Match the desktop app exactly". The web wrote an empty file in each selected format,
+   * counted it as the user's correction, showed the frame saved and dropped its masks.
+   */
+  const status = () => screen.getByLabelText("Status").textContent ?? "";
+
+  /** Propagate, open the frame the run produced a mask for, and delete what it shows. */
+  async function emptyThePropagatedFrame() {
+    const handles = mount();
+    await openTimeline();
+    fireEvent.click(screen.getByRole("button", { name: /^Propagate/ }));
+    await waitFor(() => expect(cellLabels()[1]).toContain("propagated"), { timeout: 3000 });
+    fireEvent.click(screen.getByLabelText("Timeline").querySelectorAll("button")[1]!);
+    fireEvent.click(await screen.findByLabelText("Select Loaded 1, class 3"));
+    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+    await waitFor(() => expect(status()).toMatch(/frames\/f02\.png — 0 segments, unsaved/));
+    await screen.findByRole("button", { name: /^Write \d+ format/ });
+    return handles;
+  }
+
+  it("deletes on Enter, writes nothing, and keeps the frame's status and masks for Save All", async () => {
+    const { saved, deleted } = await emptyThePropagatedFrame();
+
+    fireEvent.keyDown(document, { key: "Enter", code: "Enter" });
+
+    // It had no file, so legacy's words for nothing deleted.
+    expect(await screen.findByText("No segments to save.")).toBeTruthy();
+    expect(deleted).toEqual(["frames/f02.png"]);
+    expect(saved).not.toContain("frames/f02.png");
+    await waitFor(() => expect(status()).toMatch(/frames\/f02\.png — 0 segments, saved/));
+    expect(cellLabels()[1]).toContain("propagated");
+
+    fireEvent.click(screen.getByRole("button", { name: "Save All" }));
+    await waitFor(() => expect(saved).toContain("frames/f02.png"));
+  });
+
+  it("deletes the same way when the frame is left, and reopens it with the run's masks", async () => {
+    const { saved, deleted } = await emptyThePropagatedFrame();
+
+    fireEvent.click(screen.getByLabelText("Timeline").querySelectorAll("button")[3]!);
+    await waitFor(() => expect(status()).toMatch(/frames\/f04\.png/));
+
+    expect(deleted).toEqual(["frames/f02.png"]);
+    expect(saved).not.toContain("frames/f02.png");
+    expect(cellLabels()[1]).toContain("propagated");
+
+    fireEvent.click(screen.getByLabelText("Timeline").querySelectorAll("button")[1]!);
+    await waitFor(() => expect(status()).toMatch(/frames\/f02\.png/));
+    expect(await screen.findByLabelText("Select Loaded 1, class 3")).toBeTruthy();
   });
 });
 

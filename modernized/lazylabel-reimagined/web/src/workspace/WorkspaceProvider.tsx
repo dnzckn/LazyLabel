@@ -186,6 +186,13 @@ export interface WrittenState {
   /** Which image the save was of, and the revisions it produced, once the server has said. */
   readonly key?: string;
   readonly revisions?: Readonly<Record<string, string>>;
+  /**
+   * The save found no segments and DELETED the image's seven sidecars, as legacy's does (RULE-083).
+   * The files' revisions go with them. And it is not a save for the sequence timeline: legacy marks
+   * an emptied frame neither saved nor anything else, so it keeps its status and its propagated
+   * masks, and Save All writes them back (`main_window.py:3499-3515`; SEQUENCE_PARITY.md SP-58).
+   */
+  readonly deleted?: boolean;
 }
 
 /**
@@ -1245,19 +1252,24 @@ export function WorkspaceProvider({
   const markSavedOn = useCallback(
     (at: SideIndex, written?: WrittenState) => {
       // Counted per image, for the sequence timeline: a propagated frame saved here is the user's
-      // correction, which Save All must not write over (SEQUENCE_PARITY.md SP-02).
-      const savedKey = written?.key;
+      // correction, which Save All must not write over (SEQUENCE_PARITY.md SP-02). A deletion is not
+      // counted: legacy leaves an emptied frame's status and masks as they were (SP-58).
+      const savedKey = written?.deleted === true ? undefined : written?.key;
       if (savedKey !== undefined) {
         setSaveCounts((previous) => new Map(previous).set(savedKey, (previous.get(savedKey) ?? 0) + 1));
       }
       updateSide(at, (current) => {
         // The revisions are the FILE's, so they move on even when an edit landed during the
         // round trip: the next write is conditional on what is on disk now. Only for the image
-        // the save was of -- a side that has since opened another keeps that one's.
+        // the save was of -- a side that has since opened another keeps that one's. Deleted files
+        // have none: the next write expects nothing, as for an image that never had a file.
+        const ofThisImage = written?.key !== undefined && current.open?.image.key === written.key;
         const revisions =
-          written?.revisions !== undefined && current.open?.image.key === written.key
-            ? { ...current.revisions, ...written.revisions }
-            : current.revisions;
+          ofThisImage && written.deleted === true
+            ? {}
+            : ofThisImage && written.revisions !== undefined
+              ? { ...current.revisions, ...written.revisions }
+              : current.revisions;
         const editedSince =
           written !== undefined
           && (current.segments !== written.segments

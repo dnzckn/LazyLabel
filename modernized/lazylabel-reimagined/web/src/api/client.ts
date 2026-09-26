@@ -18,6 +18,7 @@
 
 import type {
   WireDatasetListing,
+  WireDeleteResponse,
   WireFailure,
   WireHistogram,
   WireImageMetadata,
@@ -332,6 +333,17 @@ export class ApiClient {
   ): Promise<WireSaveResponse> {
     const response = await this.send("PUT", this.annotationsPath(projectId, imagePath), request);
     if (response.status === 200) return (await response.json()) as WireSaveResponse;
+    throw await this.problem(response);
+  }
+
+  /**
+   * Delete all seven of an image's annotation sidecars, whatever formats are selected: what legacy's
+   * save does when the image has no segments (RULE-083; the owner's decision of 2026-09-26). The keys
+   * removed come back in legacy's order, and none when there was nothing to delete.
+   */
+  async deleteAnnotations(projectId: string, imagePath: string): Promise<WireDeleteResponse> {
+    const response = await this.send("DELETE", this.annotationsPath(projectId, imagePath));
+    if (response.status === 200) return (await response.json()) as WireDeleteResponse;
     throw await this.problem(response);
   }
 

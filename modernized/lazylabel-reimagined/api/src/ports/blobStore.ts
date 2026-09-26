@@ -76,9 +76,10 @@ export interface BlobStore {
   /**
    * Delete the key. Missing is not an error.
    *
-   * Nothing in the annotation paths calls this. Decision 7 removed delete-on-empty, and decision
-   * 15f says a stale sidecar is reported and offered for removal, never deleted silently, so the
-   * only caller is an explicit user action.
+   * One annotation path calls this: deleting an image's seven sidecars, legacy's
+   * `delete_all_outputs`, which the app does where legacy's save finds no segments (the owner's
+   * decision of 2026-09-26; `annotations/service.ts`). A WRITE still never deletes: a stale sidecar
+   * in a format the user did not select is reported, not removed (decision 15f).
    */
   remove(key: string): Promise<void>;
 }

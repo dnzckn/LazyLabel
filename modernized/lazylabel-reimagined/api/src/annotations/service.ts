@@ -12,8 +12,12 @@
  *     (RULE-078, decision 15c). No sidecars at all is a distinct answer from one that cannot be
  *     read; the second is never presented as "no annotations" (decision 15d).
  *   - A write is atomic per file, and a write that cannot be made safely writes nothing at all.
- *   - A sidecar that exists in a format the user did not select is reported as stale and offered
- *     for removal, never deleted silently (decision 15f).
+ *   - A sidecar that exists in a format the user did not select is reported as stale by a WRITE,
+ *     never deleted by it (decision 15f), as legacy's `export_all` never deletes either.
+ *   - Deleting is its own operation, legacy's `delete_all_outputs`: all seven sidecars of one image,
+ *     whatever formats are selected. The app calls it where legacy's save finds no segments -- the
+ *     owner's decision of 2026-09-26, "Match the desktop app exactly", which reverses RULE-083's
+ *     "never delete" (SEQUENCE_PARITY.md SP-58, CONTROL_PARITY.md CP-67).
  */
 
 import {
@@ -182,6 +186,47 @@ export async function writeAnnotations(
   }
 
   return { written, skippedEmpty, stale };
+}
+
+/**
+ * The order legacy deletes in: its exporters' registration order, set by the import block at
+ * `core/exporters/__init__.py:224-230` and walked by `delete_all_outputs` (209-215). It is the
+ * order its "Deleted: ..." notice names the files in.
+ */
+export const DELETE_ORDER: readonly AnnotationFormat[] = [
+  "COCO_JSON",
+  "CREATEML",
+  "NPZ",
+  "NPZ_CLASS_MAP",
+  "PASCAL_VOC",
+  "YOLO_DETECTION",
+  "YOLO_SEGMENTATION",
+];
+
+/**
+ * Delete every annotation sidecar of one image, as legacy's `delete_all_outputs` does
+ * (`core/exporters/__init__.py:209-215`): each of the seven paths, the image's base name plus a
+ * format's suffix, removed when it exists, whatever formats are selected. Returns the keys removed,
+ * in legacy's order.
+ *
+ * Exactly those seven. The class-name file `<base>.json` is not among them, as it is on no live
+ * path of legacy's (RULE-083's edge cases), and nothing else beside the image is touched.
+ *
+ * Not conditional on revisions, as legacy's is on nothing but the name. What keeps it from an
+ * image whose annotations could not be read is the client, which never calls it for one (SEC-04).
+ * A removal that fails stops here with the earlier ones done, as legacy's loop does; the caller
+ * reports the failure.
+ */
+export async function deleteAnnotations(store: BlobStore, imageKey: string): Promise<readonly string[]> {
+  const keys = sidecarKeysFor(imageKey);
+  const deleted: string[] = [];
+  for (const format of DELETE_ORDER) {
+    const key = keys.get(format)!;
+    if ((await store.stat(key)) === null) continue;
+    await store.remove(key);
+    deleted.push(key);
+  }
+  return deleted;
 }
 
 async function render(

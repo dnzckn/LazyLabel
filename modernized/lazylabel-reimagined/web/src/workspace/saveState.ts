@@ -12,17 +12,21 @@
  *      click, accept, next. Decision 7 forbids silent LOSS, not automatic saving, and removing the
  *      automatic save would change the tool's core interaction under cover of a safety fix.
  *
- *   2. NEVER INFER A DELETION FROM AN EMPTY SEGMENT LIST. Legacy, in two-viewer mode, deletes every
- *      annotation file of a viewer image that happens to be empty, on every pair change, regardless
- *      of the setting. A user who opens a pair to look at it and moves on without drawing destroys
- *      whatever those images were already labelled with. An empty image saves EMPTY FILES for the
- *      selected formats; it never deletes.
+ *   2. A SAVE OF AN IMAGE WITH NO SEGMENTS DELETES ITS FILES, as legacy's does: all seven sidecar
+ *      formats, whatever formats are selected, with legacy's "Deleted: ..." notice, or "No segments
+ *      to save." when none existed (`save_export_manager.py:106-109, 523-542`; RULE-083). The owner
+ *      decided so on 2026-09-26 -- "Match the desktop app exactly" -- reversing this rule's earlier
+ *      "never delete; write empty files". It is the same save, by Enter or on leaving the image, so
+ *      the decision below says "save" either way; the save button carries it out
+ *      (`OpenImageView.tsx`).
  *
- *   3. A FAILED LOAD MUST NOT BE SAVED OVER. Legacy commits the current path before decoding
- *      succeeds, so an image that fails to open (`cv2.imread` returns None — a non-ASCII path on
- *      Windows is enough) becomes the current image with zero segments, and the NEXT navigation
- *      writes that emptiness over its real annotations. Provenance is tracked for exactly this:
- *      annotations that did not come from a successful load are never written back automatically.
+ *   3. A FAILED LOAD MUST NOT BE SAVED OVER, OR DELETED. Legacy commits the current path before
+ *      decoding succeeds, so an image that fails to open (`cv2.imread` returns None — a non-ASCII
+ *      path on Windows is enough) becomes the current image with zero segments, and the NEXT
+ *      navigation deletes its real annotations (ASSESSMENT.md SEC-04). Provenance is tracked for
+ *      exactly this: annotations that did not come from a successful load are never written back,
+ *      and never deleted, automatically or by Enter. Legacy deletes even then; the owner's decision
+ *      did not ask for that, and this rule stays.
  *
  *   4. CLOSING ASKS, AND NAMES WHAT WOULD BE LOST. Not auto-save-on-close, even with Auto-Save on:
  *      a user who closes after an experiment they did not want may be closing precisely to discard
@@ -30,8 +34,9 @@
  *      one. But the loss is not silent either — the question says which images and how many
  *      segments, because "are you sure?" gives a user nothing to decide with.
  *
- * Formats the user did not select are reported as stale by the API and never deleted
- * (decision 15f); that half lives on the server, and `WireSaveResponse.stale` carries it back.
+ * A save WITH segments writes the selected formats and deletes nothing: formats the user did not
+ * select are reported as stale by the API (decision 15f), as legacy's `export_all` leaves them
+ * alone; that half lives on the server, and `WireSaveResponse.stale` carries it back.
  */
 
 /** Where an image's in-memory annotations came from. The reason saving can be unsafe. */
@@ -48,7 +53,7 @@ export interface ImageState {
   readonly provenance: Provenance;
   /** Edited since the last successful save. */
   readonly dirty: boolean;
-  /** How many segments would be written. Zero is a legitimate state, never a deletion. */
+  /** How many segments would be written. Zero means a save deletes the image's files (rule 2). */
   readonly segmentCount: number;
 }
 
@@ -96,8 +101,8 @@ export function onNavigateAway(image: ImageState | null, settings: SaveSettings)
     };
   }
 
-  // An empty image is saved, not deleted. This is the branch legacy gets wrong, and it is written
-  // as one branch with the others precisely so there is no separate empty-image path to get wrong.
+  // An empty image is saved like any other, and its save deletes its files (rule 2). One branch, so
+  // there is no separate empty-image path to decide differently.
   if (settings.saveOnNavigate) return { kind: "save", image: image.key };
 
   const at = [{ key: image.key, segmentCount: image.segmentCount }];
@@ -203,8 +208,28 @@ export function summarize(image: ImageState | null, cropped = false): string {
   if (!image.dirty) return `${image.key} — ${segments}, saved${crop}.`;
 
   // Zero is said out loud rather than smoothed away. "0 segments, unsaved" is precisely the state
-  // a user needs to see before a save writes empty files over an image that had annotations.
+  // a user needs to see before a save deletes the files of an image that had annotations.
   return `${image.key} — ${segments}, unsaved${crop}.`;
+}
+
+/**
+ * What legacy says after a save found no segments and deleted (`save_export_manager.py:523-542`):
+ * "Deleted: " and the files' names, in the order they went -- which is legacy's exporter order, so
+ * "Deleted: a_coco.json, a.npz, a.txt" -- or the warning "No segments to save." when none of the
+ * seven existed.
+ *
+ * Kept on screen until dismissed, where legacy's fades after three seconds: this app's rule for
+ * anything irreversible (`notifications.ts`), and deleting a file is the case that rule was written
+ * for. The words are legacy's.
+ */
+export function deletionNotice(deleted: readonly string[]): {
+  readonly severity: "info" | "warning";
+  readonly message: string;
+  readonly irreversible?: boolean;
+} {
+  if (deleted.length === 0) return { severity: "warning", message: "No segments to save." };
+  const names = deleted.map((key) => key.split("/").pop() ?? key);
+  return { severity: "info", message: `Deleted: ${names.join(", ")}`, irreversible: true };
 }
 
 /**

@@ -33,7 +33,21 @@ afterEach(cleanup);
 
 const IMAGE = { key: "frames/a.png", name: "a.png" };
 
-function mount(sourceChannels = 1) {
+/** An annotation file holding one triangle: with none, a save deletes instead of writing (RULE-083). */
+const ONE_TRIANGLE = {
+  kind: "loaded",
+  annotations: {
+    segments: [{ type: "Polygon", classId: 0, vertices: [[10, 10], [90, 10], [90, 60]] }],
+    classAliases: {},
+    failures: [],
+    rejected: 0,
+    sourceFile: "frames/a.npz",
+    sourceFormat: "NPZ",
+    revision: "r0",
+  },
+};
+
+function mount(sourceChannels = 1, loaded: unknown = { kind: "none" }) {
   const pixelsUrl = vi.fn((_project: string, _key: string, query = "") => `/pixels${query}`);
   const saveAnnotations = vi.fn(
     async (_project: string, _key: string, _body: Record<string, unknown>) =>
@@ -59,7 +73,7 @@ function mount(sourceChannels = 1) {
       columns: [{ format: "NPZ", suffix: ".npz" }],
       images: [{ ...IMAGE, sidecars: { NPZ: false }, annotated: false, sharesSidecarsWith: [] }],
     }),
-    loadAnnotations: async () => ({ kind: "none" }),
+    loadAnnotations: async () => loaded,
     imageMetadata: async () => ({
       width: 1000,
       height: 800,
@@ -89,8 +103,8 @@ function mount(sourceChannels = 1) {
   return { pixelsUrl, saveAnnotations, putSettings };
 }
 
-async function openImage(sourceChannels = 1) {
-  const handles = mount(sourceChannels);
+async function openImage(sourceChannels = 1, loaded?: unknown) {
+  const handles = mount(sourceChannels, loaded);
   await waitFor(() => expect(screen.getByRole("button", { name: "a.png" })).toBeTruthy());
   fireEvent.click(screen.getByRole("button", { name: "a.png" }));
   await waitFor(() => expect(screen.getByLabelText("Status").textContent).toMatch(/a\.png/));
@@ -278,7 +292,7 @@ describe("C8: the crop, which is carried to the save", () => {
   it("sends the crop with the save request (RULE-018)", async () => {
     // The crop does not narrow the view; it blanks what falls outside on WRITE. A crop the save
     // request leaves out is a crop the panel showed and the file never saw.
-    const { saveAnnotations } = await openImage();
+    const { saveAnnotations } = await openImage(1, ONE_TRIANGLE);
     openImageTab();
 
     fireEvent.change(screen.getByLabelText("X range"), { target: { value: "0:500" } });

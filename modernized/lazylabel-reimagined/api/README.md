@@ -139,7 +139,8 @@ dead.
 | the other twelve | listed in [`src/capabilities.ts`](src/capabilities.ts) with the phase that builds them |
 
 Routes: `GET /projects/{projectId}/images` (the dataset listing),
-`GET`/`PUT /projects/{projectId}/images/{imagePath}/annotations`,
+`GET`/`PUT`/`DELETE /projects/{projectId}/images/{imagePath}/annotations` (`DELETE` removes the
+image's seven sidecars, as legacy does when a save finds no segments),
 `GET .../metadata`, `GET .../pixels`, `GET .../thumbnail`, `GET .../tiles/{z}/{x}/{y}` (the
 processed view as 512-pixel tiles; level 0 is the image's own pixels and each level above is the
 one below averaged in 2x2 blocks, the geometry shared with the browser through
@@ -216,11 +217,14 @@ because the browser needs the same rules locally.)
 
 ## The empty-save rule, closed in Phase 4
 
-A save with zero segments now writes an **empty file** for each selected format rather than writing
+A `PUT` with zero segments writes an **empty file** for each selected format rather than writing
 nothing. The architecture review found that writing nothing lets the next load resurrect deleted
 work: the user clears an image, saves, and the stale sidecar is still there to be read back.
-Deleting it would also look correct and is the one thing decision 7 rules out, so the answer had to
-be an empty file.
+
+The app no longer sends one. Since the owner's decision of 2026-09-26, "Match the desktop app
+exactly", an image saved with no segments has all seven of its sidecars deleted, whatever formats
+are selected, as legacy's save does (RULE-083): the app sends `DELETE .../annotations` instead. A
+`PUT` still never deletes.
 
 What an empty file *is* was the part worth waiting for, and it turned out not to need inventing.
 Every writer already builds its whole document and only short-circuits at the very end when there

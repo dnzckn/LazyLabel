@@ -166,6 +166,29 @@ describe("the client envelope", () => {
     expect(JSON.parse(String(calls[0]!.init?.body)).formats).toEqual(["NPZ"]);
   });
 
+  it("sends a deletion to the annotations path, with no body, and reads what went (RULE-083)", async () => {
+    const { fetch, calls } = stubFetch({
+      "/api": { status: 200, body: { deleted: ["run 4/a_coco.json", "run 4/a.npz"] } },
+    });
+
+    const result = await new ApiClient({ fetch }).deleteAnnotations("p1", "run 4/a.png");
+
+    expect(calls[0]!.url).toBe("/api/projects/p1/images/run%204/a.png/annotations");
+    expect(calls[0]!.init?.method).toBe("DELETE");
+    expect(calls[0]!.init?.body).toBeUndefined();
+    expect(result.deleted).toEqual(["run 4/a_coco.json", "run 4/a.npz"]);
+  });
+
+  it("raises a refused deletion as the API's own problem", async () => {
+    const { fetch } = stubFetch({
+      "/api": { status: 404, body: { status: 404, code: "not_found", message: "a.png is not in the dataset folder" } },
+    });
+
+    const error = await new ApiClient({ fetch }).deleteAnnotations("p1", "a.png").catch((cause: unknown) => cause);
+    expect(error).toBeInstanceOf(ApiError);
+    expect((error as ApiError).message).toBe("a.png is not in the dataset folder");
+  });
+
   it("strips a trailing slash from the base url rather than doubling it", async () => {
     const { fetch, calls } = stubFetch({ "http://api.test": { status: 204 } });
     await new ApiClient({ fetch, baseUrl: "http://api.test/" }).loadAnnotations("p", "a.png", [1, 1]);

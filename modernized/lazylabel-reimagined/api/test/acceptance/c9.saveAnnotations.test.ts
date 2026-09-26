@@ -2,15 +2,19 @@
  * C9 — Save annotations in any of the seven formats, choosing which are written.
  *
  * Run against a real folder on disk, because the properties that matter here are about files: that
- * a save lands atomically, that clearing an image survives a reload, and that nothing is removed
- * without the user asking.
+ * a save lands atomically, that clearing an image survives a reload, and that a write removes
+ * nothing.
  *
- * Decision 7 is the spine of this capability, and it is a list of things that must NOT happen:
+ * Decision 7 is the spine of the WRITE, and it is a list of things that must NOT happen:
  *
- *   - no annotation file is deleted without explicit user action;
- *   - a save with zero segments does not leave the old file behind to be read back;
+ *   - a write deletes no annotation file;
+ *   - a write with zero segments does not leave the old file behind to be read back;
  *   - a sidecar in a format the user did not select is reported, never quietly removed;
  *   - a save that cannot be made safely writes nothing at all, rather than part of a set.
+ *
+ * Deleting is its own request: legacy's `delete_all_outputs`, all seven sidecars of one image,
+ * which the app sends where legacy's save finds no segments -- the owner's decision of 2026-09-26,
+ * "Match the desktop app exactly", reversing RULE-083's "never delete" (SEQUENCE_PARITY.md SP-58).
  */
 
 import { mkdir, mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
@@ -22,7 +26,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createApp, type App } from "../../src/app.js";
 import { DirectoryBlobStore } from "../../src/adapters/directoryBlobStore.js";
 import { SqliteMetadataStore } from "../../src/adapters/sqliteMetadataStore.js";
-import { get, put, jsonBody } from "../helpers/request.js";
+import { get, put, jsonBody, request } from "../helpers/request.js";
 import type { WireLoadResponse } from "../../src/http/wire.js";
 
 const IMAGE = "frames/frame_012.png";
@@ -116,12 +120,12 @@ describe("C9: save annotations in the formats the user chose", () => {
       expect(loaded.segments).toEqual([]);
     });
 
-    it("does not delete the file, because decision 7 forbids it", async () => {
+    it("does not delete the file: a write never deletes", async () => {
       await save({ formats: ["YOLO_SEGMENTATION"], ...oneObject });
       await save({ formats: ["YOLO_SEGMENTATION"], segments: [] });
 
-      // Deleting would also be a correct-looking answer and it is the one decision 7 rules out:
-      // no annotation file disappears without the user asking for it.
+      // A write of nothing is not a deletion. The app asks for one separately, where legacy's save
+      // finds no segments (the DELETE cases below).
       expect(await readdir(path.join(root, "frames"))).toEqual(["frame_012_seg.txt"]);
     });
 
@@ -192,6 +196,105 @@ describe("C9: save annotations in the formats the user chose", () => {
 
       expect(response.status).toBe(422);
       expect(await readdir(path.join(root, "frames"))).toEqual([]);
+    });
+  });
+
+  describe("deleting an image's annotations, as legacy's empty save does (RULE-083)", () => {
+    /*
+     * Legacy's save of an image with no segments deletes all seven sidecar formats, whatever formats
+     * are selected (save_export_manager.py:106-109, 523-542), through delete_all_outputs, which walks
+     * its exporters in registration order (core/exporters/__init__.py:209-215, 224-230) and removes
+     * each one's file if it exists (coco.py:102-107 and the six like it). The owner's decision of
+     * 2026-09-26: "Match the desktop app exactly".
+     */
+    function remove(image = IMAGE) {
+      return app.handle(request("DELETE", `/projects/p1/images/${image}/annotations`));
+    }
+    const listed = async () => (await readdir(path.join(root, "frames"))).sort();
+
+    beforeEach(async () => {
+      await writeFile(path.join(root, "frames", "frame_012.png"), "an image");
+    });
+
+    it("removes all seven, whatever was selected, and names them in legacy's order", async () => {
+      await save({
+        formats: ["NPZ", "NPZ_CLASS_MAP", "YOLO_DETECTION", "YOLO_SEGMENTATION", "COCO_JSON", "PASCAL_VOC", "CREATEML"],
+        ...oneObject,
+      });
+
+      const response = await remove();
+
+      expect(response.status).toBe(200);
+      expect(jsonBody(response).deleted).toEqual([
+        "frames/frame_012_coco.json",
+        "frames/frame_012_createml.json",
+        "frames/frame_012.npz",
+        "frames/frame_012_CM.npz",
+        "frames/frame_012.xml",
+        "frames/frame_012.txt",
+        "frames/frame_012_seg.txt",
+      ]);
+      expect(await listed()).toEqual(["frame_012.png"]);
+    });
+
+    it("removes only what exists, in the order of legacy's notice: coco, npz, txt", async () => {
+      // RULE-083's example: cat.npz, cat.txt and cat_coco.json beside the image give
+      // "Deleted: cat_coco.json, cat.npz, cat.txt" (save_export_manager.py:536-538).
+      await save({ formats: ["NPZ", "YOLO_DETECTION", "COCO_JSON"], ...oneObject });
+
+      const response = await remove();
+
+      expect(jsonBody(response).deleted).toEqual([
+        "frames/frame_012_coco.json",
+        "frames/frame_012.npz",
+        "frames/frame_012.txt",
+      ]);
+    });
+
+    it("touches nothing but the seven: not the class-name file, not another image's files", async () => {
+      // Legacy's <base>.json is deleted on no live path (RULE-083's edge cases).
+      await save({ formats: ["NPZ"], ...oneObject });
+      await writeFile(path.join(root, "frames", "frame_012.json"), "{}");
+      await writeFile(path.join(root, "frames", "frame_013.npz"), "another image's");
+
+      await remove();
+
+      expect(await listed()).toEqual(["frame_012.json", "frame_012.png", "frame_013.npz"]);
+    });
+
+    it("answers an empty list when there was nothing to delete, which the app says as legacy does", async () => {
+      // Legacy then warns "No segments to save." (save_export_manager.py:541-542).
+      const response = await remove();
+
+      expect(response.status).toBe(200);
+      expect(jsonBody(response).deleted).toEqual([]);
+    });
+
+    it("leaves an image with no annotation file, which is what a later load finds", async () => {
+      await save({ formats: ["YOLO_SEGMENTATION", "NPZ"], ...oneObject });
+
+      await remove();
+
+      const loaded = await app.handle(get(`/projects/p1/images/${IMAGE}/annotations`, SIZE));
+      expect(loaded.status).toBe(204);
+    });
+
+    it("refuses an image that is not in the dataset, deleting nothing", async () => {
+      await writeFile(path.join(root, "frames", "frame_099.npz"), "left alone");
+
+      const response = await remove("frames/frame_099.png");
+
+      expect(response.status).toBe(404);
+      expect(await listed()).toContain("frame_099.npz");
+    });
+
+    it("refuses a key that is not an image, rather than deleting by its base name", async () => {
+      await save({ formats: ["NPZ"], ...oneObject });
+
+      const response = await remove("frames/frame_012.npz");
+
+      expect(response.status).toBe(400);
+      expect(await listed()).toContain("frame_012.npz");
     });
   });
 });

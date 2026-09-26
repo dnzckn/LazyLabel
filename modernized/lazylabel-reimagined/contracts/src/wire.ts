@@ -111,6 +111,19 @@ export interface WireSaveResponse {
   readonly note?: string;
 }
 
+/**
+ * What deleting an image's annotations removed: legacy's `delete_all_outputs`
+ * (`core/exporters/__init__.py:209-215`), which the app calls where legacy's save finds no segments.
+ */
+export interface WireDeleteResponse {
+  /**
+   * The sidecar keys removed, in legacy's order -- its exporters' registration order, COCO,
+   * CreateML, NPZ, NPZ class map, Pascal VOC, YOLO detection, YOLO segmentation -- which is the order
+   * its "Deleted: ..." notice names them in. Empty when none of the seven existed.
+   */
+  readonly deleted: readonly string[];
+}
+
 /** One image in a dataset listing, with what it already carries. */
 export interface WireDatasetImage {
   readonly key: string;

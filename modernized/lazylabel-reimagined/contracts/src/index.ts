@@ -19,6 +19,7 @@ export {
   maskRegion,
   type WireDatasetImage,
   type WireDatasetListing,
+  type WireDeleteResponse,
   type WireFailure,
   type WireHistogram,
   type WireImageMetadata,

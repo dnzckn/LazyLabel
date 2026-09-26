@@ -20,9 +20,11 @@ import type { AnnotationFormat, ExportContext, Segment } from "@lazylabel/annota
 
 import {
   AnnotationLoadError,
+  deleteAnnotations,
   readAnnotations,
   writeAnnotations,
 } from "./annotations/service.js";
+import { isImageKey } from "./annotations/sidecars.js";
 import { listDataset, SIDECAR_COLUMNS } from "./dataset/listing.js";
 import {
   decodeImage,
@@ -169,6 +171,11 @@ export function createApp(deps: AppDeps): App {
       method: "PUT",
       pattern: "/projects/:projectId/images/*imagePath/annotations",
       handler: (request, params) => putAnnotations(deps, request, params),
+    },
+    {
+      method: "DELETE",
+      pattern: "/projects/:projectId/images/*imagePath/annotations",
+      handler: (_request, params) => removeAnnotations(deps, params),
     },
     {
       method: "GET",
@@ -910,6 +917,31 @@ async function putAnnotations(
     }
     throw cause;
   }
+}
+
+/**
+ * Delete an image's seven annotation sidecars: legacy's `delete_all_outputs`
+ * (`core/exporters/__init__.py:209-215`), which the app calls where legacy's save finds no
+ * segments -- the owner's decision of 2026-09-26, "Match the desktop app exactly" (RULE-083,
+ * SEQUENCE_PARITY.md SP-58, CONTROL_PARITY.md CP-67). 200 with the keys removed, in legacy's order;
+ * an empty list when none of the seven existed, which the app reports as legacy's "No segments to
+ * save.".
+ *
+ * Only for an image in the dataset. A key that names no image -- a typo, a stale client, or a
+ * sidecar's own path -- is refused rather than taken as a base name to delete by.
+ */
+async function removeAnnotations(
+  deps: AppDeps,
+  params: Readonly<Record<string, string>>,
+): Promise<ApiResponse> {
+  const imageKey = params["imagePath"]!;
+  if (!isImageKey(imageKey)) {
+    throw badRequest(`${imageKey} is not an image, so it has no annotation files to delete`);
+  }
+  if ((await deps.blobStore.stat(imageKey)) === null) {
+    throw notFound(`${imageKey} is not in the dataset folder`);
+  }
+  return json(200, { deleted: await deleteAnnotations(deps.blobStore, imageKey) });
 }
 
 /**
