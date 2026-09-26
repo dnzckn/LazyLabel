@@ -33,7 +33,7 @@ import type { WireSegment } from "@lazylabel/contracts";
 
 import type { ApiClient } from "../api/client.js";
 import { useSettings } from "../settings/SettingsProvider.jsx";
-import { useHotkey } from "../hotkeys/HotkeyProvider.jsx";
+import { useHotkey, useKeyHint } from "../hotkeys/HotkeyProvider.jsx";
 import { useNotifications } from "../notifications/NotificationProvider.jsx";
 import { PropagationControl } from "./PropagationControl.jsx";
 import type { OpenAnnotations } from "./references.js";
@@ -570,6 +570,8 @@ export function TimelinePanel({
   });
   useHotkey("next_suggested_frame", () => active && navigate("suggested", 1));
   useHotkey("prev_suggested_frame", () => active && navigate("suggested", -1));
+  // Legacy's tooltips name the keys, " (N)"; from the user's own bindings here.
+  const keyOf = useKeyHint();
 
   useEffect(() => {
     if (openKey === undefined) return;
@@ -758,6 +760,18 @@ export function TimelinePanel({
   const counts = summarize(frames);
   const order = sortKeys === null ? shown.map((frame) => frame.index) : keptOrder(sortKeys, shown);
   const allScores = { ...scores, ...ownScores };
+  // What N and Shift+N move between: flagged frames that are not references.
+  const flaggedCount = frames.filter((frame) => !frame.isReference && frame.state === "flagged").length;
+
+  /**
+   * Clear Suggested: the purple frames back to pending and the list emptied, as legacy's
+   * `clear_suggested_frames` does (`sequence_view_mode.py:502-509`, `main_window.py:5170-5181`).
+   */
+  const clearSuggestions = () => {
+    setOverrides((previous) => clearSuggested(previous ?? frames));
+    setArchetypes([]);
+    onArchetypes?.([]);
+  };
 
   return (
     <div className="timeline">
@@ -866,12 +880,6 @@ export function TimelinePanel({
         </button>
         {videoReady && (
           <>
-        <button type="button" onClick={() => navigate("flagged", 1)}>
-          Next flagged
-        </button>
-        <button type="button" onClick={() => navigate("reference", 1)}>
-          Next reference
-        </button>
         <button type="button" onClick={() => void markCurrent()}>
           Mark as reference
         </button>
@@ -898,6 +906,18 @@ export function TimelinePanel({
             {finding ? "Abort" : "Find archetypes"}
           </button>
         )}
+        {client !== undefined && aiReady && (
+          // Beside Find Archetypes, as legacy's is, and enabled only with suggestions
+          // (sequence_widget.py:281-285, 601-608).
+          <button
+            type="button"
+            title="Clear AI-suggested reference highlights"
+            disabled={archetypes.length === 0}
+            onClick={clearSuggestions}
+          >
+            Clear Suggested
+          </button>
+        )}
         {videoReady && (
           <button type="button" onClick={() => setOverrides(clearFlags(frames))}>
             Clear flags
@@ -907,6 +927,56 @@ export function TimelinePanel({
           New timeline
         </button>
       </div>
+
+      {/* Legacy's Review group (sequence_widget.py:410-466): the counts, and Prev and Next for
+          each, enabled only when there is one to go to. Hidden without AI, as legacy's is. */}
+      {aiReady && (
+        <fieldset className="timeline__group">
+          <legend>Review</legend>
+          <p className="timeline__count">
+            Suggested refs: <strong className="timeline__count--suggested">{archetypes.length}</strong>
+          </p>
+          <div className="timeline__controls">
+            <button
+              type="button"
+              title="Go to previous suggested reference frame"
+              disabled={archetypes.length === 0}
+              onClick={() => navigate("suggested", -1)}
+            >
+              ← Prev Suggested
+            </button>
+            <button
+              type="button"
+              title="Go to next suggested reference frame"
+              disabled={archetypes.length === 0}
+              onClick={() => navigate("suggested", 1)}
+            >
+              Next Suggested →
+            </button>
+          </div>
+          <p className="timeline__count">
+            Flagged frames: <strong className="timeline__count--flagged">{flaggedCount}</strong>
+          </p>
+          <div className="timeline__controls">
+            <button
+              type="button"
+              title={`Go to previous flagged frame${keyOf("prev_flagged_frame")}`}
+              disabled={flaggedCount === 0}
+              onClick={() => navigate("flagged", -1)}
+            >
+              ← Prev Flagged
+            </button>
+            <button
+              type="button"
+              title={`Go to next flagged frame${keyOf("next_flagged_frame")}`}
+              disabled={flaggedCount === 0}
+              onClick={() => navigate("flagged", 1)}
+            >
+              Next Flagged →
+            </button>
+          </div>
+        </fieldset>
+      )}
 
       {/* RULE-077. The bounds are set from the current frame, which is where a user's attention
           already is -- asking them to type two numbers would be asking them to count. */}

@@ -122,6 +122,10 @@ function build(from?: string, to?: string, { references = true } = {}) {
 
 const cells = () => screen.getByLabelText("Timeline").querySelectorAll("button");
 
+/** Press the key an action is bound to by default. */
+const pressKey = (action: string) =>
+  fireEvent.keyDown(document, { key: defaultSettings().hotkeys[action]!.primary });
+
 describe("a built timeline is a fixed list of files (SP-21)", () => {
   it("keeps its frames when the browser lists another folder", async () => {
     // Legacy's timeline is the paths it was built from (sequence_view_mode.py:123-126). The web's was
@@ -230,7 +234,7 @@ describe("with no AI (SP-31)", () => {
     build("0", "4", { references: false });
     await waitFor(() => expect(cells()).toHaveLength(5));
 
-    for (const name of [/^Propagate/, /Find archetypes/, /Mark as reference/, /\+ All labeled/, /Next flagged/, /Clear flags/]) {
+    for (const name of [/^Propagate/, /Find archetypes/, /Mark as reference/, /\+ All labeled/, /Next Flagged/, /Prev Suggested/, /Clear Suggested/, /Clear flags/]) {
       expect(screen.queryByRole("button", { name })).toBeNull();
     }
     expect(screen.getByText("Cut")).toBeTruthy();
@@ -302,7 +306,7 @@ describe("the cursor moves when the frame opens (SP-19)", () => {
     build("0", "4");
     await waitFor(() => expect(cells()[1]!.getAttribute("aria-label")).toMatch(/reference$/));
 
-    fireEvent.click(screen.getByText("Next reference"));
+    pressKey("next_reference_frame");
 
     expect(current()).toBe(0);
   });
@@ -460,23 +464,19 @@ describe("using it", () => {
     build("0", "4");
     await waitFor(() => expect(cells()).toHaveLength(5));
 
-    fireEvent.click(screen.getByText("Next reference"));
+    pressKey("next_reference_frame");
 
     expect(onOpen).toHaveBeenCalledWith("frames/f02.png", undefined);
   });
 
-  it("does nothing when there is no frame of that kind, rather than jumping somewhere", async () => {
-    // Nothing is flagged without propagation, so Next flagged has nowhere to go. Silence is the
-    // honest answer; moving to frame 0 would look like it had found something.
-    const { onOpen } = show();
+  it("offers Next Flagged only when a frame is flagged, as legacy does", async () => {
+    // Nothing is flagged without propagation, so Next Flagged has nowhere to go: legacy disables
+    // it (sequence_widget.py:663-665) rather than let it move to a frame it did not find.
+    show();
     build("0", "4");
     await waitFor(() => expect(cells()).toHaveLength(5));
-    // Building opened frame 1 (SP-18); what matters is that Next flagged opens nothing more.
-    onOpen.mockClear();
 
-    fireEvent.click(screen.getByText("Next flagged"));
-
-    expect(onOpen).not.toHaveBeenCalled();
+    expect((screen.getByRole("button", { name: "Next Flagged →" }) as HTMLButtonElement).disabled).toBe(true);
   });
 
   it("keeps the order Sort took, when a frame's status changes after it (SP-28)", async () => {
@@ -677,6 +677,51 @@ describe("the confidence histogram", () => {
     withScores({});
 
     await waitFor(() => expect(threshold().value).toBe("0.99"));
+  });
+});
+
+describe("the Review group (SP-45)", () => {
+  /*
+   * Legacy's Review group: "Flagged frames: N" with ← Prev Flagged and Next Flagged →, enabled only
+   * when there is one (sequence_widget.py:441-464, 649-665). The web had a "Next flagged" button,
+   * always enabled, and no count and no Prev.
+   */
+  const current = () => [...cells()].findIndex((cell) => cell.className.includes("timeline__frame--current"));
+  const button = (name: string) => screen.getByRole("button", { name }) as HTMLButtonElement;
+
+  function flagTwo() {
+    render(withSettings(<TimelinePanel images={FOLDER} scores={{ 0: 0.95, 2: 0.97, 3: 0.995 }} />));
+    build("0", "4");
+    fireEvent.change(screen.getByLabelText("Minimum confidence"), { target: { value: "0.98" } });
+  }
+
+  it("counts the flagged frames and enables their buttons", async () => {
+    flagTwo();
+
+    await waitFor(() => expect(screen.getByText(/Flagged frames:/).textContent).toBe("Flagged frames: 2"));
+    expect(button("← Prev Flagged").disabled).toBe(false);
+    expect(button("Next Flagged →").disabled).toBe(false);
+    expect(button("Next Flagged →").title).toBe("Go to next flagged frame (N)");
+  });
+
+  it("steps to the next and the previous flagged frame", async () => {
+    flagTwo();
+    await waitFor(() => expect(button("Next Flagged →").disabled).toBe(false));
+
+    fireEvent.click(button("Next Flagged →"));
+    await waitFor(() => expect(current()).toBe(2));
+
+    fireEvent.click(button("← Prev Flagged"));
+    await waitFor(() => expect(current()).toBe(0));
+  });
+
+  it("says 0 and disables both with nothing flagged", async () => {
+    show();
+    build("0", "4");
+    await waitFor(() => expect(cells()).toHaveLength(5));
+
+    expect(screen.getByText(/Flagged frames:/).textContent).toBe("Flagged frames: 0");
+    expect(button("← Prev Flagged").disabled).toBe(true);
   });
 });
 

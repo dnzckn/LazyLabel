@@ -244,6 +244,49 @@ describe("suggestions over time (SP-30)", () => {
   });
 });
 
+describe("the Review group's suggestions, and Clear Suggested (SP-45)", () => {
+  /*
+   * Legacy's "Suggested refs: N", with ← Prev Suggested and Next Suggested →, and Clear Suggested
+   * beside Find Archetypes, all enabled only when there are suggestions (sequence_widget.py:281-285,
+   * 417-439, 601-608; main_window.py:5150-5181). The web had H and Shift+H and nothing on screen.
+   */
+  const button = (name: string) => screen.getByRole("button", { name }) as HTMLButtonElement;
+  const suggestedCount = () => screen.getByText(/Suggested refs:/).textContent;
+
+  it("counts the suggestions and steps between them", async () => {
+    show(found);
+    await build();
+    expect(suggestedCount()).toBe("Suggested refs: 0");
+    expect(button("Next Suggested →").disabled).toBe(true);
+
+    fireEvent.click(screen.getByRole("button", { name: /Find archetypes/ }));
+
+    await waitFor(() => expect(suggestedCount()).toBe("Suggested refs: 2"));
+    fireEvent.click(button("Next Suggested →"));
+    await waitFor(() => expect(cells()[2]!.className).toContain("timeline__frame--current"));
+    fireEvent.click(button("Next Suggested →"));
+    await waitFor(() => expect(cells()[4]!.className).toContain("timeline__frame--current"));
+    fireEvent.click(button("← Prev Suggested"));
+    await waitFor(() => expect(cells()[2]!.className).toContain("timeline__frame--current"));
+  });
+
+  it("clears them: pending again, the count 0, the buttons disabled", async () => {
+    const { onArchetypes } = show(found);
+    await build();
+    expect(button("Clear Suggested").disabled).toBe(true);
+    fireEvent.click(screen.getByRole("button", { name: /Find archetypes/ }));
+    await waitFor(() => expect(button("Clear Suggested").disabled).toBe(false));
+
+    fireEvent.click(button("Clear Suggested"));
+
+    await waitFor(() => expect(suggestedCount()).toBe("Suggested refs: 0"));
+    expect([...cells()].some((cell) => cell.getAttribute("aria-label")!.includes("suggested"))).toBe(false);
+    expect(button("Clear Suggested").disabled).toBe(true);
+    expect(button("← Prev Suggested").disabled).toBe(true);
+    expect(onArchetypes).toHaveBeenLastCalledWith([]);
+  });
+});
+
 describe("aborting (SP-29)", () => {
   it("stops on a second press, in legacy's words, and drops the answer when it comes", async () => {
     // Legacy's button reads Abort while it runs, and a press or Ctrl+H cancels with "Reference

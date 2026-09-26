@@ -45,6 +45,13 @@
   --scroll-thumb-hover: rgb(0 0 0 / 0.314);
   --timeline-ground: rgb(215 215 220);
   --frame-pending: #b9b9be;
+  /* The sequence panel's bold labels, per theme (sequence_widget.py:796-823). */
+  --seq-reference: #b8860b;
+  --seq-suggested: #7b1fa2;
+  --seq-flagged: #c62828;
+  --seq-start: #2e7d32;
+  --seq-end: #c62828;
+  --seq-trim: #5d2f0e;
   /* The channel threshold bar (channel_threshold_widget.py:95-104, 169-174, 191). */
   --threshold-ink: rgb(30 30 30);
   --threshold-track: rgb(230 230 230);
@@ -101,6 +108,12 @@
     --scroll-thumb-hover: rgb(255 255 255 / 0.271);
     --timeline-ground: rgb(50 50 50);
     --frame-pending: #646464;
+    --seq-reference: #ffc107;
+    --seq-suggested: #9c27b0;
+    --seq-flagged: #f44336;
+    --seq-start: #4caf50;
+    --seq-end: #f44336;
+    --seq-trim: #8b4513;
     --threshold-ink: rgb(255 255 255);
     --threshold-track: rgb(50 50 50);
     --threshold-track-rule: rgb(100 100 100);
@@ -152,6 +165,12 @@
   --scroll-thumb-hover: rgb(255 255 255 / 0.271);
   --timeline-ground: rgb(50 50 50);
   --frame-pending: #646464;
+  --seq-reference: #ffc107;
+  --seq-suggested: #9c27b0;
+  --seq-flagged: #f44336;
+  --seq-start: #4caf50;
+  --seq-end: #f44336;
+  --seq-trim: #8b4513;
   --threshold-ink: rgb(255 255 255);
   --threshold-track: rgb(50 50 50);
   --threshold-track-rule: rgb(100 100 100);
@@ -1870,6 +1889,27 @@ fieldset input[type="text"] {
   border-right: 5px solid transparent;
   border-top: 7px solid #2196f3;
 }
+
+/* Legacy's group boxes in the sequence panel (sequence_widget.py:116-127): a count or a name in
+   bold, in the colour of what it counts. */
+.timeline__group {
+  margin: 4px 0 6px;
+}
+
+.timeline__count {
+  margin: 0 0 4px;
+}
+
+.timeline__count strong {
+  font-weight: 700;
+}
+
+.timeline__count--reference { color: var(--seq-reference); }
+.timeline__count--suggested { color: var(--seq-suggested); }
+.timeline__count--flagged { color: var(--seq-flagged); }
+.timeline__count--start { color: var(--seq-start); }
+.timeline__count--end { color: var(--seq-end); }
+.timeline__count--trim { color: var(--seq-trim); }
 
 /* Legacy's control row under the bar: small bold buttons (timeline_widget.py:516-611). */
 .timeline__controls {
