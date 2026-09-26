@@ -21,7 +21,7 @@
  * failures would be worse.
  */
 
-import type { WireMask, WireSegment } from "@lazylabel/contracts";
+import type { WireMask, WireSaveRequest, WireSegment } from "@lazylabel/contracts";
 
 import type { ApiClient, WirePropagationFrame } from "../api/client.js";
 import { saveableFrames } from "./confidence.js";
@@ -40,6 +40,8 @@ export interface SaveAllRequest {
   /** Class id to name, as the open image named them at Propagate: see `ReferenceMasks.aliases`. */
   readonly aliases: Readonly<Record<string, string>>;
   readonly formats: readonly string[];
+  /** RULE-012's two settings, as the Enter path sends them: which class keeps a shared pixel. */
+  readonly pixelPriority: NonNullable<WireSaveRequest["pixelPriority"]>;
   /** Called after each frame so a long save can show progress rather than appearing to hang. */
   readonly onProgress?: (done: number, total: number) => void;
 }
@@ -173,6 +175,12 @@ export async function saveAll(request: SaveAllRequest): Promise<SaveAllResult> {
         formats: request.formats,
         segments,
         classAliases: aliasesFor(segments, request.aliases),
+        // Legacy's Save All is its ordinary save (`main_window.py:4813`), which gives a pixel two
+        // classes share to one of them by the pixel-priority settings
+        // (`save_export_manager.py:405-410`). Sent none, the API took it as off, so with it on
+        // the pixel was still written to both classes (`SEQUENCE_PARITY.md` SP-06). The API
+        // applies it to the mask tensor every format is built from, as for the Enter path's save.
+        pixelPriority: request.pixelPriority,
       });
       written.push(frame.key);
     } catch (cause) {

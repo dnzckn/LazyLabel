@@ -487,6 +487,13 @@ export function PropagationControl({
         // Decision 7: an explicit act writes, and it writes the formats the user chose. A default
         // invented here would put files on disk in a format nobody asked for.
         formats: (settings.values["export_formats"] as string[] | undefined) ?? ["NPZ"],
+        // RULE-012, read as the Enter path reads it (`OpenImageView.tsx`) and when the save is made,
+        // as legacy's Save All reads it (`save_export_manager.py:112, 405-410`,
+        // `SEQUENCE_PARITY.md` SP-06).
+        pixelPriority: {
+          enabled: settings.values["pixel_priority_enabled"] === true,
+          ascending: settings.values["pixel_priority_ascending"] !== false,
+        },
         onProgress: (doneCount, total) => setSaving({ done: doneCount, total }),
       });
       setWritten((previous) => new Set([...previous, ...outcome.written]));

@@ -13,11 +13,19 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import type { WireMask, WireSaveRequest, WireSegment } from "@lazylabel/contracts";
+import { createFinalMaskTensor, type MaskTensor } from "@lazylabel/annotation-formats";
+import {
+  decodeSegment,
+  encodeMask,
+  type WireMask,
+  type WireSaveRequest,
+  type WireSegment,
+} from "@lazylabel/contracts";
 import { defaultSettings } from "@lazylabel/settings-schema";
 
 import type {
   ApiClient,
+  WirePropagationFrame,
   WirePropagationJob,
   WirePropagationStart,
 } from "../../src/api/client.js";
@@ -666,13 +674,25 @@ describe("RULE-056: not losing propagated work without asking", () => {
     inPanel = false,
     /** The open image's annotations as the shell hands them down from the store. */
     openAnnotations?: OpenAnnotations,
+    /**
+     * The rest of the run: the settings the user changed from the defaults, what the reference's
+     * file holds, and what the propagation carries onto f02.
+     */
+    run: {
+      readonly values?: Readonly<Record<string, unknown>>;
+      readonly segments?: readonly WireSegment[];
+      readonly results?: readonly WirePropagationFrame[];
+    } = {},
   ) {
     /** Every request Propagate sent, as `fakeClient` records them. */
     const started: WirePropagationStart[] = [];
     /** Every request Save All sent, with the image it was for. */
     const saved: { key: string; request: WireSaveRequest }[] = [];
     const client = {
-      getSettings: async () => defaultSettings(),
+      getSettings: async () => {
+        const defaults = defaultSettings();
+        return { ...defaults, values: { ...defaults.values, ...run.values } };
+      },
       putSettings: async (next: unknown) => next,
       imageMetadata: async () => ({
         width: 8,
@@ -687,7 +707,7 @@ describe("RULE-056: not losing propagated work without asking", () => {
           sourceFormat: "NPZ",
           sourceFile: key,
           revision: "r1",
-          segments: [SQUARE],
+          segments: run.segments ?? [SQUARE],
           classAliases: {},
           failures: [],
         },
@@ -710,7 +730,9 @@ describe("RULE-056: not losing propagated work without asking", () => {
           state: "completed",
           completed: 1,
           cursor: 1,
-          results: [{ source: "frames/f02.png", objectId: 1, mask: MASK, confidence: 0.999 }],
+          results: run.results ?? [
+            { source: "frames/f02.png", objectId: 1, mask: MASK, confidence: 0.999 },
+          ],
         }),
       saveAnnotations: async (_p: string, key: string, request: WireSaveRequest) => {
         saved.push({ key, request });
@@ -766,6 +788,37 @@ describe("RULE-056: not losing propagated work without asking", () => {
     );
     fireEvent.click(screen.getByRole("button", { name: /^Propagate/ }));
     await screen.findByRole("button", { name: /Save 1 frame/ }, { timeout: 3000 });
+  }
+
+  /** A mask on an 8x8 frame covering columns and rows `from` to `to`, `to` excluded. */
+  function square(from: number, to: number): WireMask {
+    const data = new Uint8Array(64);
+    for (let y = from; y < to; y += 1) for (let x = from; x < to; x += 1) data[y * 8 + x] = 1;
+    return encodeMask({ height: 8, width: 8, data });
+  }
+
+  /**
+   * The mask tensor the API writes for a save request: NPZ's array, and what every other format is
+   * drawn from. Built as the API builds it (api/src/app.ts:817-822, an absent pixelPriority read as
+   * off at 1042-1044), by the same library call.
+   */
+  function writtenTensor(request: WireSaveRequest): MaskTensor {
+    const segments = request.segments.map(decodeSegment);
+    const classOrder = [
+      ...new Set(segments.map((each) => each.classId).filter((id): id is number => id !== null)),
+    ].sort((a, b) => a - b);
+    return createFinalMaskTensor(segments, request.imageSize, classOrder, {
+      enabled: request.pixelPriority?.enabled === true,
+      ascending: request.pixelPriority?.ascending !== false,
+    });
+  }
+
+  /** The classes a written tensor gives the pixel at column x, row y. */
+  function classesAt(tensor: MaskTensor, x: number, y: number): number[] {
+    const channels = tensor.classOrder.length;
+    return tensor.classOrder.filter(
+      (_, channel) => tensor.data[(y * tensor.width + x) * channels + channel] === 1,
+    );
   }
 
   it("ASKS before a New timeline throws propagated frames away", async () => {
@@ -930,6 +983,46 @@ describe("RULE-056: not losing propagated work without asking", () => {
 
     expect(saved[0]!.request.classAliases).toEqual({});
   });
+
+  it.each([
+    { order: "ascending", ascending: true, winner: 0 },
+    { order: "descending", ascending: false, winner: 3 },
+  ])(
+    "gives a pixel two classes share to one of them by pixel priority, $order, as legacy does",
+    async ({ ascending, winner }) => {
+      // Legacy's Save All is its ordinary save (main_window.py:4813), which with pixel priority on
+      // gives a pixel two classes both cover to the lower class id, or descending to the higher
+      // (save_export_manager.py:405-410; segment_manager.py:317-373). Here Save All sent no
+      // pixelPriority, the API took it as off, and the pixel was written to both classes
+      // (SEQUENCE_PARITY.md SP-06).
+      const { saved } = panel(() => true, false, undefined, {
+        values: { pixel_priority_enabled: true, pixel_priority_ascending: ascending },
+        // Class 0 and class 3 on the reference, carried onto f02 overlapping in a 2x2 block.
+        segments: [
+          { type: "Polygon", classId: 0, vertices: [[1, 1], [4, 1], [4, 4], [1, 4]] },
+          { type: "Polygon", classId: 3, vertices: [[3, 3], [6, 3], [6, 6], [3, 6]] },
+        ],
+        results: [
+          { source: "frames/f02.png", objectId: 1, mask: square(1, 5), confidence: 0.999 },
+          { source: "frames/f02.png", objectId: 2, mask: square(3, 7), confidence: 0.999 },
+        ],
+      });
+      await propagateAndWait();
+
+      fireEvent.click(screen.getByRole("button", { name: /Save 1 frame/ }));
+      await screen.findByText(/Saved 1 frame/);
+
+      const tensor = writtenTensor(saved[0]!.request);
+      expect(tensor.classOrder).toEqual([0, 3]);
+      // Each pixel both cover goes to one class...
+      for (const [x, y] of [[3, 3], [4, 3], [3, 4], [4, 4]] as const) {
+        expect(classesAt(tensor, x, y), `pixel (${x}, ${y})`).toEqual([winner]);
+      }
+      // ...and neither loses a pixel it alone covers.
+      expect(classesAt(tensor, 1, 1)).toEqual([0]);
+      expect(classesAt(tensor, 6, 6)).toEqual([3]);
+    },
+  );
 
   it("offers the Save beside the timeline bar, where legacy's Save All is", async () => {
     panel(() => true);

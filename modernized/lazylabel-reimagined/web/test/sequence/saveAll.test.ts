@@ -73,6 +73,7 @@ function run(
       classes: { 1: 7 },
       aliases: {},
       formats: ["NPZ"],
+      pixelPriority: { enabled: false, ascending: true },
       ...extra,
     }),
   };
@@ -226,6 +227,7 @@ describe("when a write fails", () => {
       classes: {},
       aliases: {},
       formats: ["NPZ"],
+      pixelPriority: { enabled: false, ascending: true },
     });
 
     expect(outcome.written).toEqual(["frames/f02.png"]);
