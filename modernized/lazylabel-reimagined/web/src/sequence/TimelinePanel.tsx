@@ -141,6 +141,22 @@ const NOTHING_TO_STEP_TO: Readonly<Record<Target, string>> = {
   suggested: "No suggested frames",
 };
 
+/** The frames' keys in Sort's order, as it stands now. */
+function sortedKeys(frames: readonly Frame[]): readonly string[] {
+  return sortedOrder(frames).map((index) => frames[index]!.key);
+}
+
+/** A kept sort order as positions today: frames it names, in its order, then any it does not. */
+function keptOrder(keys: readonly string[], frames: readonly Frame[]): readonly number[] {
+  const position = new Map(frames.map((frame) => [frame.key, frame.index]));
+  const named = keys.flatMap((key) => {
+    const at = position.get(key);
+    return at === undefined ? [] : [at];
+  });
+  const seen = new Set(named);
+  return [...named, ...frames.map((frame) => frame.index).filter((index) => !seen.has(index))];
+}
+
 export function TimelinePanel({
   images,
   onOpen,
@@ -186,7 +202,14 @@ export function TimelinePanel({
       ),
     [range],
   );
-  const [sorted, setSorted] = useState(false);
+  /*
+   * The sorted order, TAKEN ONCE when Sort is pressed and kept, as legacy's is
+   * (`timeline_widget.py:109-120`), then taken again after a trim (`main_window.py:5286-5288`).
+   * It was recomputed on every render, so frames jumped under the pointer while a run or a Save All
+   * changed their statuses (SEQUENCE_PARITY.md SP-28). Keys, so a trim cannot misplace them.
+   */
+  const [sortKeys, setSortKeys] = useState<readonly string[] | null>(null);
+  const sorted = sortKeys !== null;
   const [current, setCurrent] = useState(0);
   // Where the propagation's Save button is drawn: beside the bar, as legacy's Save All is.
   const [saveSlot, setSaveSlot] = useState<HTMLDivElement | null>(null);
@@ -485,7 +508,7 @@ export function TimelinePanel({
     // Everything else the old timeline held, as legacy's reset clears it (`sequence_widget.py:770-794`,
     // SEQUENCE_PARITY.md SP-35): the sort, the trim bounds, the suggestions, and the run's scores and
     // masks, which would otherwise land on the same positions in the next timeline.
-    setSorted(false);
+    setSortKeys(null);
     setBounds([null, null]);
     setTrimNote(null);
     setArchetypes([]);
@@ -534,6 +557,8 @@ export function TimelinePanel({
     setOverrides(outcome.frames);
     setCurrent(outcome.current);
     setBounds([null, null]);
+    // A sorted timeline is sorted again, over what the trim kept, as legacy's is.
+    if (sortKeys !== null) setSortKeys(sortedKeys(outcome.frames));
     setTrimNote(`Removed ${outcome.removed} frame${outcome.removed === 1 ? "" : "s"} from the timeline. No files were touched.`);
     // The open frame cut away: the nearest kept one opens, as legacy's does (`main_window.py:5290-5291`,
     // SEQUENCE_PARITY.md SP-19). One that survived stays open with its edits, where legacy reloads it
@@ -555,7 +580,7 @@ export function TimelinePanel({
   };
 
   const counts = summarize(frames);
-  const order = sorted ? sortedOrder(shown) : shown.map((frame) => frame.index);
+  const order = sortKeys === null ? shown.map((frame) => frame.index) : keptOrder(sortKeys, shown);
   const allScores = { ...scores, ...ownScores };
 
   return (
@@ -657,7 +682,10 @@ export function TimelinePanel({
 
 
       <div className="timeline__controls">
-        <button type="button" onClick={() => setSorted((on) => !on)}>
+        <button
+          type="button"
+          onClick={() => setSortKeys((keys) => (keys === null ? sortedKeys(shown) : null))}
+        >
           {sorted ? "Unsort" : "Sort"}
         </button>
         <button type="button" onClick={() => navigate("flagged", 1)}>

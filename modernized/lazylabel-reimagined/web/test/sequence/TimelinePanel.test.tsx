@@ -301,6 +301,24 @@ describe("using it", () => {
     expect(onOpen).not.toHaveBeenCalled();
   });
 
+  it("keeps the order Sort took, when a frame's status changes after it (SP-28)", async () => {
+    // Legacy computes the order once, when Sort is pressed (timeline_widget.py:109-120). The web
+    // recomputed it on every render, so frames jumped under the pointer as statuses changed.
+    show();
+    build("0", "4");
+    await waitFor(() => expect(cells()).toHaveLength(5));
+    fireEvent.click(screen.getByText("Sort"));
+    await waitFor(() => expect(cells()[0]!.getAttribute("aria-label")).toContain("frames/f02.png"));
+    const order = () => [...cells()].map((cell) => cell.getAttribute("aria-label")!.split(", ")[1]);
+    expect(order()).toEqual(["frames/f02.png", "frames/f05.png", "frames/f01.png", "frames/f03.png", "frames/f04.png"]);
+
+    fireEvent.click(cells()[3]!); // f03
+    fireEvent.click(screen.getByText("Mark as reference"));
+
+    await waitFor(() => expect(cells()[3]!.getAttribute("aria-label")).toContain("reference"));
+    expect(order()).toEqual(["frames/f02.png", "frames/f05.png", "frames/f01.png", "frames/f03.png", "frames/f04.png"]);
+  });
+
   it("sorts references first, and unsorts again", async () => {
     show();
     build("0", "4");
