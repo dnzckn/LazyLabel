@@ -85,6 +85,16 @@ function build(from?: string, to?: string, { references = true } = {}) {
 
 const cells = () => screen.getByLabelText("Timeline").querySelectorAll("button");
 
+describe("the header (SP-19)", () => {
+  it("names an image opened from outside the timeline instead of a frame that is not on screen", async () => {
+    const onStatus = vi.fn();
+    render(withSettings(<TimelinePanel images={FOLDER} onStatus={onStatus} openKey="frames/f05.png" />));
+    build("0", "2", { references: false });
+
+    await waitFor(() => expect(onStatus).toHaveBeenLastCalledWith("f05.png -- not in the timeline"));
+  });
+});
+
 describe("building the timeline (SP-18)", () => {
   it("opens the first frame and says how many frames it holds, as legacy's Build does", async () => {
     // Legacy loads frame 1 and notifies "Timeline built: N frames" (main_window.py:4992-4996). The
@@ -494,6 +504,37 @@ describe("trimming the timeline — RULE-077", () => {
     fireEvent.click(cells()[second]!);
     fireEvent.click(screen.getByText("Trim to here"));
   }
+
+  it("opens the nearest kept frame when the open one is cut (SP-19)", async () => {
+    // Legacy selects the nearest kept frame after a trim (main_window.py:5290-5291). The web moved
+    // the cursor and left the cut frame on screen.
+    const onOpen = vi.fn();
+    render(withSettings(<TimelinePanel images={FOLDER} onOpen={onOpen} openKey="frames/f02.png" />));
+    build("0", "4", { references: false });
+    await waitFor(() => expect(cells()).toHaveLength(5));
+    boundsFrom(1, 2);
+    onOpen.mockClear();
+
+    fireEvent.click(screen.getByText("Cut"));
+
+    await waitFor(() => expect(cells()).toHaveLength(3));
+    expect(onOpen).toHaveBeenCalledTimes(1);
+    expect(["frames/f01.png", "frames/f04.png"]).toContain(onOpen.mock.calls[0]![0]);
+  });
+
+  it("leaves an open frame that survives the trim alone, edits and all (SP-14)", async () => {
+    const onOpen = vi.fn();
+    render(withSettings(<TimelinePanel images={FOLDER} onOpen={onOpen} openKey="frames/f05.png" />));
+    build("0", "4", { references: false });
+    await waitFor(() => expect(cells()).toHaveLength(5));
+    boundsFrom(1, 2);
+    onOpen.mockClear();
+
+    fireEvent.click(screen.getByText("Cut"));
+
+    await waitFor(() => expect(cells()).toHaveLength(3));
+    expect(onOpen).not.toHaveBeenCalled();
+  });
 
   it("cuts the frames between the bounds and says how many", async () => {
     show();

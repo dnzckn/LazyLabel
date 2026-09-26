@@ -427,11 +427,17 @@ export function TimelinePanel({
 
   const currentFrame = shown[current];
   const currentScore = currentFrame === undefined ? undefined : { ...scores, ...ownScores }[current];
+  // An image opened from outside the timeline, which legacy bounces back from and this app opens
+  // (decision 8): the header names it, rather than naming a frame that is not on screen (SP-19).
+  const outside =
+    openKey !== undefined && shown.length > 0 && !shown.some((frame) => frame.key === openKey);
   const status =
     currentFrame === undefined
       ? "No sequence loaded"
-      : `${currentFrame.key.split("/").pop()} (${current + 1}/${shown.length})`
-        + (currentScore === undefined ? "" : ` -- Conf: ${currentScore.toFixed(4)}`);
+      : outside
+        ? `${openKey.split("/").pop()} -- not in the timeline`
+        : `${currentFrame.key.split("/").pop()} (${current + 1}/${shown.length})`
+          + (currentScore === undefined ? "" : ` -- Conf: ${currentScore.toFixed(4)}`);
   useEffect(() => onStatus?.(status), [onStatus, status]);
 
   if (images.length === 0) {
@@ -490,6 +496,13 @@ export function TimelinePanel({
     setCurrent(outcome.current);
     setBounds([null, null]);
     setTrimNote(`Removed ${outcome.removed} frame${outcome.removed === 1 ? "" : "s"} from the timeline. No files were touched.`);
+    // The open frame cut away: the nearest kept one opens, as legacy's does (`main_window.py:5290-5291`,
+    // SEQUENCE_PARITY.md SP-19). One that survived stays open with its edits, where legacy reloads it
+    // and loses them (SP-14).
+    const nearest = outcome.frames[outcome.current];
+    if (nearest !== undefined && !outcome.frames.some((frame) => frame.key === openKey)) {
+      onOpen?.(nearest.key, propagatedFor(nearest));
+    }
   };
 
   /**
