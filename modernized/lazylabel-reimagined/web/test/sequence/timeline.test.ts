@@ -19,7 +19,7 @@ import {
   clearFlags,
   clearReferences,
   colourOf,
-  markAllBefore,
+  framesBefore,
   markReference,
   markReferences,
   markSaved,
@@ -395,15 +395,13 @@ describe("+ All Before and Clear All (legacy's reference buttons)", () => {
     // Sorted, frame 3 is shown first: "before" frame 1 on screen is frame 3 alone, not frame 0.
     const frames = timeline("pending", "pending", "pending", "pending");
 
-    const marked = markAllBefore(frames, 1, [3, 1, 0, 2]);
-
-    expect(marked.map((f) => f.isReference)).toEqual([false, false, false, true]);
+    expect(framesBefore(frames, 1, [3, 1, 0, 2]).map((f) => f.index)).toEqual([3]);
   });
 
   it("does not make a size-mismatched frame a reference, as legacy refuses it", () => {
     const frames = timeline("skipped", "pending", "pending");
 
-    expect(markAllBefore(frames, 2, [0, 1, 2]).map((f) => f.isReference)).toEqual([false, true, false]);
+    expect(framesBefore(frames, 2, [0, 1, 2]).map((f) => f.index)).toEqual([1]);
   });
 
   it("clears every reference, and the size-mismatch skips that depended on them", () => {

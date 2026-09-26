@@ -44,10 +44,10 @@ import {
   buildTimeline,
   clearSuggested,
   folderOf,
+  framesBefore,
   clearFlags,
   clearReferences,
   colourOf,
-  markAllBefore,
   markReference,
   markReferences,
   markSaved,
@@ -384,11 +384,77 @@ export function TimelinePanel({
    */
   // Marking the frame you are on, which is what a user does after drawing on it: `markReferences`
   // derives the whole set when the timeline is built and nothing re-derives it while they work.
-  const markCurrent = useCallback(
-    () => setOverrides(markReference(frames, current)),
-    [current, frames, setOverrides],
+  /*
+   * RULE-048 AT MARK TIME, as legacy checks it (`main_window.py:3887-3908, 3934-3980`;
+   * `sequence_view_mode.py:232-237`; SEQUENCE_PARITY.md SP-24, CONTROL_PARITY.md CP-27): the first
+   * reference fixes the size, G refuses another, and + All Before and + All Labeled leave such
+   * frames out and say how many. Nothing was checked, so a reference of another size silently
+   * seeded nothing when the run began. Sizes come from the image's metadata, asked once per frame;
+   * a size that cannot be read is taken at its word, as `markReferences` takes an unknown one.
+   */
+  const sizes = useRef(new Map<string, Promise<{ width: number; height: number } | null>>());
+  const sizeOf = useCallback(
+    (key: string): Promise<{ width: number; height: number } | null> => {
+      const known = sizes.current.get(key);
+      if (known !== undefined) return known;
+      const asked =
+        client === undefined
+          ? Promise.resolve(null)
+          : Promise.resolve()
+              .then(() => client.imageMetadata("default", key))
+              .then(
+                (metadata) => ({ width: metadata.width, height: metadata.height }),
+                () => null,
+              );
+      sizes.current.set(key, asked);
+      return asked;
+    },
+    [client],
   );
-  useHotkey("add_reference_frame", () => active && markCurrent());
+
+  /** Which of `keys` may become references at the size the first reference fixed, in order, and how many may not. */
+  const bySize = useCallback(
+    async (keys: readonly string[]): Promise<{ accepted: string[]; skipped: number }> => {
+      const first = frames.find((frame) => frame.isReference);
+      let required = first === undefined ? null : await sizeOf(first.key);
+      const measured = await Promise.all(keys.map((key) => sizeOf(key)));
+      const accepted: string[] = [];
+      let skipped = 0;
+      keys.forEach((key, i) => {
+        const size = measured[i] ?? null;
+        if (size === null) accepted.push(key);
+        else if (required === null) {
+          required = size;
+          accepted.push(key);
+        } else if (size.width === required.width && size.height === required.height) accepted.push(key);
+        else skipped += 1;
+      });
+      return { accepted, skipped };
+    },
+    [frames, sizeOf],
+  );
+
+  const markCurrent = useCallback(async () => {
+    const frame = frames[current];
+    if (frame === undefined) return;
+    const first = frames.find((each) => each.isReference && each.key !== frame.key);
+    // No client, no sizes to ask for: marked at once, as before.
+    if (first !== undefined && client !== undefined) {
+      const [size, required] = await Promise.all([sizeOf(frame.key), sizeOf(first.key)]);
+      if (size !== null && required !== null && (size.width !== required.width || size.height !== required.height)) {
+        notify({
+          severity: "warning",
+          message: `Cannot add reference: image is ${size.width}x${size.height} but reference requires ${required.width}x${required.height}`,
+        });
+        return;
+      }
+    }
+    setOverrides((previous) => markReference(previous ?? frames, frame.index));
+    notify({ severity: "info", message: `Added frame ${frame.index + 1} as reference` });
+  }, [client, current, frames, notify, setOverrides, sizeOf]);
+  useHotkey("add_reference_frame", () => {
+    if (active) void markCurrent();
+  });
 
   useHotkey("next_flagged_frame", () => active && navigate("flagged", 1));
   useHotkey("prev_flagged_frame", () => active && navigate("flagged", -1));
@@ -594,7 +660,33 @@ export function TimelinePanel({
         // Keep the listing the panel was given.
       }
     }
-    setOverrides((previous) => markReferences(previous ?? frames, labelled));
+    const labelledKeys = frames.filter((frame) => labelled.has(frame.key)).map((frame) => frame.key);
+    const { accepted, skipped } =
+      client === undefined ? { accepted: labelledKeys, skipped: 0 } : await bySize(labelledKeys);
+    setOverrides((previous) => markReferences(previous ?? frames, new Set(accepted)));
+    notify({
+      severity: "info",
+      message: `Added ${accepted.length} labeled frames as references`
+        + (skipped > 0 ? ` (${skipped} skipped: dimension mismatch)` : ""),
+    });
+  };
+
+  /** + All Before, over the frames left of the current one ON SCREEN, at the reference size. */
+  const markAllBeforeChecked = async () => {
+    const before = framesBefore(frames, current, order);
+    if (before.length === 0) {
+      notify({ severity: "info", message: "No frames before current position" });
+      return;
+    }
+    const beforeKeys = before.map((frame) => frame.key);
+    const { accepted, skipped } =
+      client === undefined ? { accepted: beforeKeys, skipped: 0 } : await bySize(beforeKeys);
+    setOverrides((previous) => markReferences(previous ?? frames, new Set(accepted)));
+    notify({
+      severity: "info",
+      message: `Added ${accepted.length} frames as references`
+        + (skipped > 0 ? ` (${skipped} skipped: dimension mismatch)` : ""),
+    });
   };
 
   /**
@@ -762,12 +854,12 @@ export function TimelinePanel({
         <button type="button" onClick={() => navigate("reference", 1)}>
           Next reference
         </button>
-        <button type="button" onClick={markCurrent}>
+        <button type="button" onClick={() => void markCurrent()}>
           Mark as reference
         </button>
         {/* Legacy's other three reference buttons (`sequence_widget.py:228-253`). "Before" means
             to the left ON SCREEN, so a sorted timeline adds what the user sees to the left. */}
-        <button type="button" onClick={() => setOverrides(markAllBefore(frames, current, order))}>
+        <button type="button" onClick={() => void markAllBeforeChecked()}>
           + All before
         </button>
         <button type="button" onClick={() => void markAllLabeled()}>

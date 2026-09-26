@@ -131,6 +131,53 @@ describe("+ All labeled (SP-26)", () => {
   });
 });
 
+describe("reference sizes (SP-24)", () => {
+  /*
+   * The first reference fixes the size (main_window.py:3887-3908, 3934-3980;
+   * sequence_view_mode.py:232-237). G refuses another size; + All Before and + All Labeled leave
+   * such frames out and say how many. Nothing was checked, so a reference of another size seeded
+   * nothing when the run began, silently.
+   */
+  function sized() {
+    return {
+      imageMetadata: async (_project: string, key: string) =>
+        key === "frames/f04.png" ? { width: 8, height: 6 } : { width: 8, height: 8 },
+      listImages: async () => ({
+        images: FOLDER.map((each) => ({ ...each, annotated: each.name === "f02.png" || each.name === "f04.png" })),
+      }),
+    } as unknown as ApiClient;
+  }
+
+  it("refuses G on a frame of another size, in legacy's words", async () => {
+    render(withSettings(<TimelinePanel images={FOLDER} client={sized()} />));
+    build("0", "4", { references: false });
+    await waitFor(() => expect(cells()).toHaveLength(5));
+    fireEvent.click(cells()[1]!); // f02
+    fireEvent.click(screen.getByText("Mark as reference"));
+    expect(await screen.findByText("Added frame 2 as reference")).toBeTruthy();
+
+    fireEvent.click(cells()[3]!); // f04, 8x6
+    fireEvent.click(screen.getByText("Mark as reference"));
+
+    expect(await screen.findByText("Cannot add reference: image is 8x6 but reference requires 8x8")).toBeTruthy();
+    expect(cells()[3]!.getAttribute("aria-label")).not.toContain("reference");
+  });
+
+  it("leaves a frame of another size out of + All labeled, and says how many", async () => {
+    render(withSettings(<TimelinePanel images={FOLDER} client={sized()} />));
+    build("0", "4", { references: false });
+    await waitFor(() => expect(cells()).toHaveLength(5));
+
+    fireEvent.click(screen.getByRole("button", { name: "+ All labeled" }));
+
+    expect(
+      await screen.findByText("Added 1 labeled frames as references (1 skipped: dimension mismatch)"),
+    ).toBeTruthy();
+    expect(cells()[1]!.getAttribute("aria-label")).toContain("reference");
+    expect(cells()[3]!.getAttribute("aria-label")).not.toContain("reference");
+  });
+});
+
 describe("with no AI (SP-31)", () => {
   /*
    * Legacy hides its Reference Frames, Propagation and Review groups without its AI packages, and

@@ -191,25 +191,26 @@ export function resetForPropagation(frames: readonly Frame[]): readonly Frame[] 
 }
 
 /**
- * "+ All Before": every frame before the current one, as the timeline is SHOWN, becomes a reference.
+ * "+ All Before": the frames before the current one, as the timeline is SHOWN, that may become
+ * references -- the panel then checks their size (SP-24) and marks them.
  *
  * In display order, as legacy does it (`main_window.py:3910-3930`): with the timeline sorted,
  * "before" is to the left of the current frame on screen, not a lower index -- the frames a user is
- * looking at, which is the only reading of "before" they can act on.
+ * looking at, which is the only reading of "before" they can act on. A size-mismatched frame
+ * (`skipped`) is left out, as legacy refuses it.
  */
-export function markAllBefore(
+export function framesBefore(
   frames: readonly Frame[],
   current: number,
   order: readonly number[],
 ): readonly Frame[] {
   const at = order.indexOf(current);
-  if (at <= 0) return frames;
-  const before = new Set(order.slice(0, at));
-  return frames.map((frame) =>
-    before.has(frame.index) && !frame.isReference && frame.state !== "skipped"
-      ? { ...frame, isReference: true }
-      : frame,
-  );
+  if (at <= 0) return [];
+  const byIndex = new Map(frames.map((frame) => [frame.index, frame]));
+  return order
+    .slice(0, at)
+    .map((index) => byIndex.get(index))
+    .filter((frame): frame is Frame => frame !== undefined && frame.state !== "skipped");
 }
 
 /**
