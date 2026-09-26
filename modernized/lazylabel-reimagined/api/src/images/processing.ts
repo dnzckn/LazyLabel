@@ -29,7 +29,6 @@ import {
   equalizeLut,
   posterize,
   rescale,
-  stretchWindow,
   MAX_8_BIT,
   MAX_16_BIT,
 } from "./imageProcessing.js";
@@ -43,19 +42,29 @@ export interface ChannelMarkers {
   readonly b?: readonly number[];
 }
 
+/** `[x1, y1, x2, y2]`, end-exclusive, as a crop is. */
+export type Region = readonly [number, number, number, number];
+
 /**
- * RULE-031's histogram presets — the three ways to choose a rescale other than by hand.
+ * RULE-031's histogram presets: what legacy's Rescale histogram dialog applies when its Apply is
+ * pressed after Equalize or CLAHE (`rescale_histogram_dialog.py:530-581`; `main_window.py:2809-2825`).
  *
- * Mutually exclusive with a manual `rescale` window, which is the rule's own edge case: "dragging
- * the rescale handles clears any preset". Both at once has no meaning, so the type does not allow
- * anyone to ask for it.
+ * Its third, Contrast Stretch, is not one of these. It moves the dialog's min and max lines and
+ * Apply hands those to the slider (lines 512-528, 576-580), so what it leaves behind is an ordinary
+ * `rescale` window, and that is how it arrives here.
+ *
+ * A preset REPLACES the window while it is set, as legacy's table replaces the linear rescale
+ * (`rescale_widget.py:368-370`); moving a handle clears it (lines 305-314).
  */
 export type Preset =
-  /** min/max at the tail percentiles. `saturation` is a PERCENT, 0..50; 0 uses the data range. */
-  | { readonly kind: "stretch"; readonly saturation: number }
-  /** A CDF lookup table over the whole image. */
-  | { readonly kind: "equalize" }
-  /** Adaptive equalization, per tile, with a clip limit. */
+  /**
+   * The equalization table, built from `source` — the region the dialog was opened on, which is
+   * the crop at that moment or the whole image (`rescale_widget.py:420-430`). Legacy builds it
+   * once, at Apply, and keeps it when a crop is drawn afterwards (`main_window.py:2837-2845` clears
+   * only CLAHE), so the region it came from is part of the request. Without one, the current crop.
+   */
+  | { readonly kind: "equalize"; readonly source?: Region | null }
+  /** Adaptive equalization of the crop region, per tile, with a clip limit. */
   | { readonly kind: "clahe"; readonly clipLimit: number; readonly tilesX: number; readonly tilesY: number };
 
 export interface Processing {
@@ -192,28 +201,28 @@ export function applyProcessing(
   const maximum = samples instanceof Uint16Array ? MAX_16_BIT : MAX_8_BIT;
   const grayscale = frame.sourceChannels === 1;
   const preset = grayscale ? (processing.preset ?? null) : null;
+  const crop = processing.crop ?? null;
 
   /*
-   * A PRESET IS A WAY OF CHOOSING THE RESCALE, not a step of its own -- RULE-031 comes from the
-   * rescale histogram dialog, and the rule's edge case says dragging the handles clears a preset.
-   * So `stretch` computes the window the manual controls would have been dragged to, and the one
-   * loop below applies it either way. Two separate stages would be two places for RULE-032's order
-   * to be got wrong.
+   * A PRESET IS LEGACY'S RESCALE STEP, not a step of its own. Legacy's rescale widget applies its
+   * table when one is set and its linear window otherwise (`rescale_widget.py:363-393`), first in
+   * the chain and inside the crop (`image_adjustment_manager.py:619-623`). So both run here, where
+   * the window does, before the threshold and the FFT, on the source samples.
    *
-   * `equalize` is not a window at all -- it is a lookup table over the whole image -- so it
-   * replaces the rescale rather than choosing one. `clahe` is neither: it works on 8-bit data and
-   * belongs after the conversion, so `pipeline.ts` applies it and this function ignores it.
+   * `equalize` is a lookup table built from its source region. `clahe` is a picture, computed on
+   * the crop region at the source's own depth and written over it (`rescale_widget.py:397-406`) --
+   * 16-bit CLAHE on a 16-bit image, as OpenCV does it for legacy.
    */
-  const stretched =
-    preset?.kind === "stretch" ? stretchWindow(channelValues(samples, frame, processing.crop ?? null), preset.saturation) : null;
+  if (preset?.kind === "clahe") claheRegion(samples, frame, crop, preset);
   const lut = preset?.kind === "equalize"
-    ? equalizeLut(channelValues(samples, frame, processing.crop ?? null), maximum)
+    ? equalizeLut(channelValues(samples, frame, preset.source ?? crop), maximum)
     : null;
 
-  const window = stretched ?? processing.rescale ?? null;
+  const window = processing.rescale ?? null;
   // RULE-032: grayscale only. An RGB image keeps its rescale request and ignores it, rather than
   // failing -- a stored setting from a grayscale image should not make the next image an error.
-  const rescaling = frame.sourceChannels === 1 && window !== null && window.max > window.min;
+  // And a preset replaces the window while it is set.
+  const rescaling = preset === null && frame.sourceChannels === 1 && window !== null && window.max > window.min;
 
   const markers = processing.channels ?? {};
   // A grayscale source has one channel and legacy calls it Gray, so `gray` drives all three. On an
@@ -331,11 +340,12 @@ export function processingFromQuery(query: URLSearchParams): Processing {
 }
 
 /**
- * `preset=stretch:0.4`, `preset=equalize`, `preset=clahe:2:8:8` — RULE-031's three.
+ * `preset=equalize`, `preset=equalize:x1,y1,x2,y2` and `preset=clahe:2:8:8` — the dialog's two.
  *
- * Every number is bounded by the rule's own recorded range and a value outside it is REFUSED, not
- * clamped. These change what the user sees rather than what is written, so a silently adjusted
- * clip limit would leave them adjusting a control that had stopped responding.
+ * Every number is bounded by the dialog's own ranges and a value outside it is REFUSED, not
+ * clamped: Clip 0.5 to 40, Tile 2 to 32 (`rescale_histogram_dialog.py:428-444`). These change what
+ * the user sees rather than what is written, so a silently adjusted clip limit would leave them
+ * adjusting a control that had stopped responding.
  */
 function presetFromQuery(query: URLSearchParams): Preset | null {
   const raw = query.get("preset");
@@ -343,16 +353,12 @@ function presetFromQuery(query: URLSearchParams): Preset | null {
 
   const [kind, ...rest] = raw.split(":");
   if (kind === "equalize") {
-    if (rest.length > 0) throw new Error("preset=equalize takes no parameters");
-    return { kind: "equalize" };
-  }
-
-  if (kind === "stretch") {
-    const saturation = rest.length === 0 ? 0.4 : Number(rest[0]);
-    if (!Number.isFinite(saturation) || saturation < 0 || saturation > 50) {
-      throw new Error("preset=stretch takes a saturation percent from 0 to 50");
+    if (rest.length === 0) return { kind: "equalize" };
+    const parts = rest.length === 1 ? rest[0]!.split(",").map((part) => Number(part.trim())) : [];
+    if (parts.length !== 4 || parts.some((value) => !Number.isInteger(value) || value < 0)) {
+      throw new Error("preset=equalize takes the region its table comes from, x1,y1,x2,y2");
     }
-    return { kind: "stretch", saturation };
+    return { kind: "equalize", source: [parts[0]!, parts[1]!, parts[2]!, parts[3]!] };
   }
 
   if (kind === "clahe") {
@@ -370,7 +376,7 @@ function presetFromQuery(query: URLSearchParams): Preset | null {
     return { kind: "clahe", clipLimit, tilesX, tilesY };
   }
 
-  throw new Error(`preset must be stretch, equalize or clahe, got ${JSON.stringify(kind)}`);
+  throw new Error(`preset must be equalize or clahe, got ${JSON.stringify(kind)}`);
 }
 
 /** A comma-separated list of whole numbers within bounds, or [] when the parameter is absent. */
@@ -398,17 +404,18 @@ function intOr(query: URLSearchParams, name: string, fallback: number | null): n
 }
 
 /**
- * One channel's values over the region a preset is computed from.
+ * One channel's values over a region: what a preset is computed from.
  *
  * Channel 0, because a preset is grayscale-only and a grayscale source is expanded to three equal
- * channels by the decoder. The CROP, because RULE-031 says the preset is computed on the crop
- * region: a stretch over the whole frame would set its window from pixels the user has cropped
- * away, which is exactly the case a crop exists to exclude.
+ * channels by the decoder (its first channel, when RULE-024 calls a colour file gray). The region
+ * is the crop, or the region the dialog was opened on: legacy's dialog is given the crop
+ * (`rescale_widget.py:420-430`), so a table over the whole frame would come from pixels the user
+ * has cropped away.
  */
 function channelValues(
   samples: Uint8Array | Uint16Array,
   frame: Frame,
-  crop: readonly [number, number, number, number] | null,
+  crop: Region | null,
 ): Uint8Array | Uint16Array {
   const out = samples instanceof Uint16Array ? new Uint16Array(countIn(frame, crop)) : new Uint8Array(countIn(frame, crop));
   let at = 0;
@@ -416,45 +423,44 @@ function channelValues(
   return out.subarray(0, at);
 }
 
-function countIn(frame: Frame, crop: readonly [number, number, number, number] | null): number {
+function countIn(frame: Frame, crop: Region | null): number {
   if (crop === null) return frame.width * frame.height;
   const [x1, y1, x2, y2] = crop;
   return Math.max(0, x2 - x1) * Math.max(0, y2 - y1);
 }
 
-/**
- * RULE-031's CLAHE, applied to 8-bit data — the last step before display.
- *
- * SEPARATE FROM `applyProcessing`, and the separation is the rule rather than tidiness. CLAHE is
- * defined on 8-bit intensities and RULE-032 fixes the order as rescale, threshold, FFT, then the
- * 16-bit conversion; adaptive equalization of 16-bit samples would be a different operation
- * producing different pixels. So it runs where the data is 8-bit, which is after that conversion,
- * and every path through the pipeline calls it at its own end.
- *
- * ON THE CROP REGION, as the rule says. CLAHE is spatial — its tiles are laid over whatever it is
- * given — so running it over the whole frame and then cropping would equalize against pixels the
- * user cropped away, and the visible result would change when the crop did for no reason the user
- * could see.
- *
- * Grayscale only, like the other two presets. A colour image keeps the request and ignores it.
- */
-export function applyClahe(data: Uint8Array, frame: Frame, processing: Processing | undefined): void {
-  const preset = processing?.preset ?? null;
-  if (preset === null || preset.kind !== "clahe" || frame.sourceChannels !== 1) return;
+/** A region clamped to the frame, as numpy's slicing clamps `image[y1:y2, x1:x2]`. */
+export function clampRegion(frame: Pick<Frame, "width" | "height">, crop: Region | null): Region {
+  if (crop === null) return [0, 0, frame.width, frame.height];
+  const left = Math.max(0, Math.min(frame.width, crop[0]));
+  const top = Math.max(0, Math.min(frame.height, crop[1]));
+  return [left, top, Math.max(left, Math.min(frame.width, crop[2])), Math.max(top, Math.min(frame.height, crop[3]))];
+}
 
-  const crop = processing?.crop ?? null;
-  const x1 = crop === null ? 0 : Math.max(0, crop[0]);
-  const y1 = crop === null ? 0 : Math.max(0, crop[1]);
-  const x2 = crop === null ? frame.width : Math.min(frame.width, crop[2]);
-  const y2 = crop === null ? frame.height : Math.min(frame.height, crop[3]);
+/**
+ * CLAHE over the crop region, written back over it — legacy's CLAHE preset.
+ *
+ * Legacy computes it once, in the dialog, on the region the dialog was given, at the image's own
+ * depth (`rescale_histogram_dialog.py:50-73, 547-564`), and its rescale step then puts that picture
+ * where the crop is, or in place of the whole image (`rescale_widget.py:397-406`). A crop drawn
+ * afterwards drops it (`main_window.py:2837-2845`), so the region it was computed on is always the
+ * crop it is shown in, and the request only has to say the crop.
+ */
+function claheRegion(
+  samples: Uint8Array | Uint16Array,
+  frame: Frame,
+  crop: Region | null,
+  preset: Extract<Preset, { kind: "clahe" }>,
+): void {
+  const [x1, y1, x2, y2] = clampRegion(frame, crop);
   const width = x2 - x1;
   const height = y2 - y1;
   if (width <= 0 || height <= 0) return;
 
-  const plane = new Uint8Array(width * height);
+  const plane = samples instanceof Uint16Array ? new Uint16Array(width * height) : new Uint8Array(width * height);
   for (let y = 0; y < height; y += 1) {
     for (let x = 0; x < width; x += 1) {
-      plane[y * width + x] = data[((y + y1) * frame.width + (x + x1)) * 3]!;
+      plane[y * width + x] = samples[((y + y1) * frame.width + (x + x1)) * 3]!;
     }
   }
 
@@ -470,9 +476,9 @@ export function applyClahe(data: Uint8Array, frame: Frame, processing: Processin
     for (let x = 0; x < width; x += 1) {
       const value = equalized[y * width + x]!;
       const at = ((y + y1) * frame.width + (x + x1)) * 3;
-      data[at] = value;
-      data[at + 1] = value;
-      data[at + 2] = value;
+      samples[at] = value;
+      samples[at + 1] = value;
+      samples[at + 2] = value;
     }
   }
 }

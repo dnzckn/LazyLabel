@@ -28,12 +28,13 @@ const awaiting = (slice: string): Reason => ({ kind: "awaiting", slice });
 const dead = (instead: string): Reason => ({ kind: "dead", instead });
 
 export const UNREACHED: Readonly<Record<string, Reason>> = {
-  // RULE-031's presets are REACHED now -- `stretchWindow` and `equalizeLut` are applied by the
-  // pipeline and `clahe` by `applyClahe`, all three asked for through `preset=` on the processing
-  // query. Their entries are gone, which is what this list is for: an excuse that outlives the
-  // gap tells the next reader a working feature is still missing. `applyLut` went with them, by
-  // deletion -- the pipeline applies the table inside the loop it already runs over every pixel,
-  // so a second pass over the whole image was the wrong shape.
+  // RULE-031's presets are REACHED now -- `equalizeLut` and `clahe` are applied by the pipeline's
+  // rescale step, asked for through `preset=` on the processing query, and the Rescale histogram
+  // dialog's Contrast Stretch arrives as a plain window. Their entries are gone, which is what this
+  // list is for: an excuse that outlives the gap tells the next reader a working feature is still
+  // missing. `applyLut` went with them, by deletion -- the pipeline applies the table inside the
+  // loop it already runs over every pixel, so a second pass over the whole image was the wrong
+  // shape -- and so did `stretchWindow`, when the stretch moved into the dialog as legacy's is.
 
   // ---- Propagation, C11. Nothing left here. ----
   //

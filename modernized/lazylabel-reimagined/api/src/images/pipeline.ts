@@ -21,7 +21,7 @@
 import sharp, { type Metadata } from "sharp";
 
 import { decodeBmp, isBmp } from "./bmp.js";
-import { applyClahe, applyFrequencyFilter, applyProcessing, isEmpty, type Processing } from "./processing.js";
+import { applyFrequencyFilter, applyProcessing, isEmpty, type Processing } from "./processing.js";
 
 /**
  * The container formats this service will decode — SEC-02.
@@ -213,8 +213,6 @@ export async function decodeImage(
       if (sourceChannels === 1) toFirstChannel(samples);
       applyProcessing(samples, { width, height, sourceChannels }, processing);
       samples = applyFrequencyFilter(samples, { width, height, sourceChannels }, processing) ?? samples;
-      // Last, on 8-bit data: RULE-031's CLAHE is defined there and RULE-032 fixes the order.
-      applyClahe(samples, { width, height, sourceChannels }, processing);
     }
     return {
       width,
@@ -242,10 +240,7 @@ export async function decodeImage(
     filtered = applyFrequencyFilter(wide, { width, height, sourceChannels }, processing);
   }
 
-  // The conversion happens here, so CLAHE -- which is defined on 8-bit intensities -- happens
-  // after it. Equalizing 16-bit samples would be a different operation on different numbers.
   const eightBit = filtered ?? to8Bit(wide);
-  applyClahe(eightBit, { width, height, sourceChannels }, processing);
 
   return {
     width,
@@ -255,6 +250,67 @@ export async function decodeImage(
     sourceChannels,
     sourceFormat: format ?? "unknown",
   };
+}
+
+/** An image's first channel at its own depth, and what legacy calls it. */
+export interface SourcePlane {
+  readonly width: number;
+  readonly height: number;
+  readonly sourceDepth: 8 | 16;
+  /** 1 for a grayscale image, 3 for colour, decided as `channelsOf` decides it. */
+  readonly sourceChannels: number;
+  /** One value per pixel, 8-bit or 16-bit as the file is. */
+  readonly plane: Uint8Array | Uint16Array;
+}
+
+/**
+ * The first channel of an image at the depth of the file: what legacy's Rescale widget holds.
+ *
+ * Legacy reads the file with `cv2.IMREAD_UNCHANGED`, so a 16-bit image stays 16-bit, and keeps the
+ * first channel when RULE-024 calls it gray (`image_adjustment_manager.py:501-516`). That array is
+ * what its histogram dialog is given (`rescale_widget.py:420-430`), before any processing.
+ */
+export async function decodeSourcePlane(bytes: Uint8Array): Promise<SourcePlane> {
+  if (isBmp(bytes)) {
+    const bitmap = decodeBmp(bytes);
+    return {
+      width: bitmap.width,
+      height: bitmap.height,
+      sourceDepth: 8,
+      sourceChannels: channelsOf(3, bitmap.data),
+      plane: firstChannel(bitmap.data, new Uint8Array(bitmap.width * bitmap.height)),
+    };
+  }
+
+  let metadata;
+  try {
+    metadata = await sharp(bytes).metadata();
+  } catch (cause) {
+    throw new UnsupportedImageError(
+      `these bytes could not be read as an image: ${cause instanceof Error ? cause.message : cause}`,
+    );
+  }
+  const { width, height, format } = metadata;
+  if (!width || !height) {
+    throw new UnsupportedImageError(`the image has no usable size (${width}x${height})`);
+  }
+  assertDecodable(format);
+
+  const isWide = metadata.depth !== undefined && metadata.depth !== "uchar" && metadata.depth !== "char";
+  const headerChannels = headerChannelsOf(metadata);
+  const samples = isWide ? await wideSamples(bytes) : await eightBitSamples(bytes);
+  return {
+    width,
+    height,
+    sourceDepth: isWide ? 16 : 8,
+    sourceChannels: channelsOf(headerChannels, samples),
+    plane: firstChannel(samples, isWide ? new Uint16Array(width * height) : new Uint8Array(width * height)),
+  };
+}
+
+function firstChannel<T extends Uint8Array | Uint16Array>(samples: Uint8Array | Uint16Array, out: T): T {
+  for (let i = 0; i < out.length; i += 1) out[i] = samples[i * 3]!;
+  return out;
 }
 
 /** The 8-bit chain for a decoder that produced its samples elsewhere, such as the BMP reader. */
@@ -269,7 +325,6 @@ function processed(decoded: DecodedImage, processing: Processing | undefined): D
   };
   applyProcessing(samples, frame, processing);
   const data = applyFrequencyFilter(samples, frame, processing) ?? samples;
-  applyClahe(data, frame, processing);
   return { ...decoded, data };
 }
 

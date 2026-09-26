@@ -26,12 +26,14 @@ import {
 import { listDataset, SIDECAR_COLUMNS } from "./dataset/listing.js";
 import {
   decodeImage,
+  decodeSourcePlane,
   readImageMetadata,
   renderPng,
   renderThumbnail,
   UnsupportedImageError,
   type DecodedImage,
 } from "./images/pipeline.js";
+import { claheFromQuery, regionHistogram } from "./images/histogram.js";
 import {
   ImageTooLargeError,
   adjustmentsFromQuery,
@@ -147,6 +149,11 @@ export function createApp(deps: AppDeps): App {
       method: "GET",
       pattern: "/projects/:projectId/images/*imagePath/thumbnail",
       handler: (request, params) => imageThumbnail(deps, request, params),
+    },
+    {
+      method: "GET",
+      pattern: "/projects/:projectId/images/*imagePath/histogram",
+      handler: (request, params) => imageHistogram(deps, request, params),
     },
     {
       method: "GET",
@@ -687,6 +694,36 @@ async function imagePixels(
   cache.set(cacheKey, { bytes: rendered, headers });
 
   return png(rendered, { ...headers, "x-image-cached": "miss" });
+}
+
+/**
+ * What legacy's Rescale histogram dialog is given: the level counts of the image, or of its crop,
+ * at the image's own depth (`images/histogram.ts`). With `clahe=clip:tiles`, the counts of what
+ * CLAHE makes of that region, which the dialog previews.
+ *
+ * GRAYSCALE ONLY. Legacy's Hist button is disabled for a colour image, and its handler refuses one
+ * with this very notice (`main_window.py:2789-2792`).
+ */
+async function imageHistogram(
+  deps: AppDeps,
+  request: ApiRequest,
+  params: Readonly<Record<string, string>>,
+): Promise<ApiResponse> {
+  const key = params["imagePath"]!;
+  let crop;
+  let clahe;
+  try {
+    crop = processingFromQuery(request.query).crop ?? null;
+    clahe = claheFromQuery(request.query);
+  } catch (cause) {
+    throw badRequest(cause instanceof Error ? cause.message : String(cause));
+  }
+
+  const source = await decodeSourcePlane(await imageBytes(deps, key));
+  if (source.sourceChannels !== 1) {
+    throw new HttpError(409, "not_grayscale", "No grayscale image loaded for histogram");
+  }
+  return json(200, regionHistogram(source, crop, clahe));
 }
 
 /**

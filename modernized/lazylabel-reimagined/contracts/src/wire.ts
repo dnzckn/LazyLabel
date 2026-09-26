@@ -175,6 +175,27 @@ export interface WireImageMetadata {
   readonly sourceFormat: string;
 }
 
+/**
+ * What legacy's Rescale histogram dialog is given, from `/histogram`: the level counts of the
+ * image's first channel over the crop, or the whole image, at the file's own depth
+ * (`rescale_widget.py:420-430`). With `clahe=clip:tiles`, the counts of what CLAHE makes of that
+ * region, which the dialog previews.
+ *
+ * Counts per LEVEL rather than drawn bins, because the dialog's Contrast Stretch percentiles and its
+ * equalization table are computed from the values themselves, and bins would lose them.
+ */
+export interface WireHistogram {
+  readonly depth: 8 | 16;
+  /** The region's size. */
+  readonly width: number;
+  readonly height: number;
+  readonly pixels: number;
+  readonly min: number;
+  readonly max: number;
+  /** `[level, count]` for every level present, lowest first. */
+  readonly levels: readonly (readonly [number, number])[];
+}
+
 /** A failure, as every route reports one. Never an empty success. */
 export interface WireProblem {
   readonly status: number;

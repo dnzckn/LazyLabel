@@ -19,6 +19,7 @@
 import type {
   WireDatasetListing,
   WireFailure,
+  WireHistogram,
   WireImageMetadata,
   WireLoadResponse,
   WireMask,
@@ -262,6 +263,29 @@ export class ApiClient {
    */
   tileUrl(projectId: string, imagePath: string, z: number, x: number, y: number, query = ""): string {
     return `${this.baseUrl}${this.imagePath(projectId, imagePath)}/tiles/${z}/${x}/${y}${query}`;
+  }
+
+  /**
+   * What the Rescale histogram dialog is given: the level counts of the image's first channel over
+   * the crop, or the whole image, at the file's own depth. With `clahe`, the counts of what CLAHE
+   * makes of that region, for the dialog's preview. A colour image is refused with legacy's notice.
+   */
+  async imageHistogram(
+    projectId: string,
+    imagePath: string,
+    options: {
+      readonly crop?: { readonly x1: number; readonly y1: number; readonly x2: number; readonly y2: number } | null;
+      readonly clahe?: { readonly clipLimit: number; readonly tiles: number } | null;
+    } = {},
+  ): Promise<WireHistogram> {
+    const parts = new URLSearchParams();
+    const { crop, clahe } = options;
+    if (crop !== undefined && crop !== null) parts.set("crop", `${crop.x1},${crop.y1},${crop.x2},${crop.y2}`);
+    if (clahe !== undefined && clahe !== null) parts.set("clahe", `${clahe.clipLimit}:${clahe.tiles}`);
+    const query = [...parts.keys()].length === 0 ? "" : `?${parts.toString()}`;
+    const response = await this.send("GET", `${this.imagePath(projectId, imagePath)}/histogram${query}`);
+    if (response.status === 200) return (await response.json()) as WireHistogram;
+    throw await this.problem(response);
   }
 
   thumbnailUrl(projectId: string, imagePath: string, size = 160): string {

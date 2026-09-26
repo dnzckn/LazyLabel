@@ -20,6 +20,7 @@ export {
   type WireDatasetImage,
   type WireDatasetListing,
   type WireFailure,
+  type WireHistogram,
   type WireImageMetadata,
   type WireLoadResponse,
   type WireMask,

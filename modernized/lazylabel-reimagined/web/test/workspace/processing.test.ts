@@ -72,6 +72,29 @@ describe("the query string", () => {
   });
 });
 
+describe("the histogram dialog's presets", () => {
+  it("carries Equalize with the region its table comes from", () => {
+    // Legacy builds the table once, from the region the dialog was opened on, and keeps it when a
+    // crop is drawn afterwards (main_window.py:2837-2845).
+    expect(processingQuery({ ...NO_PROCESSING, preset: { kind: "equalize", source: [0, 0, 40, 20] } })).toBe(
+      "?preset=equalize%3A0%2C0%2C40%2C20",
+    );
+  });
+
+  it("carries CLAHE with its clip and tiles", () => {
+    expect(
+      processingQuery({ ...NO_PROCESSING, preset: { kind: "clahe", clipLimit: 3.5, tilesX: 4, tilesY: 4 } }),
+    ).toBe("?preset=clahe%3A3.5%3A4%3A4");
+  });
+
+  it("sends a preset INSTEAD of the window kept under it", () => {
+    // Legacy's slider keeps its handles while a table is set, and the table replaces them
+    // (rescale_widget.py:368-370). The API refuses both at once.
+    const processing = { ...NO_PROCESSING, rescale: { min: 30, max: 90 }, preset: { kind: "equalize", source: [0, 0, 8, 8] } } as const;
+    expect(processingQuery(processing)).toBe("?preset=equalize%3A0%2C0%2C8%2C8");
+  });
+});
+
 describe("what the source allows", () => {
   it("offers one Gray channel for a grayscale image and three for colour", () => {
     // RULE-029. Offering three on a grayscale image would let a user set a red threshold that the

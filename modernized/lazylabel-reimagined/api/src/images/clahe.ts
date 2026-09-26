@@ -9,11 +9,15 @@
  * MATCHED AGAINST OPENCV, NOT AGAINST A DESCRIPTION. The rule card names the parameters (clip 2.0,
  * 8x8 tiles) and not the algorithm, and three of its steps are choices no description pins down:
  * how the clipped histogram mass is redistributed, how tile tables are interpolated between, and
- * what happens where the grid does not divide the image. `test/fixtures/goldens/legacy-clahe.json` holds
- * the bytes `cv2.createCLAHE` actually produces.
+ * what happens where the grid does not divide the image. `test/fixtures/goldens/legacy-clahe.json`
+ * holds the bytes `cv2.createCLAHE` actually produces, and `legacy-rescale-presets.json` what
+ * legacy's dialog makes with it.
+ *
+ * 8-BIT AND 16-BIT, AS OPENCV DOES BOTH. Legacy hands a 16-bit image to `cv2.createCLAHE` as it is
+ * (`rescale_histogram_dialog.py:50-73`), and OpenCV equalizes it over 65,536 levels
+ * (`CLAHE_Impl::apply`: `histSize = 65536` for `CV_16UC1`). Equalizing its 8-bit conversion
+ * instead is a different operation on different numbers, and gives different pixels.
  */
-
-const HISTOGRAM_SIZE = 256;
 
 export interface ClaheOptions {
   readonly clipLimit?: number;
@@ -22,18 +26,19 @@ export interface ClaheOptions {
 }
 
 /**
- * Apply CLAHE to an 8-bit single-channel image.
+ * Apply CLAHE to a single-channel image, 8-bit or 16-bit, returning the same kind.
  *
  * The image is PADDED when the grid does not divide it, by reflection, exactly as OpenCV does —
  * tiles are then all the same size and the padding is discarded at the end. Uneven tiles would be
  * simpler and would give different numbers at every border.
  */
-export function clahe(
-  pixels: Uint8Array,
+export function clahe<T extends Uint8Array | Uint16Array>(
+  pixels: T,
   height: number,
   width: number,
   options: ClaheOptions = {},
-): Uint8Array {
+): T {
+  const histogramSize = pixels instanceof Uint16Array ? 65536 : 256;
   const tilesX = Math.max(1, Math.trunc(options.tilesX ?? 8));
   const tilesY = Math.max(1, Math.trunc(options.tilesY ?? 8));
   const clipLimit = options.clipLimit ?? 2;
@@ -42,11 +47,11 @@ export function clahe(
   const tileWidth = padded.width / tilesX;
   const tileHeight = padded.height / tilesY;
 
-  const luts = buildLuts(padded, tilesX, tilesY, tileWidth, tileHeight, clipLimit);
-  const interpolated = interpolate(padded, tilesX, tilesY, tileWidth, tileHeight, luts);
+  const luts = buildLuts(padded, tilesX, tilesY, tileWidth, tileHeight, clipLimit, histogramSize);
+  const interpolated = interpolate(padded, tilesX, tilesY, tileWidth, tileHeight, luts, histogramSize - 1);
 
   // Back to the original size, dropping the reflected border.
-  const out = new Uint8Array(height * width);
+  const out = (pixels instanceof Uint16Array ? new Uint16Array(height * width) : new Uint8Array(height * width)) as T;
   for (let y = 0; y < height; y += 1) {
     for (let x = 0; x < width; x += 1) out[y * width + x] = interpolated[y * padded.width + x]!;
   }
@@ -54,26 +59,34 @@ export function clahe(
 }
 
 interface Padded {
-  readonly data: Uint8Array;
+  readonly data: Uint8Array | Uint16Array;
   readonly height: number;
   readonly width: number;
 }
 
-/** `copyMakeBorder(..., BORDER_REFLECT_101)`: the edge pixel itself is not repeated. */
+/**
+ * `copyMakeBorder(..., BORDER_REFLECT_101)`: the edge pixel itself is not repeated.
+ *
+ * OpenCV pads only when the grid fails to divide the image in EITHER direction, and then pads BOTH
+ * by `tiles - size % tiles` -- so a direction the grid does divide gets a whole extra tile's worth
+ * (`CLAHE_Impl::apply`). A 24x20 image under an 8x8 grid is padded to 32x24, not 24x24, and its
+ * tiles are 4 wide rather than 3. Padding only the direction that needs it gives different tiles
+ * and different pixels everywhere.
+ */
 function padToGrid(
-  pixels: Uint8Array,
+  pixels: Uint8Array | Uint16Array,
   height: number,
   width: number,
   tilesX: number,
   tilesY: number,
 ): Padded {
-  const extraX = width % tilesX === 0 ? 0 : tilesX - (width % tilesX);
-  const extraY = height % tilesY === 0 ? 0 : tilesY - (height % tilesY);
-  if (extraX === 0 && extraY === 0) return { data: pixels, height, width };
+  if (width % tilesX === 0 && height % tilesY === 0) return { data: pixels, height, width };
+  const extraX = tilesX - (width % tilesX);
+  const extraY = tilesY - (height % tilesY);
 
   const newWidth = width + extraX;
   const newHeight = height + extraY;
-  const data = new Uint8Array(newWidth * newHeight);
+  const data = pixels instanceof Uint16Array ? new Uint16Array(newWidth * newHeight) : new Uint8Array(newWidth * newHeight);
 
   const reflect = (value: number, limit: number): number => {
     if (limit === 1) return 0;
@@ -93,13 +106,16 @@ function padToGrid(
 }
 
 /**
- * One lookup table per tile.
+ * One lookup table per tile (`CLAHE_CalcLut_Body`).
  *
- * The clip limit is `max(1, clipLimit x tileArea / 256)`, so it scales with the tile rather than
+ * The clip limit is `max(1, clipLimit x tileArea / levels)`, so it scales with the tile rather than
  * being an absolute count — a limit of 2 means "no level may hold more than twice its share".
  * Everything above it is cut and REDISTRIBUTED evenly, with the remainder spread at a stride, which
  * is OpenCV's choice and not a rounding detail: dropping the clipped mass instead would darken
  * every tile with a peak in it.
+ *
+ * The table's scale is a FLOAT, `(levels - 1) / tileArea`, and each entry is `sum * scale` in
+ * single precision before it is rounded, as OpenCV computes them.
  */
 function buildLuts(
   padded: Padded,
@@ -108,19 +124,22 @@ function buildLuts(
   tileWidth: number,
   tileHeight: number,
   clipLimit: number,
-): Uint8Array[] {
+  histogramSize: number,
+): (Uint8Array | Uint16Array)[] {
   const tileArea = tileWidth * tileHeight;
-  const lutScale = (HISTOGRAM_SIZE - 1) / tileArea;
+  const lutScale = Math.fround((histogramSize - 1) / tileArea);
   const limit =
     clipLimit > 0
-      ? Math.max(1, Math.trunc((clipLimit * tileArea) / HISTOGRAM_SIZE))
+      ? Math.max(1, Math.trunc((clipLimit * tileArea) / histogramSize))
       : 0;
+  const top = histogramSize - 1;
 
-  const luts: Uint8Array[] = [];
+  const luts: (Uint8Array | Uint16Array)[] = [];
+  const histogram = new Int32Array(histogramSize);
 
   for (let ty = 0; ty < tilesY; ty += 1) {
     for (let tx = 0; tx < tilesX; tx += 1) {
-      const histogram = new Int32Array(HISTOGRAM_SIZE);
+      histogram.fill(0);
 
       for (let y = 0; y < tileHeight; y += 1) {
         const row = (ty * tileHeight + y) * padded.width + tx * tileWidth;
@@ -129,30 +148,30 @@ function buildLuts(
 
       if (limit > 0) {
         let clipped = 0;
-        for (let i = 0; i < HISTOGRAM_SIZE; i += 1) {
+        for (let i = 0; i < histogramSize; i += 1) {
           if (histogram[i]! > limit) {
             clipped += histogram[i]! - limit;
             histogram[i] = limit;
           }
         }
 
-        const batch = Math.trunc(clipped / HISTOGRAM_SIZE);
-        let residual = clipped - batch * HISTOGRAM_SIZE;
-        for (let i = 0; i < HISTOGRAM_SIZE; i += 1) histogram[i]! += batch;
+        const batch = Math.trunc(clipped / histogramSize);
+        let residual = clipped - batch * histogramSize;
+        for (let i = 0; i < histogramSize; i += 1) histogram[i]! += batch;
 
         if (residual > 0) {
-          const step = Math.max(Math.trunc(HISTOGRAM_SIZE / residual), 1);
-          for (let i = 0; i < HISTOGRAM_SIZE && residual > 0; i += step, residual -= 1) {
+          const step = Math.max(Math.trunc(histogramSize / residual), 1);
+          for (let i = 0; i < histogramSize && residual > 0; i += step, residual -= 1) {
             histogram[i]! += 1;
           }
         }
       }
 
-      const lut = new Uint8Array(HISTOGRAM_SIZE);
+      const lut = histogramSize === 256 ? new Uint8Array(histogramSize) : new Uint16Array(histogramSize);
       let sum = 0;
-      for (let i = 0; i < HISTOGRAM_SIZE; i += 1) {
+      for (let i = 0; i < histogramSize; i += 1) {
         sum += histogram[i]!;
-        lut[i] = Math.min(255, Math.max(0, roundHalfToEven(sum * lutScale)));
+        lut[i] = Math.min(top, Math.max(0, roundHalfToEven(Math.fround(sum * lutScale))));
       }
 
       luts.push(lut);
@@ -175,9 +194,10 @@ function interpolate(
   tilesY: number,
   tileWidth: number,
   tileHeight: number,
-  luts: readonly Uint8Array[],
-): Uint8Array {
-  const out = new Uint8Array(padded.data.length);
+  luts: readonly (Uint8Array | Uint16Array)[],
+  top: number,
+): Uint8Array | Uint16Array {
+  const out = padded.data instanceof Uint16Array ? new Uint16Array(padded.data.length) : new Uint8Array(padded.data.length);
 
   /*
    * EVERY STEP IS SINGLE PRECISION, because OpenCV's is: `float res = ...` in
@@ -220,12 +240,12 @@ function interpolate(
       // Grouped X FIRST, then Y, which is OpenCV's order. Summing the four weighted corners
       // instead is algebraically identical and rounds differently, which shows up as a handful of
       // pixels off by one on the uneven-tile golden.
-      const top = Math.fround(Math.fround(topLeft * xa1) + Math.fround(topRight * xa));
-      const bottom = Math.fround(Math.fround(bottomLeft * xa1) + Math.fround(bottomRight * xa));
-      const blended = Math.fround(Math.fround(top * ya1) + Math.fround(bottom * ya));
+      const upper = Math.fround(Math.fround(topLeft * xa1) + Math.fround(topRight * xa));
+      const lower = Math.fround(Math.fround(bottomLeft * xa1) + Math.fround(bottomRight * xa));
+      const blended = Math.fround(Math.fround(upper * ya1) + Math.fround(lower * ya));
 
-      // `saturate_cast<uchar>` is cvRound then clamp, and cvRound is round-half-to-EVEN.
-      out[y * padded.width + x] = Math.min(255, Math.max(0, roundHalfToEven(blended)));
+      // `saturate_cast` is cvRound then clamp, and cvRound is round-half-to-EVEN.
+      out[y * padded.width + x] = Math.min(top, Math.max(0, roundHalfToEven(blended)));
     }
   }
 
@@ -233,7 +253,7 @@ function interpolate(
 }
 
 /**
- * `cvRound`, which is what `saturate_cast<uchar>` uses: round to nearest, TIES TO EVEN.
+ * `cvRound`, which is what `saturate_cast` uses: round to nearest, TIES TO EVEN.
  *
  * `Math.round` breaks ties upward instead, and the difference is invisible until it is not: four
  * of the six golden cases matched with `Math.round` and two differed by exactly one on a hundred

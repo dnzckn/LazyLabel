@@ -71,48 +71,6 @@ export function posterize(value: number, markers: readonly number[], maximum = M
 
 
 /**
- * The window a contrast stretch would use — RULE-031's first preset.
- *
- * `saturation` is the percentage of pixels sacrificed at EACH tail, so 0.4 (the default) means the
- * darkest 0.4% all become black and the brightest 0.4% all become white. That is the point of the
- * preset: a handful of outlying pixels otherwise hold the whole range hostage, and one hot pixel
- * in a dark frame makes every real value sit in the bottom few levels.
- *
- * The bounds are floor and ceil rather than round, which widens the window by up to a level at
- * each end. Legacy does this, and it is the safer direction: a window that is a hair too wide
- * keeps a pixel that a too-narrow one would have clipped.
- *
- * A saturation of 0 uses the actual data range, which is a stretch with nothing sacrificed.
- */
-export function stretchWindow(
-  values: Uint8Array | Uint16Array,
-  saturation = 0.4,
-): { readonly min: number; readonly max: number } {
-  if (values.length === 0) return { min: 0, max: 0 };
-
-  const sorted = [...values].sort((a, b) => a - b);
-  const lowest = sorted[0]!;
-  const highest = sorted[sorted.length - 1]!;
-
-  if (saturation <= 0) return { min: lowest, max: highest };
-
-  // Counted, not indexed by a fraction of the length. The question the preset answers is "how
-  // many pixels am I willing to sacrifice", so the tail is a COUNT of pixels -- and on a
-  // hundred-pixel image 1% has to mean one pixel rather than rounding to none.
-  const fraction = Math.min(50, saturation) / 100;
-  const sacrifice = Math.floor(sorted.length * fraction);
-  const low = sorted[Math.min(sorted.length - 1, sacrifice)]!;
-  const high = sorted[Math.max(0, sorted.length - 1 - sacrifice)]!;
-
-  // Clamped to the data range, so a percentile that lands outside it cannot produce a window the
-  // image does not occupy.
-  return {
-    min: Math.max(lowest, Math.floor(low)),
-    max: Math.min(highest, Math.ceil(high)),
-  };
-}
-
-/**
  * The equalization lookup table — RULE-031's second preset.
  *
  * `(cdf - cdfMin) / max(1, N - cdfMin) x maximum`, clipped and truncated. It spreads the values

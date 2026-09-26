@@ -13,7 +13,6 @@ import {
   equalizeLut,
   posterize,
   rescale,
-  stretchWindow,
 } from "../../src/images/imageProcessing.js";
 
 describe("rescaling", () => {
@@ -96,53 +95,6 @@ describe("posterizing", () => {
     expect(posterize(60000, [20000, 50000], MAX_16_BIT)).toBe(MAX_16_BIT);
   });
 
-});
-
-describe("the contrast stretch preset", () => {
-  it("sacrifices the tails, which is the point of it", () => {
-    // A gradient from 100 to 149, plus one dead pixel and one hot one. Without the stretch those
-    // two outliers hold the whole range hostage and every real value sits in a fifth of it.
-    const values = new Uint8Array([0, ...Array.from({ length: 98 }, (_, i) => 100 + (i % 50)), 255]);
-
-    const { min, max } = stretchWindow(values, 1);
-
-    expect(min).toBe(100);
-    expect(max).toBe(149);
-  });
-
-  it("counts PIXELS rather than indexing by a fraction of the length", () => {
-    // The question the preset answers is "how many pixels am I willing to sacrifice", so on a
-    // hundred-pixel image 1% has to mean one pixel. Indexing by fraction x (length - 1) rounds
-    // that to none, and the outlier survives.
-    const values = new Uint8Array([0, ...Array(99).fill(200)]);
-
-    expect(stretchWindow(values, 1).min).toBe(200);
-  });
-
-  it("uses the actual data range at 0%", () => {
-    const values = new Uint8Array([10, 50, 250]);
-
-    expect(stretchWindow(values, 0)).toEqual({ min: 10, max: 250 });
-  });
-
-  it("never returns a window the image does not occupy", () => {
-    // Clamped to the data range, so a percentile landing outside it cannot widen the window past
-    // the pixels that are actually there.
-    const values = new Uint8Array([100, 100, 100]);
-
-    expect(stretchWindow(values, 0.4)).toEqual({ min: 100, max: 100 });
-  });
-
-  it("copes with an empty buffer", () => {
-    expect(stretchWindow(new Uint8Array(), 0.4)).toEqual({ min: 0, max: 0 });
-  });
-
-  it("caps the saturation at 50% per tail", () => {
-    // Beyond that the two tails would cross, and legacy's slider stops there.
-    const values = new Uint8Array([0, 50, 100, 150, 200]);
-
-    expect(() => stretchWindow(values, 90)).not.toThrow();
-  });
 });
 
 describe("the equalization preset", () => {

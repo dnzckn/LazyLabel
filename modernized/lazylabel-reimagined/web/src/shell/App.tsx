@@ -321,7 +321,7 @@ export function App({ client }: { readonly client: ApiClient }): ReactNode {
                         initiallyCollapsed
                         collapseOnLoad={{ key: open?.metadata ?? null, collapsed: !grayscale }}
                       >
-                        <RescalePanel />
+                        <RescalePanel client={client} projectId="default" />
                       </Panel>
                       <Panel
                         title="Channel Threshold"

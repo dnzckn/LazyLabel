@@ -1061,12 +1061,19 @@ export function WorkspaceProvider({
   // path reads `crop`, and the processing chain is restricted to the same region (RULE-029 and
   // RULE-032 both say so). One assignment now sets both, which is what stops the view being
   // processed over one rectangle while the save blanks another.
+  //
+  // A crop applied or cleared drops a CLAHE preset, as legacy's does: its picture was computed on
+  // the region the crop had then (main_window.py:2837-2845). An equalization table is kept.
   const setCrop = useCallback(
     (next: Crop | null) =>
       updateSide(activeSide, (current) => ({
         ...current,
         crop: next,
-        processing: { ...current.processing, crop: next },
+        processing: {
+          ...current.processing,
+          crop: next,
+          preset: current.processing.preset?.kind === "clahe" ? null : current.processing.preset,
+        },
       })),
     [activeSide, updateSide],
   );

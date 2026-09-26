@@ -35,22 +35,21 @@ export const CHANNEL_NAMES = {
 } as const satisfies Record<Channel, string>;
 
 /**
- * RULE-031's histogram presets — the three ways to set the rescale other than by hand.
+ * What the Rescale histogram dialog's Apply leaves after Equalize or CLAHE — legacy's preset
+ * (`rescale_histogram_dialog.py:530-581`; `main_window.py:2809-2825`). Its Contrast Stretch leaves
+ * a `rescale` window instead, as legacy's hands its lines to the slider.
  *
- * Mutually exclusive with `rescale`, which is the rule's own edge case: "dragging the rescale
- * handles clears any preset". `setPreset` and `setRescale` each clear the other rather than
- * letting both be set, so the API never has to decide which the user meant.
+ * A preset REPLACES the window while it is set (`rescale_widget.py:368-370`), and the window is
+ * kept under it, as legacy's slider keeps its handles: moving one clears the preset and applies
+ * the window from there (lines 305-314). The query sends the preset alone while one is set.
+ *
+ * `source` is the region Equalize's table was built from, the crop at Apply or the whole image:
+ * legacy builds it once and keeps it when a crop is drawn afterwards (main_window.py:2837-2845).
+ * A crop drawn after CLAHE drops the preset instead (the same lines), which the workspace does.
  */
 export type Preset =
-  | { readonly kind: "stretch"; readonly saturation: number }
-  | { readonly kind: "equalize" }
+  | { readonly kind: "equalize"; readonly source: readonly [number, number, number, number] }
   | { readonly kind: "clahe"; readonly clipLimit: number; readonly tilesX: number; readonly tilesY: number };
-
-export const PRESET_DEFAULTS = {
-  stretch: { kind: "stretch", saturation: 0.4 },
-  equalize: { kind: "equalize" },
-  clahe: { kind: "clahe", clipLimit: 2, tilesX: 8, tilesY: 8 },
-} as const satisfies Record<string, Preset>;
 
 export interface ImageProcessing {
   /** A histogram preset, or null. Grayscale only, like the rescale it replaces. */
@@ -118,18 +117,16 @@ export function processingQuery(processing: ImageProcessing): string {
 export function processingParams(processing: ImageProcessing): string {
   const query = new URLSearchParams();
 
-  // A preset and a manual window are exclusive, and the API refuses a request carrying both --
-  // deliberately, because a client sending both has lost track of which the user chose. Sending
-  // the preset alone when it is set keeps that refusal unreachable from here.
+  // A preset replaces the window while it is set, and the API refuses a request carrying both --
+  // deliberately, because a client sending both has lost track of which applies. Sending the
+  // preset alone when it is set keeps that refusal unreachable from here.
   const preset = processing.preset;
   if (preset !== null) {
     query.set(
       "preset",
       preset.kind === "equalize"
-        ? "equalize"
-        : preset.kind === "stretch"
-          ? `stretch:${preset.saturation}`
-          : `clahe:${preset.clipLimit}:${preset.tilesX}:${preset.tilesY}`,
+        ? `equalize:${preset.source.join(",")}`
+        : `clahe:${preset.clipLimit}:${preset.tilesX}:${preset.tilesY}`,
     );
   } else if (processing.rescale !== null && processing.rescale.max > processing.rescale.min) {
     query.set("rescaleMin", String(processing.rescale.min));

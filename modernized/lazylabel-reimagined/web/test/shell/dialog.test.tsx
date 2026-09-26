@@ -130,6 +130,34 @@ describe("the hotkey dialog", () => {
     expect((field as HTMLInputElement).value).toBe("Ctrl+Z");
   });
 
+  it("makes the page inert ITSELF when modal, for an owner that cannot reach the page's root", async () => {
+    // The Rescale section's histogram dialog opens deep in a panel, as legacy's opens modal
+    // (main_window.py:2807). Everything else in the body goes inert, and only what it made inert
+    // comes back.
+    function Deep(): ReactNode {
+      const [open, setOpen] = useState(true);
+      return open ? (
+        <Dialog title="Rescale Histogram" onClose={() => setOpen(false)} modal>
+          <p>inside</p>
+        </Dialog>
+      ) : null;
+    }
+    const already = document.createElement("div");
+    already.setAttribute("inert", "");
+    document.body.append(already);
+    const { container } = render(<Deep />);
+
+    const dialog = await screen.findByRole("dialog", { name: "Rescale Histogram" });
+    expect(container.hasAttribute("inert")).toBe(true);
+    expect(dialog.closest("[inert]")).toBeNull();
+
+    fireEvent.keyDown(dialog, { key: "Escape", code: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(container.hasAttribute("inert")).toBe(false);
+    expect(already.hasAttribute("inert")).toBe(true);
+    already.remove();
+  });
+
   it("keeps its keystrokes from the page's hotkeys", async () => {
     // "." is fit_view's key. Pressed on the dialog -- on its Close button, say -- it must not fit the
     // view behind it.

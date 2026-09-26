@@ -1410,12 +1410,188 @@ fieldset input[type="text"] {
   font-size: 11px;
 }
 
+/* Hist: 36 by 20, white bold 9px on indigo, radius 3 (lines 216-224). */
+.rescale__hist,
+.rescale__hist:hover:not(:disabled),
+.rescale__hist:active:not(:disabled) {
+  width: 36px;
+  height: 20px;
+  padding: 0;
+  border: none;
+  border-radius: 3px;
+  background: #5c6bc0;
+  color: #ffffff;
+  font-size: 9px;
+  font-weight: bold;
+}
+
+.rescale__hist:hover:not(:disabled) {
+  background: #7986cb;
+}
+
+.rescale__hist:disabled {
+  color: #888888;
+}
+
 /* Reset: 40 by 20, 9px text (lines 229-235). */
 .rescale__reset {
   width: 40px;
   height: 20px;
   padding: 0;
   font-size: 9px;
+}
+
+/* ---- Legacy's Rescale histogram dialog (rescale_histogram_dialog.py:332-479): 650 by 560, 8 px
+   margins, 6 px between rows. */
+.dialog:has(> .histogram-dialog) {
+  width: min(650px, 100%);
+  min-height: min(560px, calc(100vh - 2rem));
+  padding: 8px;
+}
+
+.histogram-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* The window's title, which legacy's window frame draws. */
+.histogram-dialog__caption {
+  color: var(--muted);
+}
+
+/* The canvas: at least 500 by 280, drawn in its own pixels (lines 96-108). */
+.histogram-dialog__canvas {
+  min-width: 500px;
+  height: 280px;
+  user-select: none;
+  touch-action: none;
+}
+
+.histogram-dialog__canvas--dragging {
+  cursor: ew-resize;
+}
+
+.histogram-dialog__drawing {
+  display: block;
+  font-size: 12px;
+}
+
+/* Min, the stats, Max, the stats centred between them (lines 346-365). */
+.histogram-dialog__info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.histogram-dialog__min {
+  color: #228b22;
+  font-weight: bold;
+}
+
+.histogram-dialog__max {
+  color: #b22222;
+  font-weight: bold;
+}
+
+.histogram-dialog__stats {
+  font-size: 10px;
+}
+
+/* The Presets group: bold 11px title, rows 4 px apart (lines 367-372). */
+.histogram-dialog__presets {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 12px 6px 6px;
+}
+
+.histogram-dialog__presets legend {
+  font-size: 11px;
+  font-weight: bold;
+}
+
+.histogram-dialog__row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+}
+
+.histogram-dialog__row input[type="range"] {
+  flex: 1;
+}
+
+/* The two preset buttons share the row's spare width, as Qt's layout gives it them (lines 377-422). */
+.histogram-dialog__row button {
+  flex: 1;
+  padding: 3px 8px;
+  font-size: 10px;
+}
+
+.histogram-dialog__row button:hover:not(:disabled) {
+  background: rgb(100 100 200 / 0.4);
+}
+
+.histogram-dialog__percent {
+  width: 36px;
+}
+
+.histogram-dialog__separator {
+  align-self: stretch;
+  width: 0;
+  border-left: 1px solid var(--rule);
+  border-right: 1px solid var(--ground);
+}
+
+.histogram-dialog__row label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0;
+}
+
+.histogram-dialog__row .histogram-dialog__clip {
+  width: 55px;
+}
+
+.histogram-dialog__row .histogram-dialog__tile {
+  width: 45px;
+}
+
+.histogram-dialog__preset {
+  min-height: 1.2em;
+  color: #e65100;
+  font-size: 10px;
+}
+
+/* Linear/Log, a stretch, Apply and Cancel (lines 455-479). */
+.histogram-dialog__buttons {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.histogram-dialog__scale {
+  width: 60px;
+}
+
+.histogram-dialog__stretch {
+  flex: 1;
+}
+
+.histogram-dialog__apply,
+.histogram-dialog__apply:active:not(:disabled) {
+  padding: 4px 16px;
+  border-color: #4caf50;
+  background: #4caf50;
+  color: #ffffff;
+  font-weight: bold;
+}
+
+.histogram-dialog__apply:hover:not(:disabled) {
+  background: #66bb6a;
 }
 
 /* The slider: 50 px tall, at least 200 wide (lines 41-44). It is drawn from the same colours as the

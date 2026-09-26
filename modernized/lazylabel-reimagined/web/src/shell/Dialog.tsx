@@ -31,9 +31,16 @@ export interface DialogProps {
    * has Reset to Defaults and Close on one row (`hotkey_dialog.py:182-206`). Escape still closes.
    */
   readonly closeButton?: boolean;
+  /**
+   * True when the dialog makes the page behind it inert ITSELF, for an owner deep in the page that
+   * has no hold on the page's root -- the Rescale section's histogram dialog, which legacy opens
+   * modal (`main_window.py:2807`, `dialog.exec()`). Everything else in `document.body` goes inert
+   * while it is open and comes back as it was when it closes.
+   */
+  readonly modal?: boolean;
 }
 
-export function Dialog({ title, onClose, children, closeButton = true }: DialogProps): ReactNode {
+export function Dialog({ title, onClose, children, closeButton = true, modal = false }: DialogProps): ReactNode {
   const box = useRef<HTMLDivElement>(null);
 
   // Read during the FIRST RENDER, not in the effect. The page goes inert in the same commit that
@@ -43,6 +50,18 @@ export function Dialog({ title, onClose, children, closeButton = true }: DialogP
   const [opener] = useState(() =>
     document.activeElement instanceof HTMLElement ? document.activeElement : null,
   );
+
+  // Declared BEFORE the focus effect, so on close the page is given back before focus returns to the
+  // opener in it: an inert element cannot take focus.
+  useEffect(() => {
+    if (!modal) return undefined;
+    const own = box.current?.closest(".dialog-backdrop") ?? null;
+    const behind = [...document.body.children].filter((element) => element !== own && !element.hasAttribute("inert"));
+    for (const element of behind) element.setAttribute("inert", "");
+    return () => {
+      for (const element of behind) element.removeAttribute("inert");
+    };
+  }, [modal]);
 
   useEffect(() => {
     box.current?.focus();
