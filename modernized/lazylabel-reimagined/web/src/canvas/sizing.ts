@@ -16,6 +16,11 @@
  * what this app already drew. Reading them as lengths would make the default 0.3 mean a 0.3-pixel
  * handle, which is not a smaller handle — it is an invisible one, and every drawing aid in the app
  * would vanish for everyone who never opened the panel.
+ *
+ * EXCEPT EDIT MODE'S VERTEX HANDLES, since 2026-09-26. The owner asked for legacy's Edit mode as it
+ * looks and behaves, so `EditLayer` draws them as legacy's scene items are: `LEGACY_POINT_RADIUS x
+ * point` IMAGE pixels, which is `point_radius x annotation_size_multiplier`, growing with the zoom.
+ * The other drawing aids here still keep a constant screen size.
  */
 
 /** Legacy's defaults, which are the denominators that make its numbers mean something here. */
@@ -23,7 +28,10 @@ export const LEGACY_POINT_RADIUS = 0.3;
 export const LEGACY_LINE_THICKNESS = 0.5;
 
 export interface Sizing {
-  /** Multiplier on a screen-pixel radius: vertex handles, AI point markers, the close hint. */
+  /**
+   * Multiplier on a screen-pixel radius: drawn polygon vertices, AI point markers, the close hint.
+   * Edit mode's handles take it on legacy's image-pixel radius instead (see above).
+   */
   readonly point: number;
   /** Multiplier on a screen-pixel stroke width: outlines, previews, selection highlights. */
   readonly line: number;

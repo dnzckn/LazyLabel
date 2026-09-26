@@ -1,5 +1,5 @@
 /**
- * Editing a shape's vertices — RULE-046 and RULE-069.
+ * Editing shapes in Edit mode — RULE-046, RULE-069 and `CONTROL_PARITY.md` CP-16.
  *
  * Only two of the four segment types can be edited at all, and the reason is what they hold. A
  * Polygon and a Circle are stored as VERTICES, so a handle is a thing the user can move. An AI or
@@ -12,9 +12,16 @@
  * derived from that mask rather than authoritative. Offering handles would let a user drag points
  * that are then discarded on save.
  *
+ * EVERY SELECTED SHAPE IS EDITABLE AT ONCE, as in legacy: `display_edit_handles` gives handles to
+ * each selected Polygon and Circle (edit_mode_manager.py:94-135), and a press on the image that
+ * misses every handle drags the whole selection (single_view_mouse_handler.py:81-97, 183-197).
+ * This app used to offer handles only when exactly one shape was selected, under a comment saying
+ * legacy refuses several. It does not.
+ *
  * THE 200-VERTEX LIMIT IS ABOUT THE HANDLES, NOT THE MODE. Legacy opens edit mode for a
- * 350-vertex polygon and shows no handles, with a message saying why. It does not refuse to enter
- * the mode, which matters when several shapes are selected: the other, smaller ones stay editable.
+ * 350-vertex polygon and shows no handles on it, with a warning saying why. It does not refuse to
+ * enter the mode, which matters when several shapes are selected: the other, smaller ones keep
+ * their handles, and the big one still moves with the rest when the selection is dragged.
  */
 
 import type { WireSegment } from "@lazylabel/contracts";
@@ -36,9 +43,9 @@ export type EditModeOutcome =
 /**
  * Whether edit mode can open for this selection, and which of the selected shapes it applies to.
  *
- * Refused with legacy's own words when nothing selected is editable, because that message is the
- * only thing distinguishing "the hotkey is not bound" from "this shape cannot be edited" — and a
- * user whose selection is an AI mask will otherwise press R repeatedly.
+ * Refused with legacy's own words when nothing selected is editable (mode_manager.py:88-109),
+ * because that message is the only thing distinguishing "the hotkey is not bound" from "this shape
+ * cannot be edited" — and a user whose selection is an AI mask will otherwise press R repeatedly.
  */
 export function enterEditMode(
   segments: readonly WireSegment[],
@@ -58,8 +65,10 @@ export function enterEditMode(
 
 export type HandlesOutcome =
   | { readonly kind: "handles"; readonly vertices: readonly Point[] }
-  /** Editable in principle, but not shown: legacy's message is carried through verbatim. */
-  | { readonly kind: "none"; readonly reason: string };
+  /** A polygon over the limit: legacy's warning is carried through verbatim. */
+  | { readonly kind: "too-many"; readonly reason: string }
+  /** A mask, or a shape with no vertices. Legacy passes over these without a word. */
+  | { readonly kind: "none" };
 
 /**
  * The draggable handles for one shape.
@@ -68,23 +77,68 @@ export type HandlesOutcome =
  * limit exists to stop a few hundred overlapping hit targets appearing on one outline.
  */
 export function handlesFor(segment: WireSegment): HandlesOutcome {
-  if (!isEditableType(segment)) {
-    return {
-      kind: "none",
-      reason: `a ${segment.type} segment is a mask, so it has no vertices to edit`,
-    };
-  }
-
   const vertices = segment.vertices ?? [];
+  if (!isEditableType(segment) || vertices.length === 0) return { kind: "none" };
 
   if (segment.type === "Polygon" && vertices.length > MAX_EDITABLE_VERTICES) {
     return {
-      kind: "none",
-      reason: `Polygon has ${vertices.length} vertices (max ${MAX_EDITABLE_VERTICES} for editing)`,
+      kind: "too-many",
+      // edit_mode_manager.py:112-117, word for word.
+      reason:
+        `Polygon has ${vertices.length} vertices (max ${MAX_EDITABLE_VERTICES} for editing). `
+        + "Use lower resolution setting when creating polygons.",
     };
   }
 
   return { kind: "handles", vertices: vertices.map(([x, y]) => ({ x, y })) };
+}
+
+/** One selected shape's handles, and where the shape sits in the list. */
+export interface ShapeHandles {
+  readonly index: number;
+  readonly vertices: readonly Point[];
+}
+
+export interface EditSelection {
+  /**
+   * Every selected shape that gets handles, lowest position first.
+   *
+   * Legacy's order: it walks the selected ROWS of the segment table, which list the segments in
+   * order (right_panel.py:351-359). It is also paint order, and so which of two overlapping handles
+   * is on top and takes the press: the one added last.
+   */
+  readonly handles: readonly ShapeHandles[];
+  /** Legacy's warning for each selected polygon over the limit, in the same order. */
+  readonly warnings: readonly string[];
+  /**
+   * Every selected shape a drag on the image moves: each Polygon and Circle, over the handle limit
+   * or not (single_view_mouse_handler.py:86-95 filters by type alone).
+   */
+  readonly movable: readonly number[];
+}
+
+/** What Edit mode offers for a selection: handles, warnings, and what a drag of the image moves. */
+export function editSelection(
+  segments: readonly WireSegment[],
+  selected: readonly number[],
+): EditSelection {
+  const handles: ShapeHandles[] = [];
+  const warnings: string[] = [];
+  const movable: number[] = [];
+
+  // Sorted and de-duplicated, because a selection is a set of rows: the order a user clicked them
+  // in is not the order legacy lays their handles down in.
+  for (const index of [...new Set(selected)].sort((a, b) => a - b)) {
+    const segment = segments[index];
+    if (segment === undefined) continue;
+
+    const outcome = handlesFor(segment);
+    if (outcome.kind === "handles") handles.push({ index, vertices: outcome.vertices });
+    if (outcome.kind === "too-many") warnings.push(outcome.reason);
+    if (outcome.kind !== "none") movable.push(index);
+  }
+
+  return { handles, warnings, movable };
 }
 
 /**
@@ -129,4 +183,18 @@ export function moveVertex(segment: WireSegment, index: number, to: Point): Wire
     at === index ? ([to.x, to.y] as const) : vertex,
   );
   return { ...segment, vertices: moved };
+}
+
+/**
+ * Move a whole shape by an offset: every vertex, so a circle keeps its radius.
+ *
+ * What a drag on the image does to each selected shape (single_view_mouse_handler.py:183-193). The
+ * offset is always taken from where the drag STARTED, applied to the shape as it was then --
+ * applying each pointer event's offset to the previous result would carry the shape off by the
+ * sum of every intermediate position.
+ */
+export function translateSegment(segment: WireSegment, dx: number, dy: number): WireSegment {
+  const vertices = segment.vertices;
+  if (vertices === undefined || (dx === 0 && dy === 0)) return segment;
+  return { ...segment, vertices: vertices.map(([x, y]) => [x + dx, y + dy] as const) };
 }

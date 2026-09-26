@@ -117,15 +117,21 @@ function click(label: string, x: number, y: number, init: Record<string, unknown
 }
 
 /**
- * Drag one vertex handle to a new place.
+ * Drag one vertex handle of the first annotation to a new place.
  *
  * The press lands on the HANDLE and the move and release on the surface, which is how a browser
- * delivers a drag once the handle has captured the pointer. Pressing the surface instead does
- * nothing at all -- which is how this test found that the edit layer was never wired into the view.
+ * delivers a drag once the surface has captured the pointer. Pressing the surface instead drags the
+ * whole selection, as legacy's Edit mode does -- and before the edit layer was wired into the view
+ * it did nothing at all, which is how this test found that out.
+ *
+ * Pressed where the handle IS: the vertex moves by the pointer's offset from the press, as a Qt
+ * movable item does, so a press at the origin would carry it off by the vertex's own position.
  */
 function dragHandle(handle: number, toX: number, toY: number) {
   const surface = screen.getByLabelText("Edit tool");
-  fireEvent.pointerDown(screen.getByTestId(`handle-${handle}`), { button: 0, pointerId: 1 });
+  const grabbed = screen.getByTestId(`handle-0-${handle}`);
+  const at = { clientX: Number(grabbed.getAttribute("cx")), clientY: Number(grabbed.getAttribute("cy")) };
+  fireEvent.pointerDown(grabbed, { button: 0, pointerId: 1, ...at });
   fireEvent.pointerMove(surface, { clientX: toX, clientY: toY, pointerId: 1 });
   fireEvent.pointerUp(surface, { clientX: toX, clientY: toY, pointerId: 1 });
 }
@@ -197,6 +203,31 @@ describe("flow 3, step by step", () => {
     fireEvent.click(screen.getByText("undo"));
 
     await waitFor(() => expect(shown("count")).toBe("0"));
+  });
+
+  it("moves the outline WHILE the vertex is dragged, not only once it is let go", async () => {
+    // Legacy writes each pointer position into the segment and redraws it (editable_vertex.py:30-37,
+    // edit_mode_manager.py:147-180). Here only the handle moved during a drag: the outline on the
+    // canvas, which is drawn from the store, stayed put until the release.
+    await openAndDraw();
+    fireEvent.click(screen.getByText("select tool"));
+    click("Selection tool", 40, 30);
+    await waitFor(() => expect(shown("selected")).toBe("0"));
+    fireEvent.click(screen.getByText("none tool"));
+    const surface = await screen.findByLabelText("Edit tool");
+
+    fireEvent.pointerDown(screen.getByTestId("handle-0-1"), { button: 0, pointerId: 1, clientX: 80, clientY: 20 });
+    fireEvent.pointerMove(surface, { clientX: 95, clientY: 35, pointerId: 1 });
+
+    await waitFor(() => expect(vertices()).toEqual([[20, 20], [95, 35], [80, 70]]));
+
+    // Recorded at release with the outline as it was BEFORE the drag, which the store could no
+    // longer see by then: one undo puts the vertex back where it started, not where it last was.
+    fireEvent.pointerUp(surface, { clientX: 95, clientY: 35, pointerId: 1 });
+    fireEvent.click(screen.getByText("undo"));
+
+    await waitFor(() => expect(vertices()).toEqual([[20, 20], [80, 20], [80, 70]]));
+    expect(shown("count")).toBe("1");
   });
 
   it("undoes a vertex drag by putting the vertex BACK, not by deleting the shape", async () => {

@@ -114,7 +114,7 @@ function OpenedImage({
   // The LIVE names, not the ones the file held: a class renamed since loading must be written
   // with its new name, or the rename is lost on the next save.
   const { classAliases } = useWorkspace();
-  const { segments, addSegment, updateSegment, activeTool, activeClassId, selected, toggleSelected } =
+  const { segments, addSegment, replaceSegments, activeTool, activeClassId, selected, toggleSelected } =
     useWorkspace();
   const { eraseWith } = useWorkspace();
   // The crop is the store's, not this view's: the SAVE path reads it, so a crop dragged here and
@@ -462,23 +462,28 @@ function OpenedImage({
               />
             )}
 
-            {/* RULE-069: editing is what you get when no DRAWING tool is active and exactly one
-                annotation is selected. Legacy has an explicit Edit mode button; here the state
-                already says it -- a user who has selected one shape and put the drawing tools down
-                is editing it, and a mode to say so again would be a mode to forget to leave.
+            {/* Legacy's Edit mode (R), which is the "none" tool here (ModeControls). Every selected
+                polygon and circle gets its vertex handles, and a press anywhere else on the image
+                drags the whole selection, as legacy's does (edit_mode_manager.py:94-135,
+                single_view_mouse_handler.py:81-97). It is mounted with nothing selected too, so the
+                pointer is legacy's Edit cursor and a press there does nothing.
 
-                Exactly one, because the handles belong to a shape. With two selected there is no
-                answer to which vertex a drag moves, and legacy refuses the same case. */}
-            {activeTool === "none" && selected.length === 1 && segments[selected[0]!] !== undefined && (
+                Every selected shape, not only one: legacy does not refuse several, whatever this
+                comment used to say (CONTROL_PARITY.md CP-16). A drag moves the vertex it grabbed,
+                and each handle knows whose it is. */}
+            {activeTool === "none" && (
               <EditLayer
                 width={metadata.width}
                 height={metadata.height}
-                index={selected[0]!}
-                segment={segments[selected[0]!]!}
-                onChange={(index, segment) => updateSegment(index, segment, "Move vertex")}
-                // RULE-046's refusals -- a mask with no outline, a shape over the 200-vertex limit
-                // -- go to the notifications rather than being drawn over the image.
-                onNoHandles={(reason) => notify({ severity: "info", message: reason })}
+                segments={segments}
+                selected={selected}
+                // The shapes follow the pointer live and the drag is recorded once, at release,
+                // with the shapes as they were before it -- one undo per drag.
+                onPreview={(moved) => replaceSegments(moved)}
+                onCommit={(before, after, label) => replaceSegments(after, { label, before })}
+                // RULE-046's warning for a polygon over the 200-vertex limit goes to the
+                // notifications rather than being drawn over the image.
+                onNotice={(message) => notify({ severity: "info", message })}
               />
             )}
 

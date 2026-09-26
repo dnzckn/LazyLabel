@@ -109,9 +109,10 @@ describe("the tool keys", () => {
     });
   }
 
-  it("edit_mode clears the tool, which is what shows the vertex handles", async () => {
-    // "Edit" is not a tool here. The vertex editor appears when exactly one annotation is selected
-    // and no drawing tool is active, so R means "no tool".
+  it("edit_mode SAYS WHY when there is nothing to edit, and keeps the tool, as legacy does", async () => {
+    // Edit mode needs a selected polygon or circle. Legacy's own words are the only thing
+    // separating "the key is not bound" from "this shape has no vertices to drag" -- and legacy
+    // stays in the mode it was in (mode_manager.py:84-109), where this app used to clear the tool.
     mount();
     await waitFor(() => expect(screen.getByText("Mode Controls")).toBeTruthy());
     fireEvent.keyDown(document, { key: keyFor("polygon_mode") });
@@ -119,26 +120,16 @@ describe("the tool keys", () => {
 
     fireEvent.keyDown(document, { key: keyFor("edit_mode") });
 
-    await waitFor(() => expect(chosen()).toBe("Edit (R)"));
-  });
-
-  it("edit_mode SAYS WHY when there is nothing to edit", async () => {
-    // The vertex editor opens for one selected editable shape. With nothing selected, clearing the
-    // tool is all that visibly happens -- and legacy's own words are the only thing separating
-    // "the key is not bound" from "this shape has no vertices to drag".
-    mount();
-    await waitFor(() => expect(screen.getByText("Mode Controls")).toBeTruthy());
-
-    fireEvent.keyDown(document, { key: keyFor("edit_mode") });
-
     await waitFor(() => expect(screen.getByText(/No editable shapes selected/)).toBeTruthy());
+    expect(chosen()).toBe("Poly (2)");
   });
 
   it("SETS the tool rather than toggling back, which is RULE-070's defect", async () => {
     // Legacy means Selection and Edit to toggle back to the previous mode, and records the mode
     // just left every time -- so E R R E leaves you in selection, unable to reach AI without
     // pressing 1. The card calls it a defect. A tool key that sometimes does something else is
-    // worse than one that always does the same thing.
+    // worse than one that always does the same thing. (Nothing is selected here, so R is refused
+    // and changes nothing, as legacy's is; entering Edit is covered in ModeControls.test.tsx.)
     mount();
     await waitFor(() => expect(screen.getByText("Mode Controls")).toBeTruthy());
 
@@ -147,7 +138,8 @@ describe("the tool keys", () => {
     fireEvent.keyDown(document, { key: keyFor("selection_mode") });
     await waitFor(() => expect(chosen()).toBe("Select (E)"));
     fireEvent.keyDown(document, { key: keyFor("edit_mode") });
-    await waitFor(() => expect(chosen()).toBe("Edit (R)"));
+    await waitFor(() => expect(screen.getByText(/No editable shapes selected/)).toBeTruthy());
+    expect(chosen()).toBe("Select (E)");
 
     // The fourth press in legacy's sequence. Selection, every time, not "back to AI".
     fireEvent.keyDown(document, { key: keyFor("selection_mode") });

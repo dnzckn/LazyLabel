@@ -278,6 +278,28 @@ export interface WorkspaceContextValue {
    * remove the entry -- undoing a moved vertex must put the vertex back, not delete the shape.
    */
   readonly updateSegment: (index: number, segment: WireSegment, label?: string) => void;
+  /**
+   * Replace annotations in place, by position, keeping the selection: what dragging in Edit mode
+   * does to the shapes it moves.
+   *
+   * WITHOUT `record` THE CHANGE IS LIVE AND NOT RECORDED. Legacy moves the shape under the pointer
+   * as it is dragged (editable_vertex.py:30-37, single_view_mouse_handler.py:183-197) and records
+   * the gesture once, on release. A history entry per pointer event would make undo crawl back
+   * through the drag. A live change leaves "unsaved" alone, so a drag abandoned with Escape leaves
+   * the image as it found it.
+   *
+   * WITH `record`, ONE entry is recorded, whose undo puts back `record.before` -- the shapes as they
+   * were before the drag, which the store can no longer see, because the live changes replaced
+   * them. That is why this is not `updateSegment`, which records whatever the list held a moment
+   * ago as the thing to go back to.
+   *
+   * Only while the image the change was made on is still open: a drag abandoned by opening another
+   * image must not land in it.
+   */
+  readonly replaceSegments: (
+    changes: ReadonlyMap<number, WireSegment>,
+    record?: { readonly label: string; readonly before: ReadonlyMap<number, WireSegment> },
+  ) => void;
   readonly history: History;
   /** Cleared on a successful save; that is what makes `dirty` mean "differs from the file". */
   readonly markSaved: () => void;
@@ -792,6 +814,47 @@ export function WorkspaceProvider({
     [activeSide, history, segments, updateSide],
   );
 
+  const openKeyNow = open?.image.key;
+  const replaceSegments = useCallback(
+    (
+      changes: ReadonlyMap<number, WireSegment>,
+      record?: { readonly label: string; readonly before: ReadonlyMap<number, WireSegment> },
+    ) => {
+      const at = activeSide;
+      const key = openKeyNow;
+
+      const put = (values: ReadonlyMap<number, WireSegment>, recorded: boolean) =>
+        updateSide(at, (current) => {
+          if (current.open?.image.key !== key) return current;
+          let changed = false;
+          const next = current.segments.map((entry, i) => {
+            const value = values.get(i);
+            if (value === undefined || value === entry) return entry;
+            changed = true;
+            return value;
+          });
+          // The recorded step marks the image unsaved even when the live changes already put these
+          // very shapes in place: they are what it records.
+          const dirty = current.dirty || recorded;
+          if (!changed && dirty === current.dirty) return current;
+          return { ...current, segments: changed ? next : current.segments, dirty };
+        });
+
+      put(changes, record !== undefined);
+      if (record === undefined) return;
+
+      const before = record.before;
+      history.record({
+        label: record.label,
+        bytes: [...changes.values()].reduce((total, segment) => total + estimateBytes(segment), 0),
+        scope: [sideScope(at)],
+        undo: () => put(before, true),
+        redo: () => put(changes, true),
+      });
+    },
+    [activeSide, history, openKeyNow, updateSide],
+  );
+
   const toggleSelected = useCallback(
     (index: number) =>
       updateSide(activeSide, (current) => ({ ...current, selected: toggle(current.selected, index) })),
@@ -1069,6 +1132,7 @@ export function WorkspaceProvider({
       addSegment,
       eraseWith,
       updateSegment,
+      replaceSegments,
       history,
       markSaved,
       markSavedOn,
@@ -1121,6 +1185,7 @@ export function WorkspaceProvider({
       openImageOn,
       processing,
       registerSave,
+      replaceSegments,
       revisions,
       segments,
       selected,

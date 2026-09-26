@@ -6,9 +6,9 @@
  * to the keyboard without any code; each label is the button. The key in each label is read from
  * the user's bindings, so a remapped key is the one shown.
  *
- * WHERE REACT'S EXTRA TOOLS WENT. "Edit" is not a drawing tool here: the vertex editor appears when
- * exactly one annotation is selected and no drawing tool is active, so Edit (R) means "no tool" --
- * which is also the state the app starts in, so a first click on the canvas never draws. Pan has
+ * WHERE REACT'S EXTRA TOOLS WENT. "Edit" is not a drawing tool here: the vertex handles appear on
+ * the selected shapes while no drawing tool is active, so Edit (R) means "no tool" -- which is also
+ * the state the app starts in, so a first click on the canvas never draws. Pan has
  * no button in legacy; it sits beside Hotkeys, where the grid leaves room. Crop is drawn from the
  * Border Crop section, as legacy's is (control_panel.py:500).
  */
@@ -39,20 +39,21 @@ export function ModeControls({ onHotkeys }: { readonly onHotkeys: () => void }):
   const { notify } = useNotifications();
 
   /*
-   * EDIT SAYS WHY IT DID NOTHING. The vertex editor opens when exactly one editable annotation is
-   * selected and no drawing tool is active, so Edit clears the tool -- and with nothing selected,
-   * or with an AI mask selected, clearing the tool is all that visibly happens. `enterEditMode`
-   * carries legacy's own words for that, and they are the only thing separating "the key is not
-   * bound" from "this shape has no vertices to drag".
+   * EDIT SAYS WHY IT DID NOTHING, and does nothing. Edit mode needs a selected polygon or circle,
+   * which then carry their vertex handles. With nothing selected, or only masks, legacy refuses in
+   * its own words and STAYS IN THE MODE IT WAS IN (mode_manager.py:55-112) -- the words being the
+   * only thing that separates "the key is not bound" from "this shape has no vertices to drag".
    *
-   * The tool is still cleared on a refusal. Edit means "stop drawing and edit"; refusing the second
-   * half is not a reason to ignore the first, and leaving the polygon tool armed would put the next
-   * click into a new shape.
+   * Until 2026-09-26 the tool was cleared on a refusal anyway, so R on a mask left the user out of
+   * the mode they were drawing in. Legacy keeps it (CONTROL_PARITY.md CP-16).
    */
   const edit = () => {
-    setActiveTool("none");
     const outcome = enterEditMode(segments, selected);
-    if (outcome.kind === "refused") notify({ severity: "info", message: outcome.reason });
+    if (outcome.kind === "refused") {
+      notify({ severity: "info", message: outcome.reason });
+      return;
+    }
+    setActiveTool("none");
   };
 
   /*

@@ -15,10 +15,12 @@ import type { WireSegment } from "@lazylabel/contracts";
 
 import {
   MAX_EDITABLE_VERTICES,
+  editSelection,
   enterEditMode,
   handlesFor,
   isEditableType,
   moveVertex,
+  translateSegment,
 } from "../../src/tools/edit.js";
 
 const polygon = (count: number): WireSegment => ({
@@ -90,18 +92,22 @@ describe("handles", () => {
     expect(outcome.vertices[0]).toEqual({ x: 0, y: 0 });
   });
 
-  it("shows none above the limit, and says how many there are", () => {
+  it("shows none above the limit, and says why in legacy's words, both sentences", () => {
+    // edit_mode_manager.py:112-117. The second sentence is the advice, and it was missing here.
     const outcome = handlesFor(polygon(350));
 
-    expect(outcome.kind).toBe("none");
-    if (outcome.kind !== "none") throw new Error("expected none");
-    expect(outcome.reason).toBe("Polygon has 350 vertices (max 200 for editing)");
+    expect(outcome.kind).toBe("too-many");
+    if (outcome.kind !== "too-many") throw new Error("expected too many");
+    expect(outcome.reason).toBe(
+      "Polygon has 350 vertices (max 200 for editing). "
+        + "Use lower resolution setting when creating polygons.",
+    );
   });
 
   it("shows them at exactly the limit", () => {
     // The limit is a maximum, not a threshold to be under.
     expect(handlesFor(polygon(MAX_EDITABLE_VERTICES)).kind).toBe("handles");
-    expect(handlesFor(polygon(MAX_EDITABLE_VERTICES + 1)).kind).toBe("none");
+    expect(handlesFor(polygon(MAX_EDITABLE_VERTICES + 1)).kind).toBe("too-many");
   });
 
   it("shows a circle's two handles regardless of the limit", () => {
@@ -113,12 +119,81 @@ describe("handles", () => {
     expect(outcome.vertices).toEqual([{ x: 50, y: 50 }, { x: 55, y: 50 }]);
   });
 
-  it("explains a mask rather than returning an empty list", () => {
-    const outcome = handlesFor(aiMask);
+  it("passes over a mask without a word, as legacy's handles do", () => {
+    // A selected mask in Edit mode simply has no handles (edit_mode_manager.py:108). The one thing
+    // legacy says about masks is the refusal to ENTER the mode when nothing else is selected.
+    expect(handlesFor(aiMask)).toEqual({ kind: "none" });
+    expect(handlesFor(loaded)).toEqual({ kind: "none" });
+  });
+});
 
-    expect(outcome.kind).toBe("none");
-    if (outcome.kind !== "none") throw new Error("expected none");
-    expect(outcome.reason).toContain("is a mask");
+describe("a selection in Edit mode", () => {
+  const triangle = (at: number): WireSegment => ({
+    type: "Polygon",
+    classId: 0,
+    vertices: [[at, at], [at + 10, at], [at + 10, at + 10]],
+  });
+
+  it("gives EVERY selected polygon and circle its handles, not only a lone one", () => {
+    // CP-16. Legacy walks every selected row (edit_mode_manager.py:105-135); this app offered
+    // handles only when exactly one shape was selected.
+    const selection = editSelection([triangle(0), circle, triangle(50)], [2, 0, 1]);
+
+    expect(selection.handles.map((shape) => shape.index)).toEqual([0, 1, 2]);
+    expect(selection.handles[2]?.vertices[1]).toEqual({ x: 60, y: 50 });
+    expect(selection.warnings).toEqual([]);
+  });
+
+  it("lays them down lowest position first, whatever order they were clicked in", () => {
+    // Legacy reads the selected ROWS, which run in segment order (right_panel.py:351-359) -- and
+    // the handle added last is the one on top where two overlap.
+    const selection = editSelection([triangle(0), triangle(5), triangle(9)], [2, 0, 2]);
+
+    expect(selection.handles.map((shape) => shape.index)).toEqual([0, 2]);
+  });
+
+  it("applies the limit to each polygon on its own", () => {
+    // The card's example: the big polygon gets no handles and a warning, and the small one next to
+    // it keeps its own. The big one still moves with the selection.
+    const selection = editSelection([polygon(350), triangle(0), aiMask], [0, 1, 2]);
+
+    expect(selection.handles.map((shape) => shape.index)).toEqual([1]);
+    expect(selection.warnings).toEqual([
+      "Polygon has 350 vertices (max 200 for editing). "
+        + "Use lower resolution setting when creating polygons.",
+    ]);
+    expect(selection.movable).toEqual([0, 1]);
+  });
+
+  it("neither shows handles for a mask nor moves it", () => {
+    // single_view_mouse_handler.py:93-94: a drag of the selection takes Polygons and Circles only.
+    const selection = editSelection([aiMask, loaded], [0, 1]);
+
+    expect(selection).toEqual({ handles: [], warnings: [], movable: [] });
+  });
+
+  it("ignores a selected position that is not there", () => {
+    expect(editSelection([triangle(0)], [0, 7]).handles.map((shape) => shape.index)).toEqual([0]);
+  });
+});
+
+describe("moving a whole shape", () => {
+  it("moves every vertex by the offset", () => {
+    expect(translateSegment(polygon(3), 10, -1).vertices).toEqual([[10, -1], [11, 0], [12, 1]]);
+  });
+
+  it("moves a circle without resizing it", () => {
+    expect(translateSegment(circle, 5, 5).vertices).toEqual([[55, 55], [60, 55]]);
+  });
+
+  it("does not clamp to the image", () => {
+    // Legacy lets the selection be dragged past the edge; saving keeps only what falls inside.
+    expect(translateSegment(polygon(1), -40, -40).vertices).toEqual([[-40, -40]]);
+  });
+
+  it("hands back the same shape for no offset, so nothing is recorded", () => {
+    const original = polygon(3);
+    expect(translateSegment(original, 0, 0)).toBe(original);
   });
 });
 
