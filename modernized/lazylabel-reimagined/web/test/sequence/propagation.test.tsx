@@ -1148,6 +1148,24 @@ describe("RULE-056: not losing propagated work without asking", () => {
     expect(confirm).toHaveBeenCalledTimes(1);
   });
 
+  it("opens a frame Save All wrote from its FILE, not from the run's masks (SP-23)", async () => {
+    /*
+     * Legacy's mark_frame_saved drops a saved frame's stored masks (sequence_view_mode.py:365-373),
+     * so a revisit loads what was written. Here the run kept them after Save All, and the frame
+     * reopened with them, marked unsaved -- and asked, or with Auto-Save on wrote it again, on
+     * leaving.
+     */
+    const opened: { key: string; segments: readonly WireSegment[] | undefined }[] = [];
+    panel(() => true, false, undefined, { onOpen: (key, segments) => opened.push({ key, segments }) });
+    await propagateAndWait();
+
+    fireEvent.click(screen.getByRole("button", { name: /Save 1 frame/ }));
+    await screen.findByText(/Saved 1 frame/);
+    fireEvent.click(await screen.findByRole("button", { name: "Frame 2, frames/f02.png, saved" }));
+
+    expect(opened.at(-1)).toEqual({ key: "frames/f02.png", segments: undefined });
+  });
+
   it("counts a SECOND run's frames as unsaved, even where the first run's were saved", async () => {
     /*
      * Found in a real browser on 2026-09-23: the set of frames written was never cleared, so once

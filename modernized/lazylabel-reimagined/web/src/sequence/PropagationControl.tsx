@@ -491,11 +491,16 @@ export function PropagationControl({
   const segmentsByFrame = useMemo(() => {
     const built = new Map<string, readonly WireSegment[]>();
     for (const [key, results] of view.kept) {
+      // A frame Save All wrote is on disk now, so a revisit opens its file, as legacy's does once
+      // `mark_frame_saved` has dropped its stored masks (`sequence_view_mode.py:365-373`). Its
+      // score stays, as legacy's does. Until 2026-09-26 it reopened with the run's masks, marked
+      // unsaved (`SEQUENCE_PARITY.md` SP-23).
+      if (written.has(key)) continue;
       const segments = segmentsFor(results, classes);
       if (segments.length > 0) built.set(key, segments);
     }
     return built;
-  }, [classes, view.kept]);
+  }, [classes, view.kept, written]);
 
   useEffect(() => {
     onSegments?.(segmentsByFrame);
