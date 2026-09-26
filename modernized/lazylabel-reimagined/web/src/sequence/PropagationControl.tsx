@@ -628,7 +628,10 @@ export function PropagationControl({
           </button>
         )}
 
-        {done && unsaved.length > 0 && (() => {
+        {/* Offered DURING a run too, for the frames already committed, as legacy's Save All is
+            (main_window.py:3297-3305, SEQUENCE_PARITY.md SP-38): a long run could be saved only once it
+            had finished. */}
+        {job !== null && unsaved.length > 0 && (() => {
           // Legacy's green Save All (theme.py positiveButton), beside the bar when there is a slot.
           const save = (
             <button

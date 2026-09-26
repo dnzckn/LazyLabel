@@ -452,6 +452,30 @@ describe("watching it", () => {
     expect(fake.polls.length).toBe(settled);
   });
 
+  it("offers Save for the frames already committed while the run goes on, as legacy's Save All does (SP-38)", async () => {
+    // Legacy's Save All is enabled during a run and writes what is committed (main_window.py:3297-3305).
+    // The web offered it only once the run had finished.
+    const fake = fakeClient({
+      poll: () =>
+        job({
+          state: "running",
+          completed: 2,
+          cursor: 2,
+          results: [
+            { source: FRAMES[1]!.key, objectId: 1, mask: MASK, confidence: 0.999 },
+            { source: FRAMES[2]!.key, objectId: 1, mask: MASK, confidence: 0.999 },
+          ],
+        }),
+    });
+    show(fake);
+
+    fireEvent.click(propagate());
+
+    // Frame 1 is committed; frame 2, the newest, is not yet.
+    expect(await screen.findByRole("button", { name: /Save 1 frame/ }, { timeout: 3000 })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Cancel" })).toBeTruthy();
+  });
+
   it("reports each frame's confidence as the MINIMUM over its objects", async () => {
     // RULE-016 scores each object; RULE-060 flags a FRAME. Two objects on one frame at 0.9 and
     // 0.4 make it a 0.4 frame -- the worst object is the reason a human has to look.
