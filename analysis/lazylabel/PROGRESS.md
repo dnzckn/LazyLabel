@@ -690,15 +690,17 @@ configured, so a green CI run says nothing about them — see `Running the live 
 4. **Controls and hotkeys against the PyQt6 app: `CONTROL_PARITY.md` (started 2026-09-25).** The
    owner asked whether the app matches the PyQt6 one "in looks and hot keys ... across all tabs".
    The look was done (`VISUAL_PARITY.md`). Three read-only audits then compared what every control
-   and key DOES, and found about forty unrecorded differences, ranked P0-P3 in that file. Fixed so
-   far, in `28c2f37`:
+   and key DOES, and found about forty unrecorded differences, ranked P0-P3 in that file. By the end
+   of 2026-09-25 all five P0 items and ten of the P1 items were fixed. Among them:
    - Enter saved over an unreadable file;
-   - Ctrl+H crashed, and Ctrl+H and Ctrl+P reached the browser's history and print dialogs;
+   - Ctrl+A then V deleted classes hidden by the filter;
    - class names could not contain a typed space;
-   - the sequence keys acted on the other tabs.
+   - P did something other than legacy's P;
+   - AI mode did nothing until a model was chosen;
+   - the mouse wheel scrolled where legacy's zooms.
 
-   Work down that file in order. Verify each "reported" item against both apps' code before fixing
-   it.
+   `CONTROL_PARITY.md` has every item's status and commit. Work down that file in order. Verify each
+   "reported" item against both apps' code before fixing it.
 
 The three decisions this list used to end with are answered, above: Ctrl+Plus keeps zooming, the
 timeline keeps legacy's behaviour, and image tiles get built. The measurement that framed the tiles
