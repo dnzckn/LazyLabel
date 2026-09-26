@@ -608,7 +608,7 @@ When `inference/.venv` exists, it also runs `python -m lazylabel_inference.docto
 - **`engines`:** `>=22.13` in all five `package.json` files.
 - **The entry guard:** if `main.ts` keeps its guard, compare `realpathSync(process.argv[1])` with `fileURLToPath(import.meta.url)`. R4 removes the need.
 - **A friendly EADDRINUSE message.**
-- **Get CI green.** The differential job fails on every push, and a red badge is the first thing an evaluator sees. Also bump the actions warned about Node 20.
+- **Get CI green.** The differential job fails on every push, and a red badge is the first thing an evaluator sees. **Done 2026-09-26** (`c2dd71a`): the job lacked libEGL and libGL, so importing legacy's loaders failed on QtGui; every job has passed since. Still open: bump the actions warned about Node 20.
 
 ### Which of these gets a non-technical annotator labelling fastest?
 

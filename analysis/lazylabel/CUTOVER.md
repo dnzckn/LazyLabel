@@ -78,10 +78,10 @@ Each of these is checkable, and none of them is an opinion.
       deploy/` is currently reasoned rather than observed; its README says so and names what to
       check first. That has to stop being true before anyone depends on it.
 - [x] **A backup of the dataset folder exists.** The owner's answer, 2026-09-25: not needed, the
-      backups exist. Not because the web app deletes anything — decision
-      7 is a list of things that must not happen without an explicit act — but because this is the
-      first time a different program will write these files, and the cheapest insurance against
-      being wrong about that is a copy.
+      backups exist. The web app deletes files as the desktop app does since 2026-09-26: saving
+      an image with no segments removes its seven annotation files. And this is the first time a
+      different program will write these files, so the cheapest insurance against being wrong
+      about that is a copy.
 
 ## What a user does
 
@@ -115,18 +115,24 @@ Being straight about both, because a cutover document that only lists gains is a
   second view is a second tab. `PROGRESS.md` records where it would attach if it is wanted.
 - **The four-view multi-view setting.** Only two viewers ever existed behind it; the setting was a
   control that did nothing.
-- **Several silent behaviours.** Delete-on-empty saves, silent loss on close, and the notification
-  that announced deleting every annotation file for an image on a five-second timer. These are in
-  `ASSESSMENT.md` 5.1 and are on the list the rewrite may not reproduce.
+- **Silent loss on closing.** Closing the tab still asks while there is unsaved work, where the
+  desktop app closes without a question (SP-17). The owner's decision of 2026-09-26 to match the
+  desktop app's silent behaviours covered the Sequence tab, New Timeline, emptied images and the
+  Multi view, not closing.
+
+**Matched on the owner's decision of 2026-09-26** ("Match the desktop app exactly"): saving an image
+with no segments deletes its seven annotation files, with the desktop app's "Deleted: ..." notice;
+leaving the Sequence tab or pressing New Timeline drops unsaved propagated frames without asking;
+the Multi view saves both images on every move. One guard stays: an image whose annotations could
+not be read is never written over or deleted (SEC-04), where the desktop app deletes its files.
 
 **Gained, beyond the obvious:**
 
 - **Nothing unpickles anything** (SEC-01), and checkpoints load hash-checked and weights-only. The
   desktop app's pickled class names are read as data instead, which only accepts the one shape
   the desktop app writes.
-- **Explicit save semantics** (decision 7): nothing is deleted without an act, a damaged file never
-  hides or overwrites a valid one, and an emptied image writes an empty file rather than having
-  its files removed.
+- **A damaged file is never overwritten or deleted** (SEC-04): the web app will not save over, or
+  delete the files of, an image whose annotations could not be read, and it says why.
 - **Per-image class ids that stay per-image** (decision 6), so one dataset's numbering cannot leak
   into another's.
 - **Several legacy defects designed out rather than ported**, each recorded on its rule card:

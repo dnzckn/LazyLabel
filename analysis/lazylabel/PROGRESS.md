@@ -576,7 +576,9 @@ decisions; each answer is an option they chose:
   drop unsaved propagated frames without asking (SP-15, SP-16). Leaving a frame emptied by hand
   deletes its seven sidecar files (SP-58), which reverses RULE-083's never-delete answer and the
   delete-on-empty line in `CUTOVER.md`. Multi saves both sides on every move, whatever Auto-Save
-  on Navigate says (CP-67).
+  on Navigate says (CP-67). **Built** (`1046f58`, `38be6be`, `64198d1`): the API gained
+  `DELETE .../annotations`, which removes exactly legacy's seven paths. An image whose annotations
+  could not be read is still never written over or deleted (SEC-04). Closing still asks (SP-17).
 - **"Reset per image (current web)"**: the crop and the FFT threshold do not carry over to the
   next image (SP-10).
 - **"E/R toggle back; Ctrl+Plus/Minus zoom"**: pressing Select or Edit again returns to the
