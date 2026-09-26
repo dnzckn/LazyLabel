@@ -88,6 +88,11 @@ export interface PropagationControlProps {
    * cells (RULE-081). Handed up because the timeline's colours belong to the panel.
    */
   readonly onSkipped?: (keys: ReadonlySet<string>) => void;
+  /**
+   * The frames the run leaves out -- another size than the reference's, or unreadable -- for the
+   * timeline to mark Skipped, as legacy marks them (`main_window.py:4149-4162`, SP-25).
+   */
+  readonly onLeftOut?: (keys: readonly string[]) => void;
   /** The frames a Save All wrote, so the timeline can show them saved. */
   readonly onSaved?: (keys: readonly string[]) => void;
   /**
@@ -127,6 +132,7 @@ export function PropagationControl({
   onSegments,
   confirmDiscard = (message) => window.confirm(message),
   onSkipped,
+  onLeftOut,
   onSaved,
   savedElsewhere,
   openAnnotations,
@@ -480,6 +486,34 @@ export function PropagationControl({
 
   const job = progress.job;
   const done = job !== null && !progress.running;
+
+  /*
+   * THE FRAMES THE RUN LEAVES OUT, marked Skipped and said, as legacy marks and says them when it
+   * measures a timeline's frames before its first run (`main_window.py:4149-4162`,
+   * SEQUENCE_PARITY.md SP-25). Each run's are marked, since Clear Flags returns them to pending in
+   * between; the notice is given once per timeline, as legacy's measuring happens once until a
+   * Build or a Trim. Left out silently until 2026-09-26, and left pending.
+   */
+  const onLeftOutNow = useRef(onLeftOut);
+  onLeftOutNow.current = onLeftOut;
+  const announcedFor = useRef<string | null>(null);
+  const leftOut = job?.skipped ?? [];
+  const leftOutKey = job === null ? "" : `${job.id}:${leftOut.map((each) => each.source).join("|")}`;
+  useEffect(() => {
+    if (job === null || leftOut.length === 0) return;
+    onLeftOutNow.current?.(leftOut.map((each) => each.source));
+    if (announcedFor.current === framesKey) return;
+    announcedFor.current = framesKey;
+    const size = job.referenceSize ?? null;
+    notify({
+      severity: "info",
+      message: `${leftOut.length} frames have different dimensions`
+        + (size === null ? "" : ` (reference is ${size.width}x${size.height})`)
+        + " and will be skipped during propagation",
+    });
+    // Keyed on the run and what it left out, so a poll that changes neither does not act again.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [leftOutKey]);
 
   /*
    * CLEAR THROWS THE RUN AWAY. Legacy has no Clear (`SEQUENCE_PARITY.md` SP-57); what it does

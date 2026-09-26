@@ -26,6 +26,7 @@ from lazylabel_inference.jobs import (
     JobRegistry,
     JobState,
     ResultsOverflowedError,
+    Skipped,
     UnknownJobError,
 )
 
@@ -90,6 +91,36 @@ class TestFinishing:
 
     def test_total_may_be_unknown_rather_than_guessed(self):
         assert registry().start(yields("a"), run=inline).snapshot()["total"] is None
+
+
+class TestWhatTheWorkLeftOut:
+    """SP-25: frames a worker leaves out are listed on the job, not buffered or counted as done.
+
+    Legacy marks them Skipped and says how many (`main_window.py:4149-4162`); the job must carry
+    them to the browser, which is the only side that can paint them.
+    """
+
+    MISMATCH = "its size 9x9 is not the reference's 6x4"
+
+    def test_they_are_listed_with_why_and_the_size_they_were_measured_against(self):
+        work = yields(Skipped(frames=(("f3", self.MISMATCH),), reference_size=(4, 6)), Found("f1", 1))
+
+        snapshot = registry().start(work, run=inline).snapshot()
+
+        assert snapshot["skipped"] == [{"source": "f3", "reason": self.MISMATCH}]
+        assert snapshot["referenceSize"] == {"width": 6, "height": 4}
+
+    def test_they_are_not_results_and_not_frames_done(self):
+        job = registry().start(yields(Skipped(frames=(("f3", "corrupt"),)), Found("f1", 1)), run=inline)
+
+        assert job.completed == 1
+        assert job.results_since(0) == ([Found("f1", 1)], 1)
+
+    def test_a_job_that_left_nothing_out_says_so(self):
+        snapshot = registry().start(yields(Found("f1", 1)), run=inline).snapshot()
+
+        assert snapshot["skipped"] == []
+        assert snapshot["referenceSize"] is None
 
 
 class TestFailing:

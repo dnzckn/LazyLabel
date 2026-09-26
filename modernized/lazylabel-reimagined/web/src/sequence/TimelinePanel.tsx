@@ -51,6 +51,7 @@ import {
   markReference,
   markReferences,
   markSaved,
+  markSkipped,
   markSuggested,
   trim,
   resetForPropagation,
@@ -830,6 +831,7 @@ export function TimelinePanel({
           confirmDiscard={confirmDiscard}
           onSegments={setPropagated}
           onSkipped={setKeptLabels}
+          onLeftOut={(keys) => setOverrides((previous) => markSkipped(previous ?? frames, keys))}
           onSaved={(keys) => setOverrides((previous) => markSaved(previous ?? frames, keys))}
           {...(savedElsewhere === undefined ? {} : { savedElsewhere })}
           {...(openAnnotations === undefined ? {} : { openAnnotations })}

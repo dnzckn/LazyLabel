@@ -186,6 +186,13 @@ export interface PropagationJob {
   readonly cancelling: boolean;
   readonly error: string | null;
   readonly results: readonly PropagationFrame[];
+  /**
+   * The frames the run leaves out, and why: another size than the reference's, or unreadable.
+   * Legacy marks them Skipped and says how many before it propagates (`main_window.py:4149-4162`).
+   */
+  readonly skipped: readonly { readonly source: string; readonly reason: string }[];
+  /** The size they were measured against, once the run has measured. */
+  readonly referenceSize: { readonly width: number; readonly height: number } | null;
 }
 
 /**

@@ -222,6 +222,16 @@ export class HttpInferenceClient implements InferenceClient {
       cancelling: raw["cancelling"] === true,
       error: typeof raw["error"] === "string" ? raw["error"] : null,
       results: Array.isArray(raw["results"]) ? (raw["results"] as PropagationJob["results"]) : [],
+      // Forwarded, not judged: which frames the run left out is the service's answer (SP-25).
+      skipped: Array.isArray(raw["skipped"])
+        ? (raw["skipped"] as unknown[]).flatMap((each) => {
+            const one = (each ?? {}) as Record<string, unknown>;
+            return typeof one["source"] === "string"
+              ? [{ source: one["source"], reason: typeof one["reason"] === "string" ? one["reason"] : "" }]
+              : [];
+          })
+        : [],
+      referenceSize: sizeOf(raw["referenceSize"]),
     };
   }
 
@@ -279,4 +289,13 @@ export class HttpInferenceClient implements InferenceClient {
       problem.detail,
     );
   }
+}
+
+/** A `{width, height}` of whole positive numbers off the wire, or null. */
+function sizeOf(raw: unknown): PropagationJob["referenceSize"] {
+  const { width, height } = (raw ?? {}) as Record<string, unknown>;
+  return typeof width === "number" && typeof height === "number"
+    && Number.isInteger(width) && Number.isInteger(height) && width > 0 && height > 0
+    ? { width, height }
+    : null;
 }

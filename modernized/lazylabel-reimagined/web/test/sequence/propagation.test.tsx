@@ -794,6 +794,8 @@ describe("RULE-056: not losing propagated work without asking", () => {
        * fake's own answer arrives in a microtask, before any render.
        */
       readonly slowStart?: boolean;
+      /** The frames the job reports it left out, measured against an 8x8 reference. */
+      readonly leftOut?: readonly string[];
     } = {},
   ) {
     /** Every request Propagate sent, as `fakeClient` records them. */
@@ -846,6 +848,15 @@ describe("RULE-056: not losing propagated work without asking", () => {
           results: run.results ?? [
             { source: "frames/f02.png", objectId: 1, mask: MASK, confidence: 0.999 },
           ],
+          ...(run.leftOut === undefined
+            ? {}
+            : {
+                skipped: run.leftOut.map((source) => ({
+                  source,
+                  reason: "its size 9x9 is not the reference's 8x8",
+                })),
+                referenceSize: { width: 8, height: 8 },
+              }),
         }),
       saveAnnotations: async (_p: string, key: string, request: WireSaveRequest) => {
         saved.push({ key, request });
@@ -1352,6 +1363,41 @@ describe("RULE-056: not losing propagated work without asking", () => {
     // ...and ends painted, with the score it came back with.
     await waitFor(() => expect(f02().getAttribute("aria-label")).toMatch(/propagated$/), { timeout: 3000 });
     expect(f02().getAttribute("title")).toContain("confidence 0.9990");
+  });
+
+  it("marks the frames the run left out Skipped, brown, and says so as legacy does (SP-25)", async () => {
+    // Legacy marks them Skipped and notifies before it propagates (main_window.py:4149-4162;
+    // sequence_view_mode.py:586-596). The web left them out silently, and left them pending.
+    panel(() => true, false, undefined, { leftOut: ["frames/f03.png"] });
+    await propagateAndWait();
+    const f03 = () => screen.getByLabelText("Timeline").querySelectorAll("button")[2]!;
+
+    await waitFor(() => expect(f03().getAttribute("aria-label")).toMatch(/skipped$/));
+    expect(f03().style.backgroundColor).toBe("rgb(139, 69, 19)");
+    expect(
+      screen.getByText(
+        "1 frames have different dimensions (reference is 8x8) and will be skipped during propagation",
+      ),
+    ).toBeTruthy();
+  });
+
+  it("keeps a left-out frame Skipped through the next run, and says so once per timeline (SP-25)", async () => {
+    // Legacy keeps them through each run's reset (sequence_view_mode.py:143-159), and measures, and
+    // says so, once until a Build or a Trim (main_window.py:4063, 4149-4162).
+    panel(() => true, false, undefined, { leftOut: ["frames/f03.png"], slowStart: true });
+    await propagateAndWait();
+    const f02 = () => screen.getByLabelText("Timeline").querySelectorAll("button")[1]!;
+    const f03 = () => screen.getByLabelText("Timeline").querySelectorAll("button")[2]!;
+    await waitFor(() => expect(f03().getAttribute("aria-label")).toMatch(/skipped$/));
+
+    fireEvent.click(screen.getByRole("button", { name: /^Propagate/ }));
+    await waitFor(() => expect(f02().getAttribute("aria-label")).toMatch(/pending$/));
+    expect(f03().getAttribute("aria-label")).toMatch(/skipped$/);
+    await waitFor(() => expect(f02().getAttribute("aria-label")).toMatch(/propagated$/), { timeout: 3000 });
+
+    expect(f03().getAttribute("aria-label")).toMatch(/skipped$/);
+    expect(screen.getAllByText(/have different dimensions/)).toHaveLength(1);
+    expect(screen.queryByText(/×2/)).toBeNull();
   });
 
   it("asks before the TAB closes on propagated frames", async () => {

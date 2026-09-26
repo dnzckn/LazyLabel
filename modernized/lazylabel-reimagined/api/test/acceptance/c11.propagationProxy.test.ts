@@ -211,6 +211,33 @@ describe("C11: propagation through the API", () => {
       expect(jsonBody(response).results[1].confidence).toBeCloseTo(0.4);
     });
 
+    it("passes on the frames the run left out, and the size they were measured against (SP-25)", async () => {
+      // Legacy marks them Skipped and says how many, against which size (main_window.py:4149-4162).
+      // The adapter rebuilds the job field by field, so a field it does not name never arrives.
+      const left = [{ source: "frames/c.png", reason: "its size 9x9 is not the reference's 4x4" }];
+      const service = fakeService(() =>
+        jsonResponse(200, job({ skipped: left, referenceSize: { width: 4, height: 4 } })),
+      );
+
+      const response = await appWith(service).handle(
+        request("GET", "/inference/propagations", { query: { id: "job-1", cursor: "0" } }),
+      );
+
+      expect(jsonBody(response).skipped).toEqual(left);
+      expect(jsonBody(response).referenceSize).toEqual({ width: 4, height: 4 });
+    });
+
+    it("says nothing was left out when the service does not say", async () => {
+      const service = fakeService(() => jsonResponse(200, job()));
+
+      const response = await appWith(service).handle(
+        request("GET", "/inference/propagations", { query: { id: "job-1", cursor: "0" } }),
+      );
+
+      expect(jsonBody(response).skipped).toEqual([]);
+      expect(jsonBody(response).referenceSize).toBeNull();
+    });
+
     it("lists the jobs when no id is given", async () => {
       // What a client that has just reconnected needs; the alternative is a running propagation
       // nobody holds a handle to.

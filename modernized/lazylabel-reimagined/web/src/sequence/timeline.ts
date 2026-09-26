@@ -191,6 +191,25 @@ export function resetForPropagation(frames: readonly Frame[]): readonly Frame[] 
 }
 
 /**
+ * The frames a run leaves out, marked `skipped`: legacy's `mark_frames_skipped`, brown on its
+ * timeline (`sequence_view_mode.py:586-596`, SEQUENCE_PARITY.md SP-25).
+ *
+ * Stored rather than only shown, because legacy keeps them through the reset each run makes
+ * (`sequence_view_mode.py:143-159`), as `resetForPropagation` does; Clear Flags and Clear
+ * references return them to pending, as legacy's do. A reference keeps its role.
+ */
+export function markSkipped(frames: readonly Frame[], keys: Iterable<string>): readonly Frame[] {
+  const left = new Set(keys);
+  let changed = false;
+  const next = frames.map((frame) => {
+    if (!left.has(frame.key) || frame.isReference || frame.state === "skipped") return frame;
+    changed = true;
+    return { ...frame, state: "skipped" as const };
+  });
+  return changed ? next : frames;
+}
+
+/**
  * "+ All Before": the frames before the current one, as the timeline is SHOWN, that may become
  * references -- the panel then checks their size (SP-24) and marks them.
  *

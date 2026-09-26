@@ -54,6 +54,22 @@ class UnknownJobError(Exception):
     """No job by that id: never started, or evicted after finishing."""
 
 
+@dataclass(frozen=True)
+class Skipped:
+    """Frames a worker leaves out of its run, and why: yielded like a result, kept on the job.
+
+    Not a frame's result, so it is neither buffered nor counted as done, and a cancel does not stop
+    it being recorded. Legacy marks such frames Skipped on its timeline and says how many before it
+    propagates (`main_window.py:4149-4162`); a job that only left them out gave the browser nothing
+    to show (SEQUENCE_PARITY.md SP-25).
+    """
+
+    #: (image key, why), in the order found.
+    frames: tuple[tuple[str, str], ...]
+    #: The (height, width) they were measured against, when a size decided it.
+    reference_size: tuple[int, int] | None = None
+
+
 class ResultsOverflowedError(Exception):
     """The client fell further behind than the buffer holds, so results were dropped.
 
@@ -82,6 +98,10 @@ class Job:
     completed: int = 0
     #: Why it failed, or why it was cancelled. Never None on a FAILED job.
     error: str | None = None
+    #: Frames the work left out, and why, as `Skipped` reported them.
+    skipped: list[tuple[str, str]] = field(default_factory=list)
+    #: The (height, width) those frames were measured against, once reported.
+    reference_size: tuple[int, int] | None = None
 
     _results: deque = field(default_factory=deque, repr=False)
     #: The cursor one past the last result ever appended -- NOT the buffer's length.
@@ -106,6 +126,10 @@ class Job:
                 "cursor": self._next_cursor,
                 "cancelling": self.cancelling,
                 "error": self.error,
+                "skipped": [{"source": key, "reason": reason} for key, reason in self.skipped],
+                "referenceSize": None
+                if self.reference_size is None
+                else {"width": self.reference_size[1], "height": self.reference_size[0]},
             }
 
     def results_since(self, cursor: int) -> tuple[list[Any], int]:
@@ -187,6 +211,12 @@ class JobRegistry:
                 current: object = None
                 in_flight: object = None
                 for result in work(job._cancel):
+                    if isinstance(result, Skipped):
+                        with job._lock:
+                            job.skipped.extend(result.frames)
+                            if result.reference_size is not None:
+                                job.reference_size = result.reference_size
+                        continue
                     frame = getattr(result, "source", None)
                     if frame is not None and job._cancel.is_set():
                         # RULE-063: the frame in flight when the cancel arrived finishes, WHOLE.

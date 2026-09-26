@@ -24,7 +24,7 @@ import pytest
 
 from lazylabel_inference.app import Deps, Request, create_app
 from lazylabel_inference.availability import Availability
-from lazylabel_inference.jobs import JobRegistry
+from lazylabel_inference.jobs import JobRegistry, Skipped
 from lazylabel_inference.propagation import FrameResult
 
 
@@ -237,6 +237,26 @@ class TestWatching:
         assert answer["results"][0]["objectId"] == 7
         assert answer["results"][0]["confidence"] == pytest.approx(0.42)
         assert answer["results"][0]["mask"]
+
+    def test_the_frames_it_left_out_come_back_with_the_reference_size(self, tmp_path: Path) -> None:
+        # SP-25: legacy marks them Skipped and says how many, and against which size
+        # (`main_window.py:4149-4162`). The browser can only do the same if it is told.
+        mismatch = "its size 9x9 is not the reference's 4x4"
+        deps = deps_with(
+            yields(
+                Skipped(frames=(("frame-003.png", mismatch),), reference_size=(4, 4)),
+                frame("frame-001.png"),
+            ),
+            tmp_path=tmp_path,
+        )
+        _, started = call(deps, "POST", "/inference/propagations", body=body())
+        finished(deps, started["id"])
+
+        _, answer = call(deps, "GET", "/inference/propagations", query={"id": started["id"]})
+
+        assert answer["skipped"] == [{"source": "frame-003.png", "reason": mismatch}]
+        assert answer["referenceSize"] == {"width": 4, "height": 4}
+        assert [each["source"] for each in answer["results"]] == ["frame-001.png"]
 
     def test_a_failure_is_a_state_with_its_reason_not_a_short_result(self, tmp_path: Path) -> None:
         # Legacy's `except Exception: return` makes a run that died on frame 40 of 200

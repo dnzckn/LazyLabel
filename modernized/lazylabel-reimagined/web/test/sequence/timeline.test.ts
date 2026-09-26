@@ -23,6 +23,7 @@ import {
   markReference,
   markReferences,
   markSaved,
+  markSkipped,
   resetForPropagation,
   showKeptLabels,
   sortedOrder,
@@ -358,6 +359,34 @@ describe("what Save All leaves on the timeline", () => {
     const frames = timeline("propagated");
 
     expect(markSaved(frames, [])).toBe(frames);
+  });
+});
+
+describe("the frames a run leaves out (SP-25)", () => {
+  it("are marked skipped, brown, as legacy's mark_frames_skipped marks them", () => {
+    const frames = timeline("pending", "pending", "propagated");
+
+    expect(markSkipped(frames, ["1.png", "2.png"]).map((f) => f.state)).toEqual([
+      "pending",
+      "skipped",
+      "skipped",
+    ]);
+  });
+
+  it("stay skipped through the reset a run makes, and go pending on Clear Flags and Clear references", () => {
+    // Legacy's clear_propagation_results keeps them (sequence_view_mode.py:143-159); its Clear Flags
+    // and Clear All return them to pending (main_window.py:3457-3478, 3982-4009).
+    const marked = markSkipped(timeline("reference", "pending"), ["1.png"]);
+
+    expect(resetForPropagation(marked)[1]!.state).toBe("skipped");
+    expect(clearFlags(marked)[1]!.state).toBe("pending");
+    expect(clearReferences(marked)[1]!.state).toBe("pending");
+  });
+
+  it("never touch a reference, and return the same timeline when nothing changes", () => {
+    const frames = timeline("reference", "skipped");
+
+    expect(markSkipped(frames, ["0.png", "1.png"])).toBe(frames);
   });
 });
 

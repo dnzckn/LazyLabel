@@ -22,7 +22,8 @@ import pathlib
 import numpy as np
 import pytest
 
-from lazylabel_inference.propagation import PropagationRequest
+from lazylabel_inference.jobs import Skipped
+from lazylabel_inference.propagation import FrameResult, PropagationRequest
 from lazylabel_inference.prompts import InvalidPromptError
 from lazylabel_inference.runner import ReferenceObject, run_propagation
 
@@ -111,7 +112,8 @@ def reference(frame: int, object_id: int = 1) -> ReferenceObject:
     return ReferenceObject(frame=frame, object_id=object_id, mask=mask)
 
 
-def run(predictor, wanted, references, tmp_path, *, reader=None, cancel=None):
+def everything(predictor, wanted, references, tmp_path, *, reader=None, cancel=None):
+    """What the run yields, in order: each object on each frame, and each `Skipped` report."""
     return list(
         run_propagation(
             predictor,
@@ -122,6 +124,15 @@ def run(predictor, wanted, references, tmp_path, *, reader=None, cancel=None):
             staging_root=tmp_path,
         )
     )
+
+
+def run(predictor, wanted, references, tmp_path, *, reader=None, cancel=None):
+    """The frame results alone."""
+    return [
+        each
+        for each in everything(predictor, wanted, references, tmp_path, reader=reader, cancel=cancel)
+        if isinstance(each, FrameResult)
+    ]
 
 
 # Staging writes JPEGs with cv2, and the fake predictor returns torch tensors because the code under
@@ -452,6 +463,113 @@ class TestAFrameOfTheWrongSIZE:
         )
 
         assert keys[0] not in {result.source for result in results}
+
+
+class TestWhatIsLeftOutIsREPORTED:
+    """SP-25: every frame the run leaves out is reported once, with why, before any is propagated.
+
+    Legacy marks such frames Skipped, brown on its timeline, and says "N frames have different
+    dimensions (reference is WxH) and will be skipped during propagation" before it propagates
+    (`main_window.py:4149-4162`). The runner left them out silently, so the browser left them
+    pending.
+    """
+
+    def odd_sizes(self, *odd: str):
+        def reader(key: str):
+            return np.full((9, 9, 3), 128, dtype=np.uint8) if key in odd else image()
+
+        return reader
+
+    def test_a_frame_of_another_size_is_reported_before_any_frame(self, tmp_path: pathlib.Path) -> None:
+        keys = sequence(5)
+
+        out = everything(
+            FakePredictor(), request(5), [reference(0)], tmp_path, reader=self.odd_sizes(keys[3])
+        )
+
+        assert isinstance(out[0], Skipped)
+        assert out[0].frames == ((keys[3], "its size 9x9 is not the reference's 4x4"),)
+        # (height, width), as legacy's `reference_dimensions` is.
+        assert out[0].reference_size == (4, 4)
+        assert sum(isinstance(each, Skipped) for each in out) == 1
+
+    def test_it_is_said_before_the_model_loads_the_frames(self, tmp_path: pathlib.Path) -> None:
+        # Legacy says it after measuring and before SAM 2 loads anything (`init_sequence` defers that).
+        keys = sequence(5)
+        predictor = FakePredictor()
+        walk = run_propagation(
+            predictor, self.odd_sizes(keys[3]), request(5), [reference(0)], None, staging_root=tmp_path
+        )
+
+        first = next(walk)
+        walk.close()
+
+        assert isinstance(first, Skipped)
+        assert predictor.states == []
+
+    def test_an_unreadable_frame_is_reported_with_why(self, tmp_path: pathlib.Path) -> None:
+        # Legacy counts a frame it cannot read among the skipped ones (`propagation_manager.py:232-235`).
+        keys = sequence(5)
+
+        def reader(key: str):
+            if key == keys[2]:
+                raise OSError("corrupt")
+            return image()
+
+        out = everything(FakePredictor(), request(5), [reference(0)], tmp_path, reader=reader)
+
+        assert [each.frames for each in out if isinstance(each, Skipped)] == [((keys[2], "corrupt"),)]
+
+    def test_nothing_is_reported_when_nothing_is_left_out(self, tmp_path: pathlib.Path) -> None:
+        out = everything(FakePredictor(), request(5), [reference(0)], tmp_path)
+
+        assert not any(isinstance(each, Skipped) for each in out)
+
+    def test_a_windowed_run_reports_EVERY_window_s_frames_before_the_first(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        # Legacy measures every frame before it propagates (`propagation_manager.py:218-256`), so its
+        # count is whole before the run. Frames 300 and 550 are in later windows.
+        keys = sequence(600)
+
+        out = everything(
+            FakePredictor(),
+            request(600, window=250),
+            [reference(0)],
+            tmp_path,
+            reader=self.odd_sizes(keys[300], keys[550]),
+        )
+
+        assert isinstance(out[0], Skipped)
+        assert [key for key, _reason in out[0].frames] == [keys[300], keys[550]]
+        assert sum(isinstance(each, Skipped) for each in out) == 1
+
+    def test_a_frame_measured_before_the_windows_is_not_read_again(self, tmp_path: pathlib.Path) -> None:
+        keys = sequence(600)
+        odd = self.odd_sizes(keys[300])
+        reads: list[str] = []
+
+        def reader(key: str):
+            reads.append(key)
+            return odd(key)
+
+        everything(FakePredictor(), request(600, window=250), [reference(0)], tmp_path, reader=reader)
+
+        assert reads.count(keys[300]) == 1
+
+    def test_a_cancel_while_measuring_stops_before_any_window(self, tmp_path: pathlib.Path) -> None:
+        predictor = FakePredictor()
+
+        out = everything(
+            predictor,
+            request(600, window=250),
+            [reference(0)],
+            tmp_path,
+            cancel=TestCancelling.Flag(after=10),
+        )
+
+        assert out == []
+        assert predictor.states == []
 
 
 class TestRefusals:

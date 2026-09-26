@@ -48,6 +48,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Iterator
 
+from .jobs import Skipped
 from .propagation import (
     FrameResult,
     ReferenceObject,
@@ -157,11 +158,15 @@ def run_propagation(
     cancel: Any = None,
     *,
     staging_root: Path | None = None,
-) -> Iterator[FrameResult]:
+) -> Iterator[FrameResult | Skipped]:
     """Carry the reference masks through the sequence, yielding each object on each frame.
 
     A generator, like `propagate` and for the same reason: the frames already yielded are the
     frames already done, so the job registry's cancel keeps committed work (RULE-063).
+
+    It also yields `Skipped`, once for each frame it leaves out -- unreadable, or another size than
+    the reference's (RULE-071) -- before any frame is propagated, as legacy marks them Skipped and
+    says so before it propagates (`main_window.py:4149-4162`).
 
     The cancel is checked BETWEEN WINDOWS as well as inside one. A window is up to 250 frames of
     GPU work, and a Cancel that only took effect at the end of the current window would appear not
@@ -201,6 +206,8 @@ def run_propagation(
     if shape is not None and len(shape) >= 2:
         reference_size = (int(shape[0]), int(shape[1]))
 
+    # The frames reported left out, each once, and not read again by a later window.
+    left_out: set[str] = set()
     try:
         if not should_stream(len(sequence), request.window, streaming=request.streaming):
             yield from _run_whole(
@@ -212,8 +219,22 @@ def run_propagation(
                 directory=root / "whole",
                 cancel=cancel,
                 reference_size=reference_size,
+                left_out=left_out,
             )
             return
+
+        # Every frame measured before the first window, as legacy measures every frame before it
+        # propagates (`propagation_manager.py:218-256`): what the run leaves out is known, and said,
+        # at the start rather than a window at a time.
+        if reference_size is not None:
+            found: list[tuple[str, str]] = []
+            for key in sequence:
+                if cancel is not None and cancel.is_set():
+                    return
+                _array, reason = _measured(read_image, key, reference_size)
+                if reason is not None:
+                    found.append((key, reason))
+            yield from _report(found, reference_size, left_out)
 
         windows = _windows_for(request)
         novel_per_window = novel_frames(windows)
@@ -237,6 +258,7 @@ def run_propagation(
                 directory=root / f"window-{number:03d}",
                 cancel=cancel,
                 reference_size=reference_size,
+                left_out=left_out,
             ):
                 yield result
 
@@ -247,56 +269,95 @@ def run_propagation(
             shutil.rmtree(root, ignore_errors=True)
 
 
-def _stage_and_seed(
+def _measured(
+    reader: Callable[[str], Any], key: str, reference_size: tuple[int, int] | None
+) -> tuple[Any, str | None]:
+    """One frame read, or why it must be left out: it cannot be read, or it is another size.
+
+    READ FAILURES ARE SKIPPED, not fatal. `stage_sequence` already guards the WRITE of each frame
+    and keeps going, and a read has to behave the same way or one corrupt image ends a job that was
+    about to do 599 other frames correctly.
+
+    RULE-071: a frame whose size differs from the REFERENCE size is left out too. Not a nicety.
+    SAM 2's video state is built from one stack of frames, so a differently sized one is either
+    rejected deep inside the loader -- ending a 600-frame run over one bad image -- or silently
+    resized, which moves every mask it produces. Legacy skips them and says so on the timeline, and
+    skipping is the only one of those three that is honest.
+    """
+    try:
+        array = reader(key)
+    except Exception as cause:  # noqa: BLE001 - any read failure means the same thing here
+        return None, str(cause)
+
+    shape = getattr(array, "shape", None)
+    size = None if shape is None else (int(shape[0]), int(shape[1]))
+    if reference_size is not None and size is not None and size != reference_size:
+        return None, (
+            f"its size {size[1]}x{size[0]} is not the reference's "
+            f"{reference_size[1]}x{reference_size[0]}"
+        )
+    return array, None
+
+
+def _report(
+    found: list[tuple[str, str]],
+    reference_size: tuple[int, int] | None,
+    reported: set[str],
+) -> Iterator[Skipped]:
+    """The frames in `found` not reported before, as one `Skipped`, or nothing."""
+    new: list[tuple[str, str]] = []
+    for key, reason in found:
+        if key not in reported:
+            reported.add(key)
+            new.append((key, reason))
+    if new:
+        yield Skipped(frames=tuple(new), reference_size=reference_size)
+
+
+def _stage(
     *,
-    predictor: Any,
     plan_for: _WindowPlan,
-    references: list[ReferenceObject],
     sequence: list[str],
     reader: Callable[[str], Any],
     directory: Path,
     reference_size: tuple[int, int] | None,
-) -> tuple[StagedSequence, Any]:
-    """Stage `plan_for.positions`, open a SAM 2 state on them, and seed every reference staged."""
-    # READ FAILURES ARE SKIPPED, not fatal. `stage_sequence` already guards the WRITE of each
-    # frame and keeps going, and a read has to behave the same way or one corrupt image ends a job
-    # that was about to do 599 other frames correctly. The frame is simply absent from the staging,
-    # so `StagedSequence`'s map has one fewer entry and every remaining entry still names its own
-    # image -- which is the difference RULE-017 is about. If NONE can be read, `stage_sequence`
-    # says so.
+    left_out: set[str],
+) -> StagedSequence:
+    """Read and stage `plan_for.positions`, leaving out every frame that cannot take part.
+
+    A frame left out is simply absent from the staging, so `StagedSequence`'s map has one fewer
+    entry and every remaining entry still names its own image -- which is the difference RULE-017
+    is about. If NONE can be staged, `stage_sequence` says so. `left_out` names frames already
+    measured and reported, which are not read again.
+    """
     images = []
-    unreadable: list[tuple[str, str]] = []
+    unusable: list[tuple[str, str]] = []
     for position in plan_for.positions:
         key = sequence[position]
-        try:
-            array = reader(key)
-        except Exception as cause:  # noqa: BLE001 - any read failure means the same thing here
-            unreadable.append((key, str(cause)))
+        if key in left_out:
             continue
-
-        # RULE-071: a frame whose size differs from the REFERENCE size is skipped and left out.
-        #
-        # Not a nicety. SAM 2's video state is built from one stack of frames, so a differently
-        # sized one is either rejected deep inside the loader -- ending a 600-frame run over one
-        # bad image -- or silently resized, which moves every mask it produces. Legacy skips them
-        # and says so on the timeline, and skipping is the only one of those three that is honest.
-        shape = getattr(array, "shape", None)
-        size = None if shape is None else (int(shape[0]), int(shape[1]))
-        if reference_size is not None and size is not None and size != reference_size:
-            unreadable.append(
-                (key, f"its size {size[1]}x{size[0]} is not the reference's "
-                      f"{reference_size[1]}x{reference_size[0]}")
-            )
+        array, reason = _measured(reader, key, reference_size)
+        if reason is not None:
+            unusable.append((key, reason))
             continue
-
         images.append((key, array))
 
     staged = stage_sequence(images, directory)
-    # Carried on the staged sequence rather than dropped, so a caller can report "3 frames could
-    # not be read" instead of quietly returning a shorter result.
-    staged.skipped.extend(unreadable)
+    # Carried on the staged sequence rather than dropped, so the run can report them instead of
+    # quietly returning a shorter result.
+    staged.skipped.extend(unusable)
     _resolve_staged(plan_for, staged, sequence)
+    return staged
 
+
+def _seed(
+    *,
+    predictor: Any,
+    plan_for: _WindowPlan,
+    staged: StagedSequence,
+    references: list[ReferenceObject],
+) -> Any:
+    """Open a SAM 2 state on what was staged, and seed every reference staged."""
     state = initialise_state(predictor, staged)
 
     for reference in references:
@@ -314,7 +375,7 @@ def _stage_and_seed(
             object_id=reference.object_id,
             mask=reference.mask,
         )
-    return staged, state
+    return state
 
 
 def _run_whole(
@@ -327,7 +388,8 @@ def _run_whole(
     directory: Path,
     cancel: Any,
     reference_size: tuple[int, int] | None,
-) -> Iterator[FrameResult]:
+    left_out: set[str],
+) -> Iterator[FrameResult | Skipped]:
     """Legacy's full-context mode: every frame in ONE state, forward from the earliest reference, then back.
 
     `propagation_manager.py:623-685` loads every frame, walks forward from the earliest reference
@@ -352,15 +414,17 @@ def _run_whole(
         positions=list(range(len(sequence))),
         staged_index={},
     )
-    staged, state = _stage_and_seed(
-        predictor=predictor,
+    staged = _stage(
         plan_for=plan_for,
-        references=references,
         sequence=sequence,
         reader=reader,
         directory=directory,
         reference_size=reference_size,
+        left_out=left_out,
     )
+    # Said before the model loads the frames, as legacy says it before it propagates.
+    yield from _report(staged.skipped, reference_size, left_out)
+    state = _seed(predictor=predictor, plan_for=plan_for, staged=staged, references=references)
 
     lowest = request.lowest_reference
     last = len(sequence) - 1
@@ -414,17 +478,21 @@ def _run_window(
     directory: Path,
     cancel: Any,
     reference_size: tuple[int, int] | None,
-) -> Iterator[FrameResult]:
+    left_out: set[str],
+) -> Iterator[FrameResult | Skipped]:
     plan_for = _build_window(window, references)
-    staged, state = _stage_and_seed(
-        predictor=predictor,
+    staged = _stage(
         plan_for=plan_for,
-        references=references,
         sequence=sequence,
         reader=reader,
         directory=directory,
         reference_size=reference_size,
+        left_out=left_out,
     )
+    # Whatever the measuring before the first window could not know: a frame that failed to read
+    # or write only now, or every size when the reference's could not be read.
+    yield from _report(staged.skipped, reference_size, left_out)
+    state = _seed(predictor=predictor, plan_for=plan_for, staged=staged, references=references)
 
     if window.reverse:
         # A backward walk begins AT the reference and moves down through the window, which is why
