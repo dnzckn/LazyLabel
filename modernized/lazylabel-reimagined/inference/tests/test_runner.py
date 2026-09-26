@@ -572,6 +572,62 @@ class TestWhatIsLeftOutIsREPORTED:
         assert predictor.states == []
 
 
+class TestFramesThatAreJpegs:
+    """SEQUENCE_PARITY.md SP-08, through the runner: a reader's JPEG bytes are what SAM 2 reads.
+
+    The service's `read_frame` hands the runner a `SourceImage`, which carries a JPEG's own bytes
+    beside its pixels. The pixels are measured (RULE-071); the bytes are staged, as legacy stages the
+    file itself (`sam2_model.py:788-796`).
+    """
+
+    def reader(self, sizes: dict[str, tuple[int, int]] | None = None):
+        from lazylabel_inference.propagation import SourceImage
+
+        def read(key: str) -> SourceImage:
+            height, width = (sizes or {}).get(key, (4, 4))
+            return SourceImage(
+                pixels=np.full((height, width, 3), 128, dtype=np.uint8),
+                jpeg=b"\xff\xd8\xff" + key.encode(),
+            )
+
+        return read
+
+    def test_each_frame_is_staged_as_its_own_bytes(self, tmp_path: pathlib.Path) -> None:
+        keys = sequence(4)
+
+        run(FakePredictor(), request(4), [reference(0)], tmp_path, reader=self.reader())
+
+        staged = sorted((tmp_path / "whole").glob("*.jpg"))
+        assert [path.read_bytes() for path in staged] == [b"\xff\xd8\xff" + key.encode() for key in keys]
+
+    def test_a_window_stages_them_too_its_prepended_reference_included(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        keys = sequence(30)
+
+        run(FakePredictor(), request(30, window=10, references=(0,)), [reference(0)], tmp_path, reader=self.reader())
+
+        second = sorted((tmp_path / "window-002").glob("*.jpg"))
+        # Window 2 covers 5-14 with frame 0 prepended: the reference's own bytes, then the window's.
+        assert [path.read_bytes() for path in second] == [
+            b"\xff\xd8\xff" + key.encode() for key in [keys[0], *keys[5:15]]
+        ]
+
+    def test_a_frame_of_another_size_is_still_left_out(self, tmp_path: pathlib.Path) -> None:
+        # RULE-071 reads the reference's size off its pixels. A `SourceImage` has no `shape` of its
+        # own, and reading one off it would give no reference size at all -- and pass every frame.
+        keys = sequence(5)
+
+        out = everything(
+            FakePredictor(), request(5), [reference(0)], tmp_path, reader=self.reader({keys[3]: (9, 9)})
+        )
+
+        assert [each.frames for each in out if isinstance(each, Skipped)] == [
+            ((keys[3], "its size 9x9 is not the reference's 4x4"),)
+        ]
+        assert keys[3] not in {each.source for each in out if isinstance(each, FrameResult)}
+
+
 class TestRefusals:
     def test_no_references_is_refused(self, tmp_path: pathlib.Path) -> None:
         # Legacy runs the whole sequence and writes an empty mask over every frame.

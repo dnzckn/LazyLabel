@@ -15,6 +15,7 @@ import pytest
 
 from lazylabel_inference.propagation import (
     PropagationError,
+    SourceImage,
     StagedFrame,
     StagedSequence,
     confidence_of,
@@ -92,6 +93,56 @@ class TestStaging:
             staged.source_of(7)
         with pytest.raises(PropagationError):
             staged.source_of(-1)
+
+
+class TestStagingAJpeg:
+    """SEQUENCE_PARITY.md SP-08: SAM 2 reads a JPEG's own bytes, as it does in legacy.
+
+    Legacy links a JPEG into the staging folder, or copies it where the link is refused, and writes
+    only anything else again at quality 95 (`sam2_model.py:788-803`). Until 2026-09-26 this decoded
+    and re-encoded every frame, so on a JPEG sequence SAM 2 saw recompressed pixels.
+    """
+
+    def gradient(self) -> np.ndarray:
+        # Detail a JPEG encoder cannot keep exactly, so a re-encode could not pass for the original.
+        ys, xs = np.mgrid[0:24, 0:32]
+        return np.stack([xs * 7 % 256, ys * 11 % 256, (xs * ys) % 256], axis=-1).astype(np.uint8)
+
+    def test_its_own_bytes_are_what_is_staged(self, tmp_path: pathlib.Path) -> None:
+        import cv2
+
+        original = cv2.imencode(".jpg", self.gradient()[:, :, ::-1], [cv2.IMWRITE_JPEG_QUALITY, 80])[1].tobytes()
+
+        staged = stage_sequence([("clip/a.jpg", SourceImage(pixels=self.gradient(), jpeg=original))], tmp_path)
+
+        assert (tmp_path / "00000.jpg").read_bytes() == original
+        assert staged.source_of(0) == "clip/a.jpg"
+
+    def test_anything_else_is_written_as_legacy_writes_it(self, tmp_path: pathlib.Path) -> None:
+        # From BGR with OpenCV at quality 95 (`sam2_model.py:799-803`), for an array or a frame
+        # without JPEG bytes alike, so the bytes SAM 2 reads are the ones legacy's staging writes.
+        import cv2
+
+        pixels = self.gradient()
+        expected = cv2.imencode(".jpg", pixels[:, :, ::-1], [cv2.IMWRITE_JPEG_QUALITY, 95])[1].tobytes()
+
+        stage_sequence([("a.png", SourceImage(pixels=pixels)), ("b.png", pixels)], tmp_path)
+
+        assert (tmp_path / "00000.jpg").read_bytes() == expected
+        assert (tmp_path / "00001.jpg").read_bytes() == expected
+
+    def test_a_jpeg_among_other_frames_shifts_nothing(self, tmp_path: pathlib.Path) -> None:
+        staged = stage_sequence(
+            [
+                ("a.png", image()),
+                ("b.jpg", SourceImage(pixels=image(), jpeg=b"\xff\xd8\xff not decoded here")),
+                ("c.png", image()),
+            ],
+            tmp_path,
+        )
+
+        assert [staged.source_of(i) for i in range(3)] == ["a.png", "b.jpg", "c.png"]
+        assert (tmp_path / "00001.jpg").read_bytes() == b"\xff\xd8\xff not decoded here"
 
 
 class TestConfidence:

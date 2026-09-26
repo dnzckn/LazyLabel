@@ -450,6 +450,79 @@ class TestOnlyListedFormatsReachADecoder:
             self.service(tmp_path)._read_image(tmp_path / "unused.png", pixels=exr)
 
 
+class TestReadingAFrameForPropagation:
+    """SEQUENCE_PARITY.md SP-08: a JPEG frame comes with its own bytes, which SAM 2 is then given.
+
+    Legacy stages a JPEG by linking or copying the file and writes anything else again at quality 95
+    (`sam2_model.py:788-803`). It decides by NAME. This decides by name and by CONTENT: the bytes
+    handed on are the ones SEC-02 sniffed and the decoder read, so a file named `.jpg` that holds
+    another format is written again, where legacy would pass it to SAM 2 as it is.
+    """
+
+    def service(self, root):
+        from lazylabel_inference.service import InferenceService
+
+        return InferenceService(models=[], model_dir=root, dataset_root=root)
+
+    def encoded(self, suffix: str) -> bytes:
+        import cv2
+        import numpy as np
+
+        picture = np.zeros((6, 8, 3), dtype=np.uint8)
+        picture[1:5, 2:6] = (40, 90, 200)
+        return cv2.imencode(suffix, picture)[1].tobytes()
+
+    @pytest.mark.parametrize("name", ["a.jpg", "b.jpeg", "C.JPG", "d.JpEg"])
+    def test_a_jpeg_comes_with_the_file_s_own_bytes(self, tmp_path, name) -> None:
+        # Any case: legacy lower-cases the suffix before it looks (`sam2_model.py:788`).
+        data = self.encoded(".jpg")
+        (tmp_path / name).write_bytes(data)
+
+        frame = self.service(tmp_path).read_frame(name)
+
+        assert frame.jpeg == data
+        # Decoded as well, for RULE-071's size check, and as `read_image` decodes it.
+        assert frame.pixels.shape == (6, 8, 3)
+        assert (frame.pixels == self.service(tmp_path).read_image(name)).all()
+
+    @pytest.mark.parametrize(("name", "suffix"), [("a.png", ".png"), ("b.bmp", ".bmp"), ("c.tif", ".tif")])
+    def test_anything_else_comes_as_pixels_alone(self, tmp_path, name, suffix) -> None:
+        (tmp_path / name).write_bytes(self.encoded(suffix))
+
+        frame = self.service(tmp_path).read_frame(name)
+
+        assert frame.jpeg is None
+        assert frame.pixels.shape == (6, 8, 3)
+
+    def test_a_png_called_jpg_is_not_passed_on_as_a_jpeg(self, tmp_path) -> None:
+        # Legacy would give these bytes to SAM 2's Pillow as they are. Here the content decides
+        # what reaches a decoder, so they are decoded like any PNG and written again.
+        (tmp_path / "misnamed.jpg").write_bytes(self.encoded(".png"))
+
+        frame = self.service(tmp_path).read_frame("misnamed.jpg")
+
+        assert frame.jpeg is None
+
+    def test_a_jpeg_called_png_is_written_again_as_legacy_writes_it(self, tmp_path) -> None:
+        # Legacy goes by the name, so it decodes this with `cv2.imread` and writes it at quality 95.
+        (tmp_path / "misnamed.png").write_bytes(self.encoded(".jpg"))
+
+        frame = self.service(tmp_path).read_frame("misnamed.png")
+
+        assert frame.jpeg is None
+
+    def test_it_is_refused_on_the_same_terms_as_read_image(self, tmp_path) -> None:
+        from lazylabel_inference.prompts import InvalidPromptError
+        from lazylabel_inference.service import ImageUnreadableError
+
+        (tmp_path / "x.jpg").write_bytes(b"v/1\x01" + b"\x00" * 60)
+
+        with pytest.raises(ImageUnreadableError, match="not an image type LazyLabel opens"):
+            self.service(tmp_path).read_frame("x.jpg")
+        with pytest.raises(InvalidPromptError, match="walks the tree"):
+            self.service(tmp_path).read_frame("../x.jpg")
+
+
 class TestTheSignatureTable:
     """One allow-list in two languages, so a format one service refuses cannot pass the other."""
 

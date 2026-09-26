@@ -164,3 +164,65 @@ class TestPropagationIsWiredNow:
 
         with pytest.raises(ModelNotLoadedError, match="no video-capable model"):
             deps.propagator(PropagationRequest(("a.png", "b.png"), (0,)), None)
+
+    def test_a_jpeg_sequence_reaches_sam2_as_its_own_files(
+        self, tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """SEQUENCE_PARITY.md SP-08, as production builds it: the job reads FRAMES, not images.
+
+        Legacy gives SAM 2 a JPEG's own file (`sam2_model.py:788-796`). The runner stages what its
+        reader returns, so the propagator has to hand it `read_frame`, which carries a JPEG's bytes;
+        `read_image` returns pixels alone, and those are encoded again at quality 95.
+        """
+        cv2 = pytest.importorskip("cv2")
+        pytest.importorskip("torch")
+        import numpy as np
+
+        from lazylabel_inference import backends
+        from lazylabel_inference.manifest import ModelEntry
+        from lazylabel_inference.propagation import PropagationRequest, ReferenceObject
+
+        staged: list[bytes] = []
+
+        class Predictor:
+            device = "cpu"
+
+            def init_state(self, video_path, **_options):
+                staged.extend(path.read_bytes() for path in sorted(pathlib.Path(video_path).glob("*.jpg")))
+                return {}
+
+            def add_new_mask(self, **kwargs):
+                import torch
+
+                return kwargs["frame_idx"], [kwargs["obj_id"]], torch.full((1, 1, 2, 2), 3.0)
+
+            def propagate_in_video(self, **_kwargs):
+                return iter(())
+
+        monkeypatch.setattr(backends, "load_video_predictor", lambda *_args, **_kwargs: Predictor())
+        entry = ModelEntry("SAM 2.1 large", "sam2", "large", "sam2.1_hiera_large.pt", "0" * 64, 1)
+        deps = build_deps(config(tmp_path, root=tmp_path), [entry], Logger())
+        assert deps.propagator is not None and deps.service is not None
+        # No checkpoint is loaded here; the manifest's hash check has nothing to hash.
+        monkeypatch.setattr(deps.service, "verified", lambda chosen: chosen)
+
+        files = []
+        for index in range(2):
+            rgb = np.zeros((16, 16, 3), dtype=np.uint8)
+            rgb[:, :, 0] = np.arange(16, dtype=np.uint8) * (index + 5)
+            name = f"f{index}.jpg"
+            (tmp_path / name).write_bytes(cv2.imencode(".jpg", rgb, [cv2.IMWRITE_JPEG_QUALITY, 80])[1].tobytes())
+            files.append(name)
+        mask = np.zeros((16, 16), dtype=np.uint8)
+        mask[4:8, 4:8] = 1
+
+        list(
+            deps.propagator(
+                PropagationRequest(
+                    tuple(files), (0,), objects=(ReferenceObject(frame=0, object_id=1, mask=mask),)
+                ),
+                None,
+            )
+        )
+
+        assert staged == [(tmp_path / name).read_bytes() for name in files]

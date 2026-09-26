@@ -1,0 +1,1261 @@
+{
+  "source": "legacy lazylabel sequence mode (MainWindow, SequenceViewMode, PropagationManager, Sam2Model) at snapshot 2a7d5d8, run headless by capture_propagation_goldens.py",
+  "captured": "2026-09-26",
+  "checkpoint": "sam2.1_hiera_large.pt",
+  "checkpointSha256": "2647878d5dfa5098f2f8649825738a9345572bae2d4350a2468587ece47dd318",
+  "environment": {
+    "python": "3.12.11",
+    "torch": "2.10.0+cu128",
+    "cuda": "12.8",
+    "device": "NVIDIA GeForce RTX 3080",
+    "sam2": "2b90b9f5ceec907a1c18123530e92e794ad901a4",
+    "opencv": "5.0.0",
+    "pillow": "12.3.0"
+  },
+  "threshold": 0.99,
+  "window": 250,
+  "streaming": false,
+  "height": 240,
+  "width": 320,
+  "frames": [
+    "frame_000.jpg",
+    "frame_001.jpg",
+    "frame_002.jpg",
+    "frame_003.jpg",
+    "frame_004.jpg",
+    "frame_005.jpg",
+    "frame_006.jpg",
+    "frame_007.jpg",
+    "frame_008.jpg",
+    "frame_009.jpg",
+    "frame_010.jpg",
+    "frame_011.jpg",
+    "frame_012.jpg",
+    "frame_013.jpg",
+    "frame_014.jpg",
+    "frame_015.jpg",
+    "frame_016.jpg",
+    "frame_017.jpg",
+    "frame_018.jpg",
+    "frame_019.jpg",
+    "frame_020.jpg",
+    "frame_021.jpg",
+    "frame_022.jpg",
+    "frame_023.jpg"
+  ],
+  "frameDigests": [
+    "4479db9895aa14d12ac75ec453e149ba86ad954f6eda20b363338985f98db358",
+    "64fb0ad95bd5a90e8eaf44475fe6561d7b00af9def7ebb514c70fdbf36bdb067",
+    "8a97a30283ce5f691e05ea11dff4b9d17f8d816e98b176a6c9a1efc1737e4b36",
+    "c20ee76b94b80f640f102035ee141d3714c1a88088d002bc83700ae5fa3a1b4a",
+    "a874cc84e2ca090cd33fa36283c0895c71cc62e007b9e7cc2357131576679908",
+    "59514c87ca232842ddad3acfe1f904bc3cfbe83ce2f5d6740cb5e1b26a00b77f",
+    "884b22e388e02bda30cc03e2fef28fdd9228ec12a02b920c6692bd6adcea1c9d",
+    "623669d3b73ff049ae48d2dd8dcb93346cc0ac3e57d1a38cf0d48a34ca213753",
+    "047a98c34d5a9f610bed8d7dd8a0742e4c26a731668b49aa5bbe7c748648b2d4",
+    "764d32ca99d8bc86ae68fa899d460a3a40660c9baecb7376cf033a881a0da94f",
+    "41b561720535fa741a4f4fcccb66fdec584210caa59ba8acbb68f1d284644b65",
+    "c96fad4c2204c19375f30306695276327de7d0c24479f4f0a1f851543cc56fe2",
+    "2b189b95594c1fb08c151ea7892c40418aaed8f9c5bc92ef9f8eea7455f6a4d7",
+    "8a8e4ed7430243aaa44709c052a834bf255013f773ba6d5394f996edd7a95b90",
+    "5aeebc9bd76a0e7d1244cc68d413bc0b5452c751b3adf0a3033fcfda19f28876",
+    "c47e1bb7e49eb4f48af4265de9b2d16b4b37a1a5fbd506f42ce8c59d1660ea4f",
+    "368c0202b66e043ad83bdc4371ccb1044402c655e7179397434777a433761450",
+    "31075b456598a4fa0156cb0c03c2363b71d0e5bec36045586950db33e6b0893a",
+    "0bbf27a07fb91fc0375d8c29c75db20d84ee4aa05bfe61fd905f0ae0cc8b7fef",
+    "731cb306605c571c58d1696ed762a60fe238d31f8f905d23090da248b157be74",
+    "cd3998bbdde7ce4bf31b30e4bbb86e7f4e890d1c261d3eb68d7509d7e8bd037e",
+    "b14b7756985cf2346470d536df81ee9eaf98c22f31c016c7a6388d55ca4132c9",
+    "f8de8411603f002a1ee3a9e24f354a88e2663bf7ec52af6880a4ebcf439baff1",
+    "e1d8dd044d5ea359f65ffabd21522f8200414fb65cc2f809f6b342e493b4804e"
+  ],
+  "fileDigests": [
+    "5a63e599c9af9afb71930b6d9cad15826f9198f00b05150310d30f4a5fbc0c10",
+    "e365488f85ae10c232590fdaaf845fab0a0cd4cff51c596f37f517054eb8c61a",
+    "d8c2462301001ada3e914d03af1a0412aa13ffe9620c55292e4243934b149764",
+    "82118348bb7760d4f0793045b42283e13b682578a5e849dd9a85b3f10ce442ff",
+    "842ba87fe3e7621ecb355c77a0584c5905d0f8f4fc3f9aff3185749a85df00a4",
+    "219555146d79291115b4007ae6321b0757014e9a8fc5bae207893984770c953d",
+    "22433acb98b88a7b551568324634165de17132e2d396243a7554a196241f615d",
+    "7764840d0875c6193e01da3bc58906bfc04d658e97785da7ae098d01a81c4552",
+    "d24d8beefd2c210f63250dabb0c218ef2da3c6d782994a1da9fbe11c29af4d05",
+    "2dcda32dcd1f5b401232b24724946da02d40bd8f5d81b97b840b08a13415c958",
+    "35fa01960114d0c4977992481d04b8196a3438aaae8872fc51ccff55b43046fc",
+    "e3d3695acbda41edade42b13f5fad07f8981f0e359e9cad135c4405f8e5cb134",
+    "09771b2d80c9a8cebdf6c7784a5509a8725552eaf28a400661b7bbcbc16d44da",
+    "5b49f9f16beff0f997907940564e738cb676a3efcdf8460ac651efe9ee38739b",
+    "87d61e5784e3ead48527751cebe7123c2327282ffb559a3210487c346d57b517",
+    "0d42b2e17a7886d820ff2cce4c6392be8153956634ed75d3638cd0ec45432c26",
+    "9e46c249f3fbe9cc440481cfe7150da3515e96df8af0901fca7cb4c0126e569c",
+    "f5b205ea19c4a9131913ba00658bc796761df4366498b6a59d34631a8d0a9133",
+    "caaae4047e7170dd0954352bbbba7be9ef06a65bc65c21e3ae67e5f725c6ef94",
+    "7c6823c3d71c7dd5d25e41e890bd3ea89fb74838fd80d9fd679ed53c852fe308",
+    "e1c6442d7649f40e53cde5c578c410e1a8a05eaa74a9f31ef67061a22cc019f6",
+    "999d22ce6a99e845b4c31bdd331752740102e12e38de7b5dae97aab06fa8e856",
+    "426c6379f975187f2a6232dc4c482dca52d07284e2ebb483af76eb18390eac84",
+    "4e52d85f84ada320bceb40bbb2079519ad01d65dd3ee0dca5300165c9400cb1d"
+  ],
+  "stagings": [
+    {
+      "frames": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23
+      ],
+      "staged": [
+        {
+          "sha256": "5a63e599c9af9afb71930b6d9cad15826f9198f00b05150310d30f4a5fbc0c10",
+          "link": false
+        },
+        {
+          "sha256": "e365488f85ae10c232590fdaaf845fab0a0cd4cff51c596f37f517054eb8c61a",
+          "link": false
+        },
+        {
+          "sha256": "d8c2462301001ada3e914d03af1a0412aa13ffe9620c55292e4243934b149764",
+          "link": false
+        },
+        {
+          "sha256": "82118348bb7760d4f0793045b42283e13b682578a5e849dd9a85b3f10ce442ff",
+          "link": false
+        },
+        {
+          "sha256": "842ba87fe3e7621ecb355c77a0584c5905d0f8f4fc3f9aff3185749a85df00a4",
+          "link": false
+        },
+        {
+          "sha256": "219555146d79291115b4007ae6321b0757014e9a8fc5bae207893984770c953d",
+          "link": false
+        },
+        {
+          "sha256": "22433acb98b88a7b551568324634165de17132e2d396243a7554a196241f615d",
+          "link": false
+        },
+        {
+          "sha256": "7764840d0875c6193e01da3bc58906bfc04d658e97785da7ae098d01a81c4552",
+          "link": false
+        },
+        {
+          "sha256": "d24d8beefd2c210f63250dabb0c218ef2da3c6d782994a1da9fbe11c29af4d05",
+          "link": false
+        },
+        {
+          "sha256": "2dcda32dcd1f5b401232b24724946da02d40bd8f5d81b97b840b08a13415c958",
+          "link": false
+        },
+        {
+          "sha256": "35fa01960114d0c4977992481d04b8196a3438aaae8872fc51ccff55b43046fc",
+          "link": false
+        },
+        {
+          "sha256": "e3d3695acbda41edade42b13f5fad07f8981f0e359e9cad135c4405f8e5cb134",
+          "link": false
+        },
+        {
+          "sha256": "09771b2d80c9a8cebdf6c7784a5509a8725552eaf28a400661b7bbcbc16d44da",
+          "link": false
+        },
+        {
+          "sha256": "5b49f9f16beff0f997907940564e738cb676a3efcdf8460ac651efe9ee38739b",
+          "link": false
+        },
+        {
+          "sha256": "87d61e5784e3ead48527751cebe7123c2327282ffb559a3210487c346d57b517",
+          "link": false
+        },
+        {
+          "sha256": "0d42b2e17a7886d820ff2cce4c6392be8153956634ed75d3638cd0ec45432c26",
+          "link": false
+        },
+        {
+          "sha256": "9e46c249f3fbe9cc440481cfe7150da3515e96df8af0901fca7cb4c0126e569c",
+          "link": false
+        },
+        {
+          "sha256": "f5b205ea19c4a9131913ba00658bc796761df4366498b6a59d34631a8d0a9133",
+          "link": false
+        },
+        {
+          "sha256": "caaae4047e7170dd0954352bbbba7be9ef06a65bc65c21e3ae67e5f725c6ef94",
+          "link": false
+        },
+        {
+          "sha256": "7c6823c3d71c7dd5d25e41e890bd3ea89fb74838fd80d9fd679ed53c852fe308",
+          "link": false
+        },
+        {
+          "sha256": "e1c6442d7649f40e53cde5c578c410e1a8a05eaa74a9f31ef67061a22cc019f6",
+          "link": false
+        },
+        {
+          "sha256": "999d22ce6a99e845b4c31bdd331752740102e12e38de7b5dae97aab06fa8e856",
+          "link": false
+        },
+        {
+          "sha256": "426c6379f975187f2a6232dc4c482dca52d07284e2ebb483af76eb18390eac84",
+          "link": false
+        },
+        {
+          "sha256": "4e52d85f84ada320bceb40bbb2079519ad01d65dd3ee0dca5300165c9400cb1d",
+          "link": false
+        }
+      ]
+    }
+  ],
+  "walks": [
+    {
+      "staging": 0,
+      "start": 8,
+      "reverse": false,
+      "frames": [
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23
+      ]
+    },
+    {
+      "staging": 0,
+      "start": 8,
+      "reverse": true,
+      "frames": [
+        8,
+        7,
+        6,
+        5,
+        4,
+        3,
+        2,
+        1,
+        0
+      ]
+    }
+  ],
+  "references": [
+    {
+      "frame": 8,
+      "object": 1,
+      "class": 1,
+      "pixels": 1793,
+      "maskDigest": "e48e00ecda752a8a6ae6bd5660ca53d038172ee3bfea1d77d3bd9db8ad8362f9"
+    },
+    {
+      "frame": 8,
+      "object": 2,
+      "class": 2,
+      "pixels": 1296,
+      "maskDigest": "3049576e960e385c2a31e155efe0675fc8f839bef582703d289c676946ce75b2"
+    }
+  ],
+  "direction": "both",
+  "results": [
+    {
+      "frame": 0,
+      "object": 1,
+      "pass": "backward",
+      "confidence": 0.9999707937240601,
+      "empty": false,
+      "flagged": false,
+      "pixels": 1828
+    },
+    {
+      "frame": 0,
+      "object": 2,
+      "pass": "backward",
+      "confidence": 0.9994768500328064,
+      "empty": false,
+      "flagged": false,
+      "pixels": 1292
+    },
+    {
+      "frame": 1,
+      "object": 1,
+      "pass": "backward",
+      "confidence": 0.9999749660491943,
+      "empty": false,
+      "flagged": false,
+      "pixels": 1829
+    },
+    {
+      "frame": 1,
+      "object": 2,
+      "pass": "backward",
+      "confidence": 0.9983018636703491,
+      "empty": false,
+      "flagged": false,
+      "pixels": 1289
+    },
+    {
+      "frame": 2,
+      "object": 1,
+      "pass": "backward",
+      "confidence": 0.9999481439590454,
+      "empty": false,
+      "flagged": false,
+      "pixels": 1829
+    },
+    {
+      "frame": 2,
+      "object": 2,
+      "pass": "backward",
+      "confidence": 0.9993411898612976,
+      "empty": false,
+      "flagged": false,
+      "pixels": 1291
+    },
+    {
+      "frame": 3,
+      "object": 1,
+      "pass": "backward",
+      "confidence": 0.9999182224273682,
+      "empty": false,
+      "flagged": false,
+      "pixels": 1822
+    },
+    {
+      "frame": 3,
+      "object": 2,
+      "pass": "backward",
+      "confidence": 0.9975237250328064,
+      "empty": false,
+      "flagged": false,
+      "pixels": 1287
+    },
+    {
+      "frame": 4,
+      "object": 1,
+      "pass": "backward",
+      "confidence": 0.9871750473976135,
+      "empty": false,
+      "flagged": true,
+      "pixels": 1812
+    },
+    {
+      "frame": 4,
+      "object": 2,
+      "pass": "backward",
+      "confidence": 0.9988741278648376,
+      "empty": false,
+      "flagged": false,
+      "pixels": 2178
+    },
+    {
+      "frame": 5,
+      "object": 1,
+      "pass": "backward",
+      "confidence": 0.9999854564666748,
+      "empty": false,
+      "flagged": false,
+      "pixels": 1804
+    },
+    {
+      "frame": 5,
+      "object": 2,
+      "pass": "backward",
+      "confidence": 0.9997618794441223,
+      "empty": false,
+      "flagged": false,
+      "pixels": 2388
+    },
+    {
+      "frame": 6,
+      "object": 1,
+      "pass": "backward",
+      "confidence": 0.9999667406082153,
+      "empty": false,
+      "flagged": false,
+      "pixels": 1806
+    },
+    {
+      "frame": 6,
+      "object": 2,
+      "pass": "backward",
+      "confidence": 0.999738872051239,
+      "empty": false,
+      "flagged": false,
+      "pixels": 1279
+    },
+    {
+      "frame": 7,
+      "object": 1,
+      "pass": "backward",
+      "confidence": 0.999983549118042,
+      "empty": false,
+      "flagged": false,
+      "pixels": 1801
+    },
+    {
+      "frame": 7,
+      "object": 2,
+      "pass": "backward",
+      "confidence": 0.9999982118606567,
+      "empty": false,
+      "flagged": false,
+      "pixels": 1292
+    },
+    {
+      "frame": 9,
+      "object": 1,
+      "pass": "forward",
+      "confidence": 0.9999858140945435,
+      "empty": false,
+      "flagged": false,
+      "pixels": 1789
+    },
+    {
+      "frame": 9,
+      "object": 2,
+      "pass": "forward",
+      "confidence": 0.9999856948852539,
+      "empty": false,
+      "flagged": false,
+      "pixels": 1291
+    },
+    {
+      "frame": 10,
+      "object": 1,
+      "pass": "forward",
+      "confidence": 0.9998749494552612,
+      "empty": false,
+      "flagged": false,
+      "pixels": 1731
+    },
+    {
+      "frame": 10,
+      "object": 2,
+      "pass": "forward",
+      "confidence": 0.9999980926513672,
+      "empty": false,
+      "flagged": false,
+      "pixels": 1292
+    },
+    {
+      "frame": 11,
+      "object": 1,
+      "pass": "forward",
+      "confidence": 0.942105770111084,
+      "empty": false,
+      "flagged": true,
+      "pixels": 1294
+    },
+    {
+      "frame": 11,
+      "object": 2,
+      "pass": "forward",
+      "confidence": 0.9999473094940186,
+      "empty": false,
+      "flagged": false,
+      "pixels": 1292
+    },
+    {
+      "frame": 12,
+      "object": 1,
+      "pass": "forward",
+      "confidence": 0.9982648491859436,
+      "empty": false,
+      "flagged": false,
+      "pixels": 2289
+    },
+    {
+      "frame": 12,
+      "object": 2,
+      "pass": "forward",
+      "confidence": 0.9999380111694336,
+      "empty": false,
+      "flagged": false,
+      "pixels": 1294
+    },
+    {
+      "frame": 13,
+      "object": 1,
+      "pass": "forward",
+      "confidence": 0.9997734427452087,
+      "empty": false,
+      "flagged": false,
+      "pixels": 1993
+    },
+    {
+      "frame": 13,
+      "object": 2,
+      "pass": "forward",
+      "confidence": 0.9999173879623413,
+      "empty": false,
+      "flagged": false,
+      "pixels": 1292
+    },
+    {
+      "frame": 14,
+      "object": 1,
+      "pass": "forward",
+      "confidence": 0.9999148845672607,
+      "empty": false,
+      "flagged": false,
+      "pixels": 2042
+    },
+    {
+      "frame": 14,
+      "object": 2,
+      "pass": "forward",
+      "confidence": 0.9999243021011353,
+      "empty": false,
+      "flagged": false,
+      "pixels": 1296
+    },
+    {
+      "frame": 15,
+      "object": 1,
+      "pass": "forward",
+      "confidence": 0.9993159770965576,
+      "empty": false,
+      "flagged": false,
+      "pixels": 1196
+    },
+    {
+      "frame": 15,
+      "object": 2,
+      "pass": "forward",
+      "confidence": 0.9999938011169434,
+      "empty": false,
+      "flagged": false,
+      "pixels": 1292
+    },
+    {
+      "frame": 16,
+      "object": 1,
+      "pass": "forward",
+      "confidence": 0.99968421459198,
+      "empty": false,
+      "flagged": false,
+      "pixels": 477
+    },
+    {
+      "frame": 16,
+      "object": 2,
+      "pass": "forward",
+      "confidence": 0.999771773815155,
+      "empty": false,
+      "flagged": false,
+      "pixels": 1294
+    },
+    {
+      "frame": 17,
+      "object": 1,
+      "pass": "forward",
+      "confidence": 0.9995391368865967,
+      "empty": false,
+      "flagged": false,
+      "pixels": 579
+    },
+    {
+      "frame": 17,
+      "object": 2,
+      "pass": "forward",
+      "confidence": 0.9999984502792358,
+      "empty": false,
+      "flagged": false,
+      "pixels": 1187
+    },
+    {
+      "frame": 18,
+      "object": 1,
+      "pass": "forward",
+      "confidence": 0.9992049336433411,
+      "empty": false,
+      "flagged": false,
+      "pixels": 1335
+    },
+    {
+      "frame": 18,
+      "object": 2,
+      "pass": "forward",
+      "confidence": 0.9999247789382935,
+      "empty": false,
+      "flagged": false,
+      "pixels": 790
+    },
+    {
+      "frame": 19,
+      "object": 1,
+      "pass": "forward",
+      "confidence": 0.9991668462753296,
+      "empty": false,
+      "flagged": false,
+      "pixels": 1768
+    },
+    {
+      "frame": 19,
+      "object": 2,
+      "pass": "forward",
+      "confidence": 0.9999997615814209,
+      "empty": false,
+      "flagged": false,
+      "pixels": 394
+    },
+    {
+      "frame": 20,
+      "object": 1,
+      "pass": "forward",
+      "confidence": 0.9993065595626831,
+      "empty": false,
+      "flagged": false,
+      "pixels": 1807
+    },
+    {
+      "frame": 20,
+      "object": 2,
+      "pass": "forward",
+      "confidence": 0.0,
+      "empty": true,
+      "flagged": false,
+      "pixels": 0
+    },
+    {
+      "frame": 21,
+      "object": 1,
+      "pass": "forward",
+      "confidence": 0.9991229176521301,
+      "empty": false,
+      "flagged": false,
+      "pixels": 1661
+    },
+    {
+      "frame": 21,
+      "object": 2,
+      "pass": "forward",
+      "confidence": 0.0,
+      "empty": true,
+      "flagged": false,
+      "pixels": 0
+    },
+    {
+      "frame": 22,
+      "object": 1,
+      "pass": "forward",
+      "confidence": 0.9991818070411682,
+      "empty": false,
+      "flagged": false,
+      "pixels": 1165
+    },
+    {
+      "frame": 22,
+      "object": 2,
+      "pass": "forward",
+      "confidence": 0.0,
+      "empty": true,
+      "flagged": false,
+      "pixels": 0
+    },
+    {
+      "frame": 23,
+      "object": 1,
+      "pass": "forward",
+      "confidence": 0.9992355108261108,
+      "empty": false,
+      "flagged": false,
+      "pixels": 596
+    },
+    {
+      "frame": 23,
+      "object": 2,
+      "pass": "forward",
+      "confidence": 0.0,
+      "empty": true,
+      "flagged": false,
+      "pixels": 0
+    }
+  ],
+  "scenarios": {
+    "defaults": {
+      "keepFlagged": false,
+      "skipLabeled": true,
+      "labeled": [],
+      "timeline": [
+        "propagated",
+        "propagated",
+        "propagated",
+        "propagated",
+        "flagged",
+        "propagated",
+        "propagated",
+        "propagated",
+        "reference",
+        "propagated",
+        "propagated",
+        "flagged",
+        "propagated",
+        "propagated",
+        "propagated",
+        "propagated",
+        "propagated",
+        "propagated",
+        "propagated",
+        "propagated",
+        "propagated",
+        "propagated",
+        "propagated",
+        "propagated"
+      ],
+      "timelineConfidence": {
+        "0": 0.9994768500328064,
+        "1": 0.9983018636703491,
+        "2": 0.9993411898612976,
+        "3": 0.9975237250328064,
+        "4": 0.9871750473976135,
+        "5": 0.9997618794441223,
+        "6": 0.999738872051239,
+        "7": 0.999983549118042,
+        "9": 0.9999856948852539,
+        "10": 0.9998749494552612,
+        "11": 0.942105770111084,
+        "12": 0.9982648491859436,
+        "13": 0.9997734427452087,
+        "14": 0.9999148845672607,
+        "15": 0.9993159770965576,
+        "16": 0.99968421459198,
+        "17": 0.9995391368865967,
+        "18": 0.9992049336433411,
+        "19": 0.9991668462753296,
+        "20": 0.9993065595626831,
+        "21": 0.9991229176521301,
+        "22": 0.9991818070411682,
+        "23": 0.9992355108261108
+      },
+      "view": [
+        "propagated",
+        "propagated",
+        "propagated",
+        "propagated",
+        "flagged",
+        "propagated",
+        "propagated",
+        "propagated",
+        "reference",
+        "propagated",
+        "propagated",
+        "flagged",
+        "propagated",
+        "propagated",
+        "propagated",
+        "propagated",
+        "propagated",
+        "propagated",
+        "propagated",
+        "propagated",
+        "propagated",
+        "propagated",
+        "propagated",
+        "propagated"
+      ],
+      "viewConfidence": {
+        "0": 0.9994768500328064,
+        "1": 0.9983018636703491,
+        "2": 0.9993411898612976,
+        "3": 0.9975237250328064,
+        "4": 0.9871750473976135,
+        "5": 0.9997618794441223,
+        "6": 0.999738872051239,
+        "7": 0.999983549118042,
+        "9": 0.9999856948852539,
+        "10": 0.9998749494552612,
+        "11": 0.942105770111084,
+        "12": 0.9982648491859436,
+        "13": 0.9997734427452087,
+        "14": 0.9999148845672607,
+        "15": 0.9993159770965576,
+        "16": 0.99968421459198,
+        "17": 0.9995391368865967,
+        "18": 0.9992049336433411,
+        "19": 0.9991668462753296,
+        "20": 0.9993065595626831,
+        "21": 0.9991229176521301,
+        "22": 0.9991818070411682,
+        "23": 0.9992355108261108
+      },
+      "keptMasks": {
+        "0": [
+          1,
+          2
+        ],
+        "1": [
+          1,
+          2
+        ],
+        "2": [
+          1,
+          2
+        ],
+        "3": [
+          1,
+          2
+        ],
+        "5": [
+          1,
+          2
+        ],
+        "6": [
+          1,
+          2
+        ],
+        "7": [
+          1,
+          2
+        ],
+        "9": [
+          1,
+          2
+        ],
+        "10": [
+          1,
+          2
+        ],
+        "12": [
+          1,
+          2
+        ],
+        "13": [
+          1,
+          2
+        ],
+        "14": [
+          1,
+          2
+        ],
+        "15": [
+          1,
+          2
+        ],
+        "16": [
+          1,
+          2
+        ],
+        "17": [
+          1,
+          2
+        ],
+        "18": [
+          1,
+          2
+        ],
+        "19": [
+          1,
+          2
+        ],
+        "20": [
+          1
+        ],
+        "21": [
+          1
+        ],
+        "22": [
+          1
+        ],
+        "23": [
+          1
+        ]
+      },
+      "engine": {
+        "propagated": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          9,
+          10,
+          11,
+          12,
+          13,
+          14,
+          15,
+          16,
+          17,
+          18,
+          19,
+          20,
+          21,
+          22,
+          23
+        ],
+        "flagged": [
+          4,
+          11
+        ]
+      },
+      "counts": {
+        "flagged": 2,
+        "propagated": 21
+      },
+      "propagationNotices": [
+        "Loading images into model...",
+        "Starting propagation (both)...",
+        "Propagation complete: 23 frames, 2 flagged. Scrub timeline or click 'Save All' to save."
+      ],
+      "saveAll": {
+        "written": [
+          {
+            "frame": 0,
+            "segments": [
+              {
+                "class": 1,
+                "object": 1,
+                "pixels": 1828
+              },
+              {
+                "class": 2,
+                "object": 2,
+                "pixels": 1292
+              }
+            ]
+          },
+          {
+            "frame": 1,
+            "segments": [
+              {
+                "class": 1,
+                "object": 1,
+                "pixels": 1829
+              },
+              {
+                "class": 2,
+                "object": 2,
+                "pixels": 1289
+              }
+            ]
+          },
+          {
+            "frame": 2,
+            "segments": [
+              {
+                "class": 1,
+                "object": 1,
+                "pixels": 1829
+              },
+              {
+                "class": 2,
+                "object": 2,
+                "pixels": 1291
+              }
+            ]
+          },
+          {
+            "frame": 3,
+            "segments": [
+              {
+                "class": 1,
+                "object": 1,
+                "pixels": 1822
+              },
+              {
+                "class": 2,
+                "object": 2,
+                "pixels": 1287
+              }
+            ]
+          },
+          {
+            "frame": 5,
+            "segments": [
+              {
+                "class": 1,
+                "object": 1,
+                "pixels": 1804
+              },
+              {
+                "class": 2,
+                "object": 2,
+                "pixels": 2388
+              }
+            ]
+          },
+          {
+            "frame": 6,
+            "segments": [
+              {
+                "class": 1,
+                "object": 1,
+                "pixels": 1806
+              },
+              {
+                "class": 2,
+                "object": 2,
+                "pixels": 1279
+              }
+            ]
+          },
+          {
+            "frame": 7,
+            "segments": [
+              {
+                "class": 1,
+                "object": 1,
+                "pixels": 1801
+              },
+              {
+                "class": 2,
+                "object": 2,
+                "pixels": 1292
+              }
+            ]
+          },
+          {
+            "frame": 9,
+            "segments": [
+              {
+                "class": 1,
+                "object": 1,
+                "pixels": 1789
+              },
+              {
+                "class": 2,
+                "object": 2,
+                "pixels": 1291
+              }
+            ]
+          },
+          {
+            "frame": 10,
+            "segments": [
+              {
+                "class": 1,
+                "object": 1,
+                "pixels": 1731
+              },
+              {
+                "class": 2,
+                "object": 2,
+                "pixels": 1292
+              }
+            ]
+          },
+          {
+            "frame": 12,
+            "segments": [
+              {
+                "class": 1,
+                "object": 1,
+                "pixels": 2289
+              },
+              {
+                "class": 2,
+                "object": 2,
+                "pixels": 1294
+              }
+            ]
+          },
+          {
+            "frame": 13,
+            "segments": [
+              {
+                "class": 1,
+                "object": 1,
+                "pixels": 1993
+              },
+              {
+                "class": 2,
+                "object": 2,
+                "pixels": 1292
+              }
+            ]
+          },
+          {
+            "frame": 14,
+            "segments": [
+              {
+                "class": 1,
+                "object": 1,
+                "pixels": 2042
+              },
+              {
+                "class": 2,
+                "object": 2,
+                "pixels": 1296
+              }
+            ]
+          },
+          {
+            "frame": 15,
+            "segments": [
+              {
+                "class": 1,
+                "object": 1,
+                "pixels": 1196
+              },
+              {
+                "class": 2,
+                "object": 2,
+                "pixels": 1292
+              }
+            ]
+          },
+          {
+            "frame": 16,
+            "segments": [
+              {
+                "class": 1,
+                "object": 1,
+                "pixels": 477
+              },
+              {
+                "class": 2,
+                "object": 2,
+                "pixels": 1294
+              }
+            ]
+          },
+          {
+            "frame": 17,
+            "segments": [
+              {
+                "class": 1,
+                "object": 1,
+                "pixels": 579
+              },
+              {
+                "class": 2,
+                "object": 2,
+                "pixels": 1187
+              }
+            ]
+          },
+          {
+            "frame": 18,
+            "segments": [
+              {
+                "class": 1,
+                "object": 1,
+                "pixels": 1335
+              },
+              {
+                "class": 2,
+                "object": 2,
+                "pixels": 790
+              }
+            ]
+          },
+          {
+            "frame": 19,
+            "segments": [
+              {
+                "class": 1,
+                "object": 1,
+                "pixels": 1768
+              },
+              {
+                "class": 2,
+                "object": 2,
+                "pixels": 394
+              }
+            ]
+          },
+          {
+            "frame": 20,
+            "segments": [
+              {
+                "class": 1,
+                "object": 1,
+                "pixels": 1807
+              }
+            ]
+          },
+          {
+            "frame": 21,
+            "segments": [
+              {
+                "class": 1,
+                "object": 1,
+                "pixels": 1661
+              }
+            ]
+          },
+          {
+            "frame": 22,
+            "segments": [
+              {
+                "class": 1,
+                "object": 1,
+                "pixels": 1165
+              }
+            ]
+          },
+          {
+            "frame": 23,
+            "segments": [
+              {
+                "class": 1,
+                "object": 1,
+                "pixels": 596
+              }
+            ]
+          }
+        ],
+        "timeline": [
+          "saved",
+          "saved",
+          "saved",
+          "saved",
+          "flagged",
+          "saved",
+          "saved",
+          "saved",
+          "reference",
+          "saved",
+          "saved",
+          "flagged",
+          "saved",
+          "saved",
+          "saved",
+          "saved",
+          "saved",
+          "saved",
+          "saved",
+          "saved",
+          "saved",
+          "saved",
+          "saved",
+          "saved"
+        ],
+        "notices": [
+          "Saving 21 frames...",
+          "Saved 21 frames to NPZ"
+        ]
+      }
+    }
+  },
+  "note": "Masks are in the .npz beside this file as packed bits, one entry per 'frame:object', unpacked with np.unpackbits(...)[: height * width].reshape(height, width). Reference frames have no entry: legacy's engine skips them. An EMPTY mask is not a low-confidence one: RULE-060 drops it before the threshold check. Timelines list what the timeline widget last painted on each frame, 'pending' where it painted nothing."
+}

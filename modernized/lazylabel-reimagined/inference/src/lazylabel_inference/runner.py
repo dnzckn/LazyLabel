@@ -53,6 +53,7 @@ from .propagation import (
     FrameResult,
     ReferenceObject,
     PropagationRequest,
+    SourceImage,
     StagedSequence,
     initialise_state,
     propagate,
@@ -202,6 +203,10 @@ def run_propagation(
         # this very block -- the reader was called by the wrong name -- and the only symptom was
         # that every frame passed the size check, because there was no reference size to fail it.
         first = None
+    if isinstance(first, SourceImage):
+        # Its pixels. A `SourceImage` has no shape of its own: read off it, the shape is None, there
+        # is no reference size, and every frame of every size passes RULE-071's check.
+        first = first.pixels
     shape = getattr(first, "shape", None)
     if shape is not None and len(shape) >= 2:
         reference_size = (int(shape[0]), int(shape[1]))
@@ -271,8 +276,11 @@ def run_propagation(
 
 def _measured(
     reader: Callable[[str], Any], key: str, reference_size: tuple[int, int] | None
-) -> tuple[Any, str | None]:
+) -> tuple[SourceImage | None, str | None]:
     """One frame read, or why it must be left out: it cannot be read, or it is another size.
+
+    The reader gives an RGB array, or a `SourceImage` that also carries a JPEG's own bytes for the
+    staging (SEQUENCE_PARITY.md SP-08); either comes back as a `SourceImage`.
 
     READ FAILURES ARE SKIPPED, not fatal. `stage_sequence` already guards the WRITE of each frame
     and keeps going, and a read has to behave the same way or one corrupt image ends a job that was
@@ -285,18 +293,19 @@ def _measured(
     skipping is the only one of those three that is honest.
     """
     try:
-        array = reader(key)
+        read = reader(key)
     except Exception as cause:  # noqa: BLE001 - any read failure means the same thing here
         return None, str(cause)
 
-    shape = getattr(array, "shape", None)
+    source = read if isinstance(read, SourceImage) else SourceImage(pixels=read)
+    shape = getattr(source.pixels, "shape", None)
     size = None if shape is None else (int(shape[0]), int(shape[1]))
     if reference_size is not None and size is not None and size != reference_size:
         return None, (
             f"its size {size[1]}x{size[0]} is not the reference's "
             f"{reference_size[1]}x{reference_size[0]}"
         )
-    return array, None
+    return source, None
 
 
 def _report(
@@ -336,11 +345,11 @@ def _stage(
         key = sequence[position]
         if key in left_out:
             continue
-        array, reason = _measured(reader, key, reference_size)
+        source, reason = _measured(reader, key, reference_size)
         if reason is not None:
             unusable.append((key, reason))
             continue
-        images.append((key, array))
+        images.append((key, source))
 
     staged = stage_sequence(images, directory)
     # Carried on the staged sequence rather than dropped, so the run can report them instead of

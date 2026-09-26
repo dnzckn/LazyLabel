@@ -15,14 +15,11 @@ Run it with:
     PYTHONPATH=/path/to/legacy/lazylabel/src \\
     python -m pytest tests/test_differential_propagation.py -v
 
-ONE DIVERGENCE IS DELIBERATE AND IS NOT TESTED FOR EQUALITY. Legacy stages a source that is already
-JPEG by SYMLINKING it (`sam2_model.py:788-791`), so SAM reads the original bytes; the port always
-re-encodes at quality 95, because it receives decoded arrays and never sees the original file at
-all -- a consequence of the API decoding under its own format allow-list and handing arrays across
-the boundary. For a JPEG dataset the two therefore feed SAM slightly different pixels. The sequence
-below is PNG, where both sides re-encode identically at quality 95 and the comparison is
-like-for-like; `test_the_port_re_encodes_where_legacy_would_symlink` pins the divergence itself so
-it stays a known, recorded difference rather than a surprise.
+The sequence below is PNG, which both sides write again at quality 95. A JPEG they both hand SAM 2
+as it is (`sam2_model.py:788-796`): until 2026-09-26 the port re-encoded it, and SAM 2 saw
+recompressed pixels on a JPEG dataset (SEQUENCE_PARITY.md SP-08). `test_differential_staging.py`
+compares the two stagings byte for byte for every format the service opens, and the
+`synthetic-shapes-jpeg` golden holds the port to legacy's answers on a JPEG clip.
 """
 
 from __future__ import annotations
@@ -239,36 +236,3 @@ def test_each_mask_is_attributed_to_the_image_it_came_from(frames, port_run) -> 
     _, ported = port_run
 
     assert [result.source for result in ported] == [key for key, _ in frames]
-
-
-def test_the_port_re_encodes_where_legacy_would_symlink(tmp_path) -> None:
-    """The one deliberate divergence, pinned so it stays deliberate.
-
-    Legacy symlinks a source that is already JPEG (`sam2_model.py:788-791`), so SAM reads the
-    original bytes. The port re-encodes, because it is handed decoded arrays and never sees the
-    original file -- the API decodes under its own format allow-list and passes arrays across the
-    boundary. So for a JPEG dataset the two feed SAM slightly different pixels.
-
-    This is a generation of JPEG loss, not a correctness problem, and it is within the tolerance
-    decision 10 sets. It is recorded here rather than in a comment because the day it stops being
-    acceptable, this is the test that should fail.
-    """
-    import cv2
-    import numpy as np
-
-    from lazylabel_inference.propagation import stage_sequence
-
-    original = np.zeros((64, 64, 3), dtype=np.uint8)
-    original[16:48, 16:48] = (200, 120, 60)
-    source = tmp_path / "already.jpg"
-    assert cv2.imwrite(str(source), original[:, :, ::-1], [cv2.IMWRITE_JPEG_QUALITY, 95])
-
-    decoded = cv2.imread(str(source))[:, :, ::-1]
-    staged = stage_sequence([("already.jpg", decoded)], tmp_path / "staged")
-    restaged = (staged.directory / "00000.jpg").read_bytes()
-
-    assert restaged != source.read_bytes(), "expected a re-encode; legacy would have symlinked here"
-
-    # And the pixels survive it well enough that propagation is unaffected at decision 10's
-    # tolerance -- which is the whole reason this divergence is acceptable.
-    assert iou(decoded[:, :, 0] > 100, cv2.imread(str(staged.directory / "00000.jpg"))[:, :, 2] > 100) >= 0.98

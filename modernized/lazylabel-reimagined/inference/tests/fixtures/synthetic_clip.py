@@ -31,9 +31,21 @@ releases. `sin` would be the natural way to wobble a path, and it is exactly wha
 bit between C libraries, so the wobble is a table. Every pixel is a function of integers, so the
 frames are byte-identical everywhere and their digests can be pinned.
 
-    python synthetic_clip.py --out <folder>
+    python synthetic_clip.py --out <folder> [--variant <golden name>]
 
-writes `<folder>/frames/*.png` and `<folder>/reference/*.png`, and prints the capture command.
+writes `<folder>/frames/*` and `<folder>/reference/*.png`, and prints the capture command.
+
+THE VARIANTS. One drawing, three goldens (`VARIANTS`), each for a difference only it can show:
+
+- `synthetic-shapes`: the clip above as PNG, in one SAM 2 state (legacy's full-context mode).
+- `synthetic-shapes-jpeg`: the same frames as JPEG. Legacy hands SAM 2 a JPEG's own bytes
+  (`sam2_model.py:788-796`) and re-encodes everything else, so a PNG clip cannot show whether the
+  port does the same (SEQUENCE_PARITY.md SP-08). The bytes come from OpenCV's encoder, so the
+  golden records their digests and the test checks it regenerates the same files.
+- `synthetic-shapes-streaming`: the clip drawn on to 34 frames, the reference on frame 12 and a
+  Stream window of 10, so legacy's streaming mode runs four windows forward and three backward,
+  with overlaps and seams (SP-09, SP-36). Past frame 24 the disc leaves by the right edge, so the
+  last windows hold frames the model is unsure of and frames with nothing left to track.
 """
 
 from __future__ import annotations
@@ -52,6 +64,43 @@ FRAMES = 24
 
 #: Where the user "drew" the objects. Mid-clip, so propagation runs both ways from it.
 REFERENCE_FRAME = 8
+
+#: Legacy's four scenarios, which the capture runs unless a variant names fewer.
+SCENARIOS = ("defaults", "keep-flagged", "skip-labeled", "overwrite")
+
+
+@dataclass(frozen=True)
+class Variant:
+    """One golden: which clip it is of, how its frames are stored, and how legacy was run on it."""
+
+    #: The golden's file name under `goldens/propagation/`, without a suffix.
+    name: str
+    frames: int = FRAMES
+    reference: int = REFERENCE_FRAME
+    #: How each frame is written: ".png", or ".jpg" at `quality`.
+    suffix: str = ".png"
+    quality: int | None = None
+    #: The Stream window the capture sets, legacy's `stream_window_spin` (RULE-026).
+    window: int = 250
+    #: Frames given a sidecar for the Skip Labeled scenarios.
+    labeled: tuple[int, ...] = ()
+    scenarios: tuple[str, ...] = SCENARIOS
+
+
+VARIANTS = {
+    variant.name: variant
+    for variant in (
+        Variant("synthetic-shapes", labeled=(2, 5, 15, 21)),
+        Variant("synthetic-shapes-jpeg", suffix=".jpg", quality=90, scenarios=("defaults",)),
+        Variant(
+            "synthetic-shapes-streaming",
+            frames=34,
+            reference=12,
+            window=10,
+            scenarios=("defaults", "keep-flagged"),
+        ),
+    )
+}
 
 #: Object ids as legacy assigns them: 1, 2, ... in the order the reference frame lists its segments.
 DISC, SQUARE = 1, 2
@@ -83,9 +132,9 @@ class Clip:
     #: Per frame, each tracked object's VISIBLE pixels: its shape minus whatever is drawn over it.
     visible: list[dict[int, np.ndarray]]
 
-    def reference_masks(self) -> dict[int, np.ndarray]:
+    def reference_masks(self, frame: int = REFERENCE_FRAME) -> dict[int, np.ndarray]:
         """What the user drew on the reference frame: each object exactly, nothing occluding it."""
-        return self.visible[REFERENCE_FRAME]
+        return self.visible[frame]
 
 
 def digest(rgb: np.ndarray) -> str:
@@ -248,25 +297,53 @@ def render(seed: int = SEED, frames: int = FRAMES) -> Clip:
     return Clip(frames=out, visible=visible)
 
 
-def write(clip: Clip, folder: pathlib.Path) -> tuple[pathlib.Path, list[pathlib.Path]]:
-    """The frames and the reference masks as PNG, in separate folders.
+def encoded(rgb: np.ndarray, suffix: str = ".png", quality: int | None = None) -> bytes:
+    """One frame as the file a variant stores it in.
+
+    JPEG at `quality` through OpenCV, as legacy writes its own staging (`sam2_model.py:803`). The
+    bytes are the encoder's, not a law of nature: another OpenCV may write different ones, which is
+    why a JPEG golden records the digest of every file and its test regenerates and compares them.
+    """
+    import cv2
+
+    params = [cv2.IMWRITE_JPEG_QUALITY, int(quality)] if quality is not None else []
+    ok, data = cv2.imencode(suffix, rgb[:, :, ::-1], params)
+    if not ok:
+        raise OSError(f"OpenCV could not encode a frame as {suffix}")
+    return data.tobytes()
+
+
+def render_variant(variant: Variant) -> Clip:
+    """The clip a variant is of, its frames named with the variant's suffix."""
+    clip = render(frames=variant.frames)
+    stem = [pathlib.PurePath(name).stem for name, _ in clip.frames]
+    return Clip(
+        frames=[(name + variant.suffix, rgb) for name, (_, rgb) in zip(stem, clip.frames, strict=True)],
+        visible=clip.visible,
+    )
+
+
+def write(
+    clip: Clip, folder: pathlib.Path, variant: Variant | None = None
+) -> tuple[pathlib.Path, list[pathlib.Path]]:
+    """The frames and the reference masks, in separate folders; the masks are always PNG.
 
     Separate so that a frames folder holds nothing but frames: the capture script takes every image
     in it, and a mask sitting among them would be propagated through as frame 25.
     """
     import cv2
 
+    variant = variant or VARIANTS["synthetic-shapes"]
     frames_dir = folder / "frames"
     reference_dir = folder / "reference"
     frames_dir.mkdir(parents=True, exist_ok=True)
     reference_dir.mkdir(parents=True, exist_ok=True)
 
     for name, rgb in clip.frames:
-        if not cv2.imwrite(str(frames_dir / name), rgb[:, :, ::-1]):
-            raise OSError(f"could not write {frames_dir / name}")
+        (frames_dir / name).write_bytes(encoded(rgb, pathlib.PurePath(name).suffix, variant.quality))
 
     masks = []
-    for obj, mask in clip.reference_masks().items():
+    for obj, mask in clip.reference_masks(variant.reference).items():
         path = reference_dir / f"object{obj}_class{CLASSES[obj]}.png"
         if not cv2.imwrite(str(path), mask.astype(np.uint8) * 255):
             raise OSError(f"could not write {path}")
@@ -277,18 +354,23 @@ def write(clip: Clip, folder: pathlib.Path) -> tuple[pathlib.Path, list[pathlib.
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--out", required=True, type=pathlib.Path)
+    parser.add_argument("--variant", default="synthetic-shapes", choices=sorted(VARIANTS))
     args = parser.parse_args()
 
-    clip = render()
-    frames_dir, masks = write(clip, args.out)
+    variant = VARIANTS[args.variant]
+    clip = render_variant(variant)
+    frames_dir, masks = write(clip, args.out, variant)
     print(f"wrote {len(clip.frames)} frames to {frames_dir}")
     references = " ".join(
-        f"--reference {REFERENCE_FRAME}:{CLASSES[obj]}:{path}"
-        for obj, path in zip(clip.reference_masks(), masks, strict=True)
+        f"--reference {variant.reference}:{CLASSES[obj]}:{path}"
+        for obj, path in zip(clip.reference_masks(variant.reference), masks, strict=True)
     )
+    labeled = f" --labeled {','.join(map(str, variant.labeled))}" if variant.labeled else ""
+    scenarios = "" if variant.scenarios == SCENARIOS else f" --scenarios {','.join(variant.scenarios)}"
+    window = "" if variant.window == 250 else f" --window {variant.window}"
     print("capture with:")
-    print(f"  python capture_propagation_goldens.py --frames {frames_dir} {references} "
-          "--checkpoint <sam2.1_hiera_large.pt> --out <golden>.npz")
+    print(f"  python capture_propagation_goldens.py --frames {frames_dir} {references}{labeled}"
+          f"{scenarios}{window} --checkpoint <sam2.1_hiera_large.pt> --out <goldens>/{variant.name}")
     return 0
 
 

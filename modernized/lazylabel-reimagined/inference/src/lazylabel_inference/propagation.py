@@ -41,6 +41,23 @@ class PropagationError(InferenceError):
         self.completed = completed
 
 
+#: The names legacy stages as they are (`sam2_model.py:774, 788`), compared lower-cased.
+JPEG_SUFFIXES = frozenset({".jpg", ".jpeg"})
+
+
+@dataclass(frozen=True)
+class SourceImage:
+    """One frame as read for a propagation: its pixels, and its own bytes when it is a JPEG.
+
+    `pixels` is RGB uint8, what RULE-071 measures against the reference's size. `jpeg` is the file
+    as stored when it is a JPEG, which is what legacy hands SAM 2 (`sam2_model.py:788-796`), and
+    None for anything else, which legacy decodes and writes again at quality 95.
+    """
+
+    pixels: Any
+    jpeg: bytes | None = None
+
+
 @dataclass(frozen=True)
 class StagedFrame:
     """One frame as SAM 2 will see it, and what it actually is."""
@@ -76,22 +93,34 @@ class StagedSequence:
 def stage_sequence(images: list[tuple[str, Any]], directory: Path) -> StagedSequence:
     """Write each image as a JPEG under a DENSE index, and record what it is.
 
-    `images` is (dataset key, RGB array) in the order the user's timeline holds them. An image that
-    cannot be written is skipped -- and because the staged indices stay dense, skipping one shifts
-    nothing: the map simply has one fewer entry, and every entry still says which image it is.
+    `images` is (dataset key, image) in the order the user's timeline holds them, where an image is
+    an RGB array or a `SourceImage`. An image that cannot be written is skipped -- and because the
+    staged indices stay dense, skipping one shifts nothing: the map simply has one fewer entry, and
+    every entry still says which image it is.
+
+    A JPEG's own bytes are staged as they are, and only anything else is encoded, at quality 95.
+    That is legacy's staging (`sam2_model.py:788-803`), and SEQUENCE_PARITY.md SP-08 is what it
+    cost to differ: until 2026-09-26 every frame was decoded and encoded again here, so on a JPEG
+    sequence SAM 2 saw recompressed pixels that legacy's never sees.
     """
     import cv2
 
     directory.mkdir(parents=True, exist_ok=True)
     staged = StagedSequence(directory=directory)
 
-    for key, array in images:
+    for key, image in images:
         index = len(staged.frames)
         path = directory / f"{index:05d}.jpg"
+        source = image if isinstance(image, SourceImage) else SourceImage(pixels=image)
         try:
-            # SAM 2's loader wants JPEG. cv2 writes BGR, so RGB is reversed on the way out, which
-            # is what legacy does too -- the model sees the same pixels either way.
-            if not cv2.imwrite(str(path), array[:, :, ::-1], [cv2.IMWRITE_JPEG_QUALITY, 95]):
+            if source.jpeg is not None:
+                # Copied rather than linked: the bytes were read once, sniffed and decoded by the
+                # reader, and these are those bytes (SEC-02). Legacy links, and copies where the
+                # link is refused, as it is on Windows without the privilege; SAM 2 reads the same.
+                path.write_bytes(source.jpeg)
+            # SAM 2's loader wants JPEG. cv2 writes BGR, so RGB is reversed on the way out, and the
+            # bytes are legacy's: it reads with `cv2.imread`, which decodes as the reader does.
+            elif not cv2.imwrite(str(path), source.pixels[:, :, ::-1], [cv2.IMWRITE_JPEG_QUALITY, 95]):
                 raise OSError("cv2.imwrite reported failure")
         except Exception as cause:  # noqa: BLE001 - one bad frame must not end the staging
             staged.skipped.append((key, str(cause)))

@@ -18,7 +18,10 @@ user's drawn masks (`add_video_mask`) and so does the port (`seed_mask`).
 `--reference FRAME:CLASS:MASK` is the user's drawing: the mask's non-zero pixels, labelled CLASS, on
 timeline frame FRAME. Objects are numbered 1, 2, ... in the order given, which is legacy's order for
 the segments of one frame. `--labeled` names the frames that already have annotations for the Skip
-Labeled scenarios. `synthetic_clip.py` writes a clip and prints the whole command.
+Labeled scenarios. `--scenarios` runs some of the four below, by name. `--window` is the Stream
+window legacy reads from its spin box (default 250): a clip longer than it takes legacy's streaming
+path, one SAM 2 state per window. `synthetic_clip.py --variant NAME` writes a golden's clip and
+prints the whole command.
 
 HOW LEGACY RUNS WITHOUT ITS WINDOW. The sequence feature is MainWindow methods driving
 `SequenceViewMode`, `PropagationManager` and legacy's `Sam2Model`, and the methods only reach the
@@ -47,6 +50,16 @@ WHAT IS WRITTEN. `<out>.json` holds everything a reader without numpy needs: the
 digests, the references, every object's score on every frame, and per scenario the timeline as the
 user saw it, the confidences it showed, which masks each frame kept, the engine's own sets, and
 what Save All wrote. `<out>.npz` holds the masks, packed bits keyed "frame:object".
+
+It also records what legacy's `Sam2Model` was asked to do (`ModelSpy`): each staging, as timeline
+frames with the digest of every file SAM 2 then read, and each walk through them. That is where
+legacy's JPEG handling shows (a JPEG is staged as its own file) and where its windows do.
+
+STREAMING. With more frames than the window, each window is its own staging and walk, windows
+overlap by five frames, and a frame can be answered by two of them. So `results` carries a
+`window` field and the masks are keyed "window:frame:object"; each scenario adds `redelivered`, the
+frames the engine handed the window from more than one window, and `keptFrom`, which window's
+answer each kept mask is.
 
 It never writes into the legacy worktree, never downloads anything, and loads the checkpoint from
 the path given rather than letting legacy resolve its default, which would pull 2.4 GB into the
@@ -77,7 +90,12 @@ from synthetic_clip import digest as pixel_digest  # noqa: E402
 # Legacy's own default, and the one RULE-060's card is written against.
 DEFAULT_THRESHOLD = 0.99
 
+# Legacy's Stream window default (`ChunkConfig.chunk_size`, the spin box's initial value).
+DEFAULT_WINDOW = 250
+
 IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".tif", ".tiff", ".bmp", ".webp"}
+
+SCENARIO_NAMES = ("defaults", "keep-flagged", "skip-labeled", "overwrite")
 
 
 @dataclass(frozen=True)
@@ -116,14 +134,28 @@ def parse_frames(text: str) -> tuple[int, ...]:
         raise SystemExit(f"--labeled must be frame numbers separated by commas, got {text!r}") from cause
 
 
-def scenarios_for(labeled: tuple[int, ...]) -> list[Scenario]:
-    """The two checkboxes, at legacy's defaults and against them, with and without labelled frames."""
-    return [
+def scenarios_for(labeled: tuple[int, ...], names: tuple[str, ...] = SCENARIO_NAMES) -> list[Scenario]:
+    """The two checkboxes, at legacy's defaults and against them, with and without labelled frames.
+
+    `names` picks some of them, in this order: a golden about something else -- JPEG staging, or
+    streaming's windows -- need not carry the Skip Labeled scenarios the first golden already holds.
+    """
+    every = [
         Scenario("defaults", keep_flagged=False, skip_labeled=True, labeled=()),
         Scenario("keep-flagged", keep_flagged=True, skip_labeled=True, labeled=()),
         Scenario("skip-labeled", keep_flagged=False, skip_labeled=True, labeled=labeled),
         Scenario("overwrite", keep_flagged=False, skip_labeled=False, labeled=labeled),
     ]
+    return [scenario for scenario in every if scenario.name in names]
+
+
+def parse_scenarios(text: str) -> tuple[str, ...]:
+    """`defaults,keep-flagged`: some of legacy's four scenarios, by name."""
+    names = tuple(part.strip() for part in text.split(",") if part.strip())
+    unknown = [name for name in names if name not in SCENARIO_NAMES]
+    if not names or unknown:
+        raise SystemExit(f"--scenarios takes names from {', '.join(SCENARIO_NAMES)}, got {text!r}")
+    return names
 
 
 def frames_in(folder: pathlib.Path) -> list[pathlib.Path]:
@@ -197,14 +229,17 @@ class TimelineRecorder:
 class SequenceWidgetRecorder:
     """Stands in for `SequenceWidget`: the checkbox and spin values legacy reads, and the counts it shows."""
 
-    def __init__(self, threshold: float) -> None:
+    def __init__(self, threshold: float, window: int = DEFAULT_WINDOW) -> None:
         self._is_propagating = False
         self.flagged_count: int | None = None
         self.propagated_count: int | None = None
         self.confidence_spin = types.SimpleNamespace(value=lambda: threshold, setValue=lambda _: None)
         # Legacy's checkbox is on; with a sequence no longer than the window it changes nothing.
         self.streaming_checkbox = types.SimpleNamespace(isChecked=lambda: True)
-        self.stream_window_spin = types.SimpleNamespace(value=lambda: 250)
+        # The window legacy's `_start_propagation` reads into its chunk size (main_window.py:4203-4210).
+        # The real spin box stops at 50; the engine takes any number, and a clip ten times longer
+        # than it needs to be would be a golden ten times larger for no path it does not take.
+        self.stream_window_spin = types.SimpleNamespace(value=lambda: window)
 
     def start_propagation(self) -> None:
         self._is_propagating = True
@@ -223,6 +258,70 @@ class SequenceWidgetRecorder:
 
     def set_propagated_count(self, count: int) -> None:
         self.propagated_count = int(count)
+
+
+class ModelSpy:
+    """Every staging and every walk legacy's `Sam2Model` performs, in TIMELINE frames.
+
+    Streaming stages each window on its own, with the references outside it prepended
+    (`propagation_manager.py:987-1016`), so the frame index SAM 2 yields is local to the window. The
+    spy keeps each staging's list of paths and maps every index back to the timeline through it.
+
+    It also records what was STAGED: the digest of each file SAM 2 then read, and whether it was a
+    link. That is where legacy's JPEG handling shows (`sam2_model.py:788-803`): a JPEG is linked, or
+    copied where links are refused, so its staged digest is the source file's; anything else is
+    decoded and written again at quality 95.
+
+    Installed as instance attributes over legacy's own methods, which it calls; `restore` removes
+    them and leaves legacy's.
+    """
+
+    def __init__(self, model, index_of: dict[str, int]) -> None:
+        self.model = model
+        self.index_of = index_of
+        self.stagings: list[dict] = []
+        self.walks: list[dict] = []
+        self._initialise = model.init_video_state
+        self._propagate = model.propagate_in_video
+        model.init_video_state = self.init_video_state
+        model.propagate_in_video = self.propagate_in_video
+
+    def init_video_state(self, image_paths, image_cache=None, progress_callback=None):
+        ok = self._initialise(image_paths, image_cache=image_cache, progress_callback=progress_callback)
+        if ok:
+            folder = pathlib.Path(self.model._video_temp_dir)
+            files = sorted(folder.glob("*.jpg"), key=lambda path: int(path.stem))
+            self.stagings.append({
+                "frames": [self.index_of[str(path)] for path in image_paths],
+                "staged": [{"sha256": sha256_file(path), "link": path.is_symlink()} for path in files],
+            })
+        return ok
+
+    def propagate_in_video(self, start_frame_idx=None, max_frames=None, reverse=False):
+        staging = len(self.stagings) - 1
+        frames = self.stagings[staging]["frames"]
+        walk = {
+            "staging": staging,
+            "start": start_frame_idx,
+            "reverse": bool(reverse),
+            "results": [],
+        }
+        self.walks.append(walk)
+        for frame_idx, obj_id, mask, confidence in self._propagate(
+            start_frame_idx=start_frame_idx, max_frames=max_frames, reverse=reverse
+        ):
+            walk["results"].append({
+                "frame": frames[int(frame_idx)],
+                "object": int(obj_id),
+                "confidence": float(confidence),
+                "reverse": bool(reverse),
+                "mask": np.array(mask, dtype=bool, copy=True).squeeze(),
+            })
+            yield frame_idx, obj_id, mask, confidence
+
+    def restore(self) -> None:
+        vars(self.model).pop("init_video_state", None)
+        vars(self.model).pop("propagate_in_video", None)
 
 
 def headless_window_class(main_window_class: type) -> type:
@@ -251,9 +350,11 @@ def headless_window_class(main_window_class: type) -> type:
 
 
 def run_scenario(legacy: types.SimpleNamespace, model, scenario: Scenario, source_frames: list[pathlib.Path],
-                 masks: list[tuple[Reference, np.ndarray]], threshold: float, shape: tuple[int, int]) -> dict:
+                 masks: list[tuple[Reference, np.ndarray]], threshold: float, shape: tuple[int, int],
+                 window_size: int = DEFAULT_WINDOW) -> dict:
     """One fresh session: enter sequence mode, mark the references, Propagate, then Save All."""
     workdir = pathlib.Path(tempfile.mkdtemp(prefix=f"lazylabel-golden-{scenario.name}-"))
+    spy: ModelSpy | None = None
     try:
         paths = []
         for source in source_frames:
@@ -269,22 +370,7 @@ def run_scenario(legacy: types.SimpleNamespace, model, scenario: Scenario, sourc
         if getattr(model, "is_video_initialized", False):
             model.cleanup_video_state()
 
-        raw: list[dict] = []
-        original = model.propagate_in_video
-
-        def spy(*args, **kwargs):
-            reverse = bool(kwargs.get("reverse", False))
-            for frame_idx, obj_id, mask, confidence in original(*args, **kwargs):
-                raw.append({
-                    "frame": int(frame_idx),
-                    "object": int(obj_id),
-                    "confidence": float(confidence),
-                    "reverse": reverse,
-                    "mask": np.array(mask, dtype=bool, copy=True).squeeze(),
-                })
-                yield frame_idx, obj_id, mask, confidence
-
-        model.propagate_in_video = spy
+        spy = ModelSpy(model, {path: i for i, path in enumerate(paths)})
 
         window = legacy.HeadlessWindow()
         segments_by_path: dict[str, list[dict]] = {}
@@ -298,7 +384,7 @@ def run_scenario(legacy: types.SimpleNamespace, model, scenario: Scenario, sourc
         window.model_manager = types.SimpleNamespace(sam_model=model, is_model_available=lambda: True)
         window.segment_manager = legacy.SegmentManager()
         window.timeline_widget = TimelineRecorder()
-        window.sequence_widget = SequenceWidgetRecorder(threshold)
+        window.sequence_widget = SequenceWidgetRecorder(threshold, window_size)
         window._sequence_init_worker = None
         window._reference_worker = None
         window._propagation_worker = None
@@ -306,6 +392,23 @@ def run_scenario(legacy: types.SimpleNamespace, model, scenario: Scenario, sourc
         window._show_notification = notifications.append
         window._load_segments_for_reference_frame = lambda path: segments_by_path.get(str(path), [])
         window._load_sequence_frame_segments = lambda path: None
+
+        # What the engine handed the window, frame by frame, and during which walk: where a frame
+        # comes twice, from two windows, the second is what RULE-026's overlap rule let through.
+        # Set on the instance before the worker exists, so its signal connects to this.
+        deliveries: dict[int, list[dict]] = {}
+        frame_done = legacy.HeadlessWindow._on_propagation_frame_done
+
+        def delivered(frame_idx: int, result) -> None:
+            entry: dict = {"walk": len(spy.walks)}
+            if isinstance(result, int | float):
+                entry.update(kind="flagged", confidence=float(result))
+            else:
+                entry.update(kind="mask", object=int(result.obj_id), confidence=float(result.confidence))
+            deliveries.setdefault(int(frame_idx), []).append(entry)
+            frame_done(window, frame_idx, result)
+
+        window._on_propagation_frame_done = delivered
 
         def record_save() -> None:
             saved.append({
@@ -380,25 +483,47 @@ def run_scenario(legacy: types.SimpleNamespace, model, scenario: Scenario, sourc
                 segments.append({"class": segment["class"], "object": owner[0], "pixels": int(segment["mask"].sum())})
             writes.append({"frame": frame, "segments": segments})
 
-        return {
-            "raw": raw,
-            "record": {
-                "keepFlagged": scenario.keep_flagged,
-                "skipLabeled": scenario.skip_labeled,
-                "labeled": list(scenario.labeled),
-                **after_propagation,
-                "propagationNotices": propagation_notices,
-                "saveAll": {
-                    "written": writes,
-                    "timeline": [window.timeline_widget.status.get(i, "pending") for i in range(total)],
-                    "notices": list(notifications),
-                },
+        record = {
+            "keepFlagged": scenario.keep_flagged,
+            "skipLabeled": scenario.skip_labeled,
+            "labeled": list(scenario.labeled),
+            **after_propagation,
+            "propagationNotices": propagation_notices,
+            "saveAll": {
+                "written": writes,
+                "timeline": [window.timeline_widget.status.get(i, "pending") for i in range(total)],
+                "notices": list(notifications),
             },
         }
+        if len(spy.stagings) > 1:
+            # Streaming: which frames came to the window from more than one window, and which
+            # window's answer each kept mask is. One window's answer per frame is what the port
+            # keeps; these say where legacy's differ (SEQUENCE_PARITY.md SP-36).
+            record["redelivered"] = {
+                str(frame): entries
+                for frame, entries in sorted(deliveries.items())
+                if len({entry["walk"] for entry in entries}) > 1
+            }
+            sources: dict[str, dict[str, list[int]]] = {}
+            for (frame, obj), mask in sorted(kept.items()):
+                sources.setdefault(str(frame), {})[str(obj)] = kept_from(spy.walks, frame, obj, mask)
+            record["keptFrom"] = sources
+        return {"walks": spy.walks, "stagings": spy.stagings, "record": record}
     finally:
-        # The spy was an attribute on the instance; removing it leaves legacy's own method.
-        vars(model).pop("propagate_in_video", None)
+        # The spy's methods were attributes on the instance; removing them leaves legacy's own.
+        if spy is not None:
+            spy.restore()
         shutil.rmtree(workdir, ignore_errors=True)
+
+
+def kept_from(walks: list[dict], frame: int, obj: int, mask: np.ndarray) -> list[int]:
+    """The walks, numbered from 1, whose answer for this object on this frame is this mask."""
+    return [
+        number
+        for number, walk in enumerate(walks, start=1)
+        for entry in walk["results"]
+        if entry["frame"] == frame and entry["object"] == obj and np.array_equal(entry["mask"], mask)
+    ]
 
 
 def model_results(raw: list[dict], reference_frames: set[int], threshold: float) -> tuple[list[dict], dict[str, np.ndarray]]:
@@ -435,9 +560,51 @@ def model_results(raw: list[dict], reference_frames: set[int], threshold: float)
     return results, masks
 
 
+def flatten(walks: list[dict]) -> list[dict]:
+    """Every answer of every walk, in order, each carrying the number of its walk, from 1."""
+    return [{**entry, "walk": number} for number, walk in enumerate(walks, start=1) for entry in walk["results"]]
+
+
+def window_results(walks: list[dict], reference_frames: set[int], threshold: float) -> tuple[list[dict], dict[str, np.ndarray]]:
+    """Streaming: every object on every frame each WINDOW walked, as the model produced it.
+
+    Windows overlap, so a frame can be answered by two of them. Both answers are kept, under their
+    window's number, because which one an app goes on to use is the difference SP-36 is about. In
+    streaming each window is its own staging and its own walk, so the walk's number is the window's.
+    References are left out, the prepended ones included, as legacy's engine leaves them out.
+    """
+    results: list[dict] = []
+    masks: dict[str, np.ndarray] = {}
+    for number, walk in enumerate(walks, start=1):
+        seen: set[tuple[int, int]] = set()
+        for entry in walk["results"]:
+            if entry["frame"] in reference_frames:
+                continue
+            key = (entry["frame"], entry["object"])
+            if key in seen:
+                raise SystemExit(f"window {number}: frame {key[0]} object {key[1]} came back twice")
+            seen.add(key)
+            mask = entry["mask"]
+            empty = not mask.any()
+            results.append({
+                "window": number,
+                "frame": entry["frame"],
+                "object": entry["object"],
+                "pass": "backward" if entry["reverse"] else "forward",
+                "confidence": entry["confidence"],
+                "empty": bool(empty),
+                "flagged": bool(not empty and entry["confidence"] < threshold),
+                "pixels": int(mask.sum()),
+            })
+            masks[f"{number}:{entry['frame']}:{entry['object']}"] = pack(mask)
+    results.sort(key=lambda r: (r["window"], r["frame"], r["object"]))
+    return results, masks
+
+
 def same_answers(first: list[dict], other: list[dict]) -> str | None:
     """Why two runs of the model disagree, or None. Every scenario must see the same model output."""
-    if [(e["frame"], e["object"], e["reverse"]) for e in first] != [(e["frame"], e["object"], e["reverse"]) for e in other]:
+    shape = lambda run: [(e.get("walk"), e["frame"], e["object"], e["reverse"]) for e in run]  # noqa: E731
+    if shape(first) != shape(other):
         return "they produced different frames or objects"
     for a, b in zip(first, other, strict=True):
         if not np.array_equal(a["mask"], b["mask"]):
@@ -459,6 +626,8 @@ def environment() -> dict:
     import importlib.metadata
     import platform
 
+    import cv2
+    import PIL
     import torch
 
     sam2 = "unknown"
@@ -473,6 +642,10 @@ def environment() -> dict:
         "cuda": torch.version.cuda,
         "device": torch.cuda.get_device_name(0) if torch.cuda.is_available() else "cpu",
         "sam2": sam2,
+        # Legacy writes every non-JPEG frame again as JPEG with OpenCV, and SAM 2 reads the staged
+        # files with Pillow, so both decide the pixels the model sees.
+        "opencv": cv2.__version__,
+        "pillow": PIL.__version__,
     }
 
 
@@ -529,7 +702,14 @@ def main() -> int:
     parser.add_argument("--out", required=True, type=pathlib.Path,
                         help="output path without a suffix: .json and .npz are written beside each other")
     parser.add_argument("--threshold", type=float, default=DEFAULT_THRESHOLD)
+    parser.add_argument("--window", type=int, default=DEFAULT_WINDOW,
+                        help="the Stream window legacy reads from its spin box; a clip longer than it streams")
+    parser.add_argument("--scenarios", default=",".join(SCENARIO_NAMES), type=parse_scenarios,
+                        help="which of legacy's four scenarios to run, by name")
     args = parser.parse_args()
+    if args.window <= 5:
+        # Legacy's windows overlap by 5 and advance by the rest; at 5 or fewer they never advance.
+        raise SystemExit(f"--window must be more than the overlap of 5, not {args.window}")
 
     # Everything that can be wrong with the inputs is checked BEFORE the model loads: a mistyped
     # frame number should cost a second, not a 2.4 GB load.
@@ -566,29 +746,45 @@ def main() -> int:
         raise SystemExit("the legacy Sam2Model did not load the checkpoint")
 
     runs = {}
-    for scenario in scenarios_for(args.labeled):
+    for scenario in scenarios_for(args.labeled, args.scenarios):
         print(f"\n{scenario.name}: keep flagged {scenario.keep_flagged}, skip labelled "
               f"{scenario.skip_labeled}, labelled {list(scenario.labeled)}")
-        runs[scenario.name] = run_scenario(legacy, model, scenario, frames, masks, args.threshold, shape)
+        runs[scenario.name] = run_scenario(
+            legacy, model, scenario, frames, masks, args.threshold, shape, window_size=args.window
+        )
         record = runs[scenario.name]["record"]
         print(f"  timeline      {' '.join(status[:4] for status in record['timeline'])}")
         print(f"  after save    {' '.join(status[:4] for status in record['saveAll']['timeline'])}")
         print(f"  saved frames  {[write['frame'] for write in record['saveAll']['written']]}")
+        for frame, entries in record.get("redelivered", {}).items():
+            print(f"  frame {frame:>3} came from walks {sorted({entry['walk'] for entry in entries})}: "
+                  + ", ".join(f"{e['kind']} {e.get('object', '-')} {e['confidence']:.4f}" for e in entries))
 
     model.cleanup_video_state()
     del model
     gc.collect()
 
-    first = next(iter(runs.values()))["raw"]
+    first = next(iter(runs.values()))
     for name, run in runs.items():
-        problem = same_answers(first, run["raw"])
+        problem = same_answers(flatten(first["walks"]), flatten(run["walks"]))
         if problem:
             raise SystemExit(f"the model answered differently in {name}: {problem}. A golden needs one answer.")
 
-    results, packed = model_results(first, reference_frames, args.threshold)
+    # Legacy's rule for taking the streaming path (`propagation_manager.py:594-598`), the checkbox on.
+    streaming = len(frames) > args.window
+    if streaming:
+        results, packed = window_results(first["walks"], reference_frames, args.threshold)
+    else:
+        results, packed = model_results(flatten(first["walks"]), reference_frames, args.threshold)
+    print("\nwalks:")
+    for number, walk in enumerate(first["walks"], start=1):
+        staged = first["stagings"][walk["staging"]]["frames"]
+        yielded = list(dict.fromkeys(entry["frame"] for entry in walk["results"]))
+        print(f"  {number}: staged {staged}, start {walk['start']}, reverse {walk['reverse']}, yielded {yielded}")
     print("\nper object:")
     for result in results:
-        print(f"  frame {result['frame']:>3} obj {result['object']} {result['pass']:<8} "
+        window = f"window {result['window']:>2} " if "window" in result else ""
+        print(f"  {window}frame {result['frame']:>3} obj {result['object']} {result['pass']:<8} "
               f"conf {result['confidence']:.4f} px {result['pixels']:>5}"
               f"{' EMPTY' if result['empty'] else ''}{' FLAGGED' if result['flagged'] else ''}")
 
@@ -601,10 +797,26 @@ def main() -> int:
         "checkpointSha256": sha256_file(args.checkpoint),
         "environment": environment(),
         "threshold": args.threshold,
+        "window": args.window,
+        "streaming": streaming,
         "height": int(height),
         "width": int(width),
         "frames": [path.name for path in frames],
         "frameDigests": [pixel_digest(picture) for picture in pictures],
+        # The files themselves: for a JPEG frame these are the bytes legacy hands SAM 2.
+        "fileDigests": [sha256_file(path) for path in frames],
+        # Each staging legacy made -- one for the whole clip, or one per window when streaming --
+        # as timeline frames in staged order, and the digest of each file SAM 2 then read.
+        "stagings": first["stagings"],
+        "walks": [
+            {
+                "staging": walk["staging"],
+                "start": walk["start"],
+                "reverse": walk["reverse"],
+                "frames": list(dict.fromkeys(entry["frame"] for entry in walk["results"])),
+            }
+            for walk in first["walks"]
+        ],
         "references": [
             {
                 "frame": reference.frame,
@@ -619,8 +831,10 @@ def main() -> int:
         "results": results,
         "scenarios": {name: run["record"] for name, run in runs.items()},
         "note": (
-            "Masks are in the .npz beside this file as packed bits, one entry per 'frame:object', "
-            "unpacked with np.unpackbits(...)[: height * width].reshape(height, width). Reference "
+            "Masks are in the .npz beside this file as packed bits, one entry per "
+            + ("'window:frame:object' (each result's window, numbered from 1 in the order legacy "
+               "walked them)" if streaming else "'frame:object'")
+            + ", unpacked with np.unpackbits(...)[: height * width].reshape(height, width). Reference "
             "frames have no entry: legacy's engine skips them. An EMPTY mask is not a low-confidence "
             "one: RULE-060 drops it before the threshold check. Timelines list what the timeline "
             "widget last painted on each frame, 'pending' where it painted nothing."

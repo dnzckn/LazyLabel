@@ -36,6 +36,7 @@ from .embeddings import (
     model_identity,
 )
 from .manifest import ModelEntry, check_checkpoint
+from .propagation import JPEG_SUFFIXES, SourceImage
 from .prompts import (
     InferenceError,
     InvalidPromptError,
@@ -206,6 +207,27 @@ class InferenceService:
         """
         return self._read_image(self._resolve(image_key))
 
+    def read_frame(self, image_key: str) -> SourceImage:
+        """One frame of a propagation: its RGB pixels, and its own bytes when it is a JPEG.
+
+        SEQUENCE_PARITY.md SP-08. Legacy hands SAM 2 a JPEG's own file -- linked into the staging
+        folder, or copied where the link is refused -- and decodes and writes again at quality 95
+        only what is not a JPEG (`sam2_model.py:788-803`). The runner stages what this returns.
+
+        A JPEG by NAME, which is legacy's test (`img_path.suffix.lower() in {".jpg", ".jpeg"}`), and
+        by CONTENT, which is SEC-02's: the bytes handed on are the bytes sniffed and decoded here,
+        read once. So a file named `.jpg` that holds another format is written again like any other
+        frame, where legacy would give it to SAM 2's Pillow as it is.
+
+        The pixels are decoded all the same: RULE-071 measures every frame against the reference's
+        size, and legacy measures a JPEG with `cv2.imread` as well (`propagation_manager.py:229-236`).
+        """
+        path = self._resolve(image_key)
+        blob, found = self._read_file(path)
+        pixels = self._decode(blob, found, path.name)
+        jpeg = blob if found == "jpeg" and path.suffix.lower() in JPEG_SUFFIXES else None
+        return SourceImage(pixels=pixels, jpeg=jpeg)
+
     def _resolve(self, image_key: str) -> Path:
         """Turn a dataset-relative key into a path, refusing anything that escapes the root."""
         if not image_key or "\0" in image_key or "\\" in image_key:
@@ -255,30 +277,47 @@ class InferenceService:
                 raise ImageUnreadableError("the rendered pixels could not be decoded as an image")
             return cv2.cvtColor(decoded, cv2.COLOR_BGR2RGB)
 
+        blob, found = self._read_file(path)
+        return self._decode(blob, found, path.name)
+
+    def _read_file(self, path: Path) -> tuple[bytes, str]:
+        """The file's bytes and the format they START with, refused unless LazyLabel opens it.
+
+        SEC-02. `cv2.imread` picks its decoder from the file's CONTENT, and OpenCV's wheels bundle
+        codecs pip-audit does not track -- OpenEXR 2.3.0 and OpenJPEG among them. The API refuses
+        any format outside its allow-list, but this service reads the dataset DIRECTLY, so a
+        file named `x.png` holding EXR bytes went straight past that check to whatever decoder
+        cv2 chose. Same list as the API's, checked on the bytes rather than the name.
+
+        Read ONCE and decoded from memory, so what was checked is exactly what is decoded -- and,
+        for a JPEG in a propagation, exactly what is staged. Sniffing the head and then letting
+        `imread` open the file again would leave a window in which the file on disk could be
+        swapped for something else.
+        """
         if not path.is_file():
             raise ImageUnreadableError(f"{path.name} is not in the dataset folder")
-
-        # SEC-02. `cv2.imread` picks its decoder from the file's CONTENT, and OpenCV's wheels bundle
-        # codecs pip-audit does not track -- OpenEXR 2.3.0 and OpenJPEG among them. The API refuses
-        # any format outside its allow-list, but this service reads the dataset DIRECTLY, so a
-        # file named `x.png` holding EXR bytes went straight past that check to whatever decoder
-        # cv2 chose. Same list as the API's, checked on the bytes rather than the name.
-        #
-        # Read ONCE and decoded from memory, so what was checked is exactly what is decoded.
-        # Sniffing the head and then letting `imread` open the file again would leave a window in
-        # which the file on disk could be swapped for something else.
         blob = path.read_bytes()
         found = sniff_image_format(blob)
         if found is None:
             raise ImageUnreadableError(
                 f"{path.name} is not an image type LazyLabel opens (JPEG, PNG, WebP, TIFF, GIF or BMP)"
             )
+        return blob, found
+
+    @staticmethod
+    def _decode(blob: bytes, found: str, name: str) -> Any:
+        """Checked bytes decoded as RGB uint8, with `cv2.imread`'s decoder and flags."""
+        try:
+            import cv2
+        except ImportError as cause:  # pragma: no cover - cv2 ships with the AI extra
+            raise ImageUnreadableError(f"OpenCV is not installed: {cause}") from cause
+        import numpy as np
 
         # cv2.imdecode returns None rather than raising, which is how legacy's failure becomes a
         # cvtColor exception inside a catch-all and then a bare False.
         data = cv2.imdecode(np.frombuffer(blob, dtype=np.uint8), cv2.IMREAD_COLOR)
         if data is None:
-            raise ImageUnreadableError(f"{path.name} could not be decoded as a {found} image")
+            raise ImageUnreadableError(f"{name} could not be decoded as a {found} image")
         return cv2.cvtColor(data, cv2.COLOR_BGR2RGB)
 
     def _prune_sessions(self) -> None:

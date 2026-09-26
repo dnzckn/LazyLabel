@@ -204,7 +204,9 @@ def _propagator_for(service, models, logger):
 
         return run_propagation(
             loaded[entry.name],
-            service.read_image,
+            # Frames, not images: a JPEG comes with its own bytes, which are what SAM 2 is given,
+            # as legacy gives it the file (SEQUENCE_PARITY.md SP-08).
+            service.read_frame,
             request,
             list(request.objects),
             cancel,
