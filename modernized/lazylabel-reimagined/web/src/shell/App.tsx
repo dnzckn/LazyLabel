@@ -135,9 +135,10 @@ export function App({ client }: { readonly client: ApiClient }): ReactNode {
    * one open, as legacy's does. It stepped over the raw listing until 2026-09-25, which a sort or a
    * search made a different order from the one on screen (`CONTROL_PARITY.md` CP-14).
    *
-   * Unsaved work is still guarded: `openImage` asks before discarding it, whatever route asked for
-   * the change. A hotkey that bypassed the prompt would be the fastest possible way to lose a
-   * whole image, because it is the key you hold down.
+   * Unsaved work is still guarded: `openImage` saves it first with Auto-Save on Navigate on, as
+   * legacy's does, and otherwise asks before discarding it, whatever route asked for the change. A
+   * hotkey that bypassed both would be the fastest possible way to lose a whole image, because it
+   * is the key you hold down.
    */
   const step = useCallback(
     (by: 1 | -1) => {
@@ -241,6 +242,22 @@ export function App({ client }: { readonly client: ApiClient }): ReactNode {
                             {Object.keys(state.settings.hotkeys).length} hotkeys.
                           </p>
                         )}
+                        {/* Legacy's first control here, on by default (settings_widget.py:39-44).
+                            Moving to another image saves the one being left, by the owner's
+                            decision of 2026-09-25; off, the move asks instead. */}
+                        <label title="Automatically save work when switching to any new image (navigation keys, the file list, the timeline)">
+                          <input
+                            type="checkbox"
+                            checked={settings.values["auto_save"] !== false}
+                            onChange={(event) =>
+                              void save({
+                                ...settings,
+                                values: { ...settings.values, auto_save: event.currentTarget.checked },
+                              })
+                            }
+                          />{" "}
+                          Auto-Save on Navigate
+                        </label>
                         <ExportFormats />
                         <button type="button" onClick={() => setShowSettings(true)}>
                           Edit settings

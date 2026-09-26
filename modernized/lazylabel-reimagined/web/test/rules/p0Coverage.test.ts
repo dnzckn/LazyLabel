@@ -73,12 +73,8 @@ const DELIBERATELY_NOT_IMPLEMENTED: Readonly<Record<string, string>> = {
     + "without moving which ones look flagged. Here one threshold drives both, so there is "
     + "nothing to keep in step -- see decision 7 on never losing work silently.",
   "RULE-054":
-    "decision 7: closing never saves, and this app never had anything to save on close -- "
-    + "annotations are written by an explicit act, so there is no auto-save to suppress.",
-  "RULE-059":
-    "decision 7: auto-save on navigate is the mechanism that deletes a sidecar for an image whose "
-    + "segments happen to be empty. `auto_save` is kept in the schema so a legacy settings file "
-    + "round-trips, and is honoured by nothing.",
+    "decision 7: closing never saves, even with Auto-Save on Navigate on -- closing is not moving "
+    + "to another image -- and it asks rather than losing the work in silence as legacy does.",
 };
 
 async function collectTests(root: string): Promise<string[]> {

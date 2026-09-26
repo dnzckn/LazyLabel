@@ -17,11 +17,11 @@
  * real annotation with the right class. Flow 3's equivalent found that the edit layer had never
  * been wired into the view at all, which is exactly the class of gap a component test cannot see.
  *
- * Step 6, "go to the next image; labels are saved automatically", is asserted as decision 7 settled
- * it rather than as legacy behaves: LazyLabel's auto-save is a SETTING, and with it off, navigating
- * must not silently write. What is checked here is that switching images carries nothing over —
- * the previous image's annotations, selection and undo history are all gone, which is RULE-052 and
- * is what stops an undo reaching into a file that is no longer on screen.
+ * Step 6, "go to the next image; labels are saved automatically", is asserted as legacy behaves,
+ * by the owner's decision of 2026-09-25: Auto-Save on Navigate, on by default, saves the image being
+ * left. Also checked: switching images carries nothing over — the previous image's annotations,
+ * selection and undo history are all gone, which is RULE-052 and is what stops an undo reaching
+ * into a file that is no longer on screen.
  */
 
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
@@ -272,11 +272,10 @@ describe("flow 1, step 6: moving to the next image", () => {
     expect(shown("dirty")).toBe("clean");
   });
 
-  it("does not save on the way out", async () => {
-    // Decision 7, and it is where this flow departs from legacy's description. Auto-save is a
-    // SETTING; with it off, navigating away must not write. Legacy's multi-view navigation saves
-    // regardless of the setting (RULE-057), which is how work is written that a user meant to
-    // discard.
+  it("saves on the way out, with Auto-Save on Navigate on as it is by default", async () => {
+    // Step 6 as the flow states it, "labels are saved automatically": legacy's Auto-Save on
+    // Navigate, restored by the owner's decision of 2026-09-25 (file_navigation_manager.py:270-274).
+    // Turned off, the move asks instead and writes nothing (`test/workspace/autoSave.test.tsx`).
     const { saveAnnotations } = await readyToPrompt();
     clickImage(6, 6);
     await previewReady();
@@ -286,7 +285,8 @@ describe("flow 1, step 6: moving to the next image", () => {
     fireEvent.click(screen.getByText("open b"));
     await waitFor(() => expect(shown("count")).toBe("0"));
 
-    expect(saveAnnotations).not.toHaveBeenCalled();
+    expect(saveAnnotations).toHaveBeenCalledTimes(1);
+    expect((saveAnnotations.mock.calls[0] as unknown[])[1]).toBe("a.png");
   });
 });
 

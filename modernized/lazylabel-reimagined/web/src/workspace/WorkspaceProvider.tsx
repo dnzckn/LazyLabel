@@ -181,6 +181,21 @@ export interface WrittenState {
   readonly revisions?: Readonly<Record<string, string>>;
 }
 
+/**
+ * The save a side's save button makes, lent to the store so that LEAVING the side can save it
+ * first: legacy's Auto-Save on Navigate, restored by the owner's decision of 2026-09-25.
+ *
+ * Lent rather than rebuilt here, because the button's save IS the save -- its formats, its
+ * revisions, its refusal to write over annotations that could not be read. A second copy is how
+ * legacy came to have several save paths doing different bookkeeping for the same act.
+ */
+export interface LeaveSave {
+  /** `auto_save`, as the button read it: whether leaving the side saves it first. */
+  readonly enabled: boolean;
+  /** The save Enter makes. Resolves whether it wrote; a refusal is shown where Enter's is. */
+  readonly save: () => Promise<boolean>;
+}
+
 export type LinkReport =
   | { readonly kind: "linked"; readonly classId: number; readonly allocated: boolean; readonly image: string }
   | { readonly kind: "refused"; readonly reason: string; readonly erase?: boolean }
@@ -235,6 +250,8 @@ export interface WorkspaceContextValue {
    * 2026-09-23. Returns whether the side was closed.
    */
   readonly closeSide: (side: SideIndex) => boolean;
+  /** Lend the store a side's save, for leaving that side (`LeaveSave`). Returns its withdrawal. */
+  readonly registerSave: (side: SideIndex, lend: () => LeaveSave) => () => void;
   /**
    * The derived answer the save path and the status bar need: what is open, is it saved, is it
    * safe to write. Null while nothing is open or the open image is still loading.
@@ -475,22 +492,58 @@ export function WorkspaceProvider({
     [],
   );
 
+  /** Each side's lent save (`LeaveSave`), or null while no save button shows that side. */
+  const savers = useRef<[(() => LeaveSave) | null, (() => LeaveSave) | null]>([null, null]);
+  const registerSave = useCallback((side: SideIndex, lend: () => LeaveSave) => {
+    savers.current[side] = lend;
+    return () => {
+      if (savers.current[side] === lend) savers.current[side] = null;
+    };
+  }, []);
+  /** The move each side is making once the save leaving it has written, or null. */
+  const leaving = useRef<[Leaving | null, Leaving | null]>([null, null]);
+  /** Counts saves written on the way out, so the effect below runs after each one's render. */
+  const [leaveWritten, setLeaveWritten] = useState(0);
+
   const openImageOn = useCallback(
     (side: SideIndex, image: WireDatasetImage, options?: OpenOptions) => {
+      // The save leaving this side is still being written: go where the user asked LAST, once it is.
+      const waiting = leaving.current[side];
+      if (waiting !== null) {
+        waiting.image = image;
+        waiting.options = options;
+        return;
+      }
+
       /*
-       * WHAT IS ON THIS SIDE IS ABOUT TO BE THROWN AWAY, and until now nothing asked.
+       * WHAT IS ON THIS SIDE IS ABOUT TO BE THROWN AWAY, so it is saved first, or asked about.
        *
-       * Decision 7's whole subject: legacy auto-saves on navigation, which is how it deletes every
-       * sidecar for an image whose segments happen to be empty, so this app does not save -- and
-       * then discarded the work instead, silently, which is the same loss by the other route. Both
-       * `onNavigateAway` and `onClose` were written for exactly this, tested, and called by
-       * nothing.
+       * Saved: legacy's Auto-Save on Navigate, on by default, saves the image being left before
+       * loading the next (file_navigation_manager.py:270-274), and the owner decided on 2026-09-25
+       * that "moving should save if save on move setting is turned on". The save is the side's own
+       * save button's, lent through `registerSave`, and the move waits for it: a save that fails
+       * keeps the image open, with the reason on the button. Never for annotations that could not
+       * be read -- `onNavigateAway` asks about those whatever the setting says.
        *
-       * `saveOnNavigate: false` is not a setting read: `auto_save` is dropped under decision 7 and
-       * the honoured list records why. Passing it explicitly keeps the rule visible here rather
-       * than hiding it behind an absent key.
+       * Asked: with the setting off, or no button to lend the save. Discarding the work without a
+       * word, as legacy does then, is decision 7's silent loss.
        */
-      const decision = onNavigateAway(stateOf(sides[side]), { saveOnNavigate: false });
+      const saver = savers.current[side]?.() ?? null;
+      const decision = onNavigateAway(stateOf(sides[side]), { saveOnNavigate: saver?.enabled === true });
+      if (decision.kind === "save" && saver !== null) {
+        const held: Leaving = { image, options, written: false };
+        leaving.current[side] = held;
+        void saver.save().then((written) => {
+          if (leaving.current[side] !== held) return;
+          if (!written) {
+            leaving.current[side] = null;
+            return;
+          }
+          held.written = true;
+          setLeaveWritten((count) => count + 1);
+        });
+        return;
+      }
       if (decision.kind === "ask" && !confirmNavigation(`${decision.summary} Open ${image.name} anyway?`)) {
         return;
       }
@@ -564,6 +617,22 @@ export function WorkspaceProvider({
     [client, confirmNavigation, history, projectId, sides, updateSide],
   );
 
+  /*
+   * THE MOVE A SAVE WAS HOLDING, made after the render that save produced, and decided again there
+   * rather than assumed: an edit made while the write was in flight leaves the side unsaved, and is
+   * then saved too instead of being discarded. Through a ref, so this runs once per written save.
+   */
+  const openLatest = useRef(openImageOn);
+  openLatest.current = openImageOn;
+  useEffect(() => {
+    for (const side of SIDES) {
+      const held = leaving.current[side];
+      if (held === null || !held.written) continue;
+      leaving.current[side] = null;
+      openLatest.current(side, held.image, held.options);
+    }
+  }, [leaveWritten]);
+
   const openImage = useCallback(
     (image: WireDatasetImage, options?: OpenOptions) => openImageOn(activeSide, image, options),
     [activeSide, openImageOn],
@@ -573,12 +642,16 @@ export function WorkspaceProvider({
     (side: SideIndex): boolean => {
       // The question opening another image asks, because closing is navigation too. Until
       // 2026-09-23 it asked nothing, so "None -- one image" discarded the second side's work.
+      // Never a save, even with Auto-Save on: legacy saves when moving to another image or pair,
+      // and has no act of closing a viewer to save on (main_window.py:6491-6530).
       const decision = onNavigateAway(stateOf(sides[side]), { saveOnNavigate: false });
       if (decision.kind === "ask" && !confirmNavigation(`${decision.summary} Close it anyway?`)) {
         return false;
       }
       updateSide(side, () => EMPTY_SIDE);
       history.clear(sideScope(side));
+      // A move this side was saving for would reopen it once the write lands.
+      leaving.current[side] = null;
       return true;
     },
     [confirmNavigation, history, sides, updateSide],
@@ -989,6 +1062,7 @@ export function WorkspaceProvider({
       openImage,
       openImageOn,
       closeSide,
+      registerSave,
       imageState,
       imageStates,
       segments,
@@ -1046,6 +1120,7 @@ export function WorkspaceProvider({
       openImage,
       openImageOn,
       processing,
+      registerSave,
       revisions,
       segments,
       selected,
@@ -1102,6 +1177,14 @@ function reportFor(
   if (plan === null) return null;
   if (mirrored === null) return plan as Extract<LinkedAdd, { kind: "refused" }>;
   return { kind: "linked", classId: mirrored.classId, allocated: mirrored.allocated, image };
+}
+
+/** A move waiting for the save leaving its side. Mutable: a later move replaces where it goes. */
+interface Leaving {
+  image: WireDatasetImage;
+  options: OpenOptions | undefined;
+  /** Set once the save has written, for the effect that then makes the move. */
+  written: boolean;
 }
 
 /** What the save path and the status bar need to know about one side. */

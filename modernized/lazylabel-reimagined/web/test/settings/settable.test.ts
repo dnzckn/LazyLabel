@@ -32,7 +32,6 @@ const NOT_EDITABLE: Readonly<Record<string, string>> = {
   right_panel_width: "desktop panel geometry; the workspace grid reflows instead",
   default_model_type: "dropped: the model picker chooses from the manifest (`ai_model`)",
   default_model_filename: "dropped: checkpoints come from the manifest, never a file name",
-  auto_save: "dropped by decision 7: nothing is written without an explicit act",
   multi_view_grid_mode: "dropped: only two viewers ever existed behind the four-view setting",
   file_manager_show_name: "the name column is always shown; a file list without names is unusable",
   line_thickness: "import-only, as in legacy, which has no control for it either",

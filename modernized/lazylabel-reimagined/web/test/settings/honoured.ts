@@ -95,11 +95,9 @@ export const HONOURED: Readonly<Record<string, Honoured>> = {
   // the rule's default, where the model segments the original file and no image crosses that wire.
   operate_on_view: read,
 
-  auto_save: dropped(
-    "decision 7: nothing is written without an explicit act. Legacy saves on navigation, which is "
-      + "how it deletes every sidecar for an image whose segments happen to be empty. The key stays "
-      + "so an imported legacy settings file round-trips rather than losing a value the user set.",
-  ),
+  // Legacy's Auto-Save on Navigate, restored by the owner's decision of 2026-09-25: leaving an image
+  // saves it first through the save button's own path (`OpenImageView.tsx`), and asks when it is off.
+  auto_save: read,
   export_formats: read,
   // RULE-026's streaming window, and the LAST gap in this table to close. The browser sends it
   // when it starts a propagation; the service decides whether streaming applies at all, since only
@@ -108,7 +106,7 @@ export const HONOURED: Readonly<Record<string, Honoured>> = {
   dark_mode: read,
   multi_view_grid_mode: dropped(
     "decision 8: legacy's four-view setting was a control over two viewers, and the split view is "
-      + "rebuilt with two. Kept for the same round-trip reason as auto_save.",
+      + "rebuilt with two. Kept so an imported legacy settings file round-trips.",
   ),
 
   pixel_priority_enabled: read,

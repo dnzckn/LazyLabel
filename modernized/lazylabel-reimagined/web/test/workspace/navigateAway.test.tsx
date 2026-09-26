@@ -9,6 +9,10 @@
  * `onNavigateAway` and `onClose` were written for exactly this, tested on their own, and called by
  * nothing. That is the eleventh of the family in this project: a rule implemented, proven, exposed
  * and never reached.
+ *
+ * Since the owner's decision of 2026-09-25 the move SAVES first while Auto-Save on Navigate is on,
+ * through the save button (`autoSave.test.tsx`). No save button is mounted here, so these are the
+ * asking half: what happens with the setting off.
  */
 
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";

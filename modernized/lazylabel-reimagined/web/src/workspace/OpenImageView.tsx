@@ -22,7 +22,7 @@ import type {
 
 import { AnnotationCanvas } from "../canvas/AnnotationCanvas.jsx";
 import { useSettings } from "../settings/SettingsProvider.jsx";
-import { useWorkspace } from "./WorkspaceProvider.jsx";
+import { useWorkspace, type LeaveSave } from "./WorkspaceProvider.jsx";
 import { PolygonLayer, toWireVertices } from "../canvas/PolygonLayer.jsx";
 import { AiTool } from "./AiTool.jsx";
 import { SelectLayer } from "../canvas/SelectLayer.jsx";
@@ -652,7 +652,7 @@ function ConvertButton({
   // drawn since loading has to be written as it now stands, or the edit is lost on the next save.
   // The crop comes from the store for the same reason: it is part of what a save WRITES, and a
   // crop the request leaves out is a crop the panel showed and the file never saw.
-  const { classAliases, segments, crop, activeSide, markSavedOn, imageState, revisions } =
+  const { classAliases, segments, crop, activeSide, markSavedOn, imageState, revisions, registerSave } =
     useWorkspace();
   const { notify } = useNotifications();
 
@@ -698,6 +698,9 @@ function ConvertButton({
 
   const formats = normalizeExportFormats(settings.values["export_formats"]).formats;
 
+  /** The write under way, which a second save -- or leaving the image -- waits for rather than races. */
+  const writing = useRef<Promise<boolean> | null>(null);
+
   /*
    * `expected` is what the write is conditional on. The button passes the revisions this client
    * read; the recovery below passes `{}`, which is an UNCONDITIONAL write — "overwrite whatever is
@@ -706,13 +709,15 @@ function ConvertButton({
    * That is not a hole in the safety, it is the shape decision 7 asks for: nothing is lost without
    * an explicit act, and this is the explicit act, behind its own button, labelled with what it
    * does and shown only after a refusal.
+   *
+   * Resolves whether it wrote, which is what leaving the image waits on (`LeaveSave`).
    */
-  const convert = useCallback((expected: Readonly<Record<string, string | null>>) => {
+  const convert = useCallback((expected: Readonly<Record<string, string | null>>): Promise<boolean> => {
     // Captured now, not read in the callback below: see `markSavedOn` there.
     const side = activeSide;
     const written = { segments, classAliases, crop };
     setState({ status: "saving" });
-    client
+    const write = client
       .saveAnnotations(projectId, image.key, {
         imageSize: size,
         formats,
@@ -754,6 +759,7 @@ function ConvertButton({
         // conflict with the app's own previous save. The store keeps them, not this button, which
         // remounts whenever the view moves.
         markSavedOn(side, { ...written, key: image.key, revisions: result.written });
+        return true;
       })
       .catch((cause: unknown) => {
         const reason = cause instanceof Error ? cause.message : String(cause);
@@ -799,7 +805,13 @@ function ConvertButton({
               + "the file another way first."
             : reason,
         });
+        return false;
+      })
+      .finally(() => {
+        if (writing.current === write) writing.current = null;
       });
+    writing.current = write;
+    return write;
   }, [
     activeSide,
     classAliases,
@@ -827,9 +839,11 @@ function ConvertButton({
    * And guarded on `writable`, as the button is. The key used to skip that check, so on an image
    * whose annotations could not be read Enter wrote an empty file over the damaged one -- the one
    * write the disabled button exists to prevent, from the key a user presses without looking.
+   *
+   * A press during a write gets that write's outcome rather than a second write.
    */
-  const saveNow = () => {
-    if (state.status === "saving") return;
+  const saveNow = (): Promise<boolean> => {
+    if (writing.current !== null) return writing.current;
     if (!writable) {
       notify({
         severity: "warning",
@@ -838,12 +852,22 @@ function ConvertButton({
           "Saving would replace a damaged file with an empty one. Move the file aside and reopen "
           + "the image to start fresh, or repair it outside the app.",
       });
-      return;
+      return Promise.resolve(false);
     }
-    convert(revisions);
+    return convert(revisions);
   };
   useHotkey("save_output", saveNow);
   useHotkey("save_output_alt", saveNow);
+
+  /*
+   * LENT TO THE STORE, for leaving this image: legacy's Auto-Save on Navigate, on unless turned off
+   * (settings_widget.py:39-44), saves the image being left, and by the owner's decision of
+   * 2026-09-25 it does so here -- with this save, guards and all, not a second one. Through a ref,
+   * so it is lent once per side rather than on every render.
+   */
+  const lent = useRef<LeaveSave>({ enabled: false, save: saveNow });
+  lent.current = { enabled: settings.values["auto_save"] !== false, save: saveNow };
+  useEffect(() => registerSave(activeSide, () => lent.current), [activeSide, registerSave]);
 
   return (
     <div>
