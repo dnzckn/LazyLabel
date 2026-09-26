@@ -177,6 +177,17 @@ function PropagateHint({ active, hint }: { readonly active: boolean; readonly hi
   return null;
 }
 
+/**
+ * Legacy's references line (`sequence_widget.py:688-708`): the frame numbers, 1-based and in order,
+ * all of them up to five, else the first three and the total, with a star; "None" without any.
+ */
+function referenceList(frames: readonly Frame[]): string {
+  const numbers = frames.filter((frame) => frame.isReference).map((frame) => frame.index + 1).sort((a, b) => a - b);
+  if (numbers.length === 0) return "None";
+  if (numbers.length <= 5) return `Frames: ${numbers.join(", ")} ★`;
+  return `Frames: ${numbers.slice(0, 3).join(", ")}... (${numbers.length} total) ★`;
+}
+
 /** The frames' keys in Sort's order, as it stands now. */
 function sortedKeys(frames: readonly Frame[]): readonly string[] {
   return sortedOrder(frames).map((index) => frames[index]!.key);
@@ -1056,6 +1067,80 @@ export function TimelinePanel({
       </div>
       </div>
 
+      {/* Legacy's Reference Frames group (sequence_widget.py:210-289): which frames are references,
+          the four buttons, and Find Archetypes with Clear Suggested. The reference half goes with
+          propagation, Find Archetypes with the service (SP-31). */}
+      {(videoReady || (client !== undefined && aiReady)) && (
+        <fieldset className="timeline__group">
+          <legend>Reference Frames</legend>
+          {videoReady && (
+            <>
+              <p className="timeline__count">
+                References: <strong className="timeline__count--reference">{referenceList(frames)}</strong>
+              </p>
+              <div className="timeline__controls">
+                <button
+                  type="button"
+                  title={`Add current frame as reference for propagation${keyOf("add_reference_frame")}`}
+                  onClick={() => void markCurrent()}
+                >
+                  + Add Current
+                </button>
+                {/* "Before" is to the left ON SCREEN, so a sorted timeline adds what is to the left. */}
+                <button
+                  type="button"
+                  title="Add all frames before current position as references"
+                  onClick={() => void markAllBeforeChecked()}
+                >
+                  + All Before
+                </button>
+              </div>
+              <div className="timeline__controls">
+                <button
+                  type="button"
+                  title="Add all frames with existing labels (NPZ files) as references"
+                  onClick={() => void markAllLabeled()}
+                >
+                  + All Labeled
+                </button>
+                <button
+                  type="button"
+                  title="Clear all reference frames"
+                  disabled={counts.references === 0}
+                  onClick={() => {
+                    setOverrides(clearReferences(frames));
+                    notify({ severity: "info", message: "Cleared all reference frames" });
+                  }}
+                >
+                  Clear All
+                </button>
+              </div>
+            </>
+          )}
+          {client !== undefined && aiReady && (
+            <div className="timeline__controls">
+              <button
+                type="button"
+                // Legacy's Abort while it runs (sequence_widget.py:579-590), red as Propagate's is.
+                className={`seq-button ${finding ? "seq-button--red" : "seq-button--purple"}`}
+                onClick={() => void find()}
+              >
+                {finding ? "Abort" : "Find archetypes"}
+              </button>
+              {/* Enabled only with suggestions (sequence_widget.py:281-285, 601-608). */}
+              <button
+                type="button"
+                title="Clear AI-suggested reference highlights"
+                disabled={archetypes.length === 0}
+                onClick={clearSuggestions}
+              >
+                Clear Suggested
+              </button>
+            </div>
+          )}
+        </fieldset>
+      )}
+
       {!videoReady && <PropagateHint active={active} hint={aiHint} />}
       {client !== undefined && videoReady && (
         <PropagationControl
@@ -1077,53 +1162,6 @@ export function TimelinePanel({
           options={confidence}
         />
       )}
-
-
-      <div className="timeline__controls">
-        {videoReady && (
-          <>
-        <button type="button" onClick={() => void markCurrent()}>
-          Mark as reference
-        </button>
-        {/* Legacy's other three reference buttons (`sequence_widget.py:228-253`). "Before" means
-            to the left ON SCREEN, so a sorted timeline adds what the user sees to the left. */}
-        <button type="button" onClick={() => void markAllBeforeChecked()}>
-          + All before
-        </button>
-        <button type="button" onClick={() => void markAllLabeled()}>
-          + All labeled
-        </button>
-        <button type="button" onClick={() => setOverrides(clearReferences(frames))}>
-          Clear references
-        </button>
-          </>
-        )}
-        {client !== undefined && aiReady && (
-          <button
-            type="button"
-            // Legacy's Abort while it runs (sequence_widget.py:579-590), red as Propagate's is.
-            className={`seq-button ${finding ? "seq-button--red" : "seq-button--purple"}`}
-            onClick={() => void find()}
-          >
-            {finding ? "Abort" : "Find archetypes"}
-          </button>
-        )}
-        {client !== undefined && aiReady && (
-          // Beside Find Archetypes, as legacy's is, and enabled only with suggestions
-          // (sequence_widget.py:281-285, 601-608).
-          <button
-            type="button"
-            title="Clear AI-suggested reference highlights"
-            disabled={archetypes.length === 0}
-            onClick={clearSuggestions}
-          >
-            Clear Suggested
-          </button>
-        )}
-        <button type="button" className="seq-button seq-button--brown" onClick={startOver}>
-          New timeline
-        </button>
-      </div>
 
       {/* Legacy's Review group (sequence_widget.py:410-466): the counts, and Prev and Next for
           each, enabled only when there is one to go to. Hidden without AI, as legacy's is. */}
@@ -1231,6 +1269,13 @@ export function TimelinePanel({
           </button>
         </div>
       </fieldset>
+
+      {/* Last, as legacy's is (sequence_widget.py:541-553). */}
+      <div className="timeline__controls">
+        <button type="button" className="seq-button seq-button--brown" onClick={startOver}>
+          New timeline
+        </button>
+      </div>
 
       {trimNote !== null && (
         <p className="timeline__counts" role="status">

@@ -139,7 +139,7 @@ describe("C10: build a timeline and mark reference frames", () => {
     // which images are annotated.
     await openSequence();
     fireEvent.click(screen.getByText("Build timeline"));
-    fireEvent.click(screen.getByRole("button", { name: "+ All labeled" }));
+    fireEvent.click(screen.getByRole("button", { name: "+ All Labeled" }));
 
     await waitFor(() => expect(cells()).toHaveLength(4));
     const labels = [...cells()].map((cell) => cell.getAttribute("aria-label"));
@@ -150,7 +150,7 @@ describe("C10: build a timeline and mark reference frames", () => {
   it("counts the references above the timeline", async () => {
     await openSequence();
     fireEvent.click(screen.getByText("Build timeline"));
-    fireEvent.click(screen.getByRole("button", { name: "+ All labeled" }));
+    fireEvent.click(screen.getByRole("button", { name: "+ All Labeled" }));
 
     expect(await screen.findByText(/4 frames, 1 reference/)).toBeTruthy();
   });

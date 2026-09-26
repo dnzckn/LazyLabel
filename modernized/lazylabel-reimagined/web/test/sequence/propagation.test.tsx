@@ -974,7 +974,7 @@ describe("RULE-056: not losing propagated work without asking", () => {
   async function propagateAndWait() {
     fireEvent.click(screen.getByText("Build timeline"));
     // Building marks nothing since 2026-09-23, as in legacy: the reference is marked as a user marks it.
-    fireEvent.click(screen.getByRole("button", { name: "+ All labeled" }));
+    fireEvent.click(screen.getByRole("button", { name: "+ All Labeled" }));
     await waitFor(() =>
       expect(screen.getByLabelText("Timeline").querySelectorAll("button")).toHaveLength(3),
     );
@@ -1050,7 +1050,7 @@ describe("RULE-056: not losing propagated work without asking", () => {
     panel(confirm);
     fireEvent.click(screen.getByText("Build timeline"));
     // Building marks nothing since 2026-09-23, as in legacy: the reference is marked as a user marks it.
-    fireEvent.click(screen.getByRole("button", { name: "+ All labeled" }));
+    fireEvent.click(screen.getByRole("button", { name: "+ All Labeled" }));
     await waitFor(() =>
       expect(screen.getByLabelText("Timeline").querySelectorAll("button")).toHaveLength(3),
     );
@@ -1452,7 +1452,7 @@ describe("RULE-056: not losing propagated work without asking", () => {
 
     async function propagateUntilDone(keepFlagged = false) {
       fireEvent.click(screen.getByText("Build timeline"));
-      fireEvent.click(screen.getByRole("button", { name: "+ All labeled" }));
+      fireEvent.click(screen.getByRole("button", { name: "+ All Labeled" }));
       await waitFor(() => expect(cell(0).getAttribute("aria-label")).toMatch(/reference$/));
       if (keepFlagged) fireEvent.click(screen.getByLabelText("Keep flagged masks"));
       fireEvent.click(screen.getByRole("button", { name: /^Propagate/ }));
@@ -1529,7 +1529,7 @@ describe("RULE-056: not losing propagated work without asking", () => {
     panel(() => true);
     fireEvent.click(screen.getByText("Build timeline"));
     // Building marks nothing since 2026-09-23, as in legacy: the reference is marked as a user marks it.
-    fireEvent.click(screen.getByRole("button", { name: "+ All labeled" }));
+    fireEvent.click(screen.getByRole("button", { name: "+ All Labeled" }));
     await waitFor(() =>
       expect(screen.getByLabelText("Timeline").querySelectorAll("button")).toHaveLength(3),
     );

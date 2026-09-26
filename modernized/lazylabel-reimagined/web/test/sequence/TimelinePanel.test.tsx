@@ -104,10 +104,10 @@ function showShell(options: { readonly initial?: string; readonly refuse?: boole
 }
 
 /**
- * Build a timeline and, unless told not to, mark its annotated frames with "+ All labeled".
+ * Build a timeline and, unless told not to, mark its annotated frames with "+ All Labeled".
  *
  * Building marks nothing since 2026-09-23, as in legacy, so a test about using references has to
- * make some -- and "+ All labeled" is how a user gets the setup these tests were written against.
+ * make some -- and "+ All Labeled" is how a user gets the setup these tests were written against.
  */
 function build(from?: string, to?: string, { references = true } = {}) {
   if (from !== undefined) {
@@ -117,7 +117,7 @@ function build(from?: string, to?: string, { references = true } = {}) {
     fireEvent.change(screen.getByLabelText("Last frame"), { target: { value: to } });
   }
   fireEvent.click(screen.getByText("Build timeline"));
-  if (references) fireEvent.click(screen.getByRole("button", { name: "+ All labeled" }));
+  if (references) fireEvent.click(screen.getByRole("button", { name: "+ All Labeled" }));
 }
 
 const cells = () => screen.getByLabelText("Timeline").querySelectorAll("button");
@@ -146,7 +146,7 @@ describe("a built timeline is a fixed list of files (SP-21)", () => {
   });
 });
 
-describe("+ All labeled (SP-26)", () => {
+describe("+ All Labeled (SP-26)", () => {
   it("asks the dataset at the click, so what was labelled since the folder opened counts", async () => {
     // Legacy probes the disk at the click (main_window.py:3966). The panel used the listing from when
     // the folder opened, which no save refreshes.
@@ -164,7 +164,7 @@ describe("+ All labeled (SP-26)", () => {
     build("0", "4", { references: false });
     await waitFor(() => expect(cells()).toHaveLength(5));
 
-    fireEvent.click(screen.getByRole("button", { name: "+ All labeled" }));
+    fireEvent.click(screen.getByRole("button", { name: "+ All Labeled" }));
 
     await waitFor(() => expect(cells()[3]!.getAttribute("aria-label")).toContain("reference"));
     expect(cells()[1]!.getAttribute("aria-label")).toContain("reference");
@@ -194,22 +194,22 @@ describe("reference sizes (SP-24)", () => {
     build("0", "4", { references: false });
     await waitFor(() => expect(cells()).toHaveLength(5));
     fireEvent.click(cells()[1]!); // f02
-    fireEvent.click(screen.getByText("Mark as reference"));
+    fireEvent.click(screen.getByText("+ Add Current"));
     expect(await screen.findByText("Added frame 2 as reference")).toBeTruthy();
 
     fireEvent.click(cells()[3]!); // f04, 8x6
-    fireEvent.click(screen.getByText("Mark as reference"));
+    fireEvent.click(screen.getByText("+ Add Current"));
 
     expect(await screen.findByText("Cannot add reference: image is 8x6 but reference requires 8x8")).toBeTruthy();
     expect(cells()[3]!.getAttribute("aria-label")).not.toContain("reference");
   });
 
-  it("leaves a frame of another size out of + All labeled, and says how many", async () => {
+  it("leaves a frame of another size out of + All Labeled, and says how many", async () => {
     render(withSettings(<TimelinePanel images={FOLDER} client={sized()} />));
     build("0", "4", { references: false });
     await waitFor(() => expect(cells()).toHaveLength(5));
 
-    fireEvent.click(screen.getByRole("button", { name: "+ All labeled" }));
+    fireEvent.click(screen.getByRole("button", { name: "+ All Labeled" }));
 
     expect(
       await screen.findByText("Added 1 labeled frames as references (1 skipped: dimension mismatch)"),
@@ -234,7 +234,7 @@ describe("with no AI (SP-31)", () => {
     build("0", "4", { references: false });
     await waitFor(() => expect(cells()).toHaveLength(5));
 
-    for (const name of [/^Propagate/, /Find archetypes/, /Mark as reference/, /\+ All labeled/, /Next Flagged/, /Prev Suggested/, /Clear Suggested/, /Clear flags/]) {
+    for (const name of [/^Propagate/, /Find archetypes/, /\+ Add Current/, /\+ All Labeled/, /Next Flagged/, /Prev Suggested/, /Clear Suggested/, /Clear flags/]) {
       expect(screen.queryByRole("button", { name })).toBeNull();
     }
     expect(screen.getByText("Cut")).toBeTruthy();
@@ -295,7 +295,7 @@ describe("the cursor moves when the frame opens (SP-19)", () => {
     await waitFor(() => expect(cells()).toHaveLength(5));
     fireEvent.click(cells()[2]!);
 
-    fireEvent.click(screen.getByText("Mark as reference"));
+    fireEvent.click(screen.getByText("+ Add Current"));
 
     await waitFor(() => expect(cells()[0]!.getAttribute("aria-label")).toMatch(/reference$/));
     expect(cells()[2]!.getAttribute("aria-label")).toMatch(/pending$/);
@@ -491,7 +491,7 @@ describe("using it", () => {
     expect(order()).toEqual(["frames/f02.png", "frames/f05.png", "frames/f01.png", "frames/f03.png", "frames/f04.png"]);
 
     fireEvent.click(cells()[3]!); // f03
-    fireEvent.click(screen.getByText("Mark as reference"));
+    fireEvent.click(screen.getByText("+ Add Current"));
 
     await waitFor(() => expect(cells()[3]!.getAttribute("aria-label")).toContain("reference"));
     expect(order()).toEqual(["frames/f02.png", "frames/f05.png", "frames/f01.png", "frames/f03.png", "frames/f04.png"]);
@@ -580,7 +580,7 @@ describe("the confidence histogram", () => {
     render(withSettings(<TimelinePanel images={FOLDER} scores={scores} />, saved));
     fireEvent.click(screen.getByText("Build timeline"));
     // f02 is a reference in these tests, marked the way a user marks it since building stopped doing so.
-    fireEvent.click(screen.getByRole("button", { name: "+ All labeled" }));
+    fireEvent.click(screen.getByRole("button", { name: "+ All Labeled" }));
     return saved;
   }
 
@@ -1155,36 +1155,80 @@ describe("trimming the timeline — RULE-077", () => {
 describe("legacy's other reference buttons (sequence_widget.py:228-253)", () => {
   const roles = () => [...cells()].map((cell) => cell.getAttribute("aria-label")!.split(", ").at(-1));
 
-  it("Clear references leaves no frame a reference", async () => {
+  it("Clear All leaves no frame a reference", async () => {
     show();
     build("0", "4");
     await waitFor(() => expect(roles().filter((role) => role === "reference")).toHaveLength(2));
 
-    fireEvent.click(screen.getByRole("button", { name: "Clear references" }));
+    fireEvent.click(screen.getByRole("button", { name: "Clear All" }));
 
     expect(roles().filter((role) => role === "reference")).toHaveLength(0);
   });
 
-  it("+ All labeled makes every annotated frame a reference again", async () => {
+  it("+ All Labeled makes every annotated frame a reference again", async () => {
     show();
     build("0", "4");
     await waitFor(() => expect(cells()).toHaveLength(5));
-    fireEvent.click(screen.getByRole("button", { name: "Clear references" }));
+    fireEvent.click(screen.getByRole("button", { name: "Clear All" }));
 
-    fireEvent.click(screen.getByRole("button", { name: "+ All labeled" }));
+    fireEvent.click(screen.getByRole("button", { name: "+ All Labeled" }));
 
     expect(roles()).toEqual(["pending", "reference", "pending", "pending", "reference"]);
   });
 
-  it("+ All before makes every frame left of the current one a reference", async () => {
+  it("+ All Before makes every frame left of the current one a reference", async () => {
     show();
     build("0", "4");
     await waitFor(() => expect(cells()).toHaveLength(5));
-    fireEvent.click(screen.getByRole("button", { name: "Clear references" }));
+    fireEvent.click(screen.getByRole("button", { name: "Clear All" }));
     fireEvent.click(cells()[3]!);
 
-    fireEvent.click(screen.getByRole("button", { name: "+ All before" }));
+    fireEvent.click(screen.getByRole("button", { name: "+ All Before" }));
 
     expect(roles()).toEqual(["reference", "reference", "reference", "pending", "pending"]);
+  });
+});
+
+describe("the references line and Clear All (SP-49)", () => {
+  /*
+   * Legacy's "References:" line lists the frames, "Frames: 1, 3 ★", or the first three and the
+   * total past five, and Clear All is disabled with none and says "Cleared all reference frames"
+   * (sequence_widget.py:218-224, 253-256, 661, 688-708; main_window.py:4009). The web said
+   * "5 frames, 2 references", and Clear references was always enabled and silent.
+   */
+  const references = () => screen.getByText(/^References:/).textContent;
+  const clearAll = () => screen.getByRole("button", { name: "Clear All" }) as HTMLButtonElement;
+
+  it("lists the reference frames by number, and says None without any", async () => {
+    show();
+    build("0", "4", { references: false });
+    await waitFor(() => expect(cells()).toHaveLength(5));
+    expect(references()).toBe("References: None");
+    expect(clearAll().disabled).toBe(true);
+
+    fireEvent.click(screen.getByRole("button", { name: "+ All Labeled" }));
+
+    expect(references()).toBe("References: Frames: 2, 5 ★");
+    expect(clearAll().disabled).toBe(false);
+  });
+
+  it("shows the first three and the total past five", async () => {
+    const seven = Array.from({ length: 8 }, (_, i) => image(`h${i + 1}.png`, i !== 3));
+    show(seven);
+    build("0", "7");
+
+    await waitFor(() => expect(references()).toBe("References: Frames: 1, 2, 3... (7 total) ★"));
+  });
+
+  it("clears them in legacy's words, and is disabled again", async () => {
+    show();
+    build("0", "4");
+    await waitFor(() => expect(clearAll().disabled).toBe(false));
+
+    fireEvent.click(clearAll());
+
+    expect(await screen.findByText("Cleared all reference frames")).toBeTruthy();
+    expect(references()).toBe("References: None");
+    expect(clearAll().disabled).toBe(true);
   });
 });

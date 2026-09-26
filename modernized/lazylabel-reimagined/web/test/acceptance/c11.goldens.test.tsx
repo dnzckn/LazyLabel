@@ -24,7 +24,7 @@
  * saved. Built, and held here.
  *
  * THE SETUP IS LEGACY'S, exactly: the labelled frames have their sidecars from the start, and the
- * reference is marked by hand -- click frame 8, "Mark as reference" -- because building a timeline
+ * reference is marked by hand -- click frame 8, "+ Add Current" -- because building a timeline
  * marks nothing since 2026-09-23, as legacy's does not. Until then this app marked every annotated
  * frame on build, and this test had to add the labelled frames' sidecars after the build to get
  * legacy's configuration at all.
@@ -262,9 +262,9 @@ const confidences = () =>
 async function propagate(scenario: Scenario) {
   fireEvent.click(await screen.findByText("Build timeline"));
   await waitFor(() => expect(cells()).toHaveLength(KEYS.length));
-  // The reference, marked as a user marks it: open the frame, then "Mark as reference".
+  // The reference, marked as a user marks it: open the frame, then "+ Add Current".
   fireEvent.click(cells()[REFERENCE]!);
-  fireEvent.click(screen.getByRole("button", { name: "Mark as reference" }));
+  fireEvent.click(screen.getByRole("button", { name: "+ Add Current" }));
 
   const controls = screen.getByRole("button", { name: /^Propagate/ }).closest("div")!;
   if (scenario.keepFlagged) fireEvent.click(within(controls).getByLabelText("Keep flagged masks"));

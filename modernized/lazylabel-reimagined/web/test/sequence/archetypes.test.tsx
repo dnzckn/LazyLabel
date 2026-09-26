@@ -234,7 +234,7 @@ describe("suggestions over time (SP-30)", () => {
     fireEvent.click(screen.getByRole("button", { name: /Find archetypes/ }));
     await waitFor(() => expect(cells()[2]!.getAttribute("aria-label")).toContain("suggested"));
     fireEvent.click(cells()[2]!);
-    fireEvent.click(screen.getByText("Mark as reference"));
+    fireEvent.click(screen.getByText("+ Add Current"));
     await waitFor(() => expect(cells()[2]!.getAttribute("aria-label")).toContain("reference"));
     fireEvent.click(cells()[0]!);
 
