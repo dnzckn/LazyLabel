@@ -77,6 +77,12 @@ export interface OpenOptions {
    * owner's decision of 2026-09-26 (SEQUENCE_PARITY.md SP-15). Nothing else passes it.
    */
   readonly discard?: boolean;
+  /**
+   * The Multi view's save of both sides (`savePair`) has run for this move already, so the open
+   * does not run it again (CONTROL_PARITY.md CP-67). The pair's next and previous pass it, and the
+   * store does for a move it held for that save.
+   */
+  readonly pairSaved?: boolean;
 }
 
 export const SIDES: readonly SideIndex[] = [0, 1];
@@ -208,6 +214,14 @@ export interface LeaveSave {
   readonly enabled: boolean;
   /** The save Enter makes. Resolves whether it wrote; a refusal is shown where Enter's is. */
   readonly save: () => Promise<boolean>;
+  /**
+   * Legacy's multi-view save of ONE side, either side, which `savePair` runs for both
+   * (CONTROL_PARITY.md CP-67): Enter's request for that side's image, or its seven sidecars deleted
+   * when it has no segments; silent when it works, as legacy's is. Resolves whether the side is safe
+   * to leave -- true too for a side with nothing it may save: none loaded, or annotations that
+   * could not be read, which are never written over or deleted (SEC-04).
+   */
+  readonly saveSide?: (side: SideIndex) => Promise<boolean>;
 }
 
 export type LinkReport =
@@ -279,6 +293,16 @@ export interface WorkspaceContextValue {
   readonly closeSide: (side: SideIndex) => boolean;
   /** Lend the store a side's save, for leaving that side (`LeaveSave`). Returns its withdrawal. */
   readonly registerSave: (side: SideIndex, lend: () => LeaveSave) => () => void;
+  /**
+   * Legacy's multi-view save, `_save_multi_view_annotations` (`main_window.py:6559-6636`): both
+   * sides, in order, changed or not and whatever Auto-Save on Navigate says, an empty side's seven
+   * sidecars deleted without a word -- what legacy runs before every pair move, even one that then
+   * finds the end of the list (6496-6497, 6529-6530; CONTROL_PARITY.md CP-67). Resolves whether
+   * both are safe to leave, once the render that shows the saves is done, so what the caller does
+   * next reads them. With no save lent, nothing is saved, and it resolves true: each open then asks
+   * about its side as any open does.
+   */
+  readonly savePair: () => Promise<boolean>;
   /**
    * The derived answer the save path and the status bar need: what is open, is it saved, is it
    * safe to write. Null while nothing is open or the open image is still loading.
@@ -592,6 +616,51 @@ export function WorkspaceProvider({
   /** Counts saves written on the way out, so the effect below runs after each one's render. */
   const [leaveWritten, setLeaveWritten] = useState(0);
 
+  /*
+   * LEGACY'S MULTI-VIEW SAVE (`savePair` on the context): both sides through the lent `saveSide`,
+   * one after the other, each attempted whatever the other did, as legacy's loop does
+   * (main_window.py:6581-6636). A call while one is being written waits for that one.
+   *
+   * Each caller is answered after the render that shows what was written, through the effect
+   * below: the next thing a caller does -- a move, a closed side -- must see the sides saved, and a
+   * promise settled straight from the write would hand it the sides as they were before.
+   */
+  const pairSaving = useRef<Promise<boolean> | null>(null);
+  const pairWaiting = useRef<{ readonly answer: (saved: boolean) => void; saved: boolean | null }[]>([]);
+  const [pairWritten, setPairWritten] = useState(0);
+  /** The lent save of one side, from whichever save button is mounted, or undefined with none. */
+  const pairSaver = useCallback(
+    (): ((side: SideIndex) => Promise<boolean>) | undefined =>
+      SIDES.map((each) => savers.current[each]?.().saveSide).find((lent) => lent !== undefined),
+    [],
+  );
+  const savePair = useCallback((): Promise<boolean> => {
+    const saveSide = pairSaver();
+    if (saveSide === undefined) return Promise.resolve(true);
+    return new Promise<boolean>((answer) => {
+      pairWaiting.current.push({ answer, saved: null });
+      if (pairSaving.current !== null) return;
+      const saving = (async () => {
+        const saved: boolean[] = [];
+        for (const each of SIDES) saved.push(await saveSide(each));
+        return saved.every(Boolean);
+      })();
+      pairSaving.current = saving;
+      void saving.then((saved) => {
+        pairSaving.current = null;
+        for (const waiter of pairWaiting.current) {
+          if (waiter.saved === null) waiter.saved = saved;
+        }
+        setPairWritten((count) => count + 1);
+      });
+    });
+  }, [pairSaver]);
+  useEffect(() => {
+    const answered = pairWaiting.current.filter((waiter) => waiter.saved !== null);
+    pairWaiting.current = pairWaiting.current.filter((waiter) => waiter.saved === null);
+    for (const waiter of answered) waiter.answer(waiter.saved === true);
+  }, [pairWritten]);
+
   const openImageOn = useCallback(
     (side: SideIndex, image: WireDatasetImage, options?: OpenOptions) => {
       // The save leaving this side is still being written: go where the user asked LAST, once it is.
@@ -599,6 +668,31 @@ export function WorkspaceProvider({
       if (waiting !== null) {
         waiting.image = image;
         waiting.options = options;
+        return;
+      }
+
+      /*
+       * IN THE MULTI VIEW, A MOVE SAVES BOTH SIDES FIRST, changed or not and whatever Auto-Save on
+       * Navigate says, and a side with no segments has its seven sidecars deleted without a word:
+       * legacy's multi-view save, run before every pair move (main_window.py:6496-6497, 6529-6530;
+       * file_navigation_manager.py:401-403). The owner's decision of 2026-09-26, "Match the desktop
+       * app exactly" (CONTROL_PARITY.md CP-67). A file chosen in the list and a new partner chosen
+       * for the pair come here; the pair's next and previous run `savePair` themselves, before they
+       * know whether anything moves, and say so with `pairSaved`.
+       *
+       * The move waits for the save. One that fails keeps the pair where it is, with the reason
+       * said, where legacy logs it and moves on. Once both are written the move is made, and the
+       * side asked about as any move asks -- which, both being saved, is nothing, unless the side
+       * was edited while the save was in flight or could not be read.
+       */
+      if (multiView && options?.discard !== true && options?.pairSaved !== true && pairSaver() !== undefined) {
+        const held: Leaving = { image, options, written: false };
+        leaving.current[side] = held;
+        void savePair().then((saved) => {
+          if (leaving.current[side] !== held) return;
+          leaving.current[side] = null;
+          if (saved) openLatest.current(side, held.image, { ...held.options, pairSaved: true });
+        });
         return;
       }
 
@@ -706,7 +800,7 @@ export function WorkspaceProvider({
           );
         });
     },
-    [client, confirmNavigation, history, projectId, sides, updateSide],
+    [client, confirmNavigation, history, multiView, pairSaver, projectId, savePair, sides, updateSide],
   );
 
   /*
@@ -1300,6 +1394,7 @@ export function WorkspaceProvider({
       openImageOn,
       closeSide,
       registerSave,
+      savePair,
       imageState,
       imageStates,
       segments,
@@ -1365,6 +1460,7 @@ export function WorkspaceProvider({
       registerSave,
       replaceSegments,
       revisions,
+      savePair,
       segments,
       selected,
       setClassAlias,

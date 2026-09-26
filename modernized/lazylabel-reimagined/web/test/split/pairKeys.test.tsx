@@ -133,6 +133,8 @@ function mount(names: readonly string[]) {
     tileUrl: () => "/tile",
     thumbnailUrl: () => "/thumbnail",
     saveAnnotations: async () => ({ written: { NPZ: "r1" }, stale: [] as string[], skippedEmpty: [] as string[] }),
+    // Every pair move saves both sides first, and an empty one's files are deleted (CP-67, RULE-083).
+    deleteAnnotations: async () => ({ deleted: [] as string[] }),
   } as unknown as ApiClient;
 
   render(

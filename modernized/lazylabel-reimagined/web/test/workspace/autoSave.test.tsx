@@ -56,6 +56,15 @@ const AT_REV_A: AnnotationsResult = {
 
 const UNREADABLE: AnnotationsResult = { kind: "failed", failures: [], message: "the npz is truncated" };
 
+/** a.png's NPZ at rev-A, holding one triangle: a side a save WRITES rather than deletes. */
+const TRIANGLE_AT_REV_A = {
+  kind: "loaded",
+  annotations: {
+    ...(AT_REV_A as unknown as { annotations: Record<string, unknown> }).annotations,
+    segments: [{ type: "Polygon", classId: 0, vertices: [[120, 10], [160, 10], [160, 40]] }],
+  },
+} as unknown as AnnotationsResult;
+
 function mount({
   a = AT_REV_A,
   answer = true,
@@ -71,6 +80,11 @@ function mount({
   const saveAnnotations = vi.fn(async (_project: string, key: string, _body: Record<string, unknown>) => {
     events.push(`save ${key}`);
     return { written: { NPZ: "rev-A2", YOLO_DETECTION: "rev-T" }, stale: [] as string[], skippedEmpty: [] as string[] };
+  });
+  // A save with no segments deletes instead (RULE-083). a.png's files are there to go.
+  const deleteAnnotations = vi.fn(async (_project: string, key: string) => {
+    events.push(`delete ${key}`);
+    return { deleted: key === "frames/a.png" ? ["frames/a.npz", "frames/a.txt"] : [] };
   });
   const confirmNavigation = vi.fn((_summary: string) => answer);
   const putSettings = vi.fn(async (settings: unknown) => settings);
@@ -109,6 +123,7 @@ function mount({
     tileUrl: () => "/tile",
     thumbnailUrl: () => "/thumbnail",
     saveAnnotations,
+    deleteAnnotations,
   } as unknown as ApiClient;
 
   render(
@@ -123,7 +138,7 @@ function mount({
     </NotificationProvider>,
   );
 
-  return { events, saveAnnotations, confirmNavigation, putSettings };
+  return { events, saveAnnotations, deleteAnnotations, confirmNavigation, putSettings };
 }
 
 const status = () => screen.getByLabelText("Status").textContent ?? "";
@@ -196,29 +211,6 @@ describe("with Auto-Save on Navigate on, legacy's default", () => {
     expect(confirmNavigation).not.toHaveBeenCalled();
   });
 
-  it("saves the side being edited when the PAIR moves, in the Multi view", async () => {
-    const { events, confirmNavigation } = mount({ names: ["a.png", "b.png", "c.png", "d.png"] });
-    await waitFor(() => expect(screen.getByRole("button", { name: "a.png" })).toBeTruthy());
-    fireEvent.click(screen.getByRole("button", { name: "a.png" }));
-    await waitFor(() => expect(status()).toMatch(/a\.png/));
-    fireEvent.click(screen.getByRole("tab", { name: "Multi" }));
-    fireEvent.change(await screen.findByLabelText("Second image"), { target: { value: "frames/b.png" } });
-    fireEvent.click(await screen.findByLabelText("Edit the right image"));
-    await waitFor(() => expect(status()).toMatch(/b\.png/));
-    chooseTool("Poly (2)");
-    drawTriangle(10, 10);
-    await waitFor(() => expect(status()).toMatch(/frames\/b\.png — 1 segment, unsaved/));
-
-    // Legacy's Right: load_next_image, which in the Multi view moves the pair to the next two
-    // (main_window.py:6491-6522; CP-31). The side being left with work on it is saved first.
-    next();
-
-    await waitFor(() => expect(events).toHaveLength(5));
-    expect(events.slice(0, 3)).toEqual(["load frames/a.png", "load frames/b.png", "save frames/b.png"]);
-    expect(events.slice(3).sort()).toEqual(["load frames/c.png", "load frames/d.png"]);
-    expect(confirmNavigation).not.toHaveBeenCalled();
-  });
-
   it("KEEPS the image open when the save is refused, and says why where the save button does", async () => {
     const { events, saveAnnotations, confirmNavigation } = mount();
     saveAnnotations.mockRejectedValue(
@@ -256,6 +248,198 @@ describe("with Auto-Save on Navigate on, legacy's default", () => {
     );
     expect(saveAnnotations).not.toHaveBeenCalled();
     expect(status()).toMatch(/frames\/a\.png could not be read/);
+  });
+});
+
+describe("in the Multi view, every move saves BOTH sides first (CP-67)", () => {
+  /*
+   * Legacy's next and previous in the Multi view save both viewers and then move the pair two rows
+   * (main_window.py:6491-6557; CP-31). The save comes first, whatever Auto-Save on Navigate says,
+   * changed or not, even where nothing then moves, and an empty viewer's files are deleted with no
+   * message (main_window.py:6496-6497, 6529-6530, 6559-6636; file_navigation_manager.py:401-403).
+   * The owner's decision of 2026-09-26: "Match the desktop app exactly". The web saved only the
+   * side being edited, only with the setting on, and asked about the other.
+   */
+  const FOUR = ["a.png", "b.png", "c.png", "d.png"];
+
+  /** a.png on the left, b.png chosen as its partner, and the right side made the one edited. */
+  async function pairUp(): Promise<void> {
+    fireEvent.click(await screen.findByRole("button", { name: "a.png" }));
+    await waitFor(() => expect(status()).toMatch(/a\.png/));
+    fireEvent.click(screen.getByRole("tab", { name: "Multi" }));
+    fireEvent.change(await screen.findByLabelText("Second image"), { target: { value: "frames/b.png" } });
+    fireEvent.click(await screen.findByLabelText("Edit the right image"));
+    await waitFor(() => expect(status()).toMatch(/frames\/b\.png/));
+    await screen.findByRole("button", { name: /^Write \d+ format/ });
+  }
+
+  /** Draw on the right side, b.png, leaving it unsaved. */
+  async function drawOnRight(): Promise<void> {
+    chooseTool("Poly (2)");
+    drawTriangle(10, 10);
+    await waitFor(() => expect(status()).toMatch(/frames\/b\.png — 1 segment, unsaved/));
+  }
+
+  /** Legacy's Left: load_previous_image. */
+  const previous = () => fireEvent.keyDown(document, { key: "ArrowLeft", code: "ArrowLeft" });
+
+  it("saves both, the side not edited too, then moves the pair two rows", async () => {
+    const { events, confirmNavigation } = mount({ a: TRIANGLE_AT_REV_A, names: FOUR });
+    await pairUp();
+    await drawOnRight();
+    events.length = 0;
+
+    next();
+
+    await waitFor(() => expect(events).toHaveLength(4));
+    expect(events.slice(0, 2)).toEqual(["save frames/a.png", "save frames/b.png"]);
+    expect(events.slice(2).sort()).toEqual(["load frames/c.png", "load frames/d.png"]);
+    expect(confirmNavigation).not.toHaveBeenCalled();
+  });
+
+  it("saves both with Auto-Save on Navigate OFF, and asks nothing", async () => {
+    const { events, confirmNavigation } = mount({ a: TRIANGLE_AT_REV_A, names: FOUR });
+    await pairUp();
+    fireEvent.click(autoSave());
+    await waitFor(() => expect(autoSave().checked).toBe(false));
+    await drawOnRight();
+    events.length = 0;
+
+    next();
+
+    await waitFor(() => expect(events).toHaveLength(4));
+    expect(events.slice(0, 2)).toEqual(["save frames/a.png", "save frames/b.png"]);
+    expect(confirmNavigation).not.toHaveBeenCalled();
+  });
+
+  it("saves them as Enter would: the selected formats, each side's own annotations and revision", async () => {
+    const { saveAnnotations } = mount({ a: TRIANGLE_AT_REV_A, names: FOUR });
+    await pairUp();
+    await drawOnRight();
+    saveAnnotations.mockClear();
+
+    next();
+
+    await waitFor(() => expect(saveAnnotations).toHaveBeenCalledTimes(2));
+    const [first, second] = saveAnnotations.mock.calls;
+    expect(first![1]).toBe("frames/a.png");
+    expect(first![2]["formats"]).toEqual(["NPZ", "YOLO_DETECTION"]);
+    // Conditional on what the save when the pair was made wrote, not on the load's rev-A.
+    expect(first![2]["expectedRevisions"]).toEqual({ NPZ: "rev-A2", YOLO_DETECTION: "rev-T" });
+    expect((first![2]["segments"] as unknown[]).length).toBe(1);
+    expect(second![1]).toBe("frames/b.png");
+    expect(second![2]["expectedRevisions"]).toEqual({});
+    expect((second![2]["segments"] as unknown[]).length).toBe(1);
+  });
+
+  it("deletes an empty side's files, silently, and writes the other", async () => {
+    // a.png is open with no segments: legacy's multi-view save deletes its files and says nothing,
+    // not even "No segments to save." (main_window.py:6588-6594).
+    const { events, deleteAnnotations } = mount({ names: FOUR });
+    await pairUp();
+    await drawOnRight();
+    events.length = 0;
+
+    next();
+
+    await waitFor(() => expect(events).toHaveLength(4));
+    expect(events.slice(0, 2)).toEqual(["delete frames/a.png", "save frames/b.png"]);
+    expect(deleteAnnotations.mock.calls.at(-1)!.slice(0, 2)).toEqual(["default", "frames/a.png"]);
+    expect(screen.queryByText(/^Deleted:/)).toBeNull();
+    expect(screen.queryByText("No segments to save.")).toBeNull();
+  });
+
+  it("saves both at either end of the list too, before legacy's words, and moves nothing", async () => {
+    // Legacy saves before it looks for the next pair, and only then finds the end of the list
+    // (main_window.py:6497-6512, 6530-6547).
+    const { events } = mount({ a: TRIANGLE_AT_REV_A });
+    await pairUp();
+    await drawOnRight();
+    events.length = 0;
+
+    next();
+
+    expect(await screen.findByText("Reached end of image list")).toBeTruthy();
+    expect(events).toEqual(["save frames/a.png", "save frames/b.png"]);
+
+    previous();
+
+    expect(await screen.findByText("Reached beginning of image list")).toBeTruthy();
+    expect(events).toEqual(["save frames/a.png", "save frames/b.png", "save frames/a.png", "save frames/b.png"]);
+  });
+
+  it("empties the right side, just saved, without asking, when the list has only one more", async () => {
+    // Legacy saves both, then loads nothing into viewer 2 (main_window.py:6497, 6516).
+    const { events, confirmNavigation } = mount({ a: TRIANGLE_AT_REV_A, names: ["a.png", "b.png", "c.png"] });
+    await pairUp();
+    await drawOnRight();
+    events.length = 0;
+
+    next();
+
+    await waitFor(() => expect(document.querySelector(".split__pane--empty")?.textContent).toBe("No image loaded"));
+    expect(events).toEqual(["save frames/a.png", "save frames/b.png", "load frames/c.png"]);
+    expect(confirmNavigation).not.toHaveBeenCalled();
+  });
+
+  it("saves both when the partner is changed, the Multi view's own move", async () => {
+    const { events, confirmNavigation } = mount({ a: TRIANGLE_AT_REV_A });
+    fireEvent.click(await screen.findByRole("button", { name: "a.png" }));
+    await waitFor(() => expect(status()).toMatch(/a\.png/));
+    fireEvent.click(screen.getByRole("tab", { name: "Multi" }));
+    await screen.findByRole("button", { name: /^Write \d+ format/ });
+
+    fireEvent.change(await screen.findByLabelText("Second image"), { target: { value: "frames/b.png" } });
+
+    await waitFor(() => expect(events).toEqual(["load frames/a.png", "save frames/a.png", "load frames/b.png"]));
+    expect(confirmNavigation).not.toHaveBeenCalled();
+  });
+
+  it("never writes over or deletes a side whose annotations could not be read (SEC-04)", async () => {
+    // Legacy deletes such a viewer's files like any empty one's. The owner did not ask for that.
+    const { events, deleteAnnotations } = mount({ a: UNREADABLE, names: FOUR });
+    await pairUp();
+    await drawOnRight();
+    events.length = 0;
+
+    next();
+
+    await waitFor(() => expect(events).toHaveLength(3));
+    expect(events[0]).toBe("save frames/b.png");
+    expect(deleteAnnotations).not.toHaveBeenCalled();
+  });
+
+  it("keeps the pair where it is when a save fails, and says why", async () => {
+    const { events, saveAnnotations } = mount({ a: TRIANGLE_AT_REV_A, names: FOUR });
+    await pairUp();
+    await drawOnRight();
+    saveAnnotations.mockClear();
+    saveAnnotations.mockRejectedValue(new Error("the disk is full"));
+    events.length = 0;
+
+    next();
+
+    // One notice for each side it could not save, each naming its image.
+    expect(await screen.findAllByText("Error saving: the disk is full")).toHaveLength(2);
+    const named = [...document.querySelectorAll(".notifications__detail")].map((each) => each.textContent);
+    expect(named).toEqual(expect.arrayContaining(["a.png", "b.png"]));
+    // Both were tried, as legacy's loop tries each viewer, and nothing moved.
+    expect(saveAnnotations.mock.calls.map((call) => call[1])).toEqual(["frames/a.png", "frames/b.png"]);
+    expect(events).toEqual([]);
+    expect(status()).toMatch(/frames\/b\.png — 1 segment, unsaved/);
+  });
+
+  it("saves only the image moved on the Single tab, though a second side is still open", async () => {
+    // Legacy's Single view has one image, and saves that one, with Auto-Save on (RULE-059).
+    const { events } = mount({ a: TRIANGLE_AT_REV_A, names: FOUR });
+    await pairUp();
+    fireEvent.click(screen.getByRole("tab", { name: "Single" }));
+    await drawOnRight();
+    events.length = 0;
+
+    next();
+
+    await waitFor(() => expect(events).toEqual(["save frames/b.png", "load frames/c.png"]));
   });
 });
 

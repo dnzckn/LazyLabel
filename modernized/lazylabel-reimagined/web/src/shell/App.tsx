@@ -62,8 +62,8 @@ export function App({ client }: { readonly client: ApiClient }): ReactNode {
   const [showAbout, setShowAbout] = useState(false);
   // From the store, not held here: the status bar is one reader of this among several.
   const { imageState, openImage, open, crop, saveCounts, segments, classAliases } = useWorkspace();
-  // The pair, for the Multi tab's next and previous (CP-31).
-  const { sides, multiView, openImageOn, closeSide, activeSide, setActiveSide } = useWorkspace();
+  // The pair, for the Multi tab's next and previous (CP-31), and the save of both before it (CP-67).
+  const { sides, multiView, openImageOn, closeSide, activeSide, setActiveSide, savePair } = useWorkspace();
   // RULE-024's answer, from the pixels: whether a load opens the Rescale and FFT sections.
   const grayscale = open?.metadata?.sourceChannels === 1;
   // The folder as the browser listed it, so the sequence timeline builds from the same answer
@@ -192,37 +192,54 @@ export function App({ client }: { readonly client: ApiClient }): ReactNode {
    * IN THE MULTI TAB THE PAIR MOVES, as legacy's does (main_window.py:6491-6557; CP-31): by two rows
    * of the list as shown, counted from the LEFT image whichever side is being edited -- the next two
    * into the left and right, the right emptied when the list has only one more. Legacy's words at
-   * the ends, where nothing moves, and when the left side is empty. Each side is opened as any open
-   * is, so what the side being left holds is saved or asked about first.
+   * the ends, where nothing moves, and when the left side is empty.
+   *
+   * BOTH SIDES ARE SAVED FIRST, before anything is decided -- at the ends of the list and with the
+   * left side empty too -- changed or not, whatever Auto-Save on Navigate says, and an empty side's
+   * files deleted without a word: legacy's `_save_multi_view_annotations` opens both of its moves
+   * (main_window.py:6496-6497, 6529-6530). The owner's decision of 2026-09-26, "Match the desktop
+   * app exactly" (CONTROL_PARITY.md CP-67). A save that fails keeps the pair where it is, with the
+   * reason said. The move is then made from what the save left, so a side just saved is opened over
+   * or emptied without a question.
    */
   const { notify } = useNotifications();
+  /** The move, from the pair as the save left it. `stepPair` calls it through a ref, after the save. */
+  const movePair = (by: 1 | -1): void => {
+    const left = sides[0].open;
+    if (left === null) {
+      notify({ severity: "info", message: "No current image" });
+      return;
+    }
+    const at = shownRows.findIndex((image) => image.key === left.image.key);
+    const first = at < 0 ? undefined : shownRows[at + 2 * by];
+    if (first === undefined) {
+      notify({
+        severity: "info",
+        message: by === 1 ? "Reached end of image list" : "Reached beginning of image list",
+      });
+      return;
+    }
+    const second = shownRows[at + 2 * by + 1];
+    const review = (image: WireDatasetImage) => {
+      const segments = reviewFor(image.key);
+      return segments === undefined ? undefined : { segments };
+    };
+    // Saved already: the opens do not save the pair again.
+    openImageOn(0, first, { ...review(first), pairSaved: true });
+    if (second !== undefined) openImageOn(1, second, { ...review(second), pairSaved: true });
+    // The tools go with the image left on screen, as when the pair is cleared by hand.
+    else if (sides[1].open !== null && closeSide(1) && activeSide === 1) setActiveSide(0);
+  };
+  // The latest: the one a key press finds reads the sides as they were before the save.
+  const movePairNow = useRef(movePair);
+  movePairNow.current = movePair;
   const stepPair = useCallback(
     (by: 1 | -1) => {
-      const left = sides[0].open;
-      if (left === null) {
-        notify({ severity: "info", message: "No current image" });
-        return;
-      }
-      const at = shownRows.findIndex((image) => image.key === left.image.key);
-      const first = at < 0 ? undefined : shownRows[at + 2 * by];
-      if (first === undefined) {
-        notify({
-          severity: "info",
-          message: by === 1 ? "Reached end of image list" : "Reached beginning of image list",
-        });
-        return;
-      }
-      const second = shownRows[at + 2 * by + 1];
-      const review = (image: WireDatasetImage) => {
-        const segments = reviewFor(image.key);
-        return segments === undefined ? undefined : { segments };
-      };
-      openImageOn(0, first, review(first));
-      if (second !== undefined) openImageOn(1, second, review(second));
-      // The tools go with the image left on screen, as when the pair is cleared by hand.
-      else if (sides[1].open !== null && closeSide(1) && activeSide === 1) setActiveSide(0);
+      void savePair().then((saved) => {
+        if (saved) movePairNow.current(by);
+      });
     },
-    [activeSide, closeSide, notify, openImageOn, reviewFor, setActiveSide, shownRows, sides],
+    [savePair],
   );
 
   useHotkey("load_next_image", () => (multiView ? stepPair(1) : step(1)));

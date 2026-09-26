@@ -25,13 +25,15 @@ import { normalizeExportFormats } from "@lazylabel/settings-schema";
 import type {
   WireDatasetImage,
   WireImageMetadata,
+  WireSaveRequest,
   WireSaveResponse,
   WireSegment,
 } from "@lazylabel/contracts";
 
 import { AnnotationCanvas, segmentAt } from "../canvas/AnnotationCanvas.jsx";
 import { useSettings } from "../settings/SettingsProvider.jsx";
-import { useWorkspace, type LeaveSave } from "./WorkspaceProvider.jsx";
+import { useWorkspace, type LeaveSave, type SideIndex } from "./WorkspaceProvider.jsx";
+import type { Crop } from "../tools/crop.js";
 import { PolygonLayer, toWireVertices } from "../canvas/PolygonLayer.jsx";
 import { AiTool } from "./AiTool.jsx";
 import { SelectLayer } from "../canvas/SelectLayer.jsx";
@@ -657,6 +659,48 @@ function OpenedImage({
 }
 
 /**
+ * What a save sends for one image: its annotations as they stand, in the selected formats, with its
+ * crop and the pixel priority in force, conditional on `expected`. One request for Enter's save and
+ * for the Multi view's save of each side (CP-67), so the two cannot write differently.
+ */
+function saveRequest(
+  annotations: {
+    readonly segments: readonly WireSegment[];
+    readonly classAliases: Readonly<Record<string, string>>;
+    readonly crop: Crop | null;
+  },
+  size: readonly [number, number],
+  formats: readonly string[],
+  values: Readonly<Record<string, unknown>>,
+  expected: Readonly<Record<string, string | null>>,
+): WireSaveRequest {
+  const { segments, classAliases, crop } = annotations;
+  return {
+    imageSize: size,
+    formats,
+    segments,
+    classAliases,
+    // RULE-018 is applied on the server, against the same mask tensor the exports are built
+    // from -- so what a crop blanks is exactly what the files lose, rather than two
+    // implementations of the same rectangle.
+    cropCoords: crop === null ? null : [crop.x1, crop.y1, crop.x2, crop.y2],
+    // RULE-012: which class wins a pixel two annotations both cover. The API has accepted this
+    // since Phase 2 and the client never sent it, so the two settings did NOTHING -- a user
+    // whose imported legacy settings turned pixel priority on got masks resolved the other
+    // way, and the difference is invisible until an overlap actually occurs.
+    // Empty for an image that had no annotation file: there is nothing to be out of date
+    // with, and demanding absence would refuse a second save of a file this app just wrote.
+    expectedRevisions: expected,
+    pixelPriority: {
+      enabled: values["pixel_priority_enabled"] === true,
+      // Ascending unless explicitly false, which matches the server's own default: the lowest
+      // class id wins, as legacy resolves it.
+      ascending: values["pixel_priority_ascending"] !== false,
+    },
+  };
+}
+
+/**
  * Persona flow 4's last step: write the chosen formats beside the image -- or, for an image with no
  * segments, delete all seven of its sidecar formats, as legacy's save does (RULE-083; the owner's
  * decision of 2026-09-26).
@@ -688,6 +732,8 @@ function ConvertButton({
   // crop the request leaves out is a crop the panel showed and the file never saw.
   const { classAliases, segments, crop, activeSide, markSavedOn, imageState, revisions, registerSave } =
     useWorkspace();
+  // Both sides, for the Multi view's save of each (`saveSide`, below).
+  const { sides, imageStates } = useWorkspace();
   const { notify } = useNotifications();
   const keyOf = useKeyHint();
 
@@ -793,29 +839,7 @@ function ConvertButton({
       return erase;
     }
     const write = client
-      .saveAnnotations(projectId, image.key, {
-        imageSize: size,
-        formats,
-        segments,
-        classAliases,
-        // RULE-018 is applied on the server, against the same mask tensor the exports are built
-        // from -- so what a crop blanks is exactly what the files lose, rather than two
-        // implementations of the same rectangle.
-        cropCoords: crop === null ? null : [crop.x1, crop.y1, crop.x2, crop.y2],
-        // RULE-012: which class wins a pixel two annotations both cover. The API has accepted this
-        // since Phase 2 and the client never sent it, so the two settings did NOTHING -- a user
-        // whose imported legacy settings turned pixel priority on got masks resolved the other
-        // way, and the difference is invisible until an overlap actually occurs.
-        // Empty for an image that had no annotation file: there is nothing to be out of date
-        // with, and demanding absence would refuse a second save of a file this app just wrote.
-        expectedRevisions: expected,
-        pixelPriority: {
-          enabled: settings.values["pixel_priority_enabled"] === true,
-          // Ascending unless explicitly false, which matches the server's own default: the lowest
-          // class id wins, as legacy resolves it.
-          ascending: settings.values["pixel_priority_ascending"] !== false,
-        },
-      })
+      .saveAnnotations(projectId, image.key, saveRequest(written, size, formats, settings.values, expected))
       .then((result) => {
         setState({ status: "saved", result });
         /*
@@ -929,13 +953,55 @@ function ConvertButton({
   useHotkey("save_output_alt", saveNow);
 
   /*
+   * LEGACY'S MULTI-VIEW SAVE OF ONE SIDE (`main_window.py:6559-6636`), which the store runs for both
+   * sides before every move in the Multi view, changed or not and whatever Auto-Save on Navigate
+   * says: the owner's decision of 2026-09-26, "Match the desktop app exactly" (CONTROL_PARITY.md
+   * CP-67). Enter's request for that side's image, so the two cannot write differently; with no
+   * segments, the side's seven sidecars are deleted instead. Silent when it works, as legacy's is:
+   * no "Deleted: ..." and no "No segments to save." (6589-6593). A failure is said, and the store
+   * keeps the pair where it is.
+   *
+   * Nothing for a side with no image loaded, and nothing for one whose annotations could not be
+   * read, which is never written over or deleted (ASSESSMENT.md SEC-04). Legacy deletes those.
+   */
+  const saveSide = (at: SideIndex): Promise<boolean> => {
+    const side = sides[at];
+    const open = side.open;
+    if (open === null || open.metadata === null || !canSave(imageStates[at])) return Promise.resolve(true);
+    const key = open.image.key;
+    const written = { segments: side.segments, classAliases: side.classAliases, crop: side.crop };
+    const refused = (cause: unknown): boolean => {
+      notify({
+        severity: "error",
+        message: `Error saving: ${cause instanceof Error ? cause.message : String(cause)}`,
+        detail: open.image.name,
+      });
+      return false;
+    };
+    if (side.segments.length === 0) {
+      return client.deleteAnnotations(projectId, key).then(() => {
+        markSavedOn(at, { ...written, key, deleted: true });
+        return true;
+      }, refused);
+    }
+    const sized = [open.metadata.height, open.metadata.width] as const;
+    return client
+      .saveAnnotations(projectId, key, saveRequest(written, sized, formats, settings.values, side.revisions))
+      .then((result) => {
+        markSavedOn(at, { ...written, key, revisions: result.written });
+        return true;
+      }, refused);
+  };
+
+  /*
    * LENT TO THE STORE, for leaving this image: legacy's Auto-Save on Navigate, on unless turned off
    * (settings_widget.py:39-44), saves the image being left, and by the owner's decision of
    * 2026-09-25 it does so here -- with this save, guards and all, not a second one. Through a ref,
-   * so it is lent once per side rather than on every render.
+   * so it is lent once per side rather than on every render. The save of either side goes with it,
+   * which the store runs for both in the Multi view (CP-67).
    */
   const lent = useRef<LeaveSave>({ enabled: false, save: saveNow });
-  lent.current = { enabled: settings.values["auto_save"] !== false, save: saveNow };
+  lent.current = { enabled: settings.values["auto_save"] !== false, save: saveNow, saveSide };
   useEffect(() => registerSave(activeSide, () => lent.current), [activeSide, registerSave]);
 
   return (

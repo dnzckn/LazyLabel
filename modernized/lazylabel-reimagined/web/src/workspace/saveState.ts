@@ -18,7 +18,9 @@
  *      decided so on 2026-09-26 -- "Match the desktop app exactly" -- reversing this rule's earlier
  *      "never delete; write empty files". It is the same save, by Enter or on leaving the image, so
  *      the decision below says "save" either way; the save button carries it out
- *      (`OpenImageView.tsx`).
+ *      (`OpenImageView.tsx`). In the Multi view every move saves BOTH sides first, changed or not
+ *      and whatever the setting, and deletes an empty side's files without a word, as legacy's
+ *      multi-view save does (CONTROL_PARITY.md CP-67); the store's `savePair` runs it.
  *
  *   3. A FAILED LOAD MUST NOT BE SAVED OVER, OR DELETED. Legacy commits the current path before
  *      decoding succeeds, so an image that fails to open (`cv2.imread` returns None — a non-ASCII
