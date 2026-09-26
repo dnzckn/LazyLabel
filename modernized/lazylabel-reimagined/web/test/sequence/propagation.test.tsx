@@ -404,6 +404,80 @@ describe("starting one", () => {
     });
   });
 
+  describe("Streaming's question and the Window (SP-48)", () => {
+    /*
+     * Legacy asks "Disable streaming anyway?" when Streaming is unticked over more frames than the
+     * window, with its estimate in GB, and ticks it again on No; its Window spinbox is in the same
+     * row (sequence_widget.py:356-381, 610-627). The web showed a line in MB and asked nothing, and
+     * its window was only in the settings editor.
+     */
+    const many = Array.from({ length: 300 }, (_, i) => frame(i, i === 0));
+    function mount(frames: readonly Frame[], answer: boolean) {
+      const fake = fakeClient({});
+      const confirm = vi.fn((_message: string) => answer);
+      render(
+        <NotificationProvider>
+          <SettingsProvider client={fake.client}>
+            <HotkeyProvider bindings={defaultSettings().hotkeys}>
+              <PropagationControl client={fake.client} frames={frames} confirmDiscard={confirm} />
+            </HotkeyProvider>
+          </SettingsProvider>
+        </NotificationProvider>,
+      );
+      return { fake, confirm };
+    }
+    const streamingBox = () => screen.getByLabelText("Streaming") as HTMLInputElement;
+
+    it("asks, in legacy's words, before full context over more frames than the window, and stays on at No", () => {
+      const { confirm } = mount(many, false);
+
+      fireEvent.click(streamingBox());
+
+      expect(confirm).toHaveBeenCalledTimes(1);
+      expect(confirm.mock.calls[0]![0]).toBe(
+        "Full-context mode will load all 300 frames into memory at once (~4 GB).\n\n"
+          + "This will likely cause an out-of-memory crash for large sequences.\n\n"
+          + "Disable streaming anyway?",
+      );
+      expect(streamingBox().checked).toBe(true);
+      expect(screen.queryByText(/frames load at once/)).toBeNull();
+    });
+
+    it("turns it off at Yes", () => {
+      mount(many, true);
+
+      fireEvent.click(streamingBox());
+
+      expect(streamingBox().checked).toBe(false);
+    });
+
+    it("does not ask when the window holds the whole timeline", () => {
+      const { confirm } = mount(FRAMES, false);
+
+      fireEvent.click(streamingBox());
+
+      expect(confirm).not.toHaveBeenCalled();
+      expect(streamingBox().checked).toBe(false);
+    });
+
+    it("sets the Window in the row, 50 to 1000, and propagates with it", async () => {
+      const { fake } = mount(FRAMES, true);
+      const window = await screen.findByLabelText("Window");
+      expect((window as HTMLInputElement).value).toBe("250");
+
+      fireEvent.change(window, { target: { value: "5000" } });
+      fireEvent.blur(window);
+      await waitFor(() => expect((screen.getByLabelText("Window") as HTMLInputElement).value).toBe("1000"));
+      fireEvent.change(window, { target: { value: "120" } });
+      fireEvent.keyDown(window, { key: "Enter" });
+      await waitFor(() => expect((screen.getByLabelText("Window") as HTMLInputElement).value).toBe("120"));
+
+      fireEvent.click(propagate());
+      await waitFor(() => expect(fake.started).toHaveLength(1));
+      expect(fake.started[0]!.window).toBe(120);
+    });
+  });
+
   it("sends streaming: false once unticked", async () => {
     const fake = fakeClient({});
     show(fake);

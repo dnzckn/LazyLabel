@@ -36,6 +36,25 @@ import { folderOf, type Frame, type FrameState } from "./timeline.js";
 
 const NO_POLICY: CommitPolicy = { keepFlagged: false, skip: new Set(), references: new Set() };
 
+/** Legacy's tooltips (`sequence_widget.py:359-365, 375-380`). */
+const STREAMING_TIP =
+  "Process video in chunks (set size with Window)\nusing a rolling context window. Bounds memory\n"
+  + "regardless of sequence length.\n\nDisable for full-context mode (loads all frames\n"
+  + "at once — better quality but high memory usage).";
+const WINDOW_TIP =
+  "Number of frames per streaming chunk.\nLower values use less memory but may\n"
+  + "reduce temporal consistency.\n\nDefault: 250 (~3 GB per chunk)";
+
+/** Legacy's "High Memory Usage" question, at 12.6 MB a frame (`sequence_widget.py:610-627`). */
+function highMemory(frames: number): string {
+  return (
+    `Full-context mode will load all ${frames} frames into memory at once `
+    + `(~${Math.round((frames * 12.6) / 1024)} GB).\n\n`
+    + "This will likely cause an out-of-memory crash for large sequences.\n\n"
+    + "Disable streaming anyway?"
+  );
+}
+
 export interface PropagationControlProps {
   readonly client: ApiClient;
   readonly projectId?: string;
@@ -81,7 +100,10 @@ export interface PropagationControlProps {
    * because this is where the masks and the object classes both are.
    */
   readonly onSegments?: (byKey: ReadonlyMap<string, readonly WireSegment[]>) => void;
-  /** Asks before a new run discards unsaved frames. Injected so a test can answer it. */
+  /**
+   * Asks before a new run discards unsaved frames, and before Streaming goes off over more frames
+   * than the window holds. Injected so a test can answer it.
+   */
   readonly confirmDiscard?: (message: string) => boolean;
   /**
    * The frames Skip Labeled kept this run and the model produced a mask for -- legacy's brown
@@ -152,7 +174,19 @@ export function PropagationControl({
   options,
   projectId = "default",
 }: PropagationControlProps): ReactNode {
-  const { settings } = useSettings();
+  const { settings, save } = useSettings();
+  /** The Window as it stands, and what is being typed into it until it is committed. */
+  const windowSize = Number(settings.values["stream_window_size"] ?? 250);
+  const [windowDraft, setWindowDraft] = useState<string | null>(null);
+  const commitWindow = (): void => {
+    if (windowDraft === null) return;
+    setWindowDraft(null);
+    const typed = Math.round(Number(windowDraft.trim()));
+    // A spinbox holds its value within its range; what is not a number keeps the value in force.
+    if (windowDraft.trim() === "" || !Number.isFinite(typed)) return;
+    const next = Math.min(1000, Math.max(50, typed));
+    if (next !== windowSize) void save({ ...settings, values: { ...settings.values, stream_window_size: next } });
+  };
   const { progress, start, cancel, reset } = usePropagation(client);
   /** What could not become a seed, and why. Reported rather than dropped. */
   const [unusable, setUnusable] = useState<readonly { key: string; reason: string }[]>([]);
@@ -703,14 +737,6 @@ export function PropagationControl({
             }}
           />
         </span>
-        <label>
-          <input
-            type="checkbox"
-            checked={streaming}
-            onChange={(event) => setStreaming(event.currentTarget.checked)}
-          />{" "}
-          Streaming
-        </label>
         <label title="Off (legacy's default): a frame where any object scores below Min Conf keeps no masks at all. On: its masks are kept so you can review them. Save All writes a flagged frame either way — never.">
           <input
             type="checkbox"
@@ -727,15 +753,39 @@ export function PropagationControl({
           />{" "}
           Skip labeled
         </label>
+        <label title={STREAMING_TIP}>
+          <input
+            type="checkbox"
+            checked={streaming}
+            onChange={(event) => {
+              const on = event.currentTarget.checked;
+              // Legacy's "High Memory Usage" question, whose No keeps Streaming on
+              // (`sequence_widget.py:610-627`, SP-48).
+              if (!on && frames.length > windowSize && !confirmDiscard(highMemory(frames.length))) return;
+              setStreaming(on);
+            }}
+          />{" "}
+          Streaming
+        </label>
+        {/* Legacy's Window spinbox, in this row (`sequence_widget.py:369-381`), 50 to 1000 frames,
+            kept as the `stream_window_size` setting, as legacy keeps it (`main_window.py:2096-2100`). */}
+        <label title={WINDOW_TIP}>
+          Window:{" "}
+          <input
+            type="number"
+            min={50}
+            max={1000}
+            step={50}
+            aria-label="Window"
+            value={windowDraft ?? String(windowSize)}
+            onChange={(event) => setWindowDraft(event.currentTarget.value)}
+            onBlur={commitWindow}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") commitWindow();
+            }}
+          />
+        </label>
         {options}
-        {!streaming && frames.length > Number(settings.values["stream_window_size"] ?? 250) && (
-          // RULE-026's warning: 12.6 MB a frame, all held at once without streaming. Said before
-          // the run rather than discovered as an out-of-memory partway through it.
-          <p role="status" className="banner banner--warning">
-            Without streaming, all {frames.length} frames load at once: about{" "}
-            {Math.round(frames.length * 12.6).toLocaleString()} MB.
-          </p>
-        )}
         {/* Legacy's colours (sequence_widget.py:304, 639, 746): Propagate green, amber while it
             starts, and a red Abort. */}
         <button
