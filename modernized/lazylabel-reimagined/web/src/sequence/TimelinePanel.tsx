@@ -37,6 +37,7 @@ import { useHotkey } from "../hotkeys/HotkeyProvider.jsx";
 import { useNotifications } from "../notifications/NotificationProvider.jsx";
 import { PropagationControl } from "./PropagationControl.jsx";
 import type { OpenAnnotations } from "./references.js";
+import { mergedByClass } from "./saveAll.js";
 import { FIND_ARCHETYPES_ELSEWHERE, useSequenceActive } from "./sequenceActive.js";
 
 import {
@@ -427,12 +428,18 @@ export function TimelinePanel({
   /**
    * RULE-090's masks for one frame, or nothing.
    *
+   * MERGED INTO ONE SEGMENT PER CLASS, as legacy merges them when it opens the frame
+   * (`main_window.py:3597-3606`, `SEQUENCE_PARITY.md` SP-07). Here, on the visit, and not where
+   * Save All builds them: legacy's Save All does not merge.
+   *
    * NEVER for a reference frame. That is the user's own drawing, and showing the propagation's
    * reconstruction of it in its place is the one substitution propagation must not make -- it is
    * the same reason Save All refuses to rewrite a reference.
    */
-  const propagatedFor = (frame: Frame): readonly WireSegment[] | undefined =>
-    frame.isReference ? undefined : propagated.get(frame.key);
+  const propagatedFor = (frame: Frame): readonly WireSegment[] | undefined => {
+    const segments = frame.isReference ? undefined : propagated.get(frame.key);
+    return segments === undefined ? undefined : mergedByClass(segments);
+  };
 
   /**
    * Cut or Keep — RULE-077.

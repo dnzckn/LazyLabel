@@ -15,6 +15,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { createFinalMaskTensor, type MaskTensor } from "@lazylabel/annotation-formats";
 import {
+  decodeMask,
   decodeSegment,
   encodeMask,
   type WireMask,
@@ -676,12 +677,14 @@ describe("RULE-056: not losing propagated work without asking", () => {
     openAnnotations?: OpenAnnotations,
     /**
      * The rest of the run: the settings the user changed from the defaults, what the reference's
-     * file holds, and what the propagation carries onto f02.
+     * file holds, what the propagation carries onto f02, and what a frame opened from the timeline
+     * is handed.
      */
     run: {
       readonly values?: Readonly<Record<string, unknown>>;
       readonly segments?: readonly WireSegment[];
       readonly results?: readonly WirePropagationFrame[];
+      readonly onOpen?: (key: string, segments?: readonly WireSegment[]) => void;
     } = {},
   ) {
     /** Every request Propagate sent, as `fakeClient` records them. */
@@ -748,6 +751,7 @@ describe("RULE-056: not losing propagated work without asking", () => {
           confirmDiscard={confirmDiscard}
           {...(saves === undefined ? {} : { savedElsewhere: saves })}
           {...(open === undefined ? {} : { openAnnotations: open })}
+          {...(run.onOpen === undefined ? {} : { onOpen: run.onOpen })}
         />
       );
       return (
@@ -1023,6 +1027,70 @@ describe("RULE-056: not losing propagated work without asking", () => {
       expect(classesAt(tensor, 6, 6)).toEqual([3]);
     },
   );
+
+  /*
+   * SP-07. Legacy merges a propagated frame's masks into one "Loaded" segment per class when it
+   * opens the frame (main_window.py:3597-3606; segment_manager.py:97-172), so two touching objects
+   * of one class are saved as one box. Its Save All merges nothing (4776-4807). Here objects 1 and
+   * 2 are class 0 and overlap on f02, and object 3 is class 3.
+   */
+  const THREE_SEEDS: readonly WireSegment[] = [
+    { type: "Polygon", classId: 0, vertices: [[1, 1], [3, 1], [3, 3], [1, 3]] },
+    { type: "Polygon", classId: 0, vertices: [[4, 1], [6, 1], [6, 3], [4, 3]] },
+    { type: "Polygon", classId: 3, vertices: [[1, 5], [3, 5], [3, 7], [1, 7]] },
+  ];
+  const THREE_CARRIED: readonly WirePropagationFrame[] = [
+    { source: "frames/f02.png", objectId: 1, mask: square(1, 4), confidence: 0.999 },
+    { source: "frames/f02.png", objectId: 2, mask: square(3, 6), confidence: 0.999 },
+    { source: "frames/f02.png", objectId: 3, mask: square(6, 8), confidence: 0.999 },
+  ];
+
+  /** The pixels of two masks on an 8x8 frame, as one mask. */
+  function union(a: WireMask, b: WireMask): WireMask {
+    const right = decodeMask(b).data;
+    return encodeMask({
+      height: 8,
+      width: 8,
+      data: decodeMask(a).data.map((value, pixel) => value | right[pixel]!),
+    });
+  }
+
+  it("opens a visited propagated frame with ONE segment per class, as legacy does", async () => {
+    const onOpen = vi.fn((_key: string, _segments?: readonly WireSegment[]) => {});
+    panel(() => true, false, undefined, { segments: THREE_SEEDS, results: THREE_CARRIED, onOpen });
+    await propagateAndWait();
+
+    fireEvent.click(await screen.findByRole("button", { name: "Frame 2, frames/f02.png, propagated" }));
+
+    const [key, segments] = onOpen.mock.calls.at(-1)!;
+    expect(key).toBe("frames/f02.png");
+    // Class 0's two objects as one segment, their union, and class 3's still its own: two, not three.
+    expect(segments?.map((each) => [each.type, each.classId])).toEqual([
+      ["Loaded", 0],
+      ["Loaded", 3],
+    ]);
+    expect(segments?.[0]?.mask).toEqual(union(square(1, 4), square(3, 6)));
+    expect(segments?.[1]?.mask).toEqual(square(6, 8));
+  });
+
+  it("still writes one segment per object with Save All after the visit, as legacy does", async () => {
+    const { saved } = panel(() => true, false, undefined, {
+      segments: THREE_SEEDS,
+      results: THREE_CARRIED,
+      onOpen: () => {},
+    });
+    await propagateAndWait();
+    fireEvent.click(await screen.findByRole("button", { name: "Frame 2, frames/f02.png, propagated" }));
+
+    fireEvent.click(screen.getByRole("button", { name: /Save 1 frame/ }));
+    await screen.findByText(/Saved 1 frame/);
+
+    expect(saved[0]!.request.segments.map((each) => [each.type, each.classId])).toEqual([
+      ["AI", 0],
+      ["AI", 0],
+      ["AI", 3],
+    ]);
+  });
 
   it("offers the Save beside the timeline bar, where legacy's Save All is", async () => {
     panel(() => true);

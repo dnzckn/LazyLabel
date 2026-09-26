@@ -21,7 +21,14 @@
  * failures would be worse.
  */
 
-import type { WireMask, WireSaveRequest, WireSegment } from "@lazylabel/contracts";
+import { createFinalMaskTensor, type Segment } from "@lazylabel/annotation-formats";
+import {
+  decodeSegment,
+  encodeMask,
+  type WireMask,
+  type WireSaveRequest,
+  type WireSegment,
+} from "@lazylabel/contracts";
 
 import type { ApiClient, WirePropagationFrame } from "../api/client.js";
 import { saveableFrames } from "./confidence.js";
@@ -116,11 +123,12 @@ export function plannedSave(
 }
 
 /**
- * A frame's propagated results as segments — what a save writes AND what RULE-090 shows.
+ * A frame's propagated results as segments, one per object — what Save All writes AND, merged by
+ * `mergedByClass`, what RULE-090 shows.
  *
  * One function for both, deliberately. If the review path built these differently from the save
- * path, a user could accept a mask on screen and have a different one written to disk, and nothing
- * would say so.
+ * path, a user could accept a mask on screen and have different pixels written to disk, and
+ * nothing would say so. The merge moves no pixel from one class to another.
  */
 export function segmentsFor(
   results: readonly WirePropagationFrame[],
@@ -129,6 +137,54 @@ export function segmentsFor(
   return results
     .map((result) => segmentOf(result, classes))
     .filter((segment): segment is WireSegment => segment !== null);
+}
+
+/**
+ * What a VISITED propagated frame shows: one "Loaded" segment per class, the union of its objects.
+ *
+ * Legacy merges them when it opens the frame (`main_window.py:3597-3606`,
+ * `segment_manager.py:97-172`), so the file its leaving save writes has one segment per class, and
+ * two touching objects of one class export as one box. Opened unmerged, the frame showed, and Enter
+ * wrote, a segment per object (`SEQUENCE_PARITY.md` SP-07). Save All merges nothing, in either app
+ * (`main_window.py:4776-4807`).
+ *
+ * The union is `createFinalMaskTensor`'s, one class at a time -- the save's per-class OR, which
+ * legacy's docstring likens its merge to. As legacy's merge does, it takes the size from the first
+ * mask, leaves out a mask of another size, drops an empty union, orders the classes by id, and
+ * merges nothing with no mask or no class. One difference: a segment with no class is kept, where
+ * legacy drops it. Legacy never has one here, since it gives a propagated object class 0 when it
+ * knows no other (`main_window.py:3711-3724`), and no format writes one.
+ */
+export function mergedByClass(segments: readonly WireSegment[]): readonly WireSegment[] {
+  const size = segments.find((segment) => segment.mask !== undefined)?.mask;
+  const classes = [
+    ...new Set(segments.flatMap((segment) => (segment.classId === null ? [] : [segment.classId]))),
+  ].sort((a, b) => a - b);
+  if (size === undefined || classes.length === 0) return segments;
+  const { height, width } = size;
+
+  const merged: WireSegment[] = [];
+  for (const classId of classes) {
+    const members = segments
+      .filter((segment) => segment.classId === classId)
+      .flatMap((segment) => decodedAt(segment, height, width));
+    const union = createFinalMaskTensor(members, [height, width], [classId]).data;
+    const mask = encodeMask({ height, width, data: union });
+    if (mask.box !== null) merged.push({ type: "Loaded", classId, mask });
+  }
+  return [...merged, ...segments.filter((segment) => segment.classId === null)];
+}
+
+/** One segment decoded for the union, or none when its mask is another size or cannot be read. */
+function decodedAt(segment: WireSegment, height: number, width: number): Segment[] {
+  if (segment.mask !== undefined && (segment.mask.height !== height || segment.mask.width !== width)) {
+    return [];
+  }
+  try {
+    return [decodeSegment(segment)];
+  } catch {
+    return []; // not drawn by the canvas either
+  }
 }
 
 /**

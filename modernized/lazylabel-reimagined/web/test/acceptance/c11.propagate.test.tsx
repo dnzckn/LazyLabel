@@ -223,9 +223,11 @@ describe("C11: propagate labels through a sequence", () => {
      *
      * f02 has no sidecar of its own, so any segment on screen came from the propagation. The
      * class is 3, carried from the polygon that seeded the run, which is what makes it saveable.
+     * "Loaded", because legacy merges a visited frame's masks into one Loaded segment per class
+     * (main_window.py:3597-3606, SEQUENCE_PARITY.md SP-07).
      */
     await waitFor(() => expect(screen.getByLabelText("Status").textContent).toMatch(/f02\.png/));
-    await waitFor(() => expect(screen.getByLabelText("Select AI 1, class 3")).toBeTruthy());
+    await waitFor(() => expect(screen.getByLabelText("Select Loaded 1, class 3")).toBeTruthy());
   });
 
   it("does NOT replace a reference frame's own drawing", async () => {
@@ -239,9 +241,9 @@ describe("C11: propagate labels through a sequence", () => {
     fireEvent.click(screen.getByLabelText("Timeline").querySelectorAll("button")[0]!);
 
     await waitFor(() => expect(screen.getByLabelText("Status").textContent).toMatch(/f01\.png/));
-    // Its OWN polygon, from its own file -- not the propagation's AI mask of the same object.
+    // Its OWN polygon, from its own file -- not the propagation's mask of the same object.
     await waitFor(() => expect(screen.getByLabelText("Select Polygon 1, class 3")).toBeTruthy());
-    expect(screen.queryByLabelText(/Select AI/)).toBeNull();
+    expect(screen.queryByLabelText(/Select (AI|Loaded)/)).toBeNull();
   });
 
   it("says how far agreement with legacy has been shown, and where it stops", async () => {

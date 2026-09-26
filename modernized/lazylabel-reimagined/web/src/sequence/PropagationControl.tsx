@@ -456,9 +456,10 @@ export function PropagationControl({
     onUnsaved?.(unsaved.length);
   }, [onUnsaved, unsaved.length]);
 
-  // RULE-090's masks, in the shape an open needs them. Built with the same function the save uses,
-  // so what a user REVIEWS on the frame is exactly what a save would write -- two derivations of
-  // that would be two chances to disagree.
+  // RULE-090's masks, one segment per object. Built with the same function the save uses, so the
+  // pixels a user REVIEWS on the frame are the ones a save would write -- two derivations of that
+  // would be two chances to disagree. The panel merges them per class when it opens the frame, as
+  // legacy does (SP-07).
   const segmentsByFrame = useMemo(() => {
     const built = new Map<string, readonly WireSegment[]>();
     for (const [key, results] of view.kept) {
