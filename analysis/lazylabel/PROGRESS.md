@@ -687,6 +687,19 @@ configured, so a green CI run says nothing about them — see `Running the live 
    - **The web app's warning** now reads "The class-name table in this file is not in the form
      LazyLabel saves", and shows only for such a table.
 
+4. **Controls and hotkeys against the PyQt6 app: `CONTROL_PARITY.md` (started 2026-09-25).** The
+   owner asked whether the app matches the PyQt6 one "in looks and hot keys ... across all tabs".
+   The look was done (`VISUAL_PARITY.md`). Three read-only audits then compared what every control
+   and key DOES, and found about forty unrecorded differences, ranked P0-P3 in that file. Fixed so
+   far, in `28c2f37`:
+   - Enter saved over an unreadable file;
+   - Ctrl+H crashed, and Ctrl+H and Ctrl+P reached the browser's history and print dialogs;
+   - class names could not contain a typed space;
+   - the sequence keys acted on the other tabs.
+
+   Work down that file in order. Verify each "reported" item against both apps' code before fixing
+   it.
+
 The three decisions this list used to end with are answered, above: Ctrl+Plus keeps zooming, the
 timeline keeps legacy's behaviour, and image tiles get built. The measurement that framed the tiles
 question stays here, because the tile work is judged against it. On 2026-09-23 a noisy
