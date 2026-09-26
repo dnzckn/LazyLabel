@@ -9,9 +9,12 @@
  * segment cannot be vertex-edited, and after an erase a polygon silently becomes a mask. Without
  * the type on screen, "why can I not edit this one" has no answer.
  *
- * DESTRUCTIVE ACTIONS SAY WHAT THEY WILL DO BEFORE THEY DO IT. Delete names the count; merge names
- * the class it will move things to. Legacy's Merge gives no indication of its target at all, and
- * its target is not the active class the tooltip claims (RULE-019).
+ * EVERYTHING ELSE IS LEGACY'S WORDS (right_panel.py:126-168, segment_table_manager.py:122-128,
+ * 375-384): "Filter Class:" with "alias: id" items, "N/A" for an annotation with no class, and the
+ * "Merge to Class" and "Delete" buttons with their tooltips. Until 2026-09-26 the buttons named
+ * their effect -- "Merge into class 2", "Delete 3" -- because legacy's Merge gives no indication
+ * of its target, and that target is the lowest selected class rather than the active one
+ * (RULE-019). The owner asked for legacy's texts; the count selected is still on the status line.
  */
 
 import { useCallback, useEffect, useState, type MouseEvent, type ReactNode } from "react";
@@ -19,9 +22,9 @@ import { useCallback, useEffect, useState, type MouseEvent, type ReactNode } fro
 import type { WireSegment } from "@lazylabel/contracts";
 
 import { classColor } from "../canvas/classColor.js";
-import { merge, mergeTarget } from "../tools/merge.js";
+import { merge } from "../tools/merge.js";
 import { useWorkspace } from "./WorkspaceProvider.jsx";
-import { useHotkey } from "../hotkeys/HotkeyProvider.jsx";
+import { useHotkey, useKeyHint } from "../hotkeys/HotkeyProvider.jsx";
 
 export function SegmentTable(): ReactNode {
   const { segments, selected, toggleSelected, setSelection, clearSelection, applySegments, classAliases } =
@@ -114,27 +117,26 @@ export function SegmentTable(): ReactNode {
     setSelection(rows.map(({ index }) => index));
   });
   useHotkey("escape", clearSelection);
+  const keyOf = useKeyHint();
 
-  // AFTER the hooks, never before: an early return above a `useHotkey` changes how many hooks this
-  // component runs between renders, and React refuses -- "Rendered more hooks than during the
-  // previous render". The keys are also right to keep alive here: with no annotations they simply
-  // find nothing to act on, which is what their own guards already say.
-  if (segments.length === 0) {
-    return <p className="panel__missing">No annotations on this image yet.</p>;
-  }
-
-
-  const target = selected.length > 0 ? mergeTarget(segments, selected) : null;
-
+  // With no annotations the table is shown empty, as legacy's is: its keys find nothing to act on,
+  // which is what their own guards already say, and its buttons are disabled.
   return (
     <>
       <label className="segments__filter">
         <span>Filter Class:</span>
-        <select value={filtering ? filter : "all"} onChange={(event) => setFilter(event.target.value)}>
+        <select
+          value={filtering ? filter : "all"}
+          title="Filter segments list by class"
+          onChange={(event) => setFilter(event.target.value)}
+        >
           <option value="all">All Classes</option>
           {classes.map((classId) => (
             <option key={String(classId)} value={String(classId)}>
-              {classId === null ? "Unclassified" : aliasOf(classAliases, classId)}
+              {/* Legacy's "alias: id" (segment_table_manager.py:381-384), the alias being the id
+                  where there is none. Legacy lists no unclassified entry; this one reads "N/A", as
+                  those annotations do in the table. */}
+              {classId === null ? "N/A" : `${aliasOf(classAliases, classId)}: ${classId}`}
             </option>
           ))}
         </select>
@@ -174,32 +176,51 @@ export function SegmentTable(): ReactNode {
                 />
               </td>
               <td>{index + 1}</td>
-              <th scope="row">{segment.classId ?? "unclassified"}</th>
-              <td>{segment.classId === null ? "" : aliasOf(classAliases, segment.classId)}</td>
+              {/* Legacy's "N/A" for an annotation with no class, in both columns
+                  (segment_table_manager.py:125-128). */}
+              <th scope="row">{segment.classId ?? "N/A"}</th>
+              <td>{segment.classId === null ? "N/A" : aliasOf(classAliases, segment.classId)}</td>
               <td>{segment.type}</td>
             </tr>
           ))}
         </tbody>
       </table>
 
-      <p role="status">
-        {selected.length === 0
-          ? `${segments.length} ${segments.length === 1 ? "annotation" : "annotations"}`
-          : `${selected.length} of ${segments.length} selected`}
-      </p>
+      {segments.length > 0 && (
+        <p role="status">
+          {selected.length === 0
+            ? `${segments.length} ${segments.length === 1 ? "annotation" : "annotations"}`
+            : `${selected.length} of ${segments.length} selected`}
+        </p>
+      )}
 
       <div className="segments__actions">
-        {/* Both name their effect. A button that says only "Merge" leaves a user to find out what
-            it did by looking at the result, which for a destructive action is too late. */}
-        <button type="button" onClick={onMerge} disabled={selected.length < 2}>
-          {target === null ? "Merge" : `Merge into class ${target}`}
+        {/* Legacy's buttons and tooltips (right_panel.py:158-165). Its tooltips name the keys; these
+            name the keys the user bound. */}
+        <button
+          type="button"
+          onClick={onMerge}
+          disabled={selected.length < 2}
+          title={`Merge selected segments into a single class${keyOf("merge_segments")}`}
+        >
+          Merge to Class
         </button>
 
-        <button type="button" onClick={onDelete} disabled={selected.length === 0}>
-          {selected.length <= 1 ? "Delete" : `Delete ${selected.length}`}
+        <button
+          type="button"
+          onClick={onDelete}
+          disabled={selected.length === 0}
+          title={`Delete selected segments${keyOf("delete_segments", "delete_segments_alt")}`}
+        >
+          Delete
         </button>
 
-        <button type="button" onClick={clearSelection} disabled={selected.length === 0}>
+        <button
+          type="button"
+          onClick={clearSelection}
+          disabled={selected.length === 0}
+          title={`Cancel/Clear Selection${keyOf("escape")}`}
+        >
           Clear selection
         </button>
       </div>

@@ -8,7 +8,7 @@
 
 import { describe, expect, it } from "vitest";
 
-import { hideableColumns, visibleColumns } from "../../src/dataset/columns.js";
+import { columnName, hideableColumns, visibleColumns } from "../../src/dataset/columns.js";
 
 const ALL = [
   { format: "NPZ", suffix: ".npz" },
@@ -71,5 +71,16 @@ describe("the switches offered", () => {
 
   it("offers nothing for a column it cannot hide", () => {
     expect(hideableColumns([{ format: "FUTURE", suffix: ".future" }])).toEqual([]);
+  });
+});
+
+describe("what a column is called", () => {
+  it("is legacy's name for each of the seven formats", () => {
+    // fast_file_manager.py:277-288.
+    expect(ALL.map(columnName)).toEqual(["NPZ OHE", "NPZ CM", "YOLO Det", "YOLO Seg", "COCO", "VOC", "CreateML"]);
+  });
+
+  it("is the suffix for a format legacy never had", () => {
+    expect(columnName({ format: "FUTURE", suffix: ".future" })).toBe(".future");
   });
 });

@@ -32,7 +32,7 @@ import { useWorkspace } from "../workspace/WorkspaceProvider.jsx";
 
 import type { AnnotationsResult, ApiClient } from "../api/client.js";
 import { useSettings } from "../settings/SettingsProvider.jsx";
-import { formatModified, formatSize, hideableColumns, visibleColumns } from "./columns.js";
+import { columnName, formatModified, formatSize, hideableColumns, visibleColumns } from "./columns.js";
 import { SORT_ORDERS, needsDetails, sortImages } from "./sorting.js";
 
 export interface DatasetBrowserProps {
@@ -148,11 +148,14 @@ export function DatasetBrowser({
     if (tableless) onShown?.([]);
   }, [onShown, tableless]);
 
-  if (state.status === "loading") return <p>Loading the folder…</p>;
+  const where = folderName(here);
+
+  // Legacy's words while scanning and on a failure (fast_file_manager.py:1225, main_window.py:7330).
+  if (state.status === "loading") return <p>Loading: {where}</p>;
   if (state.status === "failed") {
     return (
       <p role="alert" className="banner banner--error">
-        The folder could not be listed: {state.reason}
+        Error discovering images: {state.reason}
       </p>
     );
   }
@@ -202,25 +205,29 @@ export function DatasetBrowser({
 
       {listing.unrecognized > 0 && (
         <p role="status" className="dataset__unrecognized">
-          {listing.unrecognized} file{listing.unrecognized === 1 ? "" : "s"} were not recognized as
-          images or annotations
+          {listing.unrecognized} file{listing.unrecognized === 1 ? "" : "s"} not recognized
         </p>
       )}
 
       {listing.images.length === 0 ? (
-        <p>
-          {folders.length > 0
-            // A folder holding only folders is the normal shape of a dataset root, and saying
-            // "no images" there reads as a failure rather than as a place to go through.
-            ? "No images in this folder. There are folders below it."
-            : "This folder has no images LazyLabel can open."}
-        </p>
+        // Legacy's empty footer (fast_file_manager.py:952-953). A folder holding only folders is
+        // the normal shape of a dataset root; they are listed just above, so a place to go through
+        // does not read as a failure.
+        <p>No images in {where}</p>
       ) : (
         <ColumnedTable listing={listing} openState={openState} openImage={openImage} onShown={onShown} />
       )}
       {/* The formats to write are in Application Settings, where legacy's Export Formats is. */}
     </section>
   );
+}
+
+/**
+ * What legacy's file list calls a folder (fast_file_manager.py:951-955): its own name, which at the
+ * dataset's root is the breadcrumb's "Dataset".
+ */
+function folderName(path: string): string {
+  return path.split("/").filter((part) => part !== "").pop() ?? "Dataset";
 }
 
 /**
@@ -274,7 +281,7 @@ function ColumnedTable({
           type="search"
           className="dataset__search"
           value={query}
-          placeholder="Search files…"
+          placeholder="Search files..."
           aria-label="Search files"
           onChange={(event) => setQuery(event.target.value)}
         />
@@ -300,7 +307,10 @@ function ColumnedTable({
 
 
         <details className="dataset__columns">
-          <summary>Columns</summary>
+          {/* Legacy's 30px column menu button, "⚏" (fast_file_manager.py:47). */}
+          <summary aria-label="Columns" title="Columns">
+            ⚏
+          </summary>
           {/* A dropdown, as legacy's 30px column menu is, so opening it does not push the list. */}
           <div className="dataset__columns-menu">
           {/* The two detail columns sit with the format ones: to a user they are all "columns",
@@ -326,11 +336,11 @@ function ColumnedTable({
             </label>
           ))}
           {hideableColumns(listing.columns).map((column) => (
-            <label key={column.format}>
+            <label key={column.format} title={column.suffix}>
               <input
                 type="checkbox"
                 checked={settings.values[column.setting] !== false}
-                aria-label={`Show the ${column.suffix} column`}
+                aria-label={`Show the ${columnName(column)} column`}
                 onChange={(event) =>
                   void save({
                     ...settings,
@@ -338,7 +348,7 @@ function ColumnedTable({
                   })
                 }
               />{" "}
-              {column.suffix}
+              {columnName(column)}
             </label>
           ))}
           </div>
@@ -348,10 +358,12 @@ function ColumnedTable({
         <table className="dataset">
           <thead>
             <tr>
-              <th scope="col">Image</th>
+              {/* Legacy's column names (fast_file_manager.py:277-288), each format's suffix in its
+                  tooltip. */}
+              <th scope="col">Name</th>
               {shown.map((column) => (
-                <th scope="col" key={column.format} title={column.format}>
-                  {column.suffix}
+                <th scope="col" key={column.format} title={column.suffix}>
+                  {columnName(column)}
                 </th>
               ))}
               {/* RULE-036's other two columns. They are the reason the listing can be asked for
@@ -387,11 +399,14 @@ function ColumnedTable({
               </tr>
             ))}
           </tbody>
-          {/* Legacy's totals row: how many images, and how many have each format. */}
+          {/* Legacy's totals row: how many images, in its words (fast_file_manager.py:954-955), and
+              how many have each format. It said how many were already annotated until 2026-09-26;
+              the per-format totals beside it say that. */}
           <tfoot>
             <tr>
               <th scope="row">
-                {listing.images.length} images, {listing.annotatedCount} already annotated
+                {listing.images.length} image{listing.images.length === 1 ? "" : "s"} in{" "}
+                {folderName(listing.folder)}
               </th>
               {shown.map((column) => (
                 <td key={column.format}>

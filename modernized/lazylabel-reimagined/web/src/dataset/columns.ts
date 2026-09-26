@@ -33,6 +33,25 @@ export interface Column {
 }
 
 /**
+ * Legacy's column names by the suffix each column shows (fast_file_manager.py:277-288, 450-458).
+ * The list read ".npz", ".txt" and so on until 2026-09-26; the suffix is the header's tooltip now.
+ */
+const LEGACY_NAME: Readonly<Record<string, string>> = {
+  ".npz": "NPZ OHE",
+  "_CM.npz": "NPZ CM",
+  ".txt": "YOLO Det",
+  "_seg.txt": "YOLO Seg",
+  "_coco.json": "COCO",
+  ".xml": "VOC",
+  "_createml.json": "CreateML",
+};
+
+/** What a column is called: legacy's name, or its suffix for a format legacy never had. */
+export function columnName(column: Column): string {
+  return LEGACY_NAME[column.suffix] ?? column.suffix;
+}
+
+/**
  * The columns to render, in the API's order.
  *
  * A column whose suffix nothing maps to is SHOWN. A new format added to the API without a setting

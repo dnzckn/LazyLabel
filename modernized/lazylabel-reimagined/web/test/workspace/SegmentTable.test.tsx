@@ -1,9 +1,9 @@
 /**
  * The annotation list, and the two destructive buttons under it.
  *
- * What this pins beyond "the list renders": that a destructive action says what it will do BEFORE
- * doing it, and that merge names the class it targets — which is the one legacy gets wrong, since
- * its tooltip claims the active class and its code uses the lowest selected one (RULE-019).
+ * What this pins beyond "the list renders": that merge moves the selection to the class RULE-019
+ * names -- the lowest selected one -- and that the panel reads as legacy's does: its filter items,
+ * its "N/A", and its "Merge to Class" and "Delete" with their tooltips (right_panel.py:126-168).
  */
 
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
@@ -83,9 +83,12 @@ const shown = (id: string) => screen.getByTestId(id).textContent;
 const row = (index: number) => screen.getByRole("checkbox", { name: new RegExp(`\\b${index + 1},`) });
 
 describe("the list", () => {
-  it("says so when there is nothing on the image", async () => {
+  it("shows the table empty when there is nothing on the image, as legacy's is", async () => {
     await mount([]);
-    expect(screen.getByText(/No annotations on this image yet/)).toBeTruthy();
+    expect(screen.getByRole("table").querySelectorAll("tbody tr")).toHaveLength(0);
+    expect(screen.queryByRole("status")).toBeNull();
+    expect((screen.getByRole("button", { name: "Delete" }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole("button", { name: "Merge to Class" }) as HTMLButtonElement).disabled).toBe(true);
   });
 
   it("shows each annotation's TYPE, not only its class", async () => {
@@ -100,9 +103,23 @@ describe("the list", () => {
     expect(table.textContent).toContain("Loaded");
   });
 
-  it("names an unclassified annotation rather than showing a blank", async () => {
+  it("names an unclassified annotation N/A in both columns, as legacy does", async () => {
+    // segment_table_manager.py:125-128.
     await mount([polygon(null)]);
-    expect(screen.getByRole("table").textContent).toContain("unclassified");
+    const cells = [...screen.getByRole("table").querySelectorAll("tbody tr th, tbody tr td")].map(
+      (cell) => cell.textContent,
+    );
+    expect(cells.slice(2, 4)).toEqual(["N/A", "N/A"]);
+  });
+
+  it("lists the filter's classes as legacy's \"alias: id\"", async () => {
+    // segment_table_manager.py:377-384, where a class with no alias is its own id.
+    await mount([polygon(2), polygon(null)]);
+    const options = [...(screen.getByLabelText("Filter Class:") as HTMLSelectElement).options].map(
+      (option) => option.textContent,
+    );
+    expect(options).toEqual(["All Classes", "N/A", "2: 2"]);
+    expect(screen.getByLabelText("Filter Class:").title).toBe("Filter segments list by class");
   });
 
   it("counts them, and counts the selection once there is one", async () => {
@@ -128,16 +145,16 @@ describe("merging", () => {
     await waitFor(() => expect((button() as HTMLButtonElement).disabled).toBe(false));
   });
 
-  it("NAMES the class it will merge into, before doing it", async () => {
-    // The one legacy gets wrong: its tooltip claims the active class and its code uses the lowest
-    // selected one. A button that says only "Merge" leaves the user to find out by looking at the
-    // result.
+  it("is legacy's Merge to Class, with legacy's tooltip and the key the user bound", async () => {
+    // right_panel.py:158-161. It named its target, "Merge into class 2", until 2026-09-26.
     await mount([polygon(5), polygon(2)]);
 
     fireEvent.click(row(0));
     fireEvent.click(row(1));
 
-    await waitFor(() => expect(screen.getByRole("button", { name: /Merge into class 2/ })).toBeTruthy());
+    const button = await screen.findByRole("button", { name: "Merge to Class" });
+    await waitFor(() => expect((button as HTMLButtonElement).disabled).toBe(false));
+    expect(button.title).toBe("Merge selected segments into a single class (M)");
   });
 
   it("moves the selected annotations to that class", async () => {
@@ -165,13 +182,16 @@ describe("merging", () => {
 });
 
 describe("deleting", () => {
-  it("says how many it will remove", async () => {
+  it("is legacy's Delete, its tooltip naming both keys, and the count is on the status line", async () => {
+    // right_panel.py:162-165. It read "Delete 2" until 2026-09-26.
     await mount([polygon(0), polygon(1), polygon(2)]);
 
     fireEvent.click(row(0));
     fireEvent.click(row(2));
 
-    await waitFor(() => expect(screen.getByRole("button", { name: "Delete 2" })).toBeTruthy());
+    await waitFor(() => expect(screen.getByRole("status").textContent).toBe("2 of 3 selected"));
+    const button = screen.getByRole("button", { name: "Delete" });
+    expect(button.title).toBe("Delete selected segments (V/Backspace)");
   });
 
   it("removes exactly those, leaving the rest", async () => {

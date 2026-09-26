@@ -52,23 +52,24 @@ describe("C5: erasing", () => {
 });
 
 describe("C5: merging and deleting", () => {
-  it("refuses to merge until two are selected, and names what it would do", async () => {
-    // "Merge into class 0", not "Merge". For an action that rewrites several annotations at once,
-    // finding out what it did by looking at the result is too late.
+  it("refuses to merge until two are selected, with legacy's button", async () => {
+    // Legacy's "Merge to Class" (right_panel.py:158). It named its target, "Merge into class 0",
+    // until the owner asked for legacy's texts on 2026-09-26.
     await openImage();
     chooseTool("Poly (2)");
     drawTriangle(10, 10);
     drawTriangle(100, 10);
     await waitFor(() => expect(selectBoxes()).toHaveLength(2));
 
-    expect((screen.getByRole("button", { name: /^Merge/ }) as HTMLButtonElement).disabled).toBe(true);
+    const merge = () => screen.getByRole("button", { name: "Merge to Class" }) as HTMLButtonElement;
+    expect(merge().disabled).toBe(true);
 
     for (const box of selectBoxes()) fireEvent.click(box);
 
-    await waitFor(() => expect(screen.getByRole("button", { name: /Merge into class 0/ })).toBeTruthy());
+    await waitFor(() => expect(merge().disabled).toBe(false));
   });
 
-  it("deletes the selected annotations, and counts them on the button", async () => {
+  it("deletes the selected annotations, with the count on the status line", async () => {
     await openImage();
     chooseTool("Poly (2)");
     drawTriangle(10, 10);
@@ -76,7 +77,8 @@ describe("C5: merging and deleting", () => {
     await waitFor(() => expect(selectBoxes()).toHaveLength(2));
 
     for (const box of selectBoxes()) fireEvent.click(box);
-    fireEvent.click(screen.getByRole("button", { name: "Delete 2" }));
+    await waitFor(() => expect(screen.getByText("2 of 2 selected")).toBeTruthy());
+    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
 
     await waitFor(() => expect(selectBoxes()).toHaveLength(0));
   });

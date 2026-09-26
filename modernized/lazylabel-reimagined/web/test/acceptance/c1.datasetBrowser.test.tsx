@@ -109,17 +109,21 @@ describe("C1: the dataset browser", () => {
     await waitFor(() => expect(screen.getByText("a.png")).toBeTruthy());
     expect(screen.getByText("b.png")).toBeTruthy();
 
-    // One column per format the user has left switched on, in load-priority order, labelled by
-    // the suffix a user would recognize. RULE-036's ten settings are honoured now, and five of
-    // them default to FALSE in legacy -- so the default view is .npz and .txt, not all seven.
-    // Showing every column regardless was the deviation, not this.
-    const headers = screen.getAllByRole("columnheader").map((cell) => cell.textContent);
-    expect(headers).toEqual(["Image", ".npz", ".txt", "Modified", "Size"]);
+    // One column per format the user has left switched on, in load-priority order, under legacy's
+    // column names (fast_file_manager.py:277-288), the suffix a user would recognize in each
+    // header's tooltip. RULE-036's ten settings are honoured now, and five of them default to
+    // FALSE in legacy -- so the default view is NPZ OHE and YOLO Det, not all seven. Showing every
+    // column regardless was the deviation, not this.
+    const headers = screen.getAllByRole("columnheader");
+    expect(headers.map((cell) => cell.textContent)).toEqual(["Name", "NPZ OHE", "YOLO Det", "Modified", "Size"]);
+    expect(headers.map((cell) => cell.title)).toEqual(["", ".npz", ".txt", "", ""]);
   });
 
-  it("says how many images are already annotated", async () => {
+  it("says how many images the folder holds, in legacy's words", async () => {
+    // fast_file_manager.py:954-955. It said how many were already annotated until 2026-09-26; the
+    // per-format totals beside it say that.
     show();
-    await waitFor(() => expect(screen.getByText(/2 images, 1 already annotated/)).toBeTruthy());
+    await waitFor(() => expect(screen.getByText("2 images in frames")).toBeTruthy());
   });
 
   it("totals each format under the list, as legacy's footer does", async () => {
@@ -127,7 +131,7 @@ describe("C1: the dataset browser", () => {
     await waitFor(() => expect(screen.getByText("a.png")).toBeTruthy());
 
     const footer = document.querySelector(".dataset tfoot tr")!;
-    expect(footer.querySelector("th")?.textContent).toBe("2 images, 1 already annotated");
+    expect(footer.querySelector("th")?.textContent).toBe("2 images in frames");
     // .npz and .txt, then the Modified and Size columns, which have nothing to total.
     expect([...footer.querySelectorAll("td")].map((cell) => cell.textContent)).toEqual([
       "1",
@@ -189,19 +193,22 @@ describe("C1: the dataset browser", () => {
 
     // A folder of .avif files would otherwise just look empty, and "no images here" and "none of
     // these count as images" are different problems with different fixes.
-    await waitFor(() => expect(screen.getByText(/18 files were not recognized/)).toBeTruthy());
-    expect(screen.getByText(/no images LazyLabel can open/)).toBeTruthy();
+    await waitFor(() => expect(screen.getByText("18 files not recognized")).toBeTruthy());
+    expect(screen.getByText(/^No images in /)).toBeTruthy();
   });
 
-  it("reports a folder that could not be listed", async () => {
+  it("reports a folder that could not be listed, in legacy's words", async () => {
     show({
       listImages: async () => {
         throw new Error("the dataset folder is not readable");
       },
     });
 
+    // main_window.py:7330.
     await waitFor(() =>
-      expect(screen.getByRole("alert").textContent).toMatch(/could not be listed/),
+      expect(screen.getByRole("alert").textContent).toBe(
+        "Error discovering images: the dataset folder is not readable",
+      ),
     );
   });
 

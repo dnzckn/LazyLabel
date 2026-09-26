@@ -89,13 +89,13 @@ describe("a dataset whose images are not at the root", () => {
     expect(screen.getByText("spare/")).toBeTruthy();
   });
 
-  it("says there are folders below rather than 'no images LazyLabel can open'", async () => {
-    // The root of a real dataset holds only folders. Reporting that as no openable images reads as
-    // a failure -- the wrong dataset, an unsupported format -- rather than as a place to go
-    // through.
+  it("says only that the root has no images, in legacy's words, with its folders listed above", async () => {
+    // The root of a real dataset holds only folders. Its folders are the buttons above the line, so
+    // legacy's "No images in ..." (fast_file_manager.py:952-953) does not read as a failure.
     show();
 
-    expect(await screen.findByText(/There are folders below it/)).toBeTruthy();
+    expect(await screen.findByText("No images in Dataset")).toBeTruthy();
+    expect(screen.getByText("frames/")).toBeTruthy();
   });
 
   it("goes down into one and lists its images", async () => {
@@ -155,7 +155,7 @@ describe("a dataset whose images are not at the root", () => {
 
     fireEvent.click(await screen.findByText("spare/"));
 
-    expect(await screen.findByText(/no images LazyLabel can open/)).toBeTruthy();
+    expect(await screen.findByText("No images in spare")).toBeTruthy();
   });
 });
 
@@ -170,6 +170,6 @@ describe("a server that does not send the field", () => {
       },
     });
 
-    expect(await screen.findByText(/no images LazyLabel can open/)).toBeTruthy();
+    expect(await screen.findByText("No images in Dataset")).toBeTruthy();
   });
 });
