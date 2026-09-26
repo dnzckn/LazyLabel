@@ -10,7 +10,7 @@
  * model is needed for is proving the masks match legacy, which is a different claim.
  */
 
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { createFinalMaskTensor, type MaskTensor } from "@lazylabel/annotation-formats";
@@ -214,6 +214,46 @@ describe("Keep Flagged Masks and Skip Labeled (RULE-060, RULE-081)", () => {
     expect((await screen.findByRole("alert")).textContent).toMatch(
       /Nothing was propagated: Skip Labeled could not read which frames already have labels/,
     );
+    expect(fake.started).toHaveLength(0);
+  });
+
+  /** A client whose settings pick `model`, and whose model list says whether it can propagate. */
+  function picking(model: string, videoCapable: boolean): Fake {
+    const fake = fakeClient({});
+    const defaults = defaultSettings();
+    const client = {
+      ...fake.client,
+      getSettings: async () => ({ ...defaults, values: { ...defaults.values, ai_model: model } }),
+      models: async () => [{ name: model, family: videoCapable ? "sam2" : "sam1", videoCapable, present: true, verified: true }],
+    } as unknown as ApiClient;
+    return { ...fake, client };
+  }
+
+  it("sends the picked SAM 2 model with the run, as legacy propagates with the model it has loaded (SP-32)", async () => {
+    // Legacy uses the loaded model (main_window.py:4052-4060). The web sent none: the service guessed,
+    // and refused outright with two SAM 2 checkpoints listed.
+    const fake = picking("SAM 2.1 large", true);
+    show(fake);
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    fireEvent.click(propagate());
+
+    await waitFor(() => expect(fake.started).toHaveLength(1));
+    expect(fake.started[0]!.model).toBe("SAM 2.1 large");
+  });
+
+  it("refuses in legacy's words when the picked model is SAM 1 (SP-32)", async () => {
+    const fake = picking("SAM vit_h", false);
+    show(fake);
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    fireEvent.click(propagate());
+
+    expect((await screen.findByRole("alert")).textContent).toMatch(/SAM 2 video predictor not available/);
     expect(fake.started).toHaveLength(0);
   });
 

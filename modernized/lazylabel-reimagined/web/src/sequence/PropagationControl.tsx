@@ -213,6 +213,28 @@ export function PropagationControl({
     if (!mayDiscard("Propagating again")) return;
 
     /*
+     * THE PICKER'S MODEL, as legacy propagates with the model it has loaded (`main_window.py:
+     * 4052-4060`, `SEQUENCE_PARITY.md` SP-32). Sent so the service does not guess: with two SAM 2
+     * checkpoints listed it refused to choose, and with one it propagated even while SAM 1 was
+     * picked. A SAM 1 pick is refused in legacy's words. With nothing picked nothing is sent, and the
+     * service uses its only SAM 2 model if it has one.
+     */
+    setRefused(null);
+    const model = String(settings.values["ai_model"] ?? "");
+    if (model !== "") {
+      let picked: { readonly videoCapable: boolean } | undefined;
+      try {
+        picked = (await client.models()).find((each) => each.name === model);
+      } catch {
+        picked = undefined; // unknown here: the service answers for it
+      }
+      if (picked !== undefined && !picked.videoCapable) {
+        setRefused("SAM 2 video predictor not available");
+        return;
+      }
+    }
+
+    /*
      * The reference MASKS are loaded before anything starts. They are the user's own annotations,
      * and the service seeds SAM 2 with them rather than with prompts re-derived from them --
      * re-clicking an object someone already drew gives a mask close to theirs and not theirs.
@@ -293,6 +315,7 @@ export function PropagationControl({
       references,
       objects: seeds.objects,
       ...(Number.isFinite(window) && window > 0 ? { window } : {}),
+      ...(model === "" ? {} : { model }),
       streaming,
     });
   }, [
