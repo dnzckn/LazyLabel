@@ -18,7 +18,10 @@ import { HotkeyEditor } from "../../src/hotkeys/HotkeyEditor.jsx";
 import { HotkeyProvider, useHotkey } from "../../src/hotkeys/HotkeyProvider.jsx";
 import { SettingsProvider, useSettings } from "../../src/settings/SettingsProvider.jsx";
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+});
 
 /**
  * Legacy's dialog, row by row: what `HotkeyDialog` rendered for the default bindings when it was
@@ -182,7 +185,7 @@ async function keyField(name: string, slot: "Primary" | "Secondary" = "Primary")
 /** Click a field, then press a key in it, the way a user rebinds. */
 async function rebind(
   name: string,
-  press: { code: string; key: string; ctrlKey?: boolean; shiftKey?: boolean },
+  press: { code: string; key: string; ctrlKey?: boolean; shiftKey?: boolean; altKey?: boolean; metaKey?: boolean },
   slot: "Primary" | "Secondary" = "Primary",
 ): Promise<HTMLInputElement> {
   const field = await keyField(name, slot);
@@ -373,6 +376,47 @@ describe("rebinding a key", () => {
     await waitFor(() => expect(saved[0]!.hotkeys["merge_segments"]!.primary).toBe("Ctrl+Shift+F9"));
   });
 
+  it("records the modifiers in Qt's order, Meta first", async () => {
+    // `QKeySequence(key | modifiers).toString()` (hotkey_dialog.py:102-108) writes Meta, Ctrl, Alt,
+    // Shift, in that order (PyQt6 6.9.1). This wrote Meta last.
+    const { saved } = mount();
+
+    await rebind("Merge Segments", { code: "F9", key: "F9", ctrlKey: true, metaKey: true });
+
+    await waitFor(() => expect(saved[0]!.hotkeys["merge_segments"]!.primary).toBe("Meta+Ctrl+F9"));
+  });
+
+  it("records a keypad key with Num, as legacy's dialog does", async () => {
+    // Qt marks a keypad key with its keypad modifier, and the dialog writes it: "Num+1". Pressed on
+    // the keypad, such a binding answers there before the plain 1 does (`keyEvent.ts`).
+    const { saved } = mount();
+
+    await rebind("Merge Segments", { code: "Numpad1", key: "1" });
+
+    await waitFor(() => expect(saved[0]!.hotkeys["merge_segments"]!.primary).toBe("Num+1"));
+  });
+
+  it("records Ctrl+= as legacy's dialog does, not as the Ctrl+Plus it is not", async () => {
+    const { saved } = mount();
+
+    await rebind("Merge Segments", { code: "Equal", key: "=", ctrlKey: true });
+
+    await waitFor(() => expect(saved[0]!.hotkeys["merge_segments"]!.primary).toBe("Ctrl+="));
+  });
+
+  it("records a Mac's Command key as Ctrl and its Control key as Meta, as legacy's dialog does there", async () => {
+    // On a Mac, Qt's "Ctrl" is the Command key (`qapplekeymapper.mm`), so legacy records Command+F9
+    // as "Ctrl+F9" -- the Ctrl+F9 the same binding means on Windows. This recorded "Meta+F9".
+    vi.spyOn(navigator, "platform", "get").mockReturnValue("MacIntel");
+    const { saved } = mount();
+
+    await rebind("Merge Segments", { code: "F9", key: "F9", metaKey: true });
+    await waitFor(() => expect(saved[0]!.hotkeys["merge_segments"]!.primary).toBe("Ctrl+F9"));
+
+    await rebind("Delete Segments", { code: "F8", key: "F8", ctrlKey: true });
+    await waitFor(() => expect(saved[1]!.hotkeys["delete_segments"]!.primary).toBe("Meta+F8"));
+  });
+
   it("keeps waiting when only a modifier is pressed", async () => {
     // A bare Ctrl is not a binding; it is the start of one.
     const { saved } = mount();
@@ -510,6 +554,32 @@ describe("the capture, as legacy's runs it", () => {
       expect(saved).toHaveLength(0);
     });
   }
+
+  it("refuses the keys only a Mac's browser keeps, on every platform (web-only)", async () => {
+    // CONTROL_PARITY.md CP-66. Command+Option+Right switches tabs on a Mac, where Qt calls it
+    // Ctrl+Alt+Right; a binding made here follows its user there, and would never fire.
+    const { saved } = mount();
+
+    const field = await rebind("Merge Segments", { code: "ArrowRight", key: "ArrowRight", ctrlKey: true, altKey: true });
+
+    expect((await screen.findByRole("status")).textContent).toBe(
+      "The key 'Ctrl+Alt+Right' is reserved by the browser on a Mac. Please choose a different key.",
+    );
+    expect(field.value).toBe("M");
+    expect(saved).toHaveLength(0);
+  });
+
+  it("refuses a Mac's Command+Q, which Qt there calls Ctrl+Q", async () => {
+    vi.spyOn(navigator, "platform", "get").mockReturnValue("MacIntel");
+    const { saved } = mount();
+
+    await rebind("Merge Segments", { code: "KeyQ", key: "q", metaKey: true });
+
+    expect((await screen.findByRole("status")).textContent).toBe(
+      "The key 'Ctrl+Q' is reserved by the browser on a Mac. Please choose a different key.",
+    );
+    expect(saved).toHaveLength(0);
+  });
 });
 
 describe("RULE-049: a key another action holds is refused", () => {
@@ -622,6 +692,17 @@ describe("a problem that came in with an imported legacy file", () => {
 
     expect((await screen.findByRole("alert")).textContent).toBe(
       "The key 'Ctrl+T' for 'Toggle Recent Class' is reserved by the browser. Please choose a different key.",
+    );
+  });
+
+  it("names a key only a Mac's browser keeps, however legacy spelled it (web-only)", async () => {
+    const base = defaultSettings();
+    mount({
+      stored: { ...base, hotkeys: { ...base.hotkeys, toggle_recent_class: { primary: "Meta+PgDown", secondary: null } } },
+    });
+
+    expect((await screen.findByRole("alert")).textContent).toBe(
+      "The key 'Meta+PgDown' for 'Toggle Recent Class' is reserved by the browser on a Mac. Please choose a different key.",
     );
   });
 

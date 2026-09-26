@@ -15,6 +15,11 @@
  *     visible reason. The exception is an action something registered a FALLBACK for: the
  *     sequence's Ctrl+H and Ctrl+P, which fell through to the browser's history and print dialogs
  *     while the Sequence tab had not been opened.
+ *
+ * A keystroke is matched the way legacy's Qt shortcuts match it (`keyEvent.ts`): a stored binding
+ * is read however it is spelled, Command is Ctrl on a Mac, a keypad key answers its "Num" binding
+ * and then the plain one, and Ctrl+Shift+= answers a Ctrl++ binding. The first of those keys with
+ * an action something handles is the one that fires.
  */
 
 import {
@@ -30,7 +35,7 @@ import {
 
 import type { HotkeyBinding } from "@lazylabel/settings-schema";
 
-import { isTypingTarget, keyStringFor } from "./keyEvent.js";
+import { isTypingTarget, keyCandidatesFor, normalizeKeyString } from "./keyEvent.js";
 
 export type HotkeyHandler = (event: KeyboardEvent) => void;
 
@@ -76,12 +81,14 @@ export function HotkeyProvider({
   const handlers = useRef(new Map<string, Set<HotkeyHandler>>());
   const fallbacks = useRef(new Map<string, Set<HotkeyHandler>>());
 
-  // Rebuilt whenever the bindings change, so a rebinding takes effect without a reload.
+  // Rebuilt whenever the bindings change, so a rebinding takes effect without a reload. Keyed by the
+  // form `keyStringFor` writes, so a binding spelled "Shift+Ctrl+Z" or "Escape" -- which Qt reads
+  // -- is found too.
   const byKey = useMemo(() => {
     const map = new Map<string, string>();
     for (const [action, binding] of Object.entries(bindings)) {
-      if (binding.primary) map.set(binding.primary, action);
-      if (binding.secondary) map.set(binding.secondary, action);
+      if (binding.primary) map.set(normalizeKeyString(binding.primary), action);
+      if (binding.secondary) map.set(normalizeKeyString(binding.secondary), action);
     }
     return map;
   }, [bindings]);
@@ -129,22 +136,25 @@ export function HotkeyProvider({
       const keyboardEvent = event as KeyboardEvent;
       if (isTypingTarget(keyboardEvent.target, keyboardEvent.key)) return;
 
-      const key = keyStringFor(keyboardEvent);
-      if (key === null) return;
+      // The keys this keystroke can be, the most particular first: the keypad's "Num" binding
+      // before the plain one, as Qt tries them.
+      for (const key of keyCandidatesFor(keyboardEvent)) {
+        const action = byKey.get(key);
+        if (action === undefined) continue;
 
-      const action = byKey.get(key);
-      if (action === undefined) return;
+        const registered = handlers.current.get(action);
+        // No handler means the key is not ours today. Leave the browser's own behaviour alone
+        // rather than swallowing it for an action this screen does not implement -- unless
+        // something registered a fallback, which says why nothing happened and keeps the key from
+        // the browser.
+        const answering =
+          registered !== undefined && registered.size > 0 ? registered : fallbacks.current.get(action);
+        if (answering === undefined || answering.size === 0) continue;
 
-      const registered = handlers.current.get(action);
-      // No handler means the key is not ours today. Leave the browser's own behaviour alone rather
-      // than swallowing it for an action this screen does not implement -- unless something
-      // registered a fallback, which says why nothing happened and keeps the key from the browser.
-      const answering =
-        registered !== undefined && registered.size > 0 ? registered : fallbacks.current.get(action);
-      if (answering === undefined || answering.size === 0) return;
-
-      keyboardEvent.preventDefault();
-      for (const handler of answering) handler(keyboardEvent);
+        keyboardEvent.preventDefault();
+        for (const handler of answering) handler(keyboardEvent);
+        return;
+      }
     };
 
     listenOn.addEventListener("keydown", onKeyDown);
@@ -155,7 +165,7 @@ export function HotkeyProvider({
     () => ({
       register,
       registerFallback,
-      actionFor: (key) => byKey.get(key) ?? null,
+      actionFor: (key) => byKey.get(normalizeKeyString(key)) ?? null,
       bindings,
       isLive: (action) => live.has(action),
     }),

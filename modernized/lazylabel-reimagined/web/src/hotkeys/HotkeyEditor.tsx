@@ -13,6 +13,9 @@
  *   as legacy names it, `name.replace("_", " ").title()` (236).
  * - Click a field and press the new key. The field turns yellow while it waits (48-54), and Escape
  *   cancels. A capture gives up after 15 seconds (36-40, 133-137).
+ * - The key is written as legacy's dialog writes it, in Qt's words (92-114, `keyEvent.ts`): on a Mac
+ *   the Command key is "Ctrl" and the Control key "Meta", the modifiers come in Qt's order, and a
+ *   keypad key carries "Num". So a binding made on a Mac means the same keys on Windows.
  * - A modifier or lock key on its own, and Tab with Ctrl or Alt, is waited through (75-90). Plain
  *   Tab and Shift+Tab move focus on, which ends the capture in legacy too: Qt's focus chain takes
  *   them before the field sees them. That was checked by running legacy's dialog under QTest.
@@ -35,7 +38,15 @@
  *   alone. Legacy's starts only on a mouse click.
  * - Keys the browser keeps for itself, such as Ctrl+W and Ctrl+T, are refused. This is web-only: a
  *   page never receives them, so such a binding could never fire (`keyEvent.ts`,
- *   `browserReserves`).
+ *   `browserReservation`). So are the keys only a Mac's browser keeps, such as Command+Q and
+ *   Command+Option+Right, written Ctrl+Q and Ctrl+Alt+Right: on every platform, since a binding
+ *   made on Windows follows its user to a Mac.
+ * - A Mac's arrow keys are written without "Num". Legacy's dialog there writes "Num+Right", because
+ *   macOS marks the arrows as keypad keys, and that binding answers no other computer's arrows.
+ * - A shifted character is written by the key it is on, "Shift+1", where legacy's dialog writes the
+ *   character, "Shift+!". Qt's Windows key mapper offers a shortcut Shift+1 and ! for that keystroke
+ *   but never Shift+! (`qwindowskeymapper.cpp`, `possibleKeyCombinations`), so the form written here
+ *   is the one legacy's own shortcuts answer.
  * - The capture field is a text input, which the dispatcher ignores (`isTypingTarget`), so pressing
  *   M to bind it does not also merge the selected segments.
  */
@@ -53,7 +64,7 @@ import {
 
 import { useSettings } from "../settings/SettingsProvider.jsx";
 import { Tabs } from "../shell/Tabs.jsx";
-import { browserReserves, keyStringFor } from "./keyEvent.js";
+import { browserReservation, keyStringFor, type BrowserReservation } from "./keyEvent.js";
 
 type Slot = "primary" | "secondary";
 
@@ -146,14 +157,21 @@ function categories(
  */
 function reservedBindings(
   bindings: Readonly<Record<string, HotkeyBinding>>,
-): readonly { readonly action: string; readonly key: string }[] {
-  const found: { action: string; key: string }[] = [];
+): readonly { readonly action: string; readonly key: string; readonly where: string }[] {
+  const found: { action: string; key: string; where: string }[] = [];
   for (const [action, binding] of Object.entries(bindings)) {
     for (const key of [binding.primary, binding.secondary]) {
-      if (key !== null && key !== "" && browserReserves(key)) found.push({ action, key });
+      if (key === null || key === "") continue;
+      const reservation = browserReservation(key);
+      if (reservation !== null) found.push({ action, key, where: whereReserved(reservation) });
     }
   }
   return found;
+}
+
+/** The end of "reserved by the browser": nothing, or " on a Mac" for a key only a Mac's keeps. */
+function whereReserved(reservation: BrowserReservation): string {
+  return reservation.onlyOnAMac ? " on a Mac" : "";
 }
 
 export interface HotkeyEditorProps {
@@ -193,7 +211,8 @@ export function HotkeyEditor({
         `The key '${conflict.key}' is used by both '${displayName(conflict.heldBy)}' and '${displayName(conflict.action)}'.`,
     ),
     ...reservedBindings(bindings).map(
-      ({ action, key }) => `The key '${key}' for '${displayName(action)}' is reserved by the browser.`,
+      ({ action, key, where }) =>
+        `The key '${key}' for '${displayName(action)}' is reserved by the browser${where}.`,
     ),
   ];
 
@@ -262,11 +281,16 @@ export function HotkeyEditor({
       }
       // A Tab still here carries Ctrl, Alt or Meta. Legacy never binds Tab, so it is waited through.
       if (WAITED_THROUGH.has(event.key) || event.key === "Tab") return;
+      // Written as legacy's dialog writes it, on this platform: Command is Ctrl on a Mac.
       const key = keyStringFor(event.nativeEvent);
       if (key === null) return; // a modifier alone: keep waiting for the key it modifies
       setCapturing(null);
-      if (browserReserves(key)) {
-        setNotice({ tone: "warning", text: `The key '${key}' is reserved by the browser. ${CHOOSE_ANOTHER}` });
+      const reservation = browserReservation(key);
+      if (reservation !== null) {
+        setNotice({
+          tone: "warning",
+          text: `The key '${key}' is reserved by the browser${whereReserved(reservation)}. ${CHOOSE_ANOTHER}`,
+        });
         return;
       }
       assign(action, slot, key);

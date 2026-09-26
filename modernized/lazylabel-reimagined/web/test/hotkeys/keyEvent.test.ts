@@ -5,26 +5,45 @@
  * mismatch here is a hotkey that silently stops working after the port.
  */
 
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { DEFAULT_HOTKEYS } from "@lazylabel/settings-schema";
 
-import { browserReserves, isTypingTarget, keyStringFor } from "../../src/hotkeys/keyEvent.js";
+import {
+  browserReservation,
+  isTypingTarget,
+  keyCandidatesFor,
+  keyStringFor,
+  normalizeKeyString,
+  type KeyEventFields,
+} from "../../src/hotkeys/keyEvent.js";
 
-function press(
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+
+type Modifiers = Partial<Pick<KeyboardEvent, "ctrlKey" | "altKey" | "shiftKey" | "metaKey">>;
+
+const WINDOWS = { apple: false } as const;
+const MAC = { apple: true } as const;
+
+function keystroke(code: string, key: string, modifiers: Modifiers = {}): KeyEventFields {
+  return { code, key, ctrlKey: false, altKey: false, shiftKey: false, metaKey: false, ...modifiers };
+}
+
+/** What the hotkey editor records for this keystroke, on Windows unless told otherwise. */
+function press(code: string, key: string, modifiers: Modifiers = {}, platform: { apple: boolean } = WINDOWS): string | null {
+  return keyStringFor(keystroke(code, key, modifiers), platform);
+}
+
+/** The stored keys this keystroke answers to, the most particular first. */
+function answers(
   code: string,
   key: string,
-  modifiers: Partial<Pick<KeyboardEvent, "ctrlKey" | "altKey" | "shiftKey" | "metaKey">> = {},
-): string | null {
-  return keyStringFor({
-    code,
-    key,
-    ctrlKey: false,
-    altKey: false,
-    shiftKey: false,
-    metaKey: false,
-    ...modifiers,
-  });
+  modifiers: Modifiers = {},
+  platform: { apple: boolean } = WINDOWS,
+): readonly string[] {
+  return keyCandidatesFor(keystroke(code, key, modifiers), platform);
 }
 
 describe("keyStringFor", () => {
@@ -35,42 +54,148 @@ describe("keyStringFor", () => {
     expect(press("KeyZ", "Z", { shiftKey: true })).toBe("Shift+Z");
   });
 
-  it("matches the shipped default bindings exactly", () => {
+  it("answers every shipped default binding", () => {
     // Each of these is a string that appears in the legacy defaults. If the translation disagrees,
-    // the binding is dead.
+    // the binding is dead. Most are the string the editor records for the key; "Escape" is read as
+    // Qt reads it, as Esc.
+    const shipped: readonly (readonly [string, string, Modifiers, string])[] = [
+      ["KeyZ", "z", { ctrlKey: true }, "Ctrl+Z"],
+      ["KeyZ", "Z", { ctrlKey: true, shiftKey: true }, "Ctrl+Shift+Z"],
+      ["Space", " ", {}, "Space"],
+      ["Space", " ", { shiftKey: true }, "Shift+Space"],
+      ["ArrowRight", "ArrowRight", {}, "Right"],
+      ["ArrowLeft", "ArrowLeft", {}, "Left"],
+      ["Period", ".", {}, "."],
+      ["Escape", "Escape", {}, "Escape"],
+      ["Backspace", "Backspace", {}, "Backspace"],
+      ["KeyA", "a", { ctrlKey: true }, "Ctrl+A"],
+      ["KeyN", "N", { shiftKey: true }, "Shift+N"],
+      ["Digit1", "1", {}, "1"],
+      ["KeyH", "h", { ctrlKey: true }, "Ctrl+H"],
+    ];
+    for (const [code, key, modifiers, binding] of shipped) {
+      expect(answers(code, key, modifiers), binding).toContain(normalizeKeyString(binding));
+    }
     expect(press("KeyZ", "z", { ctrlKey: true })).toBe("Ctrl+Z");
-    expect(press("KeyZ", "Z", { ctrlKey: true, shiftKey: true })).toBe("Ctrl+Shift+Z");
-    expect(press("Space", " ")).toBe("Space");
     expect(press("Space", " ", { shiftKey: true })).toBe("Shift+Space");
-    expect(press("ArrowRight", "ArrowRight")).toBe("Right");
-    expect(press("ArrowLeft", "ArrowLeft")).toBe("Left");
-    expect(press("Period", ".")).toBe(".");
-    expect(press("Escape", "Escape")).toBe("Escape");
-    expect(press("Backspace", "Backspace")).toBe("Backspace");
-    expect(press("KeyA", "a", { ctrlKey: true })).toBe("Ctrl+A");
-    expect(press("KeyN", "N", { shiftKey: true })).toBe("Shift+N");
-    expect(press("Digit1", "1")).toBe("1");
-    expect(press("KeyH", "h", { ctrlKey: true })).toBe("Ctrl+H");
+    expect(press("Escape", "Escape")).toBe("Esc");
   });
 
   it("separates the main Enter key from the keypad's, as Qt does", () => {
     // Legacy binds Save Output to both "Return" and "Enter". event.key calls them both "Enter";
-    // only event.code tells them apart, which is why this reads the code.
+    // only event.code tells them apart, which is why this reads the code. The keypad's is recorded
+    // with Num, as legacy's dialog records it, and still answers the "Enter" binding.
     expect(press("Enter", "Enter")).toBe("Return");
-    expect(press("NumpadEnter", "Enter")).toBe("Enter");
+    expect(press("NumpadEnter", "Enter")).toBe("Num+Enter");
+    expect(answers("NumpadEnter", "Enter")).toEqual(["Num+Enter", "Enter"]);
+    expect(answers("Enter", "Enter")).toEqual(["Return"]);
   });
 
-  it("names the zoom keys the way the bindings spell them", () => {
-    expect(press("Equal", "=", { ctrlKey: true })).toBe("Ctrl+Plus");
-    expect(press("NumpadAdd", "+", { ctrlKey: true })).toBe("Ctrl+Plus");
-    expect(press("Minus", "-", { ctrlKey: true })).toBe("Ctrl+Minus");
-    expect(press("NumpadSubtract", "-", { ctrlKey: true })).toBe("Ctrl+Minus");
+  it("records the zoom keys as legacy's dialog does, and answers the zoom bindings with them", () => {
+    // Qt's names, read from PyQt6 6.9.1: `QKeySequence(Key_Equal | Ctrl).toString()` is "Ctrl+=",
+    // the keypad's plus with Ctrl "Ctrl+Num++".
+    expect(press("Equal", "=", { ctrlKey: true })).toBe("Ctrl+=");
+    expect(press("NumpadAdd", "+", { ctrlKey: true })).toBe("Ctrl+Num++");
+    expect(press("Minus", "-", { ctrlKey: true })).toBe("Ctrl+-");
+    expect(press("NumpadSubtract", "-", { ctrlKey: true })).toBe("Ctrl+Num+-");
+
+    // The shipped zoom bindings, "Ctrl+Plus" and "Ctrl+Minus", are Ctrl++ and Ctrl+-.
+    const zoomIn = normalizeKeyString("Ctrl+Plus");
+    const zoomOut = normalizeKeyString("Ctrl+Minus");
+    expect(answers("NumpadAdd", "+", { ctrlKey: true })).toContain(zoomIn);
+    expect(answers("Equal", "=", { ctrlKey: true })).toContain(zoomIn); // web-only: the owner's zoom
+    expect(answers("Minus", "-", { ctrlKey: true })).toContain(zoomOut);
+    expect(answers("NumpadSubtract", "-", { ctrlKey: true })).toContain(zoomOut);
+  });
+
+  it("zooms in on Ctrl+Shift+=, where Shift types the +, as a + binding answers in Qt", () => {
+    // CONTROL_PARITY.md CP-66. Qt offers the character Shift typed with the Shift taken off
+    // (`qwindowskeymapper.cpp`, `possibleKeyCombinations`), so Ctrl+Shift+= on a US keyboard is
+    // Ctrl++ as well.
+    expect(answers("Equal", "+", { ctrlKey: true, shiftKey: true })).toEqual(["Ctrl+Shift+=", "Ctrl++"]);
+    expect(answers("Equal", "+", { ctrlKey: true, shiftKey: true })).toContain(
+      normalizeKeyString("Ctrl+Plus"),
+    );
+  });
+
+  it("offers the character Shift typed only where it is another key to Qt", () => {
+    expect(answers("Digit1", "!", { shiftKey: true })).toEqual(["Shift+1", "!"]);
+    // A letter is the same key either way, and so is Space: Shift+N is not N.
+    expect(answers("KeyN", "N", { shiftKey: true })).toEqual(["Shift+N"]);
+    expect(answers("Space", " ", { shiftKey: true })).toEqual(["Shift+Space"]);
   });
 
   it("orders modifiers the way Qt writes them", () => {
+    // `QKeySequence(Key_K | Ctrl | Alt | Shift | Meta).toString()` is "Meta+Ctrl+Alt+Shift+K",
+    // read from PyQt6 6.9.1. The order this used to write, Meta last, is not one Qt writes.
     expect(press("KeyK", "k", { ctrlKey: true, altKey: true, shiftKey: true, metaKey: true })).toBe(
-      "Ctrl+Alt+Shift+Meta+K",
+      "Meta+Ctrl+Alt+Shift+K",
     );
+  });
+
+  it("reads a Mac's Command key as Ctrl and its Control key as Meta, as Qt does there", () => {
+    // Qt swaps them on macOS (`qapplekeymapper.mm`), and legacy leaves that on: its "Ctrl+Z" is
+    // Command+Z on a Mac. The web recorded Command as "Meta", so a binding made on a Mac meant the
+    // Windows key on Windows, and Command+Z was not Undo.
+    expect(press("KeyZ", "z", { metaKey: true }, MAC)).toBe("Ctrl+Z");
+    expect(press("KeyZ", "z", { ctrlKey: true }, MAC)).toBe("Meta+Z");
+    expect(press("KeyK", "k", { metaKey: true, ctrlKey: true, altKey: true, shiftKey: true }, MAC)).toBe(
+      "Meta+Ctrl+Alt+Shift+K",
+    );
+    // Elsewhere Ctrl is Ctrl and the Windows key is Meta.
+    expect(press("KeyZ", "z", { ctrlKey: true })).toBe("Ctrl+Z");
+    expect(press("KeyZ", "z", { metaKey: true })).toBe("Meta+Z");
+  });
+
+  it("asks the browser which platform it is on when not told", () => {
+    vi.spyOn(navigator, "platform", "get").mockReturnValue("MacIntel");
+    expect(keyStringFor(keystroke("KeyZ", "z", { metaKey: true }))).toBe("Ctrl+Z");
+
+    vi.spyOn(navigator, "platform", "get").mockReturnValue("Win32");
+    expect(keyStringFor(keystroke("KeyZ", "z", { metaKey: true }))).toBe("Meta+Z");
+  });
+
+  it("records a keypad key with Num, as legacy's dialog does", () => {
+    // `QKeySequence(Key_1 | KeypadModifier).toString()` is "Num+1" (PyQt6 6.9.1).
+    expect(press("Numpad1", "1")).toBe("Num+1");
+    expect(press("NumpadDecimal", ".")).toBe("Num+.");
+    expect(press("NumpadMultiply", "*")).toBe("Num+*");
+    expect(press("NumpadDivide", "/")).toBe("Num+/");
+    // With NumLock off a keypad key is the key it then moves by, still on the keypad: Qt's Num+Left.
+    expect(press("Numpad4", "ArrowLeft")).toBe("Num+Left");
+    expect(press("NumpadDecimal", "Delete")).toBe("Num+Del");
+  });
+
+  it("lets a keypad key answer its Num binding first and the plain one after, as Qt's shortcuts do", () => {
+    // `qshortcutmap.cpp`, `nextState`: no match with the keypad modifier, try without it. That is
+    // how a keypad digit works as a plain digit in legacy -- and why a "Num+1" binding, when there is
+    // one, wins over "1" on the keypad and is never reached from the digit row.
+    expect(answers("Numpad1", "1")).toEqual(["Num+1", "1"]);
+    expect(answers("Digit1", "1")).toEqual(["1"]);
+    expect(answers("Numpad4", "ArrowLeft")).toEqual(["Num+Left", "Left"]);
+  });
+
+  it("on a Mac, lets an arrow key answer a Num binding too, but records it without one", () => {
+    // macOS marks the arrows as keypad keys, so legacy's dialog there records "Num+Right" and it
+    // works there. Recorded here without Num: "Num+Right" answers no other computer's arrow keys.
+    expect(answers("ArrowRight", "ArrowRight", {}, MAC)).toEqual(["Num+Right", "Right"]);
+    expect(press("ArrowRight", "ArrowRight", {}, MAC)).toBe("Right");
+    expect(answers("ArrowRight", "ArrowRight")).toEqual(["Right"]);
+  });
+
+  it("writes every key the way it reads one back", () => {
+    for (const [code, key, modifiers] of [
+      ["KeyK", "k", { ctrlKey: true, altKey: true, shiftKey: true, metaKey: true }],
+      ["NumpadAdd", "+", { ctrlKey: true }],
+      ["Equal", "=", { ctrlKey: true }],
+      ["PageDown", "PageDown", { ctrlKey: true }],
+      ["Numpad4", "ArrowLeft", {}],
+      ["Delete", "Delete", {}],
+      ["F5", "F5", { shiftKey: true }],
+    ] as const) {
+      const written = press(code, key, modifiers)!;
+      expect(normalizeKeyString(written), written).toBe(written);
+    }
   });
 
   it("keeps the WASD cluster physical rather than following the layout", () => {
@@ -97,7 +222,50 @@ describe("keyStringFor", () => {
   });
 });
 
-describe("browserReserves", () => {
+describe("normalizeKeyString", () => {
+  // Legacy binds with `QShortcut(QKeySequence(text))` (main_window.py:1036-1056), and Qt reads a
+  // key string in any order and any case, and by its other names. Each of these was read with
+  // PyQt6 6.9.1.
+  it("reads the modifiers in any order and any case, as QKeySequence does", () => {
+    expect(normalizeKeyString("Shift+Ctrl+Z")).toBe("Ctrl+Shift+Z");
+    expect(normalizeKeyString("ctrl+z")).toBe("Ctrl+Z");
+    expect(normalizeKeyString("Ctrl+Meta+Z")).toBe("Meta+Ctrl+Z");
+    expect(normalizeKeyString("num+1")).toBe("Num+1");
+    expect(normalizeKeyString("Ctrl + Z")).toBe("Ctrl+Z");
+  });
+
+  it("reads Qt's other names for a key, and the ones this app used to write", () => {
+    expect(normalizeKeyString("Escape")).toBe("Esc");
+    expect(normalizeKeyString("Delete")).toBe("Del");
+    expect(normalizeKeyString("Insert")).toBe("Ins");
+    expect(normalizeKeyString("Page Down")).toBe("PgDown");
+    expect(normalizeKeyString("PageDown")).toBe("PgDown");
+    expect(normalizeKeyString("pgup")).toBe("PgUp");
+    expect(normalizeKeyString("f5")).toBe("F5");
+    expect(normalizeKeyString("RETURN")).toBe("Return");
+  });
+
+  it("reads + as a key as well as the separator", () => {
+    expect(normalizeKeyString("Ctrl++")).toBe("Ctrl++");
+    expect(normalizeKeyString("Num++")).toBe("Num++");
+    expect(normalizeKeyString("Ctrl+Num++")).toBe("Ctrl+Num++");
+    expect(normalizeKeyString("+")).toBe("+");
+    // Legacy's shipped zoom keys, which Qt cannot read at all (`QKeySequence("Ctrl+Plus")` is
+    // empty); the web reads them as written.
+    expect(normalizeKeyString("Ctrl+Plus")).toBe("Ctrl++");
+    expect(normalizeKeyString("Ctrl+Minus")).toBe("Ctrl+-");
+  });
+
+  it("leaves a string Qt cannot read unchanged, so it matches nothing, as legacy's shortcut would", () => {
+    expect(normalizeKeyString("Cmd+Z")).toBe("Cmd+Z");
+    expect(normalizeKeyString("Ctrl+")).toBe("Ctrl+");
+  });
+});
+
+describe("browserReservation", () => {
+  /** Whether the browser keeps the key at all, wherever. */
+  const browserReserves = (key: string): boolean => browserReservation(key) !== null;
+
   it("names the keys a browser tab never sends its page", () => {
     // Close, new and reopen tab; new and incognito window; close window; next and previous tab.
     for (const key of [
@@ -122,6 +290,39 @@ describe("browserReserves", () => {
     // The check reads the capture's own vocabulary, so the two cannot disagree about Ctrl+W.
     expect(browserReserves(press("KeyW", "w", { ctrlKey: true })!)).toBe(true);
     expect(browserReserves(press("Tab", "Tab", { ctrlKey: true, shiftKey: true })!)).toBe(true);
+    expect(browserReserves(press("PageDown", "PageDown", { ctrlKey: true })!)).toBe(true);
+    // And as Qt spells them, so an imported legacy binding is recognised too.
+    expect(browserReserves("Ctrl+PgDown")).toBe(true);
+    expect(browserReserves("shift+ctrl+t")).toBe(true);
+  });
+
+  it("names the keys only a Mac's browser keeps, as Qt names them there", () => {
+    // CONTROL_PARITY.md CP-66. Command is "Ctrl" on a Mac, Option "Alt" and Control "Meta": quit;
+    // next and previous tab by Command+Option+arrow, by Command+Shift+] and [, by Control+Tab and
+    // by Control+PageDown and PageUp. Refused everywhere, since a binding follows its user to a Mac.
+    for (const key of [
+      "Ctrl+Q",
+      "Ctrl+Alt+Right",
+      "Ctrl+Alt+Left",
+      "Ctrl+Shift+]",
+      "Ctrl+Shift+[",
+      "Meta+Tab",
+      "Meta+Shift+Tab",
+      "Meta+PgDown",
+      "Meta+PgUp",
+    ]) {
+      expect(browserReservation(key), key).toEqual({ onlyOnAMac: true });
+    }
+    expect(browserReservation("Ctrl+W")).toEqual({ onlyOnAMac: false });
+    expect(browserReservation("M")).toBeNull();
+  });
+
+  it("recognises a Mac's keystrokes for them, Command+W as much as Ctrl+W", () => {
+    expect(browserReserves(press("KeyW", "w", { metaKey: true }, MAC)!)).toBe(true);
+    expect(browserReserves(press("KeyQ", "q", { metaKey: true }, MAC)!)).toBe(true);
+    expect(browserReserves(press("ArrowRight", "ArrowRight", { metaKey: true, altKey: true }, MAC)!)).toBe(true);
+    expect(browserReserves(press("BracketRight", "}", { metaKey: true, shiftKey: true }, MAC)!)).toBe(true);
+    expect(browserReserves(press("Tab", "Tab", { ctrlKey: true }, MAC)!)).toBe(true);
   });
 
   it("leaves every default binding alone, the sequence's Ctrl+H and Ctrl+P included", () => {
