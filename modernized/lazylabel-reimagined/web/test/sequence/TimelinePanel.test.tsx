@@ -131,6 +131,45 @@ describe("+ All labeled (SP-26)", () => {
   });
 });
 
+describe("with no AI (SP-31)", () => {
+  /*
+   * Legacy hides its Reference Frames, Propagation and Review groups without its AI packages, and
+   * Ctrl+P and Ctrl+H show the install hint; Trim and New Timeline stay (sequence_widget.py:274-278,
+   * 307-311, 825-835; main_window.py:4020-4022, 4710-4712, 5041-5043). The web offered everything,
+   * and failures appeared after the click.
+   */
+  const client = { listImages: async () => ({ images: [] }) } as unknown as ApiClient;
+  const NO_AI = { available: false, videoCapable: false, reason: "the inference service could not be reached" };
+
+  it("hides what cannot work, keeps Trim and New timeline, and says why on Ctrl+P and Ctrl+H", async () => {
+    render(withSettings(<TimelinePanel images={FOLDER} client={client} ai={NO_AI} />));
+    build("0", "4", { references: false });
+    await waitFor(() => expect(cells()).toHaveLength(5));
+
+    for (const name of [/^Propagate/, /Find archetypes/, /Mark as reference/, /\+ All labeled/, /Next flagged/, /Clear flags/]) {
+      expect(screen.queryByRole("button", { name })).toBeNull();
+    }
+    expect(screen.getByText("Cut")).toBeTruthy();
+    expect(screen.getByText("New timeline")).toBeTruthy();
+
+    fireEvent.keyDown(document, { key: "p", ctrlKey: true });
+    expect(await screen.findByText(/AI features require the inference service/)).toBeTruthy();
+  });
+
+  it("keeps Find Archetypes when the service is up but no model can propagate", async () => {
+    render(
+      withSettings(
+        <TimelinePanel images={FOLDER} client={client} ai={{ available: true, videoCapable: false, reason: null }} />,
+      ),
+    );
+    build("0", "4", { references: false });
+    await waitFor(() => expect(cells()).toHaveLength(5));
+
+    expect(screen.queryByRole("button", { name: /^Propagate/ })).toBeNull();
+    expect(screen.getByRole("button", { name: /Find archetypes/ })).toBeTruthy();
+  });
+});
+
 describe("the header (SP-19)", () => {
   it("names an image opened from outside the timeline instead of a frame that is not on screen", async () => {
     const onStatus = vi.fn();

@@ -427,6 +427,10 @@ export function App({ client }: { readonly client: ApiClient }): ReactNode {
                   : { openAnnotations: { key: open.image.key, segments, classAliases } })}
                 onArchetypes={setArchetypes}
                 onReviewLookup={onReviewLookup}
+                // Without AI the propagation controls are hidden and their keys say why (SP-31).
+                {...(health === null
+                  ? {}
+                  : { ai: { available: health.ai.available, videoCapable: health.ai.videoCapable, reason: health.ai.reason } })}
                 onStatus={setSequenceStatus}
                 {...(open === null ? {} : { openKey: open.image.key })}
                 onOpen={(key, segments) => {

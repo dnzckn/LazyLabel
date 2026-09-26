@@ -134,6 +134,13 @@ export interface TimelinePanelProps {
    * else, and for everything while the Sequence tab is not the one in use.
    */
   readonly onReviewLookup?: (lookup: (key: string) => readonly WireSegment[] | undefined) => void;
+  /**
+   * What `/health` says about AI (SP-31). Absent means unknown, and everything is offered, as
+   * before; known and missing, the propagation, reference and review controls are hidden and
+   * their keys say why, as legacy's are without its AI packages (`sequence_widget.py:274-278,
+   * 307-311, 825-835`; `main_window.py:4020-4022, 4710-4712, 5041-5043`).
+   */
+  readonly ai?: { readonly available: boolean; readonly videoCapable: boolean; readonly reason: string | null };
 }
 
 /** What legacy says when there is no such frame to move to (main_window.py:4673-4706, 5158-5168). */
@@ -142,6 +149,23 @@ const NOTHING_TO_STEP_TO: Readonly<Record<Target, string>> = {
   reference: "No reference frames",
   suggested: "No suggested frames",
 };
+
+/** What the keys and the disabled controls say when AI is missing: legacy's hint, for a server. */
+function aiHintFor(ai: TimelinePanelProps["ai"]): string {
+  const why = ai?.reason ?? (ai !== undefined && ai.available && !ai.videoCapable
+    ? "no model that can propagate is installed"
+    : null);
+  return `AI features require the inference service${why === null ? "" : ` (${why})`}.`;
+}
+
+/** Ctrl+P while propagation is unavailable: says why, as legacy's does (`main_window.py:4710-4712`). */
+function PropagateHint({ active, hint }: { readonly active: boolean; readonly hint: string }): ReactNode {
+  const { notify } = useNotifications();
+  useHotkey("propagate", () => {
+    if (active) notify({ severity: "info", message: hint });
+  });
+  return null;
+}
 
 /** The frames' keys in Sort's order, as it stands now. */
 function sortedKeys(frames: readonly Frame[]): readonly string[] {
@@ -171,7 +195,12 @@ export function TimelinePanel({
   savedElsewhere,
   openAnnotations,
   onReviewLookup,
+  ai,
 }: TimelinePanelProps): ReactNode {
+  const aiReady = ai === undefined || ai.available;
+  // Propagation needs a video-capable model as well as a reachable service.
+  const videoReady = aiReady && (ai === undefined || ai.videoCapable);
+  const aiHint = aiHintFor(ai);
   /*
    * The timeline -- its range and what has been painted over it -- as ONE state, so that a repaint
    * can tell which timeline it was made for.
@@ -438,6 +467,7 @@ export function TimelinePanel({
     // Off its tab the key says where it works, as the shell's fallback does before this panel is
     // first mounted; on it, legacy's answer with no timeline (main_window.py:5057-5059).
     if (!active) notify({ severity: "info", message: FIND_ARCHETYPES_ELSEWHERE });
+    else if (!aiReady) notify({ severity: "info", message: aiHint });
     else if (frames.length === 0) notify({ severity: "info", message: "Build a timeline first" });
     else void find();
   });
@@ -500,7 +530,10 @@ export function TimelinePanel({
 
   if (frames.length === 0) {
     return (
-      <RangePicker images={images} onBuild={build} />
+      <>
+        {!videoReady && <PropagateHint active={active} hint={aiHint} />}
+        <RangePicker images={images} onBuild={build} />
+      </>
     );
   }
 
@@ -694,7 +727,8 @@ export function TimelinePanel({
         <div className="timeline__save" ref={setSaveSlot} />
       </div>
 
-      {client !== undefined && (
+      {!videoReady && <PropagateHint active={active} hint={aiHint} />}
+      {client !== undefined && videoReady && (
         <PropagationControl
           client={client}
           frames={shown}
@@ -720,6 +754,8 @@ export function TimelinePanel({
         >
           {sorted ? "Unsort" : "Sort"}
         </button>
+        {videoReady && (
+          <>
         <button type="button" onClick={() => navigate("flagged", 1)}>
           Next flagged
         </button>
@@ -740,7 +776,9 @@ export function TimelinePanel({
         <button type="button" onClick={() => setOverrides(clearReferences(frames))}>
           Clear references
         </button>
-        {client !== undefined && (
+          </>
+        )}
+        {client !== undefined && aiReady && (
           <button
             type="button"
             // Legacy's Abort while it runs (sequence_widget.py:579-590), red as Propagate's is.
@@ -750,9 +788,11 @@ export function TimelinePanel({
             {finding ? "Abort" : "Find archetypes"}
           </button>
         )}
-        <button type="button" onClick={() => setOverrides(clearFlags(frames))}>
-          Clear flags
-        </button>
+        {videoReady && (
+          <button type="button" onClick={() => setOverrides(clearFlags(frames))}>
+            Clear flags
+          </button>
+        )}
         <button type="button" className="seq-button seq-button--brown" onClick={startOver}>
           New timeline
         </button>
@@ -793,6 +833,7 @@ export function TimelinePanel({
         </p>
       )}
 
+      {videoReady && (
       <ConfidencePanel
         scores={allScores}
         threshold={threshold}
@@ -805,6 +846,7 @@ export function TimelinePanel({
           setOverrides(applyThreshold(frames, allScores, next));
         }}
       />
+      )}
 
       <p className="panel__missing">
         Propagation agrees with legacy frame for frame on a recorded test clip: the masks, the

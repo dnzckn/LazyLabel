@@ -46,7 +46,9 @@ function mount() {
       dataset: "ok",
       database: "ok",
       degraded: [],
-      ai: { available: false, reason: "no inference service", videoCapable: false, accelerator: "unknown" },
+      // A deployment WITH AI: without it the propagation controls are hidden, as legacy's are (SP-31),
+      // which `test/sequence/TimelinePanel.test.tsx` covers.
+      ai: { available: true, reason: null, videoCapable: true, accelerator: "unknown" },
     }),
     listImages: async () => ({
       folder: "frames",
