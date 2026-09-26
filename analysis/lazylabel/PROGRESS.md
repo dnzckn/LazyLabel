@@ -691,7 +691,7 @@ configured, so a green CI run says nothing about them — see `Running the live 
    owner asked whether the app matches the PyQt6 one "in looks and hot keys ... across all tabs".
    The look was done (`VISUAL_PARITY.md`). Three read-only audits then compared what every control
    and key DOES, and found about forty unrecorded differences, ranked P0-P3 in that file. By the end
-   of 2026-09-25 all five P0 items and fifteen of the P1 items were fixed. Among them:
+   of 2026-09-25 all five P0 items and sixteen of the P1 items were fixed. Among them:
    - Enter saved over an unreadable file;
    - Ctrl+A then V deleted classes hidden by the filter;
    - class names could not contain a typed space;
