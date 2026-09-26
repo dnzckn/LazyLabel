@@ -17,7 +17,7 @@
  * `moveVertex` directly, because the thing worth proving is that the drag reaches it at all.
  */
 
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { WireDatasetImage } from "@lazylabel/contracts";
 
@@ -180,7 +180,10 @@ describe("flow 3, step by step", () => {
     // dropped on the next save -- which is a mistake this codebase has made.
     await openAndDraw();
 
-    const field = await screen.findByLabelText(/Name for class 0/);
+    // A double-click on the class's name opens its editor, as in legacy (right_panel.py:192).
+    const id = await screen.findByRole("button", { name: "Draw new annotations as class 0" });
+    fireEvent.doubleClick(within(id.closest("tr") as HTMLElement).getByRole("cell"));
+    const field = screen.getByRole("textbox", { name: "Name for class 0" });
     fireEvent.change(field, { target: { value: "stop sign" } });
     fireEvent.blur(field);
 

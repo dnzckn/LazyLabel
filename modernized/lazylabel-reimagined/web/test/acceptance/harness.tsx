@@ -10,7 +10,7 @@
  * undo/redo — and every component test passed throughout.
  */
 
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { expect, vi } from "vitest";
 
 import { defaultSettings } from "@lazylabel/settings-schema";
@@ -132,6 +132,17 @@ export function drawTriangle(x: number, y: number, erase = false): void {
   press(x + 40, y);
   press(x + 40, y + 30);
   fireEvent.keyDown(document, { key: " ", code: "Space", shiftKey: erase });
+}
+
+/**
+ * Open a class's name editor the way a user does: a double-click on its name in the class table, as
+ * in legacy (right_panel.py:192). The row is found by its id, because an unnamed class's name IS its
+ * id and would match the id's cell too.
+ */
+export async function editClassName(classId: number): Promise<HTMLInputElement> {
+  const id = await screen.findByRole("button", { name: `Draw new annotations as class ${classId}` });
+  fireEvent.doubleClick(within(id.closest("tr") as HTMLElement).getByRole("cell"));
+  return screen.getByRole("textbox", { name: `Name for class ${classId}` }) as HTMLInputElement;
 }
 
 /** The save button, which exists whenever an image is open — including one with no file yet. */

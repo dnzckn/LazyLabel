@@ -1165,23 +1165,26 @@ fieldset input[type="text"] {
   margin: 8px 0 2px;
 }
 
-/* The name is edited in place, as a table cell is in legacy: no box until it has focus. */
+/* A row is clicked, double-clicked and dragged, as legacy's is. None of that should select its text. */
+.classes .class-row {
+  cursor: pointer;
+  user-select: none;
+}
+
+/* The name's editor, which a double-click opens over the cell as Qt opens a cell's editor. */
 .classes input[type="text"] {
   width: calc(100% - 14px);
   padding: 1px 2px;
-  background: transparent;
-  border-color: transparent;
-  color: inherit;
-  font: inherit;
-}
-
-.classes input[type="text"]:focus {
   background: var(--input);
   border-color: var(--accent);
   color: var(--ink);
+  font: inherit;
+  cursor: text;
+  user-select: text;
 }
 
-/* The id is the button that makes a class active. It reads as the cell's text. */
+/* The id is the row's focusable control: Alt+Up and Alt+Down move the row, F2 edits the name. It
+   reads as the cell's text. */
 .classes__use,
 .classes__use[aria-pressed="true"],
 .classes__use:hover:not(:disabled),
@@ -1191,10 +1194,6 @@ fieldset input[type="text"] {
   background: none;
   color: inherit;
   font: inherit;
-}
-
-.classes__use:hover:not(:disabled) {
-  text-decoration: underline;
 }
 
 /* The active class: bold, with legacy's orange marker -- a mark drawn here rather than an emoji
@@ -1214,16 +1213,25 @@ fieldset input[type="text"] {
   color: #ffa500;
 }
 
-.classes__order {
-  white-space: nowrap;
+/* A drag in progress: the row being moved is faded, and a line marks the gap it will land in --
+   white over a dark edge, so it shows on every class colour. */
+.classes.classes--dragging,
+.classes.classes--dragging * {
+  cursor: grabbing;
 }
 
-.classes__order button {
-  padding: 0 4px;
+.classes__row--dragged {
+  opacity: 0.5;
 }
 
-.classes__to {
-  font-weight: 700;
+.classes__row--drop-before > th,
+.classes__row--drop-before > td {
+  box-shadow: inset 0 2px 0 #ffffff, inset 0 4px 0 rgb(0 0 0 / 0.55);
+}
+
+.classes__row--drop-after > th,
+.classes__row--drop-after > td {
+  box-shadow: inset 0 -2px 0 #ffffff, inset 0 -4px 0 rgb(0 0 0 / 0.55);
 }
 
 /* Legacy's slider row (adjustments_widget.py:41-61): the name right-aligned in 80px, the value in

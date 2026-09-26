@@ -15,7 +15,7 @@
 import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { chooseTool, drawTriangle, lastSave, openImage, writeButton } from "./harness.jsx";
+import { chooseTool, drawTriangle, editClassName, lastSave, openImage, writeButton } from "./harness.jsx";
 
 afterEach(cleanup);
 
@@ -27,7 +27,7 @@ describe("C7: classes and names", () => {
 
     drawTriangle(10, 10);
 
-    expect(await screen.findByLabelText(/Name for class 0/)).toBeTruthy();
+    expect(await screen.findByRole("button", { name: "Draw new annotations as class 0" })).toBeTruthy();
   });
 
   it("names a class, and the name reaches the save", async () => {
@@ -35,7 +35,7 @@ describe("C7: classes and names", () => {
     chooseTool("Poly (2)");
     drawTriangle(10, 10);
 
-    const field = await screen.findByLabelText(/Name for class 0/);
+    const field = await editClassName(0);
     fireEvent.change(field, { target: { value: "car" } });
     fireEvent.blur(field);
     fireEvent.click(writeButton());
@@ -51,11 +51,12 @@ describe("C7: classes and names", () => {
     chooseTool("Poly (2)");
     drawTriangle(10, 10);
 
-    const field = await screen.findByLabelText(/Name for class 0/);
+    const field = await editClassName(0);
     fireEvent.change(field, { target: { value: "car" } });
     fireEvent.blur(field);
-    fireEvent.change(field, { target: { value: "" } });
-    fireEvent.blur(field);
+    const again = await editClassName(0);
+    fireEvent.change(again, { target: { value: "" } });
+    fireEvent.blur(again);
 
     fireEvent.click(writeButton());
 

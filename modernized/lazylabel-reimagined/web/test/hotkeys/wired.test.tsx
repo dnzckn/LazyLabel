@@ -160,7 +160,9 @@ describe("the hotkey reference", () => {
     mount();
     await waitFor(() => expect(screen.getByRole("button", { name: "Show hotkeys" })).toBeTruthy());
     fireEvent.click(screen.getByRole("button", { name: "Show hotkeys" }));
-    return await screen.findByRole("table");
+    // The dialog's table: the page has others, the class table among them even with no image open,
+    // as legacy's does.
+    return within(await screen.findByRole("dialog")).getByRole("table");
   }
 
   it("says which keys do something and which do not", async () => {

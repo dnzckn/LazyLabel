@@ -13,7 +13,15 @@
 import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { chooseTool, drawTriangle, lastSave, openImage, selectBoxes, writeButton } from "./harness.jsx";
+import {
+  chooseTool,
+  drawTriangle,
+  editClassName,
+  lastSave,
+  openImage,
+  selectBoxes,
+  writeButton,
+} from "./harness.jsx";
 
 afterEach(cleanup);
 
@@ -82,7 +90,7 @@ describe("C5: reclassing", () => {
     chooseTool("Poly (2)");
     drawTriangle(10, 10);
 
-    const field = await screen.findByLabelText(/Name for class 0/);
+    const field = await editClassName(0);
     fireEvent.change(field, { target: { value: "stop sign" } });
     fireEvent.blur(field);
 
