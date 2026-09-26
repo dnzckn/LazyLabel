@@ -211,12 +211,12 @@ describe("C10: build a timeline and mark reference frames", () => {
     expect(labels[0]).toContain("pending");
   });
 
-  it("counts the references above the timeline", async () => {
+  it("lists the references in their group, as legacy's does", async () => {
     await openSequence();
     await buildRange();
     fireEvent.click(screen.getByRole("button", { name: "+ All Labeled" }));
 
-    expect(await screen.findByText(/4 frames, 1 reference/)).toBeTruthy();
+    await waitFor(() => expect(screen.getByText(/^References:/).textContent).toBe("References: Frames: 2 ★"));
   });
 
   it("opens a frame in the workspace when its cell is clicked", async () => {
@@ -233,14 +233,12 @@ describe("C10: build a timeline and mark reference frames", () => {
   it("offers Propagate now that there is a job API behind it", async () => {
     // This test used to assert the OPPOSITE -- that no button was offered, because nothing was
     // behind one. That was the right assertion while it was true, and changing it is what closing
-    // the slice looks like. The panel says how far agreement with legacy has been shown -- on the
-    // synthetic-shapes golden since 2026-09-23 -- and where it stops.
+    // the slice looks like.
     await openSequence();
     await buildRange();
 
     await waitFor(() => expect(cells()).toHaveLength(4));
     expect(screen.getByRole("button", { name: /^Propagate/ })).toBeTruthy();
-    expect(screen.getByText(/longer than the streaming window/)).toBeTruthy();
   });
 
   it("will not propagate with nothing to carry from", async () => {
@@ -253,6 +251,5 @@ describe("C10: build a timeline and mark reference frames", () => {
 
     await waitFor(() => expect(cells()).toHaveLength(2));
     expect(screen.getByRole("button", { name: /^Propagate/ })).toHaveProperty("disabled", true);
-    expect(screen.getByText(/Nothing to carry from yet/)).toBeTruthy();
   });
 });

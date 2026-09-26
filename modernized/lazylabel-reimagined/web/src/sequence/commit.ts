@@ -73,6 +73,35 @@ export function scoreOf(result: WirePropagationFrame): ObjectScore {
   return { empty, score: result.confidence };
 }
 
+/**
+ * What legacy's engine counts, for its notices: the frames it stored a mask for, and the frames
+ * with an object below Min Conf (`propagation_manager.py:763-806, 1087-1126`). With Keep Flagged
+ * Masks off it stores no object below Min Conf. An object with no pixels is neither; a reference
+ * is never reported; a frame not in `among` (trimmed off) is not counted. Skip Labeled is the
+ * view's, not the engine's, so its frames count, as they do in legacy's
+ * "Propagation complete: N frames, M flagged" (`main_window.py:4621-4634`).
+ */
+export function engineCounts(
+  masks: ReadonlyMap<string, readonly WirePropagationFrame[]>,
+  among: ReadonlySet<string>,
+  references: ReadonlySet<string>,
+  threshold: number,
+  keepFlagged: boolean,
+): { readonly propagated: ReadonlySet<string>; readonly flagged: ReadonlySet<string> } {
+  const propagated = new Set<string>();
+  const flagged = new Set<string>();
+  for (const [key, results] of masks) {
+    if (!among.has(key) || references.has(key)) continue;
+    for (const result of results) {
+      if (scoreOf(result).empty) continue;
+      const low = isFlagged(result.confidence, threshold);
+      if (low) flagged.add(key);
+      if (!low || keepFlagged) propagated.add(key);
+    }
+  }
+  return { propagated, flagged };
+}
+
 export function commitFrame(
   key: string,
   results: readonly WirePropagationFrame[],

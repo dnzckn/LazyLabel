@@ -71,7 +71,7 @@ describe("keeping", () => {
 
     expect(outcome.kind).toBe("refused");
     if (outcome.kind !== "refused") return;
-    expect(outcome.reason).toMatch(/every frame is inside/);
+    expect(outcome.reason).toBe("Nothing to remove — all frames are in the range");
   });
 });
 
@@ -81,7 +81,7 @@ describe("what it refuses", () => {
 
     expect(outcome.kind).toBe("refused");
     if (outcome.kind !== "refused") return;
-    expect(outcome.reason).toMatch(/both trim bounds/);
+    expect(outcome.reason).toBe("Set both trim left and right bounds first");
   });
 
   it("will not empty the timeline", () => {

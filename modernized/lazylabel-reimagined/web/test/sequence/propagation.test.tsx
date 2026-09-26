@@ -212,7 +212,7 @@ describe("Keep Flagged Masks and Skip Labeled (RULE-060, RULE-081)", () => {
     fireEvent.click(propagate());
 
     expect((await screen.findByRole("alert")).textContent).toMatch(
-      /Nothing was propagated: Skip Labeled could not read which frames already have labels/,
+      /Skip Labeled could not read which frames have labels.*the dataset is unreachable/,
     );
     expect(fake.started).toHaveLength(0);
   });
@@ -495,8 +495,9 @@ describe("starting one", () => {
     const fake = fakeClient({});
     show(fake, [frame(0), frame(1)]);
 
+    // Disabled, as legacy's is (sequence_widget.py:658-659), with no line saying so beside it.
     expect(propagate()).toHaveProperty("disabled", true);
-    expect(screen.getByText(/Nothing to carry from yet/)).toBeTruthy();
+    expect(screen.queryByText(/Nothing to carry from yet/)).toBeNull();
   });
 
   it("is on the propagate hotkey, which was listed in the schema and bound to nothing", async () => {
@@ -575,7 +576,9 @@ describe("starting one", () => {
 
     fireEvent.click(propagate());
 
-    expect(await screen.findByText(/no annotations to carry/)).toBeTruthy();
+    // Legacy's words for it (main_window.py:4294-4298), with which frames and why beneath.
+    expect(await screen.findByText("No valid segments in reference frames")).toBeTruthy();
+    expect(screen.getByText(/no annotations to carry/)).toBeTruthy();
     expect(fake.started).toHaveLength(0);
   });
 
@@ -617,7 +620,7 @@ describe("watching it", () => {
     show(fake);
 
     fireEvent.click(propagate());
-    await screen.findByText(/Propagated 4 frames/);
+    await screen.findByText(/^Propagation complete/);
     const settled = fake.polls.length;
 
     await new Promise((resolve) => setTimeout(resolve, 60));
@@ -698,17 +701,21 @@ describe("watching it", () => {
     });
   });
 
-  it("names the frames that produced no mask at all", async () => {
-    // RULE-060 never commits these and they keep their previous status. "The model lost the object
-    // here" and "this frame scored badly" look identical on a grey timeline otherwise.
+  it("says when it is complete in legacy's words, counting as legacy's engine counts (SP-50)", async () => {
+    // "Propagation complete: N frames, M flagged. ..." (main_window.py:4621-4634): frames with a mask
+    // stored, and frames with an object below Min Conf. An object with no pixels is neither, and a
+    // frame where every object came out empty is not counted at all (propagation_manager.py:1087-1126).
     const fake = fakeClient({
       poll: () =>
         job({
           state: "completed",
-          completed: 1,
-          cursor: 1,
+          completed: 3,
+          cursor: 4,
           results: [
-            { source: FRAMES[2]!.key, objectId: 1, mask: EMPTY_MASK, confidence: 0 },
+            { source: FRAMES[1]!.key, objectId: 1, mask: MASK, confidence: 0.999 },
+            { source: FRAMES[2]!.key, objectId: 1, mask: MASK, confidence: 0.5 },
+            { source: FRAMES[2]!.key, objectId: 2, mask: MASK, confidence: 0.999 },
+            { source: FRAMES[3]!.key, objectId: 1, mask: EMPTY_MASK, confidence: 0 },
           ],
         }),
     });
@@ -716,12 +723,40 @@ describe("watching it", () => {
 
     fireEvent.click(propagate());
 
-    expect(await screen.findByText(/1 frame produced no mask at all/)).toBeTruthy();
+    expect(
+      await screen.findByText(
+        "Propagation complete: 2 frames, 1 flagged. Scrub timeline or click 'Save All' to save.",
+      ),
+    ).toBeTruthy();
+    expect(screen.queryByText(/produced no mask/)).toBeNull();
   });
 
-  it("shows a failure with the reason, not as a short success", async () => {
+  it("says when every frame was flagged, in legacy's words", async () => {
+    // main_window.py:4624-4629: with Keep Flagged Masks off, a frame below Min Conf stores nothing.
+    const fake = fakeClient({
+      poll: () =>
+        job({
+          state: "completed",
+          completed: 1,
+          cursor: 1,
+          results: [{ source: FRAMES[1]!.key, objectId: 1, mask: MASK, confidence: 0.5 }],
+        }),
+    });
+    show(fake);
+
+    fireEvent.click(propagate());
+
+    expect(
+      await screen.findByText(
+        "Propagation complete but all 1 frames were flagged (below confidence threshold). "
+          + "Try lowering Min Conf or improving reference annotations.",
+      ),
+    ).toBeTruthy();
+  });
+
+  it("shows a failure with the reason, in legacy's words, not as a short success", async () => {
     // Legacy's `except Exception: return` makes a run that died on frame 40 of 200 look like a run
-    // that was 39 frames long.
+    // that was 39 frames long; its error path says "Propagation error: ..." (main_window.py:4649-4656).
     const fake = fakeClient({
       poll: () =>
         job({ state: "failed", completed: 2, cursor: 2, error: "CUDA out of memory" }),
@@ -730,7 +765,7 @@ describe("watching it", () => {
 
     fireEvent.click(propagate());
 
-    expect(await screen.findByText(/Failed after 2 frames/)).toBeTruthy();
+    expect(await screen.findByText("Propagation error: CUDA out of memory")).toBeTruthy();
     expect(screen.getByRole("alert").textContent).toContain("CUDA out of memory");
   });
 
@@ -770,7 +805,9 @@ describe("stopping it", () => {
     expect(await screen.findByRole("button", { name: "Stopping…" })).toBeTruthy();
   });
 
-  it("reports what the cancel KEPT, because that is RULE-063's promise", async () => {
+  it("says legacy's 'Propagation cancelled' at the press, and nothing is complete after it", async () => {
+    // main_window.py:4445. The web said "Stopped after 3 frames -- cancelled after 3 frames; those
+    // frames are kept"; the frames kept are on the timeline, as legacy's are.
     const stopped = job({
       state: "cancelled",
       completed: 3,
@@ -790,27 +827,10 @@ describe("stopping it", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: "Cancel" }));
 
-    expect(await screen.findByText(/Stopped after 3 frames/)).toBeTruthy();
-    expect(screen.getByText(/those frames are kept/)).toBeTruthy();
-  });
-
-  it("says 1 frame, not 1 frames", async () => {
-    // A real run on 2026-09-23 read "Stopped after 1 frames".
-    const stopped = job({ state: "cancelled", completed: 1, error: "cancelled after 1 frame; that frame is kept" });
-    let cancelled = false;
-    const fake = fakeClient({
-      poll: () => (cancelled ? stopped : job({ state: "running" })),
-      cancel: () => {
-        cancelled = true;
-        return stopped;
-      },
-    });
-    show(fake);
-    fireEvent.click(propagate());
-
-    fireEvent.click(await screen.findByRole("button", { name: "Cancel" }));
-
-    expect(await screen.findByText(/Stopped after 1 frame\b(?!s)/)).toBeTruthy();
+    expect(await screen.findByText("Propagation cancelled")).toBeTruthy();
+    await waitFor(() => expect(screen.queryByRole("button", { name: /^(Cancel|Stopping…)$/ })).toBeNull());
+    expect(screen.queryByText(/^Propagation complete/)).toBeNull();
+    expect(screen.queryByText(/Stopped after/)).toBeNull();
   });
 
   it("does not treat a cancel as a failure", async () => {
@@ -830,7 +850,7 @@ describe("stopping it", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: "Cancel" }));
 
-    await screen.findByText(/Stopped after 3 frames/);
+    await waitFor(() => expect(screen.queryByRole("button", { name: /^(Cancel|Stopping…)$/ })).toBeNull());
     expect(screen.queryByRole("alert")).toBeNull();
   });
 
@@ -865,7 +885,7 @@ describe("stopping it", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
 
-    await screen.findByText(/Stopped after 3 frames/, {}, { timeout: 3000 });
+    await waitFor(() => expect(screen.queryByRole("button", { name: /^(Cancel|Stopping…)$/ })).toBeNull(), { timeout: 3000 });
     // Asked from where this browser was, not from the snapshot's cursor.
     expect(fake.polls.at(-1)!.cursor).toBe(1);
     // Every kept frame reached the timeline, the last two included.
@@ -876,11 +896,11 @@ describe("stopping it", () => {
     const fake = fakeClient({ poll: () => job({ state: "completed", completed: 4, cursor: 4 }) });
     show(fake);
     fireEvent.click(propagate());
-    await screen.findByText(/Propagated 4 frames/);
+    await screen.findByText(/^Propagation complete/);
 
     fireEvent.click(screen.getByRole("button", { name: "Clear" }));
 
-    expect(screen.queryByText(/Propagated 4 frames/)).toBeNull();
+    expect(screen.queryByRole("button", { name: "Clear" })).toBeNull();
     expect(propagate()).toHaveProperty("disabled", false);
   });
 });
@@ -1530,7 +1550,7 @@ describe("RULE-056: not losing propagated work without asking", () => {
       await waitFor(() => expect(cell(0).getAttribute("aria-label")).toMatch(/reference$/));
       if (keepFlagged) fireEvent.click(screen.getByLabelText("Keep flagged masks"));
       fireEvent.click(screen.getByRole("button", { name: /^Propagate/ }));
-      await screen.findByText("Propagated 1 frame", undefined, { timeout: 3000 });
+      await screen.findByText(/^Propagation complete/, undefined, { timeout: 3000 });
       await waitFor(() => expect(cell(1).getAttribute("aria-label")).toMatch(/flagged$/));
     }
 

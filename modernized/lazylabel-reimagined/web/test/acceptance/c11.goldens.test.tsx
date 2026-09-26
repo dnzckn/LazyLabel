@@ -41,7 +41,7 @@ import { defaultSettings } from "@lazylabel/settings-schema";
 
 import type { ApiClient, WirePropagationFrame, WirePropagationJob } from "../../src/api/client.js";
 import { HotkeyProvider } from "../../src/hotkeys/HotkeyProvider.jsx";
-import { NotificationProvider } from "../../src/notifications/NotificationProvider.jsx";
+import { NotificationHost, NotificationProvider } from "../../src/notifications/NotificationProvider.jsx";
 import { Timeline, buildRange } from "../sequence/harness.jsx";
 import { SettingsProvider } from "../../src/settings/SettingsProvider.jsx";
 
@@ -59,12 +59,16 @@ interface Scenario {
   readonly timeline: readonly string[];
   readonly timelineConfidence: Readonly<Record<string, number>>;
   readonly keptMasks: Readonly<Record<string, readonly number[]>>;
+  /** What legacy's status bar said through the run, the last when it finished. */
+  readonly propagationNotices: readonly string[];
   readonly saveAll: {
     readonly written: readonly {
       readonly frame: number;
       readonly segments: readonly { readonly class: number; readonly object: number }[];
     }[];
     readonly timeline: readonly string[];
+    /** What legacy said as Save All started and when it had written. */
+    readonly notices: readonly string[];
   };
 }
 
@@ -232,6 +236,7 @@ function mount(scenario: Scenario) {
 
   render(
     <NotificationProvider>
+      <NotificationHost />
       <SettingsProvider client={client}>
         <HotkeyProvider bindings={defaultSettings().hotkeys}>
           <Timeline
@@ -272,7 +277,8 @@ async function propagate(scenario: Scenario) {
   if (!scenario.skipLabeled) fireEvent.click(within(controls).getByLabelText("Skip labeled"));
 
   fireEvent.click(screen.getByRole("button", { name: /^Propagate/ }));
-  await screen.findByText(`Propagated ${KEYS.length} frames`, undefined, { timeout: 5000 });
+  // The run is over when the app says what legacy said then, word for word (SP-50).
+  await screen.findByText(scenario.propagationNotices.at(-1)!, undefined, { timeout: 5000 });
 }
 
 /** A whole propagation and review per test, in jsdom: seconds, not the default five. */
@@ -343,6 +349,8 @@ describe.each(Object.entries(GOLDEN.scenarios))(
         })),
       );
       await waitFor(() => expect(roles()).toEqual(scenario.saveAll.timeline));
+      // And says what legacy said, word for word: its engine's count first, the frames written after.
+      for (const notice of scenario.saveAll.notices) expect(await screen.findByText(notice)).toBeTruthy();
     }, PER_TEST);
   },
 );

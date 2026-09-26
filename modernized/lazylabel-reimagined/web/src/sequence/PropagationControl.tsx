@@ -27,7 +27,7 @@ import { useHotkey } from "../hotkeys/HotkeyProvider.jsx";
 import { useNotifications } from "../notifications/NotificationProvider.jsx";
 import { useSequenceActive } from "./sequenceActive.js";
 
-import { commitFrame, type CommitPolicy, type Committed } from "./commit.js";
+import { commitFrame, engineCounts, type CommitPolicy, type Committed } from "./commit.js";
 import { clampThreshold, DEFAULT_THRESHOLD, isFlagged } from "./confidence.js";
 import { usePropagation } from "./usePropagation.js";
 import { referenceMasks, type OpenAnnotations } from "./references.js";
@@ -188,8 +188,6 @@ export function PropagationControl({
     if (next !== windowSize) void save({ ...settings, values: { ...settings.values, stream_window_size: next } });
   };
   const { progress, start, cancel, reset } = usePropagation(client);
-  /** What could not become a seed, and why. Reported rather than dropped. */
-  const [unusable, setUnusable] = useState<readonly { key: string; reason: string }[]>([]);
   const [loading, setLoading] = useState(false);
   // RULE-026: on by default. Off loads the whole sequence at once, which the estimate below prices.
   const [streaming, setStreaming] = useState(true);
@@ -219,8 +217,6 @@ export function PropagationControl({
   };
   /** This run's policy, fixed when it starts, as legacy fixes its labelled set. */
   const [policy, setPolicy] = useState<CommitPolicy>(NO_POLICY);
-  /** Why a run was refused before it started, when it was. */
-  const [refused, setRefused] = useState<string | null>(null);
   /**
    * Each frame's commit, by image key, frozen once all its objects are in.
    *
@@ -238,7 +234,6 @@ export function PropagationControl({
    */
   const [aliases, setAliases] = useState<Readonly<Record<string, string>>>({});
   const [saving, setSaving] = useState<{ done: number; total: number } | null>(null);
-  const [saved, setSaved] = useState<string | null>(null);
   /** Frames already written. What remains is what a discard would destroy. */
   const [written, setWritten] = useState<ReadonlySet<string>>(new Set());
   /** `savedElsewhere` as it stood when this run began: a save after it is a correction. */
@@ -300,7 +295,6 @@ export function PropagationControl({
      * picked. A SAM 1 pick is refused in legacy's words. With nothing picked nothing is sent, and the
      * service uses its only SAM 2 model if it has one.
      */
-    setRefused(null);
     const model = String(settings.values["ai_model"] ?? "");
     if (model !== "") {
       let picked: { readonly videoCapable: boolean } | undefined;
@@ -311,7 +305,7 @@ export function PropagationControl({
       }
       if (aborted()) return;
       if (picked !== undefined && !picked.videoCapable) {
-        setRefused("SAM 2 video predictor not available");
+        notify({ severity: "error", message: "SAM 2 video predictor not available" });
         setLoading(false);
         return;
       }
@@ -349,10 +343,11 @@ export function PropagationControl({
           if (aborted()) return;
           // Refused, not run unprotected: a run that could not see which frames have labels could
           // overwrite every one of them at the next Save All.
-          setRefused(
-            "Nothing was propagated: Skip Labeled could not read which frames already have labels "
-              + `(${cause instanceof Error ? cause.message : String(cause)}).`,
-          );
+          notify({
+            severity: "error",
+            message: "Skip Labeled could not read which frames have labels",
+            detail: cause instanceof Error ? cause.message : String(cause),
+          });
           return;
         }
       }
@@ -361,13 +356,19 @@ export function PropagationControl({
     }
     if (aborted()) return;
 
-    setUnusable(seeds.skipped);
+    // What could not seed is said, never dropped: with none left, in legacy's words
+    // (`main_window.py:4294-4298`); with some, how many, the frames and why in the detail.
+    const unusable = seeds.skipped.map((each) => `${each.key.split("/").pop()}: ${each.reason}`).join("; ");
+    if (seeds.objects.length === 0) {
+      notify({ severity: "error", message: "No valid segments in reference frames", detail: unusable });
+    } else if (seeds.skipped.length > 0) {
+      notify({ severity: "warning", message: `${seeds.skipped.length} reference frames could not seed`, detail: unusable });
+    }
     // Before any result arrives: a frame the new run does not reach must not keep a green status
     // whose mask has just been thrown away with the previous run's.
     onRunStart?.();
     setClasses(seeds.classes);
     setAliases(seeds.aliases);
-    setSaved(null);
     // A new run's masks are new work, whatever an earlier Save All wrote. Until 2026-09-23 this set
     // was never cleared, so a frame saved once counted as saved for every later run: no Save button
     // for its new mask, and no question before anything threw that mask away.
@@ -440,7 +441,7 @@ export function PropagationControl({
   useHotkey("propagate", () => {
     if (!active) return;
     if (progress.running) {
-      if (progress.job?.cancelling !== true) void cancel();
+      abort();
       return;
     }
     if (references.length === 0) {
@@ -614,9 +615,51 @@ export function PropagationControl({
     committed.current = new Map();
     setWritten(new Set());
     setPolicy(NO_POLICY);
-    setUnusable([]);
-    setSaved(null);
     onCleared?.();
+  };
+
+  /** Legacy's engine counts, over the frames on the timeline now (see `engineCounts`). */
+  const engine = (): ReturnType<typeof engineCounts> =>
+    engineCounts(
+      progress.masks,
+      new Set(frames.map((frame) => frame.key)),
+      policy.references,
+      threshold,
+      policy.keepFlagged,
+    );
+
+  /*
+   * THE RUN'S NOTICES, in legacy's words (`main_window.py:4621-4636, 4445, 4654`, SEQUENCE_PARITY.md
+   * SP-50): when it completes, how many frames and how many flagged, from its engine's counts; when
+   * it fails, why. A cancel says so at the press, as legacy's does. They replace the lines that said
+   * it here, "Propagated N frames" and the like.
+   */
+  const announced = useRef<string | null>(null);
+  const finished = job !== null && job.state === "completed" ? job.id : null;
+  useEffect(() => {
+    if (finished === null || announced.current === finished) return;
+    announced.current = finished;
+    const { propagated, flagged } = engine();
+    notify({
+      severity: "info",
+      message:
+        propagated.size === 0 && flagged.size > 0
+          ? `Propagation complete but all ${flagged.size} frames were flagged (below confidence threshold). `
+            + "Try lowering Min Conf or improving reference annotations."
+          : `Propagation complete: ${propagated.size} frames, ${flagged.size} flagged. `
+            + "Scrub timeline or click 'Save All' to save.",
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [finished]);
+  const failure = progress.error;
+  useEffect(() => {
+    if (failure !== null) notify({ severity: "error", message: `Propagation error: ${failure}` });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [failure]);
+  const abort = (): void => {
+    if (job?.cancelling === true) return;
+    void cancel();
+    notify({ severity: "info", message: "Propagation cancelled" });
   };
 
   /*
@@ -634,7 +677,7 @@ export function PropagationControl({
       const verdict = frame.isReference ? undefined : view.verdicts.get(frame.key);
       return verdict === undefined ? frame : { ...frame, state: verdict };
     });
-  const { writable: unsaved, withheld } = plannedSave(planned, view.kept, view.known);
+  const { writable: unsaved } = plannedSave(planned, view.kept, view.known);
 
   // Written during render, read by a click handler. The same "latest value" pattern the AI tool
   // uses for its prediction, and for the same reason: an effect would be one render too late.
@@ -670,7 +713,15 @@ export function PropagationControl({
   }, [onSegments, segmentsByFrame]);
 
   const write = useCallback(async () => {
-    setSaved(null);
+    // Legacy's count is its engine's: propagated and not flagged, saved or not
+    // (`main_window.py:4750-4761`); the frames written are counted after (4846).
+    const { propagated, flagged } = engine();
+    const toSave = [...propagated].filter((key) => !flagged.has(key)).length;
+    if (toSave === 0) {
+      notify({ severity: "info", message: "No propagated frames to save" });
+      return;
+    }
+    notify({ severity: "info", message: `Saving ${toSave} frames...` });
     setSaving({ done: 0, total: unsaved.length });
     try {
       const outcome = await saveAll({
@@ -695,16 +746,22 @@ export function PropagationControl({
       });
       setWritten((previous) => new Set([...previous, ...outcome.written]));
       onSaved?.(outcome.written);
-      setSaved(
-        `Saved ${outcome.written.length} frame${outcome.written.length === 1 ? "" : "s"}`
-          + (outcome.failed.length > 0
-            ? ` — ${outcome.failed.length} could not be written: ${outcome.failed[0]!.reason}`
-            : ""),
-      );
+      // Legacy's words, which name NPZ whatever formats are written (`main_window.py:4846`).
+      notify({ severity: "info", message: `Saved ${outcome.written.length} frames to NPZ` });
+      // Legacy logs a failed write and says nothing; here it is said, and the frame stays unsaved (SP-38).
+      if (outcome.failed.length > 0) {
+        notify({
+          severity: "error",
+          message: `${outcome.failed.length} frames could not be saved`,
+          detail: outcome.failed.map((each) => `${each.key.split("/").pop()}: ${each.reason}`).join("; "),
+        });
+      }
     } finally {
       setSaving(null);
     }
-  }, [aliases, classes, client, onSaved, planned, projectId, settings.values, unsaved.length, view.kept, view.known]);
+    // `engine` reads the masks, the frames, the policy and Min Conf, all listed.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [aliases, classes, client, frames, notify, onSaved, planned, policy, progress.masks, projectId, settings.values, threshold, unsaved.length, view.kept, view.known]);
 
   return (
     <div className="timeline__propagation">
@@ -807,7 +864,7 @@ export function PropagationControl({
           <button
             type="button"
             className="seq-button seq-button--red"
-            onClick={() => void cancel()}
+            onClick={abort}
             disabled={job?.cancelling === true}
           >
             {job?.cancelling === true ? "Stopping…" : "Cancel"}
@@ -845,79 +902,13 @@ export function PropagationControl({
         )}
       </div>
 
-      {references.length === 0 && (
-        <p className="timeline__propagation-hint">
-          Nothing to carry from yet — mark a frame as a reference.
-        </p>
-      )}
-
-      {job !== null && (
+      {progress.running && job !== null && (
         <p className="timeline__propagation-state" role="status">
-          {progress.running
-            ? `Propagating — ${job.completed}${job.total === null ? "" : ` of ${job.total}`} frames`
-            : summaryOf(job.state, job.completed)}
-          {/* The service's own sentence, which for a cancel is the promise that work was kept. */}
-          {job.error !== null && job.state !== "failed" && ` — ${job.error}`}
-        </p>
-      )}
-
-      {refused !== null && (
-        <p className="timeline__propagation-error" role="alert">
-          {refused}
-        </p>
-      )}
-
-      {progress.error !== null && (
-        <p className="timeline__propagation-error" role="alert">
-          {progress.error}
-        </p>
-      )}
-
-      {unusable.length > 0 && (
-        // Never silently dropped: a propagation that seeded from three of five references would
-        // produce a plausible result that is not the one the user asked for, and nothing on screen
-        // would say so.
-        <ul className="timeline__propagation-skipped">
-          {unusable.map((each) => (
-            <li key={`${each.key}:${each.reason}`}>
-              {each.key} could not seed: {each.reason}
-            </li>
-          ))}
-        </ul>
-      )}
-
-      {saved !== null && (
-        <p className="timeline__propagation-state" role="status">
-          {saved}
-        </p>
-      )}
-
-      {done && withheld.length > 0 && (
-        // RULE-060's last clause, said out loud. A Save All that silently wrote fewer frames than
-        // the timeline shows as finished would be indistinguishable from one that failed.
-        <p className="timeline__propagation-empty">
-          {withheld.length} frame{withheld.length === 1 ? "" : "s"} will not be written:{" "}
-          {withheld[0]!.reason}
-          {withheld.length > 1 ? ", and others" : ""}.
-        </p>
-      )}
-
-      {view.empty.length > 0 && (
-        // RULE-060: a frame where every object came out empty is never committed and keeps its
-        // previous status. Saying so is the difference between "the model lost the object here"
-        // and "this frame scored badly", which look identical on a grey timeline.
-        <p className="timeline__propagation-empty">
-          {view.empty.length} frame{view.empty.length === 1 ? "" : "s"} produced no mask at
-          all and were not committed.
+          Propagating — {job.completed}
+          {job.total === null ? "" : ` of ${job.total}`} frames
         </p>
       )}
     </div>
   );
 }
 
-function summaryOf(state: string, completed: number): string {
-  const frames = `${completed} frame${completed === 1 ? "" : "s"}`;
-  if (state === "cancelled") return `Stopped after ${frames}`;
-  if (state === "failed") return `Failed after ${frames}`;
-  return `Propagated ${frames}`;
-}

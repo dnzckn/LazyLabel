@@ -2001,28 +2001,8 @@ fieldset input[type="text"] {
   width: 4.5em;
 }
 
-.timeline__propagation-hint,
-.timeline__propagation-state,
-.timeline__propagation-empty,
-.timeline__propagation-error {
+.timeline__propagation-state {
   margin: 0.4rem 0 0;
-}
-
-.timeline__propagation-hint,
-.timeline__propagation-empty {
-  color: var(--muted);
-}
-
-/* References that could not seed. A list, because each one names a different file. */
-.timeline__propagation-skipped {
-  color: var(--muted);
-  margin: 0.4rem 0 0;
-  padding-left: 1.1rem;
-}
-
-/* A failure is loud. A cancel is not -- it reports what it KEPT, which is not bad news. */
-.timeline__propagation-error {
-  color: var(--danger, #b3261e);
 }
 
 /* Undo and redo. The label says what would be undone, which no keystroke can. */

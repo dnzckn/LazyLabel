@@ -470,8 +470,9 @@ export function trim(
   /** The order the frames are SHOWN in, when sorted: the markers then bound what is between them on screen. */
   order?: readonly number[],
 ): TrimOutcome {
+  // Legacy's words (`main_window.py:5236, 5239, 5308, 5329, 5332`).
   if (a === null || b === null) {
-    return { kind: "refused", reason: "Set both trim bounds first." };
+    return { kind: "refused", reason: "Set both trim left and right bounds first" };
   }
 
   // Between the markers AS DISPLAYED: with the timeline sorted, legacy cuts and keeps the frames
@@ -488,16 +489,11 @@ export function trim(
   if (kept.length === 0) {
     // Legacy refuses this too, and the reason is not arbitrary: an empty timeline has no range
     // picker in it, so the only way back would be to rebuild from scratch.
-    return { kind: "refused", reason: "Cannot remove all frames from the timeline." };
+    return { kind: "refused", reason: "Cannot remove all frames from the timeline" };
   }
   if (removed === 0) {
-    return {
-      kind: "refused",
-      reason:
-        mode === "keep"
-          ? "Nothing to remove — every frame is inside the range."
-          : "Nothing to remove — no frame is inside the range.",
-    };
+    // Only Keep can remove nothing: Cut always removes at least the bounds.
+    return { kind: "refused", reason: "Nothing to remove — all frames are in the range" };
   }
 
   // Which of the ORIGINAL positions survived, in order, so the current frame can be moved to the

@@ -8,7 +8,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { WirePropagationFrame } from "../../src/api/client.js";
-import { commitFrame, scoreOf, type CommitPolicy } from "../../src/sequence/commit.js";
+import { commitFrame, engineCounts, scoreOf, type CommitPolicy } from "../../src/sequence/commit.js";
 
 const MASK = { height: 8, width: 8, box: [1, 1, 3, 3], data: btoa("\u0001".repeat(4)) };
 const EMPTY = { height: 8, width: 8, box: null, data: "" };
@@ -22,6 +22,38 @@ function policy(overrides: Partial<CommitPolicy> = {}): CommitPolicy {
 }
 
 const KEY = "clip/f05.png";
+
+describe("legacy's engine counts, for its notices (SP-50)", () => {
+  /*
+   * propagation_manager.py:763-806, 1087-1126: a frame is propagated when it stores a mask, which
+   * with Keep Flagged Masks off only an object at or above Min Conf does, and flagged when any
+   * object with pixels is below it. An empty object is neither; a reference is not reported.
+   */
+  const at = (key: string, ...confidences: (number | null)[]) =>
+    [key, confidences.map((c, i) => ({ ...result(i + 1, c ?? 0, c === null ? EMPTY : MASK), source: key }))] as const;
+  const masks = new Map([
+    at("a", 0.999),
+    at("b", 0.5, 0.999),
+    at("c", 0.5),
+    at("d", null),
+    at("ref", 0.1),
+    at("gone", 0.999),
+  ]);
+  const among = new Set(["a", "b", "c", "d", "ref"]);
+
+  it("counts a frame stored and a frame flagged as legacy's engine does", () => {
+    const { propagated, flagged } = engineCounts(masks, among, new Set(["ref"]), 0.99, false);
+
+    expect([...propagated].sort()).toEqual(["a", "b"]);
+    expect([...flagged].sort()).toEqual(["b", "c"]);
+  });
+
+  it("stores the objects below Min Conf too with Keep Flagged Masks on", () => {
+    const { propagated } = engineCounts(masks, among, new Set(["ref"]), 0.99, true);
+
+    expect([...propagated].sort()).toEqual(["a", "b", "c"]);
+  });
+});
 
 describe("the reference frame", () => {
   it("is the user's own drawing, and the run's version of it is ignored", () => {

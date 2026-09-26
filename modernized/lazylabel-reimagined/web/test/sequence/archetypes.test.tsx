@@ -113,45 +113,59 @@ describe("asking for them", () => {
     );
   });
 
-  it("says how many scenes it found", async () => {
+  /*
+   * Legacy's notices (main_window.py:5061-5148, SEQUENCE_PARITY.md SP-50): fewer than it expects
+   * -- 2% of the frames, between 5 and 50 -- is "Only N reference frames identified (expected ~E)";
+   * as many is "Found N suggested reference frames"; none, "No diverse reference frames found". The
+   * web wrote its own sentences about scenes into the panel.
+   */
+  it("says how many it found, in legacy's words", async () => {
+    show(() => found({ suggested: FOLDER.map((each) => each.key), budget: 5, clusters: 5 }));
+    await build();
+
+    fireEvent.click(screen.getByRole("button", { name: /Find archetypes/ }));
+
+    expect(await screen.findByText("Found 5 suggested reference frames")).toBeTruthy();
+  });
+
+  it("says when it found fewer than legacy expects", async () => {
     show(found);
     await build();
 
     fireEvent.click(screen.getByRole("button", { name: /Find archetypes/ }));
 
-    expect(await screen.findByText(/2 frames suggested from 2 scenes/)).toBeTruthy();
+    expect(await screen.findByText("Only 2 reference frames identified (expected ~5)")).toBeTruthy();
   });
 
-  it("explains a SHORT answer rather than leaving it looking broken", async () => {
-    // "Here are your twenty frames" against "this sequence is too uniform to find twenty distinct
-    // ones". Legacy computes the comparison to pick a progress message and throws it away.
-    show(() => found({ suggested: ["frames/f03.png"], budget: 20, fellShort: true, clusters: 1 }));
-    await build();
-
-    fireEvent.click(screen.getByRole("button", { name: /Find archetypes/ }));
-
-    expect(await screen.findByText(/1 of 20 suggested/)).toBeTruthy();
-    expect(screen.getByText(/only 1 distinct scenes/)).toBeTruthy();
-  });
-
-  it("says plainly when there are no scenes at all", async () => {
+  it("says when there are none", async () => {
     show(() => found({ suggested: [], clusters: 0, noise: 5 }));
     await build();
 
     fireEvent.click(screen.getByRole("button", { name: /Find archetypes/ }));
 
-    expect(await screen.findByText(/too uniform to suggest frames/)).toBeTruthy();
+    expect(await screen.findByText("No diverse reference frames found")).toBeTruthy();
   });
 
-  it("reports a failure with the service's own words", async () => {
+  it("reports a failure with the service's own words, as legacy's does", async () => {
     show(() => {
-      throw new Error("4 frames is fewer than the 5 this needs to say anything");
+      throw new Error("the embedder is not installed");
     });
     await build();
 
     fireEvent.click(screen.getByRole("button", { name: /Find archetypes/ }));
 
-    expect(await screen.findByText(/fewer than the 5/)).toBeTruthy();
+    expect(await screen.findByText("Reference analysis failed: the embedder is not installed")).toBeTruthy();
+  });
+
+  it("asks for at least five frames before it asks the service, as legacy's does", async () => {
+    const { findArchetypes } = show(found);
+    buildRange(0, 3);
+    await waitFor(() => expect(cells()).toHaveLength(4));
+
+    fireEvent.click(screen.getByRole("button", { name: /Find archetypes/ }));
+
+    expect(await screen.findByText("Need at least 5 frames to find archetypes")).toBeTruthy();
+    expect(findArchetypes).not.toHaveBeenCalled();
   });
 
   it("offers no button at all without an inference client", async () => {

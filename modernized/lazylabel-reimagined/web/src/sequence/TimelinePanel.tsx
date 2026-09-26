@@ -325,7 +325,6 @@ export function TimelinePanel({
   const [discarded, setDiscarded] = useState<ReadonlySet<string>>(new Set());
   /** RULE-077's two trim bounds, as positions in the timeline. Order between them does not matter. */
   const [bounds, setBounds] = useState<readonly [number | null, number | null]>([null, null]);
-  const [trimNote, setTrimNote] = useState<string | null>(null);
   /**
    * Propagated frames not yet written — what a New timeline would destroy.
    *
@@ -387,7 +386,6 @@ export function TimelinePanel({
   const [finding, setFinding] = useState(false);
   /** Which Find is current: an aborted one's answer is dropped when it arrives (SP-29). */
   const findRun = useRef(0);
-  const [foundNote, setFoundNote] = useState<string | null>(null);
   /*
    * MIN CONF IS A PERSISTED SETTING, not panel state -- `propagation_confidence_threshold`, which
    * decision 9 keeps with the rest. It was local state for one commit and that was wrong twice
@@ -663,26 +661,43 @@ export function TimelinePanel({
       notify({ severity: "info", message: "Reference analysis cancelled" });
       return;
     }
+    // Legacy's answers, in its words (`main_window.py:5061-5148`, SEQUENCE_PARITY.md SP-50).
+    if (frames.length < 5) {
+      notify({ severity: "info", message: "Need at least 5 frames to find archetypes" });
+      return;
+    }
     const run = (findRun.current += 1);
+    // Earlier suggestions go first, as legacy's do when it starts (`main_window.py:5066-5067`, SP-30).
+    setOverrides((previous) => clearSuggested(previous ?? frames));
+    setArchetypes([]);
+    onArchetypes?.([]);
     setFinding(true);
-    setFoundNote(null);
     try {
       const answer = await client.findArchetypes(frames.map((frame) => frame.key));
       if (run !== findRun.current) return; // aborted meanwhile
+      const found = answer.suggested.length;
+      if (found === 0) {
+        notify({ severity: "info", message: "No diverse reference frames found" });
+        return;
+      }
       setArchetypes(answer.suggested);
       onArchetypes?.(answer.suggested);
-      // Earlier suggestions go first, as legacy's do (`main_window.py:5066-5067`, SP-30).
-      setOverrides(markSuggested(clearSuggested(frames), answer.suggested));
-      setFoundNote(
-        answer.suggested.length === 0
-          ? "No distinct scenes were found — this sequence is too uniform to suggest frames."
-          : answer.fellShort
-            ? `${answer.suggested.length} of ${answer.budget} suggested; this sequence has only `
-              + `${answer.clusters} distinct scenes.`
-            : `${answer.suggested.length} frames suggested from ${answer.clusters} scenes.`,
-      );
+      setOverrides((previous) => markSuggested(previous ?? frames, answer.suggested));
+      const expected = Math.max(5, Math.min(50, Math.floor(frames.length * 0.02)));
+      notify({
+        severity: "info",
+        message:
+          found < expected
+            ? `Only ${found} reference frames identified (expected ~${expected})`
+            : `Found ${found} suggested reference frames`,
+      });
     } catch (cause) {
-      if (run === findRun.current) setFoundNote(cause instanceof Error ? cause.message : String(cause));
+      if (run === findRun.current) {
+        notify({
+          severity: "error",
+          message: `Reference analysis failed: ${cause instanceof Error ? cause.message : String(cause)}`,
+        });
+      }
     } finally {
       if (run === findRun.current) setFinding(false);
     }
@@ -734,7 +749,8 @@ export function TimelinePanel({
       : outside
         ? `${openKey.split("/").pop()} -- not in the timeline`
         : `${currentFrame.key.split("/").pop()} (${current + 1}/${shown.length})`
-          + (currentScore === undefined ? "" : ` -- Conf: ${currentScore.toFixed(4)}`);
+          // "-- Conf" only above 0, as legacy's (`main_window.py:3541-3549`, SP-54).
+          + (currentScore === undefined || currentScore <= 0 ? "" : ` -- Conf: ${currentScore.toFixed(4)}`);
   useEffect(() => onStatus?.(status), [onStatus, status]);
 
   if (frames.length === 0) {
@@ -856,13 +872,12 @@ export function TimelinePanel({
     // masks, which would otherwise land on the same positions in the next timeline.
     setSortKeys(null);
     setBounds([null, null]);
-    setTrimNote(null);
     setArchetypes([]);
     onArchetypes?.([]);
-    setFoundNote(null);
     setOwnScores({});
     setPropagated(new Map());
     setCurrent(0);
+    notify({ severity: "info", message: "Timeline cleared. Set new start/end frames." });
   };
 
 
@@ -930,8 +945,9 @@ export function TimelinePanel({
       current,
       sortKeys === null ? undefined : keptOrder(sortKeys, shown),
     );
+    // Legacy's notices (`main_window.py:5230-5336`, SEQUENCE_PARITY.md SP-50).
     if (outcome.kind === "refused") {
-      setTrimNote(outcome.reason);
+      notify({ severity: "info", message: outcome.reason });
       return;
     }
     setOverrides(outcome.frames);
@@ -939,7 +955,7 @@ export function TimelinePanel({
     setBounds([null, null]);
     // A sorted timeline is sorted again, over what the trim kept, as legacy's is.
     if (sortKeys !== null) setSortKeys(sortedKeys(outcome.frames));
-    setTrimNote(`Removed ${outcome.removed} frame${outcome.removed === 1 ? "" : "s"} from the timeline. No files were touched.`);
+    notify({ severity: "info", message: `Removed ${outcome.removed} frames from timeline` });
     // The open frame cut away: the nearest kept one opens, as legacy's does (`main_window.py:5290-5291`,
     // SEQUENCE_PARITY.md SP-19). One that survived stays open with its edits, where legacy reloads it
     // and loses them (SP-14).
@@ -1081,31 +1097,8 @@ export function TimelinePanel({
   return (
     <div className="timeline">
       {/* The bar first, directly under the view, as legacy's sequence tab has it
-          (main_window.py:3283-3307); the controls follow. */}
-      <p className="timeline__counts">
-        {counts.total} frames, {counts.references} reference
-        {counts.references === 1 ? "" : "s"}
-        {counts.byState.skipped > 0 && (
-          // Said out loud, because a skipped frame is one that will not take part in the run and
-          // legacy gives it nothing but a brown cell.
-          <>
-            {" — "}
-            <span role="status">
-              {counts.byState.skipped} skipped for a size mismatch
-            </span>
-          </>
-        )}
-        {keptLabels.size > 0 && (
-          // Brown too, as in legacy, so the colour alone cannot say which kind of skip it is.
-          <>
-            {" — "}
-            <span role="status">
-              {keptLabels.size} kept {keptLabels.size === 1 ? "its" : "their"} existing labels
-              (Skip labeled)
-            </span>
-          </>
-        )}
-      </p>
+          (main_window.py:3283-3307); the controls follow. Legacy has no counts line: the
+          references are listed in their group, and the header says where the frame is. */}
 
       {/* Legacy's bar (timeline_widget.py:233-339): one strip, a frame per slice, separators only
           while a frame is at least 4px wide -- about 230 frames across the centre pane. With its
@@ -1200,7 +1193,13 @@ export function TimelinePanel({
         </button>
         <span className="timeline__spacer" />
         {videoReady && (
-          <button type="button" onClick={() => setOverrides(clearFlags(frames))}>
+          <button
+            type="button"
+            onClick={() => {
+              setOverrides(clearFlags(frames));
+              notify({ severity: "info", message: "Cleared all timeline flags" });
+            }}
+          >
             Clear flags
           </button>
         )}
@@ -1423,26 +1422,8 @@ export function TimelinePanel({
         </button>
       </div>
 
-      {trimNote !== null && (
-        <p className="timeline__counts" role="status">
-          {trimNote}
-        </p>
-      )}
-
-      {foundNote !== null && (
-        <p className="timeline__counts" role="status">
-          {foundNote}
-        </p>
-      )}
-
       {/* Without a propagation control to sit in, Min Conf stands alone. */}
       {client === undefined && confidence}
-
-      <p className="panel__missing">
-        Propagation agrees with legacy frame for frame on a recorded test clip: the masks, the
-        flags, Keep flagged masks, Skip labeled and Save All. What has not been shown is the same
-        for a sequence longer than the streaming window, which no recording covers yet.
-      </p>
     </div>
   );
 }

@@ -250,14 +250,23 @@ describe("C11: propagate labels through a sequence", () => {
     expect(screen.queryByLabelText(/Select (AI|Loaded)/)).toBeNull();
   });
 
-  it("says how far agreement with legacy has been shown, and where it stops", async () => {
-    // Shown on the synthetic-shapes golden since 2026-09-23 (`c11.goldens.test.tsx`), and only
-    // for sequences that fit in one window. Silence about the rest would be read as confidence.
+  it("says when the run is complete, in legacy's words", async () => {
+    // main_window.py:4631-4634. How far agreement with legacy has been shown is recorded in
+    // SEQUENCE_PARITY.md, and no longer printed on screen: the owner wants no paragraphs.
     mount();
     await openTimeline();
 
-    expect(screen.getByText(/agrees with legacy frame for frame/)).toBeTruthy();
-    expect(screen.getByText(/longer than the streaming window/)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /^Propagate/ }));
+
+    expect(
+      await screen.findByText(
+        // f02 stored; f03, at 0.4 with Keep Flagged Masks off, flagged and not stored.
+        "Propagation complete: 1 frames, 1 flagged. Scrub timeline or click 'Save All' to save.",
+        undefined,
+        { timeout: 3000 },
+      ),
+    ).toBeTruthy();
+    expect(screen.queryByText(/agrees with legacy frame for frame/)).toBeNull();
   });
 });
 
@@ -299,7 +308,7 @@ describe("RULE-058: the open frame keeps its unsaved work through finish, Save A
     fireEvent.click(screen.getByRole("button", { name: "Set Left" }));
     fireEvent.click(screen.getByRole("button", { name: "Set Right" }));
     fireEvent.click(screen.getByRole("button", { name: "Keep" }));
-    await screen.findByText(/Removed 3 frames from the timeline/);
+    await screen.findByText("Removed 3 frames from timeline");
     expect(status()).toMatch(UNSAVED);
     expect(screen.queryByLabelText("Select Polygon 1, class 3")).toBeNull();
   });

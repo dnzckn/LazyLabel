@@ -555,12 +555,42 @@ describe("building one", () => {
     expect(cells()[2]!.className).toContain("timeline__frame--current");
   });
 
-  it("counts the frames and the references", async () => {
+  it("says New Timeline and Clear Flags in legacy's words (SP-50)", async () => {
+    // main_window.py:3478, 5035. Both were silent.
+    show();
+    build("0", "4");
+    await waitFor(() => expect(cells()).toHaveLength(5));
+
+    fireEvent.click(screen.getByText("Clear flags"));
+    expect(await screen.findByText("Cleared all timeline flags")).toBeTruthy();
+
+    fireEvent.click(screen.getByText("New timeline"));
+    expect(await screen.findByText("Timeline cleared. Set new start/end frames.")).toBeTruthy();
+  });
+
+  it("gives the header no confidence at 0, as legacy's gives one only above it (SP-54)", async () => {
+    // main_window.py:3541-3549.
+    const onStatus = vi.fn();
+    render(withSettings(<Timeline images={FOLDER} onStatus={onStatus} scores={{ 0: 0, 2: 0.5 }} />));
+    build("0", "4", { references: false });
+    await waitFor(() => expect(cells()).toHaveLength(5));
+    expect(onStatus).toHaveBeenLastCalledWith("f01.png (1/5)");
+
+    fireEvent.click(cells()[2]!);
+
+    await waitFor(() => expect(onStatus).toHaveBeenLastCalledWith("f03.png (3/5) -- Conf: 0.5000"));
+  });
+
+  it("says how many frames it holds and lists the references, with no counts line of its own", async () => {
+    // Legacy says "Timeline built: N frames" and lists the references in their group; it has no
+    // "N frames, M references" line (SP-57).
     show();
 
     build("0", "4");
 
-    expect(await screen.findByText(/5 frames, 2 references/)).toBeTruthy();
+    expect(await screen.findByText("Timeline built: 5 frames")).toBeTruthy();
+    expect(screen.getByText(/^References:/).textContent).toBe("References: Frames: 2, 5 ★");
+    expect(screen.queryByText(/5 frames, 2 references/)).toBeNull();
   });
 });
 
@@ -681,15 +711,14 @@ describe("with no inference service", () => {
     expect(screen.queryByText(/^Propagate/)).toBeNull();
   });
 
-  it("says how far agreement with legacy has been shown, and where it stops", async () => {
-    // Frame for frame on the synthetic-shapes golden since 2026-09-23; not past one streaming
-    // window, which no golden covers. Silence about that would be read as confidence.
+  it("prints no paragraph about how far it agrees with legacy, as legacy's panel has none", async () => {
+    // The owner, 2026-09-26: no paragraphs in a GUI. Where agreement stops is recorded in
+    // SEQUENCE_PARITY.md, not on screen.
     show();
     build("0", "4");
 
     await waitFor(() => expect(cells()).toHaveLength(5));
-    expect(screen.getByText(/agrees with legacy frame for frame/)).toBeTruthy();
-    expect(screen.getByText(/longer than the streaming window/)).toBeTruthy();
+    expect(screen.queryByText(/agrees with legacy frame for frame/)).toBeNull();
   });
 });
 
@@ -1204,7 +1233,8 @@ describe("trimming the timeline — RULE-077", () => {
     expect(onOpen).not.toHaveBeenCalled();
   });
 
-  it("cuts the frames between the bounds and says how many", async () => {
+  it("cuts the frames between the bounds and says how many, in legacy's words (SP-50)", async () => {
+    // main_window.py:5301. The web said "Removed 2 frames from the timeline. No files were touched."
     show();
     build("0", "4");
     await waitFor(() => expect(cells()).toHaveLength(5));
@@ -1213,20 +1243,7 @@ describe("trimming the timeline — RULE-077", () => {
     fireEvent.click(screen.getByText("Cut"));
 
     await waitFor(() => expect(cells()).toHaveLength(3));
-    expect(screen.getByText(/Removed 2 frames from the timeline/)).toBeTruthy();
-  });
-
-  it("says plainly that no files were touched", async () => {
-    // The single most important thing about this control. A user reading "removed" about a list of
-    // their own images has every reason to think something was deleted.
-    show();
-    build("0", "4");
-    await waitFor(() => expect(cells()).toHaveLength(5));
-
-    boundsFrom(1, 2);
-    fireEvent.click(screen.getByText("Cut"));
-
-    expect(await screen.findByText(/No files were touched/)).toBeTruthy();
+    expect(await screen.findByText("Removed 2 frames from timeline")).toBeTruthy();
   });
 
   it("keeps only what is inside the bounds", async () => {
@@ -1250,8 +1267,20 @@ describe("trimming the timeline — RULE-077", () => {
     boundsFrom(0, 4);
     fireEvent.click(screen.getByText("Cut"));
 
-    expect(await screen.findByText(/Cannot remove all frames/)).toBeTruthy();
+    expect(await screen.findByText("Cannot remove all frames from the timeline")).toBeTruthy();
     expect(cells()).toHaveLength(5);
+  });
+
+  it("says when Keep has nothing to remove, in legacy's words (SP-50)", async () => {
+    // main_window.py:5328-5330.
+    show();
+    build("0", "4");
+    await waitFor(() => expect(cells()).toHaveLength(5));
+
+    boundsFrom(0, 4);
+    fireEvent.click(screen.getByText("Keep"));
+
+    expect(await screen.findByText("Nothing to remove — all frames are in the range")).toBeTruthy();
   });
 
   it("keeps a reference frame's role through a trim", async () => {
