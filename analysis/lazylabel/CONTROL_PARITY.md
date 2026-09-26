@@ -5,6 +5,16 @@ The owner asked on 2026-09-25 whether the web app now matches the PyQt6 app "in 
 controls and keys DO. It is the backlog for that, in priority order, and the record of what was
 fixed.
 
+## Priority: sequence mode first (the owner, 2026-09-25)
+
+"Ensure that every feature behaves the same way across the two versions, particularly the
+serial/time series mode is the premiere feature that needs to work flawlessly."
+
+So sequence-mode parity comes before everything else here. `SEQUENCE_PARITY.md` is its own
+end-to-end audit, judged by what the user sees and what is written to disk. Work that file first,
+then return to this one. The recorded decisions at the end of this file conflict with "every feature
+behaves the same". Each one was put to the owner on 2026-09-25; until they answer, none is reversed.
+
 ## How it was made
 
 Three read-only audits of the source on 2026-09-25 compared the two apps control by control and key
