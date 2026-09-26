@@ -3,16 +3,20 @@
 # BUILT BY CI, NEVER RUN: built on every push to main-web since 2026-09-26, never started. See
 # `deploy/README.md`.
 #
-# Context is `modernized/`, for the same reason as the API: the web app depends on the exporters
-# package, which lives outside the rebuild directory.
+# Context is `modernized/`, for the same reason as the API: `modernized/package.json` is the npm
+# workspace, and the web app depends on the exporters package, which lives outside the rebuild
+# directory.
 
 FROM node:22-bookworm-slim AS build
 
 WORKDIR /src
 
+# The whole workspace, as in the API's image: its manifest, its one lockfile and every member.
+COPY package.json package-lock.json ./
 COPY lazylabel/core/exporters lazylabel/core/exporters
-COPY lazylabel-reimagined/contracts lazylabel-reimagined/contracts
 COPY lazylabel-reimagined/settings-schema lazylabel-reimagined/settings-schema
+COPY lazylabel-reimagined/contracts lazylabel-reimagined/contracts
+COPY lazylabel-reimagined/api lazylabel-reimagined/api
 COPY lazylabel-reimagined/web lazylabel-reimagined/web
 
 # NO API ADDRESS IS BAKED IN, and that is deliberate. The app defaults its base to `/api`
@@ -22,13 +26,12 @@ COPY lazylabel-reimagined/web lazylabel-reimagined/web
 #
 # `VITE_LAZYLABEL_API` still exists for anyone who genuinely wants a separate origin. It is not
 # set here.
-# The libraries' own dependencies before the app's: contracts imports the format library, and a
-# library's imports resolve from ITS folder, so without this `npm run build` failed at its typecheck
-# on any machine that had not installed every package by hand. Found on a clean export, 2026-09-23.
-RUN for lib in lazylabel/core/exporters lazylabel-reimagined/settings-schema lazylabel-reimagined/contracts; do       (cd "/src/$lib" && npm ci --no-audit --no-fund) || exit 1;     done
-
-WORKDIR /src/lazylabel-reimagined/web
-RUN npm install --no-audit --no-fund && npm run build
+#
+# ONE install, which also builds: `npm ci` runs the workspace's `prepare`, which builds every
+# package in dependency order, this app last. It replaced per-library installs that had to be
+# found on a clean export (2026-09-23): contracts imports the format library, and a library's
+# imports resolve from ITS folder, so without them the app's typecheck failed.
+RUN npm ci --no-audit --no-fund
 
 FROM nginx:1.27-alpine
 

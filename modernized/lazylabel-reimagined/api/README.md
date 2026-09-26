@@ -23,11 +23,10 @@ rescale applied client-side would quantise a 16-bit scan to 256 levels and then 
 [repository's README](../../../README.md#lazylabel-web-this-branch).** Node.js 22.13 or later:
 `node:sqlite`, which the settings store uses, needs no flag from 22.13.
 
-To work on this package, its three linked libraries need their own `npm install` and build first.
-`npm install` here alone is not enough: `npm test` then passes, but `npm run typecheck` and
-`npm run build` fail with `TS2307: Cannot find module '@lazylabel/annotation-formats'`, and
-`npm start` with `ERR_MODULE_NOT_FOUND`. The [reimagined README](../README.md#running-it) has the
-two loops that install and build them. Then, here:
+This package is one member of the npm workspace in `modernized/`
+([reimagined README](../README.md#running-it)). `npm install` there, or here, which npm resolves
+to the same thing, installs all five packages and builds them, the three libraries this one links
+included; without their builds `npm start` dies with `ERR_MODULE_NOT_FOUND`. Then, here:
 
 ```bash
 npm test

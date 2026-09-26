@@ -25,22 +25,8 @@ later** (the current 22 or 24 LTS). Nothing else: no Python, no compiler, no GPU
 ```powershell
 git clone -b main-web https://github.com/dnzckn/LazyLabel.git
 cd LazyLabel\modernized
-foreach ($p in "lazylabel\core\exporters", "lazylabel-reimagined\settings-schema", "lazylabel-reimagined\contracts", "lazylabel-reimagined\api", "lazylabel-reimagined\web") { npm install --prefix $p }
-foreach ($p in "lazylabel\core\exporters", "lazylabel-reimagined\settings-schema", "lazylabel-reimagined\contracts", "lazylabel-reimagined\api") { npm run build --prefix $p }
-```
-
-Then, in one window, the API, pointed at your folder of images:
-
-```powershell
-cd lazylabel-reimagined\api
+npm install
 $env:LAZYLABEL_DATASET_ROOT = "C:\path\to\your\images"; npm start
-```
-
-and in a second window, the web app:
-
-```powershell
-cd LazyLabel\modernized\lazylabel-reimagined\web
-npm run dev
 ```
 
 **macOS and Linux (bash or zsh):**
@@ -48,15 +34,14 @@ npm run dev
 ```bash
 git clone -b main-web https://github.com/dnzckn/LazyLabel.git
 cd LazyLabel/modernized
-for p in lazylabel/core/exporters lazylabel-reimagined/{settings-schema,contracts,api,web}; do npm install --prefix "$p" || break; done
-for p in lazylabel/core/exporters lazylabel-reimagined/{settings-schema,contracts,api}; do npm run build --prefix "$p" || break; done
-cd lazylabel-reimagined/api && LAZYLABEL_DATASET_ROOT="/path/to/your/images" npm start
+npm install
+LAZYLABEL_DATASET_ROOT="/path/to/your/images" npm start
 ```
 
-and in a second terminal, `cd LazyLabel/modernized/lazylabel-reimagined/web && npm run dev`.
-
-Then open **<http://localhost:5173>**. (The API on port 8787 does not serve the app yet, so its own
-address answers 404.)
+`npm install` installs and builds every package, in under a minute. `npm start` starts the API on
+your folder of images. The web app then runs from a second window: `cd LazyLabel/modernized`, then
+`npm run dev`, and open **<http://localhost:5173>**. (The API on port 8787 does not serve the app
+yet, so its own address answers 404.)
 
 - **The AI tools (SAM) are optional.** Without them everything else works and the status bar says
   "No AI". Adding them is a separate Python service:

@@ -9,10 +9,9 @@ That is not decoration. Three features in this project were implemented, unit-te
 unreachable at some point, and a dead control is the same lie told deliberately.
 
 To run the whole app, follow the quick start at the top of the
-[repository's README](../../../README.md#lazylabel-web-this-branch). To work on this package, the
-three libraries it links need their own `npm install` first (the
-[reimagined README](../README.md#running-it) has the loop): without them `npm test` passes, but
-`npm run build`, which typechecks, fails with `TS2307`. Then:
+[repository's README](../../../README.md#lazylabel-web-this-branch). This package is one member of
+the npm workspace in `modernized/` ([reimagined README](../README.md#running-it)): `npm install`
+there, or here, installs all five packages and builds them. Then, here:
 
 ```bash
 npm test

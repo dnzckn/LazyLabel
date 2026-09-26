@@ -8,10 +8,11 @@
 # a plan, not a deployment.
 #
 # THE BUILD CONTEXT IS `modernized/`, NOT `modernized/lazylabel-reimagined/`, and that is not a
-# detail: the API depends on `@lazylabel/annotation-formats` at `file:../../lazylabel/core/
-# exporters`, which is a sibling of the rebuild rather than inside it. A context rooted at the
-# rebuild cannot see it, and `COPY ../..` is not allowed — Docker refuses paths outside the
-# context. The first draft of this file got that wrong.
+# detail: `modernized/package.json` is the npm workspace that holds every JavaScript package, and
+# the API depends on `@lazylabel/annotation-formats` at `lazylabel/core/exporters`, a sibling of the
+# rebuild rather than inside it. A context rooted at the rebuild cannot see either, and
+# `COPY ../..` is not allowed — Docker refuses paths outside the context. The first draft of this
+# file got that wrong.
 
 # 22.13 is the floor `api/package.json` states, and it is a real floor rather than a preference: the
 # metadata store uses `node:sqlite`, which needs a flag before it. `22` is the newest 22 release.
@@ -19,30 +20,27 @@ FROM node:22-bookworm-slim AS build
 
 WORKDIR /src
 
-# Manifests first, so editing source does not re-resolve every dependency. The `file:` dependencies
-# mean npm needs those packages on disk before it can link them, so they are copied whole rather
-# than manifest-first — npm reads more than the manifest when linking a local path.
+# THE WHOLE WORKSPACE: its manifest, its one lockfile, and every member it lists, the web app
+# included, so what is installed is exactly the tree the lockfile describes. (`npm ci` does not
+# refuse a missing member: tried on a clean export, it silently installed a smaller tree.)
+COPY package.json package-lock.json ./
 COPY lazylabel/core/exporters lazylabel/core/exporters
-COPY lazylabel-reimagined/contracts lazylabel-reimagined/contracts
 COPY lazylabel-reimagined/settings-schema lazylabel-reimagined/settings-schema
+COPY lazylabel-reimagined/contracts lazylabel-reimagined/contracts
 COPY lazylabel-reimagined/api lazylabel-reimagined/api
+COPY lazylabel-reimagined/web lazylabel-reimagined/web
 
-# THE LIBRARIES FIRST, installed AND built. Found 2026-09-23 by running these steps on a clean export
-# of the repository -- Docker is still not available here, so that is as close as it gets. The first
-# version missed two things, and either one alone stopped this image:
-#   - contracts imports the format library, and a library's imports resolve from ITS folder, so
-#     without contracts' own install `tsc` could not find it and `npm run build` below failed; and
-#   - at run time Node resolves `@lazylabel/*` to each library's `dist`, which nothing built, so a
-#     build that had succeeded would still have died with ERR_MODULE_NOT_FOUND on start.
-# In dependency order, because contracts builds against the format library.
-RUN for lib in lazylabel/core/exporters lazylabel-reimagined/settings-schema lazylabel-reimagined/contracts; do       (cd "/src/$lib" && npm ci --no-audit --no-fund && npm run build) || exit 1;     done
+# ONE install, which also builds (DEPLOYABILITY.md R2): `npm ci` runs the workspace's `prepare`,
+# which builds all five packages in dependency order. This replaced a loop of per-package installs
+# and builds that had to be found by hand, twice, on a clean export: contracts imports the format
+# library, and a library's imports resolve from ITS folder; and at run time Node resolves
+# `@lazylabel/*` to each library's `dist`, so an unbuilt library is ERR_MODULE_NOT_FOUND on start.
+RUN npm ci --no-audit --no-fund
 
-WORKDIR /src/lazylabel-reimagined/api
-RUN npm install --no-audit --no-fund && npm run build
-
-# The compilers and test runners out of every package before the tree is copied: the runtime needs
-# the libraries' dist and the API's production dependencies, not the tooling that built them.
-RUN for pkg in lazylabel/core/exporters lazylabel-reimagined/settings-schema lazylabel-reimagined/contracts lazylabel-reimagined/api; do       (cd "/src/$pkg" && npm prune --omit=dev --no-audit --no-fund) || exit 1;     done
+# The compilers and test runners out, from every member at once, before the tree is copied: the
+# runtime needs the libraries' dist and the API's production dependencies, not the tooling that
+# built them.
+RUN npm prune --omit=dev --no-audit --no-fund
 
 # sharp ships platform-specific binaries, so the runtime image reuses the build's node_modules
 # rather than reinstalling and risking a different set.
@@ -53,9 +51,10 @@ FROM node:22-bookworm-slim
 # against one mounted folder.
 USER node
 
-# THE WHOLE TREE, not the API's folder alone. npm links a `file:` dependency as a symbolic link to the
-# library's own folder, so copying only `api/node_modules`, as the first version did, copied three
-# links to folders this image did not have. Keeping the layout keeps the links pointing somewhere.
+# THE WHOLE TREE, not the API's folder alone. npm links each workspace member into the root
+# `node_modules` as a symbolic link to the member's own folder, so copying only `node_modules`
+# would copy links to folders this image did not have -- which the first version did, per package.
+# Keeping the layout keeps the links pointing somewhere.
 COPY --from=build --chown=node:node /src /app
 WORKDIR /app/lazylabel-reimagined/api
 

@@ -67,14 +67,15 @@ changes, and look here first:
    its repository by commit (which is why `git` is in the image) and OpenCV's headless build, which
    every image route needed and the image never had. SAM 2 builds from source, and pip's build
    isolation may fetch a second PyTorch just to build it: slow, not wrong.
-2. **`npm install` against `file:` dependencies inside a container.** This was the warning, and it
+2. **The npm workspace inside a container.** This was a warning about `file:` dependencies, and it
    was right, and it was found before Docker ever ran: on a clean export, npm linked the libraries
    without their own dependencies, so `tsc` could not follow contracts' import of the format
-   library; and at run time Node resolves each library to its `dist`, which nothing built, through
-   `file:` links the runtime stage did not copy. The images now install the libraries first -- and
-   the API's builds them and keeps the whole tree -- and those steps, run on a clean export, gave
-   an API that answered `/health`. Still only reasoned: that npm on Linux makes those links
-   relative, which is what keeps them valid after the tree is copied into the runtime stage.
+   library; and at run time Node resolves each library to its `dist`, which nothing built. Since
+   2026-09-26 `modernized/package.json` is one npm workspace holding every JavaScript package, so
+   both images copy it with its one lockfile and run one `npm ci`, whose `prepare` builds all five
+   packages in dependency order; the API's image then prunes the dev tooling and keeps the whole
+   tree. Still only reasoned: that npm on Linux makes the workspace's links relative, which is what
+   keeps them valid after the tree is copied into the runtime stage.
 3. **sharp's platform binaries.** The API image reuses the build stage's `node_modules` rather than
    reinstalling, specifically so the binaries match — but the two stages must stay the same base
    image for that to hold.

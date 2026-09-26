@@ -47,51 +47,49 @@ it.
 
 ## Running it
 
-**Every package needs its own `npm install` first, the three shared libraries included.** A
-library's own imports resolve from ITS folder, so without them the API and the web app cannot
-typecheck, build or start. `npm test` passes without them, which is what hid it: tests read the
-libraries' TypeScript source. From this folder:
+**One npm workspace holds all five JavaScript packages:** [`../package.json`](../package.json),
+in `modernized/`. It was five separate installs, and every package needed its own, the three
+shared libraries included, because a library's imports resolve from its own folder. Nothing said
+so, and `npm test` passing without them hid it. From `modernized/`:
 
 ```bash
-for p in ../lazylabel/core/exporters settings-schema contracts api web; do npm install --prefix "$p" || break; done
+npm install          # installs everything, then builds all five in dependency order
+npm test             # every package's suite
+npm run typecheck    # every package's typecheck
+npm run build        # all five again, after changing a library
 ```
 
-```powershell
-foreach ($p in "..\lazylabel\core\exporters", "settings-schema", "contracts", "api", "web") { npm install --prefix $p }
-```
+One package at a time works from `modernized/` with `-w`, as in `npm test -w lazylabel-reimagined/api`,
+or from the package's own folder with a plain `npm test`: npm finds the workspace from there.
 
 Cross-package dependencies are `file:` links resolved to the other package's **TypeScript source**
 through a `development` export condition, so tests and typechecks have no build ordering and no way
 to read a stale `dist`.
 
 **Running the built API is different, and it is easy to trip over.** At runtime the same imports
-resolve to each library's `dist`, so the libraries must be built before `npm start` — otherwise Node
-reports `ERR_MODULE_NOT_FOUND` for a package that is plainly installed. Build them in dependency
-order:
+resolve to each library's `dist`, so the libraries must be built before the API starts — otherwise
+Node reports `ERR_MODULE_NOT_FOUND` for a package that is plainly installed. `npm install` builds
+them, in the order the workspace lists them; after changing a library, `npm run build` again.
 
-```bash
-for p in ../lazylabel/core/exporters settings-schema contracts api; do npm run build --prefix "$p" || break; done
-```
+No build script may call npm itself: each nested `npm run` adds a `node_modules\.bin` entry to
+PATH for every folder above the package, and four levels took PATH past what cmd.exe reads, so
+`tsc` stopped being found halfway through an install (`api/test/workspace.test.ts` says more).
 
-```powershell
-foreach ($p in "..\lazylabel\core\exporters", "settings-schema", "contracts", "api") { npm run build --prefix $p }
-```
-
-To run the two services together:
+To run the two services together, from `modernized/`:
 
 ```bash
 # terminal 1 — the API, pointed at a folder of images
-cd api && LAZYLABEL_DATASET_ROOT=/path/to/your/images npm start
+LAZYLABEL_DATASET_ROOT=/path/to/your/images npm start
 ```
 
 ```powershell
 # terminal 1, in PowerShell
-cd api; $env:LAZYLABEL_DATASET_ROOT = "C:\path\to\your\images"; npm start
+$env:LAZYLABEL_DATASET_ROOT = "C:\path\to\your\images"; npm start
 ```
 
 ```bash
 # terminal 2 — the web app, which proxies /api to it; open http://localhost:5173
-cd web && npm run dev
+npm run dev
 ```
 
 That is the whole app except the AI tools, and running without them is a supported deployment
@@ -111,22 +109,22 @@ rather than a broken one: everything but SAM prompts and propagation works. To a
    `LAZYLABEL_DATASET_ROOT` every route that reads one answers 503.
 
    ```bash
-   # terminal 3 — the inference service, from its environment
+   # terminal 3 — the inference service, from this folder, with its environment's Python
    cd inference && LAZYLABEL_MODEL_DIR=/path/to/checkpoints LAZYLABEL_DATASET_ROOT=/path/to/your/images python -m lazylabel_inference.server
    ```
 
    ```powershell
    cd inference; $env:LAZYLABEL_MODEL_DIR = "C:\path\to\checkpoints"; $env:LAZYLABEL_DATASET_ROOT = "C:\path\to\your\images"; python -m lazylabel_inference.server
    ```
-4. **Restart the API and tell it where the service is.** Without this variable the API does not look
-   for one, and `/health` says so:
+4. **Restart the API and tell it where the service is**, from `modernized/`. Without this variable
+   the API does not look for one, and `/health` says so:
 
    ```bash
-   cd api && LAZYLABEL_DATASET_ROOT=/path/to/your/images LAZYLABEL_INFERENCE_URL=http://127.0.0.1:8788 npm start
+   LAZYLABEL_DATASET_ROOT=/path/to/your/images LAZYLABEL_INFERENCE_URL=http://127.0.0.1:8788 npm start
    ```
 
    ```powershell
-   cd api; $env:LAZYLABEL_DATASET_ROOT = "C:\path\to\your\images"; $env:LAZYLABEL_INFERENCE_URL = "http://127.0.0.1:8788"; npm start
+   $env:LAZYLABEL_DATASET_ROOT = "C:\path\to\your\images"; $env:LAZYLABEL_INFERENCE_URL = "http://127.0.0.1:8788"; npm start
    ```
 
 The address is logged at startup either way, so `"inference":"none"` in the first line tells you
