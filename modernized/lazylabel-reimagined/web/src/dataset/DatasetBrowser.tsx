@@ -25,6 +25,7 @@ import type {
   WireImageMetadata,
   WireLoadResponse,
   WireSaveResponse,
+  WireSegment,
 } from "@lazylabel/contracts";
 
 import { useWorkspace } from "../workspace/WorkspaceProvider.jsx";
@@ -54,6 +55,12 @@ export interface DatasetBrowserProps {
    * other than the row below the one open (`CONTROL_PARITY.md` CP-14).
    */
   readonly onShown?: (images: readonly WireDatasetImage[]) => void;
+  /**
+   * The run's masks a timeline frame opens with (SP-22). A timeline frame chosen here shows them, as
+   * legacy's list sends a sequence frame through frame selection (right_panel.py:208;
+   * main_window.py:1447-1455, 3591-3606). Undefined opens the file.
+   */
+  readonly reviewSegments?: (key: string) => readonly WireSegment[] | undefined;
 }
 
 type ListingState =
@@ -67,6 +74,7 @@ export function DatasetBrowser({
   folder = "",
   onListed,
   onShown,
+  reviewSegments,
 }: DatasetBrowserProps): ReactNode {
   const [state, setState] = useState<ListingState>({ status: "loading" });
   /*
@@ -83,7 +91,15 @@ export function DatasetBrowser({
   useEffect(() => setHere(folder), [folder]);
   // Opening belongs to the workspace store: the list is one of five things that ask what is open,
   // and whichever one holds the state becomes the owner of a question that is not its own.
-  const { open: openState, openImage } = useWorkspace();
+  const { open: openState, openImage: openInStore } = useWorkspace();
+  // A timeline frame opens with the run's masks while the Sequence tab is in use (SP-22).
+  const openImage = useCallback(
+    (image: WireDatasetListing["images"][number]) => {
+      const segments = reviewSegments?.(image.key);
+      openInStore(image, segments === undefined ? undefined : { segments });
+    },
+    [openInStore, reviewSegments],
+  );
   const { settings, save } = useSettings();
 
   /*

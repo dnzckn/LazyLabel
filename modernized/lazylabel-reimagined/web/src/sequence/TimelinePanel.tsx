@@ -125,6 +125,12 @@ export interface TimelinePanelProps {
   readonly savedElsewhere?: ReadonlyMap<string, number>;
   /** The open image's annotations as they stand, saved or not: see PropagationControl (SP-04). */
   readonly openAnnotations?: OpenAnnotations;
+  /**
+   * Hands the shell a lookup: the run's masks a timeline frame opens with, whichever way it is
+   * opened -- the file list and Left/Right as well as a click here (SP-22). Undefined for anything
+   * else, and for everything while the Sequence tab is not the one in use.
+   */
+  readonly onReviewLookup?: (lookup: (key: string) => readonly WireSegment[] | undefined) => void;
 }
 
 /** What legacy says when there is no such frame to move to (main_window.py:4673-4706, 5158-5168). */
@@ -145,6 +151,7 @@ export function TimelinePanel({
   openKey,
   savedElsewhere,
   openAnnotations,
+  onReviewLookup,
 }: TimelinePanelProps): ReactNode {
   /*
    * The timeline -- its range and what has been painted over it -- as ONE state, so that a repaint
@@ -379,6 +386,35 @@ export function TimelinePanel({
     if (at >= 0) setCurrent(at);
   }, [openKey, shown]);
 
+  /**
+   * RULE-090's masks for a frame, merged one per class as legacy merges them when it opens the frame
+   * (`main_window.py:3597-3606`, `SEQUENCE_PARITY.md` SP-07). Here, on the visit, and not where
+   * Save All builds them: legacy's Save All does not merge.
+   *
+   * A REFERENCE opens as its file: the user's own drawing, loaded with its real vertices and
+   * provenance. Handing it a propagated reconstruction in its place is the one substitution
+   * propagation must not make -- it is the same reason Save All refuses to rewrite a reference.
+   */
+  const propagatedFor = (frame: Frame): readonly WireSegment[] | undefined => {
+    const segments = frame.isReference ? undefined : propagated.get(frame.key);
+    return segments === undefined ? undefined : mergedByClass(segments);
+  };
+
+  /*
+   * SP-22: a timeline frame opened from the file list or with Left/Right shows the run's masks, as
+   * one clicked here does. Legacy sends both through frame selection in sequence mode
+   * (right_panel.py:208, 329-335; main_window.py:1447-1455, 3591-3606); in its other modes there is
+   * no timeline, and the list opens the file. The lookup only assigns the shell's ref, so running
+   * on every render costs nothing and cannot loop.
+   */
+  useEffect(() => {
+    onReviewLookup?.((key) => {
+      if (!active) return undefined;
+      const frame = shown.find((each) => each.key === key);
+      return frame === undefined ? undefined : propagatedFor(frame);
+    });
+  });
+
   const currentFrame = shown[current];
   const currentScore = currentFrame === undefined ? undefined : { ...scores, ...ownScores }[current];
   const status =
@@ -425,21 +461,6 @@ export function TimelinePanel({
     unsavedRef.current = 0;
   };
 
-  /**
-   * RULE-090's masks for one frame, or nothing.
-   *
-   * MERGED INTO ONE SEGMENT PER CLASS, as legacy merges them when it opens the frame
-   * (`main_window.py:3597-3606`, `SEQUENCE_PARITY.md` SP-07). Here, on the visit, and not where
-   * Save All builds them: legacy's Save All does not merge.
-   *
-   * NEVER for a reference frame. That is the user's own drawing, and showing the propagation's
-   * reconstruction of it in its place is the one substitution propagation must not make -- it is
-   * the same reason Save All refuses to rewrite a reference.
-   */
-  const propagatedFor = (frame: Frame): readonly WireSegment[] | undefined => {
-    const segments = frame.isReference ? undefined : propagated.get(frame.key);
-    return segments === undefined ? undefined : mergedByClass(segments);
-  };
 
   /**
    * Cut or Keep — RULE-077.

@@ -34,6 +34,7 @@ import { HotkeyProvider } from "../../src/hotkeys/HotkeyProvider.jsx";
 import { NotificationHost, NotificationProvider } from "../../src/notifications/NotificationProvider.jsx";
 import { Panel } from "../../src/shell/Panel.jsx";
 import { TimelinePanel } from "../../src/sequence/TimelinePanel.jsx";
+import { SequenceActiveContext } from "../../src/sequence/sequenceActive.js";
 import { PropagationControl } from "../../src/sequence/PropagationControl.jsx";
 import type { OpenAnnotations } from "../../src/sequence/references.js";
 import { SettingsProvider } from "../../src/settings/SettingsProvider.jsx";
@@ -685,6 +686,9 @@ describe("RULE-056: not losing propagated work without asking", () => {
       readonly segments?: readonly WireSegment[];
       readonly results?: readonly WirePropagationFrame[];
       readonly onOpen?: (key: string, segments?: readonly WireSegment[]) => void;
+      readonly onReviewLookup?: (lookup: (key: string) => readonly WireSegment[] | undefined) => void;
+      /** The Sequence tab is not the one in use. */
+      readonly inactive?: boolean;
     } = {},
   ) {
     /** Every request Propagate sent, as `fakeClient` records them. */
@@ -752,14 +756,18 @@ describe("RULE-056: not losing propagated work without asking", () => {
           {...(saves === undefined ? {} : { savedElsewhere: saves })}
           {...(open === undefined ? {} : { openAnnotations: open })}
           {...(run.onOpen === undefined ? {} : { onOpen: run.onOpen })}
+          {...(run.onReviewLookup === undefined ? {} : { onReviewLookup: run.onReviewLookup })}
         />
       );
+      const placed = run.inactive === true
+        ? <SequenceActiveContext.Provider value={false}>{timeline}</SequenceActiveContext.Provider>
+        : timeline;
       return (
         <NotificationProvider>
           <NotificationHost />
           <SettingsProvider client={client}>
             <HotkeyProvider bindings={defaultSettings().hotkeys}>
-              {inPanel ? <Panel title="Sequence">{timeline}</Panel> : timeline}
+              {inPanel ? <Panel title="Sequence">{placed}</Panel> : placed}
             </HotkeyProvider>
           </SettingsProvider>
         </NotificationProvider>
@@ -1164,6 +1172,39 @@ describe("RULE-056: not losing propagated work without asking", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Frame 2, frames/f02.png, saved" }));
 
     expect(opened.at(-1)).toEqual({ key: "frames/f02.png", segments: undefined });
+  });
+
+  it("hands the shell the run's masks for a frame opened from the list or with Left/Right (SP-22)", async () => {
+    /*
+     * Legacy sends a sequence frame chosen in the file list, or reached with Left/Right, through
+     * frame selection, so its propagated masks show (right_panel.py:208, 329-335;
+     * main_window.py:1447-1455, 3591-3606). The web opened those from the file. The timeline now
+     * hands the shell a lookup for exactly what a click on the frame opens with.
+     */
+    let lookup: (key: string) => readonly WireSegment[] | undefined = () => undefined;
+    panel(() => true, false, undefined, {
+      onReviewLookup: (given) => { lookup = given; },
+      results: [{ source: "frames/f02.png", objectId: 1, mask: square(2, 5), confidence: 0.999 }],
+    });
+    await propagateAndWait();
+
+    await waitFor(() => expect(lookup("frames/f02.png")).toHaveLength(1));
+    // The reference is the user's own drawing and opens as its file; a stranger is not the run's.
+    expect(lookup("frames/f01.png")).toBeUndefined();
+    expect(lookup("elsewhere/x.png")).toBeUndefined();
+  });
+
+  it("hands the shell nothing while the Sequence tab is not the one in use", async () => {
+    // Legacy's other modes have no timeline: the list opens the file there.
+    let lookup: (key: string) => readonly WireSegment[] | undefined = () => [];
+    panel(() => true, false, undefined, {
+      inactive: true,
+      onReviewLookup: (given) => { lookup = given; },
+      results: [{ source: "frames/f02.png", objectId: 1, mask: square(2, 5), confidence: 0.999 }],
+    });
+    await propagateAndWait();
+
+    expect(lookup("frames/f02.png")).toBeUndefined();
   });
 
   it("counts a SECOND run's frames as unsaved, even where the first run's were saved", async () => {

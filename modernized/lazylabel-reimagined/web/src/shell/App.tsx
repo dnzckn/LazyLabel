@@ -9,9 +9,9 @@
  * including its degraded state, the hotkey system end to end, and the capability table.
  */
 
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 
-import type { WireDatasetImage } from "@lazylabel/contracts";
+import type { WireDatasetImage, WireSegment } from "@lazylabel/contracts";
 
 import { CAPABILITIES } from "../capabilities.js";
 import { DatasetBrowser } from "../dataset/DatasetBrowser.jsx";
@@ -145,6 +145,20 @@ export function App({ client }: { readonly client: ApiClient }): ReactNode {
    * hotkey that bypassed both would be the fastest possible way to lose a whole image, because it
    * is the key you hold down.
    */
+  /*
+   * The run's masks a timeline frame opens with, whichever way it is opened (SP-22). The timeline
+   * hands the lookup up; a ref, because it changes whenever the run does and only a click or a
+   * key ever reads it.
+   */
+  const reviewLookup = useRef<(key: string) => readonly WireSegment[] | undefined>(() => undefined);
+  const onReviewLookup = useCallback(
+    (lookup: (key: string) => readonly WireSegment[] | undefined) => {
+      reviewLookup.current = lookup;
+    },
+    [],
+  );
+  const reviewFor = useCallback((key: string) => reviewLookup.current(key), []);
+
   const step = useCallback(
     (by: 1 | -1) => {
       if (open === null || shownRows.length === 0) return;
@@ -153,9 +167,11 @@ export function App({ client }: { readonly client: ApiClient }): ReactNode {
       // Clamped, not wrapping. Legacy stops at the ends, and a folder that silently restarts is
       // how a user re-labels the first image believing it is the last.
       const next = shownRows[Math.min(shownRows.length - 1, Math.max(0, at + by))];
-      if (next !== undefined && next.key !== open.image.key) openImage(next);
+      if (next === undefined || next.key === open.image.key) return;
+      const segments = reviewFor(next.key);
+      openImage(next, segments === undefined ? undefined : { segments });
     },
-    [shownRows, open, openImage],
+    [shownRows, open, openImage, reviewFor],
   );
 
   useHotkey("load_next_image", () => step(1));
@@ -400,6 +416,7 @@ export function App({ client }: { readonly client: ApiClient }): ReactNode {
                   ? {}
                   : { openAnnotations: { key: open.image.key, segments, classAliases } })}
                 onArchetypes={setArchetypes}
+                onReviewLookup={onReviewLookup}
                 onStatus={setSequenceStatus}
                 {...(open === null ? {} : { openKey: open.image.key })}
                 onOpen={(key, segments) => {
@@ -415,7 +432,13 @@ export function App({ client }: { readonly client: ApiClient }): ReactNode {
         }
         right={
           <>
-            <DatasetBrowser client={client} projectId="default" onListed={setListed} onShown={setShownRows} />
+            <DatasetBrowser
+              client={client}
+              projectId="default"
+              onListed={setListed}
+              onShown={setShownRows}
+              reviewSegments={reviewFor}
+            />
 
             <Panel title="Segments">
               <SegmentTable />
