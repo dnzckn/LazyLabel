@@ -257,6 +257,42 @@ describe("Keep Flagged Masks and Skip Labeled (RULE-060, RULE-081)", () => {
     expect(fake.started).toHaveLength(0);
   });
 
+  it("aborts while it starts, on a second press, as legacy's Propagate does (SP-40)", async () => {
+    // Legacy's button is Abort from the first click, through loading and reference registration
+    // (sequence_widget.py:629-640; main_window.py:4417-4445). The web's was disabled then.
+    let release: () => void = () => undefined;
+    const fake = fakeClient({});
+    const client = {
+      ...fake.client,
+      loadAnnotations: (_project: string, key: string) =>
+        new Promise((resolve) => {
+          release = () =>
+            resolve({
+              kind: "loaded",
+              annotations: {
+                sourceFormat: "NPZ",
+                sourceFile: key,
+                revision: "r1",
+                segments: [SQUARE],
+                classAliases: {},
+                failures: [],
+              },
+            });
+        }),
+    } as unknown as ApiClient;
+    show({ ...fake, client });
+
+    fireEvent.click(propagate());
+    fireEvent.click(await screen.findByRole("button", { name: "Starting…" }));
+
+    expect(await screen.findByText("Propagation cancelled")).toBeTruthy();
+    await act(async () => {
+      release();
+    });
+    expect(fake.started).toHaveLength(0);
+    expect(propagate().textContent).toBe("Propagate");
+  });
+
   it("does not need the listing at all once Skip Labeled is off", async () => {
     const fake = fakeClient({
       listing: () => {

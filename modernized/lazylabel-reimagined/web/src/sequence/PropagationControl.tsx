@@ -202,9 +202,28 @@ export function PropagationControl({
     [confirmDiscard],
   );
 
+  const { notify } = useNotifications();
+  /** Which start is current: one aborted while it read the references stops at its next step (SP-40). */
+  const startRun = useRef(0);
+
   const begin = useCallback(async () => {
-    if (references.length === 0 || progress.running || loading) return;
+    /*
+     * A press while it starts is legacy's Abort: its button is Abort from the first click, through
+     * loading and reference registration (`sequence_widget.py:629-640`, `main_window.py:4417-4445`,
+     * SEQUENCE_PARITY.md SP-40). Here the button was disabled while it read the references, and
+     * Ctrl+P did nothing.
+     */
+    if (loading) {
+      startRun.current += 1;
+      setLoading(false);
+      notify({ severity: "info", message: "Propagation cancelled" });
+      return;
+    }
+    if (references.length === 0 || progress.running) return;
     if (!mayDiscard("Propagating again")) return;
+    const run = (startRun.current += 1);
+    const aborted = (): boolean => run !== startRun.current;
+    setLoading(true);
 
     /*
      * THE PICKER'S MODEL, as legacy propagates with the model it has loaded (`main_window.py:
@@ -222,8 +241,10 @@ export function PropagationControl({
       } catch {
         picked = undefined; // unknown here: the service answers for it
       }
+      if (aborted()) return;
       if (picked !== undefined && !picked.videoCapable) {
         setRefused("SAM 2 video predictor not available");
+        setLoading(false);
         return;
       }
     }
@@ -233,8 +254,6 @@ export function PropagationControl({
      * and the service seeds SAM 2 with them rather than with prompts re-derived from them --
      * re-clicking an object someone already drew gives a mask close to theirs and not theirs.
      */
-    setLoading(true);
-    setRefused(null);
     let seeds;
     let labelled: ReadonlySet<string> = new Set();
     try {
@@ -245,6 +264,7 @@ export function PropagationControl({
         // The open reference as it is on screen, as legacy seeds it (SP-04).
         openAnnotations,
       );
+      if (aborted()) return;
       if (skipLabeled) {
         /*
          * RULE-081's snapshot, taken NOW rather than when the timeline was built. The frames it
@@ -258,6 +278,7 @@ export function PropagationControl({
             listing.images.filter((image) => image.annotated).map((image) => image.key),
           );
         } catch (cause) {
+          if (aborted()) return;
           // Refused, not run unprotected: a run that could not see which frames have labels could
           // overwrite every one of them at the next Save All.
           setRefused(
@@ -268,8 +289,9 @@ export function PropagationControl({
         }
       }
     } finally {
-      setLoading(false);
+      if (!aborted()) setLoading(false);
     }
+    if (aborted()) return;
 
     setUnusable(seeds.skipped);
     // Before any result arrives: a frame the new run does not reach must not keep a green status
@@ -318,6 +340,7 @@ export function PropagationControl({
     keepFlagged,
     loading,
     mayDiscard,
+    notify,
     onRunStart,
     openAnnotations,
     progress.running,
@@ -334,7 +357,6 @@ export function PropagationControl({
    * (main_window.py:4708-4716; sequence_widget.py:629-634), and acts only on the Sequence tab.
    */
   const active = useSequenceActive();
-  const { notify } = useNotifications();
   useHotkey("propagate", () => {
     if (!active) return;
     if (progress.running) {
@@ -601,14 +623,15 @@ export function PropagationControl({
           type="button"
           className={`seq-button ${loading ? "seq-button--amber" : "seq-button--green"}`}
           onClick={() => void begin()}
-          disabled={references.length === 0 || progress.running || loading}
+          // Enabled while it starts: a press then is legacy's Abort (SP-40).
+          disabled={references.length === 0 || progress.running}
           title={
             references.length === 0
               ? "Mark at least one frame as a reference first"
               : "Carry the reference masks through the sequence"
           }
         >
-          {loading ? "Reading references…" : "Propagate"}
+          {loading ? "Starting…" : "Propagate"}
         </button>
 
         {progress.running && (
