@@ -26,7 +26,7 @@ import { CloseGuard } from "../workspace/CloseGuard.jsx";
 import { TimelinePanel } from "../sequence/TimelinePanel.jsx";
 import { CropPanel } from "../workspace/CropPanel.jsx";
 import { ModelPicker } from "../workspace/ModelPicker.jsx";
-import { AutoPolygonPanel } from "../workspace/AutoPolygonPanel.jsx";
+import { AutoPolygonPanel, useAutoConvertKey } from "../workspace/AutoPolygonPanel.jsx";
 import { FragmentPanel } from "../workspace/FragmentPanel.jsx";
 import { SegmentTable } from "../workspace/SegmentTable.jsx";
 import { processingQuery } from "../workspace/processing.js";
@@ -151,6 +151,9 @@ export function App({ client }: { readonly client: ApiClient }): ReactNode {
 
   useHotkey("load_next_image", () => step(1));
   useHotkey("load_previous_image", () => step(-1));
+  // Legacy's P toggles Auto-Convert. Registered here, where it is always mounted, rather than in
+  // the Auto-Convert section, which can be collapsed.
+  useAutoConvertKey();
 
   return (
     // Inert behind the hotkey dialog, so Tab cannot walk out of it into a page that would then

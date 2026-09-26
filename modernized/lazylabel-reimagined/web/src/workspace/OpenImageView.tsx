@@ -24,7 +24,6 @@ import { AnnotationCanvas } from "../canvas/AnnotationCanvas.jsx";
 import { useSettings } from "../settings/SettingsProvider.jsx";
 import { useWorkspace } from "./WorkspaceProvider.jsx";
 import { PolygonLayer, toWireVertices } from "../canvas/PolygonLayer.jsx";
-import { decodeMask } from "@lazylabel/contracts";
 import { AiTool } from "./AiTool.jsx";
 import { SelectLayer } from "../canvas/SelectLayer.jsx";
 import { ShapeLayer } from "../canvas/ShapeLayer.jsx";
@@ -36,7 +35,7 @@ import { classForNewSegment } from "./classes.js";
 import { useNotifications } from "../notifications/NotificationProvider.jsx";
 
 import type { AnnotationsResult, ApiClient } from "../api/client.js";
-import { RESOLUTION_DEFAULT, epsilonFactorFor, maskToPolygon } from "../tools/autoPolygon.js";
+import { RESOLUTION_DEFAULT } from "../tools/autoPolygon.js";
 import { useHotkey } from "../hotkeys/HotkeyProvider.jsx";
 import { CropLayer } from "../canvas/CropLayer.jsx";
 import { canSave } from "./saveState.js";
@@ -114,7 +113,7 @@ function OpenedImage({
   // The LIVE names, not the ones the file held: a class renamed since loading must be written
   // with its new name, or the rename is lost on the next save.
   const { classAliases } = useWorkspace();
-  const { segments, addSegment, updateSegment, activeTool, activeClassId, applySegments, selected, toggleSelected } =
+  const { segments, addSegment, updateSegment, activeTool, activeClassId, selected, toggleSelected } =
     useWorkspace();
   const { eraseWith } = useWorkspace();
   // The crop is the store's, not this view's: the SAVE path reads it, so a crop dragged here and
@@ -187,38 +186,6 @@ function OpenedImage({
   // A manifest NAME, not a file path. Empty means none chosen, and the AI tool says so rather
   // than sending a request the service can only refuse.
   const aiModel = String(settings.values["ai_model"] ?? "");
-
-  /*
-   * CONVERT EVERY MASK ON THIS IMAGE TO A POLYGON -- legacy's P, and Auto-Convert applied after
-   * the fact rather than at the moment a mask is accepted.
-   *
-   * It is the same conversion, at the same resolution, so a user who forgot to switch Auto-Convert
-   * on before a session's work is not left re-drawing it. Masks that cannot become a polygon --
-   * a sliver that approximates to a line -- are LEFT AS MASKS rather than dropped: the point is to
-   * gain corners to drag, not to lose annotations.
-   *
-   * One recorded step for the lot, because the user performed one action. Undo puts every mask
-   * back at once, which is what they would expect from a key that changed everything at once.
-   */
-  const convertMasks = useCallback(() => {
-    const epsilon = epsilonFactorFor(autoPolygon.resolution);
-    let changed = 0;
-    const next = segments.map((segment) => {
-      if (segment.mask === undefined || segment.classId === null) return segment;
-      const polygon = maskToPolygon(decodeMask(segment.mask), epsilon);
-      if (polygon === null) return segment;
-      changed += 1;
-      return { type: "Polygon" as const, classId: segment.classId, vertices: polygon.vertices };
-    });
-
-    if (changed === 0) {
-      notify({ severity: "info", message: "No masks on this image could become polygons" });
-      return;
-    }
-    applySegments(next, `Convert ${changed} mask${changed === 1 ? "" : "s"} to polygons`);
-  }, [applySegments, autoPolygon.resolution, notify, segments]);
-
-  useHotkey("convert_to_polygons", convertMasks);
 
 
   // One commit path for every manual tool. Three copies of "work out the class, wrap the vertices,

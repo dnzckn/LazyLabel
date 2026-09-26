@@ -45,7 +45,7 @@ Paths: **L** = `legacy/lazylabel/src/lazylabel/`, **W** = `modernized/lazylabel-
 |---|---|---|---|---|
 | CP-10 | Class names could not contain a typed space. The field trimmed on every keystroke, and every keystroke was an undo step. | commits once when editing ends: L `ui/right_panel.py:192, 228-240` | `workspace/ClassTable.tsx` `AliasField` | **done** `28c2f37` |
 | CP-11 | Sequence keys (G, N, B, H with and without Shift, Ctrl+H, Ctrl+P) acted on the Single and Multi tabs, because the timeline stays mounted. No notices when nothing to step to. | act only in sequence mode; notices: L `ui/main_window.py:4666-4716, 5150-5168` | `sequence/sequenceActive.ts` | **done** `28c2f37` |
-| CP-12 | P toggles Auto-Convert in legacy, with the toast "Auto-Convert AI to Polygon: ON/OFF". On the web it converts the masks already on the image. The schema's description still says "Toggle Auto-Convert…". | L `config/hotkeys.py:97-102`, `ui/main_window.py:1007, 1746-1766` | `workspace/OpenImageView.tsx:191-221` | **verified**. Make P toggle `auto_polygon_enabled` with legacy's toast. Keep "convert the masks on this image" as a button in the AI → Polygon section, since it is useful and tested, and record it as a web extra. Correct PROGRESS.md's paragraph that calls the current P legacy's. |
+| CP-12 | P toggles Auto-Convert in legacy, with the toast "Auto-Convert AI to Polygon: ON/OFF". On the web it converts the masks already on the image. The schema's description still says "Toggle Auto-Convert…". | L `config/hotkeys.py:97-102`, `ui/main_window.py:1007, 1746-1766` | `workspace/OpenImageView.tsx:191-221` | **done** 2026-09-25: P toggles Auto-Convert with legacy's toast; converting the masks already on an image is a button in the AI → Polygon section, a web extra |
 | CP-13 | AI mode does nothing, and says nothing, until a model is chosen, and none is chosen by default. The comment at `OpenImageView.tsx:187-188` promises a message that is not there. | works at once with the default "vit_h", loaded lazily: L `ui/managers/mode_manager.py:26-29`, `config/settings.py:40-41` | `workspace/OpenImageView.tsx:336-338`; settings-schema `schema.ts:54` (`ai_model` "") | **verified**. Default to the manifest's SAM 1 vit_h entry when it is usable (legacy's default), else the first usable entry. With none usable, a click in AI mode says "Choose a model in AI Model Selection". |
 | CP-14 | Next/previous image walk the raw listing, not the sorted and searched rows the table shows. So does Multi's "Second image" list and the sequence range pickers. | follows the order on screen: L `utils/fast_file_manager.py:1771-1843, 1971-1999` | `dataset/DatasetBrowser.tsx:106` (`onListed(listing.images)`) vs `:220-222`; `shell/App.tsx:139-153` | **verified**. Report the shown rows (sorted, then filtered) up, and step over those. |
 | CP-15 | A click on a segment row toggles it. In legacy a click replaces the selection, Ctrl+click toggles, Shift+click extends. `SegmentTable.tsx:124` says "as in legacy". | Qt ExtendedSelection: L `ui/right_panel.py:141-153` | `workspace/SegmentTable.tsx:124-128` | **done** 2026-09-25, with CP-03 |
@@ -99,8 +99,9 @@ Paths: **L** = `legacy/lazylabel/src/lazylabel/`, **W** = `modernized/lazylabel-
 
 - `W workspace/OpenImageView.tsx:382-383` says legacy refuses to edit several selected shapes (CP-16).
 - `W workspace/SegmentTable.tsx:124` says a row click toggles "as in legacy" (CP-15).
-- `PROGRESS.md` calls the web's P legacy's P (CP-12), and says a too-close channel marker snaps
-  where legacy ignores it (`L ui/widgets/channel_threshold_widget.py:249-253`, CP-47).
+- `PROGRESS.md` says a too-close channel marker snaps where legacy ignores it
+  (`L ui/widgets/channel_threshold_widget.py:249-253`, CP-47). Its paragraph on P was corrected
+  with CP-12.
 - `VISUAL_PARITY.md` marks the timeline done without zoom, scrub or trim marks (CP-41), and says
   the segment row click works "as in legacy" (CP-15).
 - `W test/rules/p0Coverage.test.ts:58-59` claims the 10% pan step is built (CP-25).

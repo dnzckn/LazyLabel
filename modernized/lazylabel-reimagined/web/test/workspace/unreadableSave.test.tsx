@@ -180,18 +180,3 @@ describe("panning the zoomed image", () => {
   });
 });
 
-describe("converting existing masks to polygons", () => {
-  const press = () =>
-    fireEvent.keyDown(document, { key: defaultSettings().hotkeys["convert_to_polygons"]!.primary });
-
-  it("says so when there is nothing it can convert", async () => {
-    // An image of polygons, or of slivers that approximate to a line. Silence would leave a user
-    // pressing the key again.
-    mount(empty);
-    await open();
-
-    press();
-
-    await waitFor(() => expect(screen.getByText(/No masks on this image could become polygons/)).toBeTruthy());
-  });
-});
