@@ -71,6 +71,12 @@ export interface OpenOptions {
    * drawing on the same image with no way to tell them apart.
    */
   readonly segments?: readonly WireSegment[];
+  /**
+   * Open without saving or asking about what the side holds, which is lost: legacy's reload of the
+   * image from disk when the Sequence tab is left (`main_window.py:3043-3056, 7242-7272`), by the
+   * owner's decision of 2026-09-26 (SEQUENCE_PARITY.md SP-15). Nothing else passes it.
+   */
+  readonly discard?: boolean;
 }
 
 export const SIDES: readonly SideIndex[] = [0, 1];
@@ -601,9 +607,14 @@ export function WorkspaceProvider({
        *
        * Asked: with the setting off, or no button to lend the save. Discarding the work without a
        * word, as legacy does then, is decision 7's silent loss.
+       *
+       * Neither, for an open that DISCARDS: legacy's reload on leaving the Sequence tab (SP-15).
        */
-      const saver = savers.current[side]?.() ?? null;
-      const decision = onNavigateAway(stateOf(sides[side]), { saveOnNavigate: saver?.enabled === true });
+      const discard = options?.discard === true;
+      const saver = discard ? null : (savers.current[side]?.() ?? null);
+      const decision = discard
+        ? ({ kind: "proceed" } as const)
+        : onNavigateAway(stateOf(sides[side]), { saveOnNavigate: saver?.enabled === true });
       if (decision.kind === "save" && saver !== null) {
         const held: Leaving = { image, options, written: false };
         leaving.current[side] = held;

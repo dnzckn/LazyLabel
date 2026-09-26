@@ -259,6 +259,40 @@ describe("with Auto-Save on Navigate on, legacy's default", () => {
   });
 });
 
+describe("leaving the Sequence tab (SP-15)", () => {
+  it("reloads the open image from its file, dropping its unsaved work UNASKED and UNSAVED", async () => {
+    // Legacy tears the timeline down and loads the image from disk when the Sequence tab is left
+    // (main_window.py:3043-3056, 7242-7272), whatever Auto-Save on Navigate says: changing tabs is
+    // not moving to another image. The owner's decision of 2026-09-26: "Match the desktop app
+    // exactly". The web kept the image as it was.
+    const { events, saveAnnotations, confirmNavigation } = mount();
+    await openAndDraw();
+    fireEvent.click(screen.getByRole("tab", { name: "Sequence" }));
+    await screen.findByRole("button", { name: "Set Start" });
+    expect(status()).toMatch(/frames\/a\.png — 1 segment, unsaved/);
+
+    fireEvent.click(screen.getByRole("tab", { name: "Single" }));
+
+    await waitFor(() => expect(status()).toMatch(/frames\/a\.png — 0 segments, saved/));
+    expect(events).toEqual(["load frames/a.png", "load frames/a.png"]);
+    expect(saveAnnotations).not.toHaveBeenCalled();
+    expect(confirmNavigation).not.toHaveBeenCalled();
+    expect(await screen.findByText("Timeline cleared. Set new start/end frames.")).toBeTruthy();
+  });
+
+  it("leaves the image alone on the other tabs' changes", async () => {
+    // Only leaving the Sequence tab reloads: Single to Multi and back keeps the side as it is.
+    const { events } = mount();
+    await openAndDraw();
+
+    fireEvent.click(screen.getByRole("tab", { name: "Multi" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Single" }));
+
+    expect(status()).toMatch(/frames\/a\.png — 1 segment, unsaved/);
+    expect(events).toEqual(["load frames/a.png"]);
+  });
+});
+
 describe("with Auto-Save on Navigate turned off", () => {
   it("asks before discarding, as before, and writes nothing", async () => {
     const { saveAnnotations, confirmNavigation, putSettings } = mount({ answer: false });

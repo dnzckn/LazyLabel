@@ -71,19 +71,17 @@ export interface PropagationControlProps {
   /**
    * How many propagated frames are not on disk yet.
    *
-   * Reported UP because the control does not own the buttons that would throw them away. RULE-056
-   * and RULE-058 are legacy losing exactly this work -- New Timeline, leaving the tab, or a
-   * propagation finishing all discard unsaved masks without a word -- and decision 7 is the
-   * standing answer: nothing is lost without the user being asked.
+   * Reported UP for the panel's close guard. New Timeline, leaving the Sequence tab and a second
+   * Propagate discard these without a question, as legacy's do (RULE-056; the owner's decision of
+   * 2026-09-26, SEQUENCE_PARITY.md SP-15 and SP-16); closing the browser tab still asks (SP-17).
    */
   readonly onUnsaved?: (count: number) => void;
   /**
-   * The same count, written where a CLICK HANDLER can read it without waiting for a render.
+   * The same count, written where an EVENT HANDLER can read it without waiting for a render.
    *
-   * `onUnsaved` travels up through the parent's state, which is one render behind: a user who
-   * propagates and immediately clicks New timeline could slip past the confirmation and lose the
-   * work it exists to protect. A ref is read at the moment the button is pressed, so there is no
-   * window at all. The callback stays for anything that wants to RENDER the number.
+   * `onUnsaved` travels up through the parent's state, which is one render behind: a tab closed
+   * straight after a run could slip past the question. A ref is read at the moment it is asked, so
+   * there is no window at all. The callback stays for anything that wants to RENDER the number.
    */
   readonly unsavedRef?: { current: number };
   /**
@@ -107,8 +105,9 @@ export interface PropagationControlProps {
    */
   readonly onSegments?: (byKey: ReadonlyMap<string, readonly WireSegment[]>) => void;
   /**
-   * Asks before a new run discards unsaved frames, and before Streaming goes off over more frames
-   * than the window holds. Injected so a test can answer it.
+   * Asks before Clear discards unsaved frames, and before Streaming goes off over more frames than
+   * the window holds. A new run asks nothing, as legacy's does not (SP-16). Injected so a test can
+   * answer it.
    */
   readonly confirmDiscard?: (message: string) => boolean;
   /**
@@ -254,10 +253,13 @@ export function PropagationControl({
   const unsavedNow = useRef(0);
 
   /*
-   * A new run replaces the last one's masks, and Clear drops them, so unsaved frames go either
-   * way. New timeline asks before doing that (RULE-056); these two did not, until 2026-09-23 --
-   * the same loss by other buttons, and decision 7 is that nothing is lost without being asked.
+   * CLEAR drops the run's masks, so its unsaved frames go with it, and it asks first. Clear is the
+   * web's own -- legacy has none (SEQUENCE_PARITY.md SP-57) -- so there is no legacy answer to copy.
    * No question when nothing is unsaved: one that always appears is one people stop reading.
+   *
+   * A NEW RUN asks nothing. It replaces the last one's masks, unsaved ones included, as legacy's
+   * does before every run (`main_window.py:4233-4239`): the owner's decision of 2026-09-26, "Match
+   * the desktop app exactly" (SP-16). It asked from 2026-09-23 until then.
    */
   const mayDiscard = useCallback(
     (doing: string): boolean => {
@@ -276,6 +278,14 @@ export function PropagationControl({
   const { notify } = useNotifications();
   /** Which start is current: one aborted while it read the references stops at its next step (SP-40). */
   const startRun = useRef(0);
+  // A start still reading its references stops when the control goes with its timeline -- New
+  // Timeline, or leaving the Sequence tab -- rather than starting a job nothing would watch.
+  useEffect(
+    () => () => {
+      startRun.current += 1;
+    },
+    [],
+  );
 
   const begin = useCallback(async () => {
     /*
@@ -291,7 +301,6 @@ export function PropagationControl({
       return;
     }
     if (references.length === 0 || progress.running) return;
-    if (!mayDiscard("Propagating again")) return;
     const run = (startRun.current += 1);
     const aborted = (): boolean => run !== startRun.current;
     setLoading(true);
@@ -427,7 +436,6 @@ export function PropagationControl({
     frames,
     keepFlagged,
     loading,
-    mayDiscard,
     notify,
     onRunStart,
     openAnnotations,

@@ -3,8 +3,8 @@
  *
  * Two properties matter more than the look. There is ONE interactive view, because it registers
  * the save, undo and pan keys and two copies would answer each key twice. And the sequence
- * controls survive leaving their tab, because they hold a built timeline and any propagated masks
- * not yet saved.
+ * controls stay mounted when their tab is left, told that it is hidden: they throw their timeline
+ * away then, as legacy's do, and keep only what legacy keeps (SEQUENCE_PARITY.md SP-15).
  */
 
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
@@ -121,6 +121,35 @@ describe("the centre tabs", () => {
     fireEvent.click(tab("Multi"));
     fireEvent.click(tab("Sequence"));
     expect(screen.getByText("clicked 1").closest("[hidden]")).toBeNull();
+  });
+
+  it("tells the shell when the Sequence tab is left, and only then (SP-15)", () => {
+    // Legacy loads the open image from disk whenever the Sequence tab is left, for Single or Multi
+    // (main_window.py:3043-3056, 7242-7272, 5930-5946). The shell does that reload; this says when.
+    const onLeaveSequence = vi.fn();
+    render(
+      <CentreTabs
+        viewer={<View />}
+        multi={(viewer) => <div>{viewer}</div>}
+        sequence={<Counter />}
+        onLeaveSequence={onLeaveSequence}
+      />,
+    );
+
+    fireEvent.click(tab("Multi"));
+    fireEvent.click(tab("Single"));
+    expect(onLeaveSequence).not.toHaveBeenCalled();
+
+    fireEvent.click(tab("Sequence"));
+    fireEvent.click(tab("Sequence"));
+    expect(onLeaveSequence).not.toHaveBeenCalled();
+
+    fireEvent.click(tab("Single"));
+    expect(onLeaveSequence).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(tab("Sequence"));
+    fireEvent.click(tab("Multi"));
+    expect(onLeaveSequence).toHaveBeenCalledTimes(2);
   });
 
   it("hands the view to Multi, so there is still exactly one", () => {

@@ -10,9 +10,13 @@
  * the active half. It remounts then, which is safe because everything it holds that matters --
  * the annotations, the crop, the file revisions -- is in the store.
  *
- * THE TIMELINE STAYS MOUNTED once opened, hidden on the other tabs. It holds a built timeline and
- * any propagated masks not yet saved -- minutes of GPU time -- and leaving the tab must not throw
- * them away. The Sequence panel learned the same thing when collapsing it did.
+ * LEAVING THE SEQUENCE TAB THROWS THE TIMELINE AWAY, without asking, as legacy's does
+ * (`main_window.py:3043-3047`): the owner's decision of 2026-09-26, "Match the desktop app exactly"
+ * (SEQUENCE_PARITY.md SP-15). The timeline, its references, its statuses and its unsaved
+ * propagated masks go, and coming back shows Timeline Setup. The panel does that itself, when told
+ * its tab no longer shows; it stays mounted, hidden, so that what legacy keeps -- the timeline's
+ * zoom -- is kept too. The shell is told as well (`onLeaveSequence`), to reload the open image from
+ * its file, as legacy's Single and Multi each load it from disk on entry.
  */
 
 import { useCallback, useState, type ReactNode } from "react";
@@ -39,6 +43,13 @@ export interface CentreTabsProps {
   readonly sequence: ReactNode;
   /** What the Sequence tab's header says after "Sequence Mode:", as legacy's does. */
   readonly sequenceStatus?: string;
+  /**
+   * The Sequence tab has just been left for another. Legacy then loads the open image from disk --
+   * Single's `_restore_single_view_state` and Multi's `_enter_multi_view_mode` both do
+   * (`main_window.py:7242-7272, 5930-5946`) -- so the frame's unsaved edits and propagated masks go
+   * without a word (SP-15). The shell does that; this only says when.
+   */
+  readonly onLeaveSequence?: () => void;
 }
 
 export function CentreTabs({
@@ -46,15 +57,20 @@ export function CentreTabs({
   multi,
   sequence,
   sequenceStatus = "No sequence loaded",
+  onLeaveSequence,
 }: CentreTabsProps): ReactNode {
   const [tab, setTab] = useState<CentreTab>("single");
   // Built the first time it is opened, then kept: see the module comment.
   const [sequenceOpened, setSequenceOpened] = useState(false);
 
-  const choose = useCallback((next: string) => {
-    setTab(next as CentreTab);
-    if (next === "sequence") setSequenceOpened(true);
-  }, []);
+  const choose = useCallback(
+    (next: string) => {
+      if (tab === "sequence" && next !== "sequence") onLeaveSequence?.();
+      setTab(next as CentreTab);
+      if (next === "sequence") setSequenceOpened(true);
+    },
+    [onLeaveSequence, tab],
+  );
 
   /*
    * THE SEQUENCE'S CTRL KEYS BELONG TO THE APP ON EVERY TAB. Legacy's shortcuts are the window's,

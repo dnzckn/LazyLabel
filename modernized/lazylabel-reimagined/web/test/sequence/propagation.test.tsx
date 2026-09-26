@@ -964,12 +964,13 @@ describe("stopping it", () => {
 });
 
 
-describe("RULE-056: not losing propagated work without asking", () => {
+describe("RULE-056: a propagation's unsaved frames, and what throws them away", () => {
   /**
-   * Legacy's New Timeline wipes references, statuses and unsaved propagated masks without a word,
-   * and the current frame is not saved either. Decision 7 is the standing answer to that whole
-   * family -- nothing is lost without the user being asked -- and a propagation is the most
-   * expensive work in this app to lose: minutes of GPU time with nothing on disk to show for it.
+   * Legacy's New Timeline and leaving the Sequence tab wipe references, statuses and unsaved
+   * propagated masks without a word, and a second Propagate replaces them without one
+   * (`main_window.py:3043-3047, 4998-5035, 4233-4239`). The web asked before each until the owner's
+   * decision of 2026-09-26, "Match the desktop app exactly" (SEQUENCE_PARITY.md SP-15, SP-16).
+   * Clear, which legacy does not have, still asks, and so does closing the browser tab (SP-17).
    *
    * Driven through the PANEL rather than the control, because the panel owns the button that
    * would do the throwing away.
@@ -1079,6 +1080,8 @@ describe("RULE-056: not losing propagated work without asking", () => {
       },
     } as unknown as ApiClient;
 
+    /** Whether the Sequence tab is the one showing, as the shell tells the panel. */
+    let showing = run.inactive !== true;
     const tree = (saves?: ReadonlyMap<string, number>, open = openAnnotations) => {
       const timeline = (
         <Timeline
@@ -1091,9 +1094,8 @@ describe("RULE-056: not losing propagated work without asking", () => {
           {...(run.onReviewLookup === undefined ? {} : { onReviewLookup: run.onReviewLookup })}
         />
       );
-      const placed = run.inactive === true
-        ? <SequenceActiveContext.Provider value={false}>{timeline}</SequenceActiveContext.Provider>
-        : timeline;
+      // Always inside the provider, so turning the tab away is a change of value, not a remount.
+      const placed = <SequenceActiveContext.Provider value={showing}>{timeline}</SequenceActiveContext.Provider>;
       return (
         <NotificationProvider>
           <NotificationHost />
@@ -1111,6 +1113,11 @@ describe("RULE-056: not losing propagated work without asking", () => {
       withSaves: (saves: ReadonlyMap<string, number>) => result.rerender(tree(saves)),
       /** Another image opened: the shell hands down its annotations and class names instead. */
       withOpen: (open: OpenAnnotations) => result.rerender(tree(undefined, open)),
+      /** Another centre tab chosen, or the Sequence tab chosen again. */
+      showTab: (shown: boolean) => {
+        showing = shown;
+        result.rerender(tree());
+      },
       started,
       saved,
     };
@@ -1165,58 +1172,99 @@ describe("RULE-056: not losing propagated work without asking", () => {
     );
   }
 
-  it("ASKS before a New timeline throws propagated frames away", async () => {
+  it("starts over at New Timeline WITHOUT ASKING, though a propagated frame is unsaved (SP-16)", async () => {
+    // Legacy's exit asks nothing (main_window.py:4998-5035). This asked, and kept the timeline on a
+    // no, until the owner's decision of 2026-09-26.
     const confirm = vi.fn((_message: string) => false);
     panel(confirm);
     await propagateAndWait();
-
-    fireEvent.click(screen.getByText("New Timeline"));
-
-    expect(confirm).toHaveBeenCalledTimes(1);
-    expect(confirm.mock.calls[0]![0]).toMatch(/1 propagated frame has not been saved/);
-  });
-
-  it("keeps the timeline when the answer is no", async () => {
-    panel(() => false);
-    await propagateAndWait();
-
-    fireEvent.click(screen.getByText("New Timeline"));
-
-    // Still a timeline, not the range picker.
-    expect(screen.getByLabelText("Timeline")).toBeTruthy();
-  });
-
-  it("starts over when the answer is yes", async () => {
-    panel(() => true);
-    await propagateAndWait();
+    expect(closeTab()).toBe(true);
 
     fireEvent.click(screen.getByText("New Timeline"));
 
     expect(await screen.findByRole("button", { name: "Build Timeline" })).toBeTruthy();
+    expect(confirm).not.toHaveBeenCalled();
+    expect(screen.getByText("Timeline cleared. Set new start/end frames.")).toBeTruthy();
+    // The run went with it: nothing is left for the close guard to ask about.
+    expect(closeTab()).toBe(false);
   });
 
-  it("does NOT ask when there is nothing to lose", async () => {
-    // A confirmation that always appears is one people learn to dismiss without reading, which
-    // makes it useless on the day it matters.
-    const confirm = vi.fn((_message: string) => true);
-    panel(confirm);
-    buildRange();
-    // Building marks nothing since 2026-09-23, as in legacy: the reference is marked as a user marks it.
-    fireEvent.click(screen.getByRole("button", { name: "+ All Labeled" }));
-    await waitFor(() =>
-      expect(screen.getByLabelText("Timeline").querySelectorAll("button")).toHaveLength(3),
-    );
+  it("propagates again WITHOUT ASKING over an unsaved frame, as legacy's does (SP-16)", async () => {
+    // Legacy clears the last run's results before every run (main_window.py:4233-4239). This
+    // asked, and kept them on a no, until the owner's decision of 2026-09-26.
+    const confirm = vi.fn((_message: string) => false);
+    const { started } = panel(confirm);
+    await propagateAndWait();
+    expect(closeTab()).toBe(true);
 
-    fireEvent.click(screen.getByText("New Timeline"));
+    fireEvent.click(screen.getByRole("button", { name: /^Propagate/ }));
 
+    await waitFor(() => expect(started).toHaveLength(2));
     expect(confirm).not.toHaveBeenCalled();
   });
 
-  /*
-   * The two ways the work was lost with no question at all (found 2026-09-23). The close guard
-   * looked only at open images, and a panel UNMOUNTED what it held when collapsed -- so closing
-   * the tab, or collapsing the Sequence panel for room, threw the whole propagation away.
-   */
+  it("throws the timeline away when its tab is left, WITHOUT ASKING, and comes back to Timeline Setup (SP-15)", async () => {
+    // Legacy tears the timeline down whenever the Sequence tab is left (main_window.py:3043-3047),
+    // with the references, the statuses, the unsaved propagated masks, and Start and End. The web
+    // kept all of it, mounted and hidden, until the owner's decision of 2026-09-26.
+    const confirm = vi.fn((_message: string) => false);
+    const { showTab } = panel(confirm);
+    await propagateAndWait();
+    expect(closeTab()).toBe(true);
+
+    showTab(false);
+
+    expect(await screen.findByText("Timeline cleared. Set new start/end frames.")).toBeTruthy();
+    expect(confirm).not.toHaveBeenCalled();
+    expect(closeTab()).toBe(false);
+
+    showTab(true);
+
+    expect(await screen.findByRole("button", { name: "Build Timeline" })).toBeTruthy();
+    expect(screen.getByText(/^Start:/).textContent).toBe("Start: Not set");
+    expect(screen.getByText(/^End:/).textContent).toBe("End: Not set");
+  });
+
+  it("stops a run the timeline was watching when the timeline is thrown away", async () => {
+    // Legacy's exit frees the predictor its run works with (main_window.py:5009-5011;
+    // propagation_manager.py:300-309). Here the job ran on, holding the model, with nobody to
+    // receive its results.
+    const cancels: string[] = [];
+    const client = {
+      getSettings: async () => defaultSettings(),
+      putSettings: async (next: unknown) => next,
+      imageMetadata: async () => ({ width: 8, height: 8, sourceDepth: 8, sourceChannels: 3, sourceFormat: "png" }),
+      loadAnnotations: async (_p: string, key: string) => ({
+        kind: "loaded",
+        annotations: { sourceFormat: "NPZ", sourceFile: key, revision: "r1", segments: [SQUARE], classAliases: {}, failures: [] },
+      }),
+      listImages: async () => ({ folder: "frames", folders: [], annotatedCount: 1, unrecognized: 0, columns: [], images: FOLDER }),
+      startPropagation: async () => job({ id: "job-9", state: "running" }),
+      propagationState: async () => job({ id: "job-9", state: "running" }),
+      cancelPropagation: async (id: string) => {
+        cancels.push(id);
+        return job({ id, state: "cancelled" });
+      },
+    } as unknown as ApiClient;
+    render(
+      <NotificationProvider>
+        <SettingsProvider client={client}>
+          <HotkeyProvider bindings={defaultSettings().hotkeys}>
+            <Timeline images={FOLDER as never} client={client} />
+          </HotkeyProvider>
+        </SettingsProvider>
+      </NotificationProvider>,
+    );
+    buildRange();
+    fireEvent.click(screen.getByRole("button", { name: "+ All Labeled" }));
+    await waitFor(() => expect(screen.getByText(/^References:/).textContent).toBe("References: Frames: 1 ★"));
+    fireEvent.click(screen.getByRole("button", { name: /^Propagate/ }));
+    await screen.findByRole("button", { name: /^Abort/ });
+
+    fireEvent.click(screen.getByText("New Timeline"));
+
+    await waitFor(() => expect(cancels).toEqual(["job-9"]));
+  });
 
   it("does not ask on a first run, when there is nothing to lose", async () => {
     const confirm = vi.fn((_message: string) => false);
@@ -1225,18 +1273,6 @@ describe("RULE-056: not losing propagated work without asking", () => {
     await propagateAndWait();
 
     expect(confirm).not.toHaveBeenCalled();
-  });
-
-  it("ASKS before Propagate runs again over unsaved frames, and keeps them on a no", async () => {
-    const confirm = vi.fn((_message: string) => false);
-    panel(confirm);
-    await propagateAndWait();
-
-    fireEvent.click(screen.getByRole("button", { name: /^Propagate/ }));
-
-    expect(confirm).toHaveBeenCalledTimes(1);
-    expect(confirm.mock.calls[0]![0]).toMatch(/1 propagated frame has not been saved. Propagating again/);
-    expect(closeTab()).toBe(true);
   });
 
   it("leaves a frame the user corrected and saved to them: Save All does not write over it", async () => {
@@ -1486,10 +1522,6 @@ describe("RULE-056: not losing propagated work without asking", () => {
     // Opening the frame shows its file: no run's mask is handed over with it.
     fireEvent.click(pending);
     expect(opened.at(-1)).toEqual({ key: "frames/f02.png", segments: undefined });
-
-    // Nothing is left for New timeline to ask about.
-    fireEvent.click(screen.getByText("New Timeline"));
-    expect(confirm).toHaveBeenCalledTimes(1);
   });
 
   it("opens a frame Save All wrote from its FILE, not from the run's masks (SP-23)", async () => {
@@ -1547,8 +1579,7 @@ describe("RULE-056: not losing propagated work without asking", () => {
     /*
      * Found in a real browser on 2026-09-23: the set of frames written was never cleared, so once
      * a Save All had written a frame, every later run's mask for it counted as saved -- no Save
-     * button to write the new masks, and no question before New timeline, Clear or a closed tab
-     * threw them away.
+     * button to write the new masks, and no question before Clear or a closed tab threw them away.
      */
     const confirm = vi.fn((_message: string) => false);
     panel(confirm);
@@ -1559,7 +1590,7 @@ describe("RULE-056: not losing propagated work without asking", () => {
     fireEvent.click(screen.getByRole("button", { name: /^Propagate/ }));
 
     await waitFor(() => expect(closeTab()).toBe(true), { timeout: 3000 });
-    fireEvent.click(screen.getByText("New Timeline"));
+    fireEvent.click(await screen.findByRole("button", { name: "Clear" }));
     expect(confirm.mock.calls.at(-1)![0]).toMatch(/1 propagated frame has not been saved/);
   });
 

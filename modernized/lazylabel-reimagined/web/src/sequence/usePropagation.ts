@@ -199,6 +199,23 @@ export function usePropagation(client: ApiClient): UsePropagation {
   const jobId = progress.job?.id ?? null;
   const running = progress.running;
 
+  /*
+   * A RUN NOBODY IS WATCHING IS STOPPED. The control that holds this hook goes with its timeline --
+   * New Timeline, or leaving the Sequence tab -- and legacy's teardown frees the predictor its run
+   * works with (`propagation_manager.py:300-309`, called at `main_window.py:5009-5011`). Left
+   * running, the job would hold the model for results nothing could receive. Through refs, so only
+   * the unmount cancels; a refusal changes nothing here, since nobody is left to tell.
+   */
+  const watching = useRef<{ readonly id: string | null; readonly client: ApiClient }>({ id: null, client });
+  watching.current = { id: running ? jobId : null, client };
+  useEffect(
+    () => () => {
+      const { id, client: stopping } = watching.current;
+      if (id !== null) void Promise.resolve().then(() => stopping.cancelPropagation(id)).catch(() => undefined);
+    },
+    [],
+  );
+
   useEffect(() => {
     if (jobId === null || !running) return;
 

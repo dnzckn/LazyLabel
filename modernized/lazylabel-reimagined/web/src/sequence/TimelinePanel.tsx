@@ -111,10 +111,10 @@ export interface TimelinePanelProps {
    */
   readonly onArchetypes?: (keys: readonly string[]) => void;
   /**
-   * How a discard is confirmed. Injected so a test can answer it without a real dialog.
-   *
-   * Defaults to `window.confirm`, which is the same choice the workspace made for navigating away
-   * from unsaved annotations -- one mechanism for "you are about to lose work", not two.
+   * The web's own questions, handed to the propagation control: before Clear drops a run's unsaved
+   * frames (legacy has no Clear, SP-57), and legacy's "High Memory Usage" before Streaming goes off.
+   * New Timeline and a second Propagate do not ask, as legacy's do not (SP-16). Injected so a test
+   * can answer without a real dialog; defaults to `window.confirm`.
    */
   readonly confirmDiscard?: (message: string) => boolean;
   /**
@@ -333,16 +333,20 @@ export function TimelinePanel({
   /** RULE-077's two trim bounds, as positions in the timeline. Order between them does not matter. */
   const [bounds, setBounds] = useState<readonly [number | null, number | null]>([null, null]);
   /**
-   * Propagated frames not yet written — what a New timeline would destroy.
+   * Propagated frames not yet written — what closing the browser tab would lose.
    *
-   * A REF, not state, because a click handler reads it. State arrives a render later, and the one
-   * user this protects is the one who propagates and immediately clicks New timeline.
+   * A REF, not state, because an event handler reads it: the one below, at the moment the tab
+   * closes. New Timeline and leaving the Sequence tab no longer ask about them (SP-15, SP-16).
    */
   const unsavedRef = useRef(0);
   /*
    * And before the TAB closes. `CloseGuard` asks about open images only, so a propagation's
    * unsaved frames went with a closed tab without a question until 2026-09-23. Registered here
    * because this panel is what knows the count; the browser shows its own wording either way.
+   *
+   * Kept after the owner's decision of 2026-09-26, which made New Timeline and leaving the tab
+   * discard without asking, as legacy's do: that question named those two, and closing is decided
+   * separately (RULE-054, SEQUENCE_PARITY.md SP-17). Legacy asks nothing on close.
    */
   useEffect(() => {
     const ask = (event: BeforeUnloadEvent): void => {
@@ -744,6 +748,49 @@ export function TimelinePanel({
     });
   });
 
+  /*
+   * LEGACY'S EXIT, `_on_exit_sequence_timeline` (`main_window.py:4998-5035`), which New Timeline
+   * and leaving the Sequence tab both run (`main_window.py:3043-3047`), and neither asks: the
+   * owner's decision of 2026-09-26, "Match the desktop app exactly" (SEQUENCE_PARITY.md SP-15,
+   * SP-16). It stops Find Archetypes, drops the run with its unsaved propagated masks, the
+   * references and every status, forgets Start and End with their colours in the list, and says
+   * so. The open frame is not saved. The zoom outlives it, as legacy's does.
+   *
+   * The propagation control goes with the timeline, and a run it was watching stops with it.
+   */
+  const discardTimeline = (): void => {
+    findRun.current += 1;
+    setFinding(false);
+    setTimeline(null);
+    setKeptLabels(new Set());
+    setDiscarded(new Set());
+    // And the range, with its colours in the list, as legacy's exit clears both (main_window.py:5017-5025).
+    setStart(null);
+    setEnd(null);
+    setBetween([]);
+    unsavedRef.current = 0;
+    // Everything else the old timeline held, as legacy's reset clears it (`sequence_widget.py:770-794`,
+    // SEQUENCE_PARITY.md SP-35): the sort, the trim bounds, the suggestions, and the run's scores and
+    // masks, which would otherwise land on the same positions in the next timeline.
+    setSortKeys(null);
+    setBounds([null, null]);
+    setArchetypes([]);
+    onArchetypes?.([]);
+    setOwnScores({});
+    setPropagated(new Map());
+    setCurrent(0);
+    notify({ severity: "info", message: "Timeline cleared. Set new start/end frames." });
+  };
+  // Leaving the tab runs it, once, when the tab stops showing. Through a ref: it reads this render.
+  const discardNow = useRef(discardTimeline);
+  discardNow.current = discardTimeline;
+  const wasActive = useRef(active);
+  useEffect(() => {
+    const left = wasActive.current && !active;
+    wasActive.current = active;
+    if (left) discardNow.current();
+  }, [active]);
+
   const currentFrame = shown[current];
   const currentScore = currentFrame === undefined ? undefined : { ...scores, ...ownScores }[current];
   // An image opened from outside the timeline, which legacy bounces back from and this app opens
@@ -843,50 +890,6 @@ export function TimelinePanel({
       </>
     );
   }
-
-  /**
-   * Start again — and ASK FIRST when that would throw propagated work away.
-   *
-   * RULE-056 is legacy doing exactly this without a word: New Timeline wipes references, statuses
-   * and unsaved propagated masks, and the current frame is not saved either. Decision 7 is the
-   * standing answer to that whole family, and a propagation is the most expensive work in this
-   * app to lose -- minutes of GPU time, and nothing on disk to show for it.
-   *
-   * No dialog when there is nothing to lose. A confirmation that always appears is one people
-   * learn to dismiss without reading, which would make it useless on the day it mattered.
-   */
-  const startOver = () => {
-    const unsaved = unsavedRef.current;
-    if (
-      unsaved > 0
-      && !confirmDiscard(
-        `${unsaved} propagated frame${unsaved === 1 ? " has" : "s have"} not been saved. `
-          + "Starting a new timeline discards them. Continue?",
-      )
-    ) {
-      return;
-    }
-    setTimeline(null);
-    setKeptLabels(new Set());
-    setDiscarded(new Set());
-    // And the range, with its colours in the list, as legacy's exit clears both (main_window.py:5017-5025).
-    setStart(null);
-    setEnd(null);
-    setBetween([]);
-    unsavedRef.current = 0;
-    // Everything else the old timeline held, as legacy's reset clears it (`sequence_widget.py:770-794`,
-    // SEQUENCE_PARITY.md SP-35): the sort, the trim bounds, the suggestions, and the run's scores and
-    // masks, which would otherwise land on the same positions in the next timeline.
-    setSortKeys(null);
-    setBounds([null, null]);
-    setArchetypes([]);
-    onArchetypes?.([]);
-    setOwnScores({});
-    setPropagated(new Map());
-    setCurrent(0);
-    notify({ severity: "info", message: "Timeline cleared. Set new start/end frames." });
-  };
-
 
   /*
    * + All labeled asks the dataset NOW which frames have labels, as legacy probes the disk at the
@@ -1427,13 +1430,13 @@ export function TimelinePanel({
         </div>
       </fieldset>
 
-      {/* Last, as legacy's is (sequence_widget.py:541-553). */}
+      {/* Last, as legacy's is (sequence_widget.py:541-553). Legacy's exit, asking nothing (SP-16). */}
       <div className="timeline__controls">
         <button
           type="button"
           className="seq-button seq-button--brown"
           title={"Exit current timeline and select a new range.\nThis will clear all propagation results."}
-          onClick={startOver}
+          onClick={discardTimeline}
         >
           New Timeline
         </button>

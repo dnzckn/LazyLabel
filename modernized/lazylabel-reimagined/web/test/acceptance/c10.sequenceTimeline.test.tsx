@@ -130,9 +130,10 @@ describe("C10: build a timeline and mark reference frames", () => {
     expect(screen.getByRole("button", { name: "Build Timeline" })).toBeTruthy();
   });
 
-  it("colours the range in the file list as legacy's does, and not on the Single tab (SP-41)", async () => {
+  it("colours the range in the file list as legacy's does, and forgets it when the tab is left (SP-41)", async () => {
     // Start light green, End red, the rows between dark green, once both are set, until New
-    // Timeline (fast_file_manager.py:303-309, 501-513, 1900-1965; main_window.py:4938-4947, 5017-5019).
+    // Timeline or leaving the tab (fast_file_manager.py:303-309, 501-513, 1900-1965;
+    // main_window.py:3043-3047, 4938-4947, 5017-5025).
     await openSequence();
     await setRange("f02.png", "f04.png");
 
@@ -141,6 +142,10 @@ describe("C10: build a timeline and mark reference frames", () => {
     fireEvent.click(screen.getByRole("tab", { name: "Single" }));
     await waitFor(() => expect(Object.values(rowColours()).every((colour) => colour === "")).toBe(true));
     fireEvent.click(screen.getByRole("tab", { name: "Sequence" }));
+    // Legacy's exit forgot Start and End (SP-15): they are set again.
+    await waitFor(() => expect(screen.getByText(/^Start:/).textContent).toBe("Start: Not set"));
+    expect(Object.values(rowColours()).every((colour) => colour === "")).toBe(true);
+    await setRange("f02.png", "f04.png");
     await waitFor(() => expect(rowColours()["f02.png"]).toBe("start"));
 
     fireEvent.click(screen.getByRole("button", { name: "Build Timeline" }));

@@ -457,6 +457,12 @@ export function App({ client }: { readonly client: ApiClient }): ReactNode {
               />
             )}
             sequenceStatus={sequenceStatus}
+            // Leaving the Sequence tab reloads the open image from its file, as legacy's Single and
+            // Multi each load it from disk: its unsaved edits and propagated masks go, unasked and
+            // unsaved (main_window.py:3043-3056, 7242-7272; SEQUENCE_PARITY.md SP-15).
+            onLeaveSequence={() => {
+              if (open !== null) openImage(open.image, { discard: true });
+            }}
             sequence={
               <TimelinePanel
                 client={client}
