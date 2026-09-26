@@ -11,10 +11,9 @@
  * runs the whole sequence and writes an empty mask over every frame, which is worse than doing
  * nothing because it looks like work.
  *
- * CANCEL IS NOT A COSMETIC STOP. RULE-063: the frames already finished are kept, and the service
- * says so in the sentence this shows. The button reports "Stopping…" while the frame in flight
- * finishes, because that is what is happening and a control that jumped straight to "stopped"
- * would be lying for the half second it takes.
+ * ABORT IS NOT A COSMETIC STOP. RULE-063: the frames already finished are kept. The button goes
+ * back to Propagate at the press, as legacy's does, and stays disabled while the frame in flight
+ * finishes, so a second run cannot start over the first.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
@@ -36,7 +35,14 @@ import { folderOf, type Frame, type FrameState } from "./timeline.js";
 
 const NO_POLICY: CommitPolicy = { keepFlagged: false, skip: new Set(), references: new Set() };
 
-/** Legacy's tooltips (`sequence_widget.py:359-365, 375-380`). */
+/** Legacy's tooltips (`sequence_widget.py:336-343, 350-353, 359-365, 375-380`). */
+const KEEP_FLAGGED_TIP =
+  "When unchecked (default), masks are discarded for any\nframe where an object fails to propagate above the\n"
+  + "confidence threshold. The frame is flagged red and no\nmasks are stored for it.\n\n"
+  + "Check to keep partial masks on flagged frames so you\ncan navigate to them and review/edit manually.";
+const SKIP_LABELED_TIP =
+  "Don't overwrite frames that already have saved\nannotations (NPZ files). Useful when re-running\n"
+  + "propagation after fixing flagged frames.";
 const STREAMING_TIP =
   "Process video in chunks (set size with Window)\nusing a rolling context window. Bounds memory\n"
   + "regardless of sequence length.\n\nDisable for full-context mode (loads all frames\n"
@@ -225,6 +231,8 @@ export function PropagationControl({
    * of what has arrived -- filled during render, never read before it is filled.
    */
   const committed = useRef(new Map<string, Committed>());
+  /** The Min Conf each frame was committed at, which legacy's engine stored it at (`engineCounts`). */
+  const committedAt = useRef(new Map<string, number>());
   /** Object id to class id, from the annotations that seeded the run. */
   const [classes, setClasses] = useState<Readonly<Record<number, number | null>>>({});
   /**
@@ -374,6 +382,7 @@ export function PropagationControl({
     // for its new mask, and no question before anything threw that mask away.
     setWritten(new Set());
     committed.current = new Map();
+    committedAt.current = new Map();
     /*
      * The last run's masks go with its commits. Kept until the new job answered, the render in
      * between committed them again under the new policy, so identical scores never changed what
@@ -474,6 +483,7 @@ export function PropagationControl({
   for (const key of progress.running ? arrived.slice(0, -1) : arrived) {
     if (!committed.current.has(key)) {
       committed.current.set(key, commitFrame(key, progress.masks.get(key) ?? [], policy, threshold));
+      committedAt.current.set(key, threshold);
     }
   }
 
@@ -615,19 +625,24 @@ export function PropagationControl({
     if (!mayDiscard("Clearing")) return;
     reset();
     committed.current = new Map();
+    committedAt.current = new Map();
     setWritten(new Set());
     setPolicy(NO_POLICY);
     onCleared?.();
   };
 
-  /** Legacy's engine counts, over the frames on the timeline now (see `engineCounts`). */
+  /**
+   * Legacy's engine counts, over the frames on the timeline now (see `engineCounts`). Save All
+   * follows them after Min Conf has moved, as legacy's does (SEQUENCE_PARITY.md SP-33): a frame
+   * whose masks were discarded stays flagged on the timeline, and there is nothing of it to save.
+   */
   const engine = (): ReturnType<typeof engineCounts> =>
     engineCounts(
       progress.masks,
       new Set(frames.map((frame) => frame.key)),
       policy.references,
-      threshold,
       policy.keepFlagged,
+      { now: threshold, at: committedAt.current },
     );
 
   /*
@@ -765,8 +780,54 @@ export function PropagationControl({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [aliases, classes, client, frames, notify, onSaved, planned, policy, progress.masks, projectId, settings.values, threshold, unsaved.length, view.kept, view.known]);
 
+  // Legacy's green Save All (theme.py positiveButton), always offered beside the bar, during a run
+  // too, and saying so when there is nothing to save (main_window.py:3297-3305, 4757-4759; SP-38).
+  const saveAllButton = (
+    <button
+      type="button"
+      className="button--positive"
+      title="Save all propagated masks to NPZ files (or scrub timeline to save)"
+      onClick={() => void write()}
+      disabled={saving !== null}
+    >
+      Save All
+    </button>
+  );
+
   return (
-    <div className="timeline__propagation">
+    // Legacy's Propagation group: the button on top, the options under it (sequence_widget.py:291-408).
+    <fieldset className="timeline__group timeline__propagation">
+      <legend>Propagation</legend>
+      <div className="timeline__propagation-go">
+        {/* LEGACY'S ONE BUTTON (sequence_widget.py:298-312, 629-647, 741-768; main_window.py:
+            4452-4457, SEQUENCE_PARITY.md SP-53): green Propagate, amber "Starting..." from the
+            press, then a red "Abort · <phase>" that stops the run. Here the phases are the job's:
+            "Loading images..." until its first frame, then "Frame N/T". A press while it starts
+            aborts too (SP-40). While a stopped run finishes its frame in flight, legacy's button is
+            back to Propagate; here it is too, and disabled until the job has stopped. */}
+        {progress.running && job?.cancelling !== true ? (
+          <button type="button" className="seq-button seq-button--red" onClick={abort}>
+            {job === null || job.completed === 0
+              ? "Abort · Loading images..."
+              : `Abort · Frame ${job.completed}${job.total === null ? "" : `/${job.total}`}`}
+          </button>
+        ) : (
+          <button
+            type="button"
+            className={`seq-button ${loading ? "seq-button--amber" : "seq-button--green"}`}
+            onClick={() => void begin()}
+            disabled={references.length === 0 || progress.running}
+            title={`Propagate masks from all reference frames to fill the sequence${keyOf("propagate")}`}
+          >
+            {loading ? "Starting..." : "Propagate"}
+          </button>
+        )}
+        {done && (
+          <button type="button" onClick={clear} disabled={saving !== null}>
+            Clear
+          </button>
+        )}
+      </div>
       <div className="timeline__propagation-actions">
         <span className="timeline__range">
           Range:{" "}
@@ -796,21 +857,21 @@ export function PropagationControl({
             }}
           />
         </span>
-        <label title="Off (legacy's default): a frame where any object scores below Min Conf keeps no masks at all. On: its masks are kept so you can review them. Save All writes a flagged frame either way — never.">
+        <label title={KEEP_FLAGGED_TIP}>
           <input
             type="checkbox"
             checked={keepFlagged}
             onChange={(event) => setKeepFlagged(event.currentTarget.checked)}
           />{" "}
-          Keep flagged masks
+          Keep Flagged Masks
         </label>
-        <label title="On (legacy's default): a frame that already has annotation files when you press Propagate keeps them, and Save All does not overwrite it.">
+        <label title={SKIP_LABELED_TIP}>
           <input
             type="checkbox"
             checked={skipLabeled}
             onChange={(event) => setSkipLabeled(event.currentTarget.checked)}
           />{" "}
-          Skip labeled
+          Skip Labeled
         </label>
         <label title={STREAMING_TIP}>
           <input
@@ -845,61 +906,9 @@ export function PropagationControl({
           />
         </label>
         {options}
-        {/* LEGACY'S ONE BUTTON (sequence_widget.py:298-312, 629-647, 741-768; main_window.py:
-            4452-4457, SEQUENCE_PARITY.md SP-53): green Propagate, amber "Starting..." from the
-            press, then a red "Abort · <phase>" that stops the run. Here the phases are the job's:
-            "Loading images..." until its first frame, then "Frame N/T". A press while it starts
-            aborts too (SP-40). While a stopped run finishes its frame in flight, legacy's button is
-            back to Propagate; here it is too, and disabled until the job has stopped. */}
-        {progress.running && job?.cancelling !== true ? (
-          <button type="button" className="seq-button seq-button--red" onClick={abort}>
-            {job === null || job.completed === 0
-              ? "Abort · Loading images..."
-              : `Abort · Frame ${job.completed}${job.total === null ? "" : `/${job.total}`}`}
-          </button>
-        ) : (
-          <button
-            type="button"
-            className={`seq-button ${loading ? "seq-button--amber" : "seq-button--green"}`}
-            onClick={() => void begin()}
-            disabled={references.length === 0 || progress.running}
-            title={`Propagate masks from all reference frames to fill the sequence${keyOf("propagate")}`}
-          >
-            {loading ? "Starting..." : "Propagate"}
-          </button>
-        )}
-
-        {/* Offered DURING a run too, for the frames already committed, as legacy's Save All is
-            (main_window.py:3297-3305, SEQUENCE_PARITY.md SP-38): a long run could be saved only once it
-            had finished. */}
-        {job !== null && unsaved.length > 0 && (() => {
-          // Legacy's green Save All (theme.py positiveButton), beside the bar when there is a slot.
-          const save = (
-            <button
-              type="button"
-              className="button--positive"
-              onClick={() => void write()}
-              disabled={saving !== null}
-            >
-              {saving === null
-                ? `Save ${unsaved.length} frame${unsaved.length === 1 ? "" : "s"}`
-                : `Saving ${saving.done} of ${saving.total}…`}
-            </button>
-          );
-          return saveSlot === undefined || saveSlot === null ? save : createPortal(save, saveSlot);
-        })()}
-
-        {done && (
-          <button
-            type="button"
-            onClick={clear}
-            disabled={saving !== null}
-          >
-            Clear
-          </button>
-        )}
       </div>
-    </div>
+      {saveSlot === undefined || saveSlot === null ? saveAllButton : createPortal(saveAllButton, saveSlot)}
+    </fieldset>
   );
 }
 

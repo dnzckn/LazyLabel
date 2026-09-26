@@ -227,6 +227,13 @@ function fileName(key: string): string {
   return key.split("/").pop() ?? key;
 }
 
+/** A key's file name without its extension, as legacy's timeline names a frame (`Path(p).stem`). */
+function stemOf(key: string): string {
+  const name = fileName(key);
+  const dot = name.lastIndexOf(".");
+  return dot > 0 ? name.slice(0, dot) : name;
+}
+
 /** The frames' keys in Sort's order, as it stands now. */
 function sortedKeys(frames: readonly Frame[]): readonly string[] {
   return sortedOrder(frames).map((index) => frames[index]!.key);
@@ -1138,14 +1145,11 @@ export function TimelinePanel({
                 // glance and it is the only thing legacy offers; a screen reader gets nothing
                 // from it, and neither does anyone who cannot separate the red from the brown.
                 aria-label={`Frame ${index + 1}, ${frame.key}, ${role}`}
-                // The score, as legacy's tooltip gives it (`timeline_widget.py:486-487`): four
-                // decimals, because at Min Conf 0.99 the difference between 0.9899 and 0.99 is the
-                // difference between a frame that is reviewed and one that is saved.
+                // Legacy's tooltip, line by line (`timeline_widget.py:471-489`, SP-52): the frame
+                // and the count, the file stem, the status, and the score to four decimals.
                 title={
-                  `${frame.key} — ${role}`
-                  + (allScores[index] === undefined
-                    ? ""
-                    : ` — confidence ${allScores[index]!.toFixed(4)}`)
+                  `Frame ${index + 1}/${shown.length}\n${stemOf(frame.key)}\nStatus: ${role}`
+                  + (allScores[index] === undefined ? "" : `\nConfidence: ${allScores[index]!.toFixed(4)}`)
                 }
                 // A mouse press has opened it already (a click's `detail` counts presses); from the
                 // keyboard there is none, and the click opens it.
@@ -1195,19 +1199,23 @@ export function TimelinePanel({
         {videoReady && (
           <button
             type="button"
+            title="Clear all status colors from the timeline"
             onClick={() => {
               setOverrides(clearFlags(frames));
               notify({ severity: "info", message: "Cleared all timeline flags" });
             }}
           >
-            Clear flags
+            Clear Flags
           </button>
         )}
+        {/* Legacy's checkable Sort, which reads "Sorted" while it is on (timeline_widget.py:605-611, 699-715). */}
         <button
           type="button"
+          aria-pressed={sorted}
+          title="Sort timeline by status (done → needs work)"
           onClick={() => setSortKeys((keys) => (keys === null ? sortedKeys(shown) : null))}
         >
-          {sorted ? "Unsort" : "Sort"}
+          {sorted ? "Sorted" : "Sort"}
         </button>
       </div>
       </div>
@@ -1268,9 +1276,13 @@ export function TimelinePanel({
                 type="button"
                 // Legacy's Abort while it runs (sequence_widget.py:579-590), red as Propagate's is.
                 className={`seq-button ${finding ? "seq-button--red" : "seq-button--purple"}`}
+                title={
+                  "Embed all frames with MobileNetV3, cluster with HDBSCAN,\n"
+                  + "and highlight the most representative frames to label"
+                }
                 onClick={() => void find()}
               >
-                {finding ? "Abort" : "Find archetypes"}
+                {finding ? "Abort" : "Find Archetypes"}
               </button>
               {/* Enabled only with suggestions (sequence_widget.py:281-285, 601-608). */}
               <button
@@ -1417,8 +1429,13 @@ export function TimelinePanel({
 
       {/* Last, as legacy's is (sequence_widget.py:541-553). */}
       <div className="timeline__controls">
-        <button type="button" className="seq-button seq-button--brown" onClick={startOver}>
-          New timeline
+        <button
+          type="button"
+          className="seq-button seq-button--brown"
+          title={"Exit current timeline and select a new range.\nThis will clear all propagation results."}
+          onClick={startOver}
+        >
+          New Timeline
         </button>
       </div>
 

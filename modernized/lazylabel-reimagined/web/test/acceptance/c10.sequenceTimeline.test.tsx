@@ -147,7 +147,7 @@ describe("C10: build a timeline and mark reference frames", () => {
     await waitFor(() => expect(cells()).toHaveLength(3));
     expect(rowColours()["f03.png"]).toBe("range");
 
-    fireEvent.click(screen.getByText("New timeline"));
+    fireEvent.click(screen.getByText("New Timeline"));
     await waitFor(() => expect(Object.values(rowColours()).every((colour) => colour === "")).toBe(true));
   });
 
@@ -171,7 +171,7 @@ describe("C10: build a timeline and mark reference frames", () => {
     fireEvent.keyDown(document, { key: "ArrowRight", code: "ArrowRight" });
     await waitFor(() => expect(screen.getByLabelText("Status").textContent).toMatch(/f01\.png/));
 
-    fireEvent.click(screen.getByText("Unsort"));
+    fireEvent.click(screen.getByText("Sorted"));
     await waitFor(() => expect(listed()).toEqual(["f01.png", "f02.png", "f03.png", "f04.png"]));
     expect(sortOrder().value).toBe("0");
 

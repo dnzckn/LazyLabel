@@ -77,11 +77,21 @@ async function build() {
 }
 
 describe("asking for them", () => {
+  it("is legacy's Find Archetypes, with its tooltip (SP-51)", async () => {
+    // sequence_widget.py:263-267. The web's read "Find archetypes", with no tooltip.
+    show(found);
+    await build();
+
+    expect(screen.getByRole("button", { name: "Find Archetypes" }).title).toBe(
+      "Embed all frames with MobileNetV3, cluster with HDBSCAN,\nand highlight the most representative frames to label",
+    );
+  });
+
   it("sends the timeline's frames in order", async () => {
     const { findArchetypes } = show(found);
     await build();
 
-    fireEvent.click(screen.getByRole("button", { name: /Find archetypes/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Find Archetypes/ }));
 
     await waitFor(() => expect(findArchetypes).toHaveBeenCalledTimes(1));
     expect(findArchetypes.mock.calls[0]![0]).toEqual(FOLDER.map((each) => each.key));
@@ -91,7 +101,7 @@ describe("asking for them", () => {
     show(found);
     await build();
 
-    fireEvent.click(screen.getByRole("button", { name: /Find archetypes/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Find Archetypes/ }));
 
     await waitFor(() => {
       const labels = [...cells()].map((cell) => cell.getAttribute("aria-label"));
@@ -106,7 +116,7 @@ describe("asking for them", () => {
     const { onArchetypes } = show(found);
     await build();
 
-    fireEvent.click(screen.getByRole("button", { name: /Find archetypes/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Find Archetypes/ }));
 
     await waitFor(() =>
       expect(onArchetypes).toHaveBeenCalledWith(["frames/f03.png", "frames/f05.png"]),
@@ -123,7 +133,7 @@ describe("asking for them", () => {
     show(() => found({ suggested: FOLDER.map((each) => each.key), budget: 5, clusters: 5 }));
     await build();
 
-    fireEvent.click(screen.getByRole("button", { name: /Find archetypes/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Find Archetypes/ }));
 
     expect(await screen.findByText("Found 5 suggested reference frames")).toBeTruthy();
   });
@@ -132,7 +142,7 @@ describe("asking for them", () => {
     show(found);
     await build();
 
-    fireEvent.click(screen.getByRole("button", { name: /Find archetypes/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Find Archetypes/ }));
 
     expect(await screen.findByText("Only 2 reference frames identified (expected ~5)")).toBeTruthy();
   });
@@ -141,7 +151,7 @@ describe("asking for them", () => {
     show(() => found({ suggested: [], clusters: 0, noise: 5 }));
     await build();
 
-    fireEvent.click(screen.getByRole("button", { name: /Find archetypes/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Find Archetypes/ }));
 
     expect(await screen.findByText("No diverse reference frames found")).toBeTruthy();
   });
@@ -152,7 +162,7 @@ describe("asking for them", () => {
     });
     await build();
 
-    fireEvent.click(screen.getByRole("button", { name: /Find archetypes/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Find Archetypes/ }));
 
     expect(await screen.findByText("Reference analysis failed: the embedder is not installed")).toBeTruthy();
   });
@@ -162,7 +172,7 @@ describe("asking for them", () => {
     buildRange(0, 3);
     await waitFor(() => expect(cells()).toHaveLength(4));
 
-    fireEvent.click(screen.getByRole("button", { name: /Find archetypes/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Find Archetypes/ }));
 
     expect(await screen.findByText("Need at least 5 frames to find archetypes")).toBeTruthy();
     expect(findArchetypes).not.toHaveBeenCalled();
@@ -183,7 +193,7 @@ describe("asking for them", () => {
     );
     await build();
 
-    expect(screen.queryByRole("button", { name: /Find archetypes/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Find Archetypes/ })).toBeNull();
   });
 });
 
@@ -232,10 +242,10 @@ describe("suggestions over time (SP-30)", () => {
     let calls = 0;
     show(() => (calls++ === 0 ? found() : found({ suggested: ["frames/f02.png"] })));
     await build();
-    fireEvent.click(screen.getByRole("button", { name: /Find archetypes/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Find Archetypes/ }));
     await waitFor(() => expect(cells()[2]!.getAttribute("aria-label")).toContain("suggested"));
 
-    fireEvent.click(screen.getByRole("button", { name: /Find archetypes/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Find Archetypes/ }));
 
     await waitFor(() => expect(cells()[1]!.getAttribute("aria-label")).toContain("suggested"));
     expect(cells()[2]!.getAttribute("aria-label")).not.toContain("suggested");
@@ -245,7 +255,7 @@ describe("suggestions over time (SP-30)", () => {
   it("H reaches a suggestion that has since become a reference", async () => {
     show(found);
     await build();
-    fireEvent.click(screen.getByRole("button", { name: /Find archetypes/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Find Archetypes/ }));
     await waitFor(() => expect(cells()[2]!.getAttribute("aria-label")).toContain("suggested"));
     fireEvent.click(cells()[2]!);
     fireEvent.click(screen.getByText("+ Add Current"));
@@ -273,7 +283,7 @@ describe("the Review group's suggestions, and Clear Suggested (SP-45)", () => {
     expect(suggestedCount()).toBe("Suggested refs: 0");
     expect(button("Next Suggested →").disabled).toBe(true);
 
-    fireEvent.click(screen.getByRole("button", { name: /Find archetypes/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Find Archetypes/ }));
 
     await waitFor(() => expect(suggestedCount()).toBe("Suggested refs: 2"));
     fireEvent.click(button("Next Suggested →"));
@@ -288,7 +298,7 @@ describe("the Review group's suggestions, and Clear Suggested (SP-45)", () => {
     const { onArchetypes } = show(found);
     await build();
     expect(button("Clear Suggested").disabled).toBe(true);
-    fireEvent.click(screen.getByRole("button", { name: /Find archetypes/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Find Archetypes/ }));
     await waitFor(() => expect(button("Clear Suggested").disabled).toBe(false));
 
     fireEvent.click(button("Clear Suggested"));
@@ -310,13 +320,13 @@ describe("aborting (SP-29)", () => {
       release = resolve;
     }));
     await build();
-    fireEvent.click(screen.getByRole("button", { name: /Find archetypes/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Find Archetypes/ }));
     await waitFor(() => expect(findArchetypes).toHaveBeenCalledTimes(1));
 
     fireEvent.click(screen.getByRole("button", { name: "Abort" }));
 
     expect(await screen.findByText("Reference analysis cancelled")).toBeTruthy();
-    expect(screen.getByRole("button", { name: /Find archetypes/ })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /Find Archetypes/ })).toBeTruthy();
     await act(async () => {
       release(found());
     });

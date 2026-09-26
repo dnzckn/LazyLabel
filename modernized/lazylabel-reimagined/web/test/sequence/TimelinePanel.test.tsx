@@ -213,11 +213,11 @@ describe("with no AI (SP-31)", () => {
     build("0", "4", { references: false });
     await waitFor(() => expect(cells()).toHaveLength(5));
 
-    for (const name of [/^Propagate/, /Find archetypes/, /\+ Add Current/, /\+ All Labeled/, /Next Flagged/, /Prev Suggested/, /Clear Suggested/, /Clear flags/]) {
+    for (const name of [/^Propagate/, /Find Archetypes/, /\+ Add Current/, /\+ All Labeled/, /Next Flagged/, /Prev Suggested/, /Clear Suggested/, /Clear Flags/]) {
       expect(screen.queryByRole("button", { name })).toBeNull();
     }
     expect(screen.getByText("Cut")).toBeTruthy();
-    expect(screen.getByText("New timeline")).toBeTruthy();
+    expect(screen.getByText("New Timeline")).toBeTruthy();
 
     fireEvent.keyDown(document, { key: "p", ctrlKey: true });
     expect(await screen.findByText(/AI features require the inference service/)).toBeTruthy();
@@ -233,7 +233,7 @@ describe("with no AI (SP-31)", () => {
     await waitFor(() => expect(cells()).toHaveLength(5));
 
     expect(screen.queryByRole("button", { name: /^Propagate/ })).toBeNull();
-    expect(screen.getByRole("button", { name: /Find archetypes/ })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /Find Archetypes/ })).toBeTruthy();
   });
 });
 
@@ -430,7 +430,7 @@ describe("setting the range up, as legacy's Timeline Setup does (SP-41)", () => 
     await waitFor(() => expect(cells()).toHaveLength(3));
     expect(onRange).toHaveBeenLastCalledWith(range);
 
-    fireEvent.click(screen.getByText("New timeline"));
+    fireEvent.click(screen.getByText("New Timeline"));
     await waitFor(() =>
       expect(onRange).toHaveBeenLastCalledWith({ start: null, end: null, between: [], order: null }),
     );
@@ -453,7 +453,7 @@ describe("setting the range up, as legacy's Timeline Setup does (SP-41)", () => 
       "frames/f03.png",
       "frames/f04.png",
     ]);
-    fireEvent.click(screen.getByText("Unsort"));
+    fireEvent.click(screen.getByText("Sorted"));
     expect(onRange.mock.lastCall![0].order).toBeNull();
   });
 
@@ -561,10 +561,10 @@ describe("building one", () => {
     build("0", "4");
     await waitFor(() => expect(cells()).toHaveLength(5));
 
-    fireEvent.click(screen.getByText("Clear flags"));
+    fireEvent.click(screen.getByText("Clear Flags"));
     expect(await screen.findByText("Cleared all timeline flags")).toBeTruthy();
 
-    fireEvent.click(screen.getByText("New timeline"));
+    fireEvent.click(screen.getByText("New Timeline"));
     expect(await screen.findByText("Timeline cleared. Set new start/end frames.")).toBeTruthy();
   });
 
@@ -656,7 +656,7 @@ describe("using it", () => {
       expect(cells()[0]!.getAttribute("aria-label")).toContain("frames/f02.png"),
     );
 
-    fireEvent.click(screen.getByText("Unsort"));
+    fireEvent.click(screen.getByText("Sorted"));
 
     await waitFor(() =>
       expect(cells()[0]!.getAttribute("aria-label")).toContain("frames/f01.png"),
@@ -676,7 +676,7 @@ describe("using it", () => {
     fireEvent.click(cells()[2]!);
     fireEvent.click(screen.getByText("Set Right"));
 
-    fireEvent.click(screen.getByText("New timeline"));
+    fireEvent.click(screen.getByText("New Timeline"));
     build("0", "4", { references: false });
     await waitFor(() => expect(cells()).toHaveLength(5));
 
@@ -692,7 +692,7 @@ describe("using it", () => {
     build("0", "4");
     await waitFor(() => expect(cells()).toHaveLength(5));
 
-    fireEvent.click(screen.getByText("New timeline"));
+    fireEvent.click(screen.getByText("New Timeline"));
 
     expect(await screen.findByRole("button", { name: "Build Timeline" })).toBeTruthy();
     expect(screen.getByText(/^Start:/).textContent).toBe("Start: Not set");
@@ -1048,13 +1048,52 @@ describe("the Review group (SP-45)", () => {
   });
 });
 
+describe("legacy's words on the timeline (SP-51, SP-52)", () => {
+  it("names a frame in its tooltip as legacy's does: number, stem, status and score", async () => {
+    // timeline_widget.py:471-489, by the frame's own number when the bar is sorted too. The web's
+    // was the key, the role and "confidence 0.9877" on one line.
+    render(withSettings(<Timeline images={FOLDER} scores={{ 2: 0.98765 }} />));
+    build("0", "4");
+    await waitFor(() => expect(cells()).toHaveLength(5));
+    fireEvent.change(screen.getByLabelText("Minimum confidence"), { target: { value: "0.995" } });
+
+    expect(cells()[0]!.title).toBe("Frame 1/5\nf01\nStatus: pending");
+    await waitFor(() => expect(cells()[2]!.title).toBe("Frame 3/5\nf03\nStatus: flagged\nConfidence: 0.9877"));
+
+    fireEvent.click(screen.getByText("Sort"));
+    await waitFor(() => expect(cells()[0]!.title).toBe("Frame 2/5\nf02\nStatus: reference"));
+  });
+
+  it("names the buttons as legacy does, with its tooltips, and Sort reads Sorted while it is on", async () => {
+    // timeline_widget.py:597-611 and sequence_widget.py:541-553: "Clear Flags", a checkable "Sort"
+    // and "New Timeline", each with its tooltip. The web's were "Clear flags", a "Sort" that read
+    // "Unsort", and "New timeline", with none.
+    show();
+    build("0", "4");
+    await waitFor(() => expect(cells()).toHaveLength(5));
+    const sort = screen.getByRole("button", { name: "Sort" });
+
+    expect(screen.getByRole("button", { name: "Clear Flags" }).title).toBe("Clear all status colors from the timeline");
+    expect(sort.title).toBe("Sort timeline by status (done → needs work)");
+    expect(sort.getAttribute("aria-pressed")).toBe("false");
+    expect(screen.getByRole("button", { name: "New Timeline" }).title).toBe(
+      "Exit current timeline and select a new range.\nThis will clear all propagation results.",
+    );
+
+    fireEvent.click(sort);
+
+    expect(sort.textContent).toBe("Sorted");
+    expect(sort.getAttribute("aria-pressed")).toBe("true");
+  });
+});
+
 describe("the frame keys", () => {
   const key = (action: string) => defaultSettings().hotkeys[action]!.primary;
   const press = (action: string) => fireEvent.keyDown(document, { key: key(action) });
 
-  /** Which cell the timeline calls current, by its title. */
+  /** Which cell the timeline calls current, by its label. */
   const current = () =>
-    [...cells()].find((cell) => cell.className.includes("--current"))?.getAttribute("title");
+    [...cells()].find((cell) => cell.className.includes("--current"))?.getAttribute("aria-label");
 
   it("jumps to the next REFERENCE frame", async () => {
     // f02 and f05 are the annotated ones, so they are the references. Starting at f01, the key

@@ -299,7 +299,7 @@ describe("RULE-058: the open frame keeps its unsaved work through finish, Save A
     expect(status()).toMatch(UNSAVED);
 
     // 2. Save All writes the propagated frames -- and not the open one.
-    fireEvent.click(await screen.findByRole("button", { name: /^Save \d+ frame/ }));
+    fireEvent.click(await screen.findByRole("button", { name: "Save All" }));
     await waitFor(() => expect(saved).toContain("frames/f02.png"));
     expect(saved).not.toContain("frames/f01.png");
     expect(status()).toMatch(UNSAVED);

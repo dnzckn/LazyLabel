@@ -74,29 +74,33 @@ export function scoreOf(result: WirePropagationFrame): ObjectScore {
 }
 
 /**
- * What legacy's engine counts, for its notices: the frames it stored a mask for, and the frames
- * with an object below Min Conf (`propagation_manager.py:763-806, 1087-1126`). With Keep Flagged
- * Masks off it stores no object below Min Conf. An object with no pixels is neither; a reference
- * is never reported; a frame not in `among` (trimmed off) is not counted. Skip Labeled is the
- * view's, not the engine's, so its frames count, as they do in legacy's
- * "Propagation complete: N frames, M flagged" (`main_window.py:4621-4634`).
+ * What legacy's engine counts, for its notices and its Save All: the frames it stored a mask for,
+ * and the frames with an object below Min Conf (`propagation_manager.py:763-806, 1087-1126`). With
+ * Keep Flagged Masks off it stores no object below the Min Conf of the moment the frame came in.
+ * Once Min Conf has moved, it flags again over what it stored, so a frame it stored nothing for is
+ * flagged no more (`propagation_manager.py:1254-1268`). An object with no pixels is neither; a
+ * reference is never reported; a frame not in `among` (trimmed off) is not counted. Skip Labeled
+ * is the view's, not the engine's, so its frames count, as they do in legacy's "Propagation
+ * complete: N frames, M flagged" (`main_window.py:4621-4634`).
  */
 export function engineCounts(
   masks: ReadonlyMap<string, readonly WirePropagationFrame[]>,
   among: ReadonlySet<string>,
   references: ReadonlySet<string>,
-  threshold: number,
   keepFlagged: boolean,
+  /** Min Conf now, and when each frame came in; a frame missing from `at` came in at `now`. */
+  thresholds: { readonly now: number; readonly at: ReadonlyMap<string, number> },
 ): { readonly propagated: ReadonlySet<string>; readonly flagged: ReadonlySet<string> } {
   const propagated = new Set<string>();
   const flagged = new Set<string>();
   for (const [key, results] of masks) {
     if (!among.has(key) || references.has(key)) continue;
+    const at = thresholds.at.get(key) ?? thresholds.now;
     for (const result of results) {
       if (scoreOf(result).empty) continue;
-      const low = isFlagged(result.confidence, threshold);
-      if (low) flagged.add(key);
-      if (!low || keepFlagged) propagated.add(key);
+      const stored = keepFlagged || !isFlagged(result.confidence, at);
+      if (stored) propagated.add(key);
+      if ((stored || at === thresholds.now) && isFlagged(result.confidence, thresholds.now)) flagged.add(key);
     }
   }
   return { propagated, flagged };

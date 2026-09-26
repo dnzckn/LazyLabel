@@ -41,17 +41,33 @@ describe("legacy's engine counts, for its notices (SP-50)", () => {
   ]);
   const among = new Set(["a", "b", "c", "d", "ref"]);
 
+  const still = { now: 0.99, at: new Map<string, number>() };
+
   it("counts a frame stored and a frame flagged as legacy's engine does", () => {
-    const { propagated, flagged } = engineCounts(masks, among, new Set(["ref"]), 0.99, false);
+    const { propagated, flagged } = engineCounts(masks, among, new Set(["ref"]), false, still);
 
     expect([...propagated].sort()).toEqual(["a", "b"]);
     expect([...flagged].sort()).toEqual(["b", "c"]);
   });
 
   it("stores the objects below Min Conf too with Keep Flagged Masks on", () => {
-    const { propagated } = engineCounts(masks, among, new Set(["ref"]), 0.99, true);
+    const { propagated } = engineCounts(masks, among, new Set(["ref"]), true, still);
 
     expect([...propagated].sort()).toEqual(["a", "b", "c"]);
+  });
+
+  it("flags again over what it stored once Min Conf has moved (SP-33)", () => {
+    // propagation_manager.py:1254-1268: lowered to 0.3, "c" stored nothing at 0.99 and is flagged
+    // no more, and "b" stored only its object at 0.999. Raised to 0.9995, the stored object of
+    // "a" is below it.
+    const at = new Map([["a", 0.99], ["b", 0.99], ["c", 0.99], ["d", 0.99]]);
+
+    const lowered = engineCounts(masks, among, new Set(["ref"]), false, { now: 0.3, at });
+    const raised = engineCounts(masks, among, new Set(["ref"]), false, { now: 0.9995, at });
+
+    expect([...lowered.propagated].sort()).toEqual(["a", "b"]);
+    expect([...lowered.flagged]).toEqual([]);
+    expect([...raised.flagged].sort()).toEqual(["a", "b"]);
   });
 });
 

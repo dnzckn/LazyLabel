@@ -1983,17 +1983,23 @@ fieldset input[type="text"] {
  * Propagation, right under the timeline bar. It used to sit above the frames so its progress line
  * stayed in view over six hundred wrapping cells; the bar is one line now, as legacy's is.
  */
-.timeline__propagation {
-  border: 1px solid var(--rule);
-  border-radius: 0.25rem;
-  padding: 0.5rem;
-  margin-bottom: 0.6rem;
-}
-
 .timeline__propagation-actions {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 0.3rem;
+}
+
+/* Legacy's Propagate spans its group, padded 8px (sequence_widget.py:303-305); Clear beside it. */
+.timeline__propagation-go {
+  display: flex;
+  gap: 0.3rem;
+  margin-bottom: 4px;
+}
+
+.timeline__propagation-go > .seq-button {
+  flex: 1;
+  padding: 8px;
 }
 
 /* Legacy's Range spinboxes (sequence_widget.py:318-331): two narrow fields around a dash. */

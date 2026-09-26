@@ -259,7 +259,7 @@ const roles = () => cells().map((cell) => cell.getAttribute("aria-label")!.split
 const confidences = () =>
   Object.fromEntries(
     cells().flatMap((cell, index) => {
-      const shown = /confidence ([0-9.]+)$/.exec(cell.getAttribute("title") ?? "");
+      const shown = /Confidence: ([0-9.]+)$/.exec(cell.getAttribute("title") ?? "");
       return shown ? [[String(index), Number(shown[1])]] : [];
     }),
   );
@@ -272,9 +272,9 @@ async function propagate(scenario: Scenario) {
   fireEvent.click(cells()[REFERENCE]!);
   fireEvent.click(screen.getByRole("button", { name: "+ Add Current" }));
 
-  const controls = screen.getByRole("button", { name: /^Propagate/ }).closest("div")!;
-  if (scenario.keepFlagged) fireEvent.click(within(controls).getByLabelText("Keep flagged masks"));
-  if (!scenario.skipLabeled) fireEvent.click(within(controls).getByLabelText("Skip labeled"));
+  const controls = screen.getByRole("button", { name: /^Propagate/ }).closest("fieldset")!;
+  if (scenario.keepFlagged) fireEvent.click(within(controls).getByLabelText("Keep Flagged Masks"));
+  if (!scenario.skipLabeled) fireEvent.click(within(controls).getByLabelText("Skip Labeled"));
 
   fireEvent.click(screen.getByRole("button", { name: /^Propagate/ }));
   // The run is over when the app says what legacy said then, word for word (SP-50).
@@ -331,7 +331,7 @@ describe.each(Object.entries(GOLDEN.scenarios))(
       // last frames, and a Save pressed in between writes only what was already settled.
       await waitFor(() => expect(roles()).toEqual(scenario.timeline));
 
-      fireEvent.click(await screen.findByRole("button", { name: /^Save \d+ frame/ }));
+      fireEvent.click(await screen.findByRole("button", { name: "Save All" }));
       // Written one frame at a time, as the real client does, so give it the time 21 writes take.
       await waitFor(() => expect(saved).toHaveLength(scenario.saveAll.written.length), {
         timeout: 20_000,

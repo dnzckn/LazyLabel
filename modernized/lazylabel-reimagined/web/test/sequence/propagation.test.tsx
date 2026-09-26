@@ -93,6 +93,8 @@ interface Fake {
   readonly started: WirePropagationStart[];
   readonly polls: { id: string; cursor: number }[];
   readonly cancels: string[];
+  /** The images Save All wrote, in order. */
+  readonly saved: string[];
 }
 
 function fakeClient(script: {
@@ -113,6 +115,7 @@ function fakeClient(script: {
   const started: WirePropagationStart[] = [];
   const polls: { id: string; cursor: number }[] = [];
   const cancels: string[] = [];
+  const saved: string[] = [];
   let pollCount = 0;
 
   const client = {
@@ -165,9 +168,13 @@ function fakeClient(script: {
       cancels.push(id);
       return script.cancel?.() ?? job({ state: "running", cancelling: true });
     },
+    saveAnnotations: async (_project: string, key: string) => {
+      saved.push(key);
+      return { written: [], stale: [], skippedEmpty: [] };
+    },
   } as unknown as ApiClient;
 
-  return { client, started, polls, cancels };
+  return { client, started, polls, cancels, saved };
 }
 
 function show(fake: Fake, frames: readonly Frame[] = FRAMES) {
@@ -196,8 +203,28 @@ describe("Keep Flagged Masks and Skip Labeled (RULE-060, RULE-081)", () => {
   it("start at legacy's defaults: flagged masks discarded, labelled frames left alone", () => {
     show(fakeClient({}));
 
-    expect((screen.getByLabelText("Keep flagged masks") as HTMLInputElement).checked).toBe(false);
-    expect((screen.getByLabelText("Skip labeled") as HTMLInputElement).checked).toBe(true);
+    expect((screen.getByLabelText("Keep Flagged Masks") as HTMLInputElement).checked).toBe(false);
+    expect((screen.getByLabelText("Skip Labeled") as HTMLInputElement).checked).toBe(true);
+  });
+
+  it("are in legacy's Propagation group, under its button, with legacy's tooltips (SP-51)", () => {
+    // sequence_widget.py:291-408: the group's title, Propagate on top, and the options' tooltips
+    // (336-343, 350-353). The web had no title, the button last, and tooltips of its own.
+    show(fakeClient({}));
+
+    const group = screen.getByRole("group", { name: "Propagation" });
+    const [first] = group.querySelectorAll("button, input");
+    expect(first).toBe(propagate());
+    const tip = (label: string) => screen.getByLabelText(label).closest("label")!.title;
+    expect(tip("Keep Flagged Masks")).toBe(
+      "When unchecked (default), masks are discarded for any\nframe where an object fails to propagate above the\n"
+        + "confidence threshold. The frame is flagged red and no\nmasks are stored for it.\n\n"
+        + "Check to keep partial masks on flagged frames so you\ncan navigate to them and review/edit manually.",
+    );
+    expect(tip("Skip Labeled")).toBe(
+      "Don't overwrite frames that already have saved\nannotations (NPZ files). Useful when re-running\n"
+        + "propagation after fixing flagged frames.",
+    );
   });
 
   it("REFUSES to propagate when Skip Labeled cannot tell which frames have labels", async () => {
@@ -301,7 +328,7 @@ describe("Keep Flagged Masks and Skip Labeled (RULE-060, RULE-081)", () => {
     });
     show(fake);
 
-    fireEvent.click(screen.getByLabelText("Skip labeled"));
+    fireEvent.click(screen.getByLabelText("Skip Labeled"));
     fireEvent.click(propagate());
 
     await waitFor(() => expect(fake.started).toHaveLength(1));
@@ -647,10 +674,26 @@ describe("watching it", () => {
     show(fake);
 
     fireEvent.click(propagate());
+    await screen.findByRole("button", { name: "Abort · Frame 2/4" });
+    fireEvent.click(screen.getByRole("button", { name: "Save All" }));
 
     // Frame 1 is committed; frame 2, the newest, is not yet.
-    expect(await screen.findByRole("button", { name: /Save 1 frame/ }, { timeout: 3000 })).toBeTruthy();
+    await waitFor(() => expect(fake.saved).toEqual([FRAMES[1]!.key]));
     expect(screen.getByRole("button", { name: /^Abort/ })).toBeTruthy();
+  });
+
+  it("offers Save All at all times, and says so when there is nothing to save, as legacy's does (SP-38, SP-51)", async () => {
+    // main_window.py:3297-3305, 4757-4759. The web showed "Save N frames" only while there was
+    // something unsaved.
+    const fake = fakeClient({});
+    show(fake);
+
+    const save = screen.getByRole("button", { name: "Save All" });
+    expect(save.title).toBe("Save all propagated masks to NPZ files (or scrub timeline to save)");
+    fireEvent.click(save);
+
+    expect(await screen.findByText("No propagated frames to save")).toBeTruthy();
+    expect(fake.saved).toEqual([]);
   });
 
   it("reports each frame's confidence as the MINIMUM over its objects", async () => {
@@ -1088,7 +1131,7 @@ describe("RULE-056: not losing propagated work without asking", () => {
       expect(screen.getByLabelText("Timeline").querySelectorAll("button")).toHaveLength(3),
     );
     fireEvent.click(screen.getByRole("button", { name: /^Propagate/ }));
-    await screen.findByRole("button", { name: /Save 1 frame/ }, { timeout: 3000 });
+    await screen.findByText(/^Propagation complete/, undefined, { timeout: 3000 });
   }
 
   /** A mask on an 8x8 frame covering columns and rows `from` to `to`, `to` excluded. */
@@ -1127,7 +1170,7 @@ describe("RULE-056: not losing propagated work without asking", () => {
     panel(confirm);
     await propagateAndWait();
 
-    fireEvent.click(screen.getByText("New timeline"));
+    fireEvent.click(screen.getByText("New Timeline"));
 
     expect(confirm).toHaveBeenCalledTimes(1);
     expect(confirm.mock.calls[0]![0]).toMatch(/1 propagated frame has not been saved/);
@@ -1137,7 +1180,7 @@ describe("RULE-056: not losing propagated work without asking", () => {
     panel(() => false);
     await propagateAndWait();
 
-    fireEvent.click(screen.getByText("New timeline"));
+    fireEvent.click(screen.getByText("New Timeline"));
 
     // Still a timeline, not the range picker.
     expect(screen.getByLabelText("Timeline")).toBeTruthy();
@@ -1147,7 +1190,7 @@ describe("RULE-056: not losing propagated work without asking", () => {
     panel(() => true);
     await propagateAndWait();
 
-    fireEvent.click(screen.getByText("New timeline"));
+    fireEvent.click(screen.getByText("New Timeline"));
 
     expect(await screen.findByRole("button", { name: "Build Timeline" })).toBeTruthy();
   });
@@ -1164,7 +1207,7 @@ describe("RULE-056: not losing propagated work without asking", () => {
       expect(screen.getByLabelText("Timeline").querySelectorAll("button")).toHaveLength(3),
     );
 
-    fireEvent.click(screen.getByText("New timeline"));
+    fireEvent.click(screen.getByText("New Timeline"));
 
     expect(confirm).not.toHaveBeenCalled();
   });
@@ -1193,39 +1236,44 @@ describe("RULE-056: not losing propagated work without asking", () => {
 
     expect(confirm).toHaveBeenCalledTimes(1);
     expect(confirm.mock.calls[0]![0]).toMatch(/1 propagated frame has not been saved. Propagating again/);
-    expect(screen.getByRole("button", { name: /Save 1 frame/ })).toBeTruthy();
+    expect(closeTab()).toBe(true);
   });
 
   it("leaves a frame the user corrected and saved to them: Save All does not write over it", async () => {
     // Legacy drops a saved frame's stored masks, so its Save All skips it. Here the run kept them,
     // and Save All wrote them over the user's correction (SEQUENCE_PARITY.md SP-02).
-    const { withSaves } = panel(() => true);
+    const { withSaves, saved } = panel(() => true);
     const everyFrame = (count: number) => new Map(FOLDER.map((image) => [image.key, count] as const));
     withSaves(everyFrame(1)); // saves made BEFORE the run are not corrections of it
     await propagateAndWait();
-    expect(screen.getByRole("button", { name: /Save 1 frame/ })).toBeTruthy();
+    expect(closeTab()).toBe(true);
 
     withSaves(everyFrame(2)); // the user saves the propagated frame by hand after the run
 
-    await waitFor(() => expect(screen.queryByRole("button", { name: /Save \d+ frames?/ })).toBeNull());
+    await waitFor(() => expect(closeTab()).toBe(false));
+    fireEvent.click(screen.getByRole("button", { name: "Save All" }));
+    await screen.findByText("Saved 0 frames to NPZ");
+    expect(saved).toEqual([]);
   });
 
   it("keeps what Save All writes, and asking before losing it, when Clear flags repaints", async () => {
     // Legacy's Clear Flags only repaints: Save All still writes every propagated, unflagged frame
     // (main_window.py:3457-3478). Here it emptied Save All and silenced every guard with it
     // (SEQUENCE_PARITY.md SP-03).
-    panel(() => true);
+    const { saved } = panel(() => true);
     await propagateAndWait();
     // The flags a user clears are the ones on screen: the run's scores have reached the timeline.
     await screen.findByRole("button", { name: "Frame 2, frames/f02.png, propagated" });
 
-    fireEvent.click(screen.getByRole("button", { name: "Clear flags" }));
+    fireEvent.click(screen.getByRole("button", { name: "Clear Flags" }));
 
     // Still a repaint, as in legacy...
     expect(screen.getByRole("button", { name: "Frame 2, frames/f02.png, pending" })).toBeTruthy();
     // ...and nothing more.
-    expect(screen.getByRole("button", { name: /Save 1 frame/ })).toBeTruthy();
     expect(closeTab()).toBe(true);
+    fireEvent.click(screen.getByRole("button", { name: "Save All" }));
+    await screen.findByText(/Saved 1 frame/);
+    expect(saved.map((each) => each.key)).toEqual(["frames/f02.png"]);
   });
 
   it("seeds a reference frame that is OPEN from its unsaved edits, not from its file", async () => {
@@ -1262,7 +1310,7 @@ describe("RULE-056: not losing propagated work without asking", () => {
     // names were fixed when it began, as legacy's are.
     withOpen({ key: "frames/f02.png", segments: [], classAliases: {} });
 
-    fireEvent.click(screen.getByRole("button", { name: /Save 1 frame/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Save All" }));
     await screen.findByText(/Saved 1 frame/);
 
     expect(saved.map((each) => each.key)).toEqual(["frames/f02.png"]);
@@ -1279,7 +1327,7 @@ describe("RULE-056: not losing propagated work without asking", () => {
     });
     await propagateAndWait();
 
-    fireEvent.click(screen.getByRole("button", { name: /Save 1 frame/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Save All" }));
     await screen.findByText(/Saved 1 frame/);
 
     expect(saved[0]!.request.classAliases).toEqual({});
@@ -1310,7 +1358,7 @@ describe("RULE-056: not losing propagated work without asking", () => {
       });
       await propagateAndWait();
 
-      fireEvent.click(screen.getByRole("button", { name: /Save 1 frame/ }));
+      fireEvent.click(screen.getByRole("button", { name: "Save All" }));
       await screen.findByText(/Saved 1 frame/);
 
       const tensor = writtenTensor(saved[0]!.request);
@@ -1379,7 +1427,7 @@ describe("RULE-056: not losing propagated work without asking", () => {
     await propagateAndWait();
     fireEvent.click(await screen.findByRole("button", { name: "Frame 2, frames/f02.png, propagated" }));
 
-    fireEvent.click(screen.getByRole("button", { name: /Save 1 frame/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Save All" }));
     await screen.findByText(/Saved 1 frame/);
 
     expect(saved[0]!.request.segments.map((each) => [each.type, each.classId])).toEqual([
@@ -1389,11 +1437,11 @@ describe("RULE-056: not losing propagated work without asking", () => {
     ]);
   });
 
-  it("offers the Save beside the timeline bar, where legacy's Save All is", async () => {
+  it("offers Save All beside the timeline bar, where legacy's is", async () => {
     panel(() => true);
     await propagateAndWait();
 
-    const save = screen.getByRole("button", { name: /Save 1 frame/ });
+    const save = screen.getByRole("button", { name: "Save All" });
     // Drawn into the bar's row through a portal: still the propagation control's button.
     expect(save.closest(".timeline__bar-row")).not.toBeNull();
     expect(save.closest(".timeline__bar-row")?.querySelector("[aria-label='Timeline']")).not.toBeNull();
@@ -1407,7 +1455,7 @@ describe("RULE-056: not losing propagated work without asking", () => {
     fireEvent.click(screen.getByRole("button", { name: "Clear" }));
 
     expect(confirm.mock.calls[0]![0]).toMatch(/1 propagated frame has not been saved. Clearing/);
-    expect(screen.getByRole("button", { name: /Save 1 frame/ })).toBeTruthy();
+    expect(closeTab()).toBe(true);
   });
 
   it("DISCARDS the run on a yes: nothing left to ask about, the timeline pending, no mask to review", async () => {
@@ -1426,14 +1474,13 @@ describe("RULE-056: not losing propagated work without asking", () => {
     panel(confirm, false, undefined, { onOpen: (key, segments) => opened.push({ key, segments }) });
     await propagateAndWait();
     const propagated = await screen.findByRole("button", { name: "Frame 2, frames/f02.png, propagated" });
-    expect(propagated.title).toMatch(/confidence/);
+    expect(propagated.title).toMatch(/Confidence/);
 
     fireEvent.click(screen.getByRole("button", { name: "Clear" }));
     expect(confirm).toHaveBeenCalledTimes(1);
 
     const pending = await screen.findByRole("button", { name: "Frame 2, frames/f02.png, pending" });
-    expect(pending.title).not.toMatch(/confidence/);
-    expect(screen.queryByRole("button", { name: /Save 1 frame/ })).toBeNull();
+    expect(pending.title).not.toMatch(/Confidence/);
     expect(closeTab()).toBe(false);
 
     // Opening the frame shows its file: no run's mask is handed over with it.
@@ -1441,7 +1488,7 @@ describe("RULE-056: not losing propagated work without asking", () => {
     expect(opened.at(-1)).toEqual({ key: "frames/f02.png", segments: undefined });
 
     // Nothing is left for New timeline to ask about.
-    fireEvent.click(screen.getByText("New timeline"));
+    fireEvent.click(screen.getByText("New Timeline"));
     expect(confirm).toHaveBeenCalledTimes(1);
   });
 
@@ -1456,7 +1503,7 @@ describe("RULE-056: not losing propagated work without asking", () => {
     panel(() => true, false, undefined, { onOpen: (key, segments) => opened.push({ key, segments }) });
     await propagateAndWait();
 
-    fireEvent.click(screen.getByRole("button", { name: /Save 1 frame/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Save All" }));
     await screen.findByText(/Saved 1 frame/);
     fireEvent.click(await screen.findByRole("button", { name: "Frame 2, frames/f02.png, saved" }));
 
@@ -1506,13 +1553,13 @@ describe("RULE-056: not losing propagated work without asking", () => {
     const confirm = vi.fn((_message: string) => false);
     panel(confirm);
     await propagateAndWait();
-    fireEvent.click(screen.getByRole("button", { name: /Save 1 frame/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Save All" }));
     await screen.findByText(/Saved 1 frame/);
 
     fireEvent.click(screen.getByRole("button", { name: /^Propagate/ }));
 
-    expect(await screen.findByRole("button", { name: /Save 1 frame/ }, { timeout: 3000 })).toBeTruthy();
-    fireEvent.click(screen.getByText("New timeline"));
+    await waitFor(() => expect(closeTab()).toBe(true), { timeout: 3000 });
+    fireEvent.click(screen.getByText("New Timeline"));
     expect(confirm.mock.calls.at(-1)![0]).toMatch(/1 propagated frame has not been saved/);
   });
 
@@ -1534,7 +1581,7 @@ describe("RULE-056: not losing propagated work without asking", () => {
 
     // ...and ends painted, with the score it came back with.
     await waitFor(() => expect(f02().getAttribute("aria-label")).toMatch(/propagated$/), { timeout: 3000 });
-    expect(f02().getAttribute("title")).toContain("confidence 0.9990");
+    expect(f02().getAttribute("title")).toContain("Confidence: 0.9990");
   });
 
   it("puts Min Conf and Hist in the propagation row, where legacy's are (SP-47)", async () => {
@@ -1545,7 +1592,7 @@ describe("RULE-056: not losing propagated work without asking", () => {
     const row = (await screen.findByRole("button", { name: "Hist" })).closest(".timeline__propagation-actions");
     expect(row).not.toBeNull();
     expect(row!.contains(screen.getByLabelText("Minimum confidence"))).toBe(true);
-    expect(row!.contains(screen.getByLabelText("Skip labeled"))).toBe(true);
+    expect(row!.contains(screen.getByLabelText("Skip Labeled"))).toBe(true);
   });
 
   describe("Min Conf lowered after a run (SP-33)", () => {
@@ -1563,32 +1610,38 @@ describe("RULE-056: not losing propagated work without asking", () => {
       buildRange();
       fireEvent.click(screen.getByRole("button", { name: "+ All Labeled" }));
       await waitFor(() => expect(cell(0).getAttribute("aria-label")).toMatch(/reference$/));
-      if (keepFlagged) fireEvent.click(screen.getByLabelText("Keep flagged masks"));
+      if (keepFlagged) fireEvent.click(screen.getByLabelText("Keep Flagged Masks"));
       fireEvent.click(screen.getByRole("button", { name: /^Propagate/ }));
       await screen.findByText(/^Propagation complete/, undefined, { timeout: 3000 });
       await waitFor(() => expect(cell(1).getAttribute("aria-label")).toMatch(/flagged$/));
     }
 
-    it("keeps a frame flagged whose masks were discarded", async () => {
-      panel(() => true, false, undefined, { results: UNSURE });
+    it("keeps a frame flagged whose masks were discarded, and has nothing of it to save", async () => {
+      // Legacy's engine stored nothing for it, so its Save All says so (main_window.py:4757-4759).
+      const { saved } = panel(() => true, false, undefined, { results: UNSURE });
       await propagateUntilDone();
 
       fireEvent.change(minConf(), { target: { value: "0.9" } });
 
       await waitFor(() => expect(minConf().value).toBe("0.9"));
       expect(cell(1).getAttribute("aria-label")).toMatch(/flagged$/);
-      expect(screen.queryByRole("button", { name: /^Save \d+ frame/ })).toBeNull();
+      fireEvent.click(screen.getByRole("button", { name: "Save All" }));
+      expect(await screen.findByText("No propagated frames to save")).toBeTruthy();
+      expect(saved).toEqual([]);
     });
 
     it("lets a flagged frame whose masks were kept go green, and be saved", async () => {
       // Legacy's Save All then writes it: its engine no longer flags it, and it has its masks.
-      panel(() => true, false, undefined, { results: UNSURE });
+      const { saved } = panel(() => true, false, undefined, { results: UNSURE });
       await propagateUntilDone(true);
 
       fireEvent.change(minConf(), { target: { value: "0.9" } });
 
       await waitFor(() => expect(cell(1).getAttribute("aria-label")).toMatch(/propagated$/));
-      expect(await screen.findByRole("button", { name: "Save 1 frame" })).toBeTruthy();
+      fireEvent.click(screen.getByRole("button", { name: "Save All" }));
+      expect(await screen.findByText("Saving 1 frames...")).toBeTruthy();
+      await screen.findByText(/Saved 1 frame/);
+      expect(saved.map((each) => each.key)).toEqual(["frames/f02.png"]);
     });
   });
 
@@ -1654,6 +1707,7 @@ describe("RULE-056: not losing propagated work without asking", () => {
     fireEvent.click(header);
     fireEvent.click(header);
 
-    expect(screen.getByRole("button", { name: /Save 1 frame/ })).toBeTruthy();
+    expect(closeTab()).toBe(true);
+    expect(screen.getByRole("button", { name: "Frame 2, frames/f02.png, propagated" })).toBeTruthy();
   });
 });
