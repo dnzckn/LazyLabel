@@ -16,7 +16,7 @@ import type { WireDatasetImage, WireSegment } from "@lazylabel/contracts";
 import { CAPABILITIES } from "../capabilities.js";
 import { DatasetBrowser } from "../dataset/DatasetBrowser.jsx";
 import { ExportFormats } from "../dataset/ExportFormats.jsx";
-import { NotificationHost } from "../notifications/NotificationProvider.jsx";
+import { NotificationHost, useNotifications } from "../notifications/NotificationProvider.jsx";
 import { OpenImageView } from "../workspace/OpenImageView.jsx";
 import { AdjustmentsPanel } from "../workspace/AdjustmentsPanel.jsx";
 import { ClassTable } from "../workspace/ClassTable.jsx";
@@ -62,6 +62,8 @@ export function App({ client }: { readonly client: ApiClient }): ReactNode {
   const [showAbout, setShowAbout] = useState(false);
   // From the store, not held here: the status bar is one reader of this among several.
   const { imageState, openImage, open, crop, saveCounts, segments, classAliases } = useWorkspace();
+  // The pair, for the Multi tab's next and previous (CP-31).
+  const { sides, multiView, openImageOn, closeSide, activeSide, setActiveSide } = useWorkspace();
   // RULE-024's answer, from the pixels: whether a load opens the Rescale and FFT sections.
   const grayscale = open?.metadata?.sourceChannels === 1;
   // The folder as the browser listed it, so the sequence timeline builds from the same answer
@@ -186,8 +188,45 @@ export function App({ client }: { readonly client: ApiClient }): ReactNode {
     [shownRows, open, openImage, reviewFor],
   );
 
-  useHotkey("load_next_image", () => step(1));
-  useHotkey("load_previous_image", () => step(-1));
+  /*
+   * IN THE MULTI TAB THE PAIR MOVES, as legacy's does (main_window.py:6491-6557; CP-31): by two rows
+   * of the list as shown, counted from the LEFT image whichever side is being edited -- the next two
+   * into the left and right, the right emptied when the list has only one more. Legacy's words at
+   * the ends, where nothing moves, and when the left side is empty. Each side is opened as any open
+   * is, so what the side being left holds is saved or asked about first.
+   */
+  const { notify } = useNotifications();
+  const stepPair = useCallback(
+    (by: 1 | -1) => {
+      const left = sides[0].open;
+      if (left === null) {
+        notify({ severity: "info", message: "No current image" });
+        return;
+      }
+      const at = shownRows.findIndex((image) => image.key === left.image.key);
+      const first = at < 0 ? undefined : shownRows[at + 2 * by];
+      if (first === undefined) {
+        notify({
+          severity: "info",
+          message: by === 1 ? "Reached end of image list" : "Reached beginning of image list",
+        });
+        return;
+      }
+      const second = shownRows[at + 2 * by + 1];
+      const review = (image: WireDatasetImage) => {
+        const segments = reviewFor(image.key);
+        return segments === undefined ? undefined : { segments };
+      };
+      openImageOn(0, first, review(first));
+      if (second !== undefined) openImageOn(1, second, review(second));
+      // The tools go with the image left on screen, as when the pair is cleared by hand.
+      else if (sides[1].open !== null && closeSide(1) && activeSide === 1) setActiveSide(0);
+    },
+    [activeSide, closeSide, notify, openImageOn, reviewFor, setActiveSide, shownRows, sides],
+  );
+
+  useHotkey("load_next_image", () => (multiView ? stepPair(1) : step(1)));
+  useHotkey("load_previous_image", () => (multiView ? stepPair(-1) : step(-1)));
   // Legacy's P toggles Auto-Convert. Registered here, where it is always mounted, rather than in
   // the Auto-Convert section, which can be collapsed.
   useAutoConvertKey();
@@ -498,8 +537,18 @@ export function App({ client }: { readonly client: ApiClient }): ReactNode {
  * a large scan shows one corner of it.
  */
 function ZoomControl(): ReactNode {
-  const { zoom, setZoom, open, fitted } = useWorkspace();
+  const { zoom, setZoom, open, fitted, multiView, setZoomOn, sides } = useWorkspace();
   const keyOf = useKeyHint();
+
+  // Fit, key and button alike: in the Multi tab both viewers, as legacy's (viewport_manager.py:81-94).
+  const fit = () => {
+    if (multiView) {
+      setZoomOn(0, null);
+      setZoomOn(1, null);
+    } else {
+      setZoom(null);
+    }
+  };
 
   // Powers of two from an eighth to eight. A linear slider spends most of its travel between
   // sizes nobody wants, and legacy's own steps double. From Fit, the steps start at the size the
@@ -520,7 +569,7 @@ function ZoomControl(): ReactNode {
   useHotkey("zoom_in", () => step(1));
   useHotkey("zoom_out", () => step(-1));
   // Fit, which is this app's default and is NOT 1:1 -- one-to-one on a large scan shows a corner.
-  useHotkey("fit_view", () => setZoom(null));
+  useHotkey("fit_view", fit);
 
   if (open === null) return null;
 
@@ -539,8 +588,8 @@ function ZoomControl(): ReactNode {
       <button
         type="button"
         title={`Fit View${keyOf("fit_view")}`}
-        onClick={() => setZoom(null)}
-        disabled={zoom === null}
+        onClick={fit}
+        disabled={multiView ? sides.every((side) => side.zoom === null) : zoom === null}
       >
         Fit
       </button>

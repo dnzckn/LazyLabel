@@ -7,8 +7,8 @@
  * ordering rule they had to repeat, that a size must land before annotations or every normalized
  * coordinate rescales.
  *
- * What it still does not do is a LINKED operation: one action on both images, as one undo entry.
- * Each side is edited on its own. The tests keep the claim where the code is.
+ * Linked adding is tested here too; the keys that act on both images in the Multi tab, the linked
+ * selection and the linked class names are in `pairKeys.test.tsx` (CP-31).
  */
 
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";

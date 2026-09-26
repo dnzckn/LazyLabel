@@ -217,6 +217,12 @@ export type EraseOutcome =
       readonly bothImages: boolean;
     };
 
+/** One side's new annotation list, for `applySegmentsOn`. */
+export interface SideSegments {
+  readonly side: SideIndex;
+  readonly segments: readonly WireSegment[];
+}
+
 export interface WorkspaceContextValue {
   /** Both slots, for the split view. Everything below resolves from `sides[activeSide]`. */
   readonly sides: readonly [SideState, SideState];
@@ -236,6 +242,13 @@ export interface WorkspaceContextValue {
   /** Which side the single-image components act on. */
   readonly activeSide: SideIndex;
   readonly setActiveSide: (side: SideIndex) => void;
+  /**
+   * Whether the Multi tab is on screen, set by the split view while it is mounted -- legacy's
+   * `view_mode == "multi"`. While it is, the keys legacy applies to both viewers act on both sides
+   * (CONTROL_PARITY.md CP-31), and a linked pair shares its selection and its class names.
+   */
+  readonly multiView: boolean;
+  readonly setMultiView: (showing: boolean) => void;
 
   readonly open: OpenImage | null;
   /** Open into the active side. */
@@ -355,6 +368,11 @@ export interface WorkspaceContextValue {
     fallback?: "lowest" | "highest",
   ) => { readonly classId: number; readonly active: boolean } | null;
   readonly selected: readonly number[];
+  /**
+   * Select or deselect one annotation. This one, `setSelection` and `clearSelection` are the
+   * selection a user makes, so while a linked pair is on screen the other image takes the same
+   * rows, as legacy's does (CP-31).
+   */
   readonly toggleSelected: (index: number) => void;
   /**
    * Replace the whole selection — what Select All needs.
@@ -364,6 +382,8 @@ export interface WorkspaceContextValue {
    */
   readonly setSelection: (indices: readonly number[]) => void;
   readonly clearSelection: () => void;
+  /** Replace a named side's selection, and only that side's: what the keys acting on a pair need. */
+  readonly setSelectionOn: (side: SideIndex, indices: readonly number[]) => void;
   /**
    * Replace the whole annotation list in one recorded step.
    *
@@ -372,8 +392,19 @@ export interface WorkspaceContextValue {
    * references -- the segments themselves are shared, not copied.
    */
   readonly applySegments: (next: readonly WireSegment[], label: string) => void;
+  /**
+   * The same for named sides, as ONE recorded step: what Delete and Merge do to a pair in the Multi
+   * view, where legacy's keys act on both viewers (CP-31). One key press, one undo. Each side
+   * changed loses its selection, as `applySegments` clears it.
+   */
+  readonly applySegmentsOn: (changes: readonly SideSegments[], label: string) => void;
   readonly classAliases: Readonly<Record<string, string>>;
-  /** Rename one class, or clear the name with an empty string. Recorded, and marks the image unsaved. */
+  /**
+   * Rename one class, or clear the name with an empty string. Recorded, and marks the image unsaved.
+   *
+   * While a linked pair is on screen, the class of the same NAME in the other image is renamed too,
+   * in the same step: legacy mirrors a rename to the other viewer (main_window.py:6392-6425).
+   */
   readonly setClassAlias: (classId: number, name: string) => void;
   /** Renumber classes and rename them together, as RULE-013's reassign does. */
   readonly applyClasses: (
@@ -411,6 +442,8 @@ export interface WorkspaceContextValue {
    */
   readonly zoom: number | null;
   readonly setZoom: (zoom: number | null) => void;
+  /** The same for a named side: fitting a pair fits both viewers, as legacy's does (CP-31). */
+  readonly setZoomOn: (side: SideIndex, zoom: number | null) => void;
   /**
    * The scale the open image is drawn at while `zoom` is null: the pane's size over the image's,
    * scaling up as well as down, as legacy's `fitInView` does. Null until the view has measured its
@@ -507,6 +540,10 @@ export function WorkspaceProvider({
   /** How many times each image has been saved this session by the ordinary save, by key. */
   const [saveCounts, setSaveCounts] = useState<ReadonlyMap<string, number>>(new Map());
   const [linked, setLinked] = useState(false);
+  // The split view says so while it is mounted (`multiView` on the context).
+  const [multiView, setMultiView] = useState(false);
+  /** Whether what is done to one side's selection or class names is done to the other's too. */
+  const mirroring = linked && multiView;
   const [linkReport, setLinkReport] = useState<LinkReport | null>(null);
   // Measured by the view, which is the only thing that knows the pane's size.
   const [fitted, setFitted] = useState<number | null>(null);
@@ -870,21 +907,45 @@ export function WorkspaceProvider({
     [activeSide, history, openKeyNow, updateSide],
   );
 
+  /*
+   * THE SELECTION A USER MAKES, and while a linked pair is on screen, the other image's too: legacy
+   * replaces the other viewer's selection with the rows selected in this one, those it has, whenever
+   * this one's changes -- from its table or from a click on the image (main_window.py:2414-2423,
+   * 6194-6209, 6284-6319). Rows there are the annotations in order, so a row is a position here.
+   * Both sides change in one update, so they are never a render apart; a selection that does not
+   * change sends nothing across, as Qt signals nothing then.
+   */
+  const select = useCallback(
+    (change: (current: readonly number[]) => readonly number[]) => {
+      const at = activeSide;
+      const other = otherSide(at);
+      setSides((current): readonly [SideState, SideState] => {
+        const indices = change(current[at].selected);
+        const here = withSelection(current[at], indices);
+        if (here === current[at]) return current;
+        const there =
+          mirroring && current[other].open !== null
+            ? withSelection(current[other], indices.filter((index) => index < current[other].segments.length))
+            : current[other];
+        return at === 0 ? [here, there] : [there, here];
+      });
+    },
+    [activeSide, mirroring],
+  );
+
   const toggleSelected = useCallback(
-    (index: number) =>
-      updateSide(activeSide, (current) => ({ ...current, selected: toggle(current.selected, index) })),
-    [activeSide, updateSide],
+    (index: number) => select((current) => toggle(current, index)),
+    [select],
   );
 
-  const setSelection = useCallback(
-    (indices: readonly number[]) =>
-      updateSide(activeSide, (current) => ({ ...current, selected: indices })),
-    [activeSide, updateSide],
-  );
+  const setSelection = useCallback((indices: readonly number[]) => select(() => indices), [select]);
 
-  const clearSelection = useCallback(
-    () => updateSide(activeSide, (current) => ({ ...current, selected: [] })),
-    [activeSide, updateSide],
+  const clearSelection = useCallback(() => select(() => []), [select]);
+
+  const setSelectionOn = useCallback(
+    (side: SideIndex, indices: readonly number[]) =>
+      updateSide(side, (current) => withSelection(current, indices)),
+    [updateSide],
   );
 
   const eraseWith = useCallback(
@@ -1008,6 +1069,41 @@ export function WorkspaceProvider({
     [activeSide, history, segments, updateSide],
   );
 
+  const applySegmentsOn = useCallback(
+    (changes: readonly SideSegments[], label: string) => {
+      // The sides this step changes, each once, with what each held before it.
+      const applied = SIDES.flatMap((side) => {
+        const change = changes.find((entry) => entry.side === side);
+        return change === undefined || change.segments === sides[side].segments
+          ? []
+          : [{ side, next: change.segments, previous: sides[side].segments }];
+      });
+      if (applied.length === 0) return;
+
+      const put = (pick: (entry: (typeof applied)[number]) => readonly WireSegment[]) => {
+        for (const entry of applied) {
+          updateSide(entry.side, (current) => ({ ...current, segments: pick(entry), dirty: true, selected: [] }));
+        }
+      };
+
+      put((entry) => entry.next);
+      history.record({
+        label,
+        bytes: applied.reduce(
+          (total, { next, previous }) =>
+            total + next.reduce((sum, segment) => sum + (previous.includes(segment) ? 0 : estimateBytes(segment)), 0),
+          0,
+        ),
+        // Every side it changed, so closing either drops it: half an inverse would put annotations
+        // back into an image that is no longer open.
+        scope: applied.map(({ side }) => sideScope(side)),
+        undo: () => put((entry) => entry.previous),
+        redo: () => put((entry) => entry.next),
+      });
+    },
+    [history, sides, updateSide],
+  );
+
   const setClassAlias = useCallback(
     (classId: number, name: string) => {
       const key = String(classId);
@@ -1023,19 +1119,44 @@ export function WorkspaceProvider({
 
       if (previous[key] === next[key]) return;
 
-      const apply = (value: Readonly<Record<string, string>>) =>
-        updateSide(at, (current) => ({ ...current, classAliases: value, dirty: true }));
+      /*
+       * LINKED, THE OTHER IMAGE'S CLASS IS RENAMED TOO, as legacy mirrors a rename to the other
+       * viewer (main_window.py:6392-6425) -- the class with the same NAME there, which legacy finds
+       * by id. A linked pair here agrees on names while each image keeps its own ids (RULE-092's
+       * answer, `split/linked.ts`), so the same id in the other image can be a different class, and
+       * renaming it would put this class's name on it. An image with no class of that name has
+       * nothing to rename.
+       */
+      const other = otherSide(at);
+      const there = sides[other];
+      const theirs = mirroring && there.open !== null ? classNamed(there, previous[key] ?? key) : null;
+      const thereBefore = there.classAliases;
+      let thereAfter: Readonly<Record<string, string>> | null = null;
+      if (theirs !== null) {
+        const renamed = { ...thereBefore };
+        if (trimmed === "") delete renamed[String(theirs)];
+        else renamed[String(theirs)] = trimmed;
+        if (renamed[String(theirs)] !== thereBefore[String(theirs)]) thereAfter = renamed;
+      }
 
-      apply(next);
+      const apply = (value: Readonly<Record<string, string>>, valueThere: Readonly<Record<string, string>> | null) => {
+        updateSide(at, (current) => ({ ...current, classAliases: value, dirty: true }));
+        if (thereAfter !== null && valueThere !== null) {
+          updateSide(other, (current) => ({ ...current, classAliases: valueThere, dirty: true }));
+        }
+      };
+
+      apply(next, thereAfter);
+      const action = trimmed === "" ? `Clear the name of class ${classId}` : `Rename class ${classId}`;
       history.record({
-        label: trimmed === "" ? `Clear the name of class ${classId}` : `Rename class ${classId}`,
+        label: thereAfter === null ? action : `${action} (both images)`,
         bytes: 64,
-        scope: [sideScope(at)],
-        undo: () => apply(previous),
-        redo: () => apply(next),
+        scope: thereAfter === null ? [sideScope(at)] : [sideScope(at), sideScope(other)],
+        undo: () => apply(previous, thereBefore),
+        redo: () => apply(next, thereAfter),
       });
     },
-    [activeSide, classAliases, history, updateSide],
+    [activeSide, classAliases, history, mirroring, sides, updateSide],
   );
 
   const applyClasses = useCallback(
@@ -1104,6 +1225,12 @@ export function WorkspaceProvider({
     [activeSide, updateSide],
   );
 
+  const setZoomOn = useCallback(
+    (side: SideIndex, next: number | null) =>
+      updateSide(side, (current) => (current.zoom === next ? current : { ...current, zoom: next })),
+    [updateSide],
+  );
+
   const markSavedOn = useCallback(
     (at: SideIndex, written?: WrittenState) => {
       // Counted per image, for the sequence timeline: a propagated frame saved here is the user's
@@ -1143,6 +1270,8 @@ export function WorkspaceProvider({
       linkReport,
       activeSide,
       setActiveSide,
+      multiView,
+      setMultiView,
       open,
       openImage,
       openImageOn,
@@ -1170,7 +1299,9 @@ export function WorkspaceProvider({
       toggleSelected,
       setSelection,
       clearSelection,
+      setSelectionOn,
       applySegments,
+      applySegmentsOn,
       classAliases,
       setClassAlias,
       applyClasses,
@@ -1180,6 +1311,7 @@ export function WorkspaceProvider({
       setProcessing,
       zoom,
       setZoom,
+      setZoomOn,
       fitted,
       setFitted,
     }),
@@ -1222,6 +1354,10 @@ export function WorkspaceProvider({
       zoom,
       setActiveTool,
       toggleTool,
+      multiView,
+      setSelectionOn,
+      applySegmentsOn,
+      setZoomOn,
       toggleActiveClass,
       toggleRecentClass,
       toggleSelected,
@@ -1236,6 +1372,30 @@ export function useWorkspace(): WorkspaceContextValue {
   const value = useContext(WorkspaceContext);
   if (value === null) throw new Error("useWorkspace needs a WorkspaceProvider above it");
   return value;
+}
+
+/** The side that is not this one. */
+function otherSide(side: SideIndex): SideIndex {
+  return side === 0 ? 1 : 0;
+}
+
+/** The side with this selection, or the same side when it already has it. */
+function withSelection(side: SideState, indices: readonly number[]): SideState {
+  const same = indices.length === side.selected.length && indices.every((index, at) => side.selected[at] === index);
+  return same ? side : { ...side, selected: indices };
+}
+
+/**
+ * The class this side calls `name`, or null when it has none: a class named so, or, since an
+ * unnamed class's name is its id, an unnamed class of that id with annotations here.
+ */
+function classNamed(side: SideState, name: string): number | null {
+  for (const [id, alias] of Object.entries(side.classAliases)) {
+    if (alias === name) return Number(id);
+  }
+  const id = Number(name);
+  if (!Number.isInteger(id) || String(id) !== name || side.classAliases[name] !== undefined) return null;
+  return side.segments.some((segment) => segment.classId === id) ? id : null;
 }
 
 /** The pixels an eraser covers in an image of this size, or null when it covers none. */

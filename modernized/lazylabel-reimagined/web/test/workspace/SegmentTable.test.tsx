@@ -15,6 +15,7 @@ import { SegmentTable } from "../../src/workspace/SegmentTable.jsx";
 import { WorkspaceProvider, useWorkspace } from "../../src/workspace/WorkspaceProvider.jsx";
 import { defaultSettings } from "@lazylabel/settings-schema";
 import { HotkeyProvider } from "../../src/hotkeys/HotkeyProvider.jsx";
+import { NotificationProvider } from "../../src/notifications/NotificationProvider.jsx";
 
 afterEach(cleanup);
 
@@ -65,14 +66,17 @@ async function mount(segments: readonly WireSegment[]) {
 
   // `useHotkey` throws without a provider by design -- a hook that quietly works without one
   // hides a missing wire, which is this project's longest-running defect family. The table's
-  // selection keys live in the component under test, so this supplies it.
+  // selection keys live in the component under test, so this supplies it, and the notices its keys
+  // give in the Multi tab need theirs.
   render(
-    <HotkeyProvider bindings={defaultSettings().hotkeys}>
-      <WorkspaceProvider client={api} projectId="p1">
-        <Probe />
-        <SegmentTable />
-      </WorkspaceProvider>
-    </HotkeyProvider>,
+    <NotificationProvider>
+      <HotkeyProvider bindings={defaultSettings().hotkeys}>
+        <WorkspaceProvider client={api} projectId="p1">
+          <Probe />
+          <SegmentTable />
+        </WorkspaceProvider>
+      </HotkeyProvider>
+    </NotificationProvider>,
   );
 
   fireEvent.click(screen.getByText("open"));

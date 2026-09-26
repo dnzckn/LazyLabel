@@ -105,8 +105,9 @@ export const CAPABILITIES: readonly Capability[] = [
     webStatus: "built",
     // Built means both halves: two images compared with their own annotations, classes, crop and
     // undo, AND one annotation drawn once landing in both -- same pixel, same class NAME with each
-    // image keeping its own id, one undo entry. What is NOT linked is deliberate and recorded in
-    // `split/SplitView.tsx`: the two sides SAVE separately, and a linked EDIT or DELETE is not
+    // image keeping its own id, one undo entry. Linked, the selection and class names are shared,
+    // and legacy's keys for both viewers act on both (CP-31). What is NOT linked is deliberate and
+    // recorded in `split/SplitView.tsx`: the two sides SAVE separately, and a linked EDIT is not
     // built. Adding is the capability; the rest are refinements with their own slice.
   },
 ];

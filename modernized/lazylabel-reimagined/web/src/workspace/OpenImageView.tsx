@@ -10,7 +10,16 @@
  * other things ask the same question and a prop chain would make this one the owner by accident.
  */
 
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import {
+  useCallback,
+  useContext,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 
 import { normalizeExportFormats } from "@lazylabel/settings-schema";
 import type {
@@ -41,7 +50,9 @@ import { useHotkey, useKeyHint } from "../hotkeys/HotkeyProvider.jsx";
 import { CropLayer } from "../canvas/CropLayer.jsx";
 import { canSave } from "./saveState.js";
 import { PanLayer } from "../canvas/PanLayer.jsx";
+import { panPane } from "../canvas/panStep.js";
 import { useFittedPane } from "../canvas/useFittedPane.js";
+import { PairPanContext } from "../split/pairPan.js";
 
 /** Reads the store and hands the parts to the presentation below. */
 export function OpenImageView({
@@ -149,20 +160,16 @@ function OpenedImage({
   useEffect(() => () => setFitted(null), [setFitted]);
   const rawPan = Number(settings.values["pan_multiplier"]);
   const panMultiplier = Number.isFinite(rawPan) && rawPan > 0 ? Math.min(10, rawPan) : 1;
+  // In the Multi tab, the other half: legacy pans both viewers (viewport_manager.py:45-50, CP-31).
+  const panOtherHalf = useContext(PairPanContext);
   const pan = useCallback(
     (dx: number, dy: number) => {
+      // A tenth of the view a press, as legacy's (`panStep.ts`).
       const pane = scrollRef.current;
-      if (pane === null) return;
-      // A tenth of the view a press, its width across and its height down, times pan_multiplier,
-      // as legacy's (viewport_manager.py:60-79). It was 64 pixels whatever the view's size
-      // (`CONTROL_PARITY.md` CP-25). `scrollBy` clamps at the ends itself, so pressing into an
-      // edge does nothing rather than needing a bound here that would have to agree with the
-      // browser's.
-      const left = dx * Math.trunc(pane.clientWidth * 0.1 * panMultiplier);
-      const top = dy * Math.trunc(pane.clientHeight * 0.1 * panMultiplier);
-      pane.scrollBy({ left, top, behavior: "auto" });
+      if (pane !== null) panPane(pane, dx, dy, panMultiplier);
+      panOtherHalf?.(dx, dy, panMultiplier);
     },
-    [panMultiplier],
+    [panMultiplier, panOtherHalf],
   );
 
   useHotkey("pan_left", () => pan(-1, 0));

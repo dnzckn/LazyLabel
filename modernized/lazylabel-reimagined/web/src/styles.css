@@ -2167,6 +2167,11 @@ fieldset input[type="text"] {
   cursor: pointer;
 }
 
+/* Left at a zoom, the other half scrolls, and the pan keys move it with the view (CP-31). */
+.split__picture--zoomed {
+  overflow: auto;
+}
+
 .split__picture .canvas {
   margin: auto;
   border: none;

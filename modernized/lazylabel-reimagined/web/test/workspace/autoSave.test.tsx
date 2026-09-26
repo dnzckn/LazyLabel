@@ -56,7 +56,11 @@ const AT_REV_A: AnnotationsResult = {
 
 const UNREADABLE: AnnotationsResult = { kind: "failed", failures: [], message: "the npz is truncated" };
 
-function mount({ a = AT_REV_A, answer = true }: { a?: AnnotationsResult; answer?: boolean } = {}) {
+function mount({
+  a = AT_REV_A,
+  answer = true,
+  names = ["a.png", "b.png"],
+}: { a?: AnnotationsResult; answer?: boolean; names?: readonly string[] } = {}) {
   vi.spyOn(Element.prototype, "getBoundingClientRect").mockReturnValue({
     ...RECT,
     toJSON: () => RECT,
@@ -87,7 +91,7 @@ function mount({ a = AT_REV_A, answer = true }: { a?: AnnotationsResult; answer?
       annotatedCount: 0,
       unrecognized: 0,
       columns: [{ format: "NPZ", suffix: ".npz" }],
-      images: [row("a.png"), row("b.png")],
+      images: names.map(row),
     }),
     loadAnnotations: async (_project: string, key: string) => {
       events.push(`load ${key}`);
@@ -192,8 +196,8 @@ describe("with Auto-Save on Navigate on, legacy's default", () => {
     expect(confirmNavigation).not.toHaveBeenCalled();
   });
 
-  it("saves the ACTIVE side of a pair when it moves, in the Multi view", async () => {
-    const { events, confirmNavigation } = mount();
+  it("saves the side being edited when the PAIR moves, in the Multi view", async () => {
+    const { events, confirmNavigation } = mount({ names: ["a.png", "b.png", "c.png", "d.png"] });
     await waitFor(() => expect(screen.getByRole("button", { name: "a.png" })).toBeTruthy());
     fireEvent.click(screen.getByRole("button", { name: "a.png" }));
     await waitFor(() => expect(status()).toMatch(/a\.png/));
@@ -205,11 +209,13 @@ describe("with Auto-Save on Navigate on, legacy's default", () => {
     drawTriangle(10, 10);
     await waitFor(() => expect(status()).toMatch(/frames\/b\.png — 1 segment, unsaved/));
 
-    // Legacy's Left: load_previous_image, which moves the side being edited.
-    fireEvent.keyDown(document, { key: "ArrowLeft", code: "ArrowLeft" });
+    // Legacy's Right: load_next_image, which in the Multi view moves the pair to the next two
+    // (main_window.py:6491-6522; CP-31). The side being left with work on it is saved first.
+    next();
 
-    await waitFor(() => expect(events).toHaveLength(4));
-    expect(events).toEqual(["load frames/a.png", "load frames/b.png", "save frames/b.png", "load frames/a.png"]);
+    await waitFor(() => expect(events).toHaveLength(5));
+    expect(events.slice(0, 3)).toEqual(["load frames/a.png", "load frames/b.png", "save frames/b.png"]);
+    expect(events.slice(3).sort()).toEqual(["load frames/c.png", "load frames/d.png"]);
     expect(confirmNavigation).not.toHaveBeenCalled();
   });
 

@@ -7,9 +7,17 @@
  *
  * THE LEFT PANE IS THE IMAGE YOU ARE WORKING ON. It is not chosen here: it is whatever the dataset
  * browser opened, side 0 of the workspace. This panel chooses the SECOND image and opens it into
- * side 1, and a radio says which of the two the centre view and every tool act on. So annotating a
- * pair is: open one, pick its partner here, and switch sides — with both on screen, both holding
- * their own segments, crop and undo.
+ * side 1, and a radio says which of the two the centre view, the tools and the panels act on. So
+ * annotating a pair is: open one, pick its partner here, and switch sides — with both on screen,
+ * both holding their own segments, crop and undo.
+ *
+ * THE KEYS LEGACY APPLIES TO BOTH VIEWERS ACT ON BOTH SIDES here, by the owner's decision of
+ * 2026-09-26 ("Act on both, like the desktop app"; CONTROL_PARITY.md CP-31), which reverses the
+ * active-side-only view of decision 8 for them: next and previous move the pair by two images,
+ * the pan keys move both halves, Fit fits both, Delete (V) and Merge (M) take each image's own
+ * selection, and Escape clears both (main_window.py:1647-1744, 6491-6557;
+ * viewport_manager.py:45-50, 89-94; keyboard_event_manager.py:44-57, 236-239). Select All selects
+ * both while linked. The store knows the tab is showing because this view says so (`multiView`).
  *
  * That is a narrower view than the one before it, which let you compare any two images without
  * disturbing what you had open, and the narrowing is deliberate. RULE-092 is about a PAIR being
@@ -31,9 +39,12 @@
  * precisely what decision 7 says must follow an explicit act.
  *
  * ERASING LINKS TOO, since 2026-09-23 -- the store's `eraseWith`, for the same reason adding is
- * cheap: every eraser reaches it as one segment. Legacy mirrors both. Deleting and merging do not
- * link, in legacy or here: each of legacy's viewers has its own buttons acting on its own
- * selection. The two sides still SAVE separately. The note at the bottom says which you are getting.
+ * cheap: every eraser reaches it as one segment. Legacy mirrors both. So, since 2026-09-26, do the
+ * SELECTION -- choosing rows in one image chooses the same rows in the other -- and a class's NAME,
+ * as legacy's linked viewers share them (main_window.py:6194-6209, 6284-6319, 6392-6425). Deleting
+ * and merging are not linked operations: their keys act on each image's own selection, linked or
+ * not, and the table's buttons on the image being edited, as each of legacy's viewers has its own.
+ * The two sides still SAVE separately.
  *
  * TWO VIEWERS, not four. Legacy has a four-view setting and only viewers 0 and 1 exist
  * (RULE-092's edge cases); the setting is a control that does nothing, and it is not carried over.
@@ -42,16 +53,16 @@
  * (2026-09-26) one said what the mode in force does: linked, one annotation drawn in either image
  * lands in both at the same pixel under the same class NAME, each image keeping its own id for it;
  * erasing links the same way; one undo takes back both; a shape outside the other image is refused
- * there rather than moved; deleting and merging act on the side chosen, and each side SAVES
- * separately. Unlinked, the tools, the panels and undo follow the side chosen. Legacy's Linked
- * button says it in a tooltip, and so does this one.
+ * there rather than moved; each side SAVES separately. Unlinked, the tools, the panels and undo
+ * follow the side chosen. Legacy's Linked button says it in a tooltip, and so does this one.
  */
 
-import { useMemo, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, type ReactNode, type RefObject } from "react";
 
 import type { WireDatasetImage, WireSegment } from "@lazylabel/contracts";
 
 import { AnnotationCanvas } from "../canvas/AnnotationCanvas.jsx";
+import { panPane } from "../canvas/panStep.js";
 import { useFittedPane } from "../canvas/useFittedPane.js";
 import { ViewKindContext } from "../canvas/viewKind.js";
 import type { ImageProcessing } from "../workspace/processing.js";
@@ -61,6 +72,7 @@ import {
   type SideState,
 } from "../workspace/WorkspaceProvider.jsx";
 import { describePair, type ImageSize } from "./linked.js";
+import { PairPanContext, type PairPan } from "./pairPan.js";
 
 export interface SplitViewProps {
   /** The folder's images, for choosing the second one. */
@@ -88,9 +100,31 @@ export interface SplitViewProps {
 }
 
 export function SplitView({ images, pixelsUrl, tileUrl, viewer }: SplitViewProps): ReactNode {
-  const { sides, activeSide, setActiveSide, openImageOn, closeSide, linked, setLinked, linkReport } =
+  const { sides, activeSide, setActiveSide, openImageOn, closeSide, linked, setLinked, linkReport, setMultiView } =
     useWorkspace();
   const [left, right] = sides;
+
+  // The store's word for legacy's `view_mode == "multi"`: while this is on screen, the keys legacy
+  // applies to both viewers act on both sides (CP-31).
+  useEffect(() => {
+    setMultiView(true);
+    return () => setMultiView(false);
+  }, [setMultiView]);
+
+  /*
+   * THE OTHER HALF MOVES WITH THE VIEW. Legacy's W, A, S and D pan both viewers, each by a tenth of
+   * its own size (viewport_manager.py:45-50, 52-79). The view pans its own half and asks for this
+   * one through `PairPanContext`. Each half's picture keeps its element here for that.
+   */
+  const leftPicture = useRef<HTMLDivElement | null>(null);
+  const rightPicture = useRef<HTMLDivElement | null>(null);
+  const panOtherHalf = useCallback<PairPan>(
+    (dx, dy, multiplier) => {
+      const picture = (activeSide === 0 ? rightPicture : leftPicture).current;
+      if (picture !== null) panPane(picture, dx, dy, multiplier);
+    },
+    [activeSide],
+  );
 
   const note = useMemo(() => {
     const leftSize = sizeOf(left);
@@ -234,10 +268,17 @@ export function SplitView({ images, pixelsUrl, tileUrl, viewer }: SplitViewProps
                   <div className="split__view">
                     {/* Legacy's Multi tab has a mouse handler of its own, and the view's layers
                         follow it here (`canvas/viewKind.ts`). */}
-                    <ViewKindContext.Provider value="multi">{viewer}</ViewKindContext.Provider>
+                    <ViewKindContext.Provider value="multi">
+                      <PairPanContext.Provider value={panOtherHalf}>{viewer}</PairPanContext.Provider>
+                    </ViewKindContext.Provider>
                   </div>
                 ) : (
-                  <Pane side={sides[side]} pixelsUrl={pixelsUrl} {...(tileUrl === undefined ? {} : { tileUrl })} />
+                  <Pane
+                    side={sides[side]}
+                    picture={side === 0 ? leftPicture : rightPicture}
+                    pixelsUrl={pixelsUrl}
+                    {...(tileUrl === undefined ? {} : { tileUrl })}
+                  />
                 )}
               </figure>
             );
@@ -278,10 +319,13 @@ function sizeOf(side: SideState): ImageSize | null {
 
 function Pane({
   side,
+  picture,
   pixelsUrl,
   tileUrl,
 }: {
   readonly side: SideState;
+  /** Kept pointing at the picture's scrolling box, which the pan keys move. */
+  readonly picture: RefObject<HTMLDivElement | null>;
   readonly pixelsUrl: (key: string, processing: ImageProcessing) => string;
   readonly tileUrl?: (key: string, processing: ImageProcessing, z: number, x: number, y: number) => string;
 }): ReactNode {
@@ -303,36 +347,53 @@ function Pane({
     return <p className="panel__missing">Measuring {open.image.name}…</p>;
   }
 
-  return <FittedPicture side={side} size={size} pixelsUrl={pixelsUrl} {...(tileUrl === undefined ? {} : { tileUrl })} />;
+  return (
+    <SidePicture
+      side={side}
+      size={size}
+      picture={picture}
+      pixelsUrl={pixelsUrl}
+      {...(tileUrl === undefined ? {} : { tileUrl })}
+    />
+  );
 }
 
-/** One half's picture, fitted to its half as the view is fitted to the pane. */
-function FittedPicture({
+/**
+ * One half's picture, at its own zoom: fitted to its half as the view is fitted to the pane, or
+ * drawn at the zoom it was left at and scrolled by the pan keys, as legacy's second viewer keeps
+ * its own zoom and moves with the first (viewport_manager.py:45-50). Fitting the pair fits it too.
+ */
+function SidePicture({
   side,
   size,
+  picture,
   pixelsUrl,
   tileUrl,
 }: {
   readonly side: SideState;
   readonly size: ImageSize;
+  readonly picture: RefObject<HTMLDivElement | null>;
   readonly pixelsUrl: (key: string, processing: ImageProcessing) => string;
   readonly tileUrl?: (key: string, processing: ImageProcessing, z: number, x: number, y: number) => string;
 }): ReactNode {
-  const { attach, scale } = useFittedPane(size);
+  const { attach, scale } = useFittedPane(size, picture);
   const key = side.open?.image.key ?? "";
   return (
-    <div className="split__picture" ref={attach}>
+    <div className={side.zoom === null ? "split__picture" : "split__picture split__picture--zoomed"} ref={attach}>
       <AnnotationCanvas
         imageUrl={pixelsUrl(key, side.processing)}
         {...(tileUrl === undefined
           ? {}
-          : { tileUrl: (z: number, x: number, y: number) => tileUrl(key, side.processing, z, x, y) })}
+          : { tileUrl: (z: number, x: number, y: number) => tileUrl(key, side.processing, z, x, y), pane: picture })}
         width={size.width}
         height={size.height}
-        zoom={scale}
+        zoom={side.zoom ?? scale}
         // The LIVE segments, straight from the store, so an edit made in the view appears here as
         // it happens rather than at the next reload.
         segments={side.segments satisfies readonly WireSegment[]}
+        // Highlighted as the view highlights its own: a linked pair selects the same rows in both
+        // images, and legacy highlights them in the other viewer (main_window.py:6319).
+        selected={side.selected}
       />
     </div>
   );

@@ -22,8 +22,9 @@ import { useCallback, useEffect, useState, type MouseEvent, type ReactNode } fro
 import type { WireSegment } from "@lazylabel/contracts";
 
 import { classColor } from "../canvas/classColor.js";
+import { useNotifications } from "../notifications/NotificationProvider.jsx";
 import { merge } from "../tools/merge.js";
-import { useWorkspace } from "./WorkspaceProvider.jsx";
+import { SIDES, useWorkspace } from "./WorkspaceProvider.jsx";
 import { useHotkey, useKeyHint } from "../hotkeys/HotkeyProvider.jsx";
 
 export function SegmentTable(): ReactNode {
@@ -94,28 +95,91 @@ export function SegmentTable(): ReactNode {
   }, [applySegments, segments, selected]);
 
   /*
+   * IN THE MULTI TAB THESE KEYS ACT ON THE PAIR, as legacy's act on both viewers (CP-31, the
+   * owner's decision of 2026-09-26: "Act on both, like the desktop app"). Delete and Merge take
+   * each image's own selection, linked or not (main_window.py:1647-1656, 1693-1744, 6361-6390).
+   * Escape clears both selections (keyboard_event_manager.py:44-57). Select All selects every
+   * annotation of both images while they are linked, and this one's alone while they are not
+   * (main_window.py:1658-1691). The table shows the image being edited, and its buttons act on that
+   * one, as legacy's per-viewer buttons act on their own viewer (main_window.py:3171-3195).
+   */
+  const { sides, activeSide, multiView, linked, setSelectionOn, applySegmentsOn } = useWorkspace();
+  const { notify } = useNotifications();
+
+  /** Legacy's V in the Multi tab: each image's selection deleted, in one step, and the count said. */
+  const deleteInPair = () => {
+    const changes = SIDES.flatMap((side) => {
+      const chosen = new Set(sides[side].selected);
+      return chosen.size === 0 ? [] : [{ side, segments: sides[side].segments.filter((_, index) => !chosen.has(index)) }];
+    });
+    const count = changes.reduce((total, { side, segments: left }) => total + sides[side].segments.length - left.length, 0);
+    if (count === 0) return;
+    applySegmentsOn(
+      changes,
+      `${count === 1 ? "Delete annotation" : `Delete ${count} annotations`}${changes.length === 2 ? " (both images)" : ""}`,
+    );
+    notify({ severity: "info", message: `Deleted ${count} segment(s)` });
+  };
+
+  /**
+   * Legacy's M in the Multi tab: each image with a selection has it merged to its lowest selected
+   * class (RULE-019), in one step, and says so for each, as legacy's per-viewer merge does. The
+   * selection goes either way, as legacy's table is rebuilt.
+   */
+  const mergeInPair = () => {
+    const merged = SIDES.flatMap((side) => {
+      const chosen = sides[side].selected;
+      return chosen.length === 0 ? [] : [{ side, count: chosen.length, result: merge(sides[side].segments, chosen) }];
+    });
+    const changes = merged
+      .filter(({ result }) => result.changed.length > 0)
+      .map(({ side, result }) => ({ side, segments: result.segments }));
+    applySegmentsOn(changes, `Merge${changes.length === 2 ? " (both images)" : ""}`);
+    for (const { side, count } of merged) {
+      setSelectionOn(side, []);
+      notify({ severity: "info", message: `Merged ${count} segment(s)` });
+    }
+  };
+
+  /*
    * THE KEYS THE TABLE'S BUTTONS ALREADY HAD LABELS FOR. Every one of these actions worked; none
    * of them had a key, while the hotkey reference listed all three with their bindings.
    *
    * Each guards itself exactly as its button does -- merge needs two, delete needs one - rather
    * than trusting the key to be pressed at a sensible moment. A hotkey that throws on an empty
-   * selection is a hotkey nobody presses twice.
+   * selection is a hotkey nobody presses twice. In the Multi tab they follow legacy's, above.
    */
   useHotkey("merge_segments", () => {
-    if (selected.length >= 2) onMerge();
+    if (multiView) mergeInPair();
+    else if (selected.length >= 2) onMerge();
   });
   useHotkey("delete_segments", () => {
-    if (selected.length > 0) onDelete();
+    if (multiView) deleteInPair();
+    else if (selected.length > 0) onDelete();
   });
   useHotkey("delete_segments_alt", () => {
-    if (selected.length > 0) onDelete();
+    if (multiView) deleteInPair();
+    else if (selected.length > 0) onDelete();
   });
   useHotkey("select_all", () => {
     // Legacy selects every row the table SHOWS (right_panel.py:378-380), so under a filter only
     // that class's annotations -- every time: unlike Select and Edit (RULE-070), it does not toggle.
-    setSelection(rows.map(({ index }) => index));
+    const shown = rows.map(({ index }) => index);
+    if (multiView && linked) {
+      const other = activeSide === 0 ? 1 : 0;
+      setSelectionOn(activeSide, shown);
+      setSelectionOn(other, sides[other].segments.map((_, index) => index));
+      return;
+    }
+    setSelection(shown);
   });
-  useHotkey("escape", clearSelection);
+  useHotkey("escape", () => {
+    if (!multiView) {
+      clearSelection();
+      return;
+    }
+    for (const side of SIDES) setSelectionOn(side, []);
+  });
   const keyOf = useKeyHint();
 
   // With no annotations the table is shown empty, as legacy's is: its keys find nothing to act on,

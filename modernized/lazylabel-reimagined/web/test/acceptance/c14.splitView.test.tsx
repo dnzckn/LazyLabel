@@ -10,7 +10,9 @@
  *     class NAME with each image keeping its own id for it, as ONE undo entry.
  *
  * What is deliberately NOT here, and is recorded rather than implied: the two sides SAVE
- * separately, and a linked EDIT or DELETE is not built. Adding is.
+ * separately, and a linked EDIT is not built. Adding and erasing link; so do the selection and the
+ * class names, and Delete and Merge act on each image's own selection, as legacy's keys act on both
+ * viewers (CP-31, `test/split/pairKeys.test.tsx`).
  */
 
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
@@ -225,7 +227,8 @@ describe("C14: erasing both together (RULE-092)", () => {
   /*
    * Legacy mirrors erasing as it mirrors adding: Shift+Space finishes the polygon in both linked
    * viewers in erase mode, and an AI mask accepted in erase mode is applied to both. Deleting and
-   * merging it does not link -- each viewer has its own buttons -- and neither does this app.
+   * merging are not mirrored: legacy's V and M act on each viewer's own selection, linked or not,
+   * and so do this app's (CP-31).
    */
   async function drawnInBoth(): Promise<void> {
     await pair();

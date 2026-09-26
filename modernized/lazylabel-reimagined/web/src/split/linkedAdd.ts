@@ -102,8 +102,8 @@ export type LinkedErase =
  *
  * Legacy mirrors erasing as it mirrors adding: Shift+Space finishes the polygon in both linked
  * viewers in erase mode, and an AI mask accepted in erase mode is applied to both. Deleting and
- * merging it does NOT link -- each viewer has its own buttons acting on its own selection -- and
- * neither does this app.
+ * merging are not mirrored -- legacy's V and M act on each viewer's own selection, linked or not,
+ * and its buttons on their own viewer -- and neither are they here (`SegmentTable.tsx`, CP-31).
  *
  * The same geometry rules as an addition, so a shape is refused rather than moved when it does not
  * fit, and a mask only crosses between images of one size. None of the class rules: an eraser
