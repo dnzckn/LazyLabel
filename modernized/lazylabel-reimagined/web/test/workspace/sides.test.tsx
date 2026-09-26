@@ -88,7 +88,7 @@ function Probe(): React.ReactNode {
       <button type="button" onClick={() => setZoom((zoom ?? 1) * 2)}>zoom in</button>
       <button type="button" onClick={() => setActiveClassId(1)}>class 1</button>
       <button type="button" onClick={() => setActiveClassId(2)}>class 2</button>
-      <button type="button" onClick={toggleRecentClass}>swap class</button>
+      <button type="button" onClick={() => toggleRecentClass()}>swap class</button>
       <button type="button" onClick={() => history.undo()}>undo</button>
 
       <p data-testid="active">{activeSide}</p>
@@ -335,28 +335,27 @@ describe("zoom", () => {
   });
 });
 
-describe("the recent-class toggle", () => {
-  it("swaps between the current class and the one before it", async () => {
-    // What annotators actually do: two classes at a time, alternating. Cell and background,
-    // vehicle and road.
+describe("the recent-class toggle, legacy's X (RULE-086)", () => {
+  // It swapped between the current class and the one before it until 2026-09-25, which is neither
+  // the rule nor legacy (CONTROL_PARITY.md CP-23).
+  it("toggles the most recent class off, and on again", async () => {
     await bothOpen();
     fireEvent.click(screen.getByText("class 1"));
     fireEvent.click(screen.getByText("class 2"));
     await waitFor(() => expect(shown("activeClass")).toBe("2"));
 
     fireEvent.click(screen.getByText("swap class"));
-    await waitFor(() => expect(shown("activeClass")).toBe("1"));
+    await waitFor(() => expect(shown("activeClass")).toBe("none"));
 
     fireEvent.click(screen.getByText("swap class"));
     await waitFor(() => expect(shown("activeClass")).toBe("2"));
   });
 
-  it("does not remember a class you re-picked, which would make the key a no-op", async () => {
+  it("counts a new annotation's class as the recent one, as legacy's add_segment does", async () => {
     await bothOpen();
-    fireEvent.click(screen.getByText("class 1"));
     fireEvent.click(screen.getByText("class 2"));
-    fireEvent.click(screen.getByText("class 2"));
-    await waitFor(() => expect(shown("activeClass")).toBe("2"));
+    fireEvent.click(screen.getByText("draw")); // a class-1 triangle
+    await waitFor(() => expect(shown("activeSegments")).not.toBe("0"));
 
     fireEvent.click(screen.getByText("swap class"));
 

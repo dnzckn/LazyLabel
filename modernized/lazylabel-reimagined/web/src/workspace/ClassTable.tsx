@@ -61,7 +61,7 @@ function AliasField({
 }
 
 export function ClassTable(): ReactNode {
-  const { segments, classAliases, setClassAlias, applyClasses, activeClassId, setActiveClassId } =
+  const { segments, classAliases, setClassAlias, applyClasses, activeClassId, toggleActiveClass } =
     useWorkspace();
   const { notify } = useNotifications();
 
@@ -162,7 +162,15 @@ export function ClassTable(): ReactNode {
                   className="classes__use"
                   aria-pressed={activeClassId === classId}
                   aria-label={`Draw new annotations as class ${classId}`}
-                  onClick={() => setActiveClassId(activeClassId === classId ? null : classId)}
+                  // Legacy's class toggle, with its words (main_window.py:2697-2710).
+                  onClick={() =>
+                    notify({
+                      severity: "info",
+                      message: toggleActiveClass(classId)
+                        ? `Class ${classId} activated for new segments`
+                        : "No active class - new segments will create new classes",
+                    })
+                  }
                 >
                   {classId}
                 </button>

@@ -17,6 +17,7 @@ import type { ReactNode } from "react";
 
 import { useHotkey, useHotkeyContext } from "../hotkeys/HotkeyProvider.jsx";
 import { useNotifications } from "../notifications/NotificationProvider.jsx";
+import { useSettings } from "../settings/SettingsProvider.jsx";
 import { enterEditMode } from "../tools/edit.js";
 import { HistoryControls } from "../workspace/HistoryControls.jsx";
 import { useWorkspace, type Tool } from "../workspace/WorkspaceProvider.jsx";
@@ -68,9 +69,27 @@ export function ModeControls({ onHotkeys }: { readonly onHotkeys: () => void }):
   useHotkey("circle_mode", () => setActiveTool("circle"));
   useHotkey("selection_mode", () => setActiveTool("select"));
   useHotkey("pan_mode", () => setActiveTool("pan"));
-  // Legacy's X. It lives beside the tool keys because it is the same kind of thing: what the next
-  // stroke will be, chosen without reaching for a panel.
-  useHotkey("toggle_recent_class", toggleRecentClass);
+  /*
+   * Legacy's X (RULE-086), with its words (main_window.py:2697-2738). It lives beside the tool keys
+   * because it is the same kind of thing: what the next stroke will be, chosen without reaching for
+   * a panel. With no recent class, legacy takes its class table's first row: the lowest id, or the
+   * highest when pixel priority runs descending.
+   */
+  const { settings } = useSettings();
+  useHotkey("toggle_recent_class", () => {
+    const descending =
+      settings.values["pixel_priority_enabled"] === true && settings.values["pixel_priority_ascending"] === false;
+    const outcome = toggleRecentClass(descending ? "highest" : "lowest");
+    notify({
+      severity: "info",
+      message:
+        outcome === null
+          ? "No classes available to toggle"
+          : outcome.active
+            ? `Class ${outcome.classId} activated for new segments`
+            : "No active class - new segments will create new classes",
+    });
+  });
   useHotkey("edit_mode", edit);
 
   const keyOf = (action: string): string => {

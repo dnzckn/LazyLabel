@@ -30,6 +30,7 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useRef,
   useState,
@@ -288,14 +289,19 @@ export interface WorkspaceContextValue {
   /** The class new annotations take, or null to use the next free id. */
   readonly activeClassId: number | null;
   readonly setActiveClassId: (classId: number | null) => void;
+  /** Legacy's toggle_active_class: active if it was not, inactive if it was. True when now active. */
+  readonly toggleActiveClass: (classId: number) => boolean;
   /**
-   * Swap between the current class and the one before it — legacy's X.
+   * Legacy's X (RULE-086): toggle the class most recently made active or used by a new annotation.
+   * With none yet on this image, the first class present -- the lowest id, or with pixel priority
+   * descending the highest. Null when the image has no classes.
    *
-   * What makes it worth having is what annotators actually do: two classes at a time, alternating.
-   * Cell and background, vehicle and road. Picking from a list every time is the friction this
-   * removes, and a toggle with no memory would be a key that clears the class instead.
+   * It swapped between the current class and the one before it until 2026-09-25, which is not
+   * what the rule says or legacy does (`CONTROL_PARITY.md` CP-23).
    */
-  readonly toggleRecentClass: () => void;
+  readonly toggleRecentClass: (
+    fallback?: "lowest" | "highest",
+  ) => { readonly classId: number; readonly active: boolean } | null;
   readonly selected: readonly number[];
   readonly toggleSelected: (index: number) => void;
   /**
@@ -391,24 +397,53 @@ export function WorkspaceProvider({
   const [activeTool, setActiveTool] = useState<Tool>("none");
   const [activeClassId, setActiveClassIdState] = useState<number | null>(null);
   /*
-   * The class before this one, for legacy's X.
+   * Legacy's `last_toggled_class_id`, for its X (RULE-086): the class most recently made active or
+   * inactive, or used by a new annotation (segment_manager.py:18, 42, 409-419).
    *
    * A ref rather than state: nothing renders from it, and making it state would re-render every
    * consumer of this context each time the active class changed -- which is all eight of them, for
    * a value none of them reads.
    */
-  const previousClassId = useRef<number | null>(null);
+  const lastToggledClassId = useRef<number | null>(null);
 
   const setActiveClassId = useCallback((classId: number | null) => {
-    setActiveClassIdState((current) => {
-      // Recorded only when it CHANGES, so pressing the same class twice does not make the toggle a
-      // no-op by remembering the class you are already on.
-      if (current !== classId) previousClassId.current = current;
-      return classId;
-    });
+    if (classId !== null) lastToggledClassId.current = classId;
+    setActiveClassIdState(classId);
   }, []);
 
-  const toggleRecentClass = useCallback(() => setActiveClassId(previousClassId.current), [setActiveClassId]);
+  /** Legacy's toggle_active_class: active if it was not, inactive if it was. True when now active. */
+  const toggleActiveClass = useCallback(
+    (classId: number): boolean => {
+      lastToggledClassId.current = classId;
+      const activating = activeClassId !== classId;
+      setActiveClassIdState(activating ? classId : null);
+      return activating;
+    },
+    [activeClassId],
+  );
+  const toggleRecentClass = useCallback(
+    (fallback: "lowest" | "highest" = "lowest") => {
+      const present = [
+        ...new Set(
+          sides[activeSide].segments
+            .map((segment) => segment.classId)
+            .filter((classId): classId is number => classId !== null && classId !== undefined),
+        ),
+      ].sort((a, b) => a - b);
+      const classId =
+        lastToggledClassId.current ?? (fallback === "highest" ? present[present.length - 1] : present[0]) ?? null;
+      if (classId === null) return null;
+      return { classId, active: toggleActiveClass(classId) };
+    },
+    [activeSide, sides, toggleActiveClass],
+  );
+
+  // Legacy's recent class belongs to the image: opening another clears it (RULE-086's edge cases).
+  const openKey = sides[activeSide].open?.image.key;
+  useEffect(() => {
+    lastToggledClassId.current = null;
+  }, [openKey]);
+
   const [linked, setLinked] = useState(false);
   const [linkReport, setLinkReport] = useState<LinkReport | null>(null);
   // Measured by the view, which is the only thing that knows the pane's size.
@@ -553,6 +588,9 @@ export function WorkspaceProvider({
 
   const addSegment = useCallback(
     (segment: WireSegment, label = "Add annotation") => {
+      // Adding an annotation USES its class, which makes it the class X toggles, as legacy's
+      // add_segment does (segment_manager.py:42; RULE-086).
+      if (segment.classId !== null && segment.classId !== undefined) lastToggledClassId.current = segment.classId;
       // Recorded OUTSIDE the state updater. React may invoke an updater more than once for one
       // call -- StrictMode does it deliberately -- and recording inside would push two history
       // entries for one drawn polygon, so the first undo would appear to do nothing.
@@ -949,6 +987,7 @@ export function WorkspaceProvider({
       setActiveTool,
       activeClassId,
       setActiveClassId,
+      toggleActiveClass,
       toggleRecentClass,
       selected,
       toggleSelected,
@@ -1001,6 +1040,7 @@ export function WorkspaceProvider({
       setZoom,
       sides,
       zoom,
+      toggleActiveClass,
       toggleRecentClass,
       toggleSelected,
       updateSegment,

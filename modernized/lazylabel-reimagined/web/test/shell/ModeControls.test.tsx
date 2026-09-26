@@ -9,8 +9,9 @@ import { defaultSettings } from "@lazylabel/settings-schema";
 
 import type { ApiClient } from "../../src/api/client.js";
 import { HotkeyProvider } from "../../src/hotkeys/HotkeyProvider.jsx";
-import { NotificationProvider } from "../../src/notifications/NotificationProvider.jsx";
+import { NotificationHost, NotificationProvider } from "../../src/notifications/NotificationProvider.jsx";
 import { ModeControls } from "../../src/shell/ModeControls.jsx";
+import { SettingsProvider } from "../../src/settings/SettingsProvider.jsx";
 import { WorkspaceProvider, useWorkspace } from "../../src/workspace/WorkspaceProvider.jsx";
 
 afterEach(cleanup);
@@ -21,14 +22,21 @@ function Tool(): React.ReactNode {
 }
 
 function mount(bindings = defaultSettings().hotkeys) {
+  const client = {
+    getSettings: async () => defaultSettings(),
+    putSettings: async (next: unknown) => next,
+  } as unknown as ApiClient;
   render(
     <NotificationProvider>
-      <HotkeyProvider bindings={bindings}>
-        <WorkspaceProvider client={{} as ApiClient} projectId="default">
-          <ModeControls onHotkeys={() => undefined} />
-          <Tool />
-        </WorkspaceProvider>
-      </HotkeyProvider>
+      <NotificationHost />
+      <SettingsProvider client={client}>
+        <HotkeyProvider bindings={bindings}>
+          <WorkspaceProvider client={{} as ApiClient} projectId="default">
+            <ModeControls onHotkeys={() => undefined} />
+            <Tool />
+          </WorkspaceProvider>
+        </HotkeyProvider>
+      </SettingsProvider>
     </NotificationProvider>,
   );
 }
@@ -83,5 +91,15 @@ describe("the Mode Controls card", () => {
     fireEvent.click(screen.getByRole("radio", { name: "Edit (R)" }));
 
     expect(screen.getByTestId("tool").textContent).toBe("none");
+  });
+});
+
+describe("X, legacy's toggle recent class (RULE-086)", () => {
+  it("says there is nothing to toggle on an image with no classes, in legacy's words", async () => {
+    mount();
+
+    fireEvent.keyDown(document, { key: "x", code: "KeyX" });
+
+    expect(await screen.findByText("No classes available to toggle")).toBeTruthy();
   });
 });
