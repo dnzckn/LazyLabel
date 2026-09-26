@@ -573,7 +573,15 @@ export function TimelinePanel({
    * trim cannot lose or misplace them.
    */
   const applyTrim = (mode: "cut" | "keep") => {
-    const outcome = trim(frames, bounds[0], bounds[1], mode, current);
+    // Over the order on screen when sorted (SP-27).
+    const outcome = trim(
+      frames,
+      bounds[0],
+      bounds[1],
+      mode,
+      current,
+      sortKeys === null ? undefined : keptOrder(sortKeys, shown),
+    );
     if (outcome.kind === "refused") {
       setTrimNote(outcome.reason);
       return;

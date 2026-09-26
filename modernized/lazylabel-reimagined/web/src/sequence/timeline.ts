@@ -447,14 +447,20 @@ export function trim(
   b: number | null,
   mode: TrimMode,
   current = 0,
+  /** The order the frames are SHOWN in, when sorted: the markers then bound what is between them on screen. */
+  order?: readonly number[],
 ): TrimOutcome {
   if (a === null || b === null) {
     return { kind: "refused", reason: "Set both trim bounds first." };
   }
 
-  const low = Math.min(a, b);
-  const high = Math.max(a, b);
-  const inside = (index: number): boolean => index >= low && index <= high;
+  // Between the markers AS DISPLAYED: with the timeline sorted, legacy cuts and keeps the frames
+  // between the markers on screen (`main_window.py:5209-5228, 5311-5322`; SEQUENCE_PARITY.md SP-27).
+  const shownAt = order === undefined ? null : new Map(order.map((index, at) => [index, at]));
+  const place = (index: number): number => shownAt?.get(index) ?? index;
+  const low = Math.min(place(a), place(b));
+  const high = Math.max(place(a), place(b));
+  const inside = (index: number): boolean => place(index) >= low && place(index) <= high;
 
   const kept = frames.filter((_frame, index) => (mode === "cut" ? !inside(index) : inside(index)));
   const removed = frames.length - kept.length;

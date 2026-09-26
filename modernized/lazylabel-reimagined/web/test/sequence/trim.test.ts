@@ -142,3 +142,29 @@ describe("what survives", () => {
     expect(outcome.frames[outcome.current]!.key).toBe("frames/f002.png");
   });
 });
+
+describe("with the timeline sorted (SP-27)", () => {
+  /*
+   * Legacy cuts and keeps the frames between the markers AS DISPLAYED (main_window.py:5209-5228,
+   * 5311-5322). The web took them in natural order, so a sorted timeline lost different frames
+   * from the ones between the markers on screen.
+   */
+  const shown = [1, 4, 0, 2, 3]; // f001, f004, f000, f002, f003 on screen
+
+  it("cuts the frames between the markers on screen", () => {
+    // Markers on f001 (shown first) and f000 (shown third): f001, f004 and f000 go.
+    expect(keysOf(trim(frames(5), 1, 0, "cut", 0, shown))).toEqual(["frames/f002.png", "frames/f003.png"]);
+  });
+
+  it("keeps the frames between the markers on screen", () => {
+    expect(keysOf(trim(frames(5), 1, 0, "keep", 0, shown))).toEqual([
+      "frames/f000.png",
+      "frames/f001.png",
+      "frames/f004.png",
+    ]);
+  });
+
+  it("takes natural order when nothing is sorted, as before", () => {
+    expect(keysOf(trim(frames(5), 1, 0, "cut"))).toEqual(["frames/f002.png", "frames/f003.png", "frames/f004.png"]);
+  });
+});

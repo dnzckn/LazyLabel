@@ -592,6 +592,22 @@ describe("trimming the timeline — RULE-077", () => {
     fireEvent.click(screen.getByText("Trim to here"));
   }
 
+  it("cuts what is between the markers ON SCREEN when the timeline is sorted (SP-27)", async () => {
+    show();
+    build("0", "4");
+    await waitFor(() => expect(cells()).toHaveLength(5));
+    fireEvent.click(screen.getByText("Sort"));
+    // On screen: f02, f05 (references), then f01, f03, f04.
+    await waitFor(() => expect(cells()[0]!.getAttribute("aria-label")).toContain("frames/f02.png"));
+    boundsFrom(0, 2); // f02 .. f01 as shown
+
+    fireEvent.click(screen.getByText("Cut"));
+
+    await waitFor(() => expect(cells()).toHaveLength(2));
+    const left = [...cells()].map((cell) => cell.getAttribute("aria-label")!.split(", ")[1]);
+    expect(left.sort()).toEqual(["frames/f03.png", "frames/f04.png"]);
+  });
+
   it("opens the nearest kept frame when the open one is cut (SP-19)", async () => {
     // Legacy selects the nearest kept frame after a trim (main_window.py:5290-5291). The web moved
     // the cursor and left the cut frame on screen.
