@@ -532,7 +532,9 @@ configured, so a green CI run says nothing about them — see `Running the live 
   the variety of save formats". **Done**, item 2 below.
 - **Two mains for now** (2026-09-25): "i want to maintain support to both, pyqt6 and react/node
   architectures so we have effectively two mains for now". `main` stays the PyQt6 app and
-  `main-web` the React/Node app. Nothing is merged, and `main-web` has not been pushed.
+  `main-web` the React/Node app. Nothing is merged. `main-web` is pushed to `origin/main-web` since
+  2026-09-26, at the owner's request ("pushed to that main-web branch tho not to main"); `main` is
+  never pushed from this work.
 - **Backups and pickled datasets: not needed**, the owner's answer of 2026-09-25. That answer
   predates a finding, though: every NPZ the desktop app writes pickles its class names (item 2).
   That is now moot: the owner approved reading and writing that table as data (item 3), so no
