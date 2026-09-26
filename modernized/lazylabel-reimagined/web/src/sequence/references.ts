@@ -46,6 +46,8 @@ export interface PropagationReference {
 export interface OpenAnnotations {
   readonly key: string;
   readonly segments: readonly WireSegment[];
+  /** The names it gives its classes, by class id, unsaved ones included. Absent names none. */
+  readonly classAliases?: Readonly<Record<string, string>>;
 }
 
 export interface ReferenceMasks {
@@ -61,6 +63,15 @@ export interface ReferenceMasks {
    * RULE-012 then cannot order and no exporter can name.
    */
   readonly classes: Readonly<Record<number, number | null>>;
+  /**
+   * The name each seeded class goes by, keyed by class id as the files key it.
+   *
+   * THE OPEN IMAGE'S NAMES, whichever reference a seed came from, as they stand when Propagate is
+   * pressed: legacy reads its segment manager, which holds the open frame, and never a reference
+   * file's names (`main_window.py:4277-4280`, `SEQUENCE_PARITY.md` SP-05). A class it has not
+   * named has no entry, where legacy writes "Class N": RULE-082's answer keeps that out of files.
+   */
+  readonly aliases: Readonly<Record<string, string>>;
 }
 
 /** One annotation's pixels, rasterized the way the exporters rasterize it. */
@@ -120,6 +131,7 @@ export async function referenceMasks(
   const objects: PropagationReference[] = [];
   const skipped: { key: string; reason: string }[] = [];
   const classes: Record<number, number | null> = {};
+  const aliases: Record<string, string> = {};
   // Legacy's `max(existing_ids, default=0) + 1`, which for a list built in order is a counter.
   let nextObjectId = 1;
 
@@ -176,11 +188,15 @@ export async function referenceMasks(
         mask: encodeMask(mask),
       });
       classes[nextObjectId] = segment.classId;
+      // Named from the open image, whatever frame this seed is on, as legacy names it (SP-05).
+      const name =
+        segment.classId === null ? undefined : open?.classAliases?.[String(segment.classId)];
+      if (name !== undefined) aliases[String(segment.classId)] = name;
       nextObjectId += 1;
     }
   }
 
-  return { objects, skipped, classes };
+  return { objects, skipped, classes, aliases };
 }
 
 function reasonOf(cause: unknown): string {

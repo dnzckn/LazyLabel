@@ -104,8 +104,9 @@ export interface PropagationControlProps {
    * The open image's annotations as the user has them now, unsaved edits included.
    *
    * A reference frame that is the open image seeds from these, when there are any, not from its
-   * file, as legacy's does (`main_window.py:3649-3656`, `SEQUENCE_PARITY.md` SP-04). Handed down
-   * from the store by the shell, as `savedElsewhere` is.
+   * file, as legacy's does (`main_window.py:3649-3656`, `SEQUENCE_PARITY.md` SP-04). Its class
+   * names, as they stand at Propagate, are the names Save All writes (`main_window.py:4277-4280`,
+   * SP-05). Handed down from the store by the shell, as `savedElsewhere` is.
    */
   readonly openAnnotations?: OpenAnnotations;
   /**
@@ -162,6 +163,12 @@ export function PropagationControl({
   const committed = useRef(new Map<string, Committed>());
   /** Object id to class id, from the annotations that seeded the run. */
   const [classes, setClasses] = useState<Readonly<Record<number, number | null>>>({});
+  /**
+   * What those classes are called, fixed when the run began: legacy stores each seed's class name
+   * at Propagate (`main_window.py:4277-4280`), so opening another frame to review it, which puts
+   * that frame's names in the store, does not rename what Save All writes (SP-05).
+   */
+  const [aliases, setAliases] = useState<Readonly<Record<string, string>>>({});
   const [saving, setSaving] = useState<{ done: number; total: number } | null>(null);
   const [saved, setSaved] = useState<string | null>(null);
   /** Frames already written. What remains is what a discard would destroy. */
@@ -247,6 +254,7 @@ export function PropagationControl({
     // whose mask has just been thrown away with the previous run's.
     onRunStart?.();
     setClasses(seeds.classes);
+    setAliases(seeds.aliases);
     setSaved(null);
     // A new run's masks are new work, whatever an earlier Save All wrote. Until 2026-09-23 this set
     // was never cleared, so a frame saved once counted as saved for every later run: no Save button
@@ -475,6 +483,7 @@ export function PropagationControl({
         masks: view.kept,
         known: view.known,
         classes,
+        aliases,
         // Decision 7: an explicit act writes, and it writes the formats the user chose. A default
         // invented here would put files on disk in a format nobody asked for.
         formats: (settings.values["export_formats"] as string[] | undefined) ?? ["NPZ"],
@@ -491,7 +500,7 @@ export function PropagationControl({
     } finally {
       setSaving(null);
     }
-  }, [classes, client, onSaved, planned, projectId, settings.values, unsaved.length, view.kept, view.known]);
+  }, [aliases, classes, client, onSaved, planned, projectId, settings.values, unsaved.length, view.kept, view.known]);
 
   return (
     <div className="timeline__propagation">

@@ -37,6 +37,8 @@ export interface SaveAllRequest {
   readonly known?: ReadonlyMap<string, string>;
   /** Object id to class id, from the annotations that seeded the run. */
   readonly classes: Readonly<Record<number, number | null>>;
+  /** Class id to name, as the open image named them at Propagate: see `ReferenceMasks.aliases`. */
+  readonly aliases: Readonly<Record<string, string>>;
   readonly formats: readonly string[];
   /** Called after each frame so a long save can show progress rather than appearing to hang. */
   readonly onProgress?: (done: number, total: number) => void;
@@ -127,6 +129,28 @@ export function segmentsFor(
     .filter((segment): segment is WireSegment => segment !== null);
 }
 
+/**
+ * The names a frame's file gives its classes: each class it writes that the run has a name for,
+ * and no other.
+ *
+ * Legacy's Save All clears its segment manager for each frame and names only the classes it then
+ * adds, each under its reference's name (`main_window.py:4776, 4787-4799`); the exporters write
+ * those names into the NPZ and label COCO, VOC and CreateML with them
+ * (`save_export_manager.py:400-403, 424`). Sent none, every class was written as its bare id
+ * (`SEQUENCE_PARITY.md` SP-05). A class with no name stays its id, never "Class N" (RULE-082).
+ */
+function aliasesFor(
+  segments: readonly WireSegment[],
+  aliases: Readonly<Record<string, string>>,
+): Record<string, string> {
+  const named: Record<string, string> = {};
+  for (const { classId } of segments) {
+    const name = classId === null ? undefined : aliases[String(classId)];
+    if (name !== undefined) named[String(classId)] = name;
+  }
+  return named;
+}
+
 export async function saveAll(request: SaveAllRequest): Promise<SaveAllResult> {
   const { writable, withheld } = plannedSave(request.frames, request.masks, request.known);
   const written: string[] = [];
@@ -148,6 +172,7 @@ export async function saveAll(request: SaveAllRequest): Promise<SaveAllResult> {
         imageSize: [size?.height ?? 0, size?.width ?? 0],
         formats: request.formats,
         segments,
+        classAliases: aliasesFor(segments, request.aliases),
       });
       written.push(frame.key);
     } catch (cause) {

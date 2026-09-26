@@ -13,7 +13,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import type { WireMask, WireSegment } from "@lazylabel/contracts";
+import type { WireMask, WireSaveRequest, WireSegment } from "@lazylabel/contracts";
 import { defaultSettings } from "@lazylabel/settings-schema";
 
 import type {
@@ -655,7 +655,7 @@ describe("RULE-056: not losing propagated work without asking", () => {
     { key: "frames/f03.png", name: "f03.png", sidecars: {}, annotated: false, sharesSidecarsWith: [] },
   ];
 
-  const SQUARE = {
+  const SQUARE: WireSegment = {
     type: "Polygon",
     classId: 0,
     vertices: [[1, 1], [6, 1], [6, 6], [1, 6]],
@@ -669,6 +669,8 @@ describe("RULE-056: not losing propagated work without asking", () => {
   ) {
     /** Every request Propagate sent, as `fakeClient` records them. */
     const started: WirePropagationStart[] = [];
+    /** Every request Save All sent, with the image it was for. */
+    const saved: { key: string; request: WireSaveRequest }[] = [];
     const client = {
       getSettings: async () => defaultSettings(),
       putSettings: async (next: unknown) => next,
@@ -710,17 +712,20 @@ describe("RULE-056: not losing propagated work without asking", () => {
           cursor: 1,
           results: [{ source: "frames/f02.png", objectId: 1, mask: MASK, confidence: 0.999 }],
         }),
-      saveAnnotations: async () => ({ written: [], stale: [], skippedEmpty: [] }),
+      saveAnnotations: async (_p: string, key: string, request: WireSaveRequest) => {
+        saved.push({ key, request });
+        return { written: [], stale: [], skippedEmpty: [] };
+      },
     } as unknown as ApiClient;
 
-    const tree = (saves?: ReadonlyMap<string, number>) => {
+    const tree = (saves?: ReadonlyMap<string, number>, open = openAnnotations) => {
       const timeline = (
         <TimelinePanel
           images={FOLDER as never}
           client={client}
           confirmDiscard={confirmDiscard}
           {...(saves === undefined ? {} : { savedElsewhere: saves })}
-          {...(openAnnotations === undefined ? {} : { openAnnotations })}
+          {...(open === undefined ? {} : { openAnnotations: open })}
         />
       );
       return (
@@ -738,7 +743,10 @@ describe("RULE-056: not losing propagated work without asking", () => {
     // The ordinary save's counts, as the shell hands them down from the store.
     return {
       withSaves: (saves: ReadonlyMap<string, number>) => result.rerender(tree(saves)),
+      /** Another image opened: the shell hands down its annotations and class names instead. */
+      withOpen: (open: OpenAnnotations) => result.rerender(tree(undefined, open)),
       started,
+      saved,
     };
   }
 
@@ -882,6 +890,45 @@ describe("RULE-056: not losing propagated work without asking", () => {
 
     // One seed, and it is the square on screen: SQUARE's would be [1, 1, 7, 7].
     expect(started[0]!.objects!.map((each) => each.mask.box)).toEqual([[2, 2, 5, 5]]);
+  });
+
+  it("writes each class under the name the OPEN image gave it at Propagate, as legacy does", async () => {
+    // Legacy names each seed's class from the open frame's aliases when Propagate is pressed
+    // (main_window.py:4277-4280), and Save All writes a frame's classes under those names, and only
+    // its own classes (4776, 4787-4799). Here it sent no names, so a class the user called "car"
+    // was written as "0" (SEQUENCE_PARITY.md SP-05). The names are the ones on screen, unsaved: the
+    // reference's file names nothing.
+    const { withOpen, saved } = panel(() => true, false, {
+      key: "frames/f01.png",
+      segments: [SQUARE],
+      classAliases: { "0": "car", "3": "bus" },
+    });
+    await propagateAndWait();
+    // Reviewing the propagated frame puts that frame's names in the store; it has none. The run's
+    // names were fixed when it began, as legacy's are.
+    withOpen({ key: "frames/f02.png", segments: [], classAliases: {} });
+
+    fireEvent.click(screen.getByRole("button", { name: /Save 1 frame/ }));
+    await screen.findByText(/Saved 1 frame/);
+
+    expect(saved.map((each) => each.key)).toEqual(["frames/f02.png"]);
+    expect(saved[0]!.request.classAliases).toEqual({ "0": "car" });
+  });
+
+  it("writes a class the open image never named under its id, never legacy's \"Class N\"", async () => {
+    // Legacy writes "Class 0" here (main_window.py:4278-4280). RULE-082's answer: "Class N" is
+    // display text and never belongs in a file.
+    const { saved } = panel(() => true, false, {
+      key: "frames/f01.png",
+      segments: [SQUARE],
+      classAliases: {},
+    });
+    await propagateAndWait();
+
+    fireEvent.click(screen.getByRole("button", { name: /Save 1 frame/ }));
+    await screen.findByText(/Saved 1 frame/);
+
+    expect(saved[0]!.request.classAliases).toEqual({});
   });
 
   it("offers the Save beside the timeline bar, where legacy's Save All is", async () => {

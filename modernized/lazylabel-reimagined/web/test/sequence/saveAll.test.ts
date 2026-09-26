@@ -71,6 +71,7 @@ function run(
       frames,
       masks: held,
       classes: { 1: 7 },
+      aliases: {},
       formats: ["NPZ"],
       ...extra,
     }),
@@ -223,6 +224,7 @@ describe("when a write fails", () => {
       frames,
       masks: masks({ 1: [result()], 2: [result()] }),
       classes: {},
+      aliases: {},
       formats: ["NPZ"],
     });
 
