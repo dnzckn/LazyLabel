@@ -20,7 +20,7 @@ import type {
   WireSegment,
 } from "@lazylabel/contracts";
 
-import { AnnotationCanvas } from "../canvas/AnnotationCanvas.jsx";
+import { AnnotationCanvas, segmentAt } from "../canvas/AnnotationCanvas.jsx";
 import { useSettings } from "../settings/SettingsProvider.jsx";
 import { useWorkspace, type LeaveSave } from "./WorkspaceProvider.jsx";
 import { PolygonLayer, toWireVertices } from "../canvas/PolygonLayer.jsx";
@@ -284,6 +284,27 @@ function OpenedImage({
     [notify],
   );
 
+  /*
+   * HOVER, as legacy's items take it: the topmost segment under the pointer is drawn at 170 rather
+   * than 70, whatever the tool (hoverable_polygon_item.py:28, hoverable_pixelmap_item.py:26). The
+   * pointer is followed on the stack, which every drawing layer sits in, so no layer has to pass
+   * its moves on. The stack is exactly the picture (drawingSurface.test.ts), so its box scales to
+   * image pixels as the layers' own boxes do.
+   */
+  const [hovered, setHovered] = useState<WireSegment | null>(null);
+  const hoverAt = useCallback(
+    (event: React.PointerEvent<HTMLDivElement>) => {
+      if (metadata === null) return;
+      const box = event.currentTarget.getBoundingClientRect();
+      if (box.width <= 0 || box.height <= 0) return;
+      const x = ((event.clientX - box.left) / box.width) * metadata.width;
+      const y = ((event.clientY - box.top) / box.height) * metadata.height;
+      const index = segmentAt(segments, x, y);
+      setHovered(index < 0 ? null : segments[index]!);
+    },
+    [metadata, segments],
+  );
+
   /**
    * Cut the drawn shape out of every annotation it overlaps.
    *
@@ -363,7 +384,7 @@ function OpenedImage({
             className={zoom === null ? "canvas-scroll canvas-scroll--fit" : "canvas-scroll"}
             ref={attachScrollPane}
           >
-          <div className="canvas-stack">
+          <div className="canvas-stack" onPointerMove={hoverAt} onPointerLeave={() => setHovered(null)}>
             {canvasFailed ? (
               <img className="preview" src={pixelsUrl} alt={image.name} />
             ) : (
@@ -375,6 +396,11 @@ function OpenedImage({
                 adjustments={adjustments}
                 zoom={zoom ?? fitted}
                 onError={onCanvasError}
+                hovered={hovered}
+                selected={selected}
+                // Edit (R) is the "none" tool here (ModeControls), where selected shapes carry
+                // their vertex handles.
+                editing={activeTool === "none"}
                 {...(tileUrl === undefined ? {} : { tileUrl, pane: scrollRef })}
               />
             )}

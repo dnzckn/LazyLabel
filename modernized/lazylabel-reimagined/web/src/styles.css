@@ -927,6 +927,22 @@ fieldset input[type="text"] {
   border-radius: 0;
 }
 
+/* The picture and its annotations: two canvases of one size, the annotations laid over the
+   picture so hovering repaints them alone. The box is the picture's, with nothing added. */
+.annotation-canvas {
+  position: relative;
+  display: inline-block;
+  line-height: 0;
+}
+
+.annotation-canvas__overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
 .polygon-layer {
   position: absolute;
   inset: 0;
@@ -1613,6 +1629,11 @@ fieldset input[type="text"] {
   border: none;
   border-radius: 0;
   max-height: 100%;
+}
+
+/* The canvases' box is what the pane centres now. */
+.split__picture .annotation-canvas {
+  margin: auto;
 }
 
 /* Which pane the tools are pointed at. An outline rather than a colour swap, because the panes

@@ -24,7 +24,7 @@ import { useEffect, useRef, useState, type ReactNode, type RefObject } from "rea
 import { maskRegion, type WireSegment } from "@lazylabel/contracts";
 
 import { NEUTRAL, adjustImage, isNeutral, type Adjustments } from "../tools/adjustments.js";
-import { classColor } from "./classColor.js";
+import { classColor, type Rgb } from "./classColor.js";
 import { tileId, tileRect, tilesInView, topLevel, visibleRegion, type ScreenRect, type TileKey } from "./tiles.js";
 
 export interface AnnotationCanvasProps {
@@ -34,7 +34,7 @@ export interface AnnotationCanvasProps {
   readonly segments: readonly WireSegment[];
   /** CSS pixels per image pixel, or null/absent to fit the pane. */
   readonly zoom?: number | null;
-  /** 0 hides the overlay, 1 hides the image. Legacy's default is a half-transparent overlay. */
+  /** 0 hides the overlay, 1 hides the image. Legacy's is 70 of 255: `OVERLAY_OPACITY`. */
   readonly opacity?: number;
   /**
    * RULE-028's display adjustments, applied to the IMAGE only.
@@ -53,7 +53,31 @@ export interface AnnotationCanvasProps {
   readonly tileUrl?: (z: number, x: number, y: number) => string;
   /** The scrolling box the canvas sits in, so only the tiles in view are fetched. */
   readonly pane?: RefObject<HTMLElement | null>;
+  /** The segment under the pointer, drawn at legacy's hover alpha. */
+  readonly hovered?: WireSegment | null;
+  /** The selected segments' indices, highlighted over everything else as legacy's are. */
+  readonly selected?: readonly number[];
+  /** Edit mode: a selected shape is highlighted in its own colour rather than yellow. */
+  readonly editing?: boolean;
 }
+
+/**
+ * Legacy's overlay alpha, 70 of 255, for every kind of annotation alike: a polygon, a circle and a
+ * mask (segment_display_manager.py:336-352, 355-376 and 81). It was 0.5 here, twice as opaque.
+ * Hovering raises legacy's to 170; this canvas has no hover.
+ */
+export const OVERLAY_OPACITY = 70 / 255;
+
+/** The segment under the pointer: legacy's hover brush and pixmap, 170 of 255 (segment_display_manager.py:337-346, 81-82). */
+export const HOVER_OPACITY = 170 / 255;
+
+/**
+ * A selected segment: legacy lays a yellow copy over everything, alpha 180, whatever its class
+ * (segment_display_manager.py:510-511, 537-541). In Edit mode a selected shape gets its own colour
+ * at 170 instead (505-508).
+ */
+export const SELECTION_OPACITY = 180 / 255;
+const SELECTION_YELLOW: Rgb = { r: 255, g: 255, b: 0 };
 
 interface Loaded {
   readonly key: TileKey;
@@ -85,26 +109,28 @@ function viewport(): ScreenRect {
   return { left: 0, top: 0, right: window.innerWidth, bottom: window.innerHeight, width: window.innerWidth, height: window.innerHeight };
 }
 
-/** Whether a segment's mask box reaches into a region; a segment with no box cannot. */
-function reaches(segment: WireSegment, x: number, y: number, width: number, height: number): boolean {
-  const box = segment.mask?.box;
-  if (box == null) return false;
-  return box[0] < x + width && box[2] > x && box[1] < y + height && box[3] > y;
-}
-
 export function AnnotationCanvas({
   imageUrl,
   width,
   height,
   segments,
   zoom,
-  opacity = 0.5,
+  opacity = OVERLAY_OPACITY,
   adjustments = NEUTRAL,
   onError,
   tileUrl,
   pane,
+  hovered = null,
+  selected = NONE_SELECTED,
+  editing = false,
 }: AnnotationCanvasProps): ReactNode {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  /*
+   * THE ANNOTATIONS HAVE A CANVAS OF THEIR OWN, laid exactly over the picture's. Hover and
+   * selection repaint them as the pointer moves, and repainting the picture with them would
+   * redraw every tile and re-run the adjustments over every pixel each time.
+   */
+  const overlayRef = useRef<HTMLCanvasElement>(null);
 
   /*
    * THE TILE STATE. Refs rather than state because tiles arrive between renders and are drawn
@@ -123,8 +149,8 @@ export function AnnotationCanvas({
   const pending = useRef(new Set<string>());
   /** The finest level drawn so far: a coarser tile arriving after it needs a repaint, not a draw. */
   const finest = useRef(Number.POSITIVE_INFINITY);
-  const latest = useRef({ width, height, segments, opacity, adjustments, onError });
-  latest.current = { width, height, segments, opacity, adjustments, onError };
+  const latest = useRef({ width, height, adjustments, onError });
+  latest.current = { width, height, adjustments, onError };
   /** Set by the first tile that fails: this image is then loaded whole, as it was before tiles. */
   const [whole, setWhole] = useState(false);
 
@@ -143,7 +169,7 @@ export function AnnotationCanvas({
 
   const tiled = identity !== null && !whole;
 
-  /** Everything, from the tiles already here: coarse first, finer over it, then the overlay. */
+  /** The picture, from the tiles already here: coarse first, finer over it. */
   const paintAll = useRef((context: CanvasRenderingContext2D) => {
     const now = latest.current;
     context.clearRect(0, 0, now.width, now.height);
@@ -154,10 +180,9 @@ export function AnnotationCanvas({
     }
     finest.current = tiles.length === 0 ? Number.POSITIVE_INFINITY : tiles[tiles.length - 1]!.key.z;
     applyAdjustments(context, now.width, now.height, now.adjustments, now.onError);
-    for (const segment of now.segments) drawSegment(context, segment, now.opacity);
   });
 
-  /** One tile that has just arrived: drawn, adjusted, and the overlay redrawn over it alone. */
+  /** One tile that has just arrived: drawn and adjusted, over its own region only. */
   const drawTile = useRef((context: CanvasRenderingContext2D, key: TileKey, image: HTMLImageElement) => {
     if (key.z > finest.current) {
       // Coarser than what is already there: drawn directly it would paint blur over detail.
@@ -175,16 +200,6 @@ export function AnnotationCanvas({
 
     context.drawImage(image, at.x, at.y, at.width, at.height);
     applyAdjustments(context, w, h, now.adjustments, now.onError, { x, y });
-    // The overlay, redrawn over this region only. The tile has just replaced every pixel in it,
-    // overlay included, so drawing the masks again here blends them exactly once.
-    context.save();
-    context.beginPath();
-    context.rect(x, y, w, h);
-    context.clip();
-    for (const segment of now.segments) {
-      if (reaches(segment, x, y, w, h)) drawSegment(context, segment, now.opacity);
-    }
-    context.restore();
   });
 
   /** Ask for whatever the current view needs and does not have. */
@@ -227,7 +242,7 @@ export function AnnotationCanvas({
     }
   });
 
-  // THE PAINTING: everything that changes what is drawn repaints in full.
+  // THE PICTURE: everything that changes it repaints it in full. The annotations are not in it.
   useEffect(() => {
     const canvas = canvasRef.current;
     if (canvas === null) return;
@@ -248,17 +263,14 @@ export function AnnotationCanvas({
       if (cancelled) return;
       drawingContext.clearRect(0, 0, width, height);
       drawingContext.drawImage(image, 0, 0, width, height);
-      // Between the image and the overlay, so the adjustments reach the pixels a user is judging
-      // and not the class colours they are navigating by.
+      // The adjustments reach the pixels a user is judging and never the class colours they are
+      // navigating by, which are on the other canvas.
       applyAdjustments(drawingContext, width, height, adjustments, onError);
-      for (const segment of segments) drawSegment(drawingContext, segment, opacity);
     };
     image.onerror = () => {
       if (cancelled) return;
-      // The annotations are still worth showing, so the masks are drawn on an empty canvas rather
-      // than the whole view failing because one request did.
+      // The annotations are on their own canvas, so they still show over the empty picture.
       drawingContext.clearRect(0, 0, width, height);
-      for (const segment of segments) drawSegment(drawingContext, segment, opacity);
       onError?.("the image could not be loaded, so only the annotations are shown");
     };
     image.src = imageUrl;
@@ -266,7 +278,18 @@ export function AnnotationCanvas({
     return () => {
       cancelled = true;
     };
-  }, [tiled, identity, imageUrl, width, height, segments, opacity, adjustments, onError]);
+  }, [tiled, identity, imageUrl, width, height, adjustments, onError]);
+
+  // THE ANNOTATIONS: repainted whole whenever they, the hover or the selection change.
+  useEffect(() => {
+    const overlay = overlayRef.current;
+    if (overlay === null) return;
+    // No error reported here: a browser with no 2D context has already been reported by the
+    // picture's canvas.
+    const context = contextOf(overlay);
+    if (context === null) return;
+    paintOverlay(context, { width, height, segments, opacity, hovered, selected, editing });
+  }, [width, height, segments, opacity, hovered, selected, editing]);
 
   // WHAT IS IN VIEW CHANGES as the pane scrolls, the window resizes or the zoom redraws the canvas
   // at another size; each asks for the tiles the new view needs, once per animation frame at most.
@@ -294,6 +317,7 @@ export function AnnotationCanvas({
   }, [tiled, identity, pane]);
 
   return (
+    <div className="annotation-canvas">
     <canvas
       ref={canvasRef}
       className="canvas"
@@ -322,7 +346,108 @@ export function AnnotationCanvas({
       role="img"
       aria-label={`${segments.length} ${segments.length === 1 ? "annotation" : "annotations"}`}
     />
+    {/* Stretched over the picture by CSS, so it is shown at whatever size the picture is. */}
+    <canvas
+      ref={overlayRef}
+      className="annotation-canvas__overlay"
+      width={width}
+      height={height}
+      aria-hidden="true"
+    />
+    </div>
   );
+}
+
+const NONE_SELECTED: readonly number[] = [];
+
+/** What the overlay canvas shows. */
+export interface OverlayState {
+  readonly width: number;
+  readonly height: number;
+  readonly segments: readonly WireSegment[];
+  readonly opacity: number;
+  readonly hovered: WireSegment | null;
+  readonly selected: readonly number[];
+  readonly editing: boolean;
+}
+
+/**
+ * Paint every annotation, then the selection over them, as legacy stacks its items: each segment
+ * in index order at 70 (170 while hovered), and the highlights above everything
+ * (segment_display_manager.py:326-383, 513-541).
+ */
+export function paintOverlay(context: CanvasRenderingContext2D, state: OverlayState): void {
+  context.clearRect(0, 0, state.width, state.height);
+  for (const segment of state.segments) {
+    drawSegment(context, segment, segment === state.hovered ? HOVER_OPACITY : state.opacity);
+  }
+  for (const index of state.selected) {
+    const segment = state.segments[index];
+    if (segment === undefined) continue;
+    const shape = segmentShape(segment);
+    if (state.editing && shape !== null) {
+      // Edit mode: the shape brightened in its own colour, under its vertex handles.
+      drawSegment(context, segment, HOVER_OPACITY);
+    } else {
+      // Legacy skips a selected MASK in Edit mode, which has no handles. Here Edit is also the
+      // tool nothing else is, where legacy would show yellow, so a mask always shows yellow.
+      drawSegment(context, segment, SELECTION_OPACITY, SELECTION_YELLOW);
+    }
+  }
+}
+
+/**
+ * The index of the topmost segment drawn at an image point, or -1: the one legacy's hover lands
+ * on. Later segments are drawn over earlier ones, so the search runs from the end. A mask counts
+ * only where its pixels are set, as Qt's pixmap items take their hover shape from their pixels.
+ */
+export function segmentAt(segments: readonly WireSegment[], x: number, y: number): number {
+  for (let index = segments.length - 1; index >= 0; index -= 1) {
+    if (covers(segments[index]!, x, y)) return index;
+  }
+  return -1;
+}
+
+function covers(segment: WireSegment, x: number, y: number): boolean {
+  const shape = segmentShape(segment);
+  if (shape !== null) {
+    if (shape.kind === "circle") return Math.hypot(x - shape.cx, y - shape.cy) <= shape.radius;
+    return insidePolygon(shape.points, x, y);
+  }
+
+  const box = segment.mask?.box;
+  if (box == null) return false;
+  const px = Math.floor(x);
+  const py = Math.floor(y);
+  if (px < box[0] || px >= box[2] || py < box[1] || py >= box[3]) return false;
+  const region = decodedRegion(segment);
+  return region !== null && region[(py - box[1]) * (box[2] - box[0]) + (px - box[0])] !== 0;
+}
+
+/** Even-odd, the rule the polygon is filled by. */
+function insidePolygon(points: readonly (readonly [number, number])[], x: number, y: number): boolean {
+  let inside = false;
+  for (let i = 0, j = points.length - 1; i < points.length; j = i, i += 1) {
+    const [xi, yi] = points[i]!;
+    const [xj, yj] = points[j]!;
+    if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
+}
+
+/** A mask's bytes, decoded once per segment: the store replaces a segment rather than editing it. */
+const regions = new WeakMap<WireSegment, Uint8Array | null>();
+
+function decodedRegion(segment: WireSegment): Uint8Array | null {
+  if (regions.has(segment)) return regions.get(segment)!;
+  let region: Uint8Array | null = null;
+  try {
+    if (segment.mask !== undefined) region = maskRegion(segment.mask);
+  } catch {
+    region = null;
+  }
+  regions.set(segment, region);
+  return region;
 }
 
 /**
@@ -375,6 +500,7 @@ export function applyAdjustments(
 export function segmentPixels(
   segment: WireSegment,
   opacity: number,
+  color: Rgb = classColor(segment.classId),
 ): { width: number; height: number; x: number; y: number; data: Uint8ClampedArray } | null {
   const mask = segment.mask;
   if (mask?.box == null) return null;
@@ -384,15 +510,10 @@ export function segmentPixels(
   const height = y1 - y0;
   if (width <= 0 || height <= 0) return null;
 
-  let region: Uint8Array;
-  try {
-    region = maskRegion(mask);
-  } catch {
-    return null;
-  }
-  if (region.length !== width * height) return null;
+  const region = decodedRegion(segment);
+  if (region === null || region.length !== width * height) return null;
 
-  const { r, g, b } = classColor(segment.classId);
+  const { r, g, b } = color;
   const alpha = Math.round(Math.max(0, Math.min(1, opacity)) * 255);
 
   // One buffer the size of the BOX. An image-sized one is what the bounded wire format exists to
@@ -410,27 +531,118 @@ export function segmentPixels(
   return { width, height, x: x0, y: y0, data };
 }
 
-/** Paint one segment's mask in its class colour. */
+/** What a Polygon or Circle segment is drawn as, instead of a mask. */
+export type SegmentShape =
+  | { readonly kind: "polygon"; readonly points: readonly (readonly [number, number])[] }
+  | { readonly kind: "circle"; readonly cx: number; readonly cy: number; readonly radius: number };
+
+/**
+ * The outline a segment is drawn as, or null when it is drawn from its mask.
+ *
+ * Legacy's order (segment_display_manager.py:333-383): a Polygon with vertices is its outline,
+ * filled; a Circle with vertices is the circle around its first vertex through its second
+ * (hoverable_ellipse_item.py:66-73); only then is a mask drawn. A Circle with one vertex draws
+ * nothing, not its mask, as legacy's empty rectangle does.
+ *
+ * Until 2026-09-26 only masks were drawn, so every polygon, box and circle a user drew, and every AI
+ * mask the auto-polygon setting converted, went into the lists and never onto the image.
+ */
+export function segmentShape(segment: WireSegment): SegmentShape | null {
+  const vertices = segment.vertices;
+  if (vertices === undefined || vertices.length === 0) return null;
+  if (segment.type === "Polygon") return { kind: "polygon", points: vertices };
+  if (segment.type !== "Circle") return null;
+
+  const [cx, cy] = vertices[0]!;
+  const rim = vertices[1];
+  const radius = rim === undefined ? 0 : Math.hypot(rim[0] - cx, rim[1] - cy);
+  return { kind: "circle", cx, cy, radius };
+}
+
+/**
+ * Fill a shape, with no outline, as legacy's transparent pen draws it.
+ *
+ * Even-odd, which is Qt's default for a polygon item, so a polygon that crosses itself leaves the
+ * same holes in both apps.
+ */
+export function fillShape(
+  context: Pick<CanvasRenderingContext2D, "save" | "restore" | "beginPath" | "moveTo" | "lineTo" | "closePath" | "arc" | "fill"> & { fillStyle: CanvasRenderingContext2D["fillStyle"] },
+  shape: SegmentShape,
+  color: Rgb,
+  opacity: number,
+): void {
+  const { r, g, b } = color;
+  const alpha = Math.round(Math.max(0, Math.min(1, opacity)) * 255) / 255;
+
+  context.save();
+  context.fillStyle = `rgba(${r}, ${g}, ${b}, ${alpha})`;
+  context.beginPath();
+  if (shape.kind === "circle") {
+    context.arc(shape.cx, shape.cy, shape.radius, 0, 2 * Math.PI);
+  } else {
+    shape.points.forEach(([x, y], index) => (index === 0 ? context.moveTo(x, y) : context.lineTo(x, y)));
+    context.closePath();
+  }
+  context.fill("evenodd");
+  context.restore();
+}
+
+/** Paint one segment, in its class colour unless told otherwise: its outline if it has one, else its mask. */
 function drawSegment(
   context: CanvasRenderingContext2D,
   segment: WireSegment,
   opacity: number,
+  color: Rgb = classColor(segment.classId),
 ): void {
-  const painted = segmentPixels(segment, opacity);
-  if (painted === null) return;
+  const shape = segmentShape(segment);
+  if (shape !== null) {
+    fillShape(context, shape, color, opacity);
+    return;
+  }
 
-  const pixels = context.createImageData(painted.width, painted.height);
-  pixels.data.set(painted.data);
+  const painted = paintedMask(context, segment, opacity, color);
+  if (painted !== null) context.drawImage(painted.canvas, painted.x, painted.y);
+}
 
-  // putImageData ignores globalAlpha and overwrites rather than blending, so the overlay is
-  // composited through a scratch canvas instead. Painting it directly would erase the photo
-  // wherever a mask is transparent.
-  const scratch = document.createElement("canvas");
-  scratch.width = painted.width;
-  scratch.height = painted.height;
-  const scratchContext = scratch.getContext("2d");
-  if (scratchContext === null) return;
+/**
+ * A mask coloured and ready to draw, kept per segment and style: hovering repaints every mask, and
+ * building each one's pixels again on every pointer move would be felt with many on screen.
+ */
+const paintedMasks = new WeakMap<WireSegment, Map<string, { canvas: HTMLCanvasElement; x: number; y: number } | null>>();
 
-  scratchContext.putImageData(pixels, 0, 0);
-  context.drawImage(scratch, painted.x, painted.y);
+function paintedMask(
+  context: CanvasRenderingContext2D,
+  segment: WireSegment,
+  opacity: number,
+  color: Rgb,
+): { canvas: HTMLCanvasElement; x: number; y: number } | null {
+  const style = `${color.r},${color.g},${color.b},${Math.round(Math.max(0, Math.min(1, opacity)) * 255)}`;
+  let styles = paintedMasks.get(segment);
+  if (styles === undefined) {
+    styles = new Map();
+    paintedMasks.set(segment, styles);
+  }
+  const kept = styles.get(style);
+  if (kept !== undefined) return kept;
+
+  const painted = segmentPixels(segment, opacity, color);
+  let made: { canvas: HTMLCanvasElement; x: number; y: number } | null = null;
+  if (painted !== null) {
+    const pixels = context.createImageData(painted.width, painted.height);
+    pixels.data.set(painted.data);
+
+    // putImageData ignores globalAlpha and overwrites rather than blending, so the overlay is
+    // composited through a scratch canvas instead. Painting it directly would erase whatever is
+    // under a transparent pixel.
+    const scratch = document.createElement("canvas");
+    scratch.width = painted.width;
+    scratch.height = painted.height;
+    const scratchContext = scratch.getContext("2d");
+    if (scratchContext) {
+      scratchContext.putImageData(pixels, 0, 0);
+      made = { canvas: scratch, x: painted.x, y: painted.y };
+    }
+  }
+  styles.set(style, made);
+  return made;
 }
