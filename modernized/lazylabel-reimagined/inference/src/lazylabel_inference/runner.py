@@ -113,9 +113,12 @@ def _build_window(window: Window, references: list[ReferenceObject]) -> _WindowP
 
     They go on the side the walk STARTS from: before a forward window's frames and after a backward
     window's. A backward walk begins at the reference and moves down, so the reference has to sit
-    just above the window's highest frame. Legacy prepends in both directions, and a reverse walk
-    that starts from the earliest seeded frame starts at staged index 0 -- where SAM 2 skips reverse
-    tracking outright -- so every backward chunk after the first came back with nothing at all.
+    just above the window's highest frame. Legacy prepends in both directions and walks with no
+    start frame (`propagation_manager.py:1016, 1062`), which SAM 2 takes to be the earliest seeded
+    one: staged index 0, where it skips reverse tracking outright. MEASURED on the streaming golden
+    (SEQUENCE_PARITY.md SP-09): legacy's second backward window staged [12, 0-7], walked, and
+    answered nothing, and frames 0-2 stayed pending and unwritten. This window answers them; the
+    difference is kept, and `test_propagation_streaming_golden.py` holds both sides of it.
     """
     inside = range(window.start, window.end + 1)
     external: list[int] = []

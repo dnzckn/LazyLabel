@@ -16,6 +16,7 @@ where an off-by-one in a window boundary would otherwise sit undetected until so
 from __future__ import annotations
 
 import ast
+import importlib.util
 import pathlib
 from types import SimpleNamespace
 
@@ -32,16 +33,29 @@ from lazylabel_inference.windows import (  # noqa: I001
     should_stream,
 )
 
-LEGACY = (
-    pathlib.Path(__file__).resolve().parents[4]
-    / "legacy"
-    / "lazylabel"
-    / "src"
-    / "lazylabel"
-    / "ui"
-    / "managers"
-    / "propagation_manager.py"
-)
+
+def _legacy_source() -> pathlib.Path:
+    """Legacy's propagation manager: in the repository's `legacy` worktree, or on the path.
+
+    A git worktree of this repository has no `legacy/` beside it, and every test below skipped
+    there. The `lazylabel` package the differential suites put on PYTHONPATH is the same file, and
+    `find_spec` locates it without importing anything.
+    """
+    beside = (
+        pathlib.Path(__file__).resolve().parents[4]
+        / "legacy" / "lazylabel" / "src" / "lazylabel" / "ui" / "managers" / "propagation_manager.py"
+    )
+    if beside.is_file():
+        return beside
+    spec = importlib.util.find_spec("lazylabel")
+    for location in (spec.submodule_search_locations or []) if spec is not None else []:
+        found = pathlib.Path(location) / "ui" / "managers" / "propagation_manager.py"
+        if found.is_file():
+            return found
+    return beside
+
+
+LEGACY = _legacy_source()
 
 
 def _legacy_chunker():
@@ -88,7 +102,10 @@ def ported(start: int, end: int, *, window: int, overlap: int, reverse: bool):
     return [(w.start, w.end) for w in plan(start, end, window=window, overlap=overlap, reverse=reverse)]
 
 
-@pytest.mark.skipif(not LEGACY.is_file(), reason="the legacy worktree is not checked out")
+@pytest.mark.skipif(
+    not LEGACY.is_file(),
+    reason="the legacy worktree is not checked out, and no `lazylabel` package is on PYTHONPATH",
+)
 class TestAgainstLegacy:
     def test_the_rule_card_s_worked_example(self):
         # 600 frames, window 250: 0-249, 245-494, 490-599. The one case BUSINESS_RULES.md states
