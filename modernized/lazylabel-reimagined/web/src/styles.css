@@ -45,6 +45,11 @@
   --scroll-thumb-hover: rgb(0 0 0 / 0.314);
   --timeline-ground: rgb(215 215 220);
   --frame-pending: #b9b9be;
+  /* The channel threshold bar (channel_threshold_widget.py:95-104, 169-174, 191). */
+  --threshold-ink: rgb(30 30 30);
+  --threshold-track: rgb(230 230 230);
+  --threshold-track-rule: rgb(180 180 180);
+  --threshold-handle-rule: rgb(120 120 120);
   /* The status bar's colours (status_bar.py:87-95, 131-143). */
   --message: #c47600;
   --good: #2e7d32;
@@ -96,6 +101,10 @@
     --scroll-thumb-hover: rgb(255 255 255 / 0.271);
     --timeline-ground: rgb(50 50 50);
     --frame-pending: #646464;
+    --threshold-ink: rgb(255 255 255);
+    --threshold-track: rgb(50 50 50);
+    --threshold-track-rule: rgb(100 100 100);
+    --threshold-handle-rule: rgb(150 150 150);
     --message: #ffa500;
     --good: #51cf66;
     --bad: #ff6b6b;
@@ -143,6 +152,10 @@
   --scroll-thumb-hover: rgb(255 255 255 / 0.271);
   --timeline-ground: rgb(50 50 50);
   --frame-pending: #646464;
+  --threshold-ink: rgb(255 255 255);
+  --threshold-track: rgb(50 50 50);
+  --threshold-track-rule: rgb(100 100 100);
+  --threshold-handle-rule: rgb(150 150 150);
   --message: #ffa500;
   --good: #51cf66;
   --bad: #ff6b6b;
@@ -1286,31 +1299,92 @@ fieldset input[type="text"] {
   box-sizing: border-box;
 }
 
-/* Rescale and channel thresholds. Numbered steps, because RULE-032 fixes their order. */
-.channel__step {
-  margin: 0.8rem 0 0.3rem;
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--muted);
+/* The processing sections' one-line status, legacy's 9px info labels (rescale_widget.py:249,
+   fft_threshold_widget.py:175-176, 287-314). */
+.processing__info {
+  margin: 0;
+  font-size: 9px;
 }
 
-.channel__add {
+.processing__info--note {
+  font-style: italic;
+}
+
+.processing__info--good {
+  color: #4caf50;
+  font-style: italic;
+}
+
+.processing__info--bad {
+  color: #f44336;
+  font-style: italic;
+}
+
+.rescale__foot {
   display: flex;
-  gap: 0.4rem;
-  align-items: flex-end;
-}
-
-.channel__markers {
-  list-style: none;
-  margin: 0.4rem 0;
-  padding: 0;
-}
-
-.channel__markers li {
-  display: flex;
-  justify-content: space-between;
   align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+}
+
+/* Channel Threshold: legacy's rows of [checkbox | bar], 5 px apart inside a 5 px margin
+   (channel_threshold_widget.py:329-349, 397-420). */
+.threshold {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 5px;
+}
+
+.threshold__row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.threshold__row > input {
+  margin: 0;
+}
+
+/* One bar: 60 px tall, at least 200 wide, taking the rest of the row (lines 39-42). The drawing is
+   SVG in the bar's own pixels; colours that follow the theme come from the tokens above. */
+.threshold-bar {
+  flex: 1;
+  min-width: 200px;
+  height: 60px;
+  user-select: none;
+  touch-action: none;
+}
+
+.threshold-bar--dragging {
+  cursor: grabbing;
+}
+
+.threshold-bar__drawing {
+  display: block;
+}
+
+.threshold-bar__text {
+  fill: var(--threshold-ink);
+  font-size: 12px;
+}
+
+.threshold-bar__track {
+  fill: var(--threshold-track);
+  stroke: var(--threshold-track-rule);
+  stroke-width: 2px;
+}
+
+.threshold-bar__handle {
+  fill: rgb(255 255 255);
+  stroke: var(--threshold-handle-rule);
+  stroke-width: 1px;
+}
+
+.threshold-bar__handle--dragging {
+  fill: rgb(255 255 100);
+  stroke: rgb(200 200 50);
+  stroke-width: 2px;
 }
 
 /* Where in the dataset we are, and the folders below it. */

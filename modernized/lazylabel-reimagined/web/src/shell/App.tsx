@@ -20,7 +20,9 @@ import { NotificationHost } from "../notifications/NotificationProvider.jsx";
 import { OpenImageView } from "../workspace/OpenImageView.jsx";
 import { AdjustmentsPanel } from "../workspace/AdjustmentsPanel.jsx";
 import { ClassTable } from "../workspace/ClassTable.jsx";
-import { ChannelPanel } from "../workspace/ChannelPanel.jsx";
+import { ChannelThresholdPanel } from "../workspace/ChannelThresholdPanel.jsx";
+import { FrequencyPanel } from "../workspace/FrequencyPanel.jsx";
+import { RescalePanel } from "../workspace/RescalePanel.jsx";
 import { SplitView } from "../split/SplitView.jsx";
 import { CloseGuard } from "../workspace/CloseGuard.jsx";
 import { TimelinePanel } from "../sequence/TimelinePanel.jsx";
@@ -60,6 +62,8 @@ export function App({ client }: { readonly client: ApiClient }): ReactNode {
   const [showAbout, setShowAbout] = useState(false);
   // From the store, not held here: the status bar is one reader of this among several.
   const { imageState, openImage, open, crop, saveCounts, segments, classAliases } = useWorkspace();
+  // RULE-024's answer, from the pixels: whether a load opens the Rescale and FFT sections.
+  const grayscale = open?.metadata?.sourceChannels === 1;
   // The folder as the browser listed it, so the sequence timeline builds from the same answer
   // rather than fetching it again. Two fetches is two answers to one question.
   const [listed, setListed] = useState<readonly WireDatasetImage[]>([]);
@@ -282,8 +286,28 @@ export function App({ client }: { readonly client: ApiClient }): ReactNode {
                       <Panel title="Border Crop">
                         <CropPanel />
                       </Panel>
-                      <Panel title="Rescale and Channel Threshold" initiallyCollapsed>
-                        <ChannelPanel />
+                      {/* Legacy's three processing sections, in its order and with its defaults
+                          (control_panel.py:503-521), each set again when an image loads (823-885):
+                          Channel Threshold opens, Rescale and FFT open only for grayscale. */}
+                      <Panel
+                        title="Rescale"
+                        initiallyCollapsed
+                        collapseOnLoad={{ key: open?.metadata ?? null, collapsed: !grayscale }}
+                      >
+                        <RescalePanel />
+                      </Panel>
+                      <Panel
+                        title="Channel Threshold"
+                        collapseOnLoad={{ key: open?.metadata ?? null, collapsed: false }}
+                      >
+                        <ChannelThresholdPanel />
+                      </Panel>
+                      <Panel
+                        title="FFT Threshold"
+                        initiallyCollapsed
+                        collapseOnLoad={{ key: open?.metadata ?? null, collapsed: !grayscale }}
+                      >
+                        <FrequencyPanel />
                       </Panel>
                       <Panel title="Image Adjustments">
                         <ZoomControl />

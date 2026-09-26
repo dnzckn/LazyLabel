@@ -3,8 +3,8 @@
  *
  * The arithmetic is in the API, because RULE-032 puts it before the 16-bit to 8-bit conversion and
  * the browser only ever receives what comes after. What is tested here is the ASKING: that an
- * empty request produces no query at all, that the widget's marker-spacing rule holds, and that
- * the channels offered follow the source.
+ * empty request produces no query at all, and that the channels offered follow the source. The
+ * bar's own rules, marker spacing among them, are held to legacy's widget in `ThresholdBar.test.tsx`.
 
  *
  * Names RULE-067 so the rule is traceable to the test that proves it: a rule named in
@@ -15,11 +15,10 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  CHANNEL_NAMES,
   FREQUENCY_SLIDER_MAX,
-  MIN_MARKER_SPACING,
   NO_PROCESSING,
   channelsFor,
-  markersAreLegal,
   processingQuery,
   rescaleApplies,
 } from "../../src/workspace/processing.js";
@@ -55,6 +54,12 @@ describe("the query string", () => {
     );
   });
 
+  it("never carries which boxes are ticked, which change no pixels on their own", () => {
+    // A ticked channel with no markers is legacy's inactive state (has_active_thresholding,
+    // channel_threshold_widget.py:570-575): the image is shown as it is, and its URL must not move.
+    expect(processingQuery({ ...NO_PROCESSING, enabled: { r: true, b: true } })).toBe("");
+  });
+
   it("sends the crop only when there is processing for it to restrict", () => {
     const crop = { x1: 1, y1: 2, x2: 3, y2: 4 };
 
@@ -83,21 +88,10 @@ describe("what the source allows", () => {
   });
 });
 
-describe("the widget's marker spacing", () => {
-  it("refuses markers closer together than the minimum", () => {
-    expect(markersAreLegal([50, 59])).toBe(false);
-    expect(markersAreLegal([50, 60])).toBe(true);
-    expect(MIN_MARKER_SPACING).toBe(10);
-  });
-
-  it("checks the sorted order, not the given one", () => {
-    expect(markersAreLegal([60, 50])).toBe(true);
-    expect(markersAreLegal([59, 50])).toBe(false);
-  });
-
-  it("accepts a single marker and none at all", () => {
-    expect(markersAreLegal([128])).toBe(true);
-    expect(markersAreLegal([])).toBe(true);
+describe("the channels' names", () => {
+  it("are legacy's bar names", () => {
+    // channel_threshold_widget.py:438-445.
+    expect(CHANNEL_NAMES).toEqual({ gray: "Gray", r: "Red", g: "Green", b: "Blue" });
   });
 });
 

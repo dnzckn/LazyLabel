@@ -1,0 +1,2891 @@
+{
+ "scenarios": [
+  {
+   "name": "add: double-click on the track, 1 px per level",
+   "channel": "Red",
+   "maximum": 256,
+   "width": 296,
+   "start": [],
+   "steps": [
+    {
+     "event": "dblclick",
+     "x": 148,
+     "y": 30,
+     "markers": [
+      128
+     ],
+     "dragging": -1
+    },
+    {
+     "event": "dblclick",
+     "x": 143,
+     "y": 30,
+     "markers": [
+      128
+     ],
+     "dragging": -1
+    },
+    {
+     "event": "dblclick",
+     "x": 139,
+     "y": 30,
+     "markers": [
+      128
+     ],
+     "dragging": -1
+    },
+    {
+     "event": "dblclick",
+     "x": 138,
+     "y": 30,
+     "markers": [
+      118,
+      128
+     ],
+     "dragging": -1
+    },
+    {
+     "event": "dblclick",
+     "x": 40,
+     "y": 30,
+     "markers": [
+      20,
+      118,
+      128
+     ],
+     "dragging": -1
+    },
+    {
+     "event": "dblclick",
+     "x": 200,
+     "y": 24,
+     "markers": [
+      20,
+      118,
+      128
+     ],
+     "dragging": -1
+    },
+    {
+     "event": "dblclick",
+     "x": 200,
+     "y": 35,
+     "markers": [
+      20,
+      118,
+      128
+     ],
+     "dragging": -1
+    },
+    {
+     "event": "dblclick",
+     "x": 200,
+     "y": 25,
+     "markers": [
+      20,
+      118,
+      128,
+      180
+     ],
+     "dragging": -1
+    },
+    {
+     "event": "dblclick",
+     "x": 230,
+     "y": 34,
+     "markers": [
+      20,
+      118,
+      128,
+      180,
+      210
+     ],
+     "dragging": -1
+    },
+    {
+     "event": "dblclick",
+     "x": 19,
+     "y": 30,
+     "markers": [
+      20,
+      118,
+      128,
+      180,
+      210
+     ],
+     "dragging": -1
+    },
+    {
+     "event": "dblclick",
+     "x": 275,
+     "y": 30,
+     "markers": [
+      20,
+      118,
+      128,
+      180,
+      210,
+      255
+     ],
+     "dragging": -1
+    },
+    {
+     "event": "dblclick",
+     "x": 276,
+     "y": 30,
+     "markers": [
+      20,
+      118,
+      128,
+      180,
+      210,
+      255
+     ],
+     "dragging": -1
+    },
+    {
+     "event": "dblclick",
+     "x": 20,
+     "y": 30,
+     "markers": [
+      0,
+      20,
+      118,
+      128,
+      180,
+      210,
+      255
+     ],
+     "dragging": -1
+    }
+   ]
+  },
+  {
+   "name": "add: a narrow bar, where levels and pixels differ",
+   "channel": "Green",
+   "maximum": 256,
+   "width": 200,
+   "start": [],
+   "steps": [
+    {
+     "event": "dblclick",
+     "x": 100,
+     "y": 30,
+     "markers": [
+      128
+     ],
+     "dragging": -1
+    },
+    {
+     "event": "dblclick",
+     "x": 101,
+     "y": 30,
+     "markers": [
+      128
+     ],
+     "dragging": -1
+    },
+    {
+     "event": "dblclick",
+     "x": 107,
+     "y": 30,
+     "markers": [
+      128,
+      139
+     ],
+     "dragging": -1
+    },
+    {
+     "event": "dblclick",
+     "x": 33,
+     "y": 30,
+     "markers": [
+      20,
+      128,
+      139
+     ],
+     "dragging": -1
+    },
+    {
+     "event": "dblclick",
+     "x": 179,
+     "y": 30,
+     "markers": [
+      20,
+      128,
+      139,
+      254
+     ],
+     "dragging": -1
+    }
+   ]
+  },
+  {
+   "name": "add: 16-bit, where ten levels is less than a pixel",
+   "channel": "Gray",
+   "maximum": 65536,
+   "width": 296,
+   "start": [],
+   "steps": [
+    {
+     "event": "dblclick",
+     "x": 148,
+     "y": 30,
+     "markers": [
+      32768
+     ],
+     "dragging": -1
+    },
+    {
+     "event": "dblclick",
+     "x": 149,
+     "y": 30,
+     "markers": [
+      32768,
+      33024
+     ],
+     "dragging": -1
+    },
+    {
+     "event": "dblclick",
+     "x": 153,
+     "y": 30,
+     "markers": [
+      32768,
+      33024,
+      34048
+     ],
+     "dragging": -1
+    },
+    {
+     "event": "dblclick",
+     "x": 275,
+     "y": 30,
+     "markers": [
+      32768,
+      33024,
+      34048,
+      65280
+     ],
+     "dragging": -1
+    }
+   ]
+  },
+  {
+   "name": "drag: a handle follows the pointer, keeping where it was grabbed",
+   "channel": "Blue",
+   "maximum": 256,
+   "width": 296,
+   "start": [
+    50,
+    150
+   ],
+   "steps": [
+    {
+     "event": "press",
+     "x": 172,
+     "y": 30,
+     "markers": [
+      50,
+      150
+     ],
+     "dragging": 1
+    },
+    {
+     "event": "move",
+     "x": 100,
+     "y": 30,
+     "markers": [
+      50,
+      78
+     ],
+     "dragging": 1
+    },
+    {
+     "event": "move",
+     "x": 101,
+     "y": 52,
+     "markers": [
+      50,
+      79
+     ],
+     "dragging": 1
+    },
+    {
+     "event": "move",
+     "x": 0,
+     "y": 30,
+     "markers": [
+      50,
+      0
+     ],
+     "dragging": 1
+    },
+    {
+     "event": "move",
+     "x": 400,
+     "y": 90,
+     "markers": [
+      50,
+      256
+     ],
+     "dragging": 1
+    },
+    {
+     "event": "release",
+     "x": 400,
+     "y": 90,
+     "markers": [
+      50,
+      256
+     ],
+     "dragging": -1
+    },
+    {
+     "event": "move",
+     "x": 120,
+     "y": 30,
+     "markers": [
+      50,
+      256
+     ],
+     "dragging": -1
+    }
+   ]
+  },
+  {
+   "name": "drag: past another marker, which leaves the list out of order",
+   "channel": "Red",
+   "maximum": 256,
+   "width": 296,
+   "start": [
+    50,
+    150
+   ],
+   "steps": [
+    {
+     "event": "press",
+     "x": 70,
+     "y": 30,
+     "markers": [
+      50,
+      150
+     ],
+     "dragging": 0
+    },
+    {
+     "event": "move",
+     "x": 220,
+     "y": 30,
+     "markers": [
+      200,
+      150
+     ],
+     "dragging": 0
+    },
+    {
+     "event": "release",
+     "x": 220,
+     "y": 30,
+     "markers": [
+      200,
+      150
+     ],
+     "dragging": -1
+    },
+    {
+     "event": "dblclick",
+     "x": 120,
+     "y": 30,
+     "markers": [
+      100,
+      150,
+      200
+     ],
+     "dragging": -1
+    }
+   ]
+  },
+  {
+   "name": "drag: a press off every handle drags nothing",
+   "channel": "Red",
+   "maximum": 256,
+   "width": 296,
+   "start": [
+    128
+   ],
+   "steps": [
+    {
+     "event": "press",
+     "x": 100,
+     "y": 30,
+     "markers": [
+      128
+     ],
+     "dragging": -1
+    },
+    {
+     "event": "move",
+     "x": 60,
+     "y": 30,
+     "markers": [
+      128
+     ],
+     "dragging": -1
+    },
+    {
+     "event": "release",
+     "x": 60,
+     "y": 30,
+     "markers": [
+      128
+     ],
+     "dragging": -1
+    },
+    {
+     "event": "press",
+     "x": 154,
+     "y": 30,
+     "markers": [
+      128
+     ],
+     "dragging": -1
+    },
+    {
+     "event": "move",
+     "x": 60,
+     "y": 30,
+     "markers": [
+      128
+     ],
+     "dragging": -1
+    },
+    {
+     "event": "release",
+     "x": 60,
+     "y": 30,
+     "markers": [
+      128
+     ],
+     "dragging": -1
+    },
+    {
+     "event": "press",
+     "x": 148,
+     "y": 21,
+     "markers": [
+      128
+     ],
+     "dragging": -1
+    },
+    {
+     "event": "release",
+     "x": 148,
+     "y": 21,
+     "markers": [
+      128
+     ],
+     "dragging": -1
+    },
+    {
+     "event": "press",
+     "x": 148,
+     "y": 38,
+     "markers": [
+      128
+     ],
+     "dragging": -1
+    },
+    {
+     "event": "release",
+     "x": 148,
+     "y": 38,
+     "markers": [
+      128
+     ],
+     "dragging": -1
+    }
+   ]
+  },
+  {
+   "name": "drag: the handle's own edges grab it",
+   "channel": "Red",
+   "maximum": 256,
+   "width": 296,
+   "start": [
+    128
+   ],
+   "steps": [
+    {
+     "event": "press",
+     "x": 142,
+     "y": 22,
+     "markers": [
+      128
+     ],
+     "dragging": 0
+    },
+    {
+     "event": "move",
+     "x": 132,
+     "y": 22,
+     "markers": [
+      118
+     ],
+     "dragging": 0
+    },
+    {
+     "event": "release",
+     "x": 132,
+     "y": 22,
+     "markers": [
+      118
+     ],
+     "dragging": -1
+    },
+    {
+     "event": "press",
+     "x": 143,
+     "y": 37,
+     "markers": [
+      118
+     ],
+     "dragging": 0
+    },
+    {
+     "event": "move",
+     "x": 153,
+     "y": 37,
+     "markers": [
+      128
+     ],
+     "dragging": 0
+    },
+    {
+     "event": "release",
+     "x": 153,
+     "y": 37,
+     "markers": [
+      128
+     ],
+     "dragging": -1
+    }
+   ]
+  },
+  {
+   "name": "remove: right-click a handle; the first in list order wins an overlap",
+   "channel": "Green",
+   "maximum": 256,
+   "width": 296,
+   "start": [
+    100,
+    104,
+    200
+   ],
+   "steps": [
+    {
+     "event": "context",
+     "x": 60,
+     "y": 30,
+     "markers": [
+      100,
+      104,
+      200
+     ],
+     "dragging": -1
+    },
+    {
+     "event": "context",
+     "x": 122,
+     "y": 30,
+     "markers": [
+      104,
+      200
+     ],
+     "dragging": -1
+    },
+    {
+     "event": "context",
+     "x": 226,
+     "y": 30,
+     "markers": [
+      104,
+      200
+     ],
+     "dragging": -1
+    },
+    {
+     "event": "context",
+     "x": 225,
+     "y": 30,
+     "markers": [
+      104
+     ],
+     "dragging": -1
+    }
+   ]
+  },
+  {
+   "name": "remove: after a drag reorders the list, list order still decides",
+   "channel": "Green",
+   "maximum": 256,
+   "width": 296,
+   "start": [
+    150,
+    154
+   ],
+   "steps": [
+    {
+     "event": "press",
+     "x": 170,
+     "y": 30,
+     "markers": [
+      150,
+      154
+     ],
+     "dragging": 0
+    },
+    {
+     "event": "move",
+     "x": 178,
+     "y": 30,
+     "markers": [
+      158,
+      154
+     ],
+     "dragging": 0
+    },
+    {
+     "event": "release",
+     "x": 178,
+     "y": 30,
+     "markers": [
+      158,
+      154
+     ],
+     "dragging": -1
+    },
+    {
+     "event": "context",
+     "x": 176,
+     "y": 30,
+     "markers": [
+      154
+     ],
+     "dragging": -1
+    }
+   ]
+  },
+  {
+   "name": "enable",
+   "channel": "Red",
+   "maximum": 256,
+   "width": 296,
+   "steps": [
+    {
+     "event": "dblclick",
+     "x": 148,
+     "y": 30,
+     "markers": [],
+     "enabled": false,
+     "applied": []
+    },
+    {
+     "event": "check",
+     "markers": [],
+     "enabled": true,
+     "applied": []
+    },
+    {
+     "event": "dblclick",
+     "x": 148,
+     "y": 30,
+     "markers": [
+      128
+     ],
+     "enabled": true,
+     "applied": [
+      128
+     ]
+    },
+    {
+     "event": "dblclick",
+     "x": 60,
+     "y": 30,
+     "markers": [
+      40,
+      128
+     ],
+     "enabled": true,
+     "applied": [
+      40,
+      128
+     ]
+    },
+    {
+     "event": "uncheck",
+     "markers": [],
+     "enabled": false,
+     "applied": []
+    },
+    {
+     "event": "check",
+     "markers": [],
+     "enabled": true,
+     "applied": []
+    }
+   ]
+  }
+ ],
+ "paints": [
+  {
+   "name": "empty, light",
+   "channel": "Red",
+   "maximum": 256,
+   "width": 296,
+   "markers": [],
+   "dragging": -1,
+   "dark": false,
+   "calls": [
+    {
+     "op": "font",
+     "pointSize": 9
+    },
+    {
+     "op": "text",
+     "x": 5,
+     "y": 15,
+     "text": "Red",
+     "pen": {
+      "rgba": [
+       30,
+       30,
+       30,
+       255
+      ],
+      "width": 1
+     }
+    },
+    {
+     "op": "roundedRect",
+     "x": 20,
+     "y": 25,
+     "width": 256,
+     "height": 10,
+     "radius": [
+      5,
+      5
+     ],
+     "pen": {
+      "rgba": [
+       180,
+       180,
+       180,
+       255
+      ],
+      "width": 2
+     },
+     "brush": {
+      "rgba": [
+       230,
+       230,
+       230,
+       255
+      ]
+     }
+    },
+    {
+     "op": "roundedRect",
+     "x": 20,
+     "y": 25,
+     "width": 256,
+     "height": 10,
+     "radius": [
+      5,
+      5
+     ],
+     "pen": {
+      "rgba": [
+       0,
+       0,
+       0,
+       0
+      ],
+      "width": 1
+     },
+     "brush": {
+      "rgba": [
+       255,
+       100,
+       100,
+       50
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "name": "empty, dark",
+   "channel": "Gray",
+   "maximum": 256,
+   "width": 296,
+   "markers": [],
+   "dragging": -1,
+   "dark": true,
+   "calls": [
+    {
+     "op": "font",
+     "pointSize": 9
+    },
+    {
+     "op": "text",
+     "x": 5,
+     "y": 15,
+     "text": "Gray",
+     "pen": {
+      "rgba": [
+       255,
+       255,
+       255,
+       255
+      ],
+      "width": 1
+     }
+    },
+    {
+     "op": "roundedRect",
+     "x": 20,
+     "y": 25,
+     "width": 256,
+     "height": 10,
+     "radius": [
+      5,
+      5
+     ],
+     "pen": {
+      "rgba": [
+       100,
+       100,
+       100,
+       255
+      ],
+      "width": 2
+     },
+     "brush": {
+      "rgba": [
+       50,
+       50,
+       50,
+       255
+      ]
+     }
+    },
+    {
+     "op": "roundedRect",
+     "x": 20,
+     "y": 25,
+     "width": 256,
+     "height": 10,
+     "radius": [
+      5,
+      5
+     ],
+     "pen": {
+      "rgba": [
+       0,
+       0,
+       0,
+       0
+      ],
+      "width": 1
+     },
+     "brush": {
+      "rgba": [
+       200,
+       200,
+       200,
+       50
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "name": "two markers, one dragged, light",
+   "channel": "Green",
+   "maximum": 256,
+   "width": 296,
+   "markers": [
+    50,
+    150
+   ],
+   "dragging": 1,
+   "dark": false,
+   "calls": [
+    {
+     "op": "font",
+     "pointSize": 9
+    },
+    {
+     "op": "text",
+     "x": 5,
+     "y": 15,
+     "text": "Green",
+     "pen": {
+      "rgba": [
+       30,
+       30,
+       30,
+       255
+      ],
+      "width": 1
+     }
+    },
+    {
+     "op": "roundedRect",
+     "x": 20,
+     "y": 25,
+     "width": 256,
+     "height": 10,
+     "radius": [
+      5,
+      5
+     ],
+     "pen": {
+      "rgba": [
+       180,
+       180,
+       180,
+       255
+      ],
+      "width": 2
+     },
+     "brush": {
+      "rgba": [
+       230,
+       230,
+       230,
+       255
+      ]
+     }
+    },
+    {
+     "op": "roundedRect",
+     "x": 20,
+     "y": 25,
+     "width": 50,
+     "height": 10,
+     "radius": [
+      5,
+      5
+     ],
+     "pen": {
+      "rgba": [
+       0,
+       0,
+       0,
+       0
+      ],
+      "width": 1
+     },
+     "brush": {
+      "rgba": [
+       100,
+       255,
+       100,
+       50
+      ]
+     }
+    },
+    {
+     "op": "roundedRect",
+     "x": 70,
+     "y": 25,
+     "width": 100,
+     "height": 10,
+     "radius": [
+      5,
+      5
+     ],
+     "pen": {
+      "rgba": [
+       0,
+       0,
+       0,
+       0
+      ],
+      "width": 1
+     },
+     "brush": {
+      "rgba": [
+       100,
+       255,
+       100,
+       125
+      ]
+     }
+    },
+    {
+     "op": "roundedRect",
+     "x": 170,
+     "y": 25,
+     "width": 106,
+     "height": 10,
+     "radius": [
+      5,
+      5
+     ],
+     "pen": {
+      "rgba": [
+       0,
+       0,
+       0,
+       0
+      ],
+      "width": 1
+     },
+     "brush": {
+      "rgba": [
+       100,
+       255,
+       100,
+       200
+      ]
+     }
+    },
+    {
+     "op": "roundedRect",
+     "x": 64,
+     "y": 22,
+     "width": 12,
+     "height": 16,
+     "radius": [
+      3,
+      3
+     ],
+     "pen": {
+      "rgba": [
+       120,
+       120,
+       120,
+       255
+      ],
+      "width": 1
+     },
+     "brush": {
+      "rgba": [
+       255,
+       255,
+       255,
+       255
+      ]
+     }
+    },
+    {
+     "op": "roundedRect",
+     "x": 164,
+     "y": 22,
+     "width": 12,
+     "height": 16,
+     "radius": [
+      3,
+      3
+     ],
+     "pen": {
+      "rgba": [
+       200,
+       200,
+       50,
+       255
+      ],
+      "width": 2
+     },
+     "brush": {
+      "rgba": [
+       255,
+       255,
+       100,
+       255
+      ]
+     }
+    },
+    {
+     "op": "text",
+     "x": 55,
+     "y": 49,
+     "text": "50",
+     "pen": {
+      "rgba": [
+       30,
+       30,
+       30,
+       255
+      ],
+      "width": 1
+     }
+    },
+    {
+     "op": "text",
+     "x": 155,
+     "y": 49,
+     "text": "150",
+     "pen": {
+      "rgba": [
+       30,
+       30,
+       30,
+       255
+      ],
+      "width": 1
+     }
+    }
+   ]
+  },
+  {
+   "name": "three markers, dark",
+   "channel": "Blue",
+   "maximum": 256,
+   "width": 296,
+   "markers": [
+    20,
+    128,
+    250
+   ],
+   "dragging": -1,
+   "dark": true,
+   "calls": [
+    {
+     "op": "font",
+     "pointSize": 9
+    },
+    {
+     "op": "text",
+     "x": 5,
+     "y": 15,
+     "text": "Blue",
+     "pen": {
+      "rgba": [
+       255,
+       255,
+       255,
+       255
+      ],
+      "width": 1
+     }
+    },
+    {
+     "op": "roundedRect",
+     "x": 20,
+     "y": 25,
+     "width": 256,
+     "height": 10,
+     "radius": [
+      5,
+      5
+     ],
+     "pen": {
+      "rgba": [
+       100,
+       100,
+       100,
+       255
+      ],
+      "width": 2
+     },
+     "brush": {
+      "rgba": [
+       50,
+       50,
+       50,
+       255
+      ]
+     }
+    },
+    {
+     "op": "roundedRect",
+     "x": 20,
+     "y": 25,
+     "width": 20,
+     "height": 10,
+     "radius": [
+      5,
+      5
+     ],
+     "pen": {
+      "rgba": [
+       0,
+       0,
+       0,
+       0
+      ],
+      "width": 1
+     },
+     "brush": {
+      "rgba": [
+       100,
+       100,
+       255,
+       50
+      ]
+     }
+    },
+    {
+     "op": "roundedRect",
+     "x": 40,
+     "y": 25,
+     "width": 108,
+     "height": 10,
+     "radius": [
+      5,
+      5
+     ],
+     "pen": {
+      "rgba": [
+       0,
+       0,
+       0,
+       0
+      ],
+      "width": 1
+     },
+     "brush": {
+      "rgba": [
+       100,
+       100,
+       255,
+       100
+      ]
+     }
+    },
+    {
+     "op": "roundedRect",
+     "x": 148,
+     "y": 25,
+     "width": 122,
+     "height": 10,
+     "radius": [
+      5,
+      5
+     ],
+     "pen": {
+      "rgba": [
+       0,
+       0,
+       0,
+       0
+      ],
+      "width": 1
+     },
+     "brush": {
+      "rgba": [
+       100,
+       100,
+       255,
+       150
+      ]
+     }
+    },
+    {
+     "op": "roundedRect",
+     "x": 270,
+     "y": 25,
+     "width": 6,
+     "height": 10,
+     "radius": [
+      5,
+      5
+     ],
+     "pen": {
+      "rgba": [
+       0,
+       0,
+       0,
+       0
+      ],
+      "width": 1
+     },
+     "brush": {
+      "rgba": [
+       100,
+       100,
+       255,
+       200
+      ]
+     }
+    },
+    {
+     "op": "roundedRect",
+     "x": 34,
+     "y": 22,
+     "width": 12,
+     "height": 16,
+     "radius": [
+      3,
+      3
+     ],
+     "pen": {
+      "rgba": [
+       150,
+       150,
+       150,
+       255
+      ],
+      "width": 1
+     },
+     "brush": {
+      "rgba": [
+       255,
+       255,
+       255,
+       255
+      ]
+     }
+    },
+    {
+     "op": "roundedRect",
+     "x": 142,
+     "y": 22,
+     "width": 12,
+     "height": 16,
+     "radius": [
+      3,
+      3
+     ],
+     "pen": {
+      "rgba": [
+       150,
+       150,
+       150,
+       255
+      ],
+      "width": 1
+     },
+     "brush": {
+      "rgba": [
+       255,
+       255,
+       255,
+       255
+      ]
+     }
+    },
+    {
+     "op": "roundedRect",
+     "x": 264,
+     "y": 22,
+     "width": 12,
+     "height": 16,
+     "radius": [
+      3,
+      3
+     ],
+     "pen": {
+      "rgba": [
+       150,
+       150,
+       150,
+       255
+      ],
+      "width": 1
+     },
+     "brush": {
+      "rgba": [
+       255,
+       255,
+       255,
+       255
+      ]
+     }
+    },
+    {
+     "op": "text",
+     "x": 25,
+     "y": 49,
+     "text": "20",
+     "pen": {
+      "rgba": [
+       255,
+       255,
+       255,
+       255
+      ],
+      "width": 1
+     }
+    },
+    {
+     "op": "text",
+     "x": 133,
+     "y": 49,
+     "text": "128",
+     "pen": {
+      "rgba": [
+       255,
+       255,
+       255,
+       255
+      ],
+      "width": 1
+     }
+    },
+    {
+     "op": "text",
+     "x": 255,
+     "y": 49,
+     "text": "250",
+     "pen": {
+      "rgba": [
+       255,
+       255,
+       255,
+       255
+      ],
+      "width": 1
+     }
+    }
+   ]
+  },
+  {
+   "name": "crowded labels, light",
+   "channel": "Red",
+   "maximum": 256,
+   "width": 296,
+   "markers": [
+    100,
+    110,
+    115,
+    250,
+    255
+   ],
+   "dragging": -1,
+   "dark": false,
+   "calls": [
+    {
+     "op": "font",
+     "pointSize": 9
+    },
+    {
+     "op": "text",
+     "x": 5,
+     "y": 15,
+     "text": "Red",
+     "pen": {
+      "rgba": [
+       30,
+       30,
+       30,
+       255
+      ],
+      "width": 1
+     }
+    },
+    {
+     "op": "roundedRect",
+     "x": 20,
+     "y": 25,
+     "width": 256,
+     "height": 10,
+     "radius": [
+      5,
+      5
+     ],
+     "pen": {
+      "rgba": [
+       180,
+       180,
+       180,
+       255
+      ],
+      "width": 2
+     },
+     "brush": {
+      "rgba": [
+       230,
+       230,
+       230,
+       255
+      ]
+     }
+    },
+    {
+     "op": "roundedRect",
+     "x": 20,
+     "y": 25,
+     "width": 100,
+     "height": 10,
+     "radius": [
+      5,
+      5
+     ],
+     "pen": {
+      "rgba": [
+       0,
+       0,
+       0,
+       0
+      ],
+      "width": 1
+     },
+     "brush": {
+      "rgba": [
+       255,
+       100,
+       100,
+       50
+      ]
+     }
+    },
+    {
+     "op": "roundedRect",
+     "x": 120,
+     "y": 25,
+     "width": 10,
+     "height": 10,
+     "radius": [
+      5,
+      5
+     ],
+     "pen": {
+      "rgba": [
+       0,
+       0,
+       0,
+       0
+      ],
+      "width": 1
+     },
+     "brush": {
+      "rgba": [
+       255,
+       100,
+       100,
+       80
+      ]
+     }
+    },
+    {
+     "op": "roundedRect",
+     "x": 130,
+     "y": 25,
+     "width": 5,
+     "height": 10,
+     "radius": [
+      5,
+      5
+     ],
+     "pen": {
+      "rgba": [
+       0,
+       0,
+       0,
+       0
+      ],
+      "width": 1
+     },
+     "brush": {
+      "rgba": [
+       255,
+       100,
+       100,
+       110
+      ]
+     }
+    },
+    {
+     "op": "roundedRect",
+     "x": 135,
+     "y": 25,
+     "width": 135,
+     "height": 10,
+     "radius": [
+      5,
+      5
+     ],
+     "pen": {
+      "rgba": [
+       0,
+       0,
+       0,
+       0
+      ],
+      "width": 1
+     },
+     "brush": {
+      "rgba": [
+       255,
+       100,
+       100,
+       140
+      ]
+     }
+    },
+    {
+     "op": "roundedRect",
+     "x": 270,
+     "y": 25,
+     "width": 5,
+     "height": 10,
+     "radius": [
+      5,
+      5
+     ],
+     "pen": {
+      "rgba": [
+       0,
+       0,
+       0,
+       0
+      ],
+      "width": 1
+     },
+     "brush": {
+      "rgba": [
+       255,
+       100,
+       100,
+       170
+      ]
+     }
+    },
+    {
+     "op": "roundedRect",
+     "x": 275,
+     "y": 25,
+     "width": 1,
+     "height": 10,
+     "radius": [
+      5,
+      5
+     ],
+     "pen": {
+      "rgba": [
+       0,
+       0,
+       0,
+       0
+      ],
+      "width": 1
+     },
+     "brush": {
+      "rgba": [
+       255,
+       100,
+       100,
+       200
+      ]
+     }
+    },
+    {
+     "op": "roundedRect",
+     "x": 114,
+     "y": 22,
+     "width": 12,
+     "height": 16,
+     "radius": [
+      3,
+      3
+     ],
+     "pen": {
+      "rgba": [
+       120,
+       120,
+       120,
+       255
+      ],
+      "width": 1
+     },
+     "brush": {
+      "rgba": [
+       255,
+       255,
+       255,
+       255
+      ]
+     }
+    },
+    {
+     "op": "roundedRect",
+     "x": 124,
+     "y": 22,
+     "width": 12,
+     "height": 16,
+     "radius": [
+      3,
+      3
+     ],
+     "pen": {
+      "rgba": [
+       120,
+       120,
+       120,
+       255
+      ],
+      "width": 1
+     },
+     "brush": {
+      "rgba": [
+       255,
+       255,
+       255,
+       255
+      ]
+     }
+    },
+    {
+     "op": "roundedRect",
+     "x": 129,
+     "y": 22,
+     "width": 12,
+     "height": 16,
+     "radius": [
+      3,
+      3
+     ],
+     "pen": {
+      "rgba": [
+       120,
+       120,
+       120,
+       255
+      ],
+      "width": 1
+     },
+     "brush": {
+      "rgba": [
+       255,
+       255,
+       255,
+       255
+      ]
+     }
+    },
+    {
+     "op": "roundedRect",
+     "x": 264,
+     "y": 22,
+     "width": 12,
+     "height": 16,
+     "radius": [
+      3,
+      3
+     ],
+     "pen": {
+      "rgba": [
+       120,
+       120,
+       120,
+       255
+      ],
+      "width": 1
+     },
+     "brush": {
+      "rgba": [
+       255,
+       255,
+       255,
+       255
+      ]
+     }
+    },
+    {
+     "op": "roundedRect",
+     "x": 269,
+     "y": 22,
+     "width": 12,
+     "height": 16,
+     "radius": [
+      3,
+      3
+     ],
+     "pen": {
+      "rgba": [
+       120,
+       120,
+       120,
+       255
+      ],
+      "width": 1
+     },
+     "brush": {
+      "rgba": [
+       255,
+       255,
+       255,
+       255
+      ]
+     }
+    },
+    {
+     "op": "text",
+     "x": 105,
+     "y": 49,
+     "text": "100",
+     "pen": {
+      "rgba": [
+       30,
+       30,
+       30,
+       255
+      ],
+      "width": 1
+     }
+    },
+    {
+     "op": "text",
+     "x": 135,
+     "y": 49,
+     "text": "110",
+     "pen": {
+      "rgba": [
+       30,
+       30,
+       30,
+       255
+      ],
+      "width": 1
+     }
+    },
+    {
+     "op": "text",
+     "x": 165,
+     "y": 49,
+     "text": "115",
+     "pen": {
+      "rgba": [
+       30,
+       30,
+       30,
+       255
+      ],
+      "width": 1
+     }
+    },
+    {
+     "op": "text",
+     "x": 255,
+     "y": 49,
+     "text": "250",
+     "pen": {
+      "rgba": [
+       30,
+       30,
+       30,
+       255
+      ],
+      "width": 1
+     }
+    },
+    {
+     "op": "text",
+     "x": 245,
+     "y": 49,
+     "text": "255",
+     "pen": {
+      "rgba": [
+       30,
+       30,
+       30,
+       255
+      ],
+      "width": 1
+     }
+    }
+   ]
+  },
+  {
+   "name": "labels at the spacing edge, light",
+   "channel": "Blue",
+   "maximum": 256,
+   "width": 296,
+   "markers": [
+    100,
+    130,
+    159
+   ],
+   "dragging": -1,
+   "dark": false,
+   "calls": [
+    {
+     "op": "font",
+     "pointSize": 9
+    },
+    {
+     "op": "text",
+     "x": 5,
+     "y": 15,
+     "text": "Blue",
+     "pen": {
+      "rgba": [
+       30,
+       30,
+       30,
+       255
+      ],
+      "width": 1
+     }
+    },
+    {
+     "op": "roundedRect",
+     "x": 20,
+     "y": 25,
+     "width": 256,
+     "height": 10,
+     "radius": [
+      5,
+      5
+     ],
+     "pen": {
+      "rgba": [
+       180,
+       180,
+       180,
+       255
+      ],
+      "width": 2
+     },
+     "brush": {
+      "rgba": [
+       230,
+       230,
+       230,
+       255
+      ]
+     }
+    },
+    {
+     "op": "roundedRect",
+     "x": 20,
+     "y": 25,
+     "width": 100,
+     "height": 10,
+     "radius": [
+      5,
+      5
+     ],
+     "pen": {
+      "rgba": [
+       0,
+       0,
+       0,
+       0
+      ],
+      "width": 1
+     },
+     "brush": {
+      "rgba": [
+       100,
+       100,
+       255,
+       50
+      ]
+     }
+    },
+    {
+     "op": "roundedRect",
+     "x": 120,
+     "y": 25,
+     "width": 30,
+     "height": 10,
+     "radius": [
+      5,
+      5
+     ],
+     "pen": {
+      "rgba": [
+       0,
+       0,
+       0,
+       0
+      ],
+      "width": 1
+     },
+     "brush": {
+      "rgba": [
+       100,
+       100,
+       255,
+       100
+      ]
+     }
+    },
+    {
+     "op": "roundedRect",
+     "x": 150,
+     "y": 25,
+     "width": 29,
+     "height": 10,
+     "radius": [
+      5,
+      5
+     ],
+     "pen": {
+      "rgba": [
+       0,
+       0,
+       0,
+       0
+      ],
+      "width": 1
+     },
+     "brush": {
+      "rgba": [
+       100,
+       100,
+       255,
+       150
+      ]
+     }
+    },
+    {
+     "op": "roundedRect",
+     "x": 179,
+     "y": 25,
+     "width": 97,
+     "height": 10,
+     "radius": [
+      5,
+      5
+     ],
+     "pen": {
+      "rgba": [
+       0,
+       0,
+       0,
+       0
+      ],
+      "width": 1
+     },
+     "brush": {
+      "rgba": [
+       100,
+       100,
+       255,
+       200
+      ]
+     }
+    },
+    {
+     "op": "roundedRect",
+     "x": 114,
+     "y": 22,
+     "width": 12,
+     "height": 16,
+     "radius": [
+      3,
+      3
+     ],
+     "pen": {
+      "rgba": [
+       120,
+       120,
+       120,
+       255
+      ],
+      "width": 1
+     },
+     "brush": {
+      "rgba": [
+       255,
+       255,
+       255,
+       255
+      ]
+     }
+    },
+    {
+     "op": "roundedRect",
+     "x": 144,
+     "y": 22,
+     "width": 12,
+     "height": 16,
+     "radius": [
+      3,
+      3
+     ],
+     "pen": {
+      "rgba": [
+       120,
+       120,
+       120,
+       255
+      ],
+      "width": 1
+     },
+     "brush": {
+      "rgba": [
+       255,
+       255,
+       255,
+       255
+      ]
+     }
+    },
+    {
+     "op": "roundedRect",
+     "x": 173,
+     "y": 22,
+     "width": 12,
+     "height": 16,
+     "radius": [
+      3,
+      3
+     ],
+     "pen": {
+      "rgba": [
+       120,
+       120,
+       120,
+       255
+      ],
+      "width": 1
+     },
+     "brush": {
+      "rgba": [
+       255,
+       255,
+       255,
+       255
+      ]
+     }
+    },
+    {
+     "op": "text",
+     "x": 105,
+     "y": 49,
+     "text": "100",
+     "pen": {
+      "rgba": [
+       30,
+       30,
+       30,
+       255
+      ],
+      "width": 1
+     }
+    },
+    {
+     "op": "text",
+     "x": 135,
+     "y": 49,
+     "text": "130",
+     "pen": {
+      "rgba": [
+       30,
+       30,
+       30,
+       255
+      ],
+      "width": 1
+     }
+    },
+    {
+     "op": "text",
+     "x": 165,
+     "y": 49,
+     "text": "159",
+     "pen": {
+      "rgba": [
+       30,
+       30,
+       30,
+       255
+      ],
+      "width": 1
+     }
+    }
+   ]
+  },
+  {
+   "name": "unsorted after a drag, light",
+   "channel": "Red",
+   "maximum": 256,
+   "width": 296,
+   "markers": [
+    200,
+    150
+   ],
+   "dragging": 0,
+   "dark": false,
+   "calls": [
+    {
+     "op": "font",
+     "pointSize": 9
+    },
+    {
+     "op": "text",
+     "x": 5,
+     "y": 15,
+     "text": "Red",
+     "pen": {
+      "rgba": [
+       30,
+       30,
+       30,
+       255
+      ],
+      "width": 1
+     }
+    },
+    {
+     "op": "roundedRect",
+     "x": 20,
+     "y": 25,
+     "width": 256,
+     "height": 10,
+     "radius": [
+      5,
+      5
+     ],
+     "pen": {
+      "rgba": [
+       180,
+       180,
+       180,
+       255
+      ],
+      "width": 2
+     },
+     "brush": {
+      "rgba": [
+       230,
+       230,
+       230,
+       255
+      ]
+     }
+    },
+    {
+     "op": "roundedRect",
+     "x": 20,
+     "y": 25,
+     "width": 150,
+     "height": 10,
+     "radius": [
+      5,
+      5
+     ],
+     "pen": {
+      "rgba": [
+       0,
+       0,
+       0,
+       0
+      ],
+      "width": 1
+     },
+     "brush": {
+      "rgba": [
+       255,
+       100,
+       100,
+       50
+      ]
+     }
+    },
+    {
+     "op": "roundedRect",
+     "x": 170,
+     "y": 25,
+     "width": 50,
+     "height": 10,
+     "radius": [
+      5,
+      5
+     ],
+     "pen": {
+      "rgba": [
+       0,
+       0,
+       0,
+       0
+      ],
+      "width": 1
+     },
+     "brush": {
+      "rgba": [
+       255,
+       100,
+       100,
+       125
+      ]
+     }
+    },
+    {
+     "op": "roundedRect",
+     "x": 220,
+     "y": 25,
+     "width": 56,
+     "height": 10,
+     "radius": [
+      5,
+      5
+     ],
+     "pen": {
+      "rgba": [
+       0,
+       0,
+       0,
+       0
+      ],
+      "width": 1
+     },
+     "brush": {
+      "rgba": [
+       255,
+       100,
+       100,
+       200
+      ]
+     }
+    },
+    {
+     "op": "roundedRect",
+     "x": 214,
+     "y": 22,
+     "width": 12,
+     "height": 16,
+     "radius": [
+      3,
+      3
+     ],
+     "pen": {
+      "rgba": [
+       200,
+       200,
+       50,
+       255
+      ],
+      "width": 2
+     },
+     "brush": {
+      "rgba": [
+       255,
+       255,
+       100,
+       255
+      ]
+     }
+    },
+    {
+     "op": "roundedRect",
+     "x": 164,
+     "y": 22,
+     "width": 12,
+     "height": 16,
+     "radius": [
+      3,
+      3
+     ],
+     "pen": {
+      "rgba": [
+       120,
+       120,
+       120,
+       255
+      ],
+      "width": 1
+     },
+     "brush": {
+      "rgba": [
+       255,
+       255,
+       255,
+       255
+      ]
+     }
+    },
+    {
+     "op": "text",
+     "x": 155,
+     "y": 49,
+     "text": "150",
+     "pen": {
+      "rgba": [
+       30,
+       30,
+       30,
+       255
+      ],
+      "width": 1
+     }
+    },
+    {
+     "op": "text",
+     "x": 205,
+     "y": 49,
+     "text": "200",
+     "pen": {
+      "rgba": [
+       30,
+       30,
+       30,
+       255
+      ],
+      "width": 1
+     }
+    }
+   ]
+  },
+  {
+   "name": "narrow bar, light",
+   "channel": "Green",
+   "maximum": 256,
+   "width": 200,
+   "markers": [
+    64,
+    192
+   ],
+   "dragging": -1,
+   "dark": false,
+   "calls": [
+    {
+     "op": "font",
+     "pointSize": 9
+    },
+    {
+     "op": "text",
+     "x": 5,
+     "y": 15,
+     "text": "Green",
+     "pen": {
+      "rgba": [
+       30,
+       30,
+       30,
+       255
+      ],
+      "width": 1
+     }
+    },
+    {
+     "op": "roundedRect",
+     "x": 20,
+     "y": 25,
+     "width": 160,
+     "height": 10,
+     "radius": [
+      5,
+      5
+     ],
+     "pen": {
+      "rgba": [
+       180,
+       180,
+       180,
+       255
+      ],
+      "width": 2
+     },
+     "brush": {
+      "rgba": [
+       230,
+       230,
+       230,
+       255
+      ]
+     }
+    },
+    {
+     "op": "roundedRect",
+     "x": 20,
+     "y": 25,
+     "width": 40,
+     "height": 10,
+     "radius": [
+      5,
+      5
+     ],
+     "pen": {
+      "rgba": [
+       0,
+       0,
+       0,
+       0
+      ],
+      "width": 1
+     },
+     "brush": {
+      "rgba": [
+       100,
+       255,
+       100,
+       50
+      ]
+     }
+    },
+    {
+     "op": "roundedRect",
+     "x": 60,
+     "y": 25,
+     "width": 80,
+     "height": 10,
+     "radius": [
+      5,
+      5
+     ],
+     "pen": {
+      "rgba": [
+       0,
+       0,
+       0,
+       0
+      ],
+      "width": 1
+     },
+     "brush": {
+      "rgba": [
+       100,
+       255,
+       100,
+       125
+      ]
+     }
+    },
+    {
+     "op": "roundedRect",
+     "x": 140,
+     "y": 25,
+     "width": 40,
+     "height": 10,
+     "radius": [
+      5,
+      5
+     ],
+     "pen": {
+      "rgba": [
+       0,
+       0,
+       0,
+       0
+      ],
+      "width": 1
+     },
+     "brush": {
+      "rgba": [
+       100,
+       255,
+       100,
+       200
+      ]
+     }
+    },
+    {
+     "op": "roundedRect",
+     "x": 54,
+     "y": 22,
+     "width": 12,
+     "height": 16,
+     "radius": [
+      3,
+      3
+     ],
+     "pen": {
+      "rgba": [
+       120,
+       120,
+       120,
+       255
+      ],
+      "width": 1
+     },
+     "brush": {
+      "rgba": [
+       255,
+       255,
+       255,
+       255
+      ]
+     }
+    },
+    {
+     "op": "roundedRect",
+     "x": 134,
+     "y": 22,
+     "width": 12,
+     "height": 16,
+     "radius": [
+      3,
+      3
+     ],
+     "pen": {
+      "rgba": [
+       120,
+       120,
+       120,
+       255
+      ],
+      "width": 1
+     },
+     "brush": {
+      "rgba": [
+       255,
+       255,
+       255,
+       255
+      ]
+     }
+    },
+    {
+     "op": "text",
+     "x": 45,
+     "y": 49,
+     "text": "64",
+     "pen": {
+      "rgba": [
+       30,
+       30,
+       30,
+       255
+      ],
+      "width": 1
+     }
+    },
+    {
+     "op": "text",
+     "x": 125,
+     "y": 49,
+     "text": "192",
+     "pen": {
+      "rgba": [
+       30,
+       30,
+       30,
+       255
+      ],
+      "width": 1
+     }
+    }
+   ]
+  },
+  {
+   "name": "16-bit, dark",
+   "channel": "Gray",
+   "maximum": 65536,
+   "width": 296,
+   "markers": [
+    16384,
+    49152
+   ],
+   "dragging": -1,
+   "dark": true,
+   "calls": [
+    {
+     "op": "font",
+     "pointSize": 9
+    },
+    {
+     "op": "text",
+     "x": 5,
+     "y": 15,
+     "text": "Gray",
+     "pen": {
+      "rgba": [
+       255,
+       255,
+       255,
+       255
+      ],
+      "width": 1
+     }
+    },
+    {
+     "op": "roundedRect",
+     "x": 20,
+     "y": 25,
+     "width": 256,
+     "height": 10,
+     "radius": [
+      5,
+      5
+     ],
+     "pen": {
+      "rgba": [
+       100,
+       100,
+       100,
+       255
+      ],
+      "width": 2
+     },
+     "brush": {
+      "rgba": [
+       50,
+       50,
+       50,
+       255
+      ]
+     }
+    },
+    {
+     "op": "roundedRect",
+     "x": 20,
+     "y": 25,
+     "width": 64,
+     "height": 10,
+     "radius": [
+      5,
+      5
+     ],
+     "pen": {
+      "rgba": [
+       0,
+       0,
+       0,
+       0
+      ],
+      "width": 1
+     },
+     "brush": {
+      "rgba": [
+       200,
+       200,
+       200,
+       50
+      ]
+     }
+    },
+    {
+     "op": "roundedRect",
+     "x": 84,
+     "y": 25,
+     "width": 128,
+     "height": 10,
+     "radius": [
+      5,
+      5
+     ],
+     "pen": {
+      "rgba": [
+       0,
+       0,
+       0,
+       0
+      ],
+      "width": 1
+     },
+     "brush": {
+      "rgba": [
+       200,
+       200,
+       200,
+       125
+      ]
+     }
+    },
+    {
+     "op": "roundedRect",
+     "x": 212,
+     "y": 25,
+     "width": 64,
+     "height": 10,
+     "radius": [
+      5,
+      5
+     ],
+     "pen": {
+      "rgba": [
+       0,
+       0,
+       0,
+       0
+      ],
+      "width": 1
+     },
+     "brush": {
+      "rgba": [
+       200,
+       200,
+       200,
+       200
+      ]
+     }
+    },
+    {
+     "op": "roundedRect",
+     "x": 78,
+     "y": 22,
+     "width": 12,
+     "height": 16,
+     "radius": [
+      3,
+      3
+     ],
+     "pen": {
+      "rgba": [
+       150,
+       150,
+       150,
+       255
+      ],
+      "width": 1
+     },
+     "brush": {
+      "rgba": [
+       255,
+       255,
+       255,
+       255
+      ]
+     }
+    },
+    {
+     "op": "roundedRect",
+     "x": 206,
+     "y": 22,
+     "width": 12,
+     "height": 16,
+     "radius": [
+      3,
+      3
+     ],
+     "pen": {
+      "rgba": [
+       150,
+       150,
+       150,
+       255
+      ],
+      "width": 1
+     },
+     "brush": {
+      "rgba": [
+       255,
+       255,
+       255,
+       255
+      ]
+     }
+    },
+    {
+     "op": "text",
+     "x": 69,
+     "y": 49,
+     "text": "16384",
+     "pen": {
+      "rgba": [
+       255,
+       255,
+       255,
+       255
+      ],
+      "width": 1
+     }
+    },
+    {
+     "op": "text",
+     "x": 197,
+     "y": 49,
+     "text": "49152",
+     "pen": {
+      "rgba": [
+       255,
+       255,
+       255,
+       255
+      ],
+      "width": 1
+     }
+    }
+   ]
+  }
+ ]
+}

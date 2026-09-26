@@ -13,12 +13,20 @@
  * recorded for the app as a whole.
  */
 
-import { useCallback, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 
 export interface PanelProps {
   readonly title: string;
   /** Collapsed to begin with. A panel whose content is not yet built starts closed. */
   readonly initiallyCollapsed?: boolean;
+  /**
+   * Opened or closed again each time `key` changes to something other than null.
+   *
+   * Legacy sets its Image-tab sections this way whenever an image loads, whatever the user did to
+   * them since (`control_panel.py:823-885`): Channel Threshold opens, and Rescale and FFT
+   * Threshold open for a grayscale image and close for colour. The key is what marks a load.
+   */
+  readonly collapseOnLoad?: { readonly key: unknown; readonly collapsed: boolean };
   /**
    * Which phase builds this, when it is not built yet. Present means the section renders its
    * explanation instead of its children.
@@ -27,7 +35,7 @@ export interface PanelProps {
   readonly children?: ReactNode;
 }
 
-export function Panel({ title, initiallyCollapsed, pending, children }: PanelProps): ReactNode {
+export function Panel({ title, initiallyCollapsed, collapseOnLoad, pending, children }: PanelProps): ReactNode {
   const [collapsed, setCollapsed] = useState(initiallyCollapsed ?? pending !== undefined);
   /*
    * COLLAPSING HIDES; IT DOES NOT UNMOUNT. It did until 2026-09-23, and collapsing is something
@@ -42,6 +50,18 @@ export function Panel({ title, initiallyCollapsed, pending, children }: PanelPro
     setCollapsed((open) => !open);
     setOpened(true);
   }, []);
+
+  // Read through a ref: the caller builds the object afresh on every render, and only a new KEY
+  // is a load.
+  const loadRule = useRef(collapseOnLoad);
+  loadRule.current = collapseOnLoad;
+  const loaded = collapseOnLoad?.key ?? null;
+  useEffect(() => {
+    if (loaded === null) return;
+    const close = loadRule.current?.collapsed ?? false;
+    setCollapsed(close);
+    if (!close) setOpened(true);
+  }, [loaded]);
 
   return (
     <section className="panel">

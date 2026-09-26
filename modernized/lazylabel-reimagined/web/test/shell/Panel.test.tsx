@@ -100,6 +100,59 @@ describe("what a collapsed panel keeps", () => {
   });
 });
 
+/*
+ * Legacy sets its Image-tab sections again whenever an image loads, whatever the user did to them
+ * in between (control_panel.py:823-885): Channel Threshold opens; Rescale and FFT open for
+ * grayscale and close for colour.
+ */
+describe("set again on each load", () => {
+  function Loader({ collapsed }: { readonly collapsed: boolean }): ReactNode {
+    const [load, setLoad] = useState<object | null>(null);
+    const [, rerender] = useState(0);
+    return (
+      <>
+        <button type="button" onClick={() => setLoad({})}>load</button>
+        <button type="button" onClick={() => rerender((n) => n + 1)}>rerender</button>
+        <Panel title="Channel Threshold" initiallyCollapsed={!collapsed} collapseOnLoad={{ key: load, collapsed }}>
+          <p>bars</p>
+        </Panel>
+      </>
+    );
+  }
+
+  const header = () => screen.getByRole("button", { name: /Channel Threshold/ });
+
+  it("does nothing before anything has loaded", () => {
+    render(<Loader collapsed={false} />);
+    expect(header().getAttribute("aria-expanded")).toBe("false");
+  });
+
+  it("opens on a load, and opens again on the next after the user closed it", () => {
+    render(<Loader collapsed={false} />);
+
+    fireEvent.click(screen.getByText("load"));
+    expect(header().getAttribute("aria-expanded")).toBe("true");
+    expect(screen.getByText("bars").closest("[hidden]")).toBeNull();
+
+    fireEvent.click(header());
+    expect(header().getAttribute("aria-expanded")).toBe("false");
+
+    fireEvent.click(screen.getByText("load"));
+    expect(header().getAttribute("aria-expanded")).toBe("true");
+  });
+
+  it("closes on a load when the rule says so, and a mere re-render leaves the user's choice", () => {
+    render(<Loader collapsed />);
+
+    fireEvent.click(screen.getByText("load"));
+    expect(header().getAttribute("aria-expanded")).toBe("false");
+
+    fireEvent.click(header());
+    fireEvent.click(screen.getByText("rerender"));
+    expect(header().getAttribute("aria-expanded")).toBe("true");
+  });
+});
+
 describe("a section that is not built yet", () => {
   it("says what is missing and which phase builds it", () => {
     // A row of disabled buttons that look like the real thing invites a user to press something.

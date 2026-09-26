@@ -23,27 +23,16 @@ import type { Crop } from "../tools/crop.js";
 export const MAX_8_BIT = 255;
 export const MAX_16_BIT = 65535;
 
-/** `channel_threshold_widget.py`: markers closer together than this are not allowed. */
-export const MIN_MARKER_SPACING = 10;
-
-/**
- * Whether a set of markers is legal.
- *
- * A WIDGET rule, not an arithmetic one, which is why it lives on this side: the server posterizes
- * whatever markers it is given, and legacy's limit exists to stop a user making bands they cannot
- * see or aim at. Stated in ABSOLUTE units, so on a 16-bit image ten levels is a two-thousandth of
- * the range and effectively no constraint at all — the rule card notes this, and it is worth
- * knowing before someone treats the limit as meaningful there.
- */
-export function markersAreLegal(markers: readonly number[]): boolean {
-  const sorted = [...markers].sort((a, b) => a - b);
-  return sorted.every(
-    (marker, index) => index === 0 || marker - sorted[index - 1]! >= MIN_MARKER_SPACING,
-  );
-}
-
 /** A channel a threshold can be set on. `gray` exists only for a grayscale source. */
 export type Channel = "gray" | "r" | "g" | "b";
+
+/** Legacy's names for the channel bars (`channel_threshold_widget.py:438-445`). */
+export const CHANNEL_NAMES = {
+  gray: "Gray",
+  r: "Red",
+  g: "Green",
+  b: "Blue",
+} as const satisfies Record<Channel, string>;
 
 /**
  * RULE-031's histogram presets — the three ways to set the rescale other than by hand.
@@ -68,7 +57,19 @@ export interface ImageProcessing {
   readonly preset: Preset | null;
   /** Null for none. The server ignores it on a colour image, as RULE-032 says to. */
   readonly rescale: { readonly min: number; readonly max: number } | null;
+  /**
+   * Each channel's threshold markers, in the bar's LIST order (the query sorts them).
+   *
+   * Only a ticked channel has any: unticking one clears its markers, as legacy's does
+   * (`channel_threshold_widget.py:351-357`), so every list here is one the server should apply.
+   */
   readonly markers: Readonly<Partial<Record<Channel, readonly number[]>>>;
+  /**
+   * Which channels' checkboxes are ticked. A ticked channel with no markers changes no pixels, so
+   * this never reaches the query; it is here because it belongs to the image, like the markers,
+   * and goes when the image does.
+   */
+  readonly enabled?: Readonly<Partial<Record<Channel, boolean>>>;
   readonly crop: Crop | null;
   /** RULE-030's radial cutoffs, 0..10000. Empty for no frequency filtering. */
   readonly frequencies: readonly number[];
@@ -80,6 +81,7 @@ export const NO_PROCESSING: ImageProcessing = {
   preset: null,
   rescale: null,
   markers: {},
+  enabled: {},
   crop: null,
   frequencies: [],
   intensities: [],
