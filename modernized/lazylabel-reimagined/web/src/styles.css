@@ -700,10 +700,6 @@ fieldset input[type="text"] {
   gap: 0.25rem 1rem;
 }
 
-.formats code {
-  color: var(--muted);
-}
-
 /* Continuous state, pinned below the content. Events belong in .notifications, which is the split
    legacy's status bar does not make -- and why its "Deleted: ..." notice expires. */
 .status-bar {

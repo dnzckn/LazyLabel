@@ -130,7 +130,7 @@ async function reload(api: Api, view: ReturnType<typeof render>): Promise<void> 
 }
 
 const autoSave = () => screen.getByLabelText("Auto-Save on Navigate") as HTMLInputElement;
-/** An export format's box in Application Settings, by the format's name. */
+/** An export format's box in Application Settings, by legacy's name for the format. */
 const format = (name: RegExp) => screen.getByRole("checkbox", { name }) as HTMLInputElement;
 
 describe("a change survives a reload", () => {
@@ -154,12 +154,12 @@ describe("a change survives a reload", () => {
     await loaded();
 
     fireEvent.click(autoSave());
-    fireEvent.click(format(/PASCAL_VOC/));
+    fireEvent.click(format(/^Pascal VOC$/));
     await waitFor(() => expect(api.puts).toHaveLength(2));
     await reload(api, view);
 
     expect(autoSave().checked).toBe(false);
-    expect(format(/PASCAL_VOC/).checked).toBe(true);
+    expect(format(/^Pascal VOC$/).checked).toBe(true);
   });
 });
 
@@ -258,8 +258,8 @@ describe("Reset to Default", () => {
 
     await reload(api, view);
     expect(autoSave().checked).toBe(true);
-    expect(format(/^NPZ \.npz/).checked && format(/YOLO_DETECTION/).checked).toBe(true);
-    expect(format(/COCO_JSON/).checked).toBe(false);
+    expect(format(/^NPZ$/).checked && format(/^YOLO Detection$/).checked).toBe(true);
+    expect(format(/^COCO JSON$/).checked).toBe(false);
     // The theme is applied by an effect after the render that says "ready", so it is waited for.
     await waitFor(() => expect(document.documentElement.dataset["theme"]).toBe("dark"));
   });

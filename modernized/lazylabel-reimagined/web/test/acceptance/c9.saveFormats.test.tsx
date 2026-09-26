@@ -21,14 +21,15 @@ import { chooseTool, drawTriangle, lastSave, mount, openImage, writeButton } fro
 
 afterEach(cleanup);
 
+/** The seven formats as legacy's Export Formats menu names them (core/exporters/__init__.py:26-34). */
 const FORMATS = [
   "NPZ",
-  "NPZ_CLASS_MAP",
-  "YOLO_DETECTION",
-  "YOLO_SEGMENTATION",
-  "COCO_JSON",
-  "PASCAL_VOC",
-  "CREATEML",
+  "NPZ Class Map",
+  "YOLO Detection",
+  "YOLO Segmentation",
+  "COCO JSON",
+  "Pascal VOC",
+  "CreateML",
 ];
 
 describe("C9: choosing the formats", () => {
@@ -43,17 +44,14 @@ describe("C9: choosing the formats", () => {
   it("offers all seven", async () => {
     await openImage();
 
-    // By the set of names rather than one lookup each: "NPZ" is a substring of "NPZ_CLASS_MAP",
+    // By the set of whole names rather than a lookup each: "NPZ" is a substring of "NPZ Class Map",
     // so a per-format regex matches two checkboxes and says nothing useful about either.
     const offered = screen
       .getAllByRole("checkbox")
-      .map((box) => box.getAttribute("aria-label") ?? box.parentElement?.textContent ?? "");
+      .map((box) => (box.getAttribute("aria-label") ?? box.parentElement?.textContent ?? "").trim());
 
     for (const format of FORMATS) {
-      expect(
-        offered.some((name) => name.includes(format)),
-        `${format} is not offered`,
-      ).toBe(true);
+      expect(offered.includes(format), `${format} is not offered`).toBe(true);
     }
   });
 

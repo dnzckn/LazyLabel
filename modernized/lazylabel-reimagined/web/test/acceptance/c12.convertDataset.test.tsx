@@ -116,22 +116,47 @@ describe("C12: converting a dataset in the browser", () => {
     expect(checked).toHaveLength(2);
   });
 
-  it("persists the choice, so it is there on the next visit", async () => {
+  it("names the formats as legacy's Export Formats menu does, each with its tooltip (CP-61)", async () => {
+    // core/exporters/__init__.py:26-58, in the menu's order (export_format_widget.py:31-36). They
+    // read "YOLO_DETECTION .txt" and the like until 2026-09-26.
+    show();
+    await waitFor(() => expect(screen.getByText("Export Formats")).toBeTruthy());
+
+    const labels = [...screen.getByText("Export Formats").closest("fieldset")!.querySelectorAll("label")];
+    expect(labels.map((label) => label.textContent?.trim())).toEqual([
+      "NPZ",
+      "NPZ Class Map",
+      "YOLO Detection",
+      "YOLO Segmentation",
+      "COCO JSON",
+      "Pascal VOC",
+      "CreateML",
+    ]);
+    expect(labels[1]!.title).toBe(
+      "Single-channel class map (H×W). Each pixel stores its class index. Overlaps default to lowest class index; use Pixel Priority to control.",
+    );
+    expect(labels[5]!.title).toBe("Pascal VOC XML format with bounding box annotations.");
+  });
+
+  it("persists the choice by the format's id, so it is there on the next visit", async () => {
     const putSettings = vi.fn(async (settings: unknown) => settings);
     show({ putSettings });
 
     await waitFor(() => expect(screen.getByText("Export Formats")).toBeTruthy());
-    screen.getByRole("checkbox", { name: /PASCAL_VOC/ }).click();
+    screen.getByRole("checkbox", { name: "Pascal VOC" }).click();
 
     // Persona flow 4 says the choice is saved to settings. Decision 7 saves it when it changes
-    // rather than on exit, which is the behaviour that lost the last image's work.
+    // rather than on exit, which is the behaviour that lost the last image's work. The name on
+    // screen is legacy's; what is stored is the id, as before.
     await waitFor(() => expect(putSettings).toHaveBeenCalled());
     const saved = putSettings.mock.calls[0]![0] as { values: { export_formats: string[] } };
-    expect(saved.values.export_formats).toContain("PASCAL_VOC");
+    expect(saved.values.export_formats).toEqual(["NPZ", "YOLO_DETECTION", "PASCAL_VOC"]);
   });
 
-  it("refuses to clear the last format, and says why (RULE-088)", async () => {
+  it("keeps the last format ticked, as legacy's does, with the reason in the tooltip (RULE-088)", async () => {
+    const putSettings = vi.fn(async (settings: unknown) => settings);
     show({
+      putSettings,
       getSettings: async () => {
         const base = defaultSettings();
         return { ...base, values: { ...base.values, export_formats: ["NPZ"] } };
@@ -139,12 +164,15 @@ describe("C12: converting a dataset in the browser", () => {
     });
 
     await waitFor(() => expect(screen.getByText("Export Formats")).toBeTruthy());
-    screen.getByRole("checkbox", { name: /NPZ \.npz/ }).click();
+    await waitFor(() => expect((screen.getByRole("checkbox", { name: "NPZ" }) as HTMLInputElement).checked).toBe(true));
+    screen.getByRole("checkbox", { name: "NPZ" }).click();
 
-    // An empty selection makes a save write no files and still report success. Legacy silently
-    // re-checks the box; this refuses, in the words of legacy's own tooltip, and keeps the box on.
-    await waitFor(() => expect(screen.getByText("At least one format must be selected.")).toBeTruthy());
-    expect((screen.getByRole("checkbox", { name: /NPZ \.npz/ }) as HTMLInputElement).checked).toBe(true);
+    // An empty selection makes a save write no files and still report success. Legacy re-ticks the
+    // box and says nothing (export_format_widget.py:94-101); its tooltip carries the rule.
+    expect((screen.getByRole("checkbox", { name: "NPZ" }) as HTMLInputElement).checked).toBe(true);
+    expect(screen.queryByText("At least one format must be selected.")).toBeNull();
+    expect(screen.getByText("Export Formats").closest("fieldset")!.title).toMatch(/At least one format must be selected\./);
+    expect(putSettings).not.toHaveBeenCalled();
   });
 
   it("writes the chosen formats beside the image and says which", async () => {
