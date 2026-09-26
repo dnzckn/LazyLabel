@@ -789,6 +789,11 @@ describe("RULE-056: not losing propagated work without asking", () => {
       readonly onReviewLookup?: (lookup: (key: string) => readonly WireSegment[] | undefined) => void;
       /** The Sequence tab is not the one in use. */
       readonly inactive?: boolean;
+      /**
+       * The start answers after a task, as a real request does, so React renders in between. The
+       * fake's own answer arrives in a microtask, before any render.
+       */
+      readonly slowStart?: boolean;
     } = {},
   ) {
     /** Every request Propagate sent, as `fakeClient` records them. */
@@ -830,6 +835,7 @@ describe("RULE-056: not losing propagated work without asking", () => {
       }),
       startPropagation: async (request: WirePropagationStart) => {
         started.push(request);
+        if (run.slowStart === true) await new Promise((resolve) => setTimeout(resolve, 20));
         return job({ state: "running" });
       },
       propagationState: async () =>
@@ -1325,6 +1331,27 @@ describe("RULE-056: not losing propagated work without asking", () => {
     expect(await screen.findByRole("button", { name: /Save 1 frame/ }, { timeout: 3000 })).toBeTruthy();
     fireEvent.click(screen.getByText("New timeline"));
     expect(confirm.mock.calls.at(-1)![0]).toMatch(/1 propagated frame has not been saved/);
+  });
+
+  it("paints a second run whose scores are the first run's, rather than leaving its frames pending", async () => {
+    /*
+     * Found in a real GPU run on 2026-09-26: Propagate, then Propagate again with the same references.
+     * The render after the second start re-committed the FIRST run's masks, so the scores handed up
+     * never changed, and the timeline, cleared for the new run, was never painted again: its frames
+     * showed pending with no confidence, while Save All held them back as committed.
+     */
+    panel(() => true, false, undefined, { slowStart: true });
+    await propagateAndWait();
+    const f02 = () => screen.getByLabelText("Timeline").querySelectorAll("button")[1]!;
+    await waitFor(() => expect(f02().getAttribute("aria-label")).toMatch(/propagated$/));
+
+    fireEvent.click(screen.getByRole("button", { name: /^Propagate/ }));
+    // The run starts from a cleared timeline...
+    await waitFor(() => expect(f02().getAttribute("aria-label")).toMatch(/pending$/));
+
+    // ...and ends painted, with the score it came back with.
+    await waitFor(() => expect(f02().getAttribute("aria-label")).toMatch(/propagated$/), { timeout: 3000 });
+    expect(f02().getAttribute("title")).toContain("confidence 0.9990");
   });
 
   it("asks before the TAB closes on propagated frames", async () => {

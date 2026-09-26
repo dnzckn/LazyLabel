@@ -305,6 +305,13 @@ export function PropagationControl({
     // for its new mask, and no question before anything threw that mask away.
     setWritten(new Set());
     committed.current = new Map();
+    /*
+     * The last run's masks go with its commits. Kept until the new job answered, the render in
+     * between committed them again under the new policy, so identical scores never changed what
+     * was handed up, and the timeline this run had cleared was never painted (found in a real run,
+     * 2026-09-26).
+     */
+    reset();
     savesAtRun.current = new Map(savedElsewhere ?? []);
     const referenceKeys = new Set(references.map((index) => frames[index]!.key));
     setPolicy({
@@ -346,6 +353,7 @@ export function PropagationControl({
     progress.running,
     projectId,
     references,
+    reset,
     savedElsewhere,
     settings.values,
     skipLabeled,
