@@ -14,6 +14,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { flushSync } from "react-dom";
 
 import { classColor } from "./classColor.js";
 import { locate, scale, type DisplayBox, type ImagePoint } from "./coordinates.js";
@@ -164,6 +165,18 @@ export function AiLayer({
         return;
       }
 
+      /*
+       * ENTER: ACCEPT, THEN LET THE SAVE HAPPEN -- legacy's "First accept any AI segments (same as
+       * spacebar), then save" (keyboard_event_manager.py:231-234). The save alone forgot the mask
+       * on screen (`CONTROL_PARITY.md` CP-22). In the capture phase, so this runs before the
+       * dispatcher's save, and under flushSync, so the accepted mask is in the store before the save
+       * reads it -- the order the polygon layer keeps for its shape. Nothing placed: the save alone.
+       */
+      if (event.key === "Enter" && !event.shiftKey) {
+        if (pending(prompt) !== "nothing") flushSync(() => accept(false));
+        return;
+      }
+
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "z") {
         // With nothing placed there is nothing here to take back, and Ctrl+Z is the app's Undo:
         // left alone, it reaches the history.
@@ -183,7 +196,7 @@ export function AiLayer({
     // CAPTURE, so this runs before the dispatcher's listener, which bubbles.
     document.addEventListener("keydown", onKeyDown, true);
     return () => document.removeEventListener("keydown", onKeyDown, true);
-  }, [onAccept, onPrompt, onRefused, prompt]);
+  }, [accept, onAccept, onPrompt, onRefused, prompt]);
 
   const box = boxOf();
   const perPixel = box === null ? { x: 1, y: 1 } : scale(box, image);

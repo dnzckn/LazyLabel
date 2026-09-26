@@ -172,6 +172,28 @@ describe("accepting", () => {
   });
 });
 
+describe("Enter, legacy's accept-then-save", () => {
+  it("accepts the pending prompt before the save runs, as Space would", () => {
+    // Legacy: "First accept any AI segments (same as spacebar), then save". The save alone left
+    // the mask on screen out of the file (CONTROL_PARITY.md CP-22).
+    const { surface, onAccept } = layer();
+    click(surface, 30, 40);
+
+    fireEvent.keyDown(document, { key: "Enter" });
+
+    expect(onAccept).toHaveBeenCalledWith(false);
+  });
+
+  it("with nothing placed, leaves the save to itself and refuses nothing", () => {
+    const { onAccept, onRefused } = layer();
+
+    fireEvent.keyDown(document, { key: "Enter" });
+
+    expect(onAccept).not.toHaveBeenCalled();
+    expect(onRefused).not.toHaveBeenCalled();
+  });
+});
+
 describe("taking things back", () => {
   it("discards everything on Escape", () => {
     const { surface } = layer();
