@@ -42,6 +42,7 @@ import { useSettings } from "../settings/SettingsProvider.jsx";
 import { HotkeyEditor } from "../hotkeys/HotkeyEditor.jsx";
 import { Dialog } from "./Dialog.jsx";
 import { SettingsEditor } from "../settings/SettingsEditor.jsx";
+import { ResetSettings } from "../settings/ResetSettings.jsx";
 import { useHotkey } from "../hotkeys/HotkeyProvider.jsx";
 import type { ApiClient, ApiHealth } from "../api/client.js";
 
@@ -207,6 +208,14 @@ export function App({ client }: { readonly client: ApiClient }): ReactNode {
         </p>
       )}
 
+      {/* Saves succeed and vanish when the API restarts, which from here is "settings do not
+          save" -- the owner's report of 2026-09-26, whose API ran with LAZYLABEL_DB=:memory:. */}
+      {health?.databaseInMemory === true && (
+        <p role="status" className="banner banner--warning">
+          Settings are kept in memory and will be lost when the API restarts.
+        </p>
+      )}
+
       <Workspace
         left={
           <>
@@ -233,15 +242,8 @@ export function App({ client }: { readonly client: ApiClient }): ReactNode {
                         <AutoPolygonPanel />
                       </Panel>
                       <Panel title="Application Settings">
-                        {state.status === "loading" ? (
-                          <p>Loading…</p>
-                        ) : (
-                          <p>
-                            Schema version {state.settings.schemaVersion},{" "}
-                            {Object.keys(state.settings.values).length} settings and{" "}
-                            {Object.keys(state.settings.hotkeys).length} hotkeys.
-                          </p>
-                        )}
+                        {/* Controls only, as legacy's group has (settings_widget.py:33-110). It
+                            opened with a line counting the schema's settings and hotkeys. */}
                         {/* Legacy's first control here, on by default (settings_widget.py:39-44).
                             Moving to another image saves the one being left, by the owner's
                             decision of 2026-09-25; off, the move asks instead. */}
@@ -262,6 +264,9 @@ export function App({ client }: { readonly client: ApiClient }): ReactNode {
                         <button type="button" onClick={() => setShowSettings(true)}>
                           Edit settings
                         </button>{" "}
+                        {/* Legacy's last control in this group (settings_widget.py:104-110), for
+                            every setting rather than the group's five; hotkeys keep theirs. */}
+                        <ResetSettings />{" "}
                         <button type="button" onClick={() => setShowAbout(true)}>
                           What is built
                         </button>

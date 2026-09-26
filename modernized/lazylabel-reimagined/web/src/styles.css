@@ -1067,6 +1067,16 @@ fieldset input[type="text"] {
   text-align: center;
 }
 
+/* The settings dialog: one control a line, as legacy's group boxes stack them, and the pixel
+   priority direction 20px in under its switch (settings_widget.py:75-102). */
+.settings-editor fieldset > label {
+  display: block;
+}
+
+.settings-editor__indent {
+  padding-left: 20px;
+}
+
 /* Legacy's "Filter Class:" row above the segment table. */
 .segments__filter {
   display: flex;

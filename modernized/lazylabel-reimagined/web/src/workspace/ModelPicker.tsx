@@ -12,7 +12,7 @@
  * two have different fixes: re-download it, or go and find it.
  */
 
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 
 import { useSettings } from "../settings/SettingsProvider.jsx";
 import type { ApiClient, WireModelStatus } from "../api/client.js";
@@ -50,15 +50,26 @@ export function useDefaultModel(client: ApiClient): void {
   const { state, settings, save } = useSettings();
   const loaded = state.status === "ready";
   const chosen = String(settings.values["ai_model"] ?? "");
+  // Held while a choice is being saved, and kept when the save fails. A refused save is taken back,
+  // which empties `ai_model` again and would rerun this at the pace of the network; the failure is
+  // reported once instead. Let go on success, so Reset to Default chooses again.
+  const held = useRef(false);
 
   useEffect(() => {
-    if (!loaded || chosen !== "") return;
+    if (!loaded || chosen !== "" || held.current) return;
     let cancelled = false;
     client
       .models()
       .then((models) => {
         const pick = defaultModel(models);
-        if (!cancelled && pick !== null) void save({ ...settings, values: { ...settings.values, ai_model: pick } });
+        if (cancelled || pick === null) return;
+        held.current = true;
+        save({ ...settings, values: { ...settings.values, ai_model: pick } }).then(
+          () => {
+            held.current = false;
+          },
+          () => undefined,
+        );
       })
       // No models to be had is the section's to say (below); nothing is chosen for it.
       .catch(() => undefined);

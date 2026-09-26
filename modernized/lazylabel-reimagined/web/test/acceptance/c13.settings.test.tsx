@@ -15,7 +15,7 @@ import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ReactNode } from "react";
 
-import { defaultSettings, checkAssignment } from "@lazylabel/settings-schema";
+import { defaultSettings, checkAssignment, type StoredSettings } from "@lazylabel/settings-schema";
 
 import { SettingsProvider, useSettings } from "../../src/settings/SettingsProvider.jsx";
 import type { ApiClient } from "../../src/api/client.js";
@@ -130,6 +130,41 @@ describe("C13: settings in the browser", () => {
     // RULE-088 corrects an unusable list instead of storing it. Saying so is what keeps the UI from
     // claiming the user's choice was kept.
     expect(result.corrections).toHaveLength(1);
+  });
+
+  it("applies a change made during the load to what was loaded, not to the defaults", async () => {
+    // Sent at once, it was built from the defaults on screen and replaced every stored preference
+    // the load was about to bring back.
+    const stored = defaultSettings();
+    let release: (settings: StoredSettings) => void = () => {};
+    const putSettings = vi.fn(async (settings: StoredSettings) => settings);
+    const client = fakeClient({
+      getSettings: () =>
+        new Promise<StoredSettings>((resolve) => {
+          release = resolve;
+        }),
+      putSettings,
+    });
+
+    let context: ReturnType<typeof useSettings> | null = null;
+    function Saver(): ReactNode {
+      context = useSettings();
+      return null;
+    }
+    render(
+      <SettingsProvider client={client}>
+        <Saver />
+      </SettingsProvider>,
+    );
+    await waitFor(() => expect(context).not.toBeNull());
+
+    const { settings, save } = context!;
+    const saving = save({ ...settings, values: { ...settings.values, auto_save: false } });
+    release({ ...stored, values: { ...stored.values, brightness: 25 } });
+    await saving;
+
+    expect(putSettings).toHaveBeenCalledTimes(1);
+    expect(putSettings.mock.calls[0]![0].values).toMatchObject({ auto_save: false, brightness: 25 });
   });
 
   it("uses the same conflict rule the API enforces", () => {

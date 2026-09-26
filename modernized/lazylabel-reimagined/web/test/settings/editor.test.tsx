@@ -40,7 +40,7 @@ async function field(label: string): Promise<HTMLInputElement> {
 describe("RULE-050: typed values are clamped when editing finishes", () => {
   it("turns 25 in the join threshold into 10", async () => {
     const { saved } = mount();
-    const join = await field("Join threshold (pixels)");
+    const join = await field("Join");
 
     fireEvent.change(join, { target: { value: "25" } });
     fireEvent.blur(join);
@@ -51,7 +51,7 @@ describe("RULE-050: typed values are clamped when editing finishes", () => {
 
   it("holds pan speed to 0.1 at the bottom", async () => {
     const { saved } = mount();
-    const pan = await field("Pan speed");
+    const pan = await field("Pan");
 
     fireEvent.change(pan, { target: { value: "0" } });
     fireEvent.blur(pan);
@@ -62,7 +62,7 @@ describe("RULE-050: typed values are clamped when editing finishes", () => {
 
   it("reverts non-numeric input and saves nothing", async () => {
     const { saved } = mount();
-    const pan = await field("Pan speed");
+    const pan = await field("Pan");
 
     fireEvent.change(pan, { target: { value: "" } });
     fireEvent.blur(pan);
@@ -75,15 +75,15 @@ describe("RULE-050: typed values are clamped when editing finishes", () => {
 describe("RULE-026: the streaming window", () => {
   it("snaps to a multiple of 50 and stays within 50-1000", async () => {
     const { saved } = mount();
-    const window = await field("Streaming window (frames)");
+    const window = await field("Window");
 
     fireEvent.change(window, { target: { value: "1234" } });
     fireEvent.blur(window);
     await waitFor(() => expect(saved).toHaveLength(1));
     expect(saved[0]!.values["stream_window_size"]).toBe(1000);
 
-    // Looked up again: the field is keyed on the stored value, so a save replaces it.
-    const again = await field("Streaming window (frames)");
+    // The same field, still focused: it holds the typing, not a remount keyed on the value.
+    const again = await field("Window");
     fireEvent.change(again, { target: { value: "320" } });
     fireEvent.blur(again);
     await waitFor(() => expect(saved).toHaveLength(2));
@@ -95,7 +95,7 @@ describe("the switches a new user could not reach", () => {
   it("turns Operate On View on (RULE-089)", async () => {
     const { saved } = mount();
 
-    fireEvent.click(await screen.findByLabelText(/Operate On View/));
+    fireEvent.click(await screen.findByLabelText("Operate On View"));
 
     await waitFor(() => expect(saved).toHaveLength(1));
     expect(saved[0]!.values["operate_on_view"]).toBe(true);
@@ -103,20 +103,65 @@ describe("the switches a new user could not reach", () => {
 
   it("turns pixel priority on, and offers its direction only once it is (RULE-012)", async () => {
     const { saved } = mount();
-    const direction = (await screen.findByLabelText("The lower class id wins")) as HTMLInputElement;
-    expect(direction.disabled).toBe(true);
+    const ascending = (await screen.findByLabelText("Ascending")) as HTMLInputElement;
+    const descending = screen.getByLabelText("Descending") as HTMLInputElement;
+    // Legacy's pair: Ascending by default, both greyed out until the switch is on.
+    expect(ascending.checked).toBe(true);
+    expect(ascending.disabled && descending.disabled).toBe(true);
 
-    fireEvent.click(screen.getByLabelText("Give each pixel to one class"));
+    fireEvent.click(screen.getByLabelText("Enable Pixel Priority"));
 
     await waitFor(() => expect(saved).toHaveLength(1));
     expect(saved[0]!.values["pixel_priority_enabled"]).toBe(true);
-    await waitFor(() => expect(direction.disabled).toBe(false));
+    await waitFor(() => expect(descending.disabled).toBe(false));
+
+    fireEvent.click(descending);
+
+    await waitFor(() => expect(saved).toHaveLength(2));
+    expect(saved[1]!.values["pixel_priority_ascending"]).toBe(false);
   });
 
   it("holds no second switch for a file-list column; the Columns chooser beside the list has it", async () => {
     mount();
-    await screen.findByLabelText("Pan speed");
+    await screen.findByLabelText("Pan");
 
     expect(screen.queryByLabelText("_coco.json")).toBeNull();
+  });
+});
+
+describe("what the dialog shows (the owner, 2026-09-26)", () => {
+  it("is legacy's labels and controls, with its tooltips, and no paragraph of explanation", async () => {
+    // "have you ever seen a gui with a paragraph there written to it" -- legacy's widgets carry
+    // their explanation in a tooltip, and so does this.
+    mount();
+    const pan = await field("Pan");
+    const dialog = pan.closest("section")!;
+
+    expect(dialog.querySelectorAll("p")).toHaveLength(0);
+    expect(pan.closest("label")!.title).toBe("Adjusts the speed of WASD panning.");
+    expect(screen.getByLabelText("Join").closest("label")!.title).toBe(
+      "The pixel distance to 'snap' a polygon closed.",
+    );
+    expect(screen.getByLabelText("Operate On View").closest("label")!.title).toMatch(
+      /^If checked, SAM model will operate on the currently displayed \(adjusted\) image\./,
+    );
+    expect(screen.getByLabelText("Enable Pixel Priority").closest("label")!.title).toBe(
+      "Control pixel ownership when multiple classes overlap",
+    );
+  });
+
+  it("applies a typed value on Enter, as legacy's editingFinished does, and keeps the field", async () => {
+    const { saved } = mount();
+    const join = await field("Join");
+    join.focus();
+
+    fireEvent.change(join, { target: { value: "4" } });
+    fireEvent.keyDown(join, { key: "Enter" });
+
+    await waitFor(() => expect(saved).toHaveLength(1));
+    expect(saved[0]!.values["polygon_join_threshold"]).toBe(4);
+    // Still the field being typed in: it is not remounted by its own save.
+    expect(document.activeElement).toBe(join);
+    expect(join.value).toBe("4");
   });
 });

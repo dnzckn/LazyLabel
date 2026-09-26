@@ -48,9 +48,9 @@ export function ExportFormats({ onChange }: ExportFormatsProps): ReactNode {
       const isOn = selected.includes(format);
 
       if (isOn && !canRemoveExportFormat(selected, format)) {
-        setRefusal(
-          `${format} is the only selected format. A save with none selected writes no files at all, so at least one has to stay.`,
-        );
+        // Legacy's own words, from its tooltip (settings_widget.py:51-54): a save with none selected
+        // would write no files at all.
+        setRefusal("At least one format must be selected.");
         return;
       }
 
@@ -62,8 +62,9 @@ export function ExportFormats({ onChange }: ExportFormatsProps): ReactNode {
   );
 
   return (
-    <fieldset>
-      <legend>Formats to write</legend>
+    // Legacy's label and tooltip (settings_widget.py:46-57).
+    <fieldset title={"Select which annotation formats to save.\nAt least one format must be selected."}>
+      <legend>Export Formats</legend>
 
       <ul className="formats">
         {KNOWN_EXPORT_FORMATS.map((format) => (

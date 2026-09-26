@@ -64,6 +64,11 @@ export interface ApiHealth {
    */
   readonly datasetRoot?: string;
   readonly database: string;
+  /**
+   * True when the API keeps settings only in memory (`LAZYLABEL_DB=:memory:`): every save succeeds
+   * and none survives a restart. Optional because an older API does not send it.
+   */
+  readonly databaseInMemory?: boolean;
   readonly degraded: string[];
   readonly ai: {
     readonly available: boolean;

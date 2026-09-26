@@ -80,6 +80,34 @@ describe("every setting is accounted for", () => {
   });
 });
 
+/**
+ * What the desktop app keeps across a restart, as its own code wrote it: `Settings().save_to_file`
+ * and `HotkeyManager.save_hotkeys` at 2a7d5d8, the settings package's fixtures (its README says
+ * why they are generated rather than typed). The owner's "the settings of the app should save
+ * between sessions" (2026-09-26) starts with each of these having somewhere to be kept here.
+ */
+describe("every setting and hotkey legacy keeps across a restart has a place here", () => {
+  const fixture = (name: string) =>
+    path.join(HERE, "..", "..", "..", "settings-schema", "test", "fixtures", "legacy-config", name);
+
+  it("has a schema key for every field of legacy's settings.json (config/settings.py:12-75)", async () => {
+    const legacy = JSON.parse(await readFile(fixture("settings.json"), "utf-8")) as Record<string, unknown>;
+
+    const missing = Object.keys(legacy).filter((key) => !KEYS.includes(key));
+
+    expect(Object.keys(legacy).length, "the fixture is legacy's whole file").toBeGreaterThan(30);
+    expect(missing, "legacy keeps these and the web app has nowhere to keep them").toEqual([]);
+  });
+
+  it("has an action for every binding legacy's hotkeys.json holds (config/hotkeys.py:244-258)", async () => {
+    const legacy = JSON.parse(await readFile(fixture("hotkeys.json"), "utf-8")) as Record<string, unknown>;
+
+    const missing = Object.keys(legacy).filter((action) => !(action in defaultSettings().hotkeys));
+
+    expect(missing).toEqual([]);
+  });
+});
+
 describe("the classification matches the source", () => {
   it("every key called READ is actually read", () => {
     const broken = KEYS.filter((key) => HONOURED[key]?.kind === "read" && !isRead(key));

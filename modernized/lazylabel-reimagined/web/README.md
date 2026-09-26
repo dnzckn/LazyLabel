@@ -29,7 +29,11 @@ npm run build
 - **Settings, including the degraded case.** When the settings database is unavailable the app runs
   on defaults and shows a banner, because annotations are files and labelling should continue. The
   failure-mode table calls for exactly that, and it is only true if the browser treats a settings
-  failure as degraded rather than fatal.
+  failure as degraded rather than fatal. Saves go one at a time, each applying only what its control
+  changed on top of what the server last confirmed, so two made together both land; a refused one is
+  taken back and reported. Application Settings ends with Reset to Default (every setting, not the
+  hotkeys), and an API running with `LAZYLABEL_DB=:memory:` gets a banner saying settings will not
+  outlive it.
 - **The hotkey system.** Bindings come from the shared schema, so this and the API agree about what
   `Ctrl+Z` means and which assignments are legal (RULE-049). Settings, Show hotkeys opens the
   editor: click a key and press the new one, and a key another action holds is refused by name.
@@ -81,7 +85,8 @@ that proves it works, and nothing calling it.
   (`inference/tests/test_reach.py`). A new one fails the test, and so does wiring one up without
   removing its entry.
 - `test/settings/honoured.ts` -- every setting, classified read, dropped or gap, checked against the
-  source in both directions. No gaps left. The counts are asserted, so a change moves an entry.
+  source in both directions. No gaps left. The counts are asserted, so a change moves an entry. It
+  also checks that every key legacy's own `settings.json` and `hotkeys.json` hold has a place here.
 - `test/rules/p0Coverage.test.ts` -- every P0, P1 and P2 rule named by a test or recorded as a
   deliberate divergence with the decision behind it.
 - The hotkey editor in the app itself (Settings, Show hotkeys). It marks each action live or "not

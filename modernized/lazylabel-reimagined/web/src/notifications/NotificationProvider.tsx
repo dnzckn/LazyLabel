@@ -110,6 +110,17 @@ export function useNotifications(): NotificationContextValue {
 }
 
 /**
+ * The notifications, or null with no provider above.
+ *
+ * For the settings provider only, which reports a failed save when it can and is mounted without
+ * notifications by every test of a component that merely READS settings. Anything that must tell
+ * the user something uses `useNotifications`, which throws, so a missing provider cannot hide it.
+ */
+export function useOptionalNotifications(): NotificationContextValue | null {
+  return useContext(NotificationContext);
+}
+
+/**
  * Where notifications appear.
  *
  * Errors and warnings are `role="alert"` so a screen reader announces them without being asked;

@@ -101,7 +101,7 @@ async function openImage(): Promise<void> {
 describe("C12: converting a dataset in the browser", () => {
   it("offers all seven formats, with the defaults already chosen", async () => {
     show();
-    await waitFor(() => expect(screen.getByText("Formats to write")).toBeTruthy());
+    await waitFor(() => expect(screen.getByText("Export Formats")).toBeTruthy());
 
     // Scoped to the format chooser: the browser's column switches are checkboxes too, and an
     // unscoped query counts both. They are told apart by their labels -- a column switch says
@@ -120,7 +120,7 @@ describe("C12: converting a dataset in the browser", () => {
     const putSettings = vi.fn(async (settings: unknown) => settings);
     show({ putSettings });
 
-    await waitFor(() => expect(screen.getByText("Formats to write")).toBeTruthy());
+    await waitFor(() => expect(screen.getByText("Export Formats")).toBeTruthy());
     screen.getByRole("checkbox", { name: /PASCAL_VOC/ }).click();
 
     // Persona flow 4 says the choice is saved to settings. Decision 7 saves it when it changes
@@ -138,13 +138,13 @@ describe("C12: converting a dataset in the browser", () => {
       },
     });
 
-    await waitFor(() => expect(screen.getByText("Formats to write")).toBeTruthy());
+    await waitFor(() => expect(screen.getByText("Export Formats")).toBeTruthy());
     screen.getByRole("checkbox", { name: /NPZ \.npz/ }).click();
 
     // An empty selection makes a save write no files and still report success. Legacy silently
-    // re-checks the box; this refuses and explains, which is the same rule without the sleight.
-    await waitFor(() => expect(screen.getByText(/only selected format/)).toBeTruthy());
-    expect(screen.getByText(/writes no files at all/)).toBeTruthy();
+    // re-checks the box; this refuses, in the words of legacy's own tooltip, and keeps the box on.
+    await waitFor(() => expect(screen.getByText("At least one format must be selected.")).toBeTruthy());
+    expect((screen.getByRole("checkbox", { name: /NPZ \.npz/ }) as HTMLInputElement).checked).toBe(true);
   });
 
   it("writes the chosen formats beside the image and says which", async () => {
