@@ -159,6 +159,16 @@ export function App({ client }: { readonly client: ApiClient }): ReactNode {
   );
   const reviewFor = useCallback((key: string) => reviewLookup.current(key), []);
 
+  /*
+   * Every image the browser has listed, by key. A built timeline is a fixed list of files, as
+   * legacy's is (`sequence_view_mode.py:123-126`), so its frames still open after the browser has
+   * moved to another folder; clicking one did nothing until 2026-09-26 (SP-21).
+   */
+  const seenImages = useRef(new Map<string, WireDatasetImage>());
+  useEffect(() => {
+    for (const image of listed) seenImages.current.set(image.key, image);
+  }, [listed]);
+
   const step = useCallback(
     (by: 1 | -1) => {
       if (open === null || shownRows.length === 0) return;
@@ -420,7 +430,7 @@ export function App({ client }: { readonly client: ApiClient }): ReactNode {
                 onStatus={setSequenceStatus}
                 {...(open === null ? {} : { openKey: open.image.key })}
                 onOpen={(key, segments) => {
-                  const image = listed.find((entry) => entry.key === key);
+                  const image = listed.find((entry) => entry.key === key) ?? seenImages.current.get(key);
                   // RULE-090: a frame the propagation produced masks for shows those masks.
                   if (image !== undefined) {
                     openImage(image, segments === undefined ? undefined : { segments });

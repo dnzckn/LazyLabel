@@ -167,7 +167,11 @@ export function TimelinePanel({
    * discarded or rebuilt since is now dropped.
    */
   const [timeline, setTimeline] = useState<{
-    readonly range: { readonly from: number; readonly to: number };
+    /**
+     * The files it was built from, FROZEN at Build: a built timeline is a fixed list of paths, as
+     * legacy's is (`sequence_view_mode.py:123-126`), whatever folder the browser shows later.
+     */
+    readonly range: { readonly from: number; readonly to: number; readonly keys: readonly string[] };
     readonly overrides: readonly Frame[] | null;
   } | null>(null);
   const range = timeline?.range ?? null;
@@ -251,8 +255,10 @@ export function TimelinePanel({
     // references come from "+ Add Current", "+ All Before" and "+ All Labeled". Marking them
     // automatically made every frame an earlier Save All wrote a seed on a rebuilt timeline -- each
     // of its annotations tracked as an object of its own -- and left Skip Labeled nothing to protect.
-    return buildTimeline(keys, range.from, range.to);
-  }, [keys, overrides, range]);
+    // From the files frozen at Build. It was rebuilt from whichever folder the browser listed, at
+    // the old positions, so browsing elsewhere silently changed the timeline (SEQUENCE_PARITY.md SP-21).
+    return buildTimeline(range.keys, 0, range.keys.length - 1);
+  }, [overrides, range]);
 
   /*
    * What the timeline SHOWS: the stored frames with this run's kept labels painted over them.
@@ -272,9 +278,9 @@ export function TimelinePanel({
    */
   const build = useCallback(
     (from: number, to: number) => {
-      setTimeline({ range: { from, to }, overrides: null });
-      setCurrent(0);
       const built = buildTimeline(keys, from, to);
+      setTimeline({ range: { from, to, keys: built.map((frame) => frame.key) }, overrides: null });
+      setCurrent(0);
       if (built.length === 0) return;
       onOpen?.(built[0]!.key);
       notify({ severity: "info", message: `Timeline built: ${built.length} frames` });

@@ -85,6 +85,26 @@ function build(from?: string, to?: string, { references = true } = {}) {
 
 const cells = () => screen.getByLabelText("Timeline").querySelectorAll("button");
 
+describe("a built timeline is a fixed list of files (SP-21)", () => {
+  it("keeps its frames when the browser lists another folder", async () => {
+    // Legacy's timeline is the paths it was built from (sequence_view_mode.py:123-126). The web's was
+    // rebuilt from whichever folder the browser listed, at the old positions.
+    const { rerender } = render(withSettings(<TimelinePanel images={FOLDER} />));
+    build("1", "3", { references: false });
+    await waitFor(() => expect(cells()).toHaveLength(3));
+    const before = [...cells()].map((cell) => cell.getAttribute("aria-label"));
+
+    const elsewhere = ["x1.png", "x2.png", "x3.png", "x4.png", "x5.png"].map((name) => ({
+      ...image(name),
+      key: `other/${name}`,
+    }));
+    rerender(withSettings(<TimelinePanel images={elsewhere} />));
+
+    expect([...cells()].map((cell) => cell.getAttribute("aria-label"))).toEqual(before);
+    expect(before[0]).toContain("frames/f02.png");
+  });
+});
+
 describe("the header (SP-19)", () => {
   it("names an image opened from outside the timeline instead of a frame that is not on screen", async () => {
     const onStatus = vi.fn();
