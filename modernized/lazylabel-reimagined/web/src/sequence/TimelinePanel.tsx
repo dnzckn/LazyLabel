@@ -349,6 +349,34 @@ export function TimelinePanel({
   // mode, although the panel stays mounted on the other tabs.
   const active = useSequenceActive();
 
+  /**
+   * RULE-090's masks for a frame, merged one per class as legacy merges them when it opens the frame
+   * (`main_window.py:3597-3606`, `SEQUENCE_PARITY.md` SP-07). Here, on the visit, and not where
+   * Save All builds them: legacy's Save All does not merge.
+   *
+   * A REFERENCE opens as its file: the user's own drawing, loaded with its real vertices and
+   * provenance. Handing it a propagated reconstruction in its place is the one substitution
+   * propagation must not make -- it is the same reason Save All refuses to rewrite a reference.
+   */
+  const propagatedFor = (frame: Frame): readonly WireSegment[] | undefined => {
+    const segments = frame.isReference ? undefined : propagated.get(frame.key);
+    return segments === undefined ? undefined : mergedByClass(segments);
+  };
+
+  /*
+   * THE CURSOR MOVES WHEN THE FRAME OPENS, not when it is asked for (SEQUENCE_PARITY.md SP-19).
+   * The workspace saves the image being left first, or asks, and a Cancel at its question (Auto-Save
+   * on Navigate off) refuses the open: the cursor stayed on a frame that was not on screen, and the
+   * header, G and the trim bounds acted on it. Legacy's navigation always completes, so its frame on
+   * screen is always the current one (`main_window.py:3414-3434`). With an image open the cursor
+   * waits for `openKey`, which changes only once the open happens; with none open nothing can be
+   * refused, and with no `onOpen` nothing opens at all, so it moves at once.
+   */
+  const choose = (frame: Frame): void => {
+    if (onOpen === undefined || openKey === undefined) setCurrent(frame.index);
+    onOpen?.(frame.key, propagatedFor(frame));
+  };
+
   const navigate = useCallback(
     (target: Target, direction: 1 | -1) => {
       const next =
@@ -360,14 +388,13 @@ export function TimelinePanel({
         notify({ severity: "info", message: NOTHING_TO_STEP_TO[target] });
         return;
       }
-      setCurrent(next);
       const frame = frames[next];
-      if (frame !== undefined) onOpen?.(frame.key, propagatedFor(frame));
+      if (frame !== undefined) choose(frame);
     },
-    // `propagated` stands for propagatedFor, which reads it: without it, H and N handed a frame the
-    // masks of an earlier render.
+    // `onOpen`, `openKey` and `propagated` stand for `choose`, which reads them: without
+    // `propagated`, H and N handed a frame the masks of an earlier render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [archetypes, current, frames, notify, onOpen, propagated],
+    [archetypes, current, frames, notify, onOpen, openKey, propagated],
   );
 
   /*
@@ -546,20 +573,6 @@ export function TimelinePanel({
     const at = shown.findIndex((frame) => frame.key === openKey);
     if (at >= 0) setCurrent(at);
   }, [openKey, shown]);
-
-  /**
-   * RULE-090's masks for a frame, merged one per class as legacy merges them when it opens the frame
-   * (`main_window.py:3597-3606`, `SEQUENCE_PARITY.md` SP-07). Here, on the visit, and not where
-   * Save All builds them: legacy's Save All does not merge.
-   *
-   * A REFERENCE opens as its file: the user's own drawing, loaded with its real vertices and
-   * provenance. Handing it a propagated reconstruction in its place is the one substitution
-   * propagation must not make -- it is the same reason Save All refuses to rewrite a reference.
-   */
-  const propagatedFor = (frame: Frame): readonly WireSegment[] | undefined => {
-    const segments = frame.isReference ? undefined : propagated.get(frame.key);
-    return segments === undefined ? undefined : mergedByClass(segments);
-  };
 
   /*
    * SP-22: a timeline frame opened from the file list or with Left/Right shows the run's masks, as
@@ -807,10 +820,7 @@ export function TimelinePanel({
                     ? ""
                     : ` — confidence ${allScores[index]!.toFixed(4)}`)
                 }
-                onClick={() => {
-                  setCurrent(index);
-                  onOpen?.(frame.key, propagatedFor(frame));
-                }}
+                onClick={() => choose(frame)}
               />
             </li>
           );

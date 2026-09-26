@@ -7,6 +7,7 @@
  */
 
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { WireDatasetImage } from "@lazylabel/contracts";
 
@@ -64,6 +65,42 @@ function show(images: readonly WireDatasetImage[] = FOLDER) {
   const onOpen = vi.fn();
   render(withSettings(<TimelinePanel images={images} onOpen={onOpen} />));
   return { onOpen };
+}
+
+/**
+ * The shell's side of opening a frame: `openKey` follows an open that happens, and stays where it
+ * was when the workspace refuses one -- a Cancel at its question about unsaved work.
+ */
+function Shell({
+  initial,
+  refuse = false,
+  onOpen,
+  onStatus,
+}: {
+  readonly initial?: string;
+  readonly refuse?: boolean;
+  readonly onOpen: (key: string) => void;
+  readonly onStatus?: (status: string) => void;
+}) {
+  const [openKey, setOpenKey] = useState(initial);
+  return (
+    <TimelinePanel
+      images={FOLDER}
+      {...(openKey === undefined ? {} : { openKey })}
+      {...(onStatus === undefined ? {} : { onStatus })}
+      onOpen={(key) => {
+        onOpen(key);
+        if (!refuse) setOpenKey(key);
+      }}
+    />
+  );
+}
+
+function showShell(options: { readonly initial?: string; readonly refuse?: boolean } = {}) {
+  const onOpen = vi.fn();
+  const onStatus = vi.fn();
+  render(withSettings(<Shell {...options} onOpen={onOpen} onStatus={onStatus} />));
+  return { onOpen, onStatus };
 }
 
 /**
@@ -224,6 +261,61 @@ describe("the header (SP-19)", () => {
     build("0", "2", { references: false });
 
     await waitFor(() => expect(onStatus).toHaveBeenLastCalledWith("f05.png -- not in the timeline"));
+  });
+});
+
+describe("the cursor moves when the frame opens (SP-19)", () => {
+  /*
+   * Legacy's navigation always completes, so the frame on screen is always the current one
+   * (main_window.py:3414-3434). The web moved the cursor before the open, which the workspace can
+   * refuse: with Auto-Save on Navigate off it asks about unsaved work, and a Cancel there left the
+   * cursor on a frame that was not on screen, for the header, G and the trim bounds to act on.
+   */
+  const current = () => [...cells()].findIndex((cell) => cell.className.includes("timeline__frame--current"));
+
+  it("stays on the frame on screen when the open is refused", async () => {
+    const { onOpen, onStatus } = showShell({ initial: "frames/f01.png", refuse: true });
+    build("0", "4", { references: false });
+    await waitFor(() => expect(cells()).toHaveLength(5));
+
+    fireEvent.click(cells()[2]!);
+
+    expect(onOpen).toHaveBeenLastCalledWith("frames/f03.png");
+    expect(current()).toBe(0);
+    expect(onStatus).toHaveBeenLastCalledWith("f01.png (1/5)");
+  });
+
+  it("marks the frame on screen with G, not the one whose open was refused", async () => {
+    showShell({ initial: "frames/f01.png", refuse: true });
+    build("0", "4", { references: false });
+    await waitFor(() => expect(cells()).toHaveLength(5));
+    fireEvent.click(cells()[2]!);
+
+    fireEvent.click(screen.getByText("Mark as reference"));
+
+    await waitFor(() => expect(cells()[0]!.getAttribute("aria-label")).toMatch(/reference$/));
+    expect(cells()[2]!.getAttribute("aria-label")).toMatch(/pending$/);
+  });
+
+  it("stays put when a key's open is refused too", async () => {
+    showShell({ initial: "frames/f01.png", refuse: true });
+    build("0", "4");
+    await waitFor(() => expect(cells()[1]!.getAttribute("aria-label")).toMatch(/reference$/));
+
+    fireEvent.click(screen.getByText("Next reference"));
+
+    expect(current()).toBe(0);
+  });
+
+  it("moves with the open when it happens", async () => {
+    const { onStatus } = showShell({ initial: "frames/f01.png" });
+    build("0", "4", { references: false });
+    await waitFor(() => expect(cells()).toHaveLength(5));
+
+    fireEvent.click(cells()[2]!);
+
+    await waitFor(() => expect(current()).toBe(2));
+    expect(onStatus).toHaveBeenLastCalledWith("f03.png (3/5)");
   });
 });
 
@@ -697,11 +789,10 @@ describe("trimming the timeline — RULE-077", () => {
   it("opens the nearest kept frame when the open one is cut (SP-19)", async () => {
     // Legacy selects the nearest kept frame after a trim (main_window.py:5290-5291). The web moved
     // the cursor and left the cut frame on screen.
-    const onOpen = vi.fn();
-    render(withSettings(<TimelinePanel images={FOLDER} onOpen={onOpen} openKey="frames/f02.png" />));
+    const { onOpen } = showShell({ initial: "frames/f02.png" });
     build("0", "4", { references: false });
     await waitFor(() => expect(cells()).toHaveLength(5));
-    boundsFrom(1, 2);
+    boundsFrom(1, 2); // opens f02, then f03, as the bounds are set from the frame on screen
     onOpen.mockClear();
 
     fireEvent.click(screen.getByText("Cut"));
@@ -712,11 +803,11 @@ describe("trimming the timeline — RULE-077", () => {
   });
 
   it("leaves an open frame that survives the trim alone, edits and all (SP-14)", async () => {
-    const onOpen = vi.fn();
-    render(withSettings(<TimelinePanel images={FOLDER} onOpen={onOpen} openKey="frames/f05.png" />));
+    const { onOpen } = showShell({ initial: "frames/f05.png" });
     build("0", "4", { references: false });
     await waitFor(() => expect(cells()).toHaveLength(5));
     boundsFrom(1, 2);
+    fireEvent.click(cells()[4]!); // f05 open again, outside the bounds
     onOpen.mockClear();
 
     fireEvent.click(screen.getByText("Cut"));
