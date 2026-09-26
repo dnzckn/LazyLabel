@@ -37,7 +37,7 @@ Paths: **L** = `legacy/lazylabel/src/lazylabel/`, **W** = `modernized/lazylabel-
 | CP-02 | Ctrl+H threw a ReferenceError with no timeline; before the Sequence tab first opened, Ctrl+H/Ctrl+P reached the browser's history and print dialogs. | L `ui/main_window.py:5040-5059, 4708-4716` | `sequence/TimelinePanel.tsx`, `shell/CentreTabs.tsx`, `hotkeys/HotkeyProvider.tsx` (`useHotkeyFallback`) | **done** `28c2f37` |
 | CP-03 | Ctrl+A selects rows hidden by Filter Class, so Ctrl+A then V (or M) deletes or merges classes the user cannot see. Undo recovers. | selects visible rows only: L `ui/managers/segment_table_manager.py:111-116`; the filter drops hidden rows from the selection: `:154-160` | `workspace/SegmentTable.tsx` | **done** 2026-09-25 |
 | CP-04 | A legacy `hotkeys.json` with a conflict imports, and then every settings save fails with 422. The editor does not say which pair conflicts. | n/a | settings-schema `src/importLegacy.ts:76-82`; api `src/app.ts` `putSettings`; `hotkeys/HotkeyEditor.tsx` | **done** 2026-09-25: the API refuses only a conflict a save ADDS, and the hotkey editor names any stored pair |
-| CP-05 | Capture-phase key listeners act behind a dialog: Esc, Enter or Ctrl+Z on a dialog button clears AI points or finishes or edits a polygon behind it. | modal dialogs block application shortcuts | `canvas/AiLayer.tsx:182`, `canvas/PolygonLayer.tsx:200`, `shell/Dialog.tsx:56-57` | reported |
+| CP-05 | Capture-phase key listeners act behind a dialog: Esc, Enter or Ctrl+Z on a dialog button clears AI points or finishes or edits a polygon behind it. | modal dialogs block application shortcuts | `canvas/AiLayer.tsx`, `canvas/PolygonLayer.tsx`, `hotkeys/keyEvent.ts` `isInModal` | **done** 2026-09-25 |
 
 ## P1
 

@@ -181,6 +181,24 @@ describe("taking things back", () => {
     expect(screen.queryByTestId("ai-positive-0")).toBeNull();
   });
 
+  it("keeps its points when Escape or Ctrl+Z is pressed inside a modal dialog", () => {
+    // The Escape that closed the hotkey dialog also cleared the points behind it: this listens in
+    // the capture phase, before the dialog can stop the key.
+    const dialog = document.createElement("div");
+    dialog.setAttribute("aria-modal", "true");
+    const close = document.createElement("button");
+    dialog.appendChild(close);
+    document.body.appendChild(dialog);
+
+    const { surface } = layer();
+    click(surface, 30, 40);
+    fireEvent.keyDown(close, { key: "Escape" });
+    fireEvent.keyDown(close, { key: "z", ctrlKey: true });
+
+    expect(screen.queryByTestId("ai-positive-0")).not.toBeNull();
+    dialog.remove();
+  });
+
   it("removes the BOX first on undo, because that is what Space would take", () => {
     const { surface } = layer();
     click(surface, 30, 40);

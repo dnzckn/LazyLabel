@@ -28,6 +28,7 @@ import {
 } from "../tools/ai.js";
 import { useSizing } from "./useSizing.js";
 import { useHotkey } from "../hotkeys/HotkeyProvider.jsx";
+import { isInModal } from "../hotkeys/keyEvent.js";
 
 export interface AiLayerProps {
   readonly width: number;
@@ -155,6 +156,7 @@ export function AiLayer({
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (isTypingTarget(event.target)) return;
+      if (isInModal(event.target)) return; // a key in a dialog is the dialog's, not the prompt's
 
       if (event.key === "Escape") {
         event.preventDefault();

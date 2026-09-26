@@ -34,6 +34,7 @@ import {
 } from "../tools/polygon.js";
 import { useSizing } from "./useSizing.js";
 import { useHotkey } from "../hotkeys/HotkeyProvider.jsx";
+import { isInModal } from "../hotkeys/keyEvent.js";
 
 export interface PolygonLayerProps {
   readonly width: number;
@@ -157,6 +158,7 @@ export function PolygonLayer({
 
     const onKeyDown = (event: KeyboardEvent) => {
       if (isTypingTarget(event.target)) return; // a Space in a class-name field is a space
+      if (isInModal(event.target)) return; // a key in a dialog is the dialog's, not the drawing's
 
       if (event.key === "Escape") {
         event.preventDefault();

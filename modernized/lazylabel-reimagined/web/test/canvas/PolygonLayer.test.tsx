@@ -215,6 +215,26 @@ describe("the keyboard", () => {
     expect(onComplete).not.toHaveBeenCalled();
   });
 
+  it("hears nothing pressed inside a modal dialog: Escape, Enter and Ctrl+Z there are the dialog's", () => {
+    // It listens in the capture phase, before the dialog can stop the key, so the Escape that closed
+    // the hotkey dialog also threw the polygon away, and Enter on its Close button finished it.
+    const dialog = document.createElement("div");
+    dialog.setAttribute("role", "dialog");
+    dialog.setAttribute("aria-modal", "true");
+    const close = document.createElement("button");
+    dialog.appendChild(close);
+    document.body.appendChild(dialog);
+
+    const { onComplete } = triangle();
+    fireEvent.keyDown(close, { key: "Escape" });
+    fireEvent.keyDown(close, { key: "Enter" });
+    fireEvent.keyDown(close, { key: "z", ctrlKey: true });
+
+    expect(vertexAt(2)).not.toBeNull();
+    expect(onComplete).not.toHaveBeenCalled();
+    dialog.remove();
+  });
+
   it("takes back one vertex on Ctrl+Z, rather than the whole polygon", () => {
     const { surface } = triangle();
     fireEvent.keyDown(document, { key: "z", ctrlKey: true });

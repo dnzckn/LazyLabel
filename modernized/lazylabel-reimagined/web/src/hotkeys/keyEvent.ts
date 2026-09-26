@@ -112,6 +112,19 @@ function baseKeyFor(event: Pick<KeyboardEvent, "code" | "key">): string | null {
 }
 
 /**
+ * Whether a keystroke was aimed at a modal dialog, which the page behind it must not hear.
+ *
+ * The dialog stops its keys from bubbling to the document, which keeps them from the dispatcher.
+ * A listener in the CAPTURE phase hears them first, though, so the AI and polygon layers -- which
+ * capture on purpose, to run before the dispatcher -- cleared their points on the Escape that closed
+ * the hotkey dialog, and finished a polygon on an Enter pressed on its Close button. Legacy's modal
+ * dialogs block the window's shortcuts.
+ */
+export function isInModal(target: EventTarget | null): boolean {
+  return target instanceof Element && target.closest('[aria-modal="true"]') !== null;
+}
+
+/**
  * Whether a keystroke should reach the hotkey system at all.
  *
  * It must not while the user is typing: pressing V in a class-name field should write a V, not
