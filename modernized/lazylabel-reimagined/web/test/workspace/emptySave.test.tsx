@@ -82,6 +82,14 @@ function mount({
     return { deleted: key === "frames/a.png" ? onDisk : [] };
   });
   const confirmNavigation = vi.fn((_summary: string) => answer);
+  const listImages = vi.fn(async () => ({
+    folder: "frames",
+    folders: [],
+    annotatedCount: 1,
+    unrecognized: 0,
+    columns: [{ format: "NPZ", suffix: ".npz" }],
+    images: [row("a.png"), row("b.png")],
+  }));
 
   const client = {
     getSettings: async () => defaultSettings(),
@@ -93,14 +101,7 @@ function mount({
       degraded: [],
       ai: { available: false, reason: "none", videoCapable: false, accelerator: "unknown" },
     }),
-    listImages: async () => ({
-      folder: "frames",
-      folders: [],
-      annotatedCount: 1,
-      unrecognized: 0,
-      columns: [{ format: "NPZ", suffix: ".npz" }],
-      images: [row("a.png"), row("b.png")],
-    }),
+    listImages,
     loadAnnotations: async (_project: string, key: string) => {
       events.push(`load ${key}`);
       return key === "frames/a.png" ? a : { kind: "none" };
@@ -126,7 +127,7 @@ function mount({
     </NotificationProvider>,
   );
 
-  return { events, saveAnnotations, deleteAnnotations, confirmNavigation };
+  return { events, saveAnnotations, deleteAnnotations, confirmNavigation, listImages };
 }
 
 const status = () => screen.getByLabelText("Status").textContent ?? "";
@@ -135,7 +136,7 @@ const enter = () => fireEvent.keyDown(document, { key: "Enter", code: "Enter" })
 
 /** Open a.png from the file list, with its save key live. */
 async function openA(): Promise<void> {
-  fireEvent.click(await screen.findByRole("button", { name: "a.png" }));
+  fireEvent.doubleClick(await screen.findByRole("button", { name: "a.png" }));
   await waitFor(() => expect(status()).toMatch(/frames\/a\.png/));
   await screen.findByRole("button", { name: /^Write \d+ format/ });
 }
@@ -162,6 +163,19 @@ describe("RULE-083: a save with no segments deletes, as legacy's does", () => {
     expect(saveAnnotations).not.toHaveBeenCalled();
     // As its files are now, so nothing is unsaved.
     await waitFor(() => expect(status()).toMatch(/frames\/a\.png — 0 segments, saved/));
+  });
+
+  it("reads the folder again after deleting, so the file list's format columns follow", async () => {
+    // The list re-reads after a save (saveCounts), but a deletion is not counted as a save there,
+    // since the timeline reads that as "saved" (SP-58). Without its own count the ticks went stale.
+    const { listImages } = mount();
+    await emptyA();
+    const before = listImages.mock.calls.length;
+
+    enter();
+
+    expect(await screen.findByText("Deleted: a_coco.json, a.npz, a.txt")).toBeTruthy();
+    await waitFor(() => expect(listImages.mock.calls.length).toBeGreaterThan(before));
   });
 
   it("says legacy's \"No segments to save.\" when there was nothing to delete", async () => {

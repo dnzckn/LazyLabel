@@ -369,6 +369,11 @@ export interface WorkspaceContextValue {
    * must not write the run's masks over it (SEQUENCE_PARITY.md SP-02).
    */
   readonly saveCounts: ReadonlyMap<string, number>;
+  /**
+   * How many times a save has deleted an image's files this session (SP-58). Not in `saveCounts`,
+   * which the timeline reads as "saved"; the file list reads both, to re-read its format columns.
+   */
+  readonly deletions: number;
   /** The active side's file revisions, which its next save is conditional on. */
   readonly revisions: Readonly<Record<string, string | null>>;
   /**
@@ -576,6 +581,7 @@ export function WorkspaceProvider({
 
   /** How many times each image has been saved this session by the ordinary save, by key. */
   const [saveCounts, setSaveCounts] = useState<ReadonlyMap<string, number>>(new Map());
+  const [deletions, setDeletions] = useState(0);
   const [linked, setLinked] = useState(false);
   // The split view says so while it is mounted (`multiView` on the context).
   const [multiView, setMultiView] = useState(false);
@@ -1352,6 +1358,7 @@ export function WorkspaceProvider({
       if (savedKey !== undefined) {
         setSaveCounts((previous) => new Map(previous).set(savedKey, (previous.get(savedKey) ?? 0) + 1));
       }
+      if (written?.deleted === true) setDeletions((count) => count + 1);
       updateSide(at, (current) => {
         // The revisions are the FILE's, so they move on even when an edit landed during the
         // round trip: the next write is conditional on what is on disk now. Only for the image
@@ -1382,6 +1389,7 @@ export function WorkspaceProvider({
     () => ({
       sides,
       saveCounts,
+      deletions,
       linked,
       setLinked,
       linkReport,
@@ -1470,6 +1478,7 @@ export function WorkspaceProvider({
       setZoom,
       sides,
       saveCounts,
+      deletions,
       zoom,
       setActiveTool,
       toggleTool,

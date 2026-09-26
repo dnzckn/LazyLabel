@@ -264,7 +264,7 @@ describe("in the Multi view, every move saves BOTH sides first (CP-67)", () => {
 
   /** a.png on the left, b.png chosen as its partner, and the right side made the one edited. */
   async function pairUp(): Promise<void> {
-    fireEvent.click(await screen.findByRole("button", { name: "a.png" }));
+    fireEvent.doubleClick(await screen.findByRole("button", { name: "a.png" }));
     await waitFor(() => expect(status()).toMatch(/a\.png/));
     fireEvent.click(screen.getByRole("tab", { name: "Multi" }));
     fireEvent.change(await screen.findByLabelText("Second image"), { target: { value: "frames/b.png" } });
@@ -384,7 +384,7 @@ describe("in the Multi view, every move saves BOTH sides first (CP-67)", () => {
 
   it("saves both when the partner is changed, the Multi view's own move", async () => {
     const { events, confirmNavigation } = mount({ a: TRIANGLE_AT_REV_A });
-    fireEvent.click(await screen.findByRole("button", { name: "a.png" }));
+    fireEvent.doubleClick(await screen.findByRole("button", { name: "a.png" }));
     await waitFor(() => expect(status()).toMatch(/a\.png/));
     fireEvent.click(screen.getByRole("tab", { name: "Multi" }));
     await screen.findByRole("button", { name: /^Write \d+ format/ });
