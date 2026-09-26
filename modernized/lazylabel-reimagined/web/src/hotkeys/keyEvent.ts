@@ -112,6 +112,44 @@ function baseKeyFor(event: Pick<KeyboardEvent, "code" | "key">): string | null {
 }
 
 /**
+ * Keys the browser keeps for itself. In a browser tab they close it, open another or switch tabs,
+ * and the page is never sent the keystroke, so a hotkey bound to one could never fire.
+ *
+ * WEB-ONLY. The desktop app can use these, and legacy's dialog binds all but the Tab ones, which
+ * it never binds.
+ *
+ * The list is Chromium's reserved commands (`BrowserCommandController::IsReservedCommandOrKey`) at
+ * their Windows and Linux keys:
+ * - close tab: Ctrl+W, Ctrl+F4;
+ * - close window: Ctrl+Shift+W, and Alt+F4, which the system takes first;
+ * - new tab: Ctrl+T; reopen closed tab: Ctrl+Shift+T;
+ * - new window: Ctrl+N; new incognito window: Ctrl+Shift+N;
+ * - next and previous tab: Ctrl+Tab, Ctrl+Shift+Tab, Ctrl+PageDown, Ctrl+PageUp.
+ *
+ * macOS's Cmd forms are not listed. This app records Cmd as Meta, and mapping Qt's Ctrl to Cmd is
+ * `CONTROL_PARITY.md` CP-66.
+ */
+const BROWSER_RESERVED: ReadonlySet<string> = new Set([
+  "Ctrl+W",
+  "Ctrl+F4",
+  "Ctrl+Shift+W",
+  "Alt+F4",
+  "Ctrl+T",
+  "Ctrl+Shift+T",
+  "Ctrl+N",
+  "Ctrl+Shift+N",
+  "Ctrl+Tab",
+  "Ctrl+Shift+Tab",
+  "Ctrl+PageDown",
+  "Ctrl+PageUp",
+]);
+
+/** Whether the browser keeps this key string from every page (see `BROWSER_RESERVED`). */
+export function browserReserves(key: string): boolean {
+  return BROWSER_RESERVED.has(key);
+}
+
+/**
  * Whether a keystroke was aimed at a modal dialog, which the page behind it must not hear.
  *
  * The dialog stops its keys from bubbling to the document, which keeps them from the dispatcher.

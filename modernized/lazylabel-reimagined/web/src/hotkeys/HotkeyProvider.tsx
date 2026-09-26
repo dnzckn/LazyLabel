@@ -49,15 +49,14 @@ export interface HotkeyContextValue {
   /**
    * The actions something is actually listening for, right now.
    *
-   * Exposed so the hotkey reference can stop promising keys that do nothing. FORTY of the
-   * forty-three in the schema had no handler, and the reference listed every one of them with its
-   * key as though pressing it would work -- which is a worse lie than a missing feature, because
-   * the user is told where to find it.
+   * It was exposed so the hotkey reference could stop promising keys that did nothing. At the time,
+   * FORTY of the forty-three actions in the schema had no handler, and the reference listed every
+   * one of them with its key as though pressing it would work.
    *
-   * Runtime truth rather than a hand-kept list, so it cannot go stale: an action wired up
-   * tomorrow stops being marked the moment it is. It is genuinely live state -- a hotkey
-   * registered only while an image is open is listed as unavailable when none is -- and that is
-   * the honest answer to "will this key do something if I press it now".
+   * Every keyboard action has a handler now, and the editor has legacy's columns, with no "Works"
+   * column. The wiring tests still ask this, because it is runtime truth rather than a hand-kept
+   * list. It is genuinely live state: a hotkey registered only while an image is open reads false
+   * when none is.
    */
   readonly isLive: (action: string) => boolean;
 }

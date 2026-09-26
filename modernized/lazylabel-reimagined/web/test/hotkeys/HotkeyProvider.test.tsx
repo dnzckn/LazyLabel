@@ -111,8 +111,8 @@ describe("HotkeyProvider", () => {
   });
 
   it("does not count a fallback as the action being live", () => {
-    // The hotkey reference asks "will this do something if I press it now"; a fallback only says
-    // why it will not.
+    // `isLive` answers "will this do something if I press it now"; a fallback only says why it
+    // will not.
     let live: boolean | undefined;
     function Probe(): ReactNode {
       useHotkeyFallback("propagate", () => undefined);

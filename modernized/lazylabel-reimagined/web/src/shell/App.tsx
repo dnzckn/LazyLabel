@@ -321,10 +321,12 @@ export function App({ client }: { readonly client: ApiClient }): ReactNode {
               </Dialog>
             )}
             {/* In a dialog, because the editor needs the width legacy's gave it and this column is
-                a quarter of that. It renders into document.body, outside the inert page. */}
+                a quarter of that. It renders into document.body, outside the inert page. Named as
+                legacy's window is (hotkey_dialog.py:149); the editor draws the Close, on one row
+                with Reset to Defaults as legacy's does. */}
             {showHotkeys && (
-              <Dialog title="Hotkeys" onClose={() => setShowHotkeys(false)}>
-                <HotkeyEditor />
+              <Dialog title="Hotkey Configuration" onClose={() => setShowHotkeys(false)} closeButton={false}>
+                <HotkeyEditor onClose={() => setShowHotkeys(false)} />
               </Dialog>
             )}
           </>

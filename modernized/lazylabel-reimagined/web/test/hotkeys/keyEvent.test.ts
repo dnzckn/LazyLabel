@@ -7,7 +7,9 @@
 
 import { describe, expect, it } from "vitest";
 
-import { isTypingTarget, keyStringFor } from "../../src/hotkeys/keyEvent.js";
+import { DEFAULT_HOTKEYS } from "@lazylabel/settings-schema";
+
+import { browserReserves, isTypingTarget, keyStringFor } from "../../src/hotkeys/keyEvent.js";
 
 function press(
   code: string,
@@ -92,6 +94,50 @@ describe("keyStringFor", () => {
   it("names function keys", () => {
     expect(press("F5", "F5")).toBe("F5");
     expect(press("F12", "F12", { ctrlKey: true })).toBe("Ctrl+F12");
+  });
+});
+
+describe("browserReserves", () => {
+  it("names the keys a browser tab never sends its page", () => {
+    // Close, new and reopen tab; new and incognito window; close window; next and previous tab.
+    for (const key of [
+      "Ctrl+W",
+      "Ctrl+F4",
+      "Ctrl+Shift+W",
+      "Alt+F4",
+      "Ctrl+T",
+      "Ctrl+Shift+T",
+      "Ctrl+N",
+      "Ctrl+Shift+N",
+      "Ctrl+Tab",
+      "Ctrl+Shift+Tab",
+      "Ctrl+PageDown",
+      "Ctrl+PageUp",
+    ]) {
+      expect(browserReserves(key), key).toBe(true);
+    }
+  });
+
+  it("recognises them as a keystroke spells them", () => {
+    // The check reads the capture's own vocabulary, so the two cannot disagree about Ctrl+W.
+    expect(browserReserves(press("KeyW", "w", { ctrlKey: true })!)).toBe(true);
+    expect(browserReserves(press("Tab", "Tab", { ctrlKey: true, shiftKey: true })!)).toBe(true);
+  });
+
+  it("leaves every default binding alone, the sequence's Ctrl+H and Ctrl+P included", () => {
+    // The browser's history and print keys reach the page, which is why the shell keeps them from
+    // the browser (`CONTROL_PARITY.md` CP-02). Reserved means the page is never told at all.
+    for (const [action, binding] of Object.entries(DEFAULT_HOTKEYS)) {
+      for (const key of [binding.primary, binding.secondary]) {
+        if (key !== null) expect(browserReserves(key), `${action}: ${key}`).toBe(false);
+      }
+    }
+  });
+
+  it("is not a letter's business without the modifier", () => {
+    expect(browserReserves("W")).toBe(false);
+    expect(browserReserves("Shift+T")).toBe(false);
+    expect(browserReserves("Tab")).toBe(false);
   });
 });
 

@@ -7,24 +7,38 @@
  * invisible; a hotkey that does nothing is a promise made in writing and broken on the first
  * press.
  *
- * Two things are checked here. The tool keys work, which is the slice that was wired. And the
- * REFERENCE tells the truth about the rest — from the dispatcher's own registrations rather than
- * a list someone maintains, so it cannot drift.
+ * Three things are checked here. The tool keys work, which is the slice that was wired first. The
+ * dispatcher's own registrations say which actions are listened for in which state of the app. And
+ * every action the hotkey editor lists has a handler somewhere: the editor shows legacy's columns
+ * now, with no "Works" column, so listing an action nothing handles would be the old lie again.
  */
 
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { readFile, readdir } from "node:fs/promises";
+import * as path from "node:path";
+import { fileURLToPath } from "node:url";
+
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import type { ReactNode } from "react";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { defaultSettings } from "@lazylabel/settings-schema";
+import { DEFAULT_HOTKEYS, defaultSettings } from "@lazylabel/settings-schema";
 
 import type { ApiClient } from "../../src/api/client.js";
 import { App } from "../../src/shell/App.jsx";
-import { HotkeyProvider } from "../../src/hotkeys/HotkeyProvider.jsx";
+import { HotkeyProvider, useHotkeyContext } from "../../src/hotkeys/HotkeyProvider.jsx";
 import { NotificationProvider } from "../../src/notifications/NotificationProvider.jsx";
 import { SettingsProvider } from "../../src/settings/SettingsProvider.jsx";
 import { WorkspaceProvider } from "../../src/workspace/WorkspaceProvider.jsx";
 
 afterEach(cleanup);
+
+/** The dispatcher's answer to "is anything listening for this action right now". */
+let listening: (action: string) => boolean = () => false;
+
+function Listening(): ReactNode {
+  listening = useHotkeyContext().isLive;
+  return null;
+}
 
 function mount() {
   const client = {
@@ -55,6 +69,7 @@ function mount() {
     <NotificationProvider>
       <SettingsProvider client={client}>
         <HotkeyProvider bindings={defaultSettings().hotkeys}>
+          <Listening />
           <WorkspaceProvider client={client} projectId="default">
             <App client={client} />
           </WorkspaceProvider>
@@ -141,121 +156,83 @@ describe("the tool keys", () => {
   });
 });
 
-/**
- * The row for one action, matched on its header cell exactly.
- *
- * By cell rather than by accessible name, which folds in the key and the state -- and `save_output`
- * is a prefix of `save_output_alt`, so a substring match finds two rows.
- */
-function rowFor(table: HTMLElement, action: string): HTMLElement {
-  const row = within(table)
-    .getAllByRole("row")
-    .find((candidate) => candidate.querySelector("th")?.textContent === action);
-  expect(row, `no row for ${action}`).toBeTruthy();
-  return row!;
-}
-
-describe("the hotkey reference", () => {
-  async function openReference(): Promise<HTMLElement> {
+describe("which actions the dispatcher is listening for", () => {
+  /** Mounted and settled: the Mode Controls card is up and its keys are registered. */
+  async function settled(): Promise<void> {
     mount();
-    await waitFor(() => expect(screen.getByRole("button", { name: "Show hotkeys" })).toBeTruthy());
-    fireEvent.click(screen.getByRole("button", { name: "Show hotkeys" }));
-    // The dialog's table: the page has others, the class table among them even with no image open,
-    // as legacy's does.
-    return within(await screen.findByRole("dialog")).getByRole("table");
+    await waitFor(() => expect(screen.getByText("Mode Controls")).toBeTruthy());
+    await waitFor(() => expect(listening("polygon_mode")).toBe(true));
   }
 
-  it("says which keys do something and which do not", async () => {
-    const table = await openReference();
+  it("hears the shell's keys from the first render", async () => {
+    // Next and previous image are registered by the shell, and so are zoom and fit. All three of
+    // the last were once listed with a key and answered by nothing, and `fit_view` was worse: it
+    // was WIRED, to toggling the hotkey table.
+    await settled();
 
-    const rows = within(table).getAllByRole("row").slice(1);
-    const works = rows.filter((row) => row.textContent?.includes("yes"));
-    const pending = rows.filter((row) => row.textContent?.includes("not yet"));
-
-    expect(works.length).toBeGreaterThan(0);
-    expect(pending.length).toBeGreaterThan(0);
-    expect(works.length + pending.length).toBe(rows.length);
-  });
-
-  it("marks a tool key as working, now that it is", async () => {
-    const table = await openReference();
-
-    const row = within(table).getByRole("row", { name: /polygon_mode/ });
-
-    expect(row.textContent).toContain("yes");
-  });
-
-  it("marks the shell's new keys as working", async () => {
-    // Next and previous image are registered by the shell, so they are live from the first render.
-    const table = await openReference();
-
-    for (const action of ["load_next_image", "load_previous_image"]) {
-      const row = within(table).getByRole("row", { name: new RegExp(action) });
-      expect(row.textContent, action).toContain("yes");
+    for (const action of ["load_next_image", "load_previous_image", "zoom_in", "zoom_out", "fit_view"]) {
+      expect(listening(action), action).toBe(true);
     }
   });
 
-  it("reports a key as inactive while the component that owns it is not mounted", async () => {
-    // The save keys are registered by the OPENED IMAGE, and this fixture has none. Reporting them
-    // as working would be the same lie in miniature: a key listed as live that nothing is
-    // listening for. The table answers "will this do something if I press it now", which is the
-    // question a user is actually asking.
-    const table = await openReference();
-
-    for (const action of ["save_output", "save_output_alt"]) {
-      expect(rowFor(table, action).textContent, action).toContain("not yet");
-    }
-  });
-
-  it("reports the segment table's keys as working, because that panel is always mounted", async () => {
+  it("hears the segment table's keys, because that panel is always mounted", async () => {
     // Their handlers register above the table's early return, so they are listening even with
-    // nothing on the image -- where each does nothing, exactly as its button sits disabled. "Live"
-    // here means a handler exists, not that every press will have an effect; the alternative is
-    // duplicating each action's enablement into the reference, where it would drift.
-    const table = await openReference();
+    // nothing on the image -- where each does nothing, exactly as its button sits disabled.
+    await settled();
 
     for (const action of ["merge_segments", "delete_segments", "select_all", "escape"]) {
-      expect(rowFor(table, action).textContent, action).toContain("yes");
+      expect(listening(action), action).toBe(true);
     }
   });
 
-  it("reports propagate as inactive while its control is not mounted", async () => {
-    // Propagation IS built now, and this still says "not yet" -- correctly. The key is registered
-    // by the propagation control, which appears only once a timeline exists and this deployment
-    // has an inference client; this fixture has neither. The table answers "will this do something
-    // if I press it now", which is the question a user is actually asking, and the alternative is
-    // a key listed as live that nothing is listening for.
-    const table = await openReference();
+  it("does not hear a key while the component that owns it is not mounted", async () => {
+    // The save keys are registered by the OPENED IMAGE, and this fixture has none. Propagate is
+    // registered by the propagation control, which appears only once a timeline exists and the
+    // deployment has an inference client; this fixture has neither.
+    await settled();
 
-    const row = within(table).getByRole("row", { name: /propagate/ });
-
-    expect(row.textContent).toContain("not yet");
-  });
-
-  it("marks zoom and fit as working, now that they are", async () => {
-    // All three were listed with a key and answered by nothing. `fit_view` was worse than the
-    // other two: it was WIRED, to toggling this very table, which is scaffolding that became a lie
-    // the moment the table started reporting it live.
-    const table = await openReference();
-
-    for (const action of ["zoom_in", "zoom_out", "fit_view"]) {
-      expect(rowFor(table, action).textContent, action).toContain("yes");
+    for (const action of ["save_output", "save_output_alt", "propagate"]) {
+      expect(listening(action), action).toBe(false);
     }
   });
 
-  it("still reports the MOUSE bindings as not yet, because they are not keys", async () => {
-    // Three of the schema's actions are mouse bindings. No keyboard dispatcher will ever answer
-    // them, and reporting them as live would be the same lie in a different direction.
-    const table = await openReference();
+  it("never hears the MOUSE bindings, because they are not keys", async () => {
+    await settled();
 
     for (const action of ["left_click", "right_click", "mouse_drag"]) {
-      expect(rowFor(table, action).textContent, action).toContain("not yet");
+      expect(listening(action), action).toBe(false);
     }
   });
+});
 
-  it("counts them in the summary, so the scale is visible without reading every row", async () => {
-    await openReference();
+const SRC = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "src");
 
-    expect(screen.getByText(/\d+ of \d+ do something today/)).toBeTruthy();
+async function sourceText(dir: string): Promise<string> {
+  let text = "";
+  for (const entry of await readdir(dir, { withFileTypes: true })) {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) text += await sourceText(full);
+    else if (/\.(ts|tsx)$/.test(entry.name)) text += await readFile(full, "utf-8");
+  }
+  return text;
+}
+
+describe("every action the hotkey editor lists", () => {
+  it("has a handler somewhere in the app", async () => {
+    // The editor lists every action with its key, as legacy's dialog does, and no longer marks the
+    // ones nothing handles. So nothing it lists may be unhandled. A fallback does not count: it
+    // says why nothing happened. Comments are stripped, so a commented-out call is not a handler;
+    // string literals are matched first and kept, as the reach guard does, so a comment marker
+    // inside a string cannot swallow the code after it.
+    const code = (await sourceText(SRC)).replace(
+      /("(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\\n])*'|`(?:\\.|[^`\\])*`)|\/\*[\s\S]*?\*\/|\/\/[^\n]*/g,
+      (_whole, literal: string | undefined) => literal ?? " ",
+    );
+    const keyboard = Object.entries(DEFAULT_HOTKEYS)
+      .filter(([, action]) => !action.mouseRelated)
+      .map(([id]) => id);
+
+    expect(keyboard.length).toBeGreaterThan(0);
+    expect(keyboard.filter((id) => !new RegExp(`\\buseHotkey\\(\\s*"${id}"`).test(code))).toEqual([]);
   });
 });

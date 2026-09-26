@@ -6,7 +6,7 @@
  * block a user who could be working or let one label into a void.
  */
 
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { defaultSettings } from "@lazylabel/settings-schema";
@@ -209,7 +209,7 @@ describe("the application shell", () => {
     expect(screen.getByLabelText("Dataset").textContent).toMatch(/Segments/);
   });
 
-  it("shows the hotkey reference from its button", async () => {
+  it("shows the hotkey editor from its button", async () => {
     // It used to have a KEY, and that key was `fit_view`. The binding was honest scaffolding when
     // the dispatcher was new -- the first wire through it, proving the path end to end -- and it
     // became a lie once the reference table began reporting `fit_view` as live. A key listed under
@@ -220,8 +220,11 @@ describe("the application shell", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Show hotkeys" }));
 
-    await waitFor(() => expect(screen.getByRole("heading", { name: "Hotkeys" })).toBeTruthy());
-    expect(screen.getByText("merge_segments")).toBeTruthy();
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Hotkey Configuration" })).toBeTruthy());
+    // Legacy's dialog opens on its first tab, Modes, whose first row is the AI tool's.
+    const dialog = within(screen.getByRole("dialog", { name: "Hotkey Configuration" }));
+    expect(dialog.getByRole("tab", { selected: true }).textContent).toBe("Modes");
+    expect(dialog.getByRole("rowheader", { name: "Sam Mode" })).toBeTruthy();
   });
 
   it("does NOT open the reference on the fit_view key", async () => {
@@ -234,7 +237,7 @@ describe("the application shell", () => {
     );
 
     await new Promise((resolve) => setTimeout(resolve, 50));
-    expect(screen.queryByRole("heading", { name: "Hotkeys" })).toBeNull();
+    expect(screen.queryByRole("heading", { name: "Hotkey Configuration" })).toBeNull();
   });
 });
 

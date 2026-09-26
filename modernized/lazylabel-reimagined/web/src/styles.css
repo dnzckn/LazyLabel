@@ -1735,15 +1735,6 @@ fieldset input[type="text"] {
   font-variant-numeric: tabular-nums;
 }
 
-/* A hotkey the dispatcher has no listener for. Muted rather than hidden: the binding is real and
-   a user's remapping of it survives, so the row belongs in the table -- what it must not do is
-   look like a key that works. */
-.hotkeys__pending {
-  color: var(--muted);
-}
-
-/* A key field in the editor: sized to a key name rather than to a sentence, and marked as the thing
-   to click. It is a read-only text input so the dispatcher ignores the keystroke it captures. */
 /* The modal the hotkey editor opens in. Wide enough for the table legacy's 800-pixel dialog held,
    and never taller than the window: the table scrolls inside it, the page behind does not. */
 .dialog-backdrop {
@@ -1778,9 +1769,78 @@ fieldset input[type="text"] {
   margin-top: 1rem;
 }
 
+/* ---- Legacy's hotkey dialog (hotkey_dialog.py:149-281): a centred bold 16pt title, one line of
+   instructions, a tab per category over a striped four-column table, and a row of buttons. */
+
+/* 800 by 600 (hotkey_dialog.py:151), and the same size whichever tab is showing: the tabs fill the
+   space and the table scrolls inside them, so changing tab never resizes the dialog under the
+   pointer. */
+.dialog:has(> .hotkeys-editor) {
+  width: min(800px, 100%);
+  height: min(600px, calc(100vh - 2rem));
+  display: flex;
+  flex-direction: column;
+}
+
+.hotkeys-editor {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.hotkeys-editor > .tabs {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.hotkeys-editor .tabs__panel {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+.hotkeys-editor .tabs__panel:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.hotkeys__title {
+  margin: 0;
+  text-align: center;
+  font-size: 16pt;
+  font-weight: bold;
+}
+
+.hotkeys__instructions {
+  margin: 10px;
+}
+
+/* setAlternatingRowColors (230). */
+.hotkeys tbody tr:nth-child(even) {
+  background: var(--stripe);
+}
+
+/* Action and the two keys fit their contents and Description takes the rest (224-228). */
+.hotkeys__fit {
+  width: 1%;
+  white-space: nowrap;
+}
+
+/* A mouse row's name and description on a lighter ground (273-278). Legacy paints #f8f8f8, which
+   in its dark theme sat light-on-light; the theme's ground is that colour in light and a quiet lift
+   in dark. */
+.hotkeys__mouse > th,
+.hotkeys__mouse > td:nth-child(2) {
+  background: var(--ground);
+}
+
 /* The field and its Clear stay on one line; wrapping put every Clear under its field and doubled
-   the height of all forty-odd rows. */
+   the height of every row. */
 .hotkeys__slot {
+  width: 1%;
   white-space: nowrap;
 }
 
@@ -1789,22 +1849,40 @@ fieldset input[type="text"] {
   padding: 0 0.35rem;
 }
 
+/* A key field: a read-only text input, so the dispatcher ignores the keystroke it captures. It
+   draws as every line edit does, sized as legacy's is and marked as the thing to click. */
 .hotkeys__key {
-  width: 7rem;
+  width: 9rem;
   margin-right: 0.25rem;
-  font: inherit;
   font-variant-numeric: tabular-nums;
-  color: var(--ink);
-  background: var(--ground);
-  border: 1px solid var(--rule);
-  border-radius: 3px;
-  padding: 0.1rem 0.3rem;
   cursor: pointer;
 }
 
-.hotkeys__key:focus {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
+.hotkeys__key::placeholder {
+  color: var(--faint);
+}
+
+.hotkeys__key:disabled {
+  color: var(--muted);
+  cursor: default;
+}
+
+/* Waiting for a key: legacy's yellow, the same in both themes (52). Two classes, to outrank the
+   line-edit rule's `input[type="text"]`. */
+.hotkeys__key.hotkeys__key--capturing {
+  background: #ffeb3b;
+  color: black;
+}
+
+/* Reset to Defaults, then a stretch, then Close (182-206). */
+.hotkeys__buttons {
+  display: flex;
+  gap: 6px;
+  margin-top: 1rem;
+}
+
+.hotkeys__close {
+  margin-left: auto;
 }
 
 /* The crop preview: what is being REMOVED, dimmed, rather than an outline around what is kept.

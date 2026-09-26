@@ -78,9 +78,15 @@ export function TabList({ label, tabs, current, onChoose, tabId, panelId }: TabL
 export interface TabsProps {
   readonly label: string;
   readonly tabs: readonly (TabSpec & { readonly content: ReactNode })[];
+  /**
+   * Put each panel in the Tab order. The tab pattern asks for this when a panel's first content
+   * cannot take focus, as with a table under its header row, or a panel with nothing focusable in
+   * it at all, like the hotkey editor's Mouse tab.
+   */
+  readonly focusablePanels?: boolean;
 }
 
-export function Tabs({ label, tabs }: TabsProps): ReactNode {
+export function Tabs({ label, tabs, focusablePanels = false }: TabsProps): ReactNode {
   const [current, setCurrent] = useState(tabs[0]?.id ?? "");
   const base = useId();
   const tabId = (id: string) => `${base}-tab-${id}`;
@@ -103,6 +109,7 @@ export function Tabs({ label, tabs }: TabsProps): ReactNode {
           id={panelId(tab.id)}
           aria-labelledby={tabId(tab.id)}
           hidden={current !== tab.id}
+          {...(focusablePanels ? { tabIndex: 0 } : {})}
           className="tabs__panel"
         >
           {tab.content}

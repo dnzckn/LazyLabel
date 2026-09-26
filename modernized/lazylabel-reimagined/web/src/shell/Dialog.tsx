@@ -26,9 +26,14 @@ export interface DialogProps {
   readonly title: string;
   readonly onClose: () => void;
   readonly children: ReactNode;
+  /**
+   * False when the content draws its own Close in a button row of its own. Legacy's hotkey dialog
+   * has Reset to Defaults and Close on one row (`hotkey_dialog.py:182-206`). Escape still closes.
+   */
+  readonly closeButton?: boolean;
 }
 
-export function Dialog({ title, onClose, children }: DialogProps): ReactNode {
+export function Dialog({ title, onClose, children, closeButton = true }: DialogProps): ReactNode {
   const box = useRef<HTMLDivElement>(null);
 
   // Read during the FIRST RENDER, not in the effect. The page goes inert in the same commit that
@@ -59,11 +64,13 @@ export function Dialog({ title, onClose, children }: DialogProps): ReactNode {
         }}
       >
         {children}
-        <div className="dialog__actions">
-          <button type="button" onClick={onClose}>
-            Close
-          </button>
-        </div>
+        {closeButton && (
+          <div className="dialog__actions">
+            <button type="button" onClick={onClose}>
+              Close
+            </button>
+          </div>
+        )}
       </div>
     </div>,
     document.body,

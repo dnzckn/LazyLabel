@@ -25,7 +25,10 @@ function Listener({ action, onFire }: { readonly action: string; readonly onFire
   return null;
 }
 
-/** A page with a button that opens the hotkey editor in the dialog, as the settings panel does. */
+/**
+ * A page with a button that opens the hotkey editor in the dialog, composed as `App` composes it:
+ * the editor draws the Close, on one row with Reset to Defaults.
+ */
 function Page({ onFire }: { readonly onFire: () => void }): ReactNode {
   const [open, setOpen] = useState(false);
   return (
@@ -37,8 +40,8 @@ function Page({ onFire }: { readonly onFire: () => void }): ReactNode {
       </main>
       <Listener action="fit_view" onFire={onFire} />
       {open && (
-        <Dialog title="Hotkeys" onClose={() => setOpen(false)}>
-          <HotkeyEditor />
+        <Dialog title="Hotkey Configuration" onClose={() => setOpen(false)} closeButton={false}>
+          <HotkeyEditor onClose={() => setOpen(false)} />
         </Dialog>
       )}
     </>
@@ -63,12 +66,25 @@ function mount() {
 }
 
 describe("the hotkey dialog", () => {
-  it("opens as a modal named for what it holds", async () => {
+  it("opens as a modal named as legacy's window is", async () => {
     mount();
 
-    const dialog = await screen.findByRole("dialog", { name: "Hotkeys" });
+    // `hotkey_dialog.py:149`.
+    const dialog = await screen.findByRole("dialog", { name: "Hotkey Configuration" });
 
     expect(dialog.getAttribute("aria-modal")).toBe("true");
+  });
+
+  it("draws one Close, on the row with Reset to Defaults", async () => {
+    // Legacy's buttons share one row (`hotkey_dialog.py:182-206`). The dialog's own Close would
+    // have been a second one, on a row of its own below.
+    mount();
+    await screen.findByRole("dialog");
+
+    const closes = screen.getAllByRole("button", { name: "Close" });
+
+    expect(closes).toHaveLength(1);
+    expect(closes[0]!.parentElement!.textContent).toContain("Reset to Defaults");
   });
 
   it("takes focus when it opens", async () => {
@@ -104,7 +120,8 @@ describe("the hotkey dialog", () => {
   it("does NOT close on the Escape that cancels a key capture", async () => {
     // Cancelling one key should not throw away the whole dialog.
     mount();
-    const field = await screen.findByLabelText("Key for undo");
+    fireEvent.click(await screen.findByRole("tab", { name: "Actions" }));
+    const field = screen.getByLabelText("Primary key for Undo");
 
     fireEvent.click(field);
     fireEvent.keyDown(field, { key: "Escape", code: "Escape" });
