@@ -61,6 +61,11 @@ export function AiLayer({
   const [prompt, setPrompt] = useState<AiPrompt>(EMPTY_PROMPT);
   const [from, setFrom] = useState<ImagePoint | null>(null);
   const [to, setTo] = useState<ImagePoint | null>(null);
+  /**
+   * The prompts Ctrl+Z stepped back from, newest last, for redo to return to. Emptied by anything
+   * that makes them stale: a new point or box, a clear, an accept.
+   */
+  const undone = useRef<AiPrompt[]>([]);
 
   const image = { width, height };
 
@@ -115,6 +120,7 @@ export function AiLayer({
         return;
       }
 
+      undone.current = [];
       setPrompt(outcome.prompt);
       onPrompt(outcome.prompt);
     },
@@ -129,7 +135,10 @@ export function AiLayer({
    * this app answers to and a user pressing it expects the draft to go. Two ways into one action
    * is not a conflict; a key in the reference that does nothing is.
    */
-  useHotkey("clear_points", () => setPrompt(clear()));
+  useHotkey("clear_points", () => {
+    undone.current = [];
+    setPrompt(clear());
+  });
 
   /*
    * ACCEPTING THE PREVIEW, through the dispatcher rather than a raw Space listener -- the same
@@ -146,6 +155,7 @@ export function AiLayer({
         return;
       }
       onAccept(erase);
+      undone.current = [];
       setPrompt(clear());
     },
     [onAccept, onRefused, prompt],
@@ -161,6 +171,7 @@ export function AiLayer({
 
       if (event.key === "Escape") {
         event.preventDefault();
+        undone.current = [];
         setPrompt(clear());
         return;
       }
@@ -177,7 +188,24 @@ export function AiLayer({
         return;
       }
 
-      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "z") {
+      const modifier = event.ctrlKey || event.metaKey;
+      const key = event.key.toLowerCase();
+
+      // REDO puts back what undo took, as legacy's redo re-adds a point (undo_redo_manager.py:
+      // 108-109). Ctrl+Shift+Z took a point away instead while the undo check below ignored Shift
+      // (`CONTROL_PARITY.md` CP-21). With nothing of this prompt's to put back, it is the app's.
+      if (modifier && ((key === "z" && event.shiftKey) || key === "y")) {
+        const back = undone.current[undone.current.length - 1];
+        if (back === undefined) return;
+        event.preventDefault();
+        event.stopPropagation();
+        undone.current = undone.current.slice(0, -1);
+        setPrompt(back);
+        onPrompt(back);
+        return;
+      }
+
+      if (modifier && key === "z") {
         // With nothing placed there is nothing here to take back, and Ctrl+Z is the app's Undo:
         // left alone, it reaches the history.
         if (pending(prompt) === "nothing") return;
@@ -187,6 +215,7 @@ export function AiLayer({
         // annotation as well (found 2026-09-23, the same race as the polygon layer's).
         event.preventDefault();
         event.stopPropagation();
+        undone.current = [...undone.current, prompt];
         const back = undoLast(prompt);
         setPrompt(back);
         if (pending(back) !== "nothing") onPrompt(back);

@@ -64,6 +64,12 @@ export function PolygonLayer({
   const surfaceRef = useRef<SVGSVGElement>(null);
   const [draft, setDraft] = useState<PolygonDraft>(EMPTY_DRAFT);
   const [pointer, setPointer] = useState<ImagePoint | null>(null);
+  /**
+   * Vertices Ctrl+Z took back, newest last, for Ctrl+Y or Ctrl+Shift+Z to put back, as legacy's
+   * redo re-adds a polygon point (undo_redo_manager.py:110-111). Emptied by anything that makes
+   * them stale: a new vertex, or the draft ending.
+   */
+  const undone = useRef<ImagePoint[]>([]);
 
   const image = { width, height };
 
@@ -76,6 +82,7 @@ export function PolygonLayer({
 
   const complete = useCallback(
     (vertices: readonly ImagePoint[], erase: boolean) => {
+      undone.current = [];
       setDraft(cancel());
       setPointer(null);
       if (erase) onErase?.(vertices);
@@ -117,6 +124,7 @@ export function PolygonLayer({
   // Legacy's C clears the polygon's points too, not only the AI tool's
   // (keyboard_event_manager.py:300-304; `CONTROL_PARITY.md` CP-20).
   useHotkey("clear_points", () => {
+    undone.current = [];
     setDraft(cancel());
     setPointer(null);
   });
@@ -140,7 +148,10 @@ export function PolygonLayer({
         shift: event.shiftKey,
       });
 
-      if (outcome.kind === "vertex") setDraft(outcome.draft);
+      if (outcome.kind === "vertex") {
+        undone.current = [];
+        setDraft(outcome.draft);
+      }
       else if (outcome.kind === "close") complete(outcome.vertices, false);
       else if (outcome.kind === "erase") complete(outcome.vertices, true);
     },
@@ -160,14 +171,17 @@ export function PolygonLayer({
   // Keys are bound on the document rather than the SVG: the surface would have to be focused to
   // receive them, and nothing about clicking on an image says "now press Space here".
   useEffect(() => {
-    if (draft.vertices.length === 0) return;
+    // Listening while a vertex can still be put back, too: undoing the last one empties the draft.
+    if (draft.vertices.length === 0 && undone.current.length === 0) return;
+    const drawing = draft.vertices.length > 0;
 
     const onKeyDown = (event: KeyboardEvent) => {
       if (isTypingTarget(event.target)) return; // a Space in a class-name field is a space
       if (isInModal(event.target)) return; // a key in a dialog is the dialog's, not the drawing's
 
-      if (event.key === "Escape") {
+      if (event.key === "Escape" && drawing) {
         event.preventDefault();
+        undone.current = [];
         setDraft(cancel());
         setPointer(null);
         return;
@@ -184,7 +198,7 @@ export function PolygonLayer({
        * listens in the CAPTURE phase, so it runs before the dispatcher's bubbling one, and
        * `flushSync` commits the shape to the store before the save reads it.
        */
-      if (event.key === "Enter") {
+      if (event.key === "Enter" && drawing) {
         event.preventDefault();
         const outcome = finish(draft, { shift: event.shiftKey });
         if (outcome.kind === "close") flushSync(() => complete(outcome.vertices, false));
@@ -197,10 +211,23 @@ export function PolygonLayer({
       // which has nothing about this polygon in it until the polygon exists. STOPPED here: the
       // dispatcher's Undo also hears Ctrl+Z, and without this it took back the previous
       // annotation as well as the vertex.
-      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "z") {
+      //
+      // Not with Shift: Ctrl+Shift+Z is REDO, and it removed a vertex too while the check ignored
+      // the modifier (`CONTROL_PARITY.md` CP-21). Redo puts back what undo took, and with nothing
+      // of this draft's to put back it is left to the app's redo.
+      const modifier = event.ctrlKey || event.metaKey;
+      const key = event.key.toLowerCase();
+      if (modifier && key === "z" && !event.shiftKey && drawing) {
         event.preventDefault();
         event.stopPropagation();
-        setDraft((current) => undoVertex(current));
+        undone.current = [...undone.current, draft.vertices[draft.vertices.length - 1]!];
+        setDraft(undoVertex(draft));
+      } else if (modifier && ((key === "z" && event.shiftKey) || key === "y") && undone.current.length > 0) {
+        event.preventDefault();
+        event.stopPropagation();
+        const back = undone.current[undone.current.length - 1]!;
+        undone.current = undone.current.slice(0, -1);
+        setDraft({ vertices: [...draft.vertices, back] });
       }
     };
 

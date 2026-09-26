@@ -195,6 +195,20 @@ describe("Enter, legacy's accept-then-save", () => {
 });
 
 describe("taking things back", () => {
+  it("puts an undone point back on Ctrl+Shift+Z, as legacy's redo does, rather than taking another", () => {
+    // Ctrl+Shift+Z removed a point while the undo check ignored Shift (CONTROL_PARITY.md CP-21).
+    const { surface } = layer();
+    click(surface, 30, 40);
+    click(surface, 60, 40);
+    fireEvent.keyDown(document, { key: "z", ctrlKey: true });
+    expect(screen.queryByTestId("ai-positive-1")).toBeNull();
+
+    fireEvent.keyDown(document, { key: "Z", ctrlKey: true, shiftKey: true });
+
+    expect(screen.queryByTestId("ai-positive-0")).not.toBeNull();
+    expect(screen.queryByTestId("ai-positive-1")).not.toBeNull();
+  });
+
   it("discards everything on Escape", () => {
     const { surface } = layer();
     click(surface, 30, 40);

@@ -244,6 +244,31 @@ describe("the keyboard", () => {
     dialog.remove();
   });
 
+  it("puts a vertex back on Ctrl+Shift+Z or Ctrl+Y, as legacy's redo re-adds a point", () => {
+    // Ctrl+Shift+Z took a vertex AWAY while the undo check ignored Shift (CONTROL_PARITY.md CP-21).
+    triangle();
+    fireEvent.keyDown(document, { key: "z", ctrlKey: true });
+    fireEvent.keyDown(document, { key: "z", ctrlKey: true });
+    expect(vertexAt(1)).toBeNull();
+
+    fireEvent.keyDown(document, { key: "Z", ctrlKey: true, shiftKey: true });
+    expect(vertexAt(1)).not.toBeNull();
+    expect(vertexAt(2)).toBeNull();
+
+    fireEvent.keyDown(document, { key: "y", ctrlKey: true });
+    expect(vertexAt(2)).not.toBeNull();
+  });
+
+  it("puts back even the last vertex undone, which had emptied the draft", () => {
+    triangle();
+    for (let i = 0; i < 3; i += 1) fireEvent.keyDown(document, { key: "z", ctrlKey: true });
+    expect(vertexAt(0)).toBeNull();
+
+    fireEvent.keyDown(document, { key: "y", ctrlKey: true });
+
+    expect(vertexAt(0)).not.toBeNull();
+  });
+
   it("takes back one vertex on Ctrl+Z, rather than the whole polygon", () => {
     const { surface } = triangle();
     fireEvent.keyDown(document, { key: "z", ctrlKey: true });
