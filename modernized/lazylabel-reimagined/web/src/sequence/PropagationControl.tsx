@@ -162,6 +162,21 @@ export function PropagationControl({
    */
   const [keepFlagged, setKeepFlagged] = useState(false);
   const [skipLabeled, setSkipLabeled] = useState(true);
+  /*
+   * Legacy's Range spinboxes, 1-based, set back to the whole timeline whenever its frame count
+   * changes -- a Build or a Trim (`sequence_widget.py:318-331, 667-679`). Sent as positions, and
+   * not at all at the defaults, as legacy passes no limit for the whole timeline
+   * (`main_window.py:4369-4378`). The web sent no range, so every run covered every frame (SP-46).
+   */
+  const frameCount = frames.length;
+  const [range, setRange] = useState<readonly [number, number]>([1, Math.max(1, frameCount)]);
+  useEffect(() => setRange([1, Math.max(1, frameCount)]), [frameCount]);
+  const rangeValue = (raw: string, fallback: number): number => {
+    const value = Math.round(Number(raw));
+    return raw.trim() === "" || !Number.isFinite(value)
+      ? fallback
+      : Math.min(Math.max(1, frameCount), Math.max(1, value));
+  };
   /** This run's policy, fixed when it starts, as legacy fixes its labelled set. */
   const [policy, setPolicy] = useState<CommitPolicy>(NO_POLICY);
   /** Why a run was refused before it started, when it was. */
@@ -345,11 +360,14 @@ export function PropagationControl({
      * applies, since only it knows the sequence length it ends up with.
      */
     const window = Number(settings.values["stream_window_size"] ?? 250);
+    const [from, to] = [range[0] - 1, range[1] - 1];
 
     await start({
       sequence: frames.map((frame) => frame.key),
       references,
       objects: seeds.objects,
+      ...(from === 0 ? {} : { start: from }),
+      ...(to === frames.length - 1 ? {} : { end: to }),
       ...(Number.isFinite(window) && window > 0 ? { window } : {}),
       ...(model === "" ? {} : { model }),
       streaming,
@@ -365,6 +383,7 @@ export function PropagationControl({
     openAnnotations,
     progress.running,
     projectId,
+    range,
     references,
     reset,
     savedElsewhere,
@@ -650,6 +669,34 @@ export function PropagationControl({
   return (
     <div className="timeline__propagation">
       <div className="timeline__propagation-actions">
+        <span className="timeline__range">
+          Range:{" "}
+          <input
+            type="number"
+            min={1}
+            max={Math.max(1, frameCount)}
+            value={range[0]}
+            aria-label="Start frame"
+            title="Start frame (1-indexed)"
+            onChange={(event) => {
+              const value = rangeValue(event.currentTarget.value, range[0]);
+              setRange((previous) => [value, previous[1]]);
+            }}
+          />
+          {" - "}
+          <input
+            type="number"
+            min={1}
+            max={Math.max(1, frameCount)}
+            value={range[1]}
+            aria-label="End frame"
+            title="End frame (1-indexed)"
+            onChange={(event) => {
+              const value = rangeValue(event.currentTarget.value, range[1]);
+              setRange((previous) => [previous[0], value]);
+            }}
+          />
+        </span>
         <label>
           <input
             type="checkbox"

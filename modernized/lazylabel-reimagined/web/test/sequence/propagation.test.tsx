@@ -341,6 +341,69 @@ describe("starting one", () => {
     expect(fake.started[0]!.streaming).toBe(true);
   });
 
+  describe("the range (SP-46)", () => {
+    /*
+     * Legacy's Range spinboxes: 1-based, the whole timeline by default and whenever the frame
+     * count changes, sent as positions, and not sent at the defaults, which mean no limit
+     * (sequence_widget.py:318-331, 643-647, 667-679; main_window.py:4369-4378). The web had none.
+     */
+    const start = () => screen.getByLabelText("Start frame") as HTMLInputElement;
+    const end = () => screen.getByLabelText("End frame") as HTMLInputElement;
+
+    it("starts at the whole timeline, 1 to N, and sends no limit then", async () => {
+      const fake = fakeClient({});
+      show(fake);
+
+      expect([start().value, end().value]).toEqual(["1", "4"]);
+      fireEvent.click(propagate());
+
+      await waitFor(() => expect(fake.started).toHaveLength(1));
+      expect(fake.started[0]!.start).toBeUndefined();
+      expect(fake.started[0]!.end).toBeUndefined();
+    });
+
+    it("sends the range set, as 0-based positions", async () => {
+      const fake = fakeClient({});
+      show(fake);
+
+      fireEvent.change(start(), { target: { value: "2" } });
+      fireEvent.change(end(), { target: { value: "3" } });
+      fireEvent.click(propagate());
+
+      await waitFor(() => expect(fake.started).toHaveLength(1));
+      expect(fake.started[0]!.start).toBe(1);
+      expect(fake.started[0]!.end).toBe(2);
+    });
+
+    it("holds a value to the timeline, as a spinbox does", () => {
+      show(fakeClient({}));
+
+      fireEvent.change(end(), { target: { value: "9" } });
+      fireEvent.change(start(), { target: { value: "0" } });
+
+      expect([start().value, end().value]).toEqual(["1", "4"]);
+    });
+
+    it("goes back to the whole timeline when the frame count changes, as after a trim", () => {
+      const fake = fakeClient({});
+      const tree = (frames: readonly Frame[]) => (
+        <NotificationProvider>
+          <SettingsProvider client={fake.client}>
+            <HotkeyProvider bindings={defaultSettings().hotkeys}>
+              <PropagationControl client={fake.client} frames={frames} />
+            </HotkeyProvider>
+          </SettingsProvider>
+        </NotificationProvider>
+      );
+      const { rerender } = render(tree(FRAMES));
+      fireEvent.change(start(), { target: { value: "2" } });
+
+      rerender(tree(FRAMES.slice(0, 3)));
+
+      expect([start().value, end().value]).toEqual(["1", "3"]);
+    });
+  });
+
   it("sends streaming: false once unticked", async () => {
     const fake = fakeClient({});
     show(fake);

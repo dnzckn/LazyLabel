@@ -1942,6 +1942,11 @@ fieldset input[type="text"] {
   gap: 0.3rem;
 }
 
+/* Legacy's Range spinboxes (sequence_widget.py:318-331): two narrow fields around a dash. */
+.timeline__range input[type="number"] {
+  width: 4.5em;
+}
+
 .timeline__propagation-hint,
 .timeline__propagation-state,
 .timeline__propagation-empty,
