@@ -11,8 +11,10 @@ import {
   DRAG_THRESHOLD,
   EMPTY_PROMPT,
   MINIMUM_BOX_SIDE,
+  NEGATIVE_ALONE,
   clear,
   pending,
+  press,
   release,
   undoLast,
   type AiPrompt,
@@ -20,10 +22,13 @@ import {
 
 const at = (x: number, y: number) => ({ x, y });
 
-function promptOf(outcome: ReturnType<typeof release>): AiPrompt {
+function promptOf(outcome: ReturnType<typeof release> | null): AiPrompt {
+  if (outcome === null) throw new Error("expected a prompt, got a press still waiting for its release");
   if (outcome.kind === "ignored") throw new Error(`expected a prompt, got: ${outcome.reason}`);
   return outcome.prompt;
 }
+
+const ONE_POSITIVE: AiPrompt = { points: [{ x: 1, y: 1, positive: true }], box: null };
 
 describe("a click adds a point", () => {
   it("adds a positive point when the pointer did not move", () => {
@@ -48,17 +53,6 @@ describe("a click adds a point", () => {
     expect(promptOf(outcome).points[0]).toEqual({ x: 32, y: 41, positive: true });
   });
 
-  it("adds a negative point on a right click", () => {
-    const outcome = release(
-      { points: [{ x: 1, y: 1, positive: true }], box: null },
-      at(30, 40),
-      at(30, 40),
-      { negative: true },
-    );
-
-    expect(promptOf(outcome).points[1]).toEqual({ x: 30, y: 40, positive: false });
-  });
-
   it("collects several", () => {
     let prompt = promptOf(release(EMPTY_PROMPT, at(1, 1), at(1, 1)));
     prompt = promptOf(release(prompt, at(2, 2), at(2, 2)));
@@ -67,22 +61,83 @@ describe("a click adds a point", () => {
   });
 });
 
+describe("a press, in legacy's single view", () => {
+  it("is a negative point AT ONCE when it is the right button, where it was pressed", () => {
+    // `single_view_mouse_handler.py:137-139`: `_add_point(pos, positive=False)` on the press itself.
+    const outcome = press(ONE_POSITIVE, at(30, 40), "right");
+
+    expect(outcome?.kind).toBe("point");
+    expect(promptOf(outcome).points[1]).toEqual({ x: 30, y: 40, positive: false });
+  });
+
+  it("only remembers where it went down when it is the left button, for the release to decide", () => {
+    // `:131-136`: a left press stores the position and adds nothing.
+    expect(press(EMPTY_PROMPT, at(30, 40), "left")).toBeNull();
+  });
+});
+
 describe("negative points alone", () => {
   it("are placed but do not ask for a prediction", () => {
     // They say what the object is not, and SAM has nothing to grow from -- the same rule the
-    // inference service enforces on its own side.
-    const outcome = release(EMPTY_PROMPT, at(5, 5), at(5, 5), { negative: true });
+    // inference service enforces on its own side. Legacy still draws the red point
+    // (`ai_segment_manager.py:447-466`); this used to drop it.
+    const outcome = press(EMPTY_PROMPT, at(5, 5), "right");
 
-    expect(outcome.kind).toBe("ignored");
-    if (outcome.kind !== "ignored") throw new Error("expected it to be ignored");
+    expect(outcome?.kind).toBe("placed");
+    if (outcome?.kind !== "placed") throw new Error("expected the point to be placed");
+    expect(outcome.prompt.points).toEqual([{ x: 5, y: 5, positive: false }]);
     // What to do, and no more (2026-09-26); why is the code's comment.
+    expect(outcome.reason).toBe(NEGATIVE_ALONE);
     expect(outcome.reason).toBe("add a positive point to segment");
   });
 
   it("stop being a problem once a positive point joins them", () => {
-    const prompt: AiPrompt = { points: [{ x: 1, y: 1, positive: true }], box: null };
+    expect(press(ONE_POSITIVE, at(5, 5), "right")?.kind).toBe("point");
+  });
+});
 
-    expect(release(prompt, at(5, 5), at(5, 5), { negative: true }).kind).toBe("point");
+describe("legacy's multi view, which is another handler", () => {
+  // `main_window.py:5498-5572`: every press waits for its release; the release decides with
+  // either button.
+  it("waits for the release whichever button is pressed", () => {
+    expect(press(EMPTY_PROMPT, at(30, 40), "right", "multi")).toBeNull();
+    expect(press(EMPTY_PROMPT, at(30, 40), "left", "multi")).toBeNull();
+  });
+
+  it("puts a click's point where the pointer went DOWN, not where it came up", () => {
+    // `_handle_multi_view_ai_click(viewer_idx, start_pos, is_positive)`.
+    const outcome = release(EMPTY_PROMPT, at(30, 40), at(33, 41), { view: "multi" });
+
+    expect(promptOf(outcome).points).toEqual([{ x: 30, y: 40, positive: true }]);
+  });
+
+  it("makes a right click a negative point on its release", () => {
+    const outcome = release(ONE_POSITIVE, at(30, 40), at(30, 40), { negative: true, view: "multi" });
+
+    expect(promptOf(outcome).points[1]).toEqual({ x: 30, y: 40, positive: false });
+  });
+
+  it("makes a RIGHT drag a box, as it does a left one", () => {
+    const outcome = release(EMPTY_PROMPT, at(10, 10), at(70, 70), { negative: true, view: "multi" });
+
+    expect(outcome.kind).toBe("box");
+    expect(promptOf(outcome).box).toEqual([at(10, 10), at(70, 70)]);
+  });
+
+  it("makes a thin drag a point where it was pressed, where the single view discards it", () => {
+    expect(release(EMPTY_PROMPT, at(0, 0), at(40, 8)).kind).toBe("ignored");
+
+    const outcome = release(EMPTY_PROMPT, at(0, 0), at(40, 8), { view: "multi" });
+
+    expect(promptOf(outcome).points).toEqual([{ x: 0, y: 0, positive: true }]);
+  });
+
+  it("still places negative points alone without asking for a prediction", () => {
+    // Legacy's multi view asks its model anyway (`main_window.py:6791-6797`); the service here
+    // refuses a prompt of negative points alone.
+    const outcome = release(EMPTY_PROMPT, at(5, 5), at(5, 5), { negative: true, view: "multi" });
+
+    expect(outcome.kind).toBe("placed");
   });
 });
 

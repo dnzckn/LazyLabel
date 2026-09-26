@@ -9,27 +9,37 @@
  * answers in a fraction of a second, the user looks, adds a correcting point, and only then
  * presses Space. A tool that committed on every click would fill the image with rejected masks.
  *
- * A RIGHT CLICK IS A NEGATIVE POINT, so the context menu is suppressed here — otherwise the
- * browser's menu opens over the preview the user is trying to correct.
+ * THE RIGHT BUTTON IS A NEGATIVE POINT, so the context menu is suppressed here — otherwise the
+ * browser's menu opens over the preview the user is trying to correct. In legacy's single view (and
+ * its Sequence tab) the point goes down on the PRESS, and a right drag is nothing more; in its Multi
+ * tab a right press waits for its release like a left one, and a right drag is a box
+ * (`tools/ai.ts`). Which of the two this is, the split view says (`viewKind.ts`). On a Mac a
+ * Control-click is the right button, because Qt makes it one there (`platform.ts`).
  */
 
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { flushSync } from "react-dom";
 
 import { classColor } from "./classColor.js";
 import { locate, scale, type DisplayBox, type ImagePoint } from "./coordinates.js";
 import {
+  DRAG_THRESHOLD,
   EMPTY_PROMPT,
   NOTHING_TO_ACCEPT,
   clear,
   pending,
+  press,
   release,
   undoLast,
+  type AiButton,
   type AiPrompt,
+  type Release,
 } from "../tools/ai.js";
 import { useSizing } from "./useSizing.js";
+import { ViewKindContext } from "./viewKind.js";
 import { useHotkey } from "../hotkeys/HotkeyProvider.jsx";
 import { isInModal } from "../hotkeys/keyEvent.js";
+import { isApplePlatform } from "../platform.js";
 
 export interface AiLayerProps {
   readonly width: number;
@@ -39,7 +49,10 @@ export interface AiLayerProps {
   readonly onPrompt: (prompt: AiPrompt) => void;
   /** Space: take the pending prediction. `erase` is true when shift was held. */
   readonly onAccept: (erase: boolean) => void;
-  /** A gesture produced nothing, with the reason. Legacy is silent for most of these. */
+  /**
+   * A gesture produced nothing to predict, with the reason: nothing at all, or a negative point
+   * with no positive one to segment from. Legacy is silent for most of these.
+   */
   readonly onRefused?: (reason: string) => void;
   /** Drawn under the prompt marks, when the parent has a prediction to show. */
   readonly preview?: ReactNode;
@@ -57,10 +70,13 @@ export function AiLayer({
   preview,
 }: AiLayerProps): ReactNode {
   const sizing = useSizing();
+  const view = useContext(ViewKindContext);
   const surfaceRef = useRef<SVGSVGElement>(null);
   const [prompt, setPrompt] = useState<AiPrompt>(EMPTY_PROMPT);
   const [from, setFrom] = useState<ImagePoint | null>(null);
   const [to, setTo] = useState<ImagePoint | null>(null);
+  /** The button that started the gesture waiting for its release. */
+  const [held, setHeld] = useState<AiButton | null>(null);
   /**
    * The prompts Ctrl+Z stepped back from, newest last, for redo to return to. Emptied by anything
    * that makes them stale: a new point or box, a clear, an accept.
@@ -76,21 +92,46 @@ export function AiLayer({
     return { left: rect.left, top: rect.top, width: rect.width, height: rect.height };
   }, []);
 
+  /** What a gesture came to: a prompt worth predicting, a point with nothing to predict, or nothing. */
+  const settle = useCallback(
+    (outcome: Release) => {
+      if (outcome.kind === "ignored") {
+        onRefused?.(outcome.reason);
+        return;
+      }
+
+      undone.current = [];
+      setPrompt(outcome.prompt);
+      if (outcome.kind === "placed") onRefused?.(outcome.reason);
+      else onPrompt(outcome.prompt);
+    },
+    [onPrompt, onRefused],
+  );
+
   const onPointerDown = useCallback(
     (event: React.PointerEvent<SVGSVGElement>) => {
       // Left for positive, right for negative. Anything else is not a prompt.
-      if (event.button !== 0 && event.button !== 2) return;
+      const button = buttonOf(event);
+      if (button === null) return;
       const box = boxOf();
       if (box === null) return;
 
       const located = locate(event, box, image);
       if (located.kind === "outside") return;
 
+      // Legacy's single view settles a right press where it is made: a negative point, at once.
+      const now = press(prompt, located.point, button, view);
+      if (now !== null) {
+        settle(now);
+        return;
+      }
+
       event.currentTarget.setPointerCapture?.(event.pointerId);
       setFrom(located.point);
       setTo(located.point);
+      setHeld(button);
     },
-    [boxOf, image],
+    [boxOf, image, prompt, settle, view],
   );
 
   const onPointerMove = useCallback(
@@ -112,19 +153,11 @@ export function AiLayer({
       const end = box === null ? (to ?? from) : locate(event, box, image).point;
       setFrom(null);
       setTo(null);
+      setHeld(null);
 
-      const outcome = release(prompt, from, end, { negative: event.button === 2 });
-
-      if (outcome.kind === "ignored") {
-        onRefused?.(outcome.reason);
-        return;
-      }
-
-      undone.current = [];
-      setPrompt(outcome.prompt);
-      onPrompt(outcome.prompt);
+      settle(release(prompt, from, end, { negative: held === "right", view }));
     },
-    [boxOf, from, image, onPrompt, onRefused, prompt, to],
+    [boxOf, from, held, image, prompt, settle, to, view],
   );
 
   /*
@@ -230,7 +263,10 @@ export function AiLayer({
   const box = boxOf();
   const perPixel = box === null ? { x: 1, y: 1 } : scale(box, image);
   const { r, g, b } = classColor(classId);
-  const dragging = from !== null && to !== null;
+  // Legacy draws its rubber band only once the pointer is past the threshold that makes a drag
+  // (`single_view_mouse_handler.py:237`, `main_window.py:5444`), not as a speck under every click.
+  const dragging =
+    from !== null && to !== null && Math.hypot(to.x - from.x, to.y - from.y) > DRAG_THRESHOLD;
 
   return (
     <svg
@@ -294,6 +330,19 @@ export function AiLayer({
       ))}
     </svg>
   );
+}
+
+/**
+ * Which button a press is, as legacy's Qt reads it, or null for one that is not a prompt.
+ *
+ * On a Mac a click with Control held is the RIGHT button: Qt's `mouseDown:` sends it as one
+ * (`qnsview_mouse.mm`), so there it is a negative point. A browser reports it as the left button
+ * with Control down. Elsewhere Ctrl changes nothing, as legacy reads no modifier in AI mode.
+ */
+function buttonOf(event: { readonly button: number; readonly ctrlKey: boolean }): AiButton | null {
+  if (event.button === 2) return "right";
+  if (event.button !== 0) return null;
+  return event.ctrlKey && isApplePlatform() ? "right" : "left";
 }
 
 function isTypingTarget(target: EventTarget | null): boolean {

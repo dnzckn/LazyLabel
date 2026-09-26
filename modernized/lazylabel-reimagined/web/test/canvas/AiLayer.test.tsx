@@ -10,9 +10,13 @@ import { cleanup, fireEvent, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AiLayer } from "../../src/canvas/AiLayer.jsx";
+import { ViewKindContext, type ViewKind } from "../../src/canvas/viewKind.js";
 import { renderWithSettings } from "./settingsHarness.jsx";
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+});
 
 const IMAGE = { width: 200, height: 100 };
 const RECT = { left: 0, top: 0, width: 200, height: 100, right: 200, bottom: 100, x: 0, y: 0 };
@@ -24,12 +28,12 @@ beforeEach(() => {
   } as DOMRect);
 });
 
-function layer(props: Partial<Parameters<typeof AiLayer>[0]> = {}) {
+function layer(props: Partial<Parameters<typeof AiLayer>[0]> & { readonly view?: ViewKind } = {}) {
   const onPrompt = vi.fn(props.onPrompt);
   const onAccept = vi.fn(props.onAccept);
   const onRefused = vi.fn(props.onRefused);
 
-  renderWithSettings(
+  const drawn = (
     <AiLayer
       width={IMAGE.width}
       height={IMAGE.height}
@@ -38,17 +42,40 @@ function layer(props: Partial<Parameters<typeof AiLayer>[0]> = {}) {
       onAccept={onAccept}
       onRefused={onRefused}
       {...(props.preview === undefined ? {} : { preview: props.preview })}
-    />,
+    />
+  );
+
+  renderWithSettings(
+    // The split view says "multi" around the view it draws; nothing else says anything.
+    props.view === undefined ? drawn : <ViewKindContext.Provider value={props.view}>{drawn}</ViewKindContext.Provider>,
   );
 
   return { onPrompt, onAccept, onRefused, surface: screen.getByLabelText("AI tool") };
 }
 
-const point = (x: number, y: number, button = 0) => ({ button, pointerId: 1, clientX: x, clientY: y });
+const point = (x: number, y: number, button = 0, init: { ctrlKey?: boolean } = {}) => ({
+  button,
+  pointerId: 1,
+  clientX: x,
+  clientY: y,
+  ...init,
+});
 
 function click(surface: Element, x: number, y: number, button = 0) {
   fireEvent.pointerDown(surface, point(x, y, button));
   fireEvent.pointerUp(surface, point(x, y, button));
+}
+
+/** Where a drawn point is, in image pixels. */
+function centre(testId: string): { x: number; y: number } | null {
+  const mark = screen.queryByTestId(testId);
+  if (mark === null) return null;
+  return { x: Number(mark.getAttribute("cx")), y: Number(mark.getAttribute("cy")) };
+}
+
+/** Pretend the browser runs on a Mac, where Qt reads a Control-click as the right button. */
+function onAMac(): void {
+  vi.spyOn(navigator, "platform", "get").mockReturnValue("MacIntel");
 }
 
 describe("placing points", () => {
@@ -70,12 +97,25 @@ describe("placing points", () => {
 
   it("does not ask for a prediction from negative points alone", () => {
     // They say what the object is not, and SAM has nothing to grow from. The point is still
-    // placed, because a positive one may follow.
+    // placed, because a positive one may follow -- and shown, as legacy draws its red point
+    // (`ai_segment_manager.py:447-466`). It used to be dropped.
     const { surface, onPrompt, onRefused } = layer();
     click(surface, 30, 40, 2);
 
     expect(onPrompt).not.toHaveBeenCalled();
     expect(onRefused.mock.calls[0]?.[0]).toBe("add a positive point to segment");
+    expect(centre("ai-negative-0")).toEqual({ x: 30, y: 40 });
+  });
+
+  it("uses a negative point placed first once a positive one follows", () => {
+    const { surface, onPrompt } = layer();
+    click(surface, 30, 40, 2);
+    click(surface, 60, 50);
+
+    expect(onPrompt.mock.calls[0]?.[0].points).toEqual([
+      { x: 30, y: 40, positive: false },
+      { x: 60, y: 50, positive: true },
+    ]);
   });
 
   it("suppresses the context menu, since right-click is a prompt here", () => {
@@ -88,7 +128,117 @@ describe("placing points", () => {
   });
 });
 
+describe("the right button, as legacy's single view takes it", () => {
+  // `single_view_mouse_handler.py:137-139`: a right press adds the negative point then and there,
+  // and nothing about a right drag or release does anything more. The Sequence tab uses the same
+  // handler (`main_window.py:1116-1131`).
+  it("places the negative point on the PRESS, where it went down, and asks for a prediction", () => {
+    const { surface, onPrompt } = layer();
+    click(surface, 30, 40);
+    onPrompt.mockClear();
+
+    fireEvent.pointerDown(surface, point(50, 40, 2));
+
+    expect(centre("ai-negative-1")).toEqual({ x: 50, y: 40 });
+    expect(onPrompt).toHaveBeenCalledTimes(1);
+    expect(onPrompt.mock.calls[0]?.[0].points[1]).toEqual({ x: 50, y: 40, positive: false });
+  });
+
+  it("makes nothing of a right DRAG: no drag preview, no box, and nothing more on release", () => {
+    // The web made a right drag a box until 2026-09-26 (CONTROL_PARITY.md CP-26).
+    const { surface, onPrompt } = layer();
+    click(surface, 30, 40);
+    onPrompt.mockClear();
+
+    fireEvent.pointerDown(surface, point(10, 10, 2));
+    fireEvent.pointerMove(surface, point(80, 70, 2));
+    expect(screen.queryByTestId("ai-drag")).toBeNull();
+    fireEvent.pointerUp(surface, point(80, 70, 2));
+
+    expect(screen.queryByTestId("ai-box")).toBeNull();
+    expect(centre("ai-negative-1")).toEqual({ x: 10, y: 10 });
+    expect(screen.queryByTestId("ai-negative-2")).toBeNull();
+    expect(onPrompt).toHaveBeenCalledTimes(1);
+    expect(onPrompt.mock.calls[0]?.[0].box).toBeNull();
+  });
+
+  it("takes a Control-click on a Mac as the right button, as Qt does there", () => {
+    // Qt's `mouseDown:` turns a Control-click into a right press on macOS (`qnsview_mouse.mm`), and
+    // legacy leaves that on. A browser reports the left button with Control held.
+    onAMac();
+    const { surface } = layer();
+
+    fireEvent.pointerDown(surface, point(30, 40, 0, { ctrlKey: true }));
+
+    expect(centre("ai-negative-0")).toEqual({ x: 30, y: 40 });
+    expect(screen.queryByTestId("ai-positive-0")).toBeNull();
+  });
+
+  it("keeps a Ctrl-click a LEFT click elsewhere, as legacy reads no modifier here", () => {
+    const { surface } = layer();
+
+    fireEvent.pointerDown(surface, point(30, 40, 0, { ctrlKey: true }));
+    fireEvent.pointerUp(surface, point(30, 40, 0, { ctrlKey: true }));
+
+    expect(centre("ai-positive-0")).toEqual({ x: 30, y: 40 });
+  });
+});
+
+describe("in legacy's multi view, whose handler differs", () => {
+  // `main_window.py:5498-5572`: every press waits for its release, a drag with EITHER button is a
+  // box, and anything else is a point where the pointer went DOWN.
+  it("makes a RIGHT drag a box, previewed as it is drawn", () => {
+    const { surface, onPrompt } = layer({ view: "multi" });
+
+    fireEvent.pointerDown(surface, point(10, 10, 2));
+    fireEvent.pointerMove(surface, point(80, 70, 2));
+    expect(screen.queryByTestId("ai-drag")).not.toBeNull();
+    fireEvent.pointerUp(surface, point(80, 70, 2));
+
+    expect(screen.queryByTestId("ai-box")).not.toBeNull();
+    expect(screen.queryByTestId("ai-negative-0")).toBeNull();
+    expect(onPrompt.mock.calls[0]?.[0].box).toEqual([{ x: 10, y: 10 }, { x: 80, y: 70 }]);
+  });
+
+  it("places a right click's negative point on the release, where the press was", () => {
+    const { surface } = layer({ view: "multi" });
+    click(surface, 30, 40);
+
+    fireEvent.pointerDown(surface, point(50, 40, 2));
+    expect(screen.queryByTestId("ai-negative-1")).toBeNull();
+    fireEvent.pointerUp(surface, point(53, 41, 2));
+
+    expect(centre("ai-negative-1")).toEqual({ x: 50, y: 40 });
+  });
+
+  it("puts a left click's point where the press was, and makes a thin drag a point", () => {
+    const { surface, onRefused } = layer({ view: "multi" });
+
+    fireEvent.pointerDown(surface, point(30, 40));
+    fireEvent.pointerUp(surface, point(33, 41));
+    fireEvent.pointerDown(surface, point(100, 10));
+    fireEvent.pointerUp(surface, point(140, 18));
+
+    expect(centre("ai-positive-0")).toEqual({ x: 30, y: 40 });
+    expect(centre("ai-positive-1")).toEqual({ x: 100, y: 10 });
+    expect(onRefused).not.toHaveBeenCalled();
+  });
+});
+
 describe("drawing a box", () => {
+  it("shows no drag preview until the pointer is more than five pixels from the press", () => {
+    // Legacy's rubber band appears once the drag passes the threshold that makes it a drag
+    // (`single_view_mouse_handler.py:237`), not as a speck under every click.
+    const { surface } = layer();
+
+    fireEvent.pointerDown(surface, point(10, 10));
+    fireEvent.pointerMove(surface, point(13, 13));
+    expect(screen.queryByTestId("ai-drag")).toBeNull();
+
+    fireEvent.pointerMove(surface, point(20, 20));
+    expect(screen.queryByTestId("ai-drag")).not.toBeNull();
+  });
+
   it("previews the drag, then keeps the box", () => {
     const { surface, onPrompt } = layer();
 

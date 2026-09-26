@@ -11,18 +11,33 @@
  * every click with a shaky hand becomes a one-pixel box, and a one-pixel box predicts nothing --
  * so the tool would appear to ignore clicks at random.
  *
+ * A RIGHT PRESS IS A NEGATIVE POINT AT ONCE, where it was pressed, in legacy's single view
+ * (`single_view_mouse_handler.py:137-139`), which its Sequence tab uses too. It never becomes a
+ * box and its release does nothing: only a LEFT press is remembered for its release to decide
+ * (`:131-136`, `:326-368`). Shift and Ctrl change nothing here; legacy reads no modifier in AI mode.
+ *
+ * LEGACY'S MULTI VIEW IS ANOTHER HANDLER, AND IT DIFFERS (`main_window.py:5498-5572`). Every press
+ * waits for its release. A drag with EITHER button is a box when it is big enough, and anything
+ * else is a point where the pointer went DOWN -- positive for the left button, negative otherwise --
+ * so a thin drag there is a point, not nothing.
+ *
  * A BOX PREVIEW BEATS A POINT PREVIEW. Both can be pending at once, because placing points does
  * not clear a box. Legacy resolves it in favour of the box (RULE-066), and that is the right way
  * round: the box is the more recent, more deliberate gesture.
  *
  * NEGATIVE POINTS ALONE PREDICT NOTHING. They say what the object is not, and SAM has nothing to
  * grow from — the same rule the inference service enforces on its own side, where a prompt of only
- * negative points is refused rather than run.
+ * negative points is refused rather than run. The point is still placed, as legacy's single view
+ * places it (`ai_segment_manager.py:447-466, 492-493`). Legacy's multi view asks its model even so
+ * (`main_window.py:6791-6797`); with the service refusing, the multi view here waits too.
  */
 
 import type { Point } from "./polygon.js";
 
-/** `single_view_mouse_handler.py:130-139` — the move that turns a click into a drag. */
+/**
+ * The move that turns a click into a drag: more than this many image pixels from the press
+ * (`single_view_mouse_handler.py:237, 348`; the multi view's `main_window.py:5444, 5566`).
+ */
 export const DRAG_THRESHOLD = 5;
 
 /** A box smaller than this in EITHER direction is not predicted (`RULE-062`). */
@@ -42,24 +57,63 @@ export interface AiPrompt {
 
 export const EMPTY_PROMPT: AiPrompt = { points: [], box: null };
 
+/** Which of legacy's mouse handlers a gesture follows: the single view's or the Multi tab's. */
+export type AiView = "single" | "multi";
+
+/** The button a press is, as legacy's Qt reads it (a Mac's Control-click is the right one). */
+export type AiButton = "left" | "right";
+
 export type Release =
   /** A point was added; the caller should ask for a new prediction. */
   | { readonly kind: "point"; readonly prompt: AiPrompt }
   /** A box was drawn and is big enough; the caller should ask for a prediction. */
   | { readonly kind: "box"; readonly prompt: AiPrompt }
+  /**
+   * A point was added, but there is nothing to predict from: negative points alone. The caller
+   * shows it and asks for nothing.
+   */
+  | { readonly kind: "placed"; readonly prompt: AiPrompt; readonly reason: string }
   /** Nothing to do, and why. */
   | { readonly kind: "ignored"; readonly reason: string };
 
 export interface ReleaseOptions {
-  /** Right button, or ctrl-click on a trackpad: a negative point. */
+  /**
+   * The press was the right button: a negative point. Only the multi view's releases carry one; in
+   * the single view a right press is settled by `press`, and its release is nothing.
+   */
   readonly negative?: boolean;
+  /** Which of legacy's handlers to follow. The single view's when absent. */
+  readonly view?: AiView;
+}
+
+/**
+ * Said when a point is placed and nothing positive is there to segment from: a negative point says
+ * what the object is not. The message says what to do, and no more.
+ */
+export const NEGATIVE_ALONE = "add a positive point to segment";
+
+/**
+ * What a press means, before the pointer moves.
+ *
+ * In legacy's single view a RIGHT press is a negative point at once, where it was pressed
+ * (`single_view_mouse_handler.py:137-139`). Everything else -- a left press, and any press in the
+ * multi view -- only remembers where it went down, and the release decides: null says so.
+ */
+export function press(
+  prompt: AiPrompt,
+  at: Point,
+  button: AiButton,
+  view: AiView = "single",
+): Release | null {
+  if (view === "single" && button === "right") return withPoint(prompt, at, false);
+  return null;
 }
 
 /**
  * What a press-then-release means.
  *
  * `from` is where the pointer went down and `to` where it came up, both in image pixels. The
- * distance between them is the whole decision.
+ * distance between them is the whole decision. In the single view only a left press gets here.
  */
 export function release(
   prompt: AiPrompt,
@@ -68,26 +122,27 @@ export function release(
   options: ReleaseOptions = {},
 ): Release {
   const moved = Math.hypot(to.x - from.x, to.y - from.y);
-
-  if (moved <= DRAG_THRESHOLD) {
-    const point: AiPoint = { x: to.x, y: to.y, positive: options.negative !== true };
-    const next: AiPrompt = { ...prompt, points: [...prompt.points, point] };
-
-    // A prompt of only negative points has nothing to segment: a negative point says what the
-    // object is not. Adding the point is still right -- the user placed it, and a positive one may
-    // follow -- but asking for a prediction is not. The refusal says what to do, and no more.
-    if (!next.points.some((p) => p.positive)) {
-      return { kind: "ignored", reason: "add a positive point to segment" };
-    }
-
-    return { kind: "point", prompt: next };
-  }
-
   const width = Math.abs(to.x - from.x);
   const height = Math.abs(to.y - from.y);
+  const positive = options.negative !== true;
+
+  if (options.view === "multi") {
+    // `main_window.py:5552-5572`: a box when the drag went past the threshold AND is big enough,
+    // with either button. Anything else is a point where the pointer went DOWN, so a thin drag is
+    // a point there, where the single view discards it.
+    if (moved > DRAG_THRESHOLD && width > MINIMUM_BOX_SIDE && height > MINIMUM_BOX_SIDE) {
+      return { kind: "box", prompt: { ...prompt, box: [from, to] } };
+    }
+    return withPoint(prompt, from, positive);
+  }
+
+  // The single view puts a click's point where the pointer came UP
+  // (`single_view_mouse_handler.py:358-365`).
+  if (moved <= DRAG_THRESHOLD) return withPoint(prompt, to, positive);
 
   if (width <= MINIMUM_BOX_SIDE || height <= MINIMUM_BOX_SIDE) {
-    // Legacy discards this silently, which is how a 40x8 drag reads as the tool being broken.
+    // Legacy discards this silently (`:356-357`), which is how a 40x8 drag reads as the tool being
+    // broken.
     return {
       kind: "ignored",
       reason:
@@ -97,6 +152,25 @@ export function release(
   }
 
   return { kind: "box", prompt: { ...prompt, box: [from, to] } };
+}
+
+/**
+ * The prompt with one more point.
+ *
+ * A prompt of only negative points has nothing to segment. The point is still PLACED, as legacy
+ * places it (`ai_segment_manager.py:447-466`): the user put it there, and a positive one may follow.
+ * Asking for a prediction is what waits. It used to be dropped instead, the comment here saying it
+ * was placed.
+ */
+function withPoint(prompt: AiPrompt, at: Point, positive: boolean): Release {
+  const point: AiPoint = { x: at.x, y: at.y, positive };
+  const next: AiPrompt = { ...prompt, points: [...prompt.points, point] };
+
+  if (!next.points.some((p) => p.positive)) {
+    return { kind: "placed", prompt: next, reason: NEGATIVE_ALONE };
+  }
+
+  return { kind: "point", prompt: next };
 }
 
 export type Pending = "box" | "points" | "nothing";

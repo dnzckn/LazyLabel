@@ -53,6 +53,7 @@ import type { WireDatasetImage, WireSegment } from "@lazylabel/contracts";
 
 import { AnnotationCanvas } from "../canvas/AnnotationCanvas.jsx";
 import { useFittedPane } from "../canvas/useFittedPane.js";
+import { ViewKindContext } from "../canvas/viewKind.js";
 import type { ImageProcessing } from "../workspace/processing.js";
 import {
   useWorkspace,
@@ -230,7 +231,11 @@ export function SplitView({ images, pixelsUrl, tileUrl, viewer }: SplitViewProps
                   {sides[side].dirty ? " (unsaved)" : ""}
                 </figcaption>
                 {live ? (
-                  <div className="split__view">{viewer}</div>
+                  <div className="split__view">
+                    {/* Legacy's Multi tab has a mouse handler of its own, and the view's layers
+                        follow it here (`canvas/viewKind.ts`). */}
+                    <ViewKindContext.Provider value="multi">{viewer}</ViewKindContext.Provider>
+                  </div>
                 ) : (
                   <Pane side={sides[side]} pixelsUrl={pixelsUrl} {...(tileUrl === undefined ? {} : { tileUrl })} />
                 )}

@@ -12,10 +12,12 @@
  */
 
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { useContext } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { WireDatasetImage } from "@lazylabel/contracts";
 
 import type { AnnotationsResult, ApiClient } from "../../src/api/client.js";
+import { ViewKindContext } from "../../src/canvas/viewKind.js";
 import { SplitView } from "../../src/split/SplitView.jsx";
 import { processingQuery } from "../../src/workspace/processing.js";
 import { WorkspaceProvider, useWorkspace } from "../../src/workspace/WorkspaceProvider.jsx";
@@ -483,5 +485,22 @@ describe("the view in the active half", () => {
     await openLeft();
 
     expect(document.querySelector(".split__pane--empty")?.textContent).toBe("No image loaded");
+  });
+
+  it("tells the view it is in legacy's multi view, whose mouse handler differs", async () => {
+    // Legacy's Multi tab answers the mouse with its own handler (`main_window.py:5406-5583`): a
+    // right drag there is an AI box, where the single view makes it a point (CONTROL_PARITY.md
+    // CP-26). The view's layers read which one they are in.
+    function Probe(): React.ReactNode {
+      return <p data-testid="view-kind">{useContext(ViewKindContext)}</p>;
+    }
+    mount({ viewer: <Probe /> });
+    await openLeft();
+    expect(screen.getByTestId("view-kind").textContent).toBe("multi");
+
+    await pairWith("right.png");
+    fireEvent.click(screen.getAllByRole("figure")[1]!);
+    await waitFor(() => expect(panes()).toEqual(["left.png", "right.png — editing"]));
+    expect(screen.getByTestId("view-kind").textContent).toBe("multi");
   });
 });
