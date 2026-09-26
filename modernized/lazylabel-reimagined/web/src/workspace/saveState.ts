@@ -28,7 +28,8 @@
  *      the decision below says "save" either way; the save button carries it out
  *      (`OpenImageView.tsx`). In the Multi view every move saves BOTH sides first, changed or not
  *      and whatever the setting, and deletes an empty side's files without a word, as legacy's
- *      multi-view save does (CONTROL_PARITY.md CP-67); the store's `savePair` runs it.
+ *      multi-view save does (CONTROL_PARITY.md CP-67); the store's `savePair` runs it. Enter there
+ *      runs the same save of both, and says legacy's "Multi-view annotations saved!".
  *
  *   3. A FAILED LOAD MUST NOT BE SAVED OVER, OR DELETED. Legacy commits the current path before
  *      decoding succeeds, so an image that fails to open (`cv2.imread` returns None — a non-ASCII

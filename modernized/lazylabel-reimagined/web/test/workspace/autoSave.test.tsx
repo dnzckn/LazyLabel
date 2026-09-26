@@ -543,6 +543,22 @@ describe("in the Multi view, every move saves BOTH sides first (CP-67)", () => {
     expect(status()).toMatch(/frames\/b\.png — 1 segment, unsaved/);
   });
 
+  it("saves both on Enter, the side not edited too, in legacy's words", async () => {
+    // Legacy's Enter ends in `save_output`, which in the multi view saves both viewers and says
+    // "Multi-view annotations saved!" (keyboard_event_manager.py:187-234; save_export_manager.py:
+    // 86-93, 584-593). The web's Enter saved only the side being edited.
+    const { events } = mount({ a: TRIANGLE_AT_REV_A, names: FOUR });
+    await pairUp();
+    await drawOnRight();
+    events.length = 0;
+
+    fireEvent.keyDown(document, { key: "Enter", code: "Enter" });
+
+    expect(await screen.findByText("Multi-view annotations saved!")).toBeTruthy();
+    expect(events).toEqual(["save frames/a.png", "save frames/b.png"]);
+    expect(status()).toMatch(/frames\/b\.png — 1 segment, saved/);
+  });
+
   it("saves only the image moved on the Single tab, though a second side is still open", async () => {
     // Legacy's Single view has one image, and saves that one, with Auto-Save on (RULE-059).
     const { events } = mount({ a: TRIANGLE_AT_REV_A, names: FOUR });

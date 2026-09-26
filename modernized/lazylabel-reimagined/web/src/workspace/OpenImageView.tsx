@@ -732,8 +732,8 @@ function ConvertButton({
   // crop the request leaves out is a crop the panel showed and the file never saw.
   const { classAliases, segments, crop, activeSide, markSavedOn, imageState, revisions, registerSave } =
     useWorkspace();
-  // Both sides, for the Multi view's save of each (`saveSide`, below).
-  const { sides, imageStates } = useWorkspace();
+  // Both sides, for the Multi view's save of each (`saveSide`, below), and Enter's there (`saveKey`).
+  const { sides, imageStates, multiView, savePair } = useWorkspace();
   const { notify } = useNotifications();
   const keyOf = useKeyHint();
 
@@ -981,8 +981,22 @@ function ConvertButton({
     }
     return convert(revisions);
   };
-  useHotkey("save_output", saveNow);
-  useHotkey("save_output_alt", saveNow);
+  /*
+   * ENTER IN THE MULTI VIEW SAVES BOTH SIDES, as legacy's does: its Enter ends in `save_output`,
+   * which in the multi view runs the save of both viewers and says "Multi-view annotations saved!"
+   * (keyboard_event_manager.py:187-234; save_export_manager.py:86-93, 584-593). The pair save every
+   * move makes (CP-67), so the two cannot write differently. Said once both are saved; a side that
+   * could not be is said instead, where legacy logs it and says "saved" anyway.
+   */
+  const saveKey = (): Promise<boolean> =>
+    multiView
+      ? savePair().then((saved) => {
+          if (saved) notify({ severity: "success", message: "Multi-view annotations saved!" });
+          return saved;
+        })
+      : saveNow();
+  useHotkey("save_output", saveKey);
+  useHotkey("save_output_alt", saveKey);
 
   /*
    * LEGACY'S MULTI-VIEW SAVE OF ONE SIDE (`main_window.py:6559-6636`), which the store runs for both
