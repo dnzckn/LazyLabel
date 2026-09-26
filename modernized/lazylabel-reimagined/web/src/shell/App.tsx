@@ -25,7 +25,7 @@ import { SplitView } from "../split/SplitView.jsx";
 import { CloseGuard } from "../workspace/CloseGuard.jsx";
 import { TimelinePanel } from "../sequence/TimelinePanel.jsx";
 import { CropPanel } from "../workspace/CropPanel.jsx";
-import { ModelPicker } from "../workspace/ModelPicker.jsx";
+import { ModelPicker, useDefaultModel } from "../workspace/ModelPicker.jsx";
 import { AutoPolygonPanel, useAutoConvertKey } from "../workspace/AutoPolygonPanel.jsx";
 import { FragmentPanel } from "../workspace/FragmentPanel.jsx";
 import { SegmentTable } from "../workspace/SegmentTable.jsx";
@@ -154,6 +154,8 @@ export function App({ client }: { readonly client: ApiClient }): ReactNode {
   // Legacy's P toggles Auto-Convert. Registered here, where it is always mounted, rather than in
   // the Auto-Convert section, which can be collapsed.
   useAutoConvertKey();
+  // Legacy's default model, chosen once when none is, so AI mode works as soon as it is picked.
+  useDefaultModel(client);
 
   return (
     // Inert behind the hotkey dialog, so Tab cannot walk out of it into a page that would then

@@ -12,7 +12,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { defaultSettings } from "@lazylabel/settings-schema";
 
 import type { ApiClient, WireModelStatus } from "../../src/api/client.js";
-import { ModelPicker } from "../../src/workspace/ModelPicker.jsx";
+import { ModelPicker, defaultModel, useDefaultModel } from "../../src/workspace/ModelPicker.jsx";
 import { SettingsProvider } from "../../src/settings/SettingsProvider.jsx";
 
 afterEach(cleanup);
@@ -150,5 +150,72 @@ describe("when there is nothing to choose from", () => {
     mount(new Error("the inference service is unreachable"));
 
     expect((await screen.findByRole("alert")).textContent).toContain("unreachable");
+  });
+});
+
+describe("legacy's default model (CONTROL_PARITY.md CP-13)", () => {
+  // Legacy's AI mode works as soon as it is chosen, with "Default (vit_h)" loaded on first use.
+  // Here ai_model started empty, so AI mode drew nothing and said nothing.
+  const huge = usable("SAM 1 huge", { family: "sam1", size: "vit_h", videoCapable: false });
+
+  it("is SAM 1 vit_h when it is usable, wherever it is listed", () => {
+    expect(defaultModel([usable("SAM 2.1 large"), huge])).toBe("SAM 1 huge");
+  });
+
+  it("is the first usable model otherwise", () => {
+    expect(defaultModel([usable("broken", { verified: false }), usable("SAM 2.1 large")])).toBe("SAM 2.1 large");
+    expect(defaultModel([{ ...huge, present: false }, usable("SAM 2.1 large")])).toBe("SAM 2.1 large");
+  });
+
+  it("is never an embedder, and nothing when nothing can segment", () => {
+    expect(defaultModel([usable("MobileNetV3", { segmenter: false })])).toBeNull();
+    expect(defaultModel([])).toBeNull();
+  });
+
+  function Chooser({ client }: { readonly client: ApiClient }): React.ReactNode {
+    useDefaultModel(client);
+    return null;
+  }
+
+  function mountChooser(models: readonly WireModelStatus[], chosen = "") {
+    const saved: { values: Record<string, unknown> }[] = [];
+    const api = {
+      getSettings: async () => {
+        const base = defaultSettings();
+        return { ...base, values: { ...base.values, ai_model: chosen } };
+      },
+      putSettings: async (settings: { values: Record<string, unknown> }) => {
+        saved.push(settings);
+        return settings;
+      },
+      models: vi.fn(async () => models),
+    } as unknown as ApiClient;
+    render(
+      <SettingsProvider client={api}>
+        <Chooser client={api} />
+      </SettingsProvider>,
+    );
+    return { saved, api };
+  }
+
+  it("is chosen once when none is, so AI mode works without a visit to this section", async () => {
+    const { saved } = mountChooser([usable("SAM 2.1 large"), huge]);
+
+    await waitFor(() => expect(saved.at(-1)?.values["ai_model"]).toBe("SAM 1 huge"));
+  });
+
+  it("does not override a model the user chose", async () => {
+    const { saved, api } = mountChooser([usable("SAM 2.1 large"), huge], "SAM 2.1 large");
+
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(saved).toHaveLength(0);
+    expect(api.models).not.toHaveBeenCalled();
+  });
+
+  it("chooses nothing when nothing can segment", async () => {
+    const { saved, api } = mountChooser([usable("MobileNetV3", { segmenter: false })]);
+
+    await waitFor(() => expect(api.models).toHaveBeenCalled());
+    expect(saved).toHaveLength(0);
   });
 });

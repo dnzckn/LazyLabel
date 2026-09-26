@@ -247,6 +247,10 @@ describe("flow 1, step by step", () => {
     fireEvent.click(screen.getByText("ai tool"));
 
     expect(screen.queryByLabelText("AI tool")).toBeNull();
+    // And a click on the image says why nothing happens, where it used to do nothing silently
+    // (CONTROL_PARITY.md CP-13). A model is chosen for it when one can be.
+    fireEvent.pointerDown(screen.getByLabelText("AI tool, no model chosen"));
+    expect(await screen.findByText(/The AI tool has no model/)).toBeTruthy();
   });
 });
 

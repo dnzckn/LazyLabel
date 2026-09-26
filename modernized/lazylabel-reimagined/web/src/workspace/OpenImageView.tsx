@@ -183,8 +183,9 @@ function OpenedImage({
     enabled: settings.values["auto_polygon_enabled"] === true,
     resolution: Number(settings.values["polygon_resolution"] ?? RESOLUTION_DEFAULT),
   };
-  // A manifest NAME, not a file path. Empty means none chosen, and the AI tool says so rather
-  // than sending a request the service can only refuse.
+  // A manifest NAME, not a file path. Empty means none chosen -- which, since legacy's default is
+  // chosen when it can be (useDefaultModel), means none can be -- and a click in AI mode says so
+  // rather than sending a request the service can only refuse.
   const aiModel = String(settings.values["ai_model"] ?? "");
 
 
@@ -302,7 +303,23 @@ function OpenedImage({
 
             {activeTool === "ai" &&
               (aiModel === ""
-                ? null
+                ? (
+                    // No model can be chosen for it (useDefaultModel picks legacy's default when one
+                    // can), so a click says why nothing happens instead of doing nothing silently.
+                    <svg
+                      className="polygon-layer"
+                      viewBox={`0 0 ${metadata.width} ${metadata.height}`}
+                      preserveAspectRatio="none"
+                      role="application"
+                      aria-label="AI tool, no model chosen"
+                      onPointerDown={() =>
+                        notify({
+                          severity: "info",
+                          message: "The AI tool has no model: choose one in AI Model Selection",
+                        })
+                      }
+                    />
+                  )
                 : (
                     <AiTool
                       client={client}
