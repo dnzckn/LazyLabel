@@ -114,6 +114,12 @@ export function PolygonLayer({
 
   useHotkey("save_segment", () => finishWith(false));
   useHotkey("erase_segment", () => finishWith(true));
+  // Legacy's C clears the polygon's points too, not only the AI tool's
+  // (keyboard_event_manager.py:300-304; `CONTROL_PARITY.md` CP-20).
+  useHotkey("clear_points", () => {
+    setDraft(cancel());
+    setPointer(null);
+  });
 
 
   const onPointerDown = useCallback(

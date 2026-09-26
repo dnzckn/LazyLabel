@@ -20,6 +20,7 @@ import { classColor } from "./classColor.js";
 import { locate, scale, type DisplayBox, type ImagePoint } from "./coordinates.js";
 import { boxFrom, circleFrom, radiusOf } from "../tools/shapes.js";
 import { useSizing } from "./useSizing.js";
+import { useHotkey } from "../hotkeys/HotkeyProvider.jsx";
 
 export type ShapeKind = "box" | "circle";
 
@@ -119,6 +120,10 @@ export function ShapeLayer({
     },
     [boxOf, drag, image, kind, onComplete, onErase, onRefused],
   );
+
+  // Legacy's C clears whatever is being drawn in any tool, a box or circle drag included
+  // (keyboard_event_manager.py:241-313); here it was the AI tool's alone (`CONTROL_PARITY.md` CP-20).
+  useHotkey("clear_points", () => setDrag(null));
 
   // Escape abandons a drag in progress. Bound on the document because the pointer is captured and
   // the keyboard focus is wherever it was.

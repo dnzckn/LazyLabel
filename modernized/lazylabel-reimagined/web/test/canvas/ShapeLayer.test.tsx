@@ -202,6 +202,19 @@ describe("abandoning a drag", () => {
     expect(onComplete).not.toHaveBeenCalled();
   });
 
+  it("drops it on C, legacy's clear-points key, which clears a drag in every tool", () => {
+    // It was the AI tool's alone (CONTROL_PARITY.md CP-20).
+    const { surface, onComplete } = layer("circle");
+
+    fireEvent.pointerDown(surface, point(10, 20));
+    fireEvent.pointerMove(surface, point(40, 60));
+    fireEvent.keyDown(document, { key: "c", code: "KeyC" });
+
+    expect(preview()).toBeNull();
+    fireEvent.pointerUp(surface, point(40, 60));
+    expect(onComplete).not.toHaveBeenCalled();
+  });
+
   it("does nothing on a release that never had a press", () => {
     const { surface, onComplete, onRefused } = layer("box");
     fireEvent.pointerUp(surface, point(40, 60));

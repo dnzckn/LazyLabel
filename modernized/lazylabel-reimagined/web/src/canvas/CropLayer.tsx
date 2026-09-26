@@ -21,6 +21,7 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
 
 import { locate, type DisplayBox, type ImagePoint } from "./coordinates.js";
 import { cropFromDrag, type Crop } from "../tools/crop.js";
+import { useHotkey } from "../hotkeys/HotkeyProvider.jsx";
 
 export interface CropLayerProps {
   readonly width: number;
@@ -94,6 +95,9 @@ export function CropLayer({ width, height, crop, onCrop, onRefused }: CropLayerP
     },
     [boxOf, drag, image, onCrop, onRefused],
   );
+
+  // Legacy's C clears a crop drag in progress too (keyboard_event_manager.py:280-289).
+  useHotkey("clear_points", () => setDrag(null));
 
   // Escape abandons a drag in progress, on the document because the pointer is captured.
   useEffect(() => {

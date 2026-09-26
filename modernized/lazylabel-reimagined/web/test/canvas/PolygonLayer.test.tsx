@@ -207,6 +207,15 @@ describe("the keyboard", () => {
     input.remove();
   });
 
+  it("abandons the draft on C, legacy's clear-points key, as the AI tool's C does", () => {
+    // Legacy's C clears what is being drawn in every tool (CONTROL_PARITY.md CP-20).
+    const { onComplete } = triangle();
+    fireEvent.keyDown(document, { key: "c", code: "KeyC" });
+
+    expect(vertexAt(0)).toBeNull();
+    expect(onComplete).not.toHaveBeenCalled();
+  });
+
   it("abandons the draft on Escape", () => {
     const { onComplete } = triangle();
     fireEvent.keyDown(document, { key: "Escape" });
