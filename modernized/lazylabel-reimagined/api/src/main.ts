@@ -62,6 +62,8 @@ export function buildDeps(
     datasetHealthy: stores.datasetHealthy,
     // So a blocking failure can name the folder the operator configured, not just describe it.
     datasetRoot: config.datasetRoot,
+    // So the browser can say that settings will not outlive this process.
+    databaseInMemory: config.databasePath === ":memory:",
     ...(inference === undefined ? {} : { inference }),
   };
 }
@@ -79,6 +81,11 @@ async function main(): Promise<void> {
 
   if (config.databasePath !== ":memory:") {
     await fs.mkdir(path.dirname(config.databasePath), { recursive: true });
+  } else {
+    // Said at startup, and on /health for the browser: every save will succeed and none will last.
+    logger.log("warn", "settings and hotkeys are held in memory and will be lost when the API stops", {
+      database: config.databasePath,
+    });
   }
   const metadataStore = new SqliteMetadataStore(config.databasePath);
 

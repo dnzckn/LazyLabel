@@ -35,7 +35,7 @@ LAZYLABEL_DATASET_ROOT=/path/to/your/images npm start
 | Variable | Default | What it is |
 |---|---|---|
 | `LAZYLABEL_DATASET_ROOT` | *required* | The folder holding your images. The API refuses to start without it rather than guessing. |
-| `LAZYLABEL_DB` | `<root>/.lazylabel/lazylabel.db` | SQLite file for settings, hotkeys and job records. |
+| `LAZYLABEL_DB` | `<root>/.lazylabel/lazylabel.db` | SQLite file for settings, hotkeys and job records. `:memory:` keeps them only while the process runs: the API warns at startup, `/health` reports `databaseInMemory`, and the web app shows a banner, because every save succeeds and none survives a restart. |
 | `LAZYLABEL_PORT` | `8787` | |
 | `LAZYLABEL_INFERENCE_URL` | *none* | Where the inference service listens, such as `http://127.0.0.1:8788`. Unset is a supported deployment: every route except SAM prompts, propagation and archetypes works, and those answer 503 with the reason. A value that is not an http or https URL is refused at startup, quoted. |
 | `LAZYLABEL_HOST` | `127.0.0.1` | Loopback by default. Decision 3 is one trusted user, so exposing this is a deliberate act behind a reverse proxy, not a default. |

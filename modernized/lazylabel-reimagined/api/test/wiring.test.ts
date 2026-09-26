@@ -74,4 +74,9 @@ describe("building the app's dependencies", () => {
 
     expect(await deps.datasetHealthy?.()).toBe(false);
   });
+
+  it("marks a database held in memory, so /health can say settings will not outlive the process", () => {
+    expect(buildDeps(config({ databasePath: ":memory:" }), stores()).databaseInMemory).toBe(true);
+    expect(buildDeps(config({ databasePath: "/data/.lazylabel/lazylabel.db" }), stores()).databaseInMemory).toBe(false);
+  });
 });

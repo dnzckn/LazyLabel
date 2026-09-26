@@ -117,6 +117,24 @@ describe("the API envelope", () => {
       expect(response.status).toBe(503);
       expect(jsonBody(response)).toMatchObject({ status: "unavailable", dataset: "unreadable" });
     });
+
+    it("says when the database lives only in memory, which is healthy and keeps nothing", async () => {
+      // LAZYLABEL_DB=:memory: answers every save and forgets it at the next restart -- to the user,
+      // exactly "settings do not save". The browser can only say so if it is told.
+      const forgetful = createApp({
+        blobStore: store,
+        metadataStore: metadata,
+        datasetHealthy: async () => true,
+        databaseInMemory: true,
+      });
+
+      expect(jsonBody(await forgetful.handle(get("/health")))).toMatchObject({
+        status: "ok",
+        database: "ok",
+        databaseInMemory: true,
+      });
+      expect(jsonBody(await app.handle(get("/health"))).databaseInMemory).toBe(false);
+    });
   });
 
   describe("request validation", () => {

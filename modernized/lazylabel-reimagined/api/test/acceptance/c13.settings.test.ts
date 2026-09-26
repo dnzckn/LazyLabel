@@ -15,6 +15,10 @@
  * to refuse it again because a client is not a permission.
  */
 
+import { mkdtemp, rm } from "node:fs/promises";
+import * as os from "node:os";
+import * as path from "node:path";
+
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { defaultSettings, DEFAULT_EXPORT_FORMATS } from "@lazylabel/settings-schema";
@@ -251,6 +255,96 @@ describe("C13: keeping settings and hotkeys across sessions", () => {
 
       expect(response.status).toBe(200);
       expect(jsonBody(response).hotkeys.merge_segments.primary).toBe("F19");
+    });
+  });
+});
+
+describe("C13: across a restart and an upgrade", () => {
+  it("keeps settings when the process restarts over the same database FILE", async () => {
+    // The test above restarts the app over the same store OBJECT, so it never showed the file
+    // holding anything. This closes the database and opens the file again, as a restart does.
+    const dir = await mkdtemp(path.join(os.tmpdir(), "lazylabel-settings-"));
+    const file = path.join(dir, "lazylabel.db");
+    try {
+      const first = new SqliteMetadataStore(file);
+      const base = defaultSettings();
+      const saved = await createApp({ blobStore: new MemoryBlobStore(), metadataStore: first }).handle(
+        put("/users/me/settings", {
+          values: { ...base.values, brightness: 35, auto_save: false },
+          hotkeys: { ...base.hotkeys, merge_segments: { primary: "F19", secondary: null } },
+        }),
+      );
+      expect(saved.status).toBe(200);
+      await first.close();
+
+      const second = new SqliteMetadataStore(file);
+      const body = jsonBody(
+        await createApp({ blobStore: new MemoryBlobStore(), metadataStore: second }).handle(get("/users/me/settings")),
+      );
+      await second.close();
+
+      expect(body.values.brightness).toBe(35);
+      expect(body.values.auto_save).toBe(false);
+      expect(body.hotkeys.merge_segments).toEqual({ primary: "F19", secondary: null });
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  describe("a document stored before a setting or an action existed", () => {
+    let metadata: SqliteMetadataStore;
+    let app: App;
+
+    beforeEach(() => {
+      metadata = new SqliteMetadataStore(":memory:");
+      app = createApp({ blobStore: new MemoryBlobStore(), metadataStore: metadata });
+    });
+    afterEach(() => metadata.close());
+
+    type Binding = { primary: string; secondary: string | null };
+
+    /** What an older build stored: no Min Conf, no model choice, no Find Archetypes, and more. */
+    async function storeAnOlderDocument(options: { bind?: Record<string, Binding>; without?: string[] } = {}) {
+      const base = defaultSettings();
+      const values: Record<string, unknown> = { ...base.values, brightness: 20, from_a_newer_version: 1 };
+      delete values["propagation_confidence_threshold"];
+      delete values["ai_model"];
+      const bindings: Record<string, Binding> = { ...base.hotkeys, ...options.bind };
+      for (const action of ["find_archetypes", ...(options.without ?? [])]) delete bindings[action];
+      await metadata.putSettings("me", { schemaVersion: 1, values, hotkeys: bindings });
+    }
+
+    it("is served with their defaults filled in, as legacy's loader fills them (settings.py:96, hotkeys.py:28-29)", async () => {
+      await storeAnOlderDocument();
+
+      const body = jsonBody(await app.handle(get("/users/me/settings")));
+
+      expect(body.values.propagation_confidence_threshold).toBe(0.99);
+      expect(body.values.ai_model).toBe("");
+      // An action added since has its default key, rather than none at all.
+      expect(body.hotkeys.find_archetypes).toEqual({ primary: "Ctrl+H", secondary: null });
+      // And nothing the user stored is touched, a key this build does not know included.
+      expect(body.values.brightness).toBe(20);
+      expect(body.values.from_a_newer_version).toBe(1);
+    });
+
+    it("can still be saved when a default added since takes a key the user had bound", async () => {
+      // The user bound H to Fit View before Next Archetype Frame shipped with H as its default.
+      // The browser sends back what GET served, the pair included; refusing that would refuse every
+      // save after the upgrade until the user found the pair and rebound one of them.
+      await storeAnOlderDocument({
+        bind: { fit_view: { primary: "H", secondary: null } },
+        without: ["next_suggested_frame"],
+      });
+
+      const served = jsonBody(await app.handle(get("/users/me/settings")));
+      expect(served.hotkeys.next_suggested_frame.primary).toBe("H");
+      const response = await app.handle(
+        put("/users/me/settings", { values: { ...served.values, dark_mode: false }, hotkeys: served.hotkeys }),
+      );
+
+      expect(response.status).toBe(200);
+      expect(jsonBody(response).values.dark_mode).toBe(false);
     });
   });
 });

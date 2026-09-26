@@ -100,6 +100,14 @@ export interface AppDeps {
    */
   readonly datasetRoot?: string;
   /**
+   * True when the metadata store lives only as long as the process (`LAZYLABEL_DB=:memory:`).
+   *
+   * Reported on /health so the browser can say it. Every settings save succeeds against such a
+   * store and every one is gone when the API restarts, which is indistinguishable from "settings do
+   * not save" to the person using the app -- and was exactly what its owner saw on 2026-09-26.
+   */
+  readonly databaseInMemory?: boolean;
+  /**
    * The inference service, when one is configured.
    *
    * Absent is a supported deployment, not a broken one: the failure-mode table says everything
@@ -263,6 +271,8 @@ async function health(deps: AppDeps): Promise<ApiResponse> {
     dataset: dataset ? "ok" : "unreadable",
     ...(deps.datasetRoot === undefined ? {} : { datasetRoot: deps.datasetRoot }),
     database: database ? "ok" : "unavailable",
+    // Healthy, and forgetful: nothing saved outlives the process.
+    databaseInMemory: deps.databaseInMemory === true,
     // The AI tools are a third independent axis. Losing them disables clicking objects with SAM
     // and nothing else, so it degrades rather than breaks -- RULE-084's behaviour, with the reason
     // attached so the browser shows "AI tools disabled, and here is why" instead of a dead button.
@@ -863,9 +873,30 @@ async function putAnnotations(
   }
 }
 
+/**
+ * The stored settings as this build reads them: every setting and hotkey it knows, the user's own
+ * value wherever one is stored.
+ *
+ * A document is written whole and kept as written, so one saved before a setting or an action
+ * existed never gains it: a hotkey added since had no key at all for that user, and a setting read
+ * without a fallback came through as nothing. Legacy fills both in on load -- `cls(**data)` gives
+ * every field missing from settings.json its default (`config/settings.py:96`), and the default
+ * bindings are made first and the saved ones laid over them (`config/hotkeys.py:28-29, 260-275`).
+ *
+ * Keys this build does not know stay as stored (RULE-088).
+ */
+function withDefaults(stored: StoredSettings | null): StoredSettings {
+  const defaults = defaultSettings();
+  if (stored === null) return defaults;
+  return {
+    schemaVersion: SETTINGS_SCHEMA_VERSION,
+    values: { ...defaults.values, ...stored.values },
+    hotkeys: { ...defaults.hotkeys, ...stored.hotkeys },
+  };
+}
+
 async function getSettings(deps: AppDeps): Promise<ApiResponse> {
-  const stored = (await deps.metadataStore.getSettings("me")) ?? defaultSettings();
-  return json(200, stored);
+  return json(200, withDefaults(await deps.metadataStore.getSettings("me")));
 }
 
 /** One conflict, whichever of its two actions a report happens to list first. */
@@ -903,7 +934,10 @@ async function putSettings(deps: AppDeps, request: ApiRequest): Promise<ApiRespo
   // `hotkeys.json`, which RULE-049's edge case keeps rather than locking the user out of their
   // configuration. Refusing it here refused every later save -- the theme, a slider, the export
   // formats -- since each sends the whole settings, until the user found the pair on their own.
-  const previous = (await deps.metadataStore.getSettings("me")) ?? defaultSettings();
+  //
+  // Read with the defaults filled in, as GET serves it: a default binding added since the document
+  // was stored can collide with one of the user's, and the browser sends back what GET gave it.
+  const previous = withDefaults(await deps.metadataStore.getSettings("me"));
   const stored = new Set(findConflicts(previous.hotkeys).map(conflictId));
   const conflicts = findConflicts(bindings).filter((conflict) => !stored.has(conflictId(conflict)));
   if (conflicts.length > 0) {
