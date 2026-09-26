@@ -680,6 +680,114 @@ describe("the confidence histogram", () => {
   });
 });
 
+describe("zoom, pan and scrub (SP-43)", () => {
+  /*
+   * Legacy's ◀ − + ▶ zoom from 1x to 30x in steps of 1.5 and pan by a quarter of what is shown, the
+   * wheel pans by a tenth while zoomed, and a drag across the bar opens each frame it passes
+   * (timeline_widget.py:132-148, 453-469, 565-595, 638-695). The web had a cell per frame, a click,
+   * and nothing else, so on a long sequence most frames could not be hit.
+   */
+  const button = (name: string) => screen.getByRole("button", { name }) as HTMLButtonElement;
+  const onBar = () => [...cells()].map((cell) => cell.getAttribute("aria-label")!.split(", ")[1]!.slice(7));
+  const MANY = Array.from({ length: 20 }, (_, i) => image(`g${String(i + 1).padStart(2, "0")}.png`));
+  const names = (from: number, to: number) =>
+    Array.from({ length: to - from + 1 }, (_, i) => `g${String(from + i).padStart(2, "0")}.png`);
+
+  it("shows every frame at 1x, where only zooming in is offered", async () => {
+    show(MANY);
+    build("0", "19", { references: false });
+    await waitFor(() => expect(cells()).toHaveLength(20));
+
+    expect(button("Zoom in timeline").disabled).toBe(false);
+    expect(button("Zoom out timeline").disabled).toBe(true);
+    expect(button("Pan left").disabled).toBe(true);
+    expect(button("Pan right").disabled).toBe(true);
+  });
+
+  it("zooms in around the current frame as legacy centres it, and pans a quarter at a time", async () => {
+    show(MANY);
+    build("0", "19", { references: false });
+    await waitFor(() => expect(cells()).toHaveLength(20));
+    fireEvent.click(cells()[10]!);
+
+    fireEvent.click(button("Zoom in timeline")); // 1.5x: 13 frames, centred on the 20 shown before
+    expect(onBar()).toEqual(names(1, 13));
+    fireEvent.click(button("Zoom in timeline")); // 2.25x: 8 frames, centred on the 13 shown before
+    expect(onBar()).toEqual(names(5, 12));
+
+    fireEvent.click(button("Pan right"));
+    expect(onBar()).toEqual(names(7, 14));
+    fireEvent.click(button("Pan left"));
+    expect(onBar()).toEqual(names(5, 12));
+  });
+
+  it("pans with the wheel only while zoomed, a tenth at a time", async () => {
+    show(MANY);
+    build("0", "19", { references: false });
+    await waitFor(() => expect(cells()).toHaveLength(20));
+    const zoomable = screen.getByLabelText("Timeline").closest(".timeline__zoomable")!;
+
+    // Unzoomed, the wheel is the page's.
+    expect(fireEvent.wheel(zoomable, { deltaY: 100 })).toBe(true);
+    expect(cells()).toHaveLength(20);
+
+    fireEvent.click(button("Zoom in timeline"));
+    expect(fireEvent.wheel(zoomable, { deltaY: 100 })).toBe(false);
+    expect(onBar()).toEqual(names(2, 14));
+    fireEvent.wheel(zoomable, { deltaY: -100 });
+    expect(onBar()).toEqual(names(1, 13));
+  });
+
+  it("zooms to 30x and no further, and back out to every frame", async () => {
+    show(MANY);
+    build("0", "19", { references: false });
+    await waitFor(() => expect(cells()).toHaveLength(20));
+
+    for (let i = 0; i < 9; i += 1) fireEvent.click(button("Zoom in timeline"));
+    expect(button("Zoom in timeline").disabled).toBe(true);
+    expect(cells()).toHaveLength(1);
+
+    for (let i = 0; i < 9; i += 1) fireEvent.click(button("Zoom out timeline"));
+    expect(button("Zoom out timeline").disabled).toBe(true);
+    expect(onBar()).toEqual(names(1, 20));
+  });
+
+  it("opens each frame a drag across the bar passes, once, as legacy's scrub does", async () => {
+    const { onOpen } = show();
+    build("0", "4", { references: false });
+    await waitFor(() => expect(cells()).toHaveLength(5));
+    const bar = screen.getByLabelText("Timeline");
+    bar.getBoundingClientRect = () =>
+      ({ left: 0, width: 500, top: 0, height: 34, right: 500, bottom: 34, x: 0, y: 0, toJSON: () => ({}) }) as DOMRect;
+    onOpen.mockClear();
+
+    fireEvent.mouseDown(bar, { button: 0, clientX: 250 });
+    fireEvent.mouseMove(window, { buttons: 1, clientX: 260 });
+    fireEvent.mouseMove(window, { buttons: 1, clientX: 450 });
+    fireEvent.mouseMove(window, { buttons: 1, clientX: 900 });
+    fireEvent.mouseUp(window);
+    fireEvent.mouseMove(window, { buttons: 0, clientX: 50 });
+
+    expect(onOpen.mock.calls.map((call) => call[0])).toEqual(["frames/f03.png", "frames/f05.png"]);
+  });
+
+  it("does not open a pressed frame a second time on the click that follows", async () => {
+    const { onOpen } = show();
+    build("0", "4", { references: false });
+    await waitFor(() => expect(cells()).toHaveLength(5));
+    const bar = screen.getByLabelText("Timeline");
+    bar.getBoundingClientRect = () =>
+      ({ left: 0, width: 500, top: 0, height: 34, right: 500, bottom: 34, x: 0, y: 0, toJSON: () => ({}) }) as DOMRect;
+    onOpen.mockClear();
+
+    fireEvent.mouseDown(bar, { button: 0, clientX: 150 });
+    fireEvent.mouseUp(window);
+    fireEvent.click(cells()[1]!, { detail: 1 });
+
+    expect(onOpen).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe("the Review group (SP-45)", () => {
   /*
    * Legacy's Review group: "Flagged frames: N" with ← Prev Flagged and Next Flagged →, enabled only

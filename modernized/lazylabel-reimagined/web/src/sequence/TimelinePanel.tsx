@@ -23,6 +23,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type MouseEvent as ReactMouseEvent,
   type ReactNode,
   type SetStateAction,
 } from "react";
@@ -143,6 +144,12 @@ export interface TimelinePanelProps {
    */
   readonly ai?: { readonly available: boolean; readonly videoCapable: boolean; readonly reason: string | null };
 }
+
+/** Legacy's zoom and pan steps (`timeline_widget.py:511-514, 673`). */
+const ZOOM_STEP = 1.5;
+const MAX_ZOOM = 30;
+const PAN_STEP = 0.25;
+const WHEEL_STEP = 0.1;
 
 /** What legacy says when there is no such frame to move to (main_window.py:4673-4706, 5158-5168). */
 const NOTHING_TO_STEP_TO: Readonly<Record<Target, string>> = {
@@ -286,6 +293,43 @@ export function TimelinePanel({
     window.addEventListener("beforeunload", ask);
     return () => window.removeEventListener("beforeunload", ask);
   }, []);
+  /*
+   * LEGACY'S ZOOM, PAN AND SCRUB (`timeline_widget.py:132-148, 453-469, 565-595, 638-695`,
+   * SEQUENCE_PARITY.md SP-43). At 1x every frame is on the bar; zoom goes to 30x in steps of 1.5,
+   * showing that fraction of the frames from `offset` on. ◀ and ▶ pan by a quarter of what is shown,
+   * the wheel by a tenth while zoomed, and a drag across the bar opens each frame it passes. The web
+   * had one cell per frame and a click, so on a long sequence most frames could not be hit. The zoom
+   * outlives a New Timeline, as legacy's does.
+   */
+  const [zoom, setZoom] = useState(1);
+  const [offset, setOffset] = useState(0);
+  const [zoomable, setZoomable] = useState<HTMLDivElement | null>(null);
+  /** What the wheel and a drag act on, as of the last render: they arrive outside React. */
+  const barView = useRef<{
+    zoomed: boolean;
+    first: number;
+    maxOffset: number;
+    visible: readonly number[];
+    choose: (frame: Frame) => void;
+    frameAt: (index: number) => Frame | undefined;
+  }>({ zoomed: false, first: 0, maxOffset: 0, visible: [], choose: () => undefined, frameAt: () => undefined });
+  useEffect(() => {
+    if (zoomable === null) return;
+    // Not passive, so a wheel that pans does not also scroll the page; unzoomed it passes, as
+    // legacy's `wheelEvent` hands it on.
+    const onWheel = (event: WheelEvent): void => {
+      const { zoomed, first, maxOffset, visible } = barView.current;
+      if (!zoomed || event.deltaY === 0) return;
+      event.preventDefault();
+      const by = Math.max(1, Math.floor(visible.length * WHEEL_STEP));
+      setOffset(Math.max(0, Math.min(maxOffset, first + (event.deltaY < 0 ? -by : by))));
+    };
+    zoomable.addEventListener("wheel", onWheel, { passive: false });
+    return () => zoomable.removeEventListener("wheel", onWheel);
+  }, [zoomable]);
+  /** A drag in progress: how to end it. */
+  const scrubbing = useRef<(() => void) | null>(null);
+  useEffect(() => () => scrubbing.current?.(), []);
   const [finding, setFinding] = useState(false);
   /** Which Find is current: an aborted one's answer is dropped when it arrives (SP-29). */
   const findRun = useRef(0);
@@ -763,6 +807,86 @@ export function TimelinePanel({
   // What N and Shift+N move between: flagged frames that are not references.
   const flaggedCount = frames.filter((frame) => !frame.isReference && frame.state === "flagged").length;
 
+  // The frames on the bar at this zoom: `visibleCount` of them from `first`, as legacy's
+  // `_calculate_geometry` counts them (`timeline_widget.py:228-247`).
+  const total = order.length;
+  const countAt = (level: number): number => Math.max(1, Math.floor(total / level));
+  const visibleCount = countAt(zoom);
+  const maxOffset = Math.max(0, total - visibleCount);
+  const first = Math.min(offset, maxOffset);
+  const visible = order.slice(first, first + visibleCount);
+  const zoomed = zoom > 1;
+  barView.current = {
+    zoomed,
+    first,
+    maxOffset,
+    visible,
+    choose,
+    frameAt: (index) => shown[index],
+  };
+
+  /*
+   * Centred on the current frame as legacy centres it: over the count shown BEFORE the zoom, which
+   * its widget has not recomputed yet when `center_on_frame` runs (`timeline_widget.py:132-148`;
+   * `ZoomableTimeline._zoom_in`, 640-644), clamped to what that count allows.
+   */
+  const centreOn = (): void => {
+    const at = Math.max(0, order.indexOf(current));
+    setOffset(Math.max(0, Math.min(total - visibleCount, at - Math.floor(visibleCount / 2))));
+  };
+  const zoomIn = (): void => {
+    setZoom(Math.min(MAX_ZOOM, zoom * ZOOM_STEP));
+    centreOn();
+  };
+  const zoomOut = (): void => {
+    let next = Math.max(1, zoom / ZOOM_STEP);
+    if (Math.abs(next - 1) < 0.05) next = 1;
+    setZoom(next);
+    if (next <= 1) setOffset(0);
+    else centreOn();
+  };
+  const pan = (direction: 1 | -1): void => {
+    const by = Math.max(1, Math.floor(visibleCount * PAN_STEP));
+    setOffset(Math.max(0, Math.min(maxOffset, first + direction * by)));
+  };
+
+  /*
+   * A press on the bar opens the frame under the pointer, and dragging opens each frame it passes,
+   * once, as legacy's `mousePressEvent` and `mouseMoveEvent` do (`timeline_widget.py:453-469`). The
+   * position is read across the bar, so a drag past either end holds the end frame, as legacy's
+   * `_x_to_frame` clamps it. The click that follows is then ignored: a click from the keyboard,
+   * which has no press, still opens its frame.
+   */
+  const startScrub = (event: ReactMouseEvent<HTMLOListElement>): void => {
+    if (event.button !== 0) return;
+    const bar = event.currentTarget;
+    let last: number | null = null;
+    const go = (clientX: number): void => {
+      const { visible: onBar, frameAt, choose: open } = barView.current;
+      const rect = bar.getBoundingClientRect();
+      if (rect.width <= 0 || onBar.length === 0) return;
+      const slot = Math.floor(((clientX - rect.left) / rect.width) * onBar.length);
+      const frame = frameAt(onBar[Math.min(onBar.length - 1, Math.max(0, slot))]!);
+      if (frame === undefined || frame.index === last) return;
+      last = frame.index;
+      open(frame);
+    };
+    const move = (moved: MouseEvent): void => {
+      if ((moved.buttons & 1) === 0) stop();
+      else go(moved.clientX);
+    };
+    const stop = (): void => {
+      window.removeEventListener("mousemove", move);
+      window.removeEventListener("mouseup", stop);
+      scrubbing.current = null;
+    };
+    scrubbing.current?.();
+    scrubbing.current = stop;
+    window.addEventListener("mousemove", move);
+    window.addEventListener("mouseup", stop);
+    go(event.clientX);
+  };
+
   /**
    * Clear Suggested: the purple frames back to pending and the list emptied, as legacy's
    * `clear_suggested_frames` does (`sequence_view_mode.py:502-509`, `main_window.py:5170-5181`).
@@ -803,13 +927,16 @@ export function TimelinePanel({
       </p>
 
       {/* Legacy's bar (timeline_widget.py:233-339): one strip, a frame per slice, separators only
-          while a frame is at least 4px wide -- about 230 frames across the centre pane. */}
+          while a frame is at least 4px wide -- about 230 frames across the centre pane. With its
+          zoom and pan row under it (565-611), and the wheel over both. */}
+      <div className="timeline__zoomable" ref={setZoomable}>
       <div className="timeline__bar-row">
       <ol
-        className={`timeline__frames${order.length > 230 ? " timeline__frames--dense" : ""}`}
+        className={`timeline__frames${visible.length > 230 ? " timeline__frames--dense" : ""}`}
         aria-label="Timeline"
+        onMouseDown={startScrub}
       >
-        {order.map((index) => {
+        {visible.map((index) => {
           const frame = shown[index];
           if (frame === undefined) return null;
           const [r, g, b] = colourOf(frame);
@@ -839,7 +966,11 @@ export function TimelinePanel({
                     ? ""
                     : ` — confidence ${allScores[index]!.toFixed(4)}`)
                 }
-                onClick={() => choose(frame)}
+                // A mouse press has opened it already (a click's `detail` counts presses); from the
+                // keyboard there is none, and the click opens it.
+                onClick={(event) => {
+                  if (event.detail === 0) choose(frame);
+                }}
               />
             </li>
           );
@@ -847,6 +978,51 @@ export function TimelinePanel({
       </ol>
         {/* Legacy's Save All sits here, right of the bar (main_window.py:3296-3305). */}
         <div className="timeline__save" ref={setSaveSlot} />
+      </div>
+      <div className="timeline__controls timeline__bar-controls">
+        <button
+          type="button"
+          aria-label="Pan left"
+          title="Pan left"
+          disabled={!zoomed || first <= 0}
+          onClick={() => pan(-1)}
+        >
+          ◀
+        </button>
+        <button type="button" aria-label="Zoom out timeline" title="Zoom out timeline" disabled={!zoomed} onClick={zoomOut}>
+          −
+        </button>
+        <button
+          type="button"
+          aria-label="Zoom in timeline"
+          title="Zoom in timeline"
+          disabled={zoom >= MAX_ZOOM}
+          onClick={zoomIn}
+        >
+          +
+        </button>
+        <button
+          type="button"
+          aria-label="Pan right"
+          title="Pan right"
+          disabled={!zoomed || first >= maxOffset}
+          onClick={() => pan(1)}
+        >
+          ▶
+        </button>
+        <span className="timeline__spacer" />
+        {videoReady && (
+          <button type="button" onClick={() => setOverrides(clearFlags(frames))}>
+            Clear flags
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={() => setSortKeys((keys) => (keys === null ? sortedKeys(shown) : null))}
+        >
+          {sorted ? "Unsort" : "Sort"}
+        </button>
+      </div>
       </div>
 
       {!videoReady && <PropagateHint active={active} hint={aiHint} />}
@@ -872,12 +1048,6 @@ export function TimelinePanel({
 
 
       <div className="timeline__controls">
-        <button
-          type="button"
-          onClick={() => setSortKeys((keys) => (keys === null ? sortedKeys(shown) : null))}
-        >
-          {sorted ? "Unsort" : "Sort"}
-        </button>
         {videoReady && (
           <>
         <button type="button" onClick={() => void markCurrent()}>
@@ -916,11 +1086,6 @@ export function TimelinePanel({
             onClick={clearSuggestions}
           >
             Clear Suggested
-          </button>
-        )}
-        {videoReady && (
-          <button type="button" onClick={() => setOverrides(clearFlags(frames))}>
-            Clear flags
           </button>
         )}
         <button type="button" className="seq-button seq-button--brown" onClick={startOver}>

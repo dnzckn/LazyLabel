@@ -1925,6 +1925,16 @@ fieldset input[type="text"] {
   font-weight: 700;
 }
 
+/* Right under the bar: ◀ − + ▶ at the left, Clear Flags and Sort at the right
+   (timeline_widget.py:557-613). */
+.timeline__bar-controls {
+  margin-top: -4px;
+}
+
+.timeline__spacer {
+  flex: 1;
+}
+
 /*
  * Propagation, right under the timeline bar. It used to sit above the frames so its progress line
  * stayed in view over six hundred wrapping cells; the bar is one line now, as legacy's is.
