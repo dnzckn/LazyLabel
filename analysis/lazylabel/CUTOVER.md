@@ -68,9 +68,11 @@ Each of these is checkable, and none of them is an opinion.
       app's pickled class names as data, so every dataset works as the desktop app saved it, including
       every one it saves while both apps are in use (the owner keeps both). The acceptance corpus
       is used exactly as legacy wrote it and round-trips with no converter step.
-- [ ] **The live differential suites have been run with real checkpoints**, not just CI. They skip
+- [x] **The live differential suites have been run with real checkpoints**, not just CI. They skip
       themselves when no checkpoint is configured, so a green CI run says nothing about them —
-      `PROGRESS.md` has the command and the expected counts.
+      `PROGRESS.md` has the command and the expected counts. Met 2026-09-25 with all three
+      checkpoints on CPython 3.12: 650 passed, 0 skipped. Run them again if the inference service
+      changes before the switch.
 - [ ] **The deployment has been built and run.** Skipped for now, the owner's choice
       (2026-09-23, confirmed 2026-09-25). Everything under `modernized/lazylabel-reimagined/
       deploy/` is currently reasoned rather than observed; its README says so and names what to

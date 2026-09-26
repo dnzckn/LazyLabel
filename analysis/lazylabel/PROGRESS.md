@@ -1861,8 +1861,9 @@ cd modernized/lazylabel-reimagined/inference && LAZYLABEL_TEST_SAM1_CHECKPOINT=/
 ```
 
 In the 3.12 venv, which the packages have required since 2026-09-23, the last run with all
-three set was **650 passed, 0 skipped**, in 76 s on this machine, with the archetype differential
-added after the golden was recaptured. The old 3.10 venv still runs the suite, but it skips the golden's mask check,
+three set was **650 passed, 0 skipped**, with 37 warnings, in 48 s on this machine (rerun
+2026-09-25 for CUTOVER.md's checklist; 76 s the time before). That count includes the archetype
+differential added after the golden was recaptured. The old 3.10 venv still runs the suite, but it skips the golden's mask check,
 because that golden is PyTorch 2.10's: the golden module there reads 10 passed, 1 skipped. Earlier
 that day the count was 611, and 600 before that day's fixes and their tests. Any `skipped` count above zero means a
 checkpoint was not found and that suite did not actually run. This section said "255 passed, 1
