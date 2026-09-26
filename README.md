@@ -38,10 +38,9 @@ npm install
 LAZYLABEL_DATASET_ROOT="/path/to/your/images" npm start
 ```
 
-`npm install` installs and builds every package, in under a minute. `npm start` starts the API on
-your folder of images. The web app then runs from a second window: `cd LazyLabel/modernized`, then
-`npm run dev`, and open **<http://localhost:5173>**. (The API on port 8787 does not serve the app
-yet, so its own address answers 404.)
+`npm install` installs and builds every package, in under a minute. `npm start` starts LazyLabel
+on your folder of images; open **<http://127.0.0.1:8787/>**. One program, one address: the app
+and its API are served together. Ctrl+C stops it.
 
 - **The AI tools (SAM) are optional.** Without them everything else works and the status bar says
   "No AI". Adding them is a separate Python service:

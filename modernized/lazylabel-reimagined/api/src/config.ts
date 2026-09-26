@@ -6,8 +6,10 @@
  * this is where the choice between them is made, and nothing above it changes.
  */
 
+import { existsSync } from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
+import { fileURLToPath } from "node:url";
 
 export interface Config {
   /** Absolute path of the mounted dataset directory: the blob store's location. */
@@ -30,6 +32,11 @@ export interface Config {
    * stored (Phase 4 exit criterion 3), or null when that import is turned off.
    */
   readonly legacySettingsDir: string | null;
+  /**
+   * The web app's build folder, which the API serves at `/` beside its routes, or null to serve
+   * the routes alone. Whether anything has been built there is checked where it is served.
+   */
+  readonly webRoot: string | null;
 }
 
 /**
@@ -75,6 +82,32 @@ function legacySettingsDirFrom(env: NodeJS.ProcessEnv): string | null {
   return path.resolve(raw);
 }
 
+/**
+ * The web app's build: `web/dist` beside this package, which is where the workspace's
+ * `npm install` puts it, so serving the app needs no configuration (DEPLOYABILITY.md R3).
+ * `LAZYLABEL_WEB_DIST` names another folder; empty turns serving it off.
+ */
+function webRootFrom(env: NodeJS.ProcessEnv): string | null {
+  const raw = env["LAZYLABEL_WEB_DIST"];
+  if (raw === undefined) return path.join(apiPackageRoot(), "..", "web", "dist");
+  if (raw.trim() === "") return null;
+  return path.resolve(raw);
+}
+
+/**
+ * This package's folder, found by walking up from this file to its `package.json`, because the file
+ * runs from `src/` under the tests and from `dist/src/` when built, one level apart.
+ */
+function apiPackageRoot(): string {
+  let folder = path.dirname(fileURLToPath(import.meta.url));
+  for (;;) {
+    if (existsSync(path.join(folder, "package.json"))) return folder;
+    const parent = path.dirname(folder);
+    if (parent === folder) return folder;
+    folder = parent;
+  }
+}
+
 export class ConfigError extends Error {
   constructor(message: string) {
     super(message);
@@ -108,5 +141,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     host: env["LAZYLABEL_HOST"] ?? "127.0.0.1",
     inferenceUrl: inferenceUrlFrom(env),
     legacySettingsDir: legacySettingsDirFrom(env),
+    webRoot: webRootFrom(env),
   };
 }

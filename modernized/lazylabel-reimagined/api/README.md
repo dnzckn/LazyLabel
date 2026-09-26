@@ -34,7 +34,8 @@ npm run typecheck
 npm run build
 ```
 
-To start it against a folder of images:
+To start it against a folder of images, then open <http://127.0.0.1:8787/>, where it serves the
+web app too:
 
 ```bash
 LAZYLABEL_DATASET_ROOT=/path/to/your/images npm start
@@ -52,6 +53,7 @@ $env:LAZYLABEL_DATASET_ROOT = "C:\path\to\your\images"; npm start
 | `LAZYLABEL_INFERENCE_URL` | *none* | Where the inference service listens, such as `http://127.0.0.1:8788`. Unset is a supported deployment: every route except SAM prompts, propagation and archetypes works, and those answer 503 with the reason. A value that is not an http or https URL is refused at startup, quoted. |
 | `LAZYLABEL_HOST` | `127.0.0.1` | Loopback by default. Decision 3 is one trusted user, so exposing this is a deliberate act behind a reverse proxy, not a default. |
 | `LAZYLABEL_LEGACY_SETTINGS_DIR` | `~/.config/lazylabel` | Where the desktop app kept `settings.json` and `hotkeys.json`. Read once, at startup, while this database holds no settings; after that the stored settings are the truth and these files are never read again. Empty turns the import off. |
+| `LAZYLABEL_WEB_DIST` | `../web/dist` | The web app's build, which this API serves at `/` beside its routes, so one process on one port is the whole app. The default is where the workspace's `npm install` builds it; if it holds no `index.html` the API serves its routes alone and says so at startup. Empty turns it off, for an API behind a separate web server. |
 
 ### The acceptance round trip (Phase 6's exit criterion 4)
 
@@ -122,6 +124,12 @@ processed view as 512-pixel tiles; level 0 is the image's own pixels and each le
 one below averaged in 2x2 blocks, the geometry shared with the browser through
 `@lazylabel/contracts`),
 `GET`/`PUT /users/me/settings`, `GET /health`.
+
+Every route also answers under `/api`, which is where the browser calls it: the dev server's proxy
+and nginx strip that prefix before forwarding, and when the API serves the web app itself it strips
+it too. A GET or HEAD of `/`, `/index.html`, `/assets/*` or a top-level static file is answered
+from the web app's build when there is one (`src/http/staticWeb.ts`): the file, or a plain 404 when
+the build has no such file, and nothing outside the build folder is ever read for them.
 
 ## The image pipeline
 

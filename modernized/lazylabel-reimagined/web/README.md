@@ -15,14 +15,14 @@ there, or here, installs all five packages and builds them. Then, here:
 
 ```bash
 npm test
-npm run dev     # proxies /api to http://127.0.0.1:8787
-npm run build
+npm run dev     # hot reload at http://localhost:5173, proxying /api to http://127.0.0.1:8787
+npm run build   # to dist/, which the API serves at / on its own port
 ```
 
 | Variable | Default | What it is |
 |---|---|---|
 | `LAZYLABEL_API` | `http://127.0.0.1:8787` | Development only: where `npm run dev` proxies `/api`. Read from the environment or a `.env` file by `vite.config.ts`. |
-| `VITE_LAZYLABEL_API` | `/api` | The API's base URL, compiled into the build. Leave it unset: the default is same-origin, which the deployment's proxy serves, and an absolute URL would need CORS on an API that has none. |
+| `VITE_LAZYLABEL_API` | `/api` | The API's base URL, compiled into the build. Leave it unset: the default is same-origin, which the API serving this build answers, as does the deployment's proxy, and an absolute URL would need CORS on an API that has none. |
 
 ## What genuinely works
 

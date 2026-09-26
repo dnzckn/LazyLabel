@@ -15,8 +15,9 @@ export default defineConfig(({ mode }) => {
       conditions: ["development"],
     },
     server: {
-      // The API serves the built app in production; in development Vite proxies to it, so the
-      // browser sees one origin and there is no CORS configuration to get wrong.
+      // The API serves the built app itself, on its own port (`api/src/http/staticWeb.ts`); in
+      // development Vite proxies to it, so the browser sees one origin either way and there is no
+      // CORS configuration to get wrong.
       proxy: {
         "/api": {
           target: env["LAZYLABEL_API"] ?? "http://127.0.0.1:8787",

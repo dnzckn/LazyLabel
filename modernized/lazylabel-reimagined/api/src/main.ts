@@ -12,6 +12,7 @@ import { HttpInferenceClient } from "./adapters/httpInference.js";
 import { SqliteMetadataStore } from "./adapters/sqliteMetadataStore.js";
 import { loadConfig } from "./config.js";
 import { createLogger } from "./http/log.js";
+import { builtWebRoot } from "./http/staticWeb.js";
 import { createServer } from "./server.js";
 import { importDesktopSettingsOnce } from "./settings/legacyImport.js";
 import type { AppDeps } from "./app.js";
@@ -112,9 +113,18 @@ async function main(): Promise<void> {
     }),
   );
 
-  const server = createServer(app);
+  // The web app is served from here when it has been built, which `npm install` in `modernized/`
+  // does: then this one process on this one port is the whole app (DEPLOYABILITY.md R3).
+  const webRoot = builtWebRoot(config.webRoot);
+  const server = createServer(app, { webRoot });
   server.listen(config.port, config.host, () => {
     logger.log("info", "listening", {
+      url: `http://${config.host.includes(":") ? `[${config.host}]` : config.host}:${config.port}/`,
+      web:
+        webRoot
+        ?? (config.webRoot === null
+          ? "not served (LAZYLABEL_WEB_DIST is empty)"
+          : `not built, so only the API's routes are served: ${config.webRoot} has no index.html`),
       host: config.host,
       port: config.port,
       datasetRoot: config.datasetRoot,

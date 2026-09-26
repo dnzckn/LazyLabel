@@ -75,22 +75,19 @@ No build script may call npm itself: each nested `npm run` adds a `node_modules\
 PATH for every folder above the package, and four levels took PATH past what cmd.exe reads, so
 `tsc` stopped being found halfway through an install (`api/test/workspace.test.ts` says more).
 
-To run the two services together, from `modernized/`:
+To run it, from `modernized/`, then open <http://127.0.0.1:8787/>. The API serves the built web
+app itself, so this one process on this one port is the whole app:
 
 ```bash
-# terminal 1 — the API, pointed at a folder of images
 LAZYLABEL_DATASET_ROOT=/path/to/your/images npm start
 ```
 
 ```powershell
-# terminal 1, in PowerShell
 $env:LAZYLABEL_DATASET_ROOT = "C:\path\to\your\images"; npm start
 ```
 
-```bash
-# terminal 2 — the web app, which proxies /api to it; open http://localhost:5173
-npm run dev
-```
+To work on the web app with hot reload, run the Vite dev server beside it, `npm run dev` in a
+second terminal, and open <http://localhost:5173> instead: it proxies `/api` to the API.
 
 That is the whole app except the AI tools, and running without them is a supported deployment
 rather than a broken one: everything but SAM prompts and propagation works. To add them:

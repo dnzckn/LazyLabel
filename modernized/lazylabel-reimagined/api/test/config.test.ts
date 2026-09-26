@@ -10,6 +10,7 @@
 
 import * as os from "node:os";
 import * as path from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
 
@@ -116,5 +117,23 @@ describe("the desktop app's settings directory (Phase 4 exit criterion 3)", () =
 
   it("is turned off by setting it empty", () => {
     expect(load({ LAZYLABEL_LEGACY_SETTINGS_DIR: "" }).legacySettingsDir).toBeNull();
+  });
+});
+
+describe("the web app's build, which the API serves (DEPLOYABILITY.md R3)", () => {
+  it("defaults to web/dist beside this package, where the workspace's npm install builds it", () => {
+    // Found from the source file here and from dist/src when built, one level apart, so this also
+    // holds the walk up to the package's own folder.
+    const api = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+
+    expect(load({}).webRoot).toBe(path.join(api, "..", "web", "dist"));
+  });
+
+  it("can point somewhere else, resolved to an absolute path", () => {
+    expect(load({ LAZYLABEL_WEB_DIST: "site" }).webRoot).toBe(path.resolve("site"));
+  });
+
+  it("is turned off by setting it empty, for an API behind a separate web server", () => {
+    expect(load({ LAZYLABEL_WEB_DIST: "" }).webRoot).toBeNull();
   });
 });
