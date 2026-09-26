@@ -13,7 +13,7 @@
  * nothing, which is the other half of the same idea.
  */
 
-import { useCallback, useRef, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, type ReactNode } from "react";
 
 import { useHotkey } from "../hotkeys/HotkeyProvider.jsx";
 import { useSettings } from "../settings/SettingsProvider.jsx";
@@ -28,6 +28,13 @@ export function FragmentPanel(): ReactNode {
   // one session's toggling, not a preference, and persisting it would restore a value the user
   // last saw switched OFF.
   const remembered = useRef(0);
+  // EVERY non-zero value it takes, as legacy's `last_ai_filter_value` follows every set
+  // (main_window.py:1320-1324), the slider's and the stored one's included. Only Z updated it, so a
+  // slider dragged to 0 and then Z came back at 100 rather than where it had been
+  // (`CONTROL_PARITY.md` CP-24).
+  useEffect(() => {
+    if (threshold > MIN_THRESHOLD) remembered.current = threshold;
+  }, [threshold]);
 
   const set = useCallback(
     (value: number) => {

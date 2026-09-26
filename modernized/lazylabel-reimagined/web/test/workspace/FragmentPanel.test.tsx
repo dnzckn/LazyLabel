@@ -89,6 +89,21 @@ describe("the toggle key", () => {
     await waitFor(() => expect(saved["fragment_threshold"]).toBe(35));
   });
 
+  it("brings back the last value the SLIDER set, not only one it switched off itself", async () => {
+    // Legacy remembers every non-zero set (main_window.py:1320-1324). Only Z did here, so a slider
+    // dragged down to 0 and then Z came back at 100 (CONTROL_PARITY.md CP-24).
+    const { saved } = mount(0);
+    await waitFor(() => expect(slider().value).toBe("0"));
+
+    fireEvent.change(slider(), { target: { value: "40" } });
+    await waitFor(() => expect(slider().value).toBe("40"));
+    fireEvent.change(slider(), { target: { value: "0" } });
+    await waitFor(() => expect(slider().value).toBe("0"));
+    press();
+
+    await waitFor(() => expect(saved["fragment_threshold"]).toBe(40));
+  });
+
   it("goes to the rule's default from a stored zero, rather than doing nothing", async () => {
     const { saved } = mount(0);
     await waitFor(() => expect(slider().value).toBe("0"));
