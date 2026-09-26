@@ -14,8 +14,10 @@ import { defaultSettings } from "@lazylabel/settings-schema";
 
 import type { ApiClient } from "../../src/api/client.js";
 import { HotkeyProvider } from "../../src/hotkeys/HotkeyProvider.jsx";
+import { NotificationHost, NotificationProvider } from "../../src/notifications/NotificationProvider.jsx";
 import { SettingsProvider } from "../../src/settings/SettingsProvider.jsx";
 import { TimelinePanel } from "../../src/sequence/TimelinePanel.jsx";
+import { SequenceActiveContext } from "../../src/sequence/sequenceActive.js";
 
 /**
  * Min Conf is a PERSISTED setting, so the panel needs the settings context above it.
@@ -36,7 +38,10 @@ function withSettings(node: React.ReactNode, saved: Record<string, unknown> = {}
   // provider by design -- a hook that works without one hides a missing wire.
   return (
     <SettingsProvider client={client}>
-      <HotkeyProvider bindings={defaultSettings().hotkeys}>{node}</HotkeyProvider>
+      <NotificationProvider>
+        <NotificationHost />
+        <HotkeyProvider bindings={defaultSettings().hotkeys}>{node}</HotkeyProvider>
+      </NotificationProvider>
     </SettingsProvider>
   );
 }
@@ -417,9 +422,9 @@ describe("the frame keys", () => {
     await waitFor(() => expect(current()).toContain("f05.png"));
   });
 
-  it("does nothing when there is no frame of that kind", async () => {
+  it("stays put when there is no frame of that kind, and says so as legacy does", async () => {
     // No frame is flagged until propagation runs, and a key that throws on an empty timeline is a
-    // key nobody presses twice. `step` returns null and `navigate` stops there.
+    // key nobody presses twice. Legacy's notice is "No more flagged frames" (main_window.py:4673).
     show();
     build();
     await waitFor(() => expect(cells().length).toBeGreaterThan(0));
@@ -428,6 +433,39 @@ describe("the frame keys", () => {
     press("next_flagged_frame");
 
     expect(current()).toBe(before);
+    expect(await screen.findByText("No more flagged frames")).toBeTruthy();
+  });
+
+  it("answers Find Archetypes with legacy's 'Build a timeline first' before one exists", async () => {
+    // Its handler called a function declared below the early return, so with no timeline built
+    // the key threw a ReferenceError instead.
+    show();
+
+    press("find_archetypes");
+
+    expect(await screen.findByText("Build a timeline first")).toBeTruthy();
+  });
+
+  it("does nothing while its tab is not the one showing", async () => {
+    // The panel stays mounted on the other tabs; its keys must not act there.
+    render(
+      withSettings(
+        <SequenceActiveContext.Provider value={false}>
+          <TimelinePanel images={FOLDER} />
+        </SequenceActiveContext.Provider>,
+      ),
+    );
+    build();
+    await waitFor(() => expect(cells().length).toBeGreaterThan(0));
+    const before = current();
+
+    press("next_reference_frame");
+    press("find_archetypes");
+
+    expect(current()).toBe(before);
+    // Find Archetypes says where it works instead, as the shell's fallback does.
+    expect(await screen.findByText("Find Archetypes works on the Sequence tab")).toBeTruthy();
+    expect(screen.queryByText("Build a timeline first")).toBeNull();
   });
 });
 

@@ -12,7 +12,9 @@
  *     write a V, not delete the selected segments.
  *   - An action with no handler registered does nothing AND does not swallow the key. Preventing
  *     the browser's default for a key nothing handles is how Ctrl+A stops selecting text for no
- *     visible reason.
+ *     visible reason. The exception is an action something registered a FALLBACK for: the
+ *     sequence's Ctrl+H and Ctrl+P, which fell through to the browser's history and print dialogs
+ *     while the Sequence tab had not been opened.
  */
 
 import {
@@ -35,6 +37,12 @@ export type HotkeyHandler = (event: KeyboardEvent) => void;
 export interface HotkeyContextValue {
   /** Register a handler for an action. Returns the function that unregisters it. */
   readonly register: (action: string, handler: HotkeyHandler) => () => void;
+  /**
+   * Register what an action does while NOTHING else handles it, and keep its key from the browser
+   * meanwhile. Not a handler for `isLive`: a fallback says why nothing happened, it does not make
+   * the action work.
+   */
+  readonly registerFallback: (action: string, handler: HotkeyHandler) => () => void;
   /** Which action a key string is bound to, or null. Drives "that key is taken" in the UI. */
   readonly actionFor: (key: string) => string | null;
   readonly bindings: Readonly<Record<string, HotkeyBinding>>;
@@ -67,6 +75,7 @@ export function HotkeyProvider({
   readonly target?: Pick<EventTarget, "addEventListener" | "removeEventListener"> | null;
 }): ReactNode {
   const handlers = useRef(new Map<string, Set<HotkeyHandler>>());
+  const fallbacks = useRef(new Map<string, Set<HotkeyHandler>>());
 
   // Rebuilt whenever the bindings change, so a rebinding takes effect without a reload.
   const byKey = useMemo(() => {
@@ -104,6 +113,15 @@ export function HotkeyProvider({
     };
   }, []);
 
+  const registerFallback = useCallback((action: string, handler: HotkeyHandler) => {
+    const existing = fallbacks.current.get(action) ?? new Set<HotkeyHandler>();
+    existing.add(handler);
+    fallbacks.current.set(action, existing);
+    return () => {
+      fallbacks.current.get(action)?.delete(handler);
+    };
+  }, []);
+
   useEffect(() => {
     const listenOn = target === undefined ? globalThis.document : target;
     if (listenOn === null || listenOn === undefined) return;
@@ -120,11 +138,14 @@ export function HotkeyProvider({
 
       const registered = handlers.current.get(action);
       // No handler means the key is not ours today. Leave the browser's own behaviour alone rather
-      // than swallowing it for an action this screen does not implement.
-      if (registered === undefined || registered.size === 0) return;
+      // than swallowing it for an action this screen does not implement -- unless something
+      // registered a fallback, which says why nothing happened and keeps the key from the browser.
+      const answering =
+        registered !== undefined && registered.size > 0 ? registered : fallbacks.current.get(action);
+      if (answering === undefined || answering.size === 0) return;
 
       keyboardEvent.preventDefault();
-      for (const handler of registered) handler(keyboardEvent);
+      for (const handler of answering) handler(keyboardEvent);
     };
 
     listenOn.addEventListener("keydown", onKeyDown);
@@ -134,11 +155,12 @@ export function HotkeyProvider({
   const value = useMemo<HotkeyContextValue>(
     () => ({
       register,
+      registerFallback,
       actionFor: (key) => byKey.get(key) ?? null,
       bindings,
       isLive: (action) => live.has(action),
     }),
-    [register, byKey, bindings, live],
+    [register, registerFallback, byKey, bindings, live],
   );
 
   return <HotkeyContext.Provider value={value}>{children}</HotkeyContext.Provider>;
@@ -159,4 +181,16 @@ export function useHotkey(action: string, handler: HotkeyHandler): void {
   latest.current = handler;
 
   useEffect(() => register(action, (event) => latest.current(event)), [register, action]);
+}
+
+/**
+ * Run `handler` when the user triggers `action` and nothing else handles it, keeping the key from
+ * the browser either way. The action still reads as not live in the hotkey reference.
+ */
+export function useHotkeyFallback(action: string, handler: HotkeyHandler): void {
+  const { registerFallback } = useHotkeyContext();
+  const latest = useRef(handler);
+  latest.current = handler;
+
+  useEffect(() => registerFallback(action, (event) => latest.current(event)), [registerFallback, action]);
 }

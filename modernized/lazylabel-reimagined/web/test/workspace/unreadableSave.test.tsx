@@ -116,6 +116,20 @@ describe("an image whose annotations could not be read", () => {
 
     expect(saveAnnotations).not.toHaveBeenCalled();
   });
+
+  it("writes nothing when the SAVE KEY is pressed either, and says why", async () => {
+    // Enter reached the write directly while the button was disabled, so the key the user holds
+    // down put an empty file over the damaged one -- unconditionally, with no revision to check.
+    const { saveAnnotations } = mount(unreadable);
+    await open();
+
+    for (const action of ["save_output", "save_output_alt"]) {
+      fireEvent.keyDown(document, { key: defaultSettings().hotkeys[action]!.primary });
+    }
+
+    await waitFor(() => expect(screen.getAllByText(/Nothing was written/).length).toBeGreaterThan(0));
+    expect(saveAnnotations).not.toHaveBeenCalled();
+  });
 });
 
 describe("an image with no annotation file at all", () => {

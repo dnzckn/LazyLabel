@@ -17,6 +17,9 @@
 
 import { useCallback, useState, type ReactNode } from "react";
 
+import { useHotkeyFallback } from "../hotkeys/HotkeyProvider.jsx";
+import { useNotifications } from "../notifications/NotificationProvider.jsx";
+import { FIND_ARCHETYPES_ELSEWHERE, SequenceActiveContext } from "../sequence/sequenceActive.js";
 import { TabList } from "./Tabs.jsx";
 
 export type CentreTab = "single" | "multi" | "sequence";
@@ -53,6 +56,20 @@ export function CentreTabs({
     if (next === "sequence") setSequenceOpened(true);
   }, []);
 
+  /*
+   * THE SEQUENCE'S CTRL KEYS BELONG TO THE APP ON EVERY TAB. Legacy's shortcuts are the window's,
+   * so Ctrl+H and Ctrl+P never reach anything else. Here a key nothing handles falls through to
+   * the browser, and until the Sequence tab was first opened -- when nothing had registered them --
+   * Ctrl+H opened the browser's history and Ctrl+P its print dialog. Fallbacks, so they answer
+   * only until the timeline registers its own: Find Archetypes says where it works, and Propagate
+   * does nothing, as legacy's does outside sequence mode (main_window.py:4708-4716, 5057-5059).
+   */
+  const { notify } = useNotifications();
+  useHotkeyFallback("find_archetypes", () =>
+    notify({ severity: "info", message: FIND_ARCHETYPES_ELSEWHERE }),
+  );
+  useHotkeyFallback("propagate", () => undefined);
+
   return (
     <div className="centre">
       <TabList
@@ -78,7 +95,8 @@ export function CentreTabs({
 
         {sequenceOpened && (
           <div className="centre__sequence" hidden={tab !== "sequence"}>
-            {sequence}
+            {/* Mounted on every tab, and told which one shows, so its keys act only on its own. */}
+            <SequenceActiveContext.Provider value={tab === "sequence"}>{sequence}</SequenceActiveContext.Provider>
           </div>
         )}
       </div>

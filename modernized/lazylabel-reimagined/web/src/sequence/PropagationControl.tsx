@@ -24,6 +24,8 @@ import type { WireSegment } from "@lazylabel/contracts";
 import type { ApiClient, WirePropagationFrame } from "../api/client.js";
 import { useSettings } from "../settings/SettingsProvider.jsx";
 import { useHotkey } from "../hotkeys/HotkeyProvider.jsx";
+import { useNotifications } from "../notifications/NotificationProvider.jsx";
+import { useSequenceActive } from "./sequenceActive.js";
 
 import { commitFrame, type CommitPolicy, type Committed } from "./commit.js";
 import { clampThreshold, DEFAULT_THRESHOLD } from "./confidence.js";
@@ -270,7 +272,24 @@ export function PropagationControl({
     start,
   ]);
 
-  useHotkey("propagate", () => void begin());
+  /*
+   * Ctrl+P presses legacy's Propagate button, which is its Abort while a run goes
+   * (main_window.py:4708-4716; sequence_widget.py:629-634), and acts only on the Sequence tab.
+   */
+  const active = useSequenceActive();
+  const { notify } = useNotifications();
+  useHotkey("propagate", () => {
+    if (!active) return;
+    if (progress.running) {
+      if (progress.job?.cancelling !== true) void cancel();
+      return;
+    }
+    if (references.length === 0) {
+      notify({ severity: "info", message: "Mark at least one frame as a reference first" });
+      return;
+    }
+    void begin();
+  });
 
   /*
    * Push scores up as they arrive rather than at the end: a 600-frame propagation runs for minutes

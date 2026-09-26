@@ -22,6 +22,7 @@ import type {
   WirePropagationStart,
 } from "../../src/api/client.js";
 import { HotkeyProvider } from "../../src/hotkeys/HotkeyProvider.jsx";
+import { NotificationHost, NotificationProvider } from "../../src/notifications/NotificationProvider.jsx";
 import { Panel } from "../../src/shell/Panel.jsx";
 import { TimelinePanel } from "../../src/sequence/TimelinePanel.jsx";
 import { PropagationControl } from "../../src/sequence/PropagationControl.jsx";
@@ -161,11 +162,14 @@ function fakeClient(script: {
 function show(fake: Fake, frames: readonly Frame[] = FRAMES) {
   const onScores = vi.fn();
   render(
-    <SettingsProvider client={fake.client}>
-      <HotkeyProvider bindings={defaultSettings().hotkeys}>
-        <PropagationControl client={fake.client} frames={frames} onScores={onScores} />
-      </HotkeyProvider>
-    </SettingsProvider>,
+    <NotificationProvider>
+      <NotificationHost />
+      <SettingsProvider client={fake.client}>
+        <HotkeyProvider bindings={defaultSettings().hotkeys}>
+          <PropagationControl client={fake.client} frames={frames} onScores={onScores} />
+        </HotkeyProvider>
+      </SettingsProvider>
+    </NotificationProvider>,
   );
   return { onScores };
 }
@@ -700,11 +704,14 @@ describe("RULE-056: not losing propagated work without asking", () => {
 
     const timeline = <TimelinePanel images={FOLDER as never} client={client} confirmDiscard={confirmDiscard} />;
     render(
-      <SettingsProvider client={client}>
-        <HotkeyProvider bindings={defaultSettings().hotkeys}>
-          {inPanel ? <Panel title="Sequence">{timeline}</Panel> : timeline}
-        </HotkeyProvider>
-      </SettingsProvider>,
+      <NotificationProvider>
+        <NotificationHost />
+        <SettingsProvider client={client}>
+          <HotkeyProvider bindings={defaultSettings().hotkeys}>
+            {inPanel ? <Panel title="Sequence">{timeline}</Panel> : timeline}
+          </HotkeyProvider>
+        </SettingsProvider>
+      </NotificationProvider>,
     );
   }
 

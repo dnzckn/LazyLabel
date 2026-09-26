@@ -26,7 +26,9 @@ import type { WireSegment } from "@lazylabel/contracts";
 import type { ApiClient } from "../api/client.js";
 import { useSettings } from "../settings/SettingsProvider.jsx";
 import { useHotkey } from "../hotkeys/HotkeyProvider.jsx";
+import { useNotifications } from "../notifications/NotificationProvider.jsx";
 import { PropagationControl } from "./PropagationControl.jsx";
+import { FIND_ARCHETYPES_ELSEWHERE, useSequenceActive } from "./sequenceActive.js";
 
 import {
   buildTimeline,
@@ -110,6 +112,13 @@ export interface TimelinePanelProps {
    */
   readonly openKey?: string;
 }
+
+/** What legacy says when there is no such frame to move to (main_window.py:4673-4706, 5158-5168). */
+const NOTHING_TO_STEP_TO: Readonly<Record<Target, string>> = {
+  flagged: "No more flagged frames",
+  reference: "No reference frames",
+  suggested: "No suggested frames",
+};
 
 export function TimelinePanel({
   images,
@@ -213,15 +222,24 @@ export function TimelinePanel({
     [],
   );
 
+  const { notify } = useNotifications();
+  // Whether the Sequence tab is showing: its keys act only there, as legacy's act only in sequence
+  // mode, although the panel stays mounted on the other tabs.
+  const active = useSequenceActive();
+
   const navigate = useCallback(
     (target: Target, direction: 1 | -1) => {
       const next = step(frames, current, target, direction);
-      if (next === null) return;
+      if (next === null) {
+        // Legacy says so rather than doing nothing (main_window.py:4673-4706, 5158-5168).
+        notify({ severity: "info", message: NOTHING_TO_STEP_TO[target] });
+        return;
+      }
       setCurrent(next);
       const frame = frames[next];
       if (frame !== undefined) onOpen?.(frame.key, propagatedFor(frame));
     },
-    [current, frames, onOpen],
+    [current, frames, notify, onOpen],
   );
 
   /*
@@ -243,12 +261,12 @@ export function TimelinePanel({
     () => setOverrides(markReference(frames, current)),
     [current, frames],
   );
-  useHotkey("add_reference_frame", markCurrent);
+  useHotkey("add_reference_frame", () => active && markCurrent());
 
-  useHotkey("next_flagged_frame", () => navigate("flagged", 1));
-  useHotkey("prev_flagged_frame", () => navigate("flagged", -1));
-  useHotkey("next_reference_frame", () => navigate("reference", 1));
-  useHotkey("prev_reference_frame", () => navigate("reference", -1));
+  useHotkey("next_flagged_frame", () => active && navigate("flagged", 1));
+  useHotkey("prev_flagged_frame", () => active && navigate("flagged", -1));
+  useHotkey("next_reference_frame", () => active && navigate("reference", 1));
+  useHotkey("prev_reference_frame", () => active && navigate("reference", -1));
   /*
    * APPLY THE THRESHOLD WHEN SCORES ARRIVE, not only when the slider moves.
    *
@@ -269,9 +287,50 @@ export function TimelinePanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scoreKey, threshold]);
 
-  useHotkey("find_archetypes", () => void find());
-  useHotkey("next_suggested_frame", () => navigate("suggested", 1));
-  useHotkey("prev_suggested_frame", () => navigate("suggested", -1));
+  /**
+   * C10: ask which frames are worth annotating by hand, and mark them.
+   *
+   * The answer is kept as well as drawn, because RULE-091's prefetch encodes the first uncached
+   * archetype ahead of the neighbours -- a suggestion is where a user JUMPS to, and a jump is the
+   * navigation neighbour-prefetching never helps with.
+   *
+   * ABOVE the early returns, with the hooks. Its key handler called it from there while it was
+   * declared below them, so on a panel with no timeline built -- which returns early -- Ctrl+H
+   * threw a ReferenceError instead of saying anything.
+   */
+  const find = useCallback(async () => {
+    if (client === undefined || finding) return;
+    setFinding(true);
+    setFoundNote(null);
+    try {
+      const answer = await client.findArchetypes(frames.map((frame) => frame.key));
+      setArchetypes(answer.suggested);
+      onArchetypes?.(answer.suggested);
+      setOverrides(markSuggested(frames, answer.suggested));
+      setFoundNote(
+        answer.suggested.length === 0
+          ? "No distinct scenes were found — this sequence is too uniform to suggest frames."
+          : answer.fellShort
+            ? `${answer.suggested.length} of ${answer.budget} suggested; this sequence has only `
+              + `${answer.clusters} distinct scenes.`
+            : `${answer.suggested.length} frames suggested from ${answer.clusters} scenes.`,
+      );
+    } catch (cause) {
+      setFoundNote(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setFinding(false);
+    }
+  }, [client, finding, frames, onArchetypes]);
+
+  useHotkey("find_archetypes", () => {
+    // Off its tab the key says where it works, as the shell's fallback does before this panel is
+    // first mounted; on it, legacy's answer with no timeline (main_window.py:5057-5059).
+    if (!active) notify({ severity: "info", message: FIND_ARCHETYPES_ELSEWHERE });
+    else if (frames.length === 0) notify({ severity: "info", message: "Build a timeline first" });
+    else void find();
+  });
+  useHotkey("next_suggested_frame", () => active && navigate("suggested", 1));
+  useHotkey("prev_suggested_frame", () => active && navigate("suggested", -1));
 
   useEffect(() => {
     if (openKey === undefined) return;
@@ -297,37 +356,6 @@ export function TimelinePanel({
       <RangePicker images={images} onBuild={build} />
     );
   }
-
-  /**
-   * C10: ask which frames are worth annotating by hand, and mark them.
-   *
-   * The answer is kept as well as drawn, because RULE-091's prefetch encodes the first uncached
-   * archetype ahead of the neighbours -- a suggestion is where a user JUMPS to, and a jump is the
-   * navigation neighbour-prefetching never helps with.
-   */
-  const find = async () => {
-    if (client === undefined || finding) return;
-    setFinding(true);
-    setFoundNote(null);
-    try {
-      const answer = await client.findArchetypes(frames.map((frame) => frame.key));
-      setArchetypes(answer.suggested);
-      onArchetypes?.(answer.suggested);
-      setOverrides(markSuggested(frames, answer.suggested));
-      setFoundNote(
-        answer.suggested.length === 0
-          ? "No distinct scenes were found — this sequence is too uniform to suggest frames."
-          : answer.fellShort
-            ? `${answer.suggested.length} of ${answer.budget} suggested; this sequence has only `
-              + `${answer.clusters} distinct scenes.`
-            : `${answer.suggested.length} frames suggested from ${answer.clusters} scenes.`,
-      );
-    } catch (cause) {
-      setFoundNote(cause instanceof Error ? cause.message : String(cause));
-    } finally {
-      setFinding(false);
-    }
-  };
 
   /**
    * Start again — and ASK FIRST when that would throw propagated work away.

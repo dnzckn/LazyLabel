@@ -103,14 +103,63 @@ describe("listing the classes", () => {
 });
 
 describe("naming a class", () => {
-  it("stores the name", async () => {
+  const field = () => screen.getByRole("textbox", { name: "Name for class 3" }) as HTMLInputElement;
+
+  it("stores the name when the user leaves the field", async () => {
     await mount(of(3));
 
-    fireEvent.change(screen.getByRole("textbox", { name: "Name for class 3" }), {
-      target: { value: "car" },
-    });
+    fireEvent.change(field(), { target: { value: "car" } });
+    fireEvent.blur(field());
 
     await waitFor(() => expect(shown("aliases")).toBe('{"3":"car"}'));
+  });
+
+  it("stores the name on Enter", async () => {
+    await mount(of(3));
+
+    fireEvent.change(field(), { target: { value: "car" } });
+    fireEvent.keyDown(field(), { key: "Enter" });
+
+    await waitFor(() => expect(shown("aliases")).toBe('{"3":"car"}'));
+  });
+
+  it("keeps a space typed between two words", async () => {
+    // Typed a keystroke at a time. It used to commit and trim at every keystroke, so the space
+    // after "stop" was trimmed away and the field reverted: "stop sign" could only be pasted.
+    await mount(of(3));
+
+    let typed = "";
+    for (const character of "stop sign") {
+      typed += character;
+      fireEvent.change(field(), { target: { value: typed } });
+      expect(field().value).toBe(typed);
+    }
+    fireEvent.blur(field());
+
+    await waitFor(() => expect(shown("aliases")).toBe('{"3":"stop sign"}'));
+  });
+
+  it("is one undo step however many keystrokes it took", async () => {
+    await mount(of(3), { "3": "car" });
+
+    for (const typed of ["l", "lo", "lor", "lorr", "lorry"]) fireEvent.change(field(), { target: { value: typed } });
+    fireEvent.blur(field());
+    await waitFor(() => expect(shown("aliases")).toBe('{"3":"lorry"}'));
+
+    fireEvent.click(screen.getByText("undo"));
+
+    await waitFor(() => expect(shown("aliases")).toBe('{"3":"car"}'));
+  });
+
+  it("puts the name back on Escape, storing nothing", async () => {
+    await mount(of(3), { "3": "car" });
+
+    fireEvent.change(field(), { target: { value: "lorry" } });
+    fireEvent.keyDown(field(), { key: "Escape" });
+    expect(field().value).toBe("car");
+    fireEvent.blur(field());
+
+    expect(shown("aliases")).toBe('{"3":"car"}');
   });
 
   it("CLEARS the entry when the name is blanked, rather than storing an empty one", async () => {
@@ -118,24 +167,10 @@ describe("naming a class", () => {
     // back to the id.
     await mount(of(3), { "3": "car" });
 
-    fireEvent.change(screen.getByRole("textbox", { name: "Name for class 3" }), {
-      target: { value: "  " },
-    });
+    fireEvent.change(field(), { target: { value: "  " } });
+    fireEvent.blur(field());
 
     await waitFor(() => expect(shown("aliases")).toBe("{}"));
-  });
-
-  it("can be undone", async () => {
-    await mount(of(3), { "3": "car" });
-
-    fireEvent.change(screen.getByRole("textbox", { name: "Name for class 3" }), {
-      target: { value: "lorry" },
-    });
-    await waitFor(() => expect(shown("aliases")).toBe('{"3":"lorry"}'));
-
-    fireEvent.click(screen.getByText("undo"));
-
-    await waitFor(() => expect(shown("aliases")).toBe('{"3":"car"}'));
   });
 });
 

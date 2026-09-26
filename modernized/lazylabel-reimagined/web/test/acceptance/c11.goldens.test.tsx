@@ -41,6 +41,7 @@ import { defaultSettings } from "@lazylabel/settings-schema";
 
 import type { ApiClient, WirePropagationFrame, WirePropagationJob } from "../../src/api/client.js";
 import { HotkeyProvider } from "../../src/hotkeys/HotkeyProvider.jsx";
+import { NotificationProvider } from "../../src/notifications/NotificationProvider.jsx";
 import { TimelinePanel } from "../../src/sequence/TimelinePanel.jsx";
 import { SettingsProvider } from "../../src/settings/SettingsProvider.jsx";
 
@@ -230,18 +231,20 @@ function mount(scenario: Scenario) {
   } as unknown as ApiClient;
 
   render(
-    <SettingsProvider client={client}>
-      <HotkeyProvider bindings={defaultSettings().hotkeys}>
-        <TimelinePanel
-          images={listing(new Set([REFERENCE, ...scenario.labeled])).images as never}
-          client={client}
-          confirmDiscard={() => true}
-          onOpen={(key, segments) =>
-            opened.set(key, (segments ?? []).map((segment) => objectOf(segment.mask?.box)).sort())
-          }
-        />
-      </HotkeyProvider>
-    </SettingsProvider>,
+    <NotificationProvider>
+      <SettingsProvider client={client}>
+        <HotkeyProvider bindings={defaultSettings().hotkeys}>
+          <TimelinePanel
+            images={listing(new Set([REFERENCE, ...scenario.labeled])).images as never}
+            client={client}
+            confirmDiscard={() => true}
+            onOpen={(key, segments) =>
+              opened.set(key, (segments ?? []).map((segment) => objectOf(segment.mask?.box)).sort())
+            }
+          />
+        </HotkeyProvider>
+      </SettingsProvider>
+    </NotificationProvider>,
   );
   return { saved, opened };
 }

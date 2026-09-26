@@ -15,6 +15,7 @@ import { defaultSettings } from "@lazylabel/settings-schema";
 
 import type { ApiClient } from "../../src/api/client.js";
 import { HotkeyProvider } from "../../src/hotkeys/HotkeyProvider.jsx";
+import { NotificationHost, NotificationProvider } from "../../src/notifications/NotificationProvider.jsx";
 import { SettingsProvider } from "../../src/settings/SettingsProvider.jsx";
 import { TimelinePanel } from "../../src/sequence/TimelinePanel.jsx";
 import { markSuggested } from "../../src/sequence/timeline.js";
@@ -56,11 +57,14 @@ function show(answer: () => unknown) {
   } as unknown as ApiClient;
 
   render(
-    <SettingsProvider client={client}>
-      <HotkeyProvider bindings={defaultSettings().hotkeys}>
-        <TimelinePanel images={FOLDER} client={client} onArchetypes={onArchetypes} />
-      </HotkeyProvider>
-    </SettingsProvider>,
+    <NotificationProvider>
+      <NotificationHost />
+      <SettingsProvider client={client}>
+        <HotkeyProvider bindings={defaultSettings().hotkeys}>
+          <TimelinePanel images={FOLDER} client={client} onArchetypes={onArchetypes} />
+        </HotkeyProvider>
+      </SettingsProvider>
+    </NotificationProvider>,
   );
   return { onArchetypes, findArchetypes };
 }
@@ -154,11 +158,14 @@ describe("asking for them", () => {
     // A button that answers 503 teaches a user the feature is unreliable; no button says plainly
     // that this deployment has no model.
     render(
-      <SettingsProvider client={{ getSettings: async () => defaultSettings() } as never}>
-        <HotkeyProvider bindings={defaultSettings().hotkeys}>
-          <TimelinePanel images={FOLDER} />
-        </HotkeyProvider>
-      </SettingsProvider>,
+      <NotificationProvider>
+        <NotificationHost />
+        <SettingsProvider client={{ getSettings: async () => defaultSettings() } as never}>
+          <HotkeyProvider bindings={defaultSettings().hotkeys}>
+            <TimelinePanel images={FOLDER} />
+          </HotkeyProvider>
+        </SettingsProvider>
+      </NotificationProvider>,
     );
     await build();
 

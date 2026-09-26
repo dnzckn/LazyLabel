@@ -11,9 +11,49 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { useEffect, useState, type ReactNode } from "react";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { CentreTabs } from "../../src/shell/CentreTabs.jsx";
+import { defaultSettings } from "@lazylabel/settings-schema";
+
+import { HotkeyProvider } from "../../src/hotkeys/HotkeyProvider.jsx";
+import { NotificationHost, NotificationProvider } from "../../src/notifications/NotificationProvider.jsx";
+import { CentreTabs as Bare, type CentreTabsProps } from "../../src/shell/CentreTabs.jsx";
+import { useSequenceActive } from "../../src/sequence/sequenceActive.js";
 
 afterEach(cleanup);
+
+/** The tabs as the app mounts them: under the hotkeys and the notifications. */
+function CentreTabs(props: CentreTabsProps): ReactNode {
+  return (
+    <NotificationProvider>
+      <NotificationHost />
+      <HotkeyProvider bindings={defaultSettings().hotkeys}>
+        <Bare {...props} />
+      </HotkeyProvider>
+    </NotificationProvider>
+  );
+}
+
+const key = (action: string) => defaultSettings().hotkeys[action]!.primary;
+
+/** Presses a stored letter binding such as "Ctrl+H" on the document, as the dispatcher hears it. */
+function press(stored: string): KeyboardEvent {
+  const parts = stored.split("+");
+  const letter = parts[parts.length - 1]!;
+  const event = new KeyboardEvent("keydown", {
+    key: letter.toLowerCase(),
+    code: `Key${letter.toUpperCase()}`,
+    ctrlKey: parts.includes("Ctrl"),
+    shiftKey: parts.includes("Shift"),
+    bubbles: true,
+    cancelable: true,
+  });
+  document.dispatchEvent(event);
+  return event;
+}
+
+/** Stands in for the sequence controls: says whether it was told its tab is showing. */
+function ActiveProbe(): ReactNode {
+  return <p>{useSequenceActive() ? "sequence showing" : "sequence hidden"}</p>;
+}
 
 let mounts = 0;
 
@@ -128,5 +168,38 @@ describe("the centre tabs", () => {
     expect(tab("Single").tabIndex).toBe(0);
     expect(tab("Multi").tabIndex).toBe(-1);
     expect(tab("Sequence").tabIndex).toBe(-1);
+  });
+});
+
+describe("the sequence keys", () => {
+  function mountWithProbe() {
+    render(<CentreTabs viewer={<View />} multi={(viewer) => <div>{viewer}</div>} sequence={<ActiveProbe />} />);
+  }
+
+  it("keeps Ctrl+H and Ctrl+P from the browser before the Sequence tab was ever opened", () => {
+    // Nothing had registered them, so they fell through: the browser's history and print dialogs.
+    mountWithProbe();
+
+    expect(press(key("find_archetypes")).defaultPrevented).toBe(true);
+    expect(press(key("propagate")).defaultPrevented).toBe(true);
+  });
+
+  it("says where Find Archetypes works when it is pressed on another tab", async () => {
+    mountWithProbe();
+
+    press(key("find_archetypes"));
+
+    expect(await screen.findByText("Find Archetypes works on the Sequence tab")).toBeTruthy();
+  });
+
+  it("tells the sequence controls whether their tab is showing, so their keys act only there", () => {
+    // The controls stay mounted when the tab is left; N pressed on Single opened a flagged frame.
+    mountWithProbe();
+
+    fireEvent.click(tab("Sequence"));
+    expect(screen.getByText("sequence showing")).toBeTruthy();
+
+    fireEvent.click(tab("Single"));
+    expect(screen.getByText("sequence hidden")).toBeTruthy();
   });
 });

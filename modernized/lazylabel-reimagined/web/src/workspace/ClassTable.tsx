@@ -18,6 +18,48 @@ import { reassignClassIds } from "./classes.js";
 import { useNotifications } from "../notifications/NotificationProvider.jsx";
 import { useWorkspace } from "./WorkspaceProvider.jsx";
 
+/**
+ * One class's name, committed once when the user finishes typing, as legacy's table commits an edit
+ * (right_panel.py:192, 228-240): on Enter or on leaving the field. Escape puts the name back.
+ *
+ * Committing on every keystroke could not work. The store trims a name and ignores an unchanged
+ * one, so the space typed between "stop" and "sign" was trimmed away as it was typed and the field
+ * reverted -- a two-word name could only be pasted -- and every keystroke was an undo step.
+ */
+function AliasField({
+  classId,
+  value,
+  onCommit,
+}: {
+  readonly classId: number;
+  readonly value: string;
+  readonly onCommit: (name: string) => void;
+}): ReactNode {
+  /** What the user is typing, or null while they are not editing and the stored name shows. */
+  const [draft, setDraft] = useState<string | null>(null);
+
+  const commit = () => {
+    if (draft === null) return;
+    setDraft(null);
+    onCommit(draft);
+  };
+
+  return (
+    <input
+      type="text"
+      value={draft ?? value}
+      placeholder={String(classId)}
+      aria-label={`Name for class ${classId}`}
+      onChange={(event) => setDraft(event.target.value)}
+      onBlur={commit}
+      onKeyDown={(event) => {
+        if (event.key === "Enter") commit();
+        else if (event.key === "Escape") setDraft(null);
+      }}
+    />
+  );
+}
+
 export function ClassTable(): ReactNode {
   const { segments, classAliases, setClassAlias, applyClasses, activeClassId, setActiveClassId } =
     useWorkspace();
@@ -108,12 +150,10 @@ export function ClassTable(): ReactNode {
               style={{ backgroundColor: swatch(classId) }}
             >
               <td className="classes__alias">
-                <input
-                  type="text"
+                <AliasField
+                  classId={classId}
                   value={classAliases[String(classId)] ?? ""}
-                  placeholder={String(classId)}
-                  aria-label={`Name for class ${classId}`}
-                  onChange={(event) => setClassAlias(classId, event.target.value)}
+                  onCommit={(name) => setClassAlias(classId, name)}
                 />
               </td>
               <th scope="row">

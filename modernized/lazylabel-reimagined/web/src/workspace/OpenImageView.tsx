@@ -592,6 +592,25 @@ function ConvertButton({
   // crop the request leaves out is a crop the panel showed and the file never saw.
   const { classAliases, segments, crop, activeSide, markSavedOn, imageState, revisions } =
     useWorkspace();
+  const { notify } = useNotifications();
+
+  /*
+   * WHETHER THIS IMAGE MAY BE WRITTEN AT ALL -- and until now the button never asked.
+   *
+   * `canSave` is false for an image whose annotations could not be READ. Its own comment says it
+   * is exported because the button needs the same answer the navigation logic needs, and it was
+   * called by neither. The hole that leaves is decision 7's central one: the image loads, its
+   * PIXELS are fine, the segment list is empty because the read failed -- and pressing Write puts
+   * an empty annotation file over a damaged one that might still have been recoverable. The write
+   * is unconditional there too, because a failed load returns no revision to make it conditional
+   * on.
+   *
+   * Disabled with the reason beside it rather than hidden. A missing button is indistinguishable
+   * from a bug; a disabled one that says why is an explanation. The save KEY asks the same
+   * question, below.
+   */
+  const writable = canSave(imageState);
+
   const [state, setState] = useState<
     | { readonly status: "idle" }
     | { readonly status: "saving" }
@@ -742,28 +761,27 @@ function ConvertButton({
    * Guarded on `saving` exactly as the button is disabled. Holding the key down would otherwise
    * queue a write per repeat against a revision each one invalidates, so every press after the
    * first would come back a conflict.
+   *
+   * And guarded on `writable`, as the button is. The key used to skip that check, so on an image
+   * whose annotations could not be read Enter wrote an empty file over the damaged one -- the one
+   * write the disabled button exists to prevent, from the key a user presses without looking.
    */
   const saveNow = () => {
-    if (state.status !== "saving") convert(revisions);
+    if (state.status === "saving") return;
+    if (!writable) {
+      notify({
+        severity: "warning",
+        message: "Nothing was written: this image's annotations could not be read",
+        detail:
+          "Saving would replace a damaged file with an empty one. Move the file aside and reopen "
+          + "the image to start fresh, or repair it outside the app.",
+      });
+      return;
+    }
+    convert(revisions);
   };
   useHotkey("save_output", saveNow);
   useHotkey("save_output_alt", saveNow);
-
-  /*
-   * WHETHER THIS IMAGE MAY BE WRITTEN AT ALL -- and until now the button never asked.
-   *
-   * `canSave` is false for an image whose annotations could not be READ. Its own comment says it
-   * is exported because the button needs the same answer the navigation logic needs, and it was
-   * called by neither. The hole that leaves is decision 7's central one: the image loads, its
-   * PIXELS are fine, the segment list is empty because the read failed -- and pressing Write puts
-   * an empty annotation file over a damaged one that might still have been recoverable. The write
-   * is unconditional there too, because a failed load returns no revision to make it conditional
-   * on.
-   *
-   * Disabled with the reason beside it rather than hidden. A missing button is indistinguishable
-   * from a bug; a disabled one that says why is an explanation.
-   */
-  const writable = canSave(imageState);
 
   return (
     <div>
