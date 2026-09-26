@@ -23,7 +23,7 @@ import type { WireSegment } from "@lazylabel/contracts";
 
 import type { ApiClient, WirePropagationFrame } from "../api/client.js";
 import { useSettings } from "../settings/SettingsProvider.jsx";
-import { useHotkey } from "../hotkeys/HotkeyProvider.jsx";
+import { useHotkey, useKeyHint } from "../hotkeys/HotkeyProvider.jsx";
 import { useNotifications } from "../notifications/NotificationProvider.jsx";
 import { useSequenceActive } from "./sequenceActive.js";
 
@@ -438,6 +438,8 @@ export function PropagationControl({
    * (main_window.py:4708-4716; sequence_widget.py:629-634), and acts only on the Sequence tab.
    */
   const active = useSequenceActive();
+  // Legacy's tooltips name the key, " (Ctrl+P)"; from the user's own bindings here.
+  const keyOf = useKeyHint();
   useHotkey("propagate", () => {
     if (!active) return;
     if (progress.running) {
@@ -843,31 +845,27 @@ export function PropagationControl({
           />
         </label>
         {options}
-        {/* Legacy's colours (sequence_widget.py:304, 639, 746): Propagate green, amber while it
-            starts, and a red Abort. */}
-        <button
-          type="button"
-          className={`seq-button ${loading ? "seq-button--amber" : "seq-button--green"}`}
-          onClick={() => void begin()}
-          // Enabled while it starts: a press then is legacy's Abort (SP-40).
-          disabled={references.length === 0 || progress.running}
-          title={
-            references.length === 0
-              ? "Mark at least one frame as a reference first"
-              : "Carry the reference masks through the sequence"
-          }
-        >
-          {loading ? "Starting…" : "Propagate"}
-        </button>
-
-        {progress.running && (
+        {/* LEGACY'S ONE BUTTON (sequence_widget.py:298-312, 629-647, 741-768; main_window.py:
+            4452-4457, SEQUENCE_PARITY.md SP-53): green Propagate, amber "Starting..." from the
+            press, then a red "Abort · <phase>" that stops the run. Here the phases are the job's:
+            "Loading images..." until its first frame, then "Frame N/T". A press while it starts
+            aborts too (SP-40). While a stopped run finishes its frame in flight, legacy's button is
+            back to Propagate; here it is too, and disabled until the job has stopped. */}
+        {progress.running && job?.cancelling !== true ? (
+          <button type="button" className="seq-button seq-button--red" onClick={abort}>
+            {job === null || job.completed === 0
+              ? "Abort · Loading images..."
+              : `Abort · Frame ${job.completed}${job.total === null ? "" : `/${job.total}`}`}
+          </button>
+        ) : (
           <button
             type="button"
-            className="seq-button seq-button--red"
-            onClick={abort}
-            disabled={job?.cancelling === true}
+            className={`seq-button ${loading ? "seq-button--amber" : "seq-button--green"}`}
+            onClick={() => void begin()}
+            disabled={references.length === 0 || progress.running}
+            title={`Propagate masks from all reference frames to fill the sequence${keyOf("propagate")}`}
           >
-            {job?.cancelling === true ? "Stopping…" : "Cancel"}
+            {loading ? "Starting..." : "Propagate"}
           </button>
         )}
 
@@ -901,13 +899,6 @@ export function PropagationControl({
           </button>
         )}
       </div>
-
-      {progress.running && job !== null && (
-        <p className="timeline__propagation-state" role="status">
-          Propagating — {job.completed}
-          {job.total === null ? "" : ` of ${job.total}`} frames
-        </p>
-      )}
     </div>
   );
 }

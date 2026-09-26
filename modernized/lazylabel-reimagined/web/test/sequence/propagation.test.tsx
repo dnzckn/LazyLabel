@@ -283,7 +283,7 @@ describe("Keep Flagged Masks and Skip Labeled (RULE-060, RULE-081)", () => {
     show({ ...fake, client });
 
     fireEvent.click(propagate());
-    fireEvent.click(await screen.findByRole("button", { name: "Starting…" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Starting..." }));
 
     expect(await screen.findByText("Propagation cancelled")).toBeTruthy();
     await act(async () => {
@@ -591,7 +591,8 @@ describe("starting one", () => {
 
     fireEvent.click(propagate());
 
-    expect(await screen.findByText(/Propagating — 2 of 4 frames/)).toBeTruthy();
+    // In the button, as legacy's says "Abort · Frame 12/100" (main_window.py:4452-4457, SP-53).
+    expect(await screen.findByRole("button", { name: "Abort · Frame 2/4" })).toBeTruthy();
   });
 });
 
@@ -649,7 +650,7 @@ describe("watching it", () => {
 
     // Frame 1 is committed; frame 2, the newest, is not yet.
     expect(await screen.findByRole("button", { name: /Save 1 frame/ }, { timeout: 3000 })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Cancel" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /^Abort/ })).toBeTruthy();
   });
 
   it("reports each frame's confidence as the MINIMUM over its objects", async () => {
@@ -787,7 +788,10 @@ describe("watching it", () => {
 });
 
 describe("stopping it", () => {
-  it("asks the service to cancel and says so while the frame in flight finishes", async () => {
+  it("stops with the one button, which reads Abort while it runs, as legacy's does (SP-53)", async () => {
+    // Legacy's Propagate is its Abort while a run goes, and goes back to Propagate at the press
+    // (sequence_widget.py:629-647, 741-768; main_window.py:4417-4445). The web had a separate
+    // Cancel beside a disabled Propagate, and a progress line under both.
     const fake = fakeClient({
       start: () => job({ state: "running" }),
       poll: () => job({ state: "running", completed: 1, cursor: 1 }),
@@ -796,13 +800,24 @@ describe("stopping it", () => {
     show(fake);
     fireEvent.click(propagate());
 
-    const cancel = await screen.findByRole("button", { name: "Cancel" });
-    fireEvent.click(cancel);
+    const abort = await screen.findByRole("button", { name: "Abort · Frame 1/4" });
+    expect(abort.className).toContain("seq-button--red");
+    expect(screen.queryByRole("button", { name: "Cancel" })).toBeNull();
+    fireEvent.click(abort);
 
     await waitFor(() => expect(fake.cancels).toEqual(["job-1"]));
-    // "Stopping…", not "stopped": a control that jumped straight to stopped would be lying for
-    // the half second the in-flight frame takes.
-    expect(await screen.findByRole("button", { name: "Stopping…" })).toBeTruthy();
+    // Propagate again, and not pressable until the frame in flight has finished.
+    await waitFor(() => expect(propagate()).toHaveProperty("disabled", true));
+    expect(screen.queryByRole("button", { name: /^Abort/ })).toBeNull();
+  });
+
+  it("reads Abort · Loading images... until the first frame, as legacy's first phase does (SP-53)", async () => {
+    const fake = fakeClient({ start: () => job({ state: "running" }), poll: () => job({ state: "running" }) });
+    show(fake);
+
+    fireEvent.click(propagate());
+
+    expect(await screen.findByRole("button", { name: "Abort · Loading images..." })).toBeTruthy();
   });
 
   it("says legacy's 'Propagation cancelled' at the press, and nothing is complete after it", async () => {
@@ -825,10 +840,10 @@ describe("stopping it", () => {
     show(fake);
     fireEvent.click(propagate());
 
-    fireEvent.click(await screen.findByRole("button", { name: "Cancel" }));
+    fireEvent.click(await screen.findByRole("button", { name: /^Abort/ }));
 
     expect(await screen.findByText("Propagation cancelled")).toBeTruthy();
-    await waitFor(() => expect(screen.queryByRole("button", { name: /^(Cancel|Stopping…)$/ })).toBeNull());
+    await waitFor(() => expect(propagate()).toHaveProperty("disabled", false));
     expect(screen.queryByText(/^Propagation complete/)).toBeNull();
     expect(screen.queryByText(/Stopped after/)).toBeNull();
   });
@@ -848,9 +863,9 @@ describe("stopping it", () => {
     show(fake);
     fireEvent.click(propagate());
 
-    fireEvent.click(await screen.findByRole("button", { name: "Cancel" }));
+    fireEvent.click(await screen.findByRole("button", { name: /^Abort/ }));
 
-    await waitFor(() => expect(screen.queryByRole("button", { name: /^(Cancel|Stopping…)$/ })).toBeNull());
+    await waitFor(() => expect(propagate()).toHaveProperty("disabled", false));
     expect(screen.queryByRole("alert")).toBeNull();
   });
 
@@ -883,9 +898,9 @@ describe("stopping it", () => {
     fireEvent.click(propagate());
     await waitFor(() => expect(fake.polls.length).toBeGreaterThan(0));
 
-    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    fireEvent.click(await screen.findByRole("button", { name: /^Abort/ }));
 
-    await waitFor(() => expect(screen.queryByRole("button", { name: /^(Cancel|Stopping…)$/ })).toBeNull(), { timeout: 3000 });
+    await waitFor(() => expect(propagate()).toHaveProperty("disabled", false), { timeout: 3000 });
     // Asked from where this browser was, not from the snapshot's cursor.
     expect(fake.polls.at(-1)!.cursor).toBe(1);
     // Every kept frame reached the timeline, the last two included.
