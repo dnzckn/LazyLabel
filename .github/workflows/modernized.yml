@@ -215,6 +215,8 @@ jobs:
   differential:
     name: differential against legacy
     runs-on: ubuntu-latest
+    env:
+      QT_QPA_PLATFORM: offscreen
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
@@ -240,9 +242,14 @@ jobs:
           echo "available=true" >> "$GITHUB_OUTPUT"
 
       - name: Install Python dependencies
-        # PyQt6 is needed only because the legacy SegmentManager imports QPointF; QtCore works
-        # headless, so no display server is required.
-        run: python -m pip install --quiet numpy opencv-python-headless PyQt6
+        # Importing the legacy loaders runs `lazylabel/__init__.py`, which imports `lazylabel.utils`,
+        # and that imports QtGui (QFileSystemModel, QImage). On Linux QtGui will not load without
+        # libEGL and libGL, so the reader comparison failed on its import from the first push of
+        # main-web, and compare_npz.py's legacy check skipped itself. AI packages are not needed:
+        # legacy runs without them. Same installs as the characterization job.
+        run: |
+          python -m pip install --quiet numpy opencv-python-headless PyQt6
+          sudo apt-get update -qq && sudo apt-get install -y -qq libegl1 libgl1
 
       # The workspace's one install; the format library has no lockfile of its own any more.
       - name: Install Node dependencies
@@ -257,7 +264,7 @@ jobs:
         working-directory: modernized/lazylabel/core/exporters
         env:
           PYTHONPATH: ${{ github.workspace }}/legacy/lazylabel/src
-        run: python tools/compare_npz.py .differential
+        run: python tools/compare_npz.py .differential --require-legacy
 
       - name: Compare readers against the legacy loaders
         working-directory: modernized/lazylabel/core/exporters

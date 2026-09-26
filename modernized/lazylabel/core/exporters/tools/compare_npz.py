@@ -1,7 +1,11 @@
 """Prove that NumPy reads the TypeScript library's NPZ output and that the arrays match legacy.
 
 Usage (from this directory):
-    E:/venv/lazylabel/Scripts/python.exe compare_npz.py <dir of TypeScript output>
+    E:/venv/lazylabel/Scripts/python.exe compare_npz.py <dir of TypeScript output> [--require-legacy]
+
+With legacy/lazylabel/src on PYTHONPATH, each archive is also opened with the desktop app's own
+loader. Without it that half is skipped; --require-legacy (CI passes it) makes a failed import of
+the legacy loader an error instead, so the check cannot pass by not running.
 
 Each file in that directory must be named <case id>.npz and is compared with
 ../goldens/<case id>/image.npz, which the legacy exporter wrote.
@@ -119,9 +123,14 @@ def legacy_can_read(produced: pathlib.Path, is_class_map: bool, expected_aliases
 
 
 def main() -> None:
-    if len(sys.argv) < 2:
+    args = [arg for arg in sys.argv[1:] if arg != "--require-legacy"]
+    if len(args) != 1:
         sys.exit(__doc__)
-    produced_dir = pathlib.Path(sys.argv[1])
+    if "--require-legacy" in sys.argv[1:]:
+        # Raises with the reason. Swallowed below, it let the legacy half of this check skip itself
+        # in CI from main-web's first push, where QtGui could not load.
+        from lazylabel.core.file_manager import FileManager  # noqa: F401
+    produced_dir = pathlib.Path(args[0])
     files = sorted(produced_dir.glob("*.npz"))
     if not files:
         sys.exit(f"no .npz files in {produced_dir}; run the emitter test first")
