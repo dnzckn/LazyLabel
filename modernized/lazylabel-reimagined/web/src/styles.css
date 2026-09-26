@@ -1277,7 +1277,46 @@ fieldset input[type="text"] {
   width: 100%;
 }
 
-/* The crop panel. A destructive control, so its warning has room rather than being a footnote. */
+/* Legacy's Border Crop (border_crop_widget.py:34-89): "X:" and "Y:" in a 15px column beside their
+   fields, the draw, clear and Apply buttons in one row, then a small centred status line. */
+.crop__row {
+  display: grid;
+  grid-template-columns: 15px minmax(0, 1fr);
+  align-items: center;
+  column-gap: 4px;
+  margin-bottom: 0.4rem;
+}
+
+.crop__row input {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.crop__buttons {
+  display: flex;
+  gap: 4px;
+}
+
+.crop__buttons > :last-child {
+  flex: 1;
+}
+
+.crop__icon {
+  width: 30px;
+  padding: 0;
+}
+
+.crop__status {
+  margin: 4px 0 0;
+  font-size: 10px;
+  text-align: center;
+}
+
+.crop__status--error {
+  color: var(--error-ink);
+}
+
+/* A label over its control, as several panels lay out a field. */
 .crop__field {
   display: block;
   margin-bottom: 0.4rem;

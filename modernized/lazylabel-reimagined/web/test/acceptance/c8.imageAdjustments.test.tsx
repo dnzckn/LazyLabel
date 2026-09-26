@@ -131,14 +131,18 @@ describe("C8: the display adjustments, which run in the browser", () => {
     expect(saved.values["brightness"]).toBe(60);
   });
 
-  it("warns that a negative brightness FOLDS rather than darkening", async () => {
-    // cv2.convertScaleAbs takes the absolute value, so the darkest pixels come back bright.
-    // Legacy never says so, and a user who sees it concludes the slider is broken.
-    await openImage();
+  it("takes a negative brightness as legacy does, with no banner about its fold", async () => {
+    // cv2.convertScaleAbs takes the absolute value, so the darkest pixels come back bright. The
+    // panel warned of it until 2026-09-26; legacy says nothing, and the owner asked for legacy's
+    // panels without explanations.
+    const { putSettings } = await openImage();
 
     fireEvent.change(screen.getByLabelText("Brightness"), { target: { value: "-40" } });
 
-    expect(await screen.findByText(/folds instead of darkening/)).toBeTruthy();
+    await waitFor(() => expect(putSettings).toHaveBeenCalled());
+    const saved = putSettings.mock.calls.at(-1)?.[0] as { values: Record<string, unknown> };
+    expect(saved.values["brightness"]).toBe(-40);
+    expect(screen.queryByText(/folds instead/)).toBeNull();
   });
 });
 
@@ -252,9 +256,9 @@ describe("C8: the crop, which is carried to the save", () => {
 
     fireEvent.change(screen.getByLabelText("X range"), { target: { value: "0:500" } });
     fireEvent.change(screen.getByLabelText("Y range"), { target: { value: "0:400" } });
-    fireEvent.click(screen.getByText("Apply crop"));
+    fireEvent.click(screen.getByRole("button", { name: "Apply" }));
 
-    await waitFor(() => expect(screen.getByText(/600,000 pixels/)).toBeTruthy());
+    await waitFor(() => expect(screen.getByText("Crop: 0:500, 0:400")).toBeTruthy());
 
     fireEvent.click(screen.getByRole("button", { name: /^Write \d+ format/ }));
 
@@ -263,16 +267,16 @@ describe("C8: the crop, which is carried to the save", () => {
     expect(body?.["cropCoords"]).toEqual([0, 0, 500, 400]);
   });
 
-  it("counts the pixels a save would blank before anyone presses it", async () => {
-    // Legacy blanks them with no warning and nothing in the exported file records that a crop was
-    // involved.
+  it("says a crop is in force before anyone presses save", async () => {
+    // Legacy blanks outside the crop and nothing in the exported file records it. The panel's
+    // status line is legacy's; the status bar's "cropped on save" is this app's.
     await openImage();
     openImageTab();
 
     fireEvent.change(screen.getByLabelText("X range"), { target: { value: "0:500" } });
     fireEvent.change(screen.getByLabelText("Y range"), { target: { value: "0:400" } });
-    fireEvent.click(screen.getByText("Apply crop"));
+    fireEvent.click(screen.getByRole("button", { name: "Apply" }));
 
-    expect(await screen.findByText(/keep the full image size/)).toBeTruthy();
+    await waitFor(() => expect(screen.getByLabelText("Status").textContent).toMatch(/cropped on save/));
   });
 });

@@ -45,7 +45,7 @@ import { HotkeyEditor } from "../hotkeys/HotkeyEditor.jsx";
 import { Dialog } from "./Dialog.jsx";
 import { SettingsEditor } from "../settings/SettingsEditor.jsx";
 import { ResetSettings } from "../settings/ResetSettings.jsx";
-import { useHotkey } from "../hotkeys/HotkeyProvider.jsx";
+import { useHotkey, useKeyHint } from "../hotkeys/HotkeyProvider.jsx";
 import type { ApiClient, ApiHealth } from "../api/client.js";
 
 /** The client already names this shape; re-declaring it here is how the two drift apart. */
@@ -491,6 +491,7 @@ export function App({ client }: { readonly client: ApiClient }): ReactNode {
  */
 function ZoomControl(): ReactNode {
   const { zoom, setZoom, open, fitted } = useWorkspace();
+  const keyOf = useKeyHint();
 
   // Powers of two from an eighth to eight. A linear slider spends most of its travel between
   // sizes nobody wants, and legacy's own steps double. From Fit, the steps start at the size the
@@ -515,13 +516,24 @@ function ZoomControl(): ReactNode {
 
   if (open === null) return null;
 
+  // Legacy has no zoom buttons, only the keys, so each carries its key's name from legacy's hotkey
+  // list (hotkeys.py:45, 108-109).
   return (
     <div className="zoom">
       <span>Zoom</span>
-      <button type="button" aria-label="Zoom out" onClick={() => step(-1)}>−</button>
+      <button type="button" aria-label="Zoom out" title={`Zoom Out${keyOf("zoom_out")}`} onClick={() => step(-1)}>
+        −
+      </button>
       <span className="field__value">{zoom === null ? "Fit" : `${Math.round(zoom * 100)}%`}</span>
-      <button type="button" aria-label="Zoom in" onClick={() => step(1)}>+</button>
-      <button type="button" onClick={() => setZoom(null)} disabled={zoom === null}>
+      <button type="button" aria-label="Zoom in" title={`Zoom In${keyOf("zoom_in")}`} onClick={() => step(1)}>
+        +
+      </button>
+      <button
+        type="button"
+        title={`Fit View${keyOf("fit_view")}`}
+        onClick={() => setZoom(null)}
+        disabled={zoom === null}
+      >
         Fit
       </button>
       <button type="button" onClick={() => setZoom(1)}>1:1</button>

@@ -17,8 +17,6 @@ import {
   MINIMUM_CROP_DRAG,
   cropFrom,
   cropFromDrag,
-  excludedPixels,
-  isWholeImage,
   parseRange,
 } from "../../src/tools/crop.js";
 
@@ -125,25 +123,5 @@ describe("the typed panel's ranges", () => {
     expect(parseRange("50:60:70")).toBeNull();
     expect(parseRange("a:b")).toBeNull();
     expect(parseRange("")).toBeNull();
-  });
-});
-
-describe("what a crop would cost", () => {
-  it("recognises a crop that covers the whole image", () => {
-    // The same as having none, and worth saying so rather than blanking a row for nothing.
-    expect(isWholeImage({ x1: 0, y1: 0, x2: 999, y2: 799 }, IMAGE)).toBe(true);
-    expect(isWholeImage({ x1: 0, y1: 0, x2: 998, y2: 799 }, IMAGE)).toBe(false);
-  });
-
-  it("counts the pixels a save would blank", () => {
-    // Legacy says nothing before blanking, and the blanking cannot be undone from the file. A
-    // count is the least a user needs to notice a crop they had forgotten was still applied.
-    const crop = { x1: 0, y1: 0, x2: 500, y2: 400 };
-
-    expect(excludedPixels(crop, IMAGE)).toBe(1000 * 800 - 500 * 400);
-  });
-
-  it("reports the whole image for a degenerate crop", () => {
-    expect(excludedPixels({ x1: 10, y1: 10, x2: 10, y2: 10 }, IMAGE)).toBe(1000 * 800);
   });
 });

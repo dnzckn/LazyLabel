@@ -2,8 +2,20 @@
  * The sliders that drive RULE-028's display adjustments.
  *
  * The arithmetic is in `tools/adjustments.ts` and matches legacy, including its
- * negative-brightness fold. What this adds is the one thing legacy does not: SAYING that the fold
- * is about to happen.
+ * negative-brightness fold.
+ *
+ * LEGACY'S WORDS, AND NOTHING MORE (the owner, 2026-09-26: "have you ever seen a gui with a
+ * paragraph there written to it"). The rows are labelled as `adjustments_widget.py:65-110` labels
+ * them, and what each does is in its tooltip, as there. Three notes this panel used to print are
+ * decisions rather than labels, so they are kept here instead:
+ *
+ * - Negative brightness FOLDS: cv2.convertScaleAbs takes the absolute value, so the darkest pixels
+ *   come back bright (RULE-028's recorded defect). It is kept because it is what legacy does.
+ * - The adjustments change what is DISPLAYED and never the file. Whether they reach the model is
+ *   legacy's Operate On View (RULE-089), a setting: off, the model sees the decoded image; on, the
+ *   API renders what is on screen and a changed adjustment re-encodes.
+ * - The annotation size scales the handles and outlines drawn over the picture, not the
+ *   annotations, and unlike legacy's it holds its size on screen as the view zooms.
  *
  * THE SLIDERS ARE IN LEGACY'S UNITS, not the values the maths uses. Gamma's slider runs 1..200 for
  * 0.01..2.00 and saturation's 0..200 for 0.0..2.0, because those are the ranges a user's stored
@@ -13,7 +25,7 @@
 
 import { useCallback, type ReactNode } from "react";
 
-import { NEUTRAL, adjustmentsFrom, folds, isNeutral, type Adjustments } from "../tools/adjustments.js";
+import { NEUTRAL, adjustmentsFrom, isNeutral, type Adjustments } from "../tools/adjustments.js";
 import { useSettings } from "../settings/SettingsProvider.jsx";
 
 /** Legacy's slider ranges (`adjustments_widget.py:65-97`). */
@@ -59,22 +71,29 @@ export function AdjustmentsPanel(): ReactNode {
 
   return (
     <>
+      {/* Legacy's rows and tooltips (adjustments_widget.py:65-97). */}
       <Slider
-        label="Brightness"
+        label="Bright:"
+        name="Brightness"
+        tooltip="Adjust image brightness"
         min={-100}
         max={100}
         value={current.brightness}
         onChange={(v) => set("brightness", v)}
       />
       <Slider
-        label="Contrast"
+        label="Contrast:"
+        name="Contrast"
+        tooltip="Adjust image contrast"
         min={-100}
         max={100}
         value={current.contrast}
         onChange={(v) => set("contrast", v)}
       />
       <Slider
-        label="Gamma"
+        label="Gamma:"
+        name="Gamma"
+        tooltip="Adjust image gamma"
         min={GAMMA_SLIDER.min}
         max={GAMMA_SLIDER.max}
         value={Math.round(current.gamma * GAMMA_SLIDER.scale)}
@@ -82,7 +101,9 @@ export function AdjustmentsPanel(): ReactNode {
         onChange={(v) => set("gamma", v / GAMMA_SLIDER.scale)}
       />
       <Slider
-        label="Saturation"
+        label="Saturate:"
+        name="Saturation"
+        tooltip="Adjust image saturation (0 = grayscale)"
         min={SATURATION_SLIDER.min}
         max={SATURATION_SLIDER.max}
         value={Math.round(current.saturation * SATURATION_SLIDER.scale)}
@@ -90,57 +111,47 @@ export function AdjustmentsPanel(): ReactNode {
         onChange={(v) => set("saturation", v / SATURATION_SLIDER.scale)}
       />
 
-      {/* The drawing aids rather than the picture, which is why it sits below the reset above and
-          carries its own note. Legacy's slider is `value / 10`, so its 10 is this app's 1.0. */}
+      {/* The drawing aids rather than the picture: legacy's Annotation Settings "Size:" row
+          (annotation_settings_widget.py:69-77), whose slider is `value / 10`, so its 10 is this
+          app's 1.0. Its "(Ctrl +/-)" is left out of the tooltip: those keys zoom the image here. */}
       <Slider
         label="Annotation size"
+        name="Annotation size"
+        tooltip="Adjusts the size of points and lines"
         min={ANNOTATION_SLIDER.min}
         max={ANNOTATION_SLIDER.max}
         value={Math.round(annotationSize * ANNOTATION_SLIDER.scale)}
-        display={`${annotationSize.toFixed(1)}x`}
+        display={annotationSize.toFixed(1)}
         onChange={(v) => setValue("annotation_size_multiplier", v / ANNOTATION_SLIDER.scale)}
       />
-      <p className="panel__missing">
-        How big the vertex handles and outlines are drawn — not the annotations themselves, which
-        are the pixels you drew and do not change. Unlike the desktop app these stay the same size
-        on screen as you zoom, so a handle you can grab when looking at the whole image is still
-        grabbable when you are in close.
-      </p>
 
-      {folds(current) && (
-        // The thing legacy never says. cv2.convertScaleAbs takes the absolute value, so darkening
-        // makes the darkest pixels BRIGHT and a gradient folds back on itself. A user who sees
-        // that without being told concludes the slider is broken.
-        <p role="status" className="banner banner--warning">
-          Negative brightness folds instead of darkening: the darkest pixels come back bright. That
-          is what the desktop app does, so it is kept — but it is rarely what anyone wants.
-        </p>
-      )}
-
-      <button type="button" onClick={reset} disabled={isNeutral(current)}>
-        {isNeutral(current) ? "No adjustments applied" : "Reset adjustments"}
+      <button
+        type="button"
+        onClick={reset}
+        disabled={isNeutral(current)}
+        title="Reset brightness, contrast, gamma, and saturation to defaults."
+      >
+        Reset Image Adjustments
       </button>
-
-      <p className="panel__missing">
-        These change what is DISPLAYED, and never the file. Whether they reach the AI is
-        legacy&rsquo;s Operate On View (RULE-089), and it is a setting: with it OFF, which is the
-        default, a model sees the image as it was decoded; with it on, the API renders exactly what
-        you can see and hands the model that instead. Changing an adjustment then re-encodes,
-        because a different view is a different encoding rather than a stale one.
-      </p>
     </>
   );
 }
 
 function Slider({
   label,
+  name,
+  tooltip,
   min,
   max,
   value,
   display,
   onChange,
 }: {
+  /** What the row shows, which is legacy's short label. */
   readonly label: string;
+  /** What the slider is called to a screen reader, where "Bright:" would be a clipped word. */
+  readonly name: string;
+  readonly tooltip: string;
   readonly min: number;
   readonly max: number;
   readonly value: number;
@@ -148,7 +159,7 @@ function Slider({
   readonly onChange: (value: number) => void;
 }): ReactNode {
   return (
-    <label className="adjustment">
+    <label className="adjustment" title={tooltip}>
       <span className="adjustment__label">
         {label} <span className="adjustment__value">{display ?? value}</span>
       </span>
@@ -157,7 +168,7 @@ function Slider({
         min={min}
         max={max}
         value={value}
-        aria-label={label}
+        aria-label={name}
         onChange={(event) => onChange(Number(event.target.value))}
       />
     </label>

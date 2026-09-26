@@ -8,7 +8,7 @@
 
 import { describe, expect, it } from "vitest";
 
-import { NEUTRAL, adjustImage, adjustPixel, folds, isNeutral } from "../../src/tools/adjustments.js";
+import { NEUTRAL, adjustImage, adjustPixel, isNeutral } from "../../src/tools/adjustments.js";
 
 /** One channel through the pipeline, which is how the card states its examples. */
 const grey = (value: number, over: Partial<typeof NEUTRAL> = {}) =>
@@ -101,13 +101,6 @@ describe("reporting", () => {
   it("knows when nothing would change", () => {
     expect(isNeutral(NEUTRAL)).toBe(true);
     expect(isNeutral({ ...NEUTRAL, gamma: 1.1 })).toBe(false);
-  });
-
-  it("says when the brightness will fold", () => {
-    // The difference between "this looks wrong" and "the slider is broken".
-    expect(folds({ ...NEUTRAL, brightness: -1 })).toBe(true);
-    expect(folds({ ...NEUTRAL, brightness: 0 })).toBe(false);
-    expect(folds({ ...NEUTRAL, brightness: 50 })).toBe(false);
   });
 });
 

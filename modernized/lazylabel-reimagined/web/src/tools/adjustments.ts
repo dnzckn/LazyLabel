@@ -17,8 +17,8 @@
  *     fold changes MASKS, not just appearance. A port that quietly clipped instead would produce
  *     different annotations from the desktop app on the same image and settings.
  *
- * `folds` reports when it happens, so the app can tell a user their image is about to look wrong
- * rather than leaving them to conclude the slider is broken.
+ * The app does not announce it. A banner under the sliders did until the owner asked, on
+ * 2026-09-26, for legacy's panels without explanations, and legacy says nothing about the fold.
  */
 
 /*
@@ -58,17 +58,6 @@ export function adjustmentsFrom(values: Readonly<Record<string, unknown>>): Adju
     gamma: numberOr(values["gamma"], NEUTRAL.gamma),
     saturation: numberOr(values["saturation"], NEUTRAL.saturation),
   };
-}
-
-/**
- * True when this brightness will fold rather than darken.
- *
- * Any negative brightness folds SOME pixel: the ones whose adjusted value goes below zero come
- * back up as positive. Reporting it is what separates "this looks wrong" from "the slider is
- * broken".
- */
-export function folds(adjustments: Adjustments): boolean {
-  return adjustments.brightness < 0;
 }
 
 function numberOr(value: unknown, fallback: number): number {

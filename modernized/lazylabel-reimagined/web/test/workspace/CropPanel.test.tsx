@@ -3,7 +3,8 @@
  *
  * `tools/crop.ts` is tested against the rule card's own worked example; what is tested here is the
  * PANEL: that what it stores is what the rule computes, that a crop is cleared when a new image
- * opens (decision 9), and that the destructive consequence is on screen before anyone presses save.
+ * opens (decision 9), and that it reads as legacy's Border Crop does -- its buttons, its refusals
+ * and its one status line (`border_crop_widget.py`).
  */
 
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
@@ -62,14 +63,32 @@ async function openA(): Promise<void> {
 function typeCrop(x: string, y: string): void {
   fireEvent.change(screen.getByLabelText("X range"), { target: { value: x } });
   fireEvent.change(screen.getByLabelText("Y range"), { target: { value: y } });
-  fireEvent.click(screen.getByText("Apply crop"));
+  fireEvent.click(screen.getByRole("button", { name: "Apply" }));
 }
 
 describe("before an image is open", () => {
-  it("offers nothing to crop against", () => {
+  it("shows legacy's controls with nothing to crop against, disabled, saying why in legacy's words", () => {
+    // crop_manager.py:118. A line of its own said so until 2026-09-26.
     mount();
-    expect(screen.getByText(/needs an open image/)).toBeTruthy();
-    expect(screen.queryByLabelText("X range")).toBeNull();
+    const apply = screen.getByRole("button", { name: "Apply" }) as HTMLButtonElement;
+    const draw = screen.getByRole("button", { name: "Draw crop rectangle" }) as HTMLButtonElement;
+
+    expect((screen.getByLabelText("X range") as HTMLInputElement).disabled).toBe(true);
+    expect(apply.disabled).toBe(true);
+    expect(draw.disabled).toBe(true);
+    expect([apply.title, draw.title]).toEqual(["No image loaded", "No image loaded"]);
+    expect(document.querySelector(".crop p")).toBeNull();
+  });
+
+  it("carries legacy's tooltips once an image is open", async () => {
+    // border_crop_widget.py:40, 51, 61, 68, 75.
+    mount();
+    await openA();
+
+    expect(screen.getByLabelText("X range").closest("label")?.title).toBe("X coordinate range in format start:end");
+    expect(screen.getByRole("button", { name: "Apply" }).title).toBe("Apply crop from coordinates");
+    expect(screen.getByRole("button", { name: "Draw crop rectangle" }).title).toBe("Draw crop rectangle");
+    expect(screen.getByRole("button", { name: "Clear crop" }).title).toBe("Clear crop");
   });
 });
 
@@ -85,37 +104,15 @@ describe("applying a crop", () => {
     expect(screen.getByTestId("crop").textContent).toBe("0,50,999,700");
   });
 
-  it("says how many pixels the save will blank", async () => {
-    // The whole point of the panel. Legacy blanks them with no warning and nothing in the exported
-    // file records that a crop was involved.
+  it("shows the crop in force on its status line, in legacy's words", async () => {
+    // border_crop_widget.py:136, 147. The paragraphs that counted the pixels a save would blank
+    // went on 2026-09-26; the status bar still says "cropped on save".
     mount();
     await openA();
 
     typeCrop("0:500", "0:400");
 
-    // 1000x800 minus the 500x400 kept region.
-    expect(screen.getByText(/600,000 pixels/)).toBeTruthy();
-  });
-
-  it("warns that the file keeps its full size", async () => {
-    mount();
-    await openA();
-
-    typeCrop("0:500", "0:400");
-
-    expect(screen.getByText(/keep the full image size/)).toBeTruthy();
-  });
-
-  it("names the largest possible crop as still excluding the far edge", async () => {
-    // 0:999 by 0:799 looks like the whole image and is not: the kept region is exclusive of the
-    // far edge, so the last row and column are outside any crop. RULE-018's title says so.
-    mount();
-    await openA();
-
-    typeCrop("0:999", "0:799");
-
-    expect(screen.getByText(/last row and column are still outside/)).toBeTruthy();
-    expect(screen.getByText(/1,799 pixels/)).toBeTruthy();
+    expect(screen.getByRole("status").textContent).toBe("Crop: 0:500, 0:400");
   });
 
   it("swaps a reversed range rather than refusing it", async () => {
@@ -152,25 +149,37 @@ describe("applying a crop", () => {
   });
 });
 
-describe("refusing what is not a range", () => {
+describe("refusing what is not a range, in legacy's words", () => {
   it("names WHICH field was wrong", async () => {
-    // Two fields and one message means a user retypes both.
+    // border_crop_widget.py:116-125.
     mount();
     await openA();
 
     typeCrop("0:500", "nonsense");
 
-    expect(screen.getByRole("alert").textContent).toContain("Y must be");
+    expect(screen.getByRole("alert").textContent).toBe("Invalid Y format. Use start:end");
     expect(screen.getByTestId("crop").textContent).toBe("none");
   });
 
-  it("names both when both are wrong", async () => {
+  it("names X first when both are wrong, as legacy checks X first", async () => {
     mount();
     await openA();
 
     typeCrop("nonsense", "also nonsense");
 
-    expect(screen.getByRole("alert").textContent).toContain("X and Y must be");
+    expect(screen.getByRole("alert").textContent).toBe("Invalid X format. Use start:end");
+  });
+
+  it("asks for both fields when one is empty, and for numbers when a half is not one", async () => {
+    // border_crop_widget.py:110-111, 138-139.
+    mount();
+    await openA();
+
+    typeCrop("0:500", "");
+    expect(screen.getByRole("alert").textContent).toBe("Enter both X and Y coordinates");
+
+    typeCrop("0:500", "a:b");
+    expect(screen.getByRole("alert").textContent).toBe("Invalid coordinates. Use numbers only.");
   });
 
   it("leaves an existing crop alone when the new input is rejected", async () => {
@@ -187,15 +196,16 @@ describe("refusing what is not a range", () => {
 });
 
 describe("removing a crop", () => {
-  it("goes back to exporting the whole image", async () => {
+  it("goes back to exporting the whole image, from legacy's clear button", async () => {
     mount();
     await openA();
     typeCrop("0:500", "0:400");
 
-    fireEvent.click(screen.getByText("Remove crop"));
+    fireEvent.click(screen.getByRole("button", { name: "Clear crop" }));
 
     expect(screen.getByTestId("crop").textContent).toBe("none");
-    expect(screen.getByText(/whole image is exported/)).toBeTruthy();
+    expect(screen.queryByRole("status")).toBeNull();
+    expect((screen.getByRole("button", { name: "Clear crop" }) as HTMLButtonElement).disabled).toBe(true);
   });
 });
 

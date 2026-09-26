@@ -2,8 +2,8 @@
  * The adjustment sliders.
  *
  * What is worth pinning beyond "a slider changes a setting": that the units are LEGACY's, so a
- * stored settings file round-trips; and that the negative-brightness fold is announced, which is
- * the one thing legacy never does.
+ * stored settings file round-trips; and that the panel reads as legacy's does -- its labels, its
+ * tooltips, and no explanations printed under them (the owner, 2026-09-26).
 
  *
  * Names RULE-050, so the rule is traceable to the test that proves it: the setting inputs are clamped -- annotation size 0.1-5.0, pan speed 0.1-10.0 -- so a typed value out of range cannot reach the canvas.
@@ -90,29 +90,44 @@ describe("the sliders", () => {
   });
 });
 
-describe("the fold warning", () => {
-  it("appears for negative brightness", async () => {
-    // The thing legacy never says: cv2.convertScaleAbs takes the absolute value, so darkening
-    // makes the darkest pixels BRIGHT. A user who sees that untold concludes the slider is broken.
-    mount({ brightness: -20 });
-
-    expect(await screen.findByText(/folds instead of darkening/)).toBeTruthy();
-  });
-
-  it("does not appear for zero or positive brightness", async () => {
-    mount({ brightness: 0 });
+describe("legacy's words", () => {
+  it("labels the rows as legacy does, keeping the sliders' full names for a screen reader", async () => {
+    // adjustments_widget.py:71-95: "Bright:", "Contrast:", "Gamma:", "Saturate:".
+    mount();
     await waitFor(() => expect(slider("Brightness")).toBeTruthy());
 
-    expect(screen.queryByText(/folds instead/)).toBeNull();
+    const rows = ["Brightness", "Contrast", "Gamma", "Saturation"].map(
+      (name) => slider(name).closest("label")?.textContent?.trim().split(/\s+/)[0],
+    );
+    expect(rows).toEqual(["Bright:", "Contrast:", "Gamma:", "Saturate:"]);
+  });
+
+  it("puts legacy's tooltips on the rows", async () => {
+    mount();
+    await waitFor(() => expect(slider("Brightness")).toBeTruthy());
+
+    expect(slider("Brightness").closest("label")?.title).toBe("Adjust image brightness");
+    expect(slider("Saturation").closest("label")?.title).toBe("Adjust image saturation (0 = grayscale)");
+  });
+
+  it("prints no explanation, not even for a negative brightness", async () => {
+    // RULE-028's fold is legacy's and legacy says nothing about it; the banner this panel printed
+    // was one of the paragraphs the owner asked to be rid of.
+    mount({ brightness: -20 });
+    await waitFor(() => expect(slider("Brightness")).toBeTruthy());
+
+    expect(document.querySelector("p")).toBeNull();
   });
 });
 
 describe("resetting", () => {
-  it("is offered only when something is applied", async () => {
+  it("is legacy's button, offered only when something is applied", async () => {
     mount();
     await waitFor(() => expect(screen.getByRole("button")).toBeTruthy());
 
-    expect((screen.getByRole("button") as HTMLButtonElement).disabled).toBe(true);
+    const button = screen.getByRole("button", { name: "Reset Image Adjustments" }) as HTMLButtonElement;
+    expect(button.disabled).toBe(true);
+    expect(button.title).toBe("Reset brightness, contrast, gamma, and saturation to defaults.");
   });
 
   it("puts every adjustment back at once", async () => {
@@ -135,16 +150,5 @@ describe("a settings file that holds nonsense", () => {
     await waitFor(() => expect(slider("Gamma")).toBeTruthy());
 
     expect((slider("Gamma") as HTMLInputElement).value).toBe("100");
-  });
-});
-
-describe("what the adjustments do NOT do", () => {
-  it("says whether they reach the AI, which is now a SETTING rather than a gap", async () => {
-    // It used to say Operate On View was not built. It is, across all four packages -- so the
-    // panel says what the setting does instead of apologising for its absence.
-    mount();
-
-    await waitFor(() => expect(screen.getByText(/never the file/)).toBeTruthy());
-    expect(screen.getByText(/with it on, the API renders exactly what you can see/)).toBeTruthy();
   });
 });

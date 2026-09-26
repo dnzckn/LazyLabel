@@ -103,22 +103,6 @@ export function parseRange(text: string): { readonly from: number; readonly to: 
   return from <= to ? { from, to } : { from: to, to: from };
 }
 
-/** Whether a crop covers the whole image, which is the same as having none. */
-export function isWholeImage(crop: Crop, image: ImageSize): boolean {
-  return crop.x1 === 0 && crop.y1 === 0 && crop.x2 === image.width - 1 && crop.y2 === image.height - 1;
-}
-
-/**
- * How many pixels a crop excludes, so the app can say what a save will blank.
- *
- * Legacy says nothing before blanking, and the blanking is not undoable from the file. A count is
- * the least a user needs to notice that a crop they forgot about is still applied.
- */
-export function excludedPixels(crop: Crop, image: ImageSize): number {
-  const kept = Math.max(0, crop.x2 - crop.x1) * Math.max(0, crop.y2 - crop.y1);
-  return Math.max(0, image.width * image.height - kept);
-}
-
 function clamp(value: number, size: number): number {
   return Math.min(Math.max(0, size - 1), Math.max(0, value));
 }
