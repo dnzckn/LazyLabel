@@ -14,7 +14,11 @@ import { fileURLToPath } from "node:url";
 export interface Config {
   /** Absolute path of the mounted dataset directory: the blob store's location. */
   readonly datasetRoot: string;
-  /** SQLite file for the metadata store, or ":memory:". */
+  /**
+   * SQLite file for the metadata store, or ":memory:". Per user by default, beside the desktop
+   * app's own settings (`~/.config/lazylabel/lazylabel-web.db`), so settings follow the user from
+   * folder to folder and nothing but annotations is written into a dataset.
+   */
   readonly databasePath: string;
   readonly port: number;
   readonly host: string;
@@ -133,7 +137,10 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
 
   return {
     datasetRoot: path.resolve(datasetRoot),
-    databasePath: env["LAZYLABEL_DB"] ?? path.join(path.resolve(datasetRoot), ".lazylabel", "lazylabel.db"),
+    // DEPLOYABILITY.md R5. It was `<datasetRoot>/.lazylabel/lazylabel.db`; config.test.ts records
+    // why it was and why it changed, and `settings/folderDatabaseImport.ts` brings such a file's
+    // settings across once.
+    databasePath: env["LAZYLABEL_DB"] ?? path.join(os.homedir(), ".config", "lazylabel", "lazylabel-web.db"),
     port,
     // Loopback by default. Decision 3 is one trusted user per deployment, so binding every
     // interface is a choice an operator makes on purpose, behind the reverse proxy that terminates

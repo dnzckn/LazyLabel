@@ -21,6 +21,7 @@ import { createLogger } from "./http/log.js";
 import { builtWebRoot } from "./http/staticWeb.js";
 import { appUrl, describeStartFailure, isEntryPoint } from "./launcher.js";
 import { createServer } from "./server.js";
+import { importFolderSettingsOnce } from "./settings/folderDatabaseImport.js";
 import { importDesktopSettingsOnce } from "./settings/legacyImport.js";
 import type { AppDeps } from "./app.js";
 import type { Config } from "./config.js";
@@ -108,6 +109,21 @@ export async function startApi(config: Config, logger: Logger): Promise<RunningA
     });
   }
   const metadataStore = new SqliteMetadataStore(config.databasePath);
+
+  // The per-folder database earlier versions kept, imported once, and first: it is this app's own
+  // record, and it already took in the desktop settings on its own first start. Never fatal.
+  try {
+    await importFolderSettingsOnce({
+      store: metadataStore,
+      databasePath: config.databasePath,
+      datasetRoot: config.datasetRoot,
+      logger,
+    });
+  } catch (cause) {
+    logger.log("error", "the settings kept in this folder could not be imported", {
+      reason: cause instanceof Error ? cause.message : String(cause),
+    });
+  }
 
   // Phase 4 exit criterion 3: the desktop app's settings, imported once. Never fatal -- someone
   // whose old settings cannot be read should still get a working app, with the reason logged.

@@ -13,6 +13,8 @@ import * as path from "node:path";
 
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
+import { defaultSettings } from "@lazylabel/settings-schema";
+import { SqliteMetadataStore } from "../src/adapters/sqliteMetadataStore.js";
 import { silentLogger } from "../src/http/log.js";
 import { startApi } from "../src/main.js";
 import type { Config } from "../src/config.js";
@@ -90,3 +92,45 @@ describe("starting the API", () => {
     await expect(startApi(config({ datasetRoot: missing }), silentLogger)).rejects.toThrow(missing);
   });
 });
+
+describe("the settings a user already had (DEPLOYABILITY.md R5)", () => {
+  it("takes a folder's old database before the desktop app's files, and keeps them in the per-user file", async () => {
+    // A folder an earlier version kept settings in, and desktop settings that say something else.
+    const dataset = path.join(scratch, "settled");
+    await mkdir(dataset);
+    const earlier = new SqliteMetadataStore(path.join(await mkdirp(dataset, ".lazylabel"), "lazylabel.db"));
+    const defaults = defaultSettings();
+    await earlier.putSettings("me", { ...defaults, values: { ...defaults.values, window_width: 1111 } });
+    await earlier.close();
+    const desktop = await mkdirp(scratch, "desktop-config");
+    await writeFile(path.join(desktop, "settings.json"), JSON.stringify({ window_width: 2222 }));
+    const perUser = path.join(scratch, "home", ".config", "lazylabel", "lazylabel-web.db");
+
+    const api = await startApi(
+      config({ datasetRoot: dataset, databasePath: perUser, legacySettingsDir: desktop }),
+      silentLogger,
+    );
+    try {
+      const settings = (await (await fetch(new URL("api/users/me/settings", api.url))).json()) as {
+        values: Record<string, unknown>;
+      };
+      // The folder's database is the web app's own record, newer than the desktop files it took in.
+      expect(settings.values["window_width"]).toBe(1111);
+    } finally {
+      await api.close();
+    }
+
+    const stored = new SqliteMetadataStore(perUser);
+    try {
+      expect((await stored.getSettings("me"))!.values["window_width"]).toBe(1111);
+    } finally {
+      await stored.close();
+    }
+  });
+});
+
+async function mkdirp(...parts: string[]): Promise<string> {
+  const folder = path.join(...parts);
+  await mkdir(folder, { recursive: true });
+  return folder;
+}

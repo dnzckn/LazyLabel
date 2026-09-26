@@ -45,10 +45,32 @@ describe("the port", () => {
 });
 
 describe("the database", () => {
-  it("lives inside the dataset folder by default", () => {
-    // Beside the images rather than in a system directory: decision 5 makes the folder the source
-    // of truth, and a database somewhere else is a second thing to back up and to lose.
-    expect(load({}).databasePath).toMatch(/[\\/]\.lazylabel[\\/]lazylabel\.db$/);
+  it("is per user by default, in the desktop app's config folder", () => {
+    /*
+     * Until 2026-09-26 it lived inside the dataset folder, `<dataset>/.lazylabel/lazylabel.db`, and
+     * this test said why: "Beside the images rather than in a system directory: decision 5 makes
+     * the folder the source of truth, and a database somewhere else is a second thing to back up
+     * and to lose."
+     *
+     * DEPLOYABILITY.md's F7 is what that default cost. Settings did not follow the user to another
+     * folder. Three files (the database, -wal and -shm) went into every dataset, and a dataset may
+     * be read-only, a network share, where SQLite's WAL does not work, or a synced folder. And the
+     * store holds no dataset's data at all, only one settings document per user, so there was
+     * nothing to keep beside the images. Decision 5's source of truth, the annotation files, is
+     * still beside them.
+     *
+     * Per user matches both of the others: the owner's own instance already ran with exactly this
+     * path, and the desktop app keeps its settings per user in the same folder, which the API
+     * already reads for the one-time desktop import. A folder's old database is brought across once
+     * (`settings/folderDatabaseImport.ts`).
+     */
+    expect(load({}).databasePath).toBe(path.join(os.homedir(), ".config", "lazylabel", "lazylabel-web.db"));
+  });
+
+  it("does not depend on the folder, so settings follow the user from one folder to another", () => {
+    expect(load({ LAZYLABEL_DATASET_ROOT: "/data/one" }).databasePath).toBe(
+      load({ LAZYLABEL_DATASET_ROOT: "/data/two" }).databasePath,
+    );
   });
 
   it("can be put elsewhere", () => {

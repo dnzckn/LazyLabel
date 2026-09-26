@@ -36,6 +36,11 @@ services:
     environment:
       # Fixed inside the container. What varies is where the bind mount comes FROM.
       LAZYLABEL_DATASET_ROOT: /data
+      # EXPLICIT, unlike outside a container. The API's default is per user, in the home folder
+      # (~/.config/lazylabel/lazylabel-web.db), and a container's home is thrown away with it, so
+      # settings would reset on every recreate. The dataset mount is what persists here, so the
+      # settings stay in it, where this deployment always kept them.
+      LAZYLABEL_DB: /data/.lazylabel/lazylabel.db
       LAZYLABEL_PORT: "8787"
       # Containers must bind every interface to be reachable from the compose network at all; the
       # loopback binding that protects you is on the PUBLISHED port below, not on this one.

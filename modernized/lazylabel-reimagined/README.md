@@ -139,7 +139,8 @@ the AI tools will be unavailable before a user clicks an object and finds out.
 The owner settled this on 2026-09-18: **the local directory is the default**, and the ports exist so
 a hosted deployment with a SQL database or object store nearby can point at one
 ([architecture §3.1](../../analysis/lazylabel/REIMAGINED_ARCHITECTURE.md)). Only the two default
-adapters are built — the mounted dataset folder, and a SQLite file.
+adapters are built — the mounted dataset folder, and a SQLite file, which is per user
+(`~/.config/lazylabel/lazylabel-web.db`) unless `LAZYLABEL_DB` says otherwise.
 
 What is not configurable, on any adapter: **the annotation sidecars are the source of truth**. The
 architecture review killed a segment table duplicating the file chain, and it stays dead.

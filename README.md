@@ -64,7 +64,10 @@ takes options after `--`.)
 - **When something is wrong, the launcher says what to do:** a Node.js that is too old, a folder
   that is not there, a port already in use (it names a free one, or opens the LazyLabel already
   running for that folder).
-- The API keeps its settings database in `<your folder>\.lazylabel\`.
+- **Your settings and hotkeys are kept per user**, in `~/.config/lazylabel/lazylabel-web.db`, the
+  desktop app's config folder, so they follow you from folder to folder; the desktop app's own
+  settings are brought across once, the first time. Nothing is written into your image folder
+  except the annotation files you save.
 
 ---
 

@@ -101,3 +101,33 @@ export class SqliteMetadataStore implements MetadataStore {
     this.db.close();
   }
 }
+
+/**
+ * The settings another database file of this store holds for `userId`, or null when it holds none.
+ *
+ * For the one-time import of the per-folder database earlier versions kept
+ * (`settings/folderDatabaseImport.ts`). Opened READ-ONLY and never migrated: it belongs to a
+ * dataset folder, which may be shared or read-only, and nothing here should change it. SQLite still
+ * leaves an empty `-wal` and `-shm` beside a WAL-mode file it has read, in the `.lazylabel` folder
+ * that file is already in. Throws when the file is not a database, or its document not an object.
+ */
+export function readSettingsFile(location: string, userId: string): StoredSettings | null {
+  const db = new DatabaseSync(location, { readOnly: true });
+  try {
+    const table = db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'settings'").get();
+    if (table === undefined) return null;
+
+    const row = db.prepare("SELECT document FROM settings WHERE user_id = ?").get(userId) as
+      | { document: string }
+      | undefined;
+    if (row === undefined) return null;
+
+    const document: unknown = JSON.parse(row.document);
+    if (typeof document !== "object" || document === null || Array.isArray(document)) {
+      throw new Error(`the stored settings for ${userId} are not an object`);
+    }
+    return document as StoredSettings;
+  } finally {
+    db.close();
+  }
+}

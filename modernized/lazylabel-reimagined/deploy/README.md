@@ -103,7 +103,9 @@ would make skipping it the accident.
 images the source of truth. A named volume would put them inside Docker, where you cannot copy,
 diff or back them up without the daemon — which is exactly the property the desktop app had, and
 that this rebuild is not allowed to give up. The SQLite database holds only settings, hotkeys,
-projects and job records; losing it costs preferences, not annotations.
+projects and job records; losing it costs preferences, not annotations. `compose.yaml` keeps it in
+the dataset mount, `/data/.lazylabel/lazylabel.db`, rather than at the API's per-user default,
+which would be in the container's home and lost whenever the container is recreated.
 
 **The model directory is read-only.** Nothing in the inference service writes a checkpoint, and
 SEC-03 forbids downloading one at runtime. A writable mount could only ever be a way for something
