@@ -19,6 +19,7 @@ import type { AnnotationsResult, ApiClient } from "../../src/api/client.js";
 import { SplitView } from "../../src/split/SplitView.jsx";
 import { processingQuery } from "../../src/workspace/processing.js";
 import { WorkspaceProvider, useWorkspace } from "../../src/workspace/WorkspaceProvider.jsx";
+import { LIMIT, longTexts } from "../terse.js";
 
 afterEach(cleanup);
 
@@ -152,10 +153,11 @@ async function pairWith(name: string): Promise<void> {
 }
 
 describe("before there is anything to pair", () => {
-  it("asks for an image to be opened first", () => {
+  it("asks for an image to be opened first, in legacy's words", () => {
+    // main_window.py:5942.
     mount();
 
-    expect(screen.getByText(/Open an image first/)).toBeTruthy();
+    expect(screen.getByText("Please load an image first")).toBeTruthy();
   });
 
   it("says a split view needs two images when the folder has one", async () => {
@@ -163,15 +165,15 @@ describe("before there is anything to pair", () => {
     // Not `openLeft`: with one image there is no pane to wait for, which is the point.
     fireEvent.click(screen.getByText("open left.png"));
 
-    await waitFor(() => expect(screen.getByText(/needs two images/)).toBeTruthy());
+    await waitFor(() => expect(screen.getByText("A split view needs two images")).toBeTruthy());
   });
 
-  it("shows the open image alone until a second is chosen", async () => {
+  it("shows the open image alone until a second is chosen, beside legacy's empty viewer", async () => {
     mount();
     await openLeft();
 
     expect(panes()).toEqual(["left.png"]);
-    expect(screen.getByText(/Pick a second image/)).toBeTruthy();
+    expect(document.querySelector(".split__pane--empty")?.textContent).toBe("No image loaded");
   });
 });
 
@@ -233,8 +235,9 @@ describe("choosing the pair", () => {
     await openLeft();
     await pairWith("left.png");
 
-    expect(screen.getByText(/Both sides are showing the same image/)).toBeTruthy();
-    expect(screen.getByText(/the later save will win/)).toBeTruthy();
+    // One line since 2026-09-26: that the sides do not share edits, and the later save wins, is
+    // the code's comment now.
+    expect(screen.getByText("Both sides show the same image")).toBeTruthy();
   });
 });
 
@@ -294,7 +297,7 @@ describe("images of different sizes", () => {
     await openLeft();
     await pairWith("third.png");
 
-    await waitFor(() => expect(screen.getByText(/100x50 and 80x50/)).toBeTruthy());
+    await waitFor(() => expect(screen.getByText("Different sizes: 100x50 and 80x50")).toBeTruthy());
     // Still both drawn: a mismatch is a thing to say, not a reason to show nothing.
     expect(canvases().length).toBe(2);
   });
@@ -305,7 +308,7 @@ describe("images of different sizes", () => {
     await pairWith("right.png");
 
     await waitFor(() => expect(canvases().length).toBe(2));
-    expect(screen.queryByText(/different sizes/)).toBeNull();
+    expect(screen.queryByText(/Different sizes/)).toBeNull();
   });
 });
 
@@ -325,28 +328,42 @@ describe("which side the tools act on", () => {
 });
 
 describe("saying which of the two you are getting", () => {
-  it("says the sides are independent while unlinked", async () => {
+  it("says what Linked does in legacy's tooltip, and in no paragraph under the panes", async () => {
+    // main_window.py:3101-3106. A paragraph under the panes said, for each mode, what links and
+    // what does not -- adding and erasing do, as legacy links them; deleting, merging and saving do
+    // not -- until the owner asked for no paragraphs (2026-09-26). SplitView's module comment keeps
+    // it.
     mount();
     await openLeft();
     await pairWith("right.png");
 
-    expect(screen.getByText(/^Unlinked:/)).toBeTruthy();
-    expect(screen.getByText(/Tick Linked to draw into both at once/)).toBeTruthy();
-  });
+    const link = screen.getByLabelText("Link the two images").closest("label")!;
+    expect(link.title).toBe("When linked, operations are mirrored to both viewers");
+    expect(screen.queryByText(/^Unlinked:/)).toBeNull();
 
-  it("says what linking does, and what it still does not, once linked", async () => {
-    // The claim stays where the code is. Adding and erasing are linked, as legacy links them;
-    // deleting and merging are not, in legacy or here, and saving is not -- a view that implied
-    // otherwise would be found out at export.
-    mount();
-    await openLeft();
-    await pairWith("right.png");
     fireEvent.click(screen.getByLabelText("Link the two images"));
 
-    const note = screen.getByText(/^Linked:/);
-    expect(note.textContent).toContain("Erasing links the same way");
-    expect(note.textContent).toContain("Deleting and merging act on the side chosen above");
-    expect(note.textContent).toContain("each side still SAVES separately");
+    expect(screen.queryByText(/^Linked:/)).toBeNull();
+  });
+
+  it(`holds no run of text over ${LIMIT} characters, paired, linked or not, same size or not`, async () => {
+    // The shell's own check (test/shell/terse.test.tsx) cannot pair two images; this reads the
+    // split view in each state that printed a paragraph until 2026-09-26.
+    mount();
+    expect(longTexts(document.body)).toEqual([]);
+
+    await openLeft();
+    expect(longTexts(document.body)).toEqual([]);
+
+    await pairWith("third.png");
+    await waitFor(() => expect(screen.getByText(/different sizes/i)).toBeTruthy());
+    expect(longTexts(document.body)).toEqual([]);
+
+    fireEvent.click(screen.getByLabelText("Link the two images"));
+    expect(longTexts(document.body)).toEqual([]);
+
+    await pairWith("left.png");
+    expect(longTexts(document.body)).toEqual([]);
   });
 });
 
@@ -461,9 +478,10 @@ describe("the view in the active half", () => {
   });
 
   it("shows legacy's empty second viewer until a second image is chosen", async () => {
+    // "Viewer 2: No image loaded" (main_window.py:3086); the stylesheet draws "Viewer 2:".
     mount({ viewer: <p>the view</p> });
     await openLeft();
 
-    expect(document.querySelector(".split__pane--empty")?.textContent).toBe("No image");
+    expect(document.querySelector(".split__pane--empty")?.textContent).toBe("No image loaded");
   });
 });

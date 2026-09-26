@@ -138,7 +138,8 @@ describe("mirroring a shape", () => {
 
     expect(out.kind).toBe("refused");
     if (out.kind !== "refused") throw new Error("expected refused");
-    expect(out.reason).toContain("does not fit");
+    // The vertex that does not fit, once, and nothing more (2026-09-26).
+    expect(out.reason).toBe("(500, 1) is outside the other image (100x50)");
   });
 });
 
@@ -147,12 +148,12 @@ describe("describing a pair", () => {
     expect(describePair({ width: 10, height: 10 }, { width: 10, height: 10 })).toBeNull();
   });
 
-  it("explains a size difference without preventing the pairing", () => {
+  it("names a size difference in one line, without preventing the pairing", () => {
     // A user comparing a full frame with a crop of it has a real reason to pair them; the smaller
-    // one simply refuses what falls outside, per operation.
+    // one simply refuses what falls outside, per operation, and each refusal says so. The line
+    // explained that too until the owner asked for no paragraphs (2026-09-26).
     const note = describePair({ width: 100, height: 50 }, { width: 80, height: 50 });
 
-    expect(note).toContain("different sizes");
-    expect(note).toContain("same pixel");
+    expect(note).toBe("Different sizes: 100x50 and 80x50");
   });
 });

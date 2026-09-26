@@ -240,7 +240,8 @@ describe("C14: erasing both together (RULE-092)", () => {
     fireEvent.click(screen.getByText("erase"));
 
     await waitFor(() => expect(canvases()).toEqual(["1 annotation", "1 annotation"]));
-    expect(screen.getByText(/Erased in both images: 1 annotation in b\.png too/)).toBeTruthy();
+    // Legacy's words for the mirrored erase (main_window.py:5803-5805), naming the image.
+    expect(screen.getByText("Erased 1 segment(s) from b.png")).toBeTruthy();
   });
 
   it("takes both back with one undo", async () => {

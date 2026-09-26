@@ -49,7 +49,7 @@ describe("mirroring the geometry", () => {
 
     expect(result.kind).toBe("refused");
     if (result.kind !== "refused") return;
-    expect(result.reason).toMatch(/does not fit the other image/);
+    expect(result.reason).toMatch(/outside the other image/);
     expect(result.reason).toMatch(/50x100/);
   });
 
@@ -61,9 +61,10 @@ describe("mirroring the geometry", () => {
     expect(result.segment.mask).toEqual({ width: 100, height: 100, data: "abc" });
   });
 
-  it("refuses a mask between images of different sizes, and says what to do instead", () => {
+  it("refuses a mask between images of different sizes", () => {
     // Resampling would change which pixels are covered; cropping is the clamping a polygon is
-    // already refused for. Either way the second image would hold a different object.
+    // already refused for. Either way the second image would hold a different object. What to do
+    // instead -- a polygon, or this side on its own -- is the code's comment since 2026-09-26.
     const result = linkedAdd(
       { segment: masked(0), aliases: {}, size: SAME },
       { ...empty, size: SMALL },
@@ -71,8 +72,7 @@ describe("mirroring the geometry", () => {
 
     expect(result.kind).toBe("refused");
     if (result.kind !== "refused") return;
-    expect(result.reason).toMatch(/mask cannot be linked between images of different sizes/);
-    expect(result.reason).toMatch(/draw it as a polygon/);
+    expect(result.reason).toBe("a mask cannot be linked between images of different sizes");
   });
 
   it("refuses an annotation with no geometry at all", () => {
@@ -179,7 +179,7 @@ describe("an eraser carried to the other image (RULE-092)", () => {
 
     expect(result.kind).toBe("refused");
     if (result.kind !== "refused") return;
-    expect(result.reason).toMatch(/does not fit the other image/);
+    expect(result.reason).toMatch(/outside the other image/);
   });
 
   it("carries a mask only between images of one size", () => {

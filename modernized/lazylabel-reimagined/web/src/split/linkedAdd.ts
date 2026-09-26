@@ -134,15 +134,11 @@ function mirrorGeometry(
     // A MASK IS SIZED TO ITS IMAGE, so "the same pixel" only has an answer when the two images are
     // the same size. Resampling one to fit would change which pixels are covered, which is exactly
     // the silent difference the same-pixel rule exists to prevent -- and cropping it to the
-    // smaller image would be the clamping that `mirrorShape` already refuses for a polygon.
+    // smaller image would be the clamping that `mirrorShape` already refuses for a polygon. A
+    // polygon links, or this side can be annotated on its own; the refusal said so until
+    // 2026-09-26, and the sizes are on the pair's own line.
     if (source.width !== target.width || source.height !== target.height) {
-      return {
-        kind: "refused",
-        reason:
-          `a mask cannot be linked between images of different sizes (${source.width}x`
-          + `${source.height} and ${target.width}x${target.height}); draw it as a polygon, or `
-          + "annotate this side on its own",
-      };
+      return { kind: "refused", reason: "a mask cannot be linked between images of different sizes" };
     }
     return { kind: "geometry", parts: { mask: segment.mask } };
   }

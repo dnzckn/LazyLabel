@@ -37,6 +37,14 @@
  *
  * TWO VIEWERS, not four. Legacy has a four-view setting and only viewers 0 and 1 exist
  * (RULE-092's edge cases); the setting is a control that does nothing, and it is not carried over.
+ *
+ * NO NOTE UNDER THE PANES. Until the owner asked for legacy's panels without paragraphs
+ * (2026-09-26) one said what the mode in force does: linked, one annotation drawn in either image
+ * lands in both at the same pixel under the same class NAME, each image keeping its own id for it;
+ * erasing links the same way; one undo takes back both; a shape outside the other image is refused
+ * there rather than moved; deleting and merging act on the side chosen, and each side SAVES
+ * separately. Unlinked, the tools, the panels and undo follow the side chosen. Legacy's Linked
+ * button says it in a tooltip, and so does this one.
  */
 
 import { useMemo, type ReactNode } from "react";
@@ -90,20 +98,14 @@ export function SplitView({ images, pixelsUrl, tileUrl, viewer }: SplitViewProps
     return describePair(leftSize, rightSize);
   }, [left, right]);
 
+  // Legacy's words on entering Multi with nothing open (main_window.py:5942). A split view pairs a
+  // second image with the one being worked on.
   if (left.open === null) {
-    return (
-      <p className="panel__missing">
-        Open an image first. A split view pairs a second image with the one you are working on.
-      </p>
-    );
+    return <p className="panel__missing">Please load an image first</p>;
   }
 
   if (images.length < 2) {
-    return (
-      <p className="panel__missing">
-        A split view needs two images. This folder has {images.length}.
-      </p>
-    );
+    return <p className="panel__missing">A split view needs two images</p>;
   }
 
   const rightKey = right.open?.image.key ?? "";
@@ -162,12 +164,11 @@ export function SplitView({ images, pixelsUrl, tileUrl, viewer }: SplitViewProps
 
       {right.open !== null && left.open.image.key === rightKey && (
         // Allowed, and worth saying: the same image twice is a legitimate way to look at one
-        // picture under two sets of display adjustments. Worth saying LOUDLY here, though, because
-        // the two sides now hold separate segments -- so edits made on one do not appear on the
-        // other, and the last save wins.
+        // picture under two sets of display adjustments. Worth saying here, though, because the two
+        // sides hold separate segments -- so edits made on one do not appear on the other, and the
+        // later save wins. The banner said all that until 2026-09-26.
         <p role="status" className="banner banner--warning">
-          Both sides are showing the same image. Each side holds its own annotations, so edits made
-          on one will not appear on the other and the later save will win.
+          Both sides show the same image
         </p>
       )}
 
@@ -186,19 +187,19 @@ export function SplitView({ images, pixelsUrl, tileUrl, viewer }: SplitViewProps
         </p>
       )}
       {linkReport !== null && linkReport.kind === "erased" && (
+        // Legacy's words for the mirrored erase (main_window.py:5803-5805) and for an erase that met
+        // nothing (polygon_drawing_manager.py:198), the viewer named by its image, as the panes'
+        // headers name it.
         <p role="status" className="panel__missing">
           {linkReport.count === 0
-            ? `Erased here; nothing was under the same pixels in ${linkReport.image}.`
-            : `Erased in both images: ${linkReport.count} annotation${linkReport.count === 1 ? "" : "s"} in ${linkReport.image} too.`}
+            ? `No segments to erase in ${linkReport.image}`
+            : `Erased ${linkReport.count} segment(s) from ${linkReport.image}`}
         </p>
       )}
       {linkReport !== null && linkReport.kind === "linked" && (
         <p role="status" className="panel__missing">
-          Added to both images
-          {linkReport.allocated
-            ? `, as a new class ${linkReport.classId} in ${linkReport.image}`
-            : `, as class ${linkReport.classId} in ${linkReport.image}`}
-          .
+          Added to both images, as {linkReport.allocated ? "new " : ""}class {linkReport.classId} in{" "}
+          {linkReport.image}
         </p>
       )}
 
@@ -211,9 +212,10 @@ export function SplitView({ images, pixelsUrl, tileUrl, viewer }: SplitViewProps
           const live = viewer !== undefined && activeSide === side;
           const half =
             open === null ? (
-              // Legacy's empty viewer: its header and nothing else. The note below says what to do.
+              // Legacy's empty viewer: its header and nothing else, "Viewer 2: No image loaded"
+              // (main_window.py:3086), the stylesheet drawing the "Viewer N:".
               <div key={side} className="split__pane split__pane--empty">
-                <p className="split__header">No image</p>
+                <p className="split__header">No image loaded</p>
               </div>
             ) : (
               <figure
@@ -239,7 +241,9 @@ export function SplitView({ images, pixelsUrl, tileUrl, viewer }: SplitViewProps
               half,
               <div key="link" className="split__middle">
                 {right.open !== null && (
-                  <label className="split__link">
+                  // Legacy's button text and tooltip (main_window.py:3101-3106). Its text turns to
+                  // "Unlinked" when released; a box that is ticked or not says that already.
+                  <label className="split__link" title="When linked, operations are mirrored to both viewers">
                     <input
                       type="checkbox"
                       checked={linked}
@@ -256,20 +260,6 @@ export function SplitView({ images, pixelsUrl, tileUrl, viewer }: SplitViewProps
           );
         })}
       </div>
-
-      <p className="panel__missing">
-        {right.open === null
-          ? "Pick a second image to pair with this one."
-          : linked
-            ? "Linked: one annotation drawn in either image lands in BOTH, at the same pixel and "
-              + "under the same class NAME — each image keeping its own id for it, which is how "
-              + "per-image class ids work. Erasing links the same way. One press of undo takes back "
-              + "both. A shape that falls outside the other image is refused there rather than "
-              + "moved, and said so above. Deleting and merging act on the side chosen above, as "
-              + "they do in the desktop app, and each side still SAVES separately."
-            : "Unlinked: the tools, the panels and undo all follow the side chosen above, and "
-              + "each side saves separately. Tick Linked to draw into both at once."}
-      </p>
     </div>
   );
 }

@@ -126,8 +126,8 @@ export function mirror(
     return {
       kind: "outside",
       reason:
-        `(${Math.round(point.x)}, ${Math.round(point.y)}) is outside the other image, which is `
-        + `${target.width}x${target.height}`,
+        `(${Math.round(point.x)}, ${Math.round(point.y)}) is outside the other image `
+        + `(${target.width}x${target.height})`,
     };
   }
   return { kind: "point", x: point.x, y: point.y };
@@ -152,12 +152,8 @@ export function mirrorShape(
 
   for (const [x, y] of vertices) {
     const at = mirror({ x, y }, target);
-    if (at.kind === "outside") {
-      return {
-        kind: "refused",
-        reason: `the shape does not fit the other image: ${at.reason}`,
-      };
-    }
+    // The first vertex outside says the shape does not fit; it is not said twice.
+    if (at.kind === "outside") return { kind: "refused", reason: at.reason };
     out.push([at.x, at.y]);
   }
 
@@ -170,12 +166,12 @@ export function mirrorShape(
  * Different sizes do NOT prevent it — the smaller image simply refuses the operations that fall
  * outside it, which the user sees per operation rather than as a blanket "these cannot be paired".
  * A user comparing a full frame with a crop of it has a real reason to pair them.
+ *
+ * One line, the sizes. It went on to explain that linked operations use the same pixel in both, so
+ * anything drawn outside the smaller image is refused for that viewer rather than moved, until the
+ * owner asked for no paragraphs (2026-09-26); each refusal still says so when it happens.
  */
 export function describePair(left: ImageSize, right: ImageSize): string | null {
   if (left.width === right.width && left.height === right.height) return null;
-  return (
-    `These images are different sizes (${left.width}x${left.height} and `
-    + `${right.width}x${right.height}). Linked operations use the same pixel in both, so anything `
-    + "drawn outside the smaller one will be refused for that viewer rather than moved."
-  );
+  return `Different sizes: ${left.width}x${left.height} and ${right.width}x${right.height}`;
 }
