@@ -13,7 +13,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import type { WireMask } from "@lazylabel/contracts";
+import type { WireMask, WireSegment } from "@lazylabel/contracts";
 import { defaultSettings } from "@lazylabel/settings-schema";
 
 import type {
@@ -26,6 +26,7 @@ import { NotificationHost, NotificationProvider } from "../../src/notifications/
 import { Panel } from "../../src/shell/Panel.jsx";
 import { TimelinePanel } from "../../src/sequence/TimelinePanel.jsx";
 import { PropagationControl } from "../../src/sequence/PropagationControl.jsx";
+import type { OpenAnnotations } from "../../src/sequence/references.js";
 import { SettingsProvider } from "../../src/settings/SettingsProvider.jsx";
 import type { Frame } from "../../src/sequence/timeline.js";
 
@@ -660,7 +661,14 @@ describe("RULE-056: not losing propagated work without asking", () => {
     vertices: [[1, 1], [6, 1], [6, 6], [1, 6]],
   };
 
-  function panel(confirmDiscard: (message: string) => boolean, inPanel = false) {
+  function panel(
+    confirmDiscard: (message: string) => boolean,
+    inPanel = false,
+    /** The open image's annotations as the shell hands them down from the store. */
+    openAnnotations?: OpenAnnotations,
+  ) {
+    /** Every request Propagate sent, as `fakeClient` records them. */
+    const started: WirePropagationStart[] = [];
     const client = {
       getSettings: async () => defaultSettings(),
       putSettings: async (next: unknown) => next,
@@ -691,7 +699,10 @@ describe("RULE-056: not losing propagated work without asking", () => {
         columns: [],
         images: FOLDER,
       }),
-      startPropagation: async () => job({ state: "running" }),
+      startPropagation: async (request: WirePropagationStart) => {
+        started.push(request);
+        return job({ state: "running" });
+      },
       propagationState: async () =>
         job({
           state: "completed",
@@ -709,6 +720,7 @@ describe("RULE-056: not losing propagated work without asking", () => {
           client={client}
           confirmDiscard={confirmDiscard}
           {...(saves === undefined ? {} : { savedElsewhere: saves })}
+          {...(openAnnotations === undefined ? {} : { openAnnotations })}
         />
       );
       return (
@@ -724,7 +736,10 @@ describe("RULE-056: not losing propagated work without asking", () => {
     };
     const result = render(tree());
     // The ordinary save's counts, as the shell hands them down from the store.
-    return { withSaves: (saves: ReadonlyMap<string, number>) => result.rerender(tree(saves)) };
+    return {
+      withSaves: (saves: ReadonlyMap<string, number>) => result.rerender(tree(saves)),
+      started,
+    };
   }
 
   /** What the browser does before a tab closes: returns true when the page asked it to ask. */
@@ -849,6 +864,24 @@ describe("RULE-056: not losing propagated work without asking", () => {
     // ...and nothing more.
     expect(screen.getByRole("button", { name: /Save 1 frame/ })).toBeTruthy();
     expect(closeTab()).toBe(true);
+  });
+
+  it("seeds a reference frame that is OPEN from its unsaved edits, not from its file", async () => {
+    // Legacy reads the open frame's segments from memory (main_window.py:3649-3656): draw on a
+    // frame, mark it, propagate, with no save between. Read from the file, an edited reference
+    // propagated what it held before the edit (SEQUENCE_PARITY.md SP-04). The file still holds
+    // SQUARE; on screen the user has redrawn it smaller and not saved.
+    const redrawn: WireSegment = {
+      type: "Polygon",
+      classId: 0,
+      vertices: [[2, 2], [4, 2], [4, 4], [2, 4]],
+    };
+    const { started } = panel(() => true, false, { key: "frames/f01.png", segments: [redrawn] });
+
+    await propagateAndWait();
+
+    // One seed, and it is the square on screen: SQUARE's would be [1, 1, 7, 7].
+    expect(started[0]!.objects!.map((each) => each.mask.box)).toEqual([[2, 2, 5, 5]]);
   });
 
   it("offers the Save beside the timeline bar, where legacy's Save All is", async () => {

@@ -10,20 +10,18 @@
  * the saved file, the propagation would start from a shape the user has never seen and cannot
  * produce again.
  *
- * TWO DELIBERATE DIVERGENCES FROM RULE-023, both in the direction of not losing work silently.
+ * ONE DELIBERATE DIVERGENCE FROM RULE-023, in the direction of not losing work silently.
  *
- * 1. LEGACY SEEDS ONLY FROM MASK SEGMENTS. A polygon, box or circle on the open frame has no mask
- *    in memory, so legacy excludes it "silently ... until saved and reloaded" — the same polygon
- *    works after a save, because NPZ, YOLO-Seg and COCO all carry masks. A user who draws a
- *    polygon and propagates gets nothing carried from it and no word about why. This rasterizes
- *    every shape instead, with `rasterizeSegment`, which is the function the exporters use — so
- *    what seeds the run is the same shape the file would have held.
+ * LEGACY SEEDS ONLY FROM MASK SEGMENTS. A polygon, box or circle on the open frame has no mask in
+ * memory, so legacy excludes it "silently ... until saved and reloaded" — the same polygon works
+ * after a save, because NPZ, YOLO-Seg and COCO all carry masks. A user who draws a polygon and
+ * propagates gets nothing carried from it and no word about why. This rasterizes every shape
+ * instead, with `rasterizeSegment`, which is the function the exporters use — so what seeds the
+ * run is the same shape the file would have held.
  *
- * 2. LEGACY READS THE OPEN FRAME FROM MEMORY, including unsaved segments; every other reference
- *    it loads from disk. This reads all of them from disk, which is decision 5 — the files are
- *    the truth. The consequence is the opposite of legacy's: an unsaved annotation is not carried,
- *    and the user is TOLD ("it has no annotations to carry") rather than watching an empty mask
- *    propagate through six hundred frames.
+ * THE OPEN FRAME SEEDS AS THE USER HAS IT, unsaved segments included, and every other reference
+ * from its file, as RULE-023 says and legacy does. Until 2026-09-25 every reference was read from
+ * its file (`SEQUENCE_PARITY.md` SP-04): see `referenceMasks`.
  *
  * OBJECT IDS ARE A RUNNING COUNTER, one per annotation across every reference frame, which is
  * exactly what legacy does (`propagation_manager.py:410-412`: `max(existing_ids, default=0) + 1`).
@@ -42,6 +40,12 @@ export interface PropagationReference {
   readonly frame: number;
   readonly objectId: number;
   readonly mask: WireMask;
+}
+
+/** The open image's annotations as they stand in the workspace, saved or not. */
+export interface OpenAnnotations {
+  readonly key: string;
+  readonly segments: readonly WireSegment[];
 }
 
 export interface ReferenceMasks {
@@ -103,11 +107,15 @@ function maskOf(
  * REPORTED rather than dropped. A propagation that quietly seeded from three of five references
  * would produce a plausible result that is not the one the user asked for, and nothing on screen
  * would say so.
+ *
+ * `open` is the image open in the workspace: a reference frame that is that image seeds from its
+ * annotations there, when it has any, instead of from its file.
  */
 export async function referenceMasks(
   client: ApiClient,
   projectId: string,
   frames: readonly { readonly position: number; readonly key: string }[],
+  open?: OpenAnnotations,
 ): Promise<ReferenceMasks> {
   const objects: PropagationReference[] = [];
   const skipped: { key: string; reason: string }[] = [];
@@ -126,12 +134,27 @@ export async function referenceMasks(
     }
 
     let segments: readonly WireSegment[];
-    try {
-      const loaded = await client.loadAnnotations(projectId, frame.key, [size.height, size.width]);
-      segments = loaded.kind === "loaded" ? loaded.annotations.segments : [];
-    } catch (cause) {
-      skipped.push({ key: frame.key, reason: reasonOf(cause) });
-      continue;
+    if (open !== undefined && open.key === frame.key && open.segments.length > 0) {
+      /*
+       * THE OPEN FRAME AS THE USER HAS IT, unsaved edits included; with nothing on it, and for any
+       * other reference, the file. Legacy's order (`main_window.py:3649-3666`), and what its loop
+       * needs: draw on a frame, mark it, propagate, with no save between. Read from the file, that
+       * loop carried nothing, and an edited reference its old annotations (`SEQUENCE_PARITY.md`
+       * SP-04). Nothing on it covers a frame still loading, and, as in legacy, one whose every
+       * annotation was deleted and not saved.
+       */
+      segments = open.segments;
+    } else {
+      try {
+        const loaded = await client.loadAnnotations(projectId, frame.key, [
+          size.height,
+          size.width,
+        ]);
+        segments = loaded.kind === "loaded" ? loaded.annotations.segments : [];
+      } catch (cause) {
+        skipped.push({ key: frame.key, reason: reasonOf(cause) });
+        continue;
+      }
     }
 
     if (segments.length === 0) {

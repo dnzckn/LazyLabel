@@ -30,7 +30,7 @@ import { useSequenceActive } from "./sequenceActive.js";
 import { commitFrame, type CommitPolicy, type Committed } from "./commit.js";
 import { clampThreshold, DEFAULT_THRESHOLD, isFlagged } from "./confidence.js";
 import { usePropagation } from "./usePropagation.js";
-import { referenceMasks } from "./references.js";
+import { referenceMasks, type OpenAnnotations } from "./references.js";
 import { plannedSave, saveAll, segmentsFor } from "./saveAll.js";
 import type { Frame, FrameState } from "./timeline.js";
 
@@ -101,6 +101,14 @@ export interface PropagationControlProps {
    */
   readonly savedElsewhere?: ReadonlyMap<string, number>;
   /**
+   * The open image's annotations as the user has them now, unsaved edits included.
+   *
+   * A reference frame that is the open image seeds from these, when there are any, not from its
+   * file, as legacy's does (`main_window.py:3649-3656`, `SEQUENCE_PARITY.md` SP-04). Handed down
+   * from the store by the shell, as `savedElsewhere` is.
+   */
+  readonly openAnnotations?: OpenAnnotations;
+  /**
    * Where the Save button is drawn: beside the timeline bar, as legacy's Save All is
    * (main_window.py:3296-3305). A portal, so the button is still this control's -- its saving
    * state, its guard and its keys stay here -- while it sits where a user looks for it.
@@ -120,6 +128,7 @@ export function PropagationControl({
   onSkipped,
   onSaved,
   savedElsewhere,
+  openAnnotations,
   saveSlot,
   projectId = "default",
 }: PropagationControlProps): ReactNode {
@@ -204,6 +213,8 @@ export function PropagationControl({
         client,
         projectId,
         references.map((index) => ({ position: index, key: frames[index]!.key })),
+        // The open reference as it is on screen, as legacy seeds it (SP-04).
+        openAnnotations,
       );
       if (skipLabeled) {
         /*
@@ -277,6 +288,7 @@ export function PropagationControl({
     loading,
     mayDiscard,
     onRunStart,
+    openAnnotations,
     progress.running,
     projectId,
     references,

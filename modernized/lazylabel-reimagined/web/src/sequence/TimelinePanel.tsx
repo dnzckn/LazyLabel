@@ -36,6 +36,7 @@ import { useSettings } from "../settings/SettingsProvider.jsx";
 import { useHotkey } from "../hotkeys/HotkeyProvider.jsx";
 import { useNotifications } from "../notifications/NotificationProvider.jsx";
 import { PropagationControl } from "./PropagationControl.jsx";
+import type { OpenAnnotations } from "./references.js";
 import { FIND_ARCHETYPES_ELSEWHERE, useSequenceActive } from "./sequenceActive.js";
 
 import {
@@ -121,6 +122,8 @@ export interface TimelinePanelProps {
   readonly openKey?: string;
   /** Saves made by the ordinary save, by image key: see PropagationControl (SP-02). */
   readonly savedElsewhere?: ReadonlyMap<string, number>;
+  /** The open image's annotations as they stand, saved or not: see PropagationControl (SP-04). */
+  readonly openAnnotations?: OpenAnnotations;
 }
 
 /** What legacy says when there is no such frame to move to (main_window.py:4673-4706, 5158-5168). */
@@ -140,6 +143,7 @@ export function TimelinePanel({
   onStatus,
   openKey,
   savedElsewhere,
+  openAnnotations,
 }: TimelinePanelProps): ReactNode {
   /*
    * The timeline -- its range and what has been painted over it -- as ONE state, so that a repaint
@@ -545,6 +549,7 @@ export function TimelinePanel({
           onSkipped={setKeptLabels}
           onSaved={(keys) => setOverrides((previous) => markSaved(previous ?? frames, keys))}
           {...(savedElsewhere === undefined ? {} : { savedElsewhere })}
+          {...(openAnnotations === undefined ? {} : { openAnnotations })}
           onRunStart={() => {
             setOwnScores({});
             setKeptLabels(new Set());

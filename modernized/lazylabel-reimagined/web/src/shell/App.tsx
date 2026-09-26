@@ -58,7 +58,7 @@ export function App({ client }: { readonly client: ApiClient }): ReactNode {
   // dialog rather than a panel beside the work (legacy has none).
   const [showAbout, setShowAbout] = useState(false);
   // From the store, not held here: the status bar is one reader of this among several.
-  const { imageState, openImage, open, crop, saveCounts } = useWorkspace();
+  const { imageState, openImage, open, crop, saveCounts, segments } = useWorkspace();
   // The folder as the browser listed it, so the sequence timeline builds from the same answer
   // rather than fetching it again. Two fetches is two answers to one question.
   const [listed, setListed] = useState<readonly WireDatasetImage[]>([]);
@@ -346,6 +346,8 @@ export function App({ client }: { readonly client: ApiClient }): ReactNode {
                 client={client}
                 images={listed}
                 savedElsewhere={saveCounts}
+                // An open reference frame seeds from what is on screen, not its file (SP-04).
+                {...(open === null ? {} : { openAnnotations: { key: open.image.key, segments } })}
                 onArchetypes={setArchetypes}
                 onStatus={setSequenceStatus}
                 {...(open === null ? {} : { openKey: open.image.key })}
