@@ -40,7 +40,7 @@ group("navigating away", () => {
   it("saves a dirty image when Auto-Save is on", () => {
     // RULE-057: auto-save on navigation stays, and stays the default. The annotator's loop is
     // click, accept, next, and decision 7 forbids silent loss rather than automatic saving.
-    expect(onNavigateAway(image(), ON)).toEqual({ kind: "save", image: "img_005.png" });
+    expect(onNavigateAway(image(), ON)).toEqual({ kind: "save", image: "img_005.png", changed: true });
   });
 
   it("asks instead of discarding when Auto-Save is off", () => {
@@ -53,9 +53,34 @@ group("navigating away", () => {
     expect(decision.at).toEqual([{ key: "img_005.png", segmentCount: 4 }]);
   });
 
-  it("does nothing for an image that was not edited", () => {
-    expect(onNavigateAway(image({ dirty: false }), ON)).toEqual({ kind: "proceed" });
+  it("saves an image that was not edited too, with Auto-Save on, as legacy's does", () => {
+    // Legacy's leaving save runs whenever an image is open and the setting is on, changed or not
+    // (file_navigation_manager.py:156-160, 270-274): it writes newly selected formats for an image
+    // nobody touched, and deletes an empty one's files. The owner, 2026-09-26: "Match the desktop
+    // app exactly". `changed` is what lets a refused write of it be skipped rather than block.
+    expect(onNavigateAway(image({ dirty: false }), ON)).toEqual({
+      kind: "save",
+      image: "img_005.png",
+      changed: false,
+    });
+    expect(onNavigateAway(image({ dirty: false, segmentCount: 0 }), ON)).toEqual({
+      kind: "save",
+      image: "img_005.png",
+      changed: false,
+    });
+  });
+
+  it("just leaves an unedited image with Auto-Save off", () => {
     expect(onNavigateAway(image({ dirty: false }), OFF)).toEqual({ kind: "proceed" });
+  });
+
+  it("just leaves an unedited image whose annotations could not be read: no save, no question", () => {
+    // SEC-04 stands for an image nobody touched: it is never written or deleted, and there is
+    // nothing of this session's to ask about.
+    expect(onNavigateAway(image({ dirty: false, provenance: "failed", segmentCount: 0 }), ON)).toEqual({
+      kind: "proceed",
+    });
+    expect(onNavigateAway(image({ dirty: false, provenance: "failed" }), OFF)).toEqual({ kind: "proceed" });
   });
 
   it("does nothing when no image is open", () => {
@@ -70,6 +95,7 @@ group("navigating away", () => {
     expect(onNavigateAway(image({ segmentCount: 0 }), ON)).toEqual({
       kind: "save",
       image: "img_005.png",
+      changed: true,
     });
   });
 
@@ -97,6 +123,7 @@ group("navigating away", () => {
     expect(onNavigateAway(image({ provenance: "absent" }), ON)).toEqual({
       kind: "save",
       image: "img_005.png",
+      changed: true,
     });
   });
 });

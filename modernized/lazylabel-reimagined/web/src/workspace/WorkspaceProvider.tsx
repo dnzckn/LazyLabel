@@ -83,6 +83,13 @@ export interface OpenOptions {
    * store does for a move it held for that save.
    */
   readonly pairSaved?: boolean;
+  /**
+   * Leave the side's image unsaved if it is UNCHANGED: a changed one is still saved or asked
+   * about. For Build Timeline's open of frame 1, which legacy makes without its leaving save
+   * (`main_window.py:4981-4994, 3424-3427`; `sequence_view_mode.py:130`), and for the move a save
+   * held, made once that save has written.
+   */
+  readonly keepUnchanged?: boolean;
 }
 
 export const SIDES: readonly SideIndex[] = [0, 1];
@@ -199,6 +206,11 @@ export interface WrittenState {
    * masks, and Save All writes them back (`main_window.py:3499-3515`; SEQUENCE_PARITY.md SP-58).
    */
   readonly deleted?: boolean;
+  /**
+   * The save was of an image the user had not changed, made on leaving it (`onNavigateAway`). Not a
+   * save for the sequence timeline either: a frame it counted would lose its pending masks unseen.
+   */
+  readonly unchanged?: boolean;
 }
 
 /**
@@ -214,6 +226,12 @@ export interface LeaveSave {
   readonly enabled: boolean;
   /** The save Enter makes. Resolves whether it wrote; a refusal is shown where Enter's is. */
   readonly save: () => Promise<boolean>;
+  /**
+   * The same save of an image the user has NOT changed, which legacy's leaving save makes too. A
+   * write refused because someone else changed the file is skipped and said, as is any failure,
+   * and it resolves true: there is no work of this session to keep the user on the image for.
+   */
+  readonly saveUnchanged?: () => Promise<boolean>;
   /**
    * Legacy's multi-view save of ONE side, either side, which `savePair` runs for both
    * (CONTROL_PARITY.md CP-67): Enter's request for that side's image, or its seven sidecars deleted
@@ -370,10 +388,12 @@ export interface WorkspaceContextValue {
    */
   readonly saveCounts: ReadonlyMap<string, number>;
   /**
-   * How many times a save has deleted an image's files this session (SP-58). Not in `saveCounts`,
-   * which the timeline reads as "saved"; the file list reads both, to re-read its format columns.
+   * How many writes this session were not saves for the timeline: a save that deleted an image's
+   * files (SP-58), and one of an image left unchanged (`WrittenState.unchanged`). Not in
+   * `saveCounts`, which the timeline reads as "saved"; the file list reads both, to re-read its
+   * format columns.
    */
-  readonly deletions: number;
+  readonly quietWrites: number;
   /** The active side's file revisions, which its next save is conditional on. */
   readonly revisions: Readonly<Record<string, string | null>>;
   /**
@@ -581,7 +601,7 @@ export function WorkspaceProvider({
 
   /** How many times each image has been saved this session by the ordinary save, by key. */
   const [saveCounts, setSaveCounts] = useState<ReadonlyMap<string, number>>(new Map());
-  const [deletions, setDeletions] = useState(0);
+  const [quietWrites, setQuietWrites] = useState(0);
   const [linked, setLinked] = useState(false);
   // The split view says so while it is mounted (`multiView` on the context).
   const [multiView, setMultiView] = useState(false);
@@ -716,16 +736,37 @@ export function WorkspaceProvider({
        * word, as legacy does then, is decision 7's silent loss.
        *
        * Neither, for an open that DISCARDS: legacy's reload on leaving the Sequence tab (SP-15).
+       *
+       * CHANGED OR NOT, with the setting on: legacy saves whenever an image is open
+       * (file_navigation_manager.py:156-160, 270-274; main_window.py:3480-3520), so an image left
+       * as it was loaded has Enter's request written again, newly selected formats and all, or its
+       * files deleted when it has no segments. The owner, 2026-09-26: "Match the desktop app
+       * exactly". Except where legacy makes no such save: reopening the image already open (its
+       * `path == current_image_path` return, 153-154 and 267-268), a move whose save has run
+       * already (`pairSaved`, `keepUnchanged`), and Build Timeline's open (`keepUnchanged`). An
+       * unchanged image's refused write is said and skipped, and the move goes on.
        */
       const discard = options?.discard === true;
       const saver = discard ? null : (savers.current[side]?.() ?? null);
       const decision = discard
         ? ({ kind: "proceed" } as const)
         : onNavigateAway(stateOf(sides[side]), { saveOnNavigate: saver?.enabled === true });
-      if (decision.kind === "save" && saver !== null) {
+      const unsavedAgain =
+        decision.kind === "save"
+        && !decision.changed
+        && (options?.pairSaved === true
+          || options?.keepUnchanged === true
+          || sides[side].open?.image.key === image.key);
+      const save =
+        decision.kind !== "save" || saver === null || unsavedAgain
+          ? null
+          : decision.changed
+            ? saver.save
+            : (saver.saveUnchanged ?? null);
+      if (save !== null) {
         const held: Leaving = { image, options, written: false };
         leaving.current[side] = held;
-        void saver.save().then((written) => {
+        void save().then((written) => {
           if (leaving.current[side] !== held) return;
           if (!written) {
             leaving.current[side] = null;
@@ -821,7 +862,8 @@ export function WorkspaceProvider({
       const held = leaving.current[side];
       if (held === null || !held.written) continue;
       leaving.current[side] = null;
-      openLatest.current(side, held.image, held.options);
+      // Saved once on this move: an image unchanged since is not written a second time.
+      openLatest.current(side, held.image, { ...held.options, keepUnchanged: true });
     }
   }, [leaveWritten]);
 
@@ -1353,12 +1395,14 @@ export function WorkspaceProvider({
     (at: SideIndex, written?: WrittenState) => {
       // Counted per image, for the sequence timeline: a propagated frame saved here is the user's
       // correction, which Save All must not write over (SEQUENCE_PARITY.md SP-02). A deletion is not
-      // counted: legacy leaves an emptied frame's status and masks as they were (SP-58).
-      const savedKey = written?.deleted === true ? undefined : written?.key;
+      // counted: legacy leaves an emptied frame's status and masks as they were (SP-58). Nor is the
+      // save of an image left unchanged: a pending frame it counted would lose its masks unseen.
+      const quiet = written?.deleted === true || written?.unchanged === true;
+      const savedKey = quiet ? undefined : written?.key;
       if (savedKey !== undefined) {
         setSaveCounts((previous) => new Map(previous).set(savedKey, (previous.get(savedKey) ?? 0) + 1));
       }
-      if (written?.deleted === true) setDeletions((count) => count + 1);
+      if (quiet) setQuietWrites((count) => count + 1);
       updateSide(at, (current) => {
         // The revisions are the FILE's, so they move on even when an edit landed during the
         // round trip: the next write is conditional on what is on disk now. Only for the image
@@ -1389,7 +1433,7 @@ export function WorkspaceProvider({
     () => ({
       sides,
       saveCounts,
-      deletions,
+      quietWrites,
       linked,
       setLinked,
       linkReport,
@@ -1478,7 +1522,7 @@ export function WorkspaceProvider({
       setZoom,
       sides,
       saveCounts,
-      deletions,
+      quietWrites,
       zoom,
       setActiveTool,
       toggleTool,

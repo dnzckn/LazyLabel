@@ -318,7 +318,8 @@ describe("building the timeline (SP-18)", () => {
     build("1", "3", { references: false });
 
     await waitFor(() => expect(cells()).toHaveLength(3));
-    expect(onOpen).toHaveBeenCalledWith("frames/f02.png");
+    // Marked as Build's open: legacy's makes no leaving save of the image it replaces.
+    expect(onOpen).toHaveBeenCalledWith("frames/f02.png", undefined, true);
     expect(await screen.findByText("Timeline built: 3 frames")).toBeTruthy();
   });
 });

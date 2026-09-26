@@ -84,8 +84,11 @@ export interface TimelinePanelProps {
    *
    * `segments` are RULE-090's propagated masks for that frame, when there are any: a frame the
    * propagation produced a mask for shows that mask, not whatever its sidecar held.
+   *
+   * `built` is set for Build's open of frame 1, which legacy makes without its leaving save
+   * (`main_window.py:4981-4994`; `sequence_view_mode.py:130`): an unchanged image is not saved.
    */
-  readonly onOpen?: (key: string, segments?: readonly WireSegment[]) => void;
+  readonly onOpen?: (key: string, segments?: readonly WireSegment[], built?: boolean) => void;
   /**
    * What propagation scored each frame, by timeline index — RULE-060's per-frame confidence.
    *
@@ -474,7 +477,7 @@ export function TimelinePanel({
       setTimeline({ range: { keys: built.map((frame) => frame.key) }, overrides: null });
       setCurrent(0);
       if (built.length === 0) return;
-      onOpen?.(built[0]!.key);
+      onOpen?.(built[0]!.key, undefined, true);
       notify({ severity: "info", message: `Timeline built: ${built.length} frames` });
     },
     [notify, onOpen],

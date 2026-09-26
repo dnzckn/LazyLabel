@@ -21,7 +21,7 @@ import { HotkeyProvider } from "../../src/hotkeys/HotkeyProvider.jsx";
 import { NotificationProvider } from "../../src/notifications/NotificationProvider.jsx";
 import { SettingsProvider } from "../../src/settings/SettingsProvider.jsx";
 import { App } from "../../src/shell/App.jsx";
-import { WorkspaceProvider } from "../../src/workspace/WorkspaceProvider.jsx";
+import { WorkspaceProvider, useWorkspace } from "../../src/workspace/WorkspaceProvider.jsx";
 import { chooseTool, drawTriangle } from "../acceptance/harness.jsx";
 
 afterEach(() => {
@@ -64,6 +64,12 @@ const TRIANGLE_AT_REV_A = {
     segments: [{ type: "Polygon", classId: 0, vertices: [[120, 10], [160, 10], [160, 40]] }],
   },
 } as unknown as AnnotationsResult;
+
+/** The saves the sequence timeline counts as the user's own (SP-02), for the tests to read. */
+function SaveCounts() {
+  const { saveCounts } = useWorkspace();
+  return <output aria-label="Timeline saves">{JSON.stringify([...saveCounts])}</output>;
+}
 
 function mount({
   a = AT_REV_A,
@@ -132,6 +138,7 @@ function mount({
         <HotkeyProvider bindings={defaultSettings().hotkeys}>
           <WorkspaceProvider client={client} projectId="default" confirmNavigation={confirmNavigation}>
             <App client={client} />
+            <SaveCounts />
           </WorkspaceProvider>
         </HotkeyProvider>
       </SettingsProvider>
@@ -192,12 +199,14 @@ describe("with Auto-Save on Navigate on, legacy's default", () => {
     fireEvent.doubleClick(await screen.findByRole("button", { name: "a.png" }));
     fireEvent.click(screen.getByRole("button", { name: "Set Start" }));
     fireEvent.doubleClick(screen.getByRole("button", { name: "b.png" }));
-    await waitFor(() => expect(status()).toMatch(/b\.png/));
+    await waitFor(() => expect(status()).toMatch(/frames\/b\.png — 0 segments, saved/));
     fireEvent.click(screen.getByRole("button", { name: "Set End" }));
     fireEvent.click(screen.getByRole("button", { name: "Build Timeline" }));
     const cells = () => screen.getByLabelText("Timeline").querySelectorAll("button");
     await waitFor(() => expect(cells()).toHaveLength(2));
-    // Build opens the first frame, as legacy's does (SP-18). The two opens that set the range go.
+    // Build opens the first frame, as legacy's does (SP-18), and saves nothing on the way: legacy's
+    // Build loads frame 1 without its leaving save (main_window.py:4981-4994, 3424-3427), so b.png,
+    // open and unchanged, is not deleted. The two opens that set the range go.
     await waitFor(() => expect(events).toEqual(["load frames/a.png", "load frames/b.png", "load frames/a.png"]));
     events.splice(0, 2);
     chooseTool("Poly (2)");
@@ -248,6 +257,111 @@ describe("with Auto-Save on Navigate on, legacy's default", () => {
     );
     expect(saveAnnotations).not.toHaveBeenCalled();
     expect(status()).toMatch(/frames\/a\.png could not be read/);
+  });
+});
+
+describe("with Auto-Save on, leaving an image saves it CHANGED OR NOT, as legacy's does", () => {
+  /*
+   * Legacy's leaving save runs whenever an image is open and the setting is on, whether or not
+   * anything changed (file_navigation_manager.py:156-160, 270-274): with segments it writes every
+   * selected format, with none it deletes all seven sidecars, "Deleted: ..." or "No segments to
+   * save." (save_export_manager.py:97-110, 523-542). The web saved only an image that was edited.
+   */
+  const THREE = ["a.png", "b.png", "c.png"];
+
+  async function openA(): Promise<void> {
+    fireEvent.doubleClick(await screen.findByRole("button", { name: "a.png" }));
+    await waitFor(() => expect(status()).toMatch(/frames\/a\.png — \d segments?, saved/));
+  }
+
+  it("writes an untouched image's selected formats, as Enter would, before opening the next", async () => {
+    const { events, saveAnnotations, confirmNavigation } = mount({ a: TRIANGLE_AT_REV_A });
+    await openA();
+
+    next();
+
+    await waitFor(() => expect(status()).toMatch(/frames\/b\.png/));
+    expect(events).toEqual(["load frames/a.png", "save frames/a.png", "load frames/b.png"]);
+    const body = saveAnnotations.mock.calls[0]![2];
+    expect(body["formats"]).toEqual(["NPZ", "YOLO_DETECTION"]);
+    expect(body["expectedRevisions"]).toEqual({ NPZ: "rev-A" });
+    expect((body["segments"] as unknown[]).length).toBe(1);
+    expect(confirmNavigation).not.toHaveBeenCalled();
+    // Not the timeline's save: a pending frame it counted would lose its masks unseen (SP-02).
+    expect(screen.getByLabelText("Timeline saves").textContent).toBe("[]");
+  });
+
+  it("deletes an untouched image's files when it has no segments, in legacy's words", async () => {
+    const { events } = mount();
+    await openA();
+
+    next();
+
+    await waitFor(() => expect(status()).toMatch(/frames\/b\.png/));
+    expect(events).toEqual(["load frames/a.png", "delete frames/a.png", "load frames/b.png"]);
+    expect(await screen.findByText("Deleted: a.npz, a.txt")).toBeTruthy();
+  });
+
+  it("warns \"No segments to save.\" for an unlabelled image with nothing to delete", async () => {
+    const { events } = mount({ names: THREE });
+    fireEvent.doubleClick(await screen.findByRole("button", { name: "b.png" }));
+    await waitFor(() => expect(status()).toMatch(/frames\/b\.png — 0 segments, saved/));
+
+    next();
+
+    await waitFor(() => expect(status()).toMatch(/frames\/c\.png/));
+    expect(events).toEqual(["load frames/b.png", "delete frames/b.png", "load frames/c.png"]);
+    expect(await screen.findByText("No segments to save.")).toBeTruthy();
+  });
+
+  it("skips the write, says so, and moves on when someone else changed the untouched image's file", async () => {
+    const { events, saveAnnotations, confirmNavigation } = mount({ a: TRIANGLE_AT_REV_A });
+    saveAnnotations.mockRejectedValue(
+      new ApiError(
+        409,
+        "revision_conflict",
+        "frames/a.npz changed since it was read (expected aaa, found bbb); nothing was written",
+        { key: "frames/a.npz" },
+      ),
+    );
+    await openA();
+
+    next();
+
+    await waitFor(() => expect(status()).toMatch(/frames\/b\.png/));
+    expect(await screen.findByText("Not saved: a.npz changed since you loaded it")).toBeTruthy();
+    // One conditional attempt, never the unconditional "Save anyway".
+    expect(saveAnnotations).toHaveBeenCalledTimes(1);
+    expect(saveAnnotations.mock.calls[0]![2]["expectedRevisions"]).toEqual({ NPZ: "rev-A" });
+    expect(events).toEqual(["load frames/a.png", "load frames/b.png"]);
+    expect(confirmNavigation).not.toHaveBeenCalled();
+  });
+
+  it("just leaves an untouched image whose annotations could not be read: no write, no question", async () => {
+    const { events, saveAnnotations, deleteAnnotations, confirmNavigation } = mount({ a: UNREADABLE });
+    fireEvent.doubleClick(await screen.findByRole("button", { name: "a.png" }));
+    await waitFor(() => expect(status()).toMatch(/frames\/a\.png could not be read/));
+
+    next();
+
+    await waitFor(() => expect(status()).toMatch(/frames\/b\.png/));
+    expect(events).toEqual(["load frames/a.png", "load frames/b.png"]);
+    expect(saveAnnotations).not.toHaveBeenCalled();
+    expect(deleteAnnotations).not.toHaveBeenCalled();
+    expect(confirmNavigation).not.toHaveBeenCalled();
+  });
+
+  it("writes nothing for an untouched image with Auto-Save off", async () => {
+    const { events, confirmNavigation } = mount({ a: TRIANGLE_AT_REV_A });
+    await openA();
+    fireEvent.click(autoSave());
+    await waitFor(() => expect(autoSave().checked).toBe(false));
+
+    next();
+
+    await waitFor(() => expect(status()).toMatch(/frames\/b\.png/));
+    expect(events).toEqual(["load frames/a.png", "load frames/b.png"]);
+    expect(confirmNavigation).not.toHaveBeenCalled();
   });
 });
 

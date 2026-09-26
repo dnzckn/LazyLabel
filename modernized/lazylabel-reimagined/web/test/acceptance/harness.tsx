@@ -81,6 +81,8 @@ export function mount(loaded: AnnotationsResult = { kind: "none" }) {
     tileUrl: () => "/tile",
     thumbnailUrl: () => "/thumbnail",
     saveAnnotations,
+    // Leaving an image saves it, changed or not, with Auto-Save on: an empty one's save deletes.
+    deleteAnnotations: async () => ({ deleted: [] }),
   } as unknown as ApiClient;
 
   render(

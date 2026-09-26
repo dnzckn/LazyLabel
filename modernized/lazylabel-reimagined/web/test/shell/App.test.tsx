@@ -52,6 +52,8 @@ function mount(client: Partial<ApiClient>) {
     pixelsUrl: () => "/api/pixels",
     tileUrl: () => "/tile",
     thumbnailUrl: () => "/api/thumbnail",
+    // Leaving an image saves it, changed or not, with Auto-Save on: an empty one's save deletes.
+    deleteAnnotations: async () => ({ deleted: [] }),
     ...client,
   } as ApiClient;
 
@@ -355,6 +357,8 @@ describe("next and previous image (CONTROL_PARITY.md CP-14)", () => {
     fireEvent.click(screen.getByRole("button", { name: "Hide" }));
     right();
     await waitFor(() => expect(opened).toEqual(["a.png", "d.png", "a.png"]));
+    // Open, so the list's current row has moved to it: the open waited for d.png's leaving save.
+    await waitFor(() => expect(screen.getByLabelText("Status").textContent).toContain("a.png — "));
     right();
     await waitFor(() => expect(opened).toEqual(["a.png", "d.png", "a.png", "c.png"]));
   });

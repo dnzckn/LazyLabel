@@ -498,11 +498,15 @@ export function App({ client }: { readonly client: ApiClient }): ReactNode {
                 onStatus={setSequenceStatus}
                 onWritten={onWritten}
                 {...(open === null ? {} : { openKey: open.image.key })}
-                onOpen={(key, segments) => {
+                onOpen={(key, segments, built) => {
                   const image = listed.find((entry) => entry.key === key) ?? seenImages.current.get(key);
-                  // RULE-090: a frame the propagation produced masks for shows those masks.
+                  // RULE-090: a frame the propagation produced masks for shows those masks. Build's
+                  // open leaves an unchanged image unsaved, as legacy's does.
                   if (image !== undefined) {
-                    openImage(image, segments === undefined ? undefined : { segments });
+                    openImage(image, {
+                      ...(segments === undefined ? {} : { segments }),
+                      ...(built === true ? { keepUnchanged: true } : {}),
+                    });
                   }
                 }}
               />

@@ -76,6 +76,8 @@ function mount() {
     pixelsUrl: () => "/pixels",
     tileUrl: () => "/tile",
     thumbnailUrl: () => "/thumbnail",
+    // Leaving an image saves it, changed or not, with Auto-Save on: an empty one's save deletes.
+    deleteAnnotations: async () => ({ deleted: [] }),
   } as unknown as ApiClient;
 
   render(
@@ -100,9 +102,15 @@ async function openSequence() {
 
 /** Legacy's range: the first frame opened from the list and Set Start, the last and Set End (SP-41). */
 async function setRange(first: string, last: string) {
+  // Each open waits for the save of the image it leaves, which Auto-Save makes changed or not, so
+  // Set Start and Set End wait for the image to be open, as a user does.
+  const opened = (name: string) =>
+    waitFor(() => expect(screen.getByLabelText("Status").textContent).toContain(`${name} — `));
   fireEvent.doubleClick(await screen.findByRole("button", { name: first }));
+  await opened(first);
   fireEvent.click(screen.getByRole("button", { name: "Set Start" }));
   fireEvent.doubleClick(screen.getByRole("button", { name: last }));
+  await opened(last);
   fireEvent.click(screen.getByRole("button", { name: "Set End" }));
 }
 
@@ -173,7 +181,9 @@ describe("C10: build a timeline and mark reference frames", () => {
     await waitFor(() => expect(listed()).toEqual(["f02.png", "f01.png", "f03.png", "f04.png"]));
     expect(nameHeader().getAttribute("aria-sort")).toBeNull();
     fireEvent.doubleClick(screen.getByRole("button", { name: "f02.png" }));
-    await waitFor(() => expect(screen.getByLabelText("Status").textContent).toMatch(/f02\.png/));
+    // Open, not opening: the open waited for f01.png's leaving save, and the row follows it.
+    await waitFor(() => expect(screen.getByLabelText("Status").textContent).toMatch(/f02\.png — /));
+    await waitFor(() => expect(document.querySelector(".dataset tbody tr[aria-selected='true'] th")?.textContent).toBe("f02.png"));
     fireEvent.keyDown(document, { key: "ArrowRight", code: "ArrowRight" });
     await waitFor(() => expect(screen.getByLabelText("Status").textContent).toMatch(/f01\.png/));
 

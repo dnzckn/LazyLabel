@@ -10,7 +10,15 @@
  *
  *   1. AUTO-SAVE ON NAVIGATION STAYS, and stays on by default (RULE-057). The annotator's loop is
  *      click, accept, next. Decision 7 forbids silent LOSS, not automatic saving, and removing the
- *      automatic save would change the tool's core interaction under cover of a safety fix.
+ *      automatic save would change the tool's core interaction under cover of a safety fix. With
+ *      it on, leaving an image or a sequence frame saves it CHANGED OR NOT, as legacy's does
+ *      (`file_navigation_manager.py:156-160, 270-274`; `main_window.py:3480-3520`): Enter's
+ *      request, so newly selected formats are written for an image nobody touched. The owner's
+ *      directive of 2026-09-26, "Match the desktop app exactly". An UNCHANGED image differs in one
+ *      way: a write refused because someone else changed its file is skipped, said, and the move
+ *      goes on -- there is no work of this session to keep the user there for. A changed image's
+ *      refusal keeps the user on it. With the setting off, a changed image is asked about and an
+ *      unchanged one is simply left.
  *
  *   2. A SAVE OF AN IMAGE WITH NO SEGMENTS DELETES ITS FILES, as legacy's does: all seven sidecar
  *      formats, whatever formats are selected, with legacy's "Deleted: ..." notice, or "No segments
@@ -28,7 +36,8 @@
  *      navigation deletes its real annotations (ASSESSMENT.md SEC-04). Provenance is tracked for
  *      exactly this: annotations that did not come from a successful load are never written back,
  *      and never deleted, automatically or by Enter. Legacy deletes even then; the owner's decision
- *      did not ask for that, and this rule stays.
+ *      did not ask for that, and this rule stays. Left unchanged, such an image is neither saved
+ *      nor asked about: the move just happens.
  *
  *   4. CLOSING ASKS, AND NAMES WHAT WOULD BE LOST. Not auto-save-on-close, even with Auto-Save on:
  *      a user who closes after an experiment they did not want may be closing precisely to discard
@@ -60,8 +69,11 @@ export interface ImageState {
 }
 
 export type Decision =
-  /** Write the annotations now, then continue. */
-  | { readonly kind: "save"; readonly image: string }
+  /**
+   * Write the annotations now, then continue. `changed` is false for an image as it was loaded or
+   * last saved, which legacy saves too (rule 1); its refused write does not stop the move.
+   */
+  | { readonly kind: "save"; readonly image: string; readonly changed: boolean }
   /** Stop and ask. `summary` names what is at stake, and is meant to be shown verbatim. */
   | { readonly kind: "ask"; readonly at: readonly AtRisk[]; readonly summary: string }
   /** Nothing to do. */
@@ -90,9 +102,11 @@ const UNSAFE_AFTER_FAILED_LOAD =
  * by a user who answers yes to a prompt that never mentioned the risk.
  */
 export function onNavigateAway(image: ImageState | null, settings: SaveSettings): Decision {
-  if (image === null || !image.dirty) return { kind: "proceed" };
+  if (image === null) return { kind: "proceed" };
 
   if (image.provenance === "failed") {
+    // Never written, changed or not (rule 3). Unchanged, there is nothing to ask about either.
+    if (!image.dirty) return { kind: "proceed" };
     // Not a refusal to continue -- a refusal to write. The user is told why, and can still leave.
     return {
       kind: "ask",
@@ -104,9 +118,10 @@ export function onNavigateAway(image: ImageState | null, settings: SaveSettings)
   }
 
   // An empty image is saved like any other, and its save deletes its files (rule 2). One branch, so
-  // there is no separate empty-image path to decide differently.
-  if (settings.saveOnNavigate) return { kind: "save", image: image.key };
+  // there is no separate empty-image path to decide differently. Changed or not (rule 1).
+  if (settings.saveOnNavigate) return { kind: "save", image: image.key, changed: image.dirty };
 
+  if (!image.dirty) return { kind: "proceed" };
   const at = [{ key: image.key, segmentCount: image.segmentCount }];
   return { kind: "ask", at, summary: describe(at) };
 }

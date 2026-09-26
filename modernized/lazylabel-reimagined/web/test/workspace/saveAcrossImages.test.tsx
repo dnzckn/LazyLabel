@@ -102,7 +102,11 @@ function Remountable({ client }: { readonly client: ApiClient }): React.ReactNod
   );
 }
 
+/** The images whose annotations were asked for, in order: an open is under way once its key is here. */
+let loaded: string[] = [];
+
 function mount() {
+  loaded = [];
   const saveAnnotations = vi.fn(async (_project: string, _key: string, _body: unknown) => ({
     written: { NPZ: "after-write" },
     stale: [] as string[],
@@ -115,7 +119,10 @@ function mount() {
   const client = {
     getSettings: async () => defaultSettings(),
     putSettings: async (settings: unknown) => settings,
-    loadAnnotations: async (_project: string, key: string) => at(revisions[key]!),
+    loadAnnotations: async (_project: string, key: string) => {
+      loaded.push(key);
+      return at(revisions[key]!);
+    },
     imageMetadata: async () => ({
       width: 200,
       height: 100,
@@ -150,6 +157,9 @@ const writeButton = () => screen.getByRole("button", { name: /^Write \d+ format/
 
 async function open(key: string): Promise<void> {
   fireEvent.click(screen.getByText(`go ${key}`));
+  // The open waits for the leaving save of the image before, changed or not, so the button on
+  // screen is that image's until this one's annotations are asked for.
+  await waitFor(() => expect(loaded.at(-1)).toBe(key));
   await waitFor(() => expect(writeButton()).toBeTruthy());
 }
 
@@ -177,7 +187,8 @@ describe("saving after switching images", () => {
     await open("frames/b.png");
     fireEvent.click(writeButton());
 
-    await waitFor(() => expect(saveAnnotations).toHaveBeenCalledTimes(2));
+    // Three: leaving a.png saved it again, unchanged, as legacy's leaving save does.
+    await waitFor(() => expect(saveAnnotations).toHaveBeenCalledTimes(3));
     const body = saveAnnotations.mock.calls.at(-1)![2] as Record<string, unknown>;
     expect(body["expectedRevisions"]).toEqual({ NPZ: "rev-B" });
   });

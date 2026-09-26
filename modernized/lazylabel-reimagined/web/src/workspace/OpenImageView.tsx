@@ -799,11 +799,36 @@ function ConvertButton({
    *
    * Resolves whether it wrote, which is what leaving the image waits on (`LeaveSave`).
    */
-  const convert = useCallback((expected: Readonly<Record<string, string | null>>): Promise<boolean> => {
+  const convert = useCallback((expected: Readonly<Record<string, string | null>>, unchanged = false): Promise<boolean> => {
     // Captured now, not read in the callback below: see `markSavedOn` there.
     const side = activeSide;
     const written = { segments, classAliases, crop };
     setState({ status: "saving" });
+    /*
+     * THE SAVE OF AN IMAGE LEFT UNCHANGED (`LeaveSave.saveUnchanged`) never keeps the user on it:
+     * nothing of this session's is at stake. A write refused because someone else changed the file
+     * is skipped, so that file stays as they left it, and said briefly; any other failure is said in
+     * legacy's words (`save_export_manager.py:131-133`). Either way the move goes on.
+     */
+    const skipped = (cause: unknown): boolean => {
+      setState({ status: "idle" });
+      const conflict =
+        typeof cause === "object" && cause !== null && "code" in cause
+          && (cause as { code?: unknown }).code === "revision_conflict";
+      const file =
+        typeof cause === "object" && cause !== null && "detail" in cause
+          ? ((cause as { detail?: { key?: unknown } }).detail?.key as string | undefined)
+          : undefined;
+      notify(
+        conflict
+          ? {
+              severity: "warning",
+              message: `Not saved: ${(file ?? image.key).split("/").pop()} changed since you loaded it`,
+            }
+          : { severity: "error", message: `Error saving: ${cause instanceof Error ? cause.message : String(cause)}` },
+      );
+      return true;
+    };
     /*
      * NO SEGMENTS: THE SAVE DELETES, as legacy's does -- all seven sidecar formats, whatever formats
      * are selected, then "Deleted: ..." or, with nothing there, "No segments to save."
@@ -825,6 +850,7 @@ function ConvertButton({
           return true;
         })
         .catch((cause: unknown) => {
+          if (unchanged) return skipped(cause);
           setState({
             status: "failed",
             deleting: true,
@@ -857,10 +883,16 @@ function ConvertButton({
         // Without this, saving twice would compare against the load's revision the second time and
         // conflict with the app's own previous save. The store keeps them, not this button, which
         // remounts whenever the view moves.
-        markSavedOn(side, { ...written, key: image.key, revisions: result.written });
+        markSavedOn(side, {
+          ...written,
+          key: image.key,
+          revisions: result.written,
+          ...(unchanged ? { unchanged: true } : {}),
+        });
         return true;
       })
       .catch((cause: unknown) => {
+        if (unchanged) return skipped(cause);
         const reason = cause instanceof Error ? cause.message : String(cause);
         const conflict =
           typeof cause === "object" && cause !== null && "code" in cause
@@ -1001,7 +1033,11 @@ function ConvertButton({
    * which the store runs for both in the Multi view (CP-67).
    */
   const lent = useRef<LeaveSave>({ enabled: false, save: saveNow });
-  lent.current = { enabled: settings.values["auto_save"] !== false, save: saveNow, saveSide };
+  // The leaving save of an image the user has not changed, which legacy makes too: Enter's, but
+  // never keeping the user on the image. None for one that could not be read (SEC-04).
+  const saveUnchanged = (): Promise<boolean> =>
+    writing.current ?? (writable ? convert(revisions, true) : Promise.resolve(true));
+  lent.current = { enabled: settings.values["auto_save"] !== false, save: saveNow, saveUnchanged, saveSide };
   useEffect(() => registerSave(activeSide, () => lent.current), [activeSide, registerSave]);
 
   return (

@@ -155,7 +155,7 @@ export function DatasetBrowser({
   const [here, setHere] = useState(folder);
   // Opening belongs to the workspace store: the list is one of five things that ask what is open,
   // and whichever one holds the state becomes the owner of a question that is not its own.
-  const { open: openState, openImage: openInStore, saveCounts, deletions } = useWorkspace();
+  const { open: openState, openImage: openInStore, saveCounts, quietWrites } = useWorkspace();
   const { notify } = useNotifications();
   // A timeline frame opens with the run's masks while the Sequence tab is in use (SP-22).
   const openImage = useCallback(
@@ -275,11 +275,11 @@ export function DatasetBrowser({
    * and selection too, and only what changed on disk changes. They went stale until 2026-09-26.
    * A save that deleted an image's files (SP-58) counts too.
    */
-  const lastWrite = useRef({ saveCounts, deletions, written });
+  const lastWrite = useRef({ saveCounts, quietWrites, written });
   useEffect(() => {
     const last = lastWrite.current;
-    if (last.saveCounts === saveCounts && last.deletions === deletions && last.written === written) return;
-    lastWrite.current = { saveCounts, deletions, written };
+    if (last.saveCounts === saveCounts && last.quietWrites === quietWrites && last.written === written) return;
+    lastWrite.current = { saveCounts, quietWrites, written };
     let cancelled = false;
     client
       .listImages(projectId, here, wantsDetails)
@@ -293,7 +293,7 @@ export function DatasetBrowser({
     return () => {
       cancelled = true;
     };
-  }, [client, projectId, here, onListed, wantsDetails, saveCounts, deletions, written]);
+  }, [client, projectId, here, onListed, wantsDetails, saveCounts, quietWrites, written]);
 
   const listing = state.status === "ready" ? state.listing : null;
   const images = listing?.images ?? NO_IMAGES;
