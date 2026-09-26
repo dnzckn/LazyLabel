@@ -126,6 +126,30 @@ describe("applying a crop", () => {
 
     expect(screen.getByTestId("crop").textContent).toBe("50,50,700,700");
   });
+
+  it("applies on Enter in either field, as legacy's returnPressed does", async () => {
+    // CONTROL_PARITY.md CP-30: Enter did nothing; only the button applied.
+    mount();
+    await openA();
+    fireEvent.change(screen.getByLabelText("X range"), { target: { value: "0:500" } });
+    fireEvent.change(screen.getByLabelText("Y range"), { target: { value: "0:400" } });
+
+    fireEvent.keyDown(screen.getByLabelText("Y range"), { key: "Enter" });
+
+    expect(screen.getByTestId("crop").textContent).toBe("0,0,500,400");
+  });
+
+  it("writes the crop in force back into the fields, clamped as it was stored", async () => {
+    // Legacy writes a drawn or clamped crop back (crop_manager.py:147-148); the fields kept the
+    // typed text, so after a clamp or a drawn crop they described another rectangle.
+    mount();
+    await openA();
+
+    typeCrop("-10:1200", "50:700");
+
+    expect((screen.getByLabelText("X range") as HTMLInputElement).value).toBe("0:999");
+    expect((screen.getByLabelText("Y range") as HTMLInputElement).value).toBe("50:700");
+  });
 });
 
 describe("refusing what is not a range", () => {

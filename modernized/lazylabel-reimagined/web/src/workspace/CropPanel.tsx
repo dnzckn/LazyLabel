@@ -17,7 +17,7 @@
  * afterwards, which is legacy's order and is why "-10:1200" is legal input rather than an error.
  */
 
-import { useCallback, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useState, type KeyboardEvent, type ReactNode } from "react";
 
 import { cropFrom, excludedPixels, isWholeImage, parseRange, type ImageSize } from "../tools/crop.js";
 import { useWorkspace } from "./WorkspaceProvider.jsx";
@@ -53,6 +53,22 @@ export function CropPanel(): ReactNode {
     setError(null);
   }, [setCrop]);
 
+  /*
+   * THE FIELDS SHOW THE CROP IN FORCE, as legacy's do: a crop drawn on the image, or typed and then
+   * clamped to it, is written back into them (crop_manager.py:147-148). They kept whatever was typed
+   * last, so after drawing a crop they described a different rectangle from the one on screen
+   * (`CONTROL_PARITY.md` CP-30). Removing the crop empties them.
+   */
+  useEffect(() => {
+    setX(crop === null ? "" : `${crop.x1}:${crop.x2}`);
+    setY(crop === null ? "" : `${crop.y1}:${crop.y2}`);
+  }, [crop]);
+
+  // Enter in either field applies, as legacy's returnPressed does (border_crop_widget.py:101-102).
+  const applyOnEnter = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === "Enter") apply();
+  };
+
   if (size === null) {
     return <p className="panel__missing">A crop needs an open image to measure against.</p>;
   }
@@ -75,9 +91,10 @@ export function CropPanel(): ReactNode {
         <input
           type="text"
           value={x}
-          placeholder="0:999"
+          placeholder="start:end (e.g., 20:460)"
           aria-label="X range"
           onChange={(event) => setX(event.target.value)}
+          onKeyDown={applyOnEnter}
         />
       </label>
       <label className="crop__field">
@@ -85,9 +102,10 @@ export function CropPanel(): ReactNode {
         <input
           type="text"
           value={y}
-          placeholder="0:799"
+          placeholder="start:end (e.g., 20:460)"
           aria-label="Y range"
           onChange={(event) => setY(event.target.value)}
+          onKeyDown={applyOnEnter}
         />
       </label>
 
