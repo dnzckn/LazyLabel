@@ -156,14 +156,15 @@ export interface WireDatasetListing {
   readonly columns: readonly { readonly format: string; readonly suffix: string }[];
 }
 
-/** An image's size and kind, read without decoding its pixels. */
+/** An image's size and kind. The size comes from the header; see `sourceChannels` for the rest. */
 export interface WireImageMetadata {
   readonly width: number;
   readonly height: number;
   /** 8, or 16 when RULE-024's truncating conversion was applied to show it. */
   readonly sourceDepth: 8 | 16;
   /**
-   * Channels in the SOURCE file: 1 for grayscale, 3 for colour.
+   * 1 for a grayscale image, 3 for colour, decided as legacy decides it: from the PIXELS when the
+   * header says colour. A colour file whose channels agree to within RULE-024's tolerance is 1.
    *
    * The pixels always arrive as RGB, so this is the only place the distinction survives the
    * pipeline — and two rules turn on it. RULE-032 disables rescale for a colour image, and

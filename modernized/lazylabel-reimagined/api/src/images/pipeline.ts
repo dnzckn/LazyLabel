@@ -18,7 +18,7 @@
  * written out below where a test can hold it.
  */
 
-import sharp from "sharp";
+import sharp, { type Metadata } from "sharp";
 
 import { decodeBmp, isBmp } from "./bmp.js";
 import { applyClahe, applyFrequencyFilter, applyProcessing, isEmpty, type Processing } from "./processing.js";
@@ -54,7 +54,7 @@ export interface DecodedImage {
   /** Bit depth of the SOURCE file: 8, or 16 when RULE-024's conversion was applied. */
   readonly sourceDepth: 8 | 16;
   /**
-   * Channels in the SOURCE file: 1 for grayscale, 3 for colour.
+   * 1 for a grayscale image, 3 for colour, decided as legacy decides it (`channelsOf`).
    *
    * The output is always three channels, so this is the only place the distinction survives — and
    * two rules turn on it. RULE-032 disables rescale for an RGB image, and RULE-029 offers a single
@@ -63,6 +63,101 @@ export interface DecodedImage {
    */
   readonly sourceChannels: number;
   readonly sourceFormat: string;
+}
+
+/**
+ * Whether a colour image is grayscale in all but name — RULE-024.
+ *
+ * Legacy looks at the PIXELS, not the file header: a three-channel image whose adjacent channels
+ * never differ by more than 3 (8-bit) or 768 (16-bit) is one Gray channel
+ * (`image_adjustment_manager.py:546-560`). That is a JPEG of a grayscale scene, or a grayscale
+ * scan saved as colour, and legacy gives it one Gray threshold bar, rescale and the FFT filter.
+ * Asking the header answers "colour" for all of them.
+ *
+ * THE 16-BIT ARITHMETIC IS LEGACY'S, OVERFLOW INCLUDED. It casts the samples to int16 before
+ * differencing, so anything above 32767 wraps negative, the difference wraps again, and the
+ * absolute value of -32768 stays -32768. Two channels of 65535 and 0 therefore differ by 1, and an
+ * image of saturated primaries counts as gray. That is reproduced rather than fixed, for the same
+ * reason the fragment filter's filled holes are: the rewrite has to show the same bars and produce
+ * the same pixels as the desktop app for the same file.
+ *
+ * Stops at the first pixel past the tolerance, so a colour photograph is decided in its first row.
+ */
+export function isEffectivelyGray(samples: Uint8Array | Uint16Array): boolean {
+  if (samples instanceof Uint8Array) {
+    for (let i = 0; i + 2 < samples.length; i += 3) {
+      const green = samples[i + 1]!;
+      if (Math.abs(green - samples[i]!) > 3 || Math.abs(samples[i + 2]! - green) > 3) return false;
+    }
+    return true;
+  }
+
+  for (let i = 0; i + 2 < samples.length; i += 3) {
+    const red = int16(samples[i]!);
+    const green = int16(samples[i + 1]!);
+    const blue = int16(samples[i + 2]!);
+    if (int16Abs(int16(green - red)) > 768 || int16Abs(int16(blue - green)) > 768) return false;
+  }
+  return true;
+}
+
+/** numpy's `astype(np.int16)` and int16 subtraction: the low sixteen bits, sign-extended. */
+function int16(value: number): number {
+  return (value << 16) >> 16;
+}
+
+/** numpy's `np.abs` on int16, where -32768 has no positive counterpart and stays as it is. */
+function int16Abs(value: number): number {
+  return value === -32768 ? value : Math.abs(value);
+}
+
+/**
+ * The channel count legacy works with: 1 when the header says grayscale or the pixels do.
+ *
+ * The header's answer is taken when it says grayscale, because such a file decodes to three equal
+ * channels and the pixel test could only agree.
+ */
+export function channelsOf(headerChannels: number, samples: Uint8Array | Uint16Array): number {
+  return headerChannels === 1 || isEffectivelyGray(samples) ? 1 : 3;
+}
+
+/**
+ * An effectively-gray image becomes its first channel before it is processed.
+ *
+ * Legacy's processing path reads the file, converts it to RGB and keeps `image[:, :, 0]` — red —
+ * when RULE-024 calls it gray (`image_adjustment_manager.py:469-478`). So a threshold, a rescale or
+ * the FFT works on red alone and the result is gray, rather than three near-identical channels
+ * thresholded apart. Only on the processing path: with nothing active legacy shows the file
+ * itself, colours and all (lines 376-379), and so does this.
+ */
+function toFirstChannel(samples: Uint8Array | Uint16Array): void {
+  for (let i = 0; i + 2 < samples.length; i += 3) {
+    samples[i + 1] = samples[i]!;
+    samples[i + 2] = samples[i]!;
+  }
+}
+
+/** 8-bit RGB samples, three per pixel, alpha dropped as `cv2.imread` drops it. */
+async function eightBitSamples(bytes: Uint8Array): Promise<Uint8Array> {
+  const { data } = await sharp(bytes).removeAlpha().toColourspace("srgb").raw().toBuffer({
+    resolveWithObject: true,
+  });
+  return new Uint8Array(data);
+}
+
+/** The true 16-bit samples, rather than whatever the library would reduce them to. */
+async function wideSamples(bytes: Uint8Array): Promise<Uint16Array> {
+  const { data } = await sharp(bytes)
+    .removeAlpha()
+    .toColourspace("rgb16")
+    .raw({ depth: "ushort" })
+    .toBuffer({ resolveWithObject: true });
+  return new Uint16Array(data.buffer, data.byteOffset, data.byteLength / 2);
+}
+
+/** 1 for a grayscale header, 3 otherwise: all that is known before the pixels are read. */
+function headerChannelsOf(metadata: Metadata): number {
+  return metadata.space === "b-w" || metadata.channels === 1 ? 1 : 3;
 }
 
 /**
@@ -77,9 +172,13 @@ export async function decodeImage(
 ): Promise<DecodedImage> {
   if (isBmp(bytes)) {
     const bitmap = decodeBmp(bytes);
-    // BMP always arrives as colour here, so a rescale request is carried and ignored rather than
-    // applied -- which is RULE-032's own answer for an RGB source.
-    const decoded = { ...bitmap, sourceDepth: 8 as const, sourceChannels: 3, sourceFormat: "bmp" };
+    // BMP always arrives as three channels, so whether it is gray is the pixels' answer alone.
+    const decoded = {
+      ...bitmap,
+      sourceDepth: 8 as const,
+      sourceChannels: channelsOf(3, bitmap.data),
+      sourceFormat: "bmp",
+    };
     return processed(decoded, processing);
   }
 
@@ -103,16 +202,15 @@ export async function decodeImage(
 
   // `channels` and `space` describe the SOURCE, before removeAlpha and the colourspace conversion
   // below turn everything into three-channel RGB. Read here, while the answer still exists.
-  const sourceChannels = metadata.space === "b-w" || metadata.channels === 1 ? 1 : 3;
+  const headerChannels = headerChannelsOf(metadata);
 
   if (!isWide) {
-    const { data } = await sharp(bytes).removeAlpha().toColourspace("srgb").raw().toBuffer({
-      resolveWithObject: true,
-    });
-    let samples: Uint8Array = new Uint8Array(data);
+    let samples: Uint8Array = await eightBitSamples(bytes);
+    const sourceChannels = channelsOf(headerChannels, samples);
     // 8-bit: the chain runs on these samples directly, since there is no widening step to be
     // before. RULE-032's order is otherwise unchanged.
     if (processing !== undefined && !isEmpty(processing)) {
+      if (sourceChannels === 1) toFirstChannel(samples);
       applyProcessing(samples, { width, height, sourceChannels }, processing);
       samples = applyFrequencyFilter(samples, { width, height, sourceChannels }, processing) ?? samples;
       // Last, on 8-bit data: RULE-031's CLAHE is defined there and RULE-032 fixes the order.
@@ -128,20 +226,15 @@ export async function decodeImage(
     };
   }
 
-  const { data } = await sharp(bytes)
-    .removeAlpha()
-    // The true 16-bit samples, rather than whatever the library would reduce them to.
-    .toColourspace("rgb16")
-    .raw({ depth: "ushort" })
-    .toBuffer({ resolveWithObject: true });
-
-  const wide = new Uint16Array(data.buffer, data.byteOffset, data.byteLength / 2);
+  const wide = await wideSamples(bytes);
+  const sourceChannels = channelsOf(headerChannels, wide);
 
   // BEFORE to8Bit, which is the whole point. RULE-032 puts rescale and channel thresholding ahead
   // of the 16-bit conversion, so they work on the full range: a scan whose data sits between
   // 3,000 and 5,000 stretches across 65,536 levels here and across 8 if it is narrowed first.
   let filtered: Uint8Array | null = null;
   if (processing !== undefined && !isEmpty(processing)) {
+    if (sourceChannels === 1) toFirstChannel(wide);
     applyProcessing(wide, { width, height, sourceChannels }, processing);
     // The frequency filter's output is ALREADY 8-bit -- RULE-030 stretches the filtered plane to
     // 0..255 and there is no wider result to keep. So when it ran, `to8Bit` must NOT run after it:
@@ -168,6 +261,7 @@ export async function decodeImage(
 function processed(decoded: DecodedImage, processing: Processing | undefined): DecodedImage {
   if (processing === undefined || isEmpty(processing)) return decoded;
   const samples = Uint8Array.from(decoded.data);
+  if (decoded.sourceChannels === 1) toFirstChannel(samples);
   const frame = {
     width: decoded.width,
     height: decoded.height,
@@ -206,27 +300,33 @@ export interface ImageMetadata {
   readonly width: number;
   readonly height: number;
   readonly sourceDepth: 8 | 16;
-  /** 1 for a grayscale source, 3 for colour. See `DecodedImage.sourceChannels`. */
+  /** 1 for a grayscale image, 3 for colour. See `DecodedImage.sourceChannels`. */
   readonly sourceChannels: number;
   readonly sourceFormat: string;
 }
 
 /**
- * The size and kind of an image, without decoding its pixels.
+ * The size and kind of an image, decoding its pixels only when the header cannot answer.
  *
  * The dataset browser needs the size to load annotations, because the text formats store normalized
- * coordinates — and asking for it should not cost a full decode of a 100-megapixel TIFF.
+ * coordinates, and the size is read from the header alone. The channel count usually is too: a
+ * grayscale header settles it. A COLOUR header does not, because RULE-024 decides from the pixels
+ * and a grayscale scan saved as colour is one Gray channel to legacy (`channelsOf`). So a colour
+ * file is decoded once here, and the test stops at its first colourful pixel.
+ *
+ * If the pixels cannot be read, the header's answer stands and the pixels route reports the
+ * failure, as it did before the pixels were asked anything here.
  */
 export async function readImageMetadata(bytes: Uint8Array): Promise<ImageMetadata> {
   if (isBmp(bytes)) {
-    // The BMP header carries the size in its first 26 bytes; no pixels are touched.
+    // The BMP header carries the size in its first 26 bytes.
     const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
     if (bytes.length < 26) throw new UnsupportedImageError("this BMP is too short to hold a header");
     return {
       width: view.getInt32(18, true),
       height: Math.abs(view.getInt32(22, true)),
       sourceDepth: 8,
-      sourceChannels: 3,
+      sourceChannels: await pixelChannels(3, async () => decodeBmp(bytes).data),
       sourceFormat: "bmp",
     };
   }
@@ -249,9 +349,24 @@ export async function readImageMetadata(bytes: Uint8Array): Promise<ImageMetadat
     width: metadata.width,
     height: metadata.height,
     sourceDepth: isWide ? 16 : 8,
-    sourceChannels: metadata.space === "b-w" || metadata.channels === 1 ? 1 : 3,
+    sourceChannels: await pixelChannels(headerChannelsOf(metadata), () =>
+      isWide ? wideSamples(bytes) : eightBitSamples(bytes),
+    ),
     sourceFormat: metadata.format ?? "unknown",
   };
+}
+
+/** `channelsOf`, reading the pixels only for a colour header and keeping its answer on failure. */
+async function pixelChannels(
+  headerChannels: number,
+  samples: () => Promise<Uint8Array | Uint16Array>,
+): Promise<number> {
+  if (headerChannels === 1) return 1;
+  try {
+    return channelsOf(headerChannels, await samples());
+  } catch {
+    return headerChannels;
+  }
 }
 
 /**

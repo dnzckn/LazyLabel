@@ -613,10 +613,12 @@ async function imageBytes(deps: AppDeps, key: string): Promise<Uint8Array> {
 }
 
 /**
- * An image's size and kind, without decoding its pixels.
+ * An image's size and kind.
  *
  * The dataset browser needs the size before it can load annotations, because the text formats store
- * normalized coordinates. Asking should not cost a full decode of a 100-megapixel TIFF.
+ * normalized coordinates, and the size comes from the header. The channel count needs the pixels
+ * only when the header says colour: RULE-024 calls a colour file gray when its channels agree
+ * (`readImageMetadata`).
  */
 async function imageMetadata(
   deps: AppDeps,
