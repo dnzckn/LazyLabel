@@ -32,14 +32,22 @@ The API's log lists every preference the import changed and why.
 variable the compose file demands is a first-run failure for everyone who copies it. So those two
 either build or the run goes red with the reason.
 
-**The inference image builds weekly and on demand**, not on every push: it installs PyTorch against
-a CUDA base and is multi-gigabyte, and a two-line change to the web app should not pull a CUDA
-runtime. Trigger it from the Actions tab when you need it checked now.
+**The inference image has never been built.** Its CI step is meant to run weekly and on demand
+rather than on every push, because it installs PyTorch against a CUDA base and is multi-gigabyte,
+and a two-line change to the web app should not pull a CUDA runtime. But GitHub fires `schedule`
+and `workflow_dispatch` only for workflows on the default branch, `main`, which does not have this
+workflow, so the step has never run and the Actions tab offers no button for it.
 
 **Nothing here has been RUN.** CI builds; it does not start the stack, because running it needs a
 dataset to mount and, for the AI profile, a GPU and a checkpoint that SEC-03 forbids downloading.
 The files were also written on a machine with no Docker at all, so before the first CI run every
-line of this was reasoned rather than observed.
+line of this was reasoned rather than observed. Reading `compose.yaml` against the services has
+since found one certain gap: the `ai` profile gives the inference service neither the dataset
+mount nor `LAZYLABEL_DATASET_ROOT`, so every route that reads an image would answer 503; and
+`MODEL_DIR` must hold a `manifest.json` beside the checkpoints (see the inference README).
+
+**For running LazyLabel on your own machine, use the quick start in the repository's README**,
+which is the tested path.
 
 What was checked by hand, and still is: the environment variables are the ones the services
 actually read, the API's `/api` default and the nginx proxy agree, and the build contexts account

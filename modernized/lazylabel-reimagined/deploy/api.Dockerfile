@@ -1,9 +1,11 @@
 # The Node API: reads and writes annotation sidecars, owns the image pipeline, proxies inference.
 #
-# NEVER BUILT. Docker is not installed on the machine this was written on, so every line here is
-# reasoned rather than observed -- except the build stage's shell steps, which were run on a clean
-# export of the repository and the result started and answered /health (2026-09-23). `deploy/README.md` says what to check first and why that matters
-# more than it sounds — a Dockerfile that has not been built is a plan, not a deployment.
+# BUILT BY CI, NEVER RUN. CI's "deployment images" job has built this image on every push to
+# main-web since 2026-09-26; no container has ever been started from it. It was written on a machine
+# with no Docker, and the build stage's shell steps were run by hand on a clean export of the
+# repository, where the result started and answered /health (2026-09-23). `deploy/README.md` says
+# what to check first and why that matters more than it sounds — an image that has not been run is
+# a plan, not a deployment.
 #
 # THE BUILD CONTEXT IS `modernized/`, NOT `modernized/lazylabel-reimagined/`, and that is not a
 # detail: the API depends on `@lazylabel/annotation-formats` at `file:../../lazylabel/core/
@@ -11,8 +13,8 @@
 # rebuild cannot see it, and `COPY ../..` is not allowed — Docker refuses paths outside the
 # context. The first draft of this file got that wrong.
 
-# 22 is the floor `api/package.json` states, and it is a real floor rather than a preference: the
-# metadata store uses `node:sqlite`, which does not exist before it.
+# 22.13 is the floor `api/package.json` states, and it is a real floor rather than a preference: the
+# metadata store uses `node:sqlite`, which needs a flag before it. `22` is the newest 22 release.
 FROM node:22-bookworm-slim AS build
 
 WORKDIR /src

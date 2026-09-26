@@ -14,15 +14,30 @@ legacy and stopped there on purpose: a propagation needs a job API with real can
 and streaming limits, which is not a wrapper around a function call. That job API is now the
 `/inference/propagations` routes below.
 
+Installed as [Setting it up with CUDA](#setting-it-up-with-cuda) shows, then from this folder:
+
 ```bash
 python -m pytest                                        # the live tests skip without checkpoints
 LAZYLABEL_MODEL_DIR=/path/to/checkpoints LAZYLABEL_DATASET_ROOT=/path/to/images python -m lazylabel_inference.server
 ```
 
+```powershell
+$env:LAZYLABEL_MODEL_DIR = "C:\path\to\checkpoints"; $env:LAZYLABEL_DATASET_ROOT = "C:\path\to\images"; python -m lazylabel_inference.server
+```
+
+`LAZYLABEL_MODEL_DIR` must hold a `manifest.json`: copy `models/manifest.example.json` there and fill
+in each checkpoint's SHA-256, from
+[`MODEL_MANIFEST.md`](../../../analysis/lazylabel/MODEL_MANIFEST.md#sha-256-values) or computed as
+the example's `$comment` shows. `LAZYLABEL_DATASET_ROOT` must be the same folder the API serves.
+
 To run the differential comparison against the legacy model, which needs a real checkpoint:
 
 ```bash
 LAZYLABEL_TEST_CHECKPOINT=/path/to/sam2.1_hiera_large.pt PYTHONPATH=/path/to/legacy/lazylabel/src python -m pytest tests/test_differential_sam2.py -v
+```
+
+```powershell
+$env:LAZYLABEL_TEST_CHECKPOINT = "C:\path\to\sam2.1_hiera_large.pt"; $env:PYTHONPATH = "C:\path\to\legacy\lazylabel\src"; python -m pytest tests/test_differential_sam2.py -v
 ```
 
 | Variable | Default | What it is |
@@ -47,15 +62,29 @@ are exactly the two that need no model to test. Both are legacy defects, and bot
 
 The PyTorch wheels from PyTorch's own index carry the CUDA runtime inside them. The machine needs an
 NVIDIA driver recent enough for that CUDA version and nothing else — no CUDA toolkit, no cuDNN
-install. These commands built the environment every suite passed in on 2026-09-23 (Windows,
-RTX 3080, driver 591.86, which supports CUDA up to 13.1):
+install. These are the commands that built the environment every suite passed in on 2026-09-23
+(Windows, RTX 3080, driver 591.86, which supports CUDA up to 13.1), with the environment in a
+`.venv` beside this README rather than where that machine keeps it. They need
+[uv](https://docs.astral.sh/uv/) and `git` (SAM 2 is installed from its repository), and run from
+this folder, `modernized/lazylabel-reimagined/inference`:
+
+```powershell
+uv venv --python 3.12
+uv pip install "torch==2.10.0" "torchvision==0.25.0" --index-url https://download.pytorch.org/whl/cu128
+$env:SAM2_BUILD_CUDA = "0"; uv pip install -e ".[ai,dev]" opencv-python-headless
+.venv\Scripts\python -c "import torch; print(torch.__version__, torch.cuda.is_available(), torch.cuda.get_device_name(0))"
+```
 
 ```bash
-uv venv E:/venv/lazylabel-312 --python 3.12
-uv pip install --python E:/venv/lazylabel-312/Scripts/python.exe "torch==2.10.0" "torchvision==0.25.0" --index-url https://download.pytorch.org/whl/cu128
-cd modernized/lazylabel-reimagined/inference && SAM2_BUILD_CUDA=0 uv pip install --python E:/venv/lazylabel-312/Scripts/python.exe -e ".[ai,dev]" opencv-python-headless
-E:/venv/lazylabel-312/Scripts/python.exe -c "import torch; print(torch.__version__, torch.cuda.is_available(), torch.cuda.get_device_name(0))"
+uv venv --python 3.12
+uv pip install "torch==2.10.0" "torchvision==0.25.0" --index-url https://download.pytorch.org/whl/cu128
+SAM2_BUILD_CUDA=0 uv pip install -e ".[ai,dev]" opencv-python-headless
+.venv/bin/python -c "import torch; print(torch.__version__, torch.cuda.is_available(), torch.cuda.get_device_name(0))"
 ```
+
+`uv pip install` finds the `.venv` in this folder by itself. Start the service with that
+environment's Python: `.venv\Scripts\python -m lazylabel_inference.server` on Windows,
+`.venv/bin/python -m lazylabel_inference.server` elsewhere.
 
 The last line should print `True` and the card's name. Four things decide it:
 - **Install torch from PyTorch's index, first.** From PyPI on Windows, pip picks a CPU-only build.
@@ -205,6 +234,10 @@ To take the number on your own hardware, with your own checkpoints:
 
 ```bash
 LAZYLABEL_MODEL_DIR=/path/to/checkpoints PYTHONPATH=src python tools/measure_latency.py "SAM 2.1 large"
+```
+
+```powershell
+$env:LAZYLABEL_MODEL_DIR = "C:\path\to\checkpoints"; $env:PYTHONPATH = "src"; python tools/measure_latency.py "SAM 2.1 large"
 ```
 
 It exits 0 when the budget is met in-process. What it does not include is the browser: decoding

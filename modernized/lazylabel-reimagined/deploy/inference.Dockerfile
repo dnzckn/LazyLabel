@@ -1,8 +1,10 @@
 # The Python inference service: SAM 1 and SAM 2.1 prompts, propagation, archetype finding.
 #
-# NEVER BUILT. See `deploy/README.md`. This one is the least verified of the three: it installs
-# PyTorch against a CUDA base image, which is where container builds usually go wrong, and the
-# checks in that README matter most here.
+# NEVER BUILT, by anything. CI's step for it runs only on a schedule or on demand, and GitHub fires
+# those triggers only for workflows on the default branch (`main`), which does not have this one.
+# See `deploy/README.md`. This one is the least verified of the three: it installs PyTorch against a
+# CUDA base image, which is where container builds usually go wrong, and the checks in that README
+# matter most here.
 #
 # OPT-IN in `compose.yaml` under the `ai` profile, because a deployment without it is a working
 # install rather than a broken one — everything except SAM prompts and propagation works.

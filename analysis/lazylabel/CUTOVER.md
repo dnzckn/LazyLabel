@@ -86,7 +86,9 @@ Each of these is checkable, and none of them is an opinion.
 ## What a user does
 
 1. Keep the desktop app installed. It is 2.0.8 and it keeps working.
-2. Point the web app at the dataset folder — `DATASET_ROOT` in `deploy/example.env`.
+2. Point the web app at the dataset folder, following the quick start at the top of the
+   repository's `README.md`. (The Docker route, `DATASET_ROOT` in `deploy/example.env`, is
+   unverified: CI builds its images, but nothing has ever run them.)
 3. Work in whichever one suits the task. The files are the same files, class names included.
 
 There is no import step and no database to populate. That is the point of decision 5: the

@@ -19,8 +19,9 @@
 # bundle. There is no authentication in this app by design (decision 3), so every port that does
 # not need to exist is one that cannot be reached.
 #
-# NOTHING HERE HAS BEEN BUILT. Docker is not installed on the machine this was written on. See
-# `README.md` in this folder for what to check first.
+# NOTHING HERE HAS BEEN RUN. CI builds the api and web images and validates this file on every push
+# to main-web (since 2026-09-26); no container has been started from them, and the inference image
+# has never been built. See `README.md` in this folder for what to check first.
 
 name: lazylabel
 

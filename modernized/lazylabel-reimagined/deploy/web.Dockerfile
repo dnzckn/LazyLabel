@@ -1,6 +1,7 @@
 # The browser app, built to static files and served by nginx.
 #
-# NEVER BUILT. See `deploy/README.md`.
+# BUILT BY CI, NEVER RUN: built on every push to main-web since 2026-09-26, never started. See
+# `deploy/README.md`.
 #
 # Context is `modernized/`, for the same reason as the API: the web app depends on the exporters
 # package, which lives outside the rebuild directory.

@@ -19,8 +19,17 @@ rescale applied client-side would quantise a 16-bit scan to 256 levels and then 
 
 ## Running it
 
+**To run the whole app, follow the quick start at the top of the
+[repository's README](../../../README.md#lazylabel-web-this-branch).** Node.js 22.13 or later:
+`node:sqlite`, which the settings store uses, needs no flag from 22.13.
+
+To work on this package, its three linked libraries need their own `npm install` and build first.
+`npm install` here alone is not enough: `npm test` then passes, but `npm run typecheck` and
+`npm run build` fail with `TS2307: Cannot find module '@lazylabel/annotation-formats'`, and
+`npm start` with `ERR_MODULE_NOT_FOUND`. The [reimagined README](../README.md#running-it) has the
+two loops that install and build them. Then, here:
+
 ```bash
-npm install
 npm test
 npm run typecheck
 npm run build
@@ -30,6 +39,10 @@ To start it against a folder of images:
 
 ```bash
 LAZYLABEL_DATASET_ROOT=/path/to/your/images npm start
+```
+
+```powershell
+$env:LAZYLABEL_DATASET_ROOT = "C:\path\to\your\images"; npm start
 ```
 
 | Variable | Default | What it is |
@@ -52,6 +65,7 @@ means files differed, and 2 means nothing was compared.
 
 In Windows PowerShell, run it as `npm.cmd run acceptance -- ...`: plain `npm` resolves to `npm.ps1`,
 which swallows the `--`, so `--oracle` never reaches the tool and every instance format "differs".
+The same holds for every npm script given options after `--` in PowerShell.
 
 - **The oracle matters.** The desktop app does not reproduce its own files either. Its NPZ holds
   one mask per class, so opening an image merges a class's instances, and the YOLO, COCO, Pascal

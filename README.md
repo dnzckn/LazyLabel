@@ -9,7 +9,66 @@ LazyLabel combines Meta's Segment Anything Model (SAM) with comprehensive manual
 
 ---
 
-## Get Started
+## LazyLabel web (this branch)
+
+This branch, `main-web`, is LazyLabel rebuilt as a web app: the same tools, in your browser, served
+by a small Node.js program on your own machine. It reads and writes the same annotation files as the
+desktop app, so the two can work on one folder. The desktop app is unchanged on `main` and on PyPI;
+its instructions are [further down](#desktop-app-pyqt6-branch-main-pypi-208).
+
+**You need** [Git](https://git-scm.com/downloads) and [Node.js](https://nodejs.org/) **22.13 or
+later** (the current 22 or 24 LTS). Nothing else: no Python, no compiler, no GPU. Check with
+`node --version`; an older Node 22 stops with `No such built-in module: node:sqlite`.
+
+**Windows (PowerShell):**
+
+```powershell
+git clone -b main-web https://github.com/dnzckn/LazyLabel.git
+cd LazyLabel\modernized
+foreach ($p in "lazylabel\core\exporters", "lazylabel-reimagined\settings-schema", "lazylabel-reimagined\contracts", "lazylabel-reimagined\api", "lazylabel-reimagined\web") { npm install --prefix $p }
+foreach ($p in "lazylabel\core\exporters", "lazylabel-reimagined\settings-schema", "lazylabel-reimagined\contracts", "lazylabel-reimagined\api") { npm run build --prefix $p }
+```
+
+Then, in one window, the API, pointed at your folder of images:
+
+```powershell
+cd lazylabel-reimagined\api
+$env:LAZYLABEL_DATASET_ROOT = "C:\path\to\your\images"; npm start
+```
+
+and in a second window, the web app:
+
+```powershell
+cd LazyLabel\modernized\lazylabel-reimagined\web
+npm run dev
+```
+
+**macOS and Linux (bash or zsh):**
+
+```bash
+git clone -b main-web https://github.com/dnzckn/LazyLabel.git
+cd LazyLabel/modernized
+for p in lazylabel/core/exporters lazylabel-reimagined/{settings-schema,contracts,api,web}; do npm install --prefix "$p" || break; done
+for p in lazylabel/core/exporters lazylabel-reimagined/{settings-schema,contracts,api}; do npm run build --prefix "$p" || break; done
+cd lazylabel-reimagined/api && LAZYLABEL_DATASET_ROOT="/path/to/your/images" npm start
+```
+
+and in a second terminal, `cd LazyLabel/modernized/lazylabel-reimagined/web && npm run dev`.
+
+Then open **<http://localhost:5173>**. (The API on port 8787 does not serve the app yet, so its own
+address answers 404.)
+
+- **The AI tools (SAM) are optional.** Without them everything else works and the status bar says
+  "No AI". Adding them is a separate Python service:
+  [`modernized/lazylabel-reimagined/README.md`](modernized/lazylabel-reimagined/README.md#running-it).
+- **In PowerShell, `npm` drops `--`.** `npm` there is `npm.ps1`, which swallows the `--` before a
+  script's own options, so they reach npm instead of the script. Type `npm.cmd` instead, as in
+  `npm.cmd run acceptance -- <corpus> --oracle <dir>`.
+- The API keeps its settings database in `<your folder>\.lazylabel\`.
+
+---
+
+## Desktop app (PyQt6, branch `main`, PyPI 2.0.8)
 
 **Full install (with AI segmentation):**
 ```bash
@@ -127,7 +186,10 @@ dogs = mask[:, :, 3]
 
 ---
 
-## Model Setup
+## Model Setup (desktop app)
+
+The web app never downloads a model; its inference service's
+[README](modernized/lazylabel-reimagined/inference/README.md) covers its checkpoints.
 
 SAM 1.0 models are downloaded automatically on first use.
 
@@ -170,7 +232,7 @@ If the automatic download doesn't work:
 
 ---
 
-## Building Windows Executable
+## Building the Desktop App's Windows Executable
 
 Create a standalone Windows executable with bundled models for offline use:
 
@@ -192,6 +254,7 @@ The executable will be created in `dist/LazyLabel/`. The entire folder (~7-8GB) 
 
 ## Documentation
 
+- [LazyLabel web](modernized/lazylabel-reimagined/README.md) - The web app's packages, and how to work on them
 - [Usage Manual](src/lazylabel/USAGE_MANUAL.md) - Comprehensive feature guide
 - [Architecture Guide](src/lazylabel/ARCHITECTURE.md) - Technical implementation details
 - [Changelog](CHANGELOG.md) - Version history and release notes

@@ -1,9 +1,12 @@
 # LazyLabel, reimagined
 
-The web rebuild. **Phases 1 to 5 of
+The web rebuild. **To run it, follow the quick start at the top of the
+[repository's README](../../README.md#lazylabel-web-this-branch).** This file is for working on it.
+
+**Phases 1 to 5 of
 [`MODERNIZATION_BRIEF.md`](../../analysis/lazylabel/MODERNIZATION_BRIEF.md) have met their exit
 criteria; Phase 6 is in progress.** [`PROGRESS.md`](../../analysis/lazylabel/PROGRESS.md) is the
-log against the plan and is the one to read first;
+log against the plan and the one to read first on the engineering;
 [`CUTOVER.md`](../../analysis/lazylabel/CUTOVER.md) is what to read when the question is whether
 to switch.
 
@@ -44,9 +47,22 @@ it.
 
 ## Running it
 
-Each package is independent: `npm install` then `npm test` inside it. Cross-package dependencies
-are `file:` links resolved to the other package's **TypeScript source** through a `development`
-export condition, so tests and typechecks have no build ordering and no way to read a stale `dist`.
+**Every package needs its own `npm install` first, the three shared libraries included.** A
+library's own imports resolve from ITS folder, so without them the API and the web app cannot
+typecheck, build or start. `npm test` passes without them, which is what hid it: tests read the
+libraries' TypeScript source. From this folder:
+
+```bash
+for p in ../lazylabel/core/exporters settings-schema contracts api web; do npm install --prefix "$p" || break; done
+```
+
+```powershell
+foreach ($p in "..\lazylabel\core\exporters", "settings-schema", "contracts", "api", "web") { npm install --prefix $p }
+```
+
+Cross-package dependencies are `file:` links resolved to the other package's **TypeScript source**
+through a `development` export condition, so tests and typechecks have no build ordering and no way
+to read a stale `dist`.
 
 **Running the built API is different, and it is easy to trip over.** At runtime the same imports
 resolve to each library's `dist`, so the libraries must be built before `npm start` — otherwise Node
@@ -54,7 +70,11 @@ reports `ERR_MODULE_NOT_FOUND` for a package that is plainly installed. Build th
 order:
 
 ```bash
-for p in ../lazylabel/core/exporters settings-schema contracts api; do (cd "$p" && npm run build); done
+for p in ../lazylabel/core/exporters settings-schema contracts api; do npm run build --prefix "$p" || break; done
+```
+
+```powershell
+foreach ($p in "..\lazylabel\core\exporters", "settings-schema", "contracts", "api") { npm run build --prefix $p }
 ```
 
 To run the two services together:
@@ -64,25 +84,50 @@ To run the two services together:
 cd api && LAZYLABEL_DATASET_ROOT=/path/to/your/images npm start
 ```
 
+```powershell
+# terminal 1, in PowerShell
+cd api; $env:LAZYLABEL_DATASET_ROOT = "C:\path\to\your\images"; npm start
+```
+
 ```bash
-# terminal 2 — the web app, which proxies /api to it
+# terminal 2 — the web app, which proxies /api to it; open http://localhost:5173
 cd web && npm run dev
 ```
 
 That is the whole app except the AI tools, and running without them is a supported deployment
-rather than a broken one: everything but SAM prompts and propagation works. To add them, start the
-inference service and **tell the API where it is** — without that variable the API does not look
-for one, and `/health` says so:
+rather than a broken one: everything but SAM prompts and propagation works. To add them:
 
-```bash
-# terminal 3 — the inference service
-cd inference && LAZYLABEL_MODEL_DIR=/path/to/checkpoints python -m lazylabel_inference.server
-```
+1. **Install the inference service** into a Python 3.12 environment, as
+   [its README](inference/README.md#setting-it-up-with-cuda) shows. The package must be installed
+   (`pip install -e ".[ai]"`), OpenCV added (`opencv-python-headless`, which the package does not
+   declare), and PyTorch taken from the index that matches your GPU driver, or it quietly runs on
+   the CPU.
+2. **Put the checkpoints in one folder, with a `manifest.json` beside them.** Copy
+   [`inference/models/manifest.example.json`](inference/models/manifest.example.json) there as
+   `manifest.json` and fill in the SHA-256 of each file you have, from
+   [`MODEL_MANIFEST.md`](../../analysis/lazylabel/MODEL_MANIFEST.md) or computed as its
+   `$comment` shows. Nothing downloads a checkpoint for you.
+3. **Start it on the SAME dataset folder as the API.** It reads the images itself; without
+   `LAZYLABEL_DATASET_ROOT` every route that reads one answers 503.
 
-```bash
-# and restart the API with
-cd api && LAZYLABEL_DATASET_ROOT=/path/to/your/images   LAZYLABEL_INFERENCE_URL=http://127.0.0.1:8788 npm start
-```
+   ```bash
+   # terminal 3 — the inference service, from its environment
+   cd inference && LAZYLABEL_MODEL_DIR=/path/to/checkpoints LAZYLABEL_DATASET_ROOT=/path/to/your/images python -m lazylabel_inference.server
+   ```
+
+   ```powershell
+   cd inference; $env:LAZYLABEL_MODEL_DIR = "C:\path\to\checkpoints"; $env:LAZYLABEL_DATASET_ROOT = "C:\path\to\your\images"; python -m lazylabel_inference.server
+   ```
+4. **Restart the API and tell it where the service is.** Without this variable the API does not look
+   for one, and `/health` says so:
+
+   ```bash
+   cd api && LAZYLABEL_DATASET_ROOT=/path/to/your/images LAZYLABEL_INFERENCE_URL=http://127.0.0.1:8788 npm start
+   ```
+
+   ```powershell
+   cd api; $env:LAZYLABEL_DATASET_ROOT = "C:\path\to\your\images"; $env:LAZYLABEL_INFERENCE_URL = "http://127.0.0.1:8788"; npm start
+   ```
 
 The address is logged at startup either way, so `"inference":"none"` in the first line tells you
 the AI tools will be unavailable before a user clicks an object and finds out.
@@ -100,10 +145,10 @@ architecture review killed a segment table duplicating the file chain, and it st
 ## Deploying it
 
 [`deploy/`](deploy) holds a compose file for a self-hosted install: the web app, the API, and an
-opt-in inference service. **Docker has never built it** — Docker is not installed on the machine it
-was written on — and its README says so first and names what to check. The API image's build steps
-were run by hand on a clean export of the repository on 2026-09-23, and the result started and
-answered `/health`; that is the nearest thing to a build this machine can do.
+opt-in inference service. **It is unverified.** CI has built the API and web images, and validated
+the compose file, on every push to `main-web` since 2026-09-26, but nothing has ever RUN them, and
+the inference image has never been built. Its README says so first and names what to check. For
+running the app on your own machine, the quick start in the repository's README is the tested path.
 
 ## What works today
 
@@ -132,8 +177,8 @@ Some of it is worth naming because the behaviour is not what you would assume:
 - **Masks and propagation match legacy** against the real checkpoints, frame for frame, and flag
   the same frames at the confidence threshold. Those suites **skip themselves without a
   checkpoint**, so a green CI run says nothing about them — `PROGRESS.md` has the command.
-- **The sequence timeline** is built; propagation is not, and the timeline says so rather than
-  offering a button with nothing behind it.
+- **The sequence timeline** is built, and propagates along a sequence through the inference
+  service (C11, above).
 
 ## Phase exit criteria
 
