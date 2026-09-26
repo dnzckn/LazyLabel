@@ -111,6 +111,8 @@ export interface TimelinePanelProps {
    * sequence (main_window.py:1447-1455) -- so the header, the marker and the picture agree.
    */
   readonly openKey?: string;
+  /** Saves made by the ordinary save, by image key: see PropagationControl (SP-02). */
+  readonly savedElsewhere?: ReadonlyMap<string, number>;
 }
 
 /** What legacy says when there is no such frame to move to (main_window.py:4673-4706, 5158-5168). */
@@ -129,6 +131,7 @@ export function TimelinePanel({
   confirmDiscard = (message) => window.confirm(message),
   onStatus,
   openKey,
+  savedElsewhere,
 }: TimelinePanelProps): ReactNode {
   const [range, setRange] = useState<{ from: number; to: number } | null>(null);
   const [overrides, setOverrides] = useState<readonly Frame[] | null>(null);
@@ -509,6 +512,7 @@ export function TimelinePanel({
           onSegments={setPropagated}
           onSkipped={setKeptLabels}
           onSaved={(keys) => setOverrides((previous) => markSaved(previous ?? frames, keys))}
+          {...(savedElsewhere === undefined ? {} : { savedElsewhere })}
           onRunStart={() => {
             setOwnScores({});
             setKeptLabels(new Set());

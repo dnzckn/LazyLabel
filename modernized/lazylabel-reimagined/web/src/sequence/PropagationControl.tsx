@@ -92,6 +92,15 @@ export interface PropagationControlProps {
   /** The frames a Save All wrote, so the timeline can show them saved. */
   readonly onSaved?: (keys: readonly string[]) => void;
   /**
+   * How many times each image has been saved by the ordinary save (Enter, the Write button), by key.
+   *
+   * A propagated frame saved that way since the run began is the user's CORRECTION: Save All must
+   * not write the run's masks over it, and reopening it must show the file. Legacy drops a saved
+   * frame's stored masks (`sequence_view_mode.py:365-373`), so its Save All skips it; here the
+   * run kept the masks and Save All wrote them over the correction (`SEQUENCE_PARITY.md` SP-02).
+   */
+  readonly savedElsewhere?: ReadonlyMap<string, number>;
+  /**
    * Where the Save button is drawn: beside the timeline bar, as legacy's Save All is
    * (main_window.py:3296-3305). A portal, so the button is still this control's -- its saving
    * state, its guard and its keys stay here -- while it sits where a user looks for it.
@@ -110,6 +119,7 @@ export function PropagationControl({
   confirmDiscard = (message) => window.confirm(message),
   onSkipped,
   onSaved,
+  savedElsewhere,
   saveSlot,
   projectId = "default",
 }: PropagationControlProps): ReactNode {
@@ -147,6 +157,8 @@ export function PropagationControl({
   const [saved, setSaved] = useState<string | null>(null);
   /** Frames already written. What remains is what a discard would destroy. */
   const [written, setWritten] = useState<ReadonlySet<string>>(new Set());
+  /** `savedElsewhere` as it stood when this run began: a save after it is a correction. */
+  const savesAtRun = useRef<ReadonlyMap<string, number>>(new Map());
 
   const references = frames
     .map((frame, index) => (frame.isReference ? index : -1))
@@ -230,6 +242,7 @@ export function PropagationControl({
     // for its new mask, and no question before anything threw that mask away.
     setWritten(new Set());
     committed.current = new Map();
+    savesAtRun.current = new Map(savedElsewhere ?? []);
     const referenceKeys = new Set(references.map((index) => frames[index]!.key));
     setPolicy({
       keepFlagged,
@@ -267,6 +280,7 @@ export function PropagationControl({
     progress.running,
     projectId,
     references,
+    savedElsewhere,
     settings.values,
     skipLabeled,
     start,
@@ -347,11 +361,20 @@ export function PropagationControl({
       // A reference contributes nothing: it is the user's own drawing, never shown or saved from
       // the run. Legacy's engine does not even report it (`propagation_manager.py:744-749`).
     }
-    return { scores, empty: empty.sort((a, b) => a - b), painted, kept, known };
+    // A frame the user saved themselves since the run began is theirs now: not the run's to show
+    // on a revisit, nor Save All's to write over (SP-02).
+    const corrected: string[] = [];
+    for (const key of [...kept.keys()]) {
+      if ((savedElsewhere?.get(key) ?? 0) > (savesAtRun.current.get(key) ?? 0)) {
+        kept.delete(key);
+        corrected.push(key);
+      }
+    }
+    return { scores, empty: empty.sort((a, b) => a - b), painted, kept, known, corrected };
     // `committed` is a ref, filled just above from these same inputs, and `frames` is read only
     // for its keys and positions, which `framesKey` stands for.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [framesKey, policy, progress.masks, progress.running, threshold]);
+  }, [framesKey, policy, progress.masks, progress.running, threshold, savedElsewhere]);
 
   // Keyed by CONTENT: `view` is rebuilt whenever the frames change, and a parent handed a new
   // object each time would re-render, hand down new frames and ask again, without end.
@@ -366,6 +389,17 @@ export function PropagationControl({
     onSkipped?.(view.painted);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [onSkipped, paintedKey]);
+
+  // A frame the user saved themselves is saved: shown so on the timeline, as Save All's are. Keyed
+  // on the frames alone, with the callback through a ref: the panel hands down a new `onSaved` on
+  // every render, and depending on it looped -- mark saved, re-render, mark saved again.
+  const onSavedNow = useRef(onSaved);
+  onSavedNow.current = onSaved;
+  const correctedKey = view.corrected.join("|");
+  useEffect(() => {
+    if (view.corrected.length > 0) onSavedNow.current?.(view.corrected);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [correctedKey]);
 
   const job = progress.job;
   const done = job !== null && !progress.running;

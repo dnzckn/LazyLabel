@@ -273,6 +273,12 @@ export interface WorkspaceContextValue {
    * an empty file on disk and the word "saved" on screen.
    */
   readonly markSavedOn: (side: SideIndex, written?: WrittenState) => void;
+  /**
+   * How many times each image has been saved this session by the ordinary save, by key. The
+   * sequence timeline reads it: a propagated frame saved here is the user's correction, and Save All
+   * must not write the run's masks over it (SEQUENCE_PARITY.md SP-02).
+   */
+  readonly saveCounts: ReadonlyMap<string, number>;
   /** The active side's file revisions, which its next save is conditional on. */
   readonly revisions: Readonly<Record<string, string | null>>;
   /**
@@ -444,6 +450,8 @@ export function WorkspaceProvider({
     lastToggledClassId.current = null;
   }, [openKey]);
 
+  /** How many times each image has been saved this session by the ordinary save, by key. */
+  const [saveCounts, setSaveCounts] = useState<ReadonlyMap<string, number>>(new Map());
   const [linked, setLinked] = useState(false);
   const [linkReport, setLinkReport] = useState<LinkReport | null>(null);
   // Measured by the view, which is the only thing that knows the pane's size.
@@ -939,7 +947,13 @@ export function WorkspaceProvider({
   );
 
   const markSavedOn = useCallback(
-    (at: SideIndex, written?: WrittenState) =>
+    (at: SideIndex, written?: WrittenState) => {
+      // Counted per image, for the sequence timeline: a propagated frame saved here is the user's
+      // correction, which Save All must not write over (SEQUENCE_PARITY.md SP-02).
+      const savedKey = written?.key;
+      if (savedKey !== undefined) {
+        setSaveCounts((previous) => new Map(previous).set(savedKey, (previous.get(savedKey) ?? 0) + 1));
+      }
       updateSide(at, (current) => {
         // The revisions are the FILE's, so they move on even when an edit landed during the
         // round trip: the next write is conditional on what is on disk now. Only for the image
@@ -955,7 +969,8 @@ export function WorkspaceProvider({
             || current.crop !== written.crop);
         if (editedSince) return revisions === current.revisions ? current : { ...current, revisions };
         return { ...current, revisions, dirty: false };
-      }),
+      });
+    },
     [updateSide],
   );
 
@@ -964,6 +979,7 @@ export function WorkspaceProvider({
   const value = useMemo(
     () => ({
       sides,
+      saveCounts,
       linked,
       setLinked,
       linkReport,
@@ -1039,6 +1055,7 @@ export function WorkspaceProvider({
       setSelection,
       setZoom,
       sides,
+      saveCounts,
       zoom,
       toggleActiveClass,
       toggleRecentClass,

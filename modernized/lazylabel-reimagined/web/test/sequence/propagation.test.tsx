@@ -702,17 +702,29 @@ describe("RULE-056: not losing propagated work without asking", () => {
       saveAnnotations: async () => ({ written: [], stale: [], skippedEmpty: [] }),
     } as unknown as ApiClient;
 
-    const timeline = <TimelinePanel images={FOLDER as never} client={client} confirmDiscard={confirmDiscard} />;
-    render(
-      <NotificationProvider>
-        <NotificationHost />
-        <SettingsProvider client={client}>
-          <HotkeyProvider bindings={defaultSettings().hotkeys}>
-            {inPanel ? <Panel title="Sequence">{timeline}</Panel> : timeline}
-          </HotkeyProvider>
-        </SettingsProvider>
-      </NotificationProvider>,
-    );
+    const tree = (saves?: ReadonlyMap<string, number>) => {
+      const timeline = (
+        <TimelinePanel
+          images={FOLDER as never}
+          client={client}
+          confirmDiscard={confirmDiscard}
+          {...(saves === undefined ? {} : { savedElsewhere: saves })}
+        />
+      );
+      return (
+        <NotificationProvider>
+          <NotificationHost />
+          <SettingsProvider client={client}>
+            <HotkeyProvider bindings={defaultSettings().hotkeys}>
+              {inPanel ? <Panel title="Sequence">{timeline}</Panel> : timeline}
+            </HotkeyProvider>
+          </SettingsProvider>
+        </NotificationProvider>
+      );
+    };
+    const result = render(tree());
+    // The ordinary save's counts, as the shell hands them down from the store.
+    return { withSaves: (saves: ReadonlyMap<string, number>) => result.rerender(tree(saves)) };
   }
 
   /** What the browser does before a tab closes: returns true when the page asked it to ask. */
@@ -805,6 +817,20 @@ describe("RULE-056: not losing propagated work without asking", () => {
     expect(confirm).toHaveBeenCalledTimes(1);
     expect(confirm.mock.calls[0]![0]).toMatch(/1 propagated frame has not been saved. Propagating again/);
     expect(screen.getByRole("button", { name: /Save 1 frame/ })).toBeTruthy();
+  });
+
+  it("leaves a frame the user corrected and saved to them: Save All does not write over it", async () => {
+    // Legacy drops a saved frame's stored masks, so its Save All skips it. Here the run kept them,
+    // and Save All wrote them over the user's correction (SEQUENCE_PARITY.md SP-02).
+    const { withSaves } = panel(() => true);
+    const everyFrame = (count: number) => new Map(FOLDER.map((image) => [image.key, count] as const));
+    withSaves(everyFrame(1)); // saves made BEFORE the run are not corrections of it
+    await propagateAndWait();
+    expect(screen.getByRole("button", { name: /Save 1 frame/ })).toBeTruthy();
+
+    withSaves(everyFrame(2)); // the user saves the propagated frame by hand after the run
+
+    await waitFor(() => expect(screen.queryByRole("button", { name: /Save \d+ frames?/ })).toBeNull());
   });
 
   it("offers the Save beside the timeline bar, where legacy's Save All is", async () => {
