@@ -540,6 +540,13 @@ configured, so a green CI run says nothing about them — see `Running the live 
 - **Docker is skipped for now**; the deployment stays unverified, and says so.
 - **The backup refs from stripping co-author trailers are deleted**
   (`backup/main-web-with-trailers`, `refs/original/refs/heads/main-web`).
+- **Every feature behaves the same, sequence mode first** (2026-09-25): "ensure that every
+  feature behaves the same way across the two versions, particularly the serial/time series more
+  is the premiere feature that needs to work flawlessly". Item 5 below.
+- **Moving saves when Auto-Save on Navigate is on** (2026-09-25): "moving should save if save on
+  move setting is turned on". This reverses decision 7 for navigation only. **Built** (2c1d1f1):
+  leaving an image or timeline frame with unsaved changes saves it first, as legacy's does. With
+  the setting off the web still asks, where legacy discards; closing still asks.
 
 
 1. **Propagation goldens: captured, and the model's half of Phase 6 exit criterion 2 is met.**
@@ -702,6 +709,16 @@ configured, so a green CI run says nothing about them — see `Running the live 
    `CONTROL_PARITY.md` has every item's status and commit. Work down that file in order. Verify each
    "reported" item against both apps' code before fixing it.
 
+5. **Sequence mode against the PyQt6 app: `SEQUENCE_PARITY.md` (started 2026-09-25).** The owner
+   named sequence mode the premier feature. A read-only audit walked a real session through both
+   apps (build, references, propagate, review, Save All, trim, archetypes) and found 58
+   differences in what the user sees or what is written, ranked S0-S3. SP-01 to SP-07 are fixed:
+   moving saves, a corrected frame stays corrected, Clear Flags no longer changes what Save All
+   writes, the open reference seeds propagation with what is on screen, Save All writes legacy's
+   class names and honours pixel priority, and a visited frame opens merged one mask per class.
+   Work down its "Recommended fix order". Rows whose fix is "Keep", and SP-58, wait on the
+   owner; SP-08 needs a JPEG clip.
+
 The three decisions this list used to end with are answered, above: Ctrl+Plus keeps zooming, the
 timeline keeps legacy's behaviour, and image tiles get built. The measurement that framed the tiles
 question stays here, because the tile work is judged against it. On 2026-09-23 a noisy
@@ -745,7 +762,7 @@ new code. Three of the five had not been.** Checked 2026-09-23:
 | SEC-01 pickle | **held** | nothing in the web stack unpickles. Since 2026-09-25 the NPZ reader parses the desktop app's `\|O` class-name table as data and refuses any other. The converter, no longer needed, unpickles only through a restricted `find_class` |
 | SEC-02 decoder by content | **fixed** | the inference service read the dataset with `cv2.imread`, bypassing the API's allow-list, so EXR or JPEG 2000 bytes in a `.png` reached OpenCV's unaudited codecs |
 | SEC-03 checkpoint pickle | **fixed** | the runtime guard only ever ran in CI; with `TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD` set, a SAM 1 checkpoint executed code -- reproduced |
-| SEC-04 failed load deleting sidecars | **held** | no auto-save, and `canSave` refuses writing back an image whose load failed |
+| SEC-04 failed load deleting sidecars | **held** | `canSave` refuses writing back an image whose load failed, so Auto-Save on Navigate (back since 2026-09-25) asks instead of saving it, and nothing deletes |
 | SEC-06 unbounded allocation | **fixed** | `assertObjects` had no caller and the text readers built one full-image mask per line; 20,000 polygons on a 12 MP image asked for ~224 GiB |
 
 Two of the three were the same defect as everything else found here -- a guard that existed and

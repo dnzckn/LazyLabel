@@ -104,6 +104,7 @@ Paths: **L** = `legacy/lazylabel/src/lazylabel/`, **W** = `modernized/lazylabel-
 | CP-64 | Status bar: legacy's short-lived messages and "GPU: name" / "CPU Only" / "No AI". | reported; partly recorded (PR:966-968) |
 | CP-65 | Labels: Filter Class items "alias: id"; "N/A" for unclassified; "Merge to Class", "Reassign Class IDs", "+ Add Current", "Clear All" disabled with no references, the "Frames: 1, 3 ★" references display; timeline tooltip "Frame i/N, name, Status, Confidence". | reported |
 | CP-66 | Platform keys: Qt's "Ctrl" is Cmd on macOS (the web records "Meta"); numpad keys become plain digits; Ctrl+Shift+= does not zoom. | reported |
+| CP-67 | Auto-Save on Navigate in Multi. Legacy saves BOTH sides on every pair move, whatever the setting (L ui/main_window.py:6496-6497, 6529-6530; L ui/managers/file_navigation_manager.py:401-403), and deletes an empty side's files with no message (L ui/main_window.py:6588-6594). The web saves only the side being edited, and only with the setting on; the other side still asks on leaving. | reported; the deletion half is RULE-083's decision (BR:1329) |
 
 ## Wrong statements to correct when their item is fixed
 
@@ -118,10 +119,13 @@ Paths: **L** = `legacy/lazylabel/src/lazylabel/`, **W** = `modernized/lazylabel-
 
 ## Recorded decisions (not work)
 
-Pop-out panels (CUTOVER.md "What is lost"); the four-view multi-view setting; auto-save on navigate
-(decision 7); Select and Edit not toggling back (PROGRESS.md 1576-1577); Ctrl+Plus/Minus zooming
+Pop-out panels (CUTOVER.md "What is lost"); the four-view multi-view setting; Select and Edit not toggling back (PROGRESS.md 1576-1577); Ctrl+Plus/Minus zooming
 the image rather than the annotation size (PROGRESS.md 520-521); the crop not carried across images;
 the hotkey editor saving each change at once, and clearing the alternate key; Multi's single set of
 tables and the active-side-only view (decision 8); the timeline staying mounted, with New timeline
 asking first; Min Conf persisted; Browse Models absent (a server has no file picker); the settings
 dialog's placement of Operate On View, pixel priority, pan and join.
+
+Auto-Save on Navigate was on this list until 2026-09-25 (decision 7). The owner reversed it that
+day: "moving should save if save on move setting is turned on". It is built (2c1d1f1); CP-67 is
+what remains of it.

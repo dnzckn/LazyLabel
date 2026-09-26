@@ -57,11 +57,11 @@ The web never saves on navigation. It asks first when the open image is unsaved 
 
 | Severity | Total | Recorded: yes | Partly | Code comment only | No |
 |---|---|---|---|---|---|
-| S0 | 17 | 9 | 1 | 4 | 3 |
+| S0 | 18 | 9 | 2 | 4 | 3 |
 | S1 | 23 | 2 | 3 | 1 | 17 |
 | S2 | 9 | 0 | 2 | 0 | 7 |
 | S3 | 8 | 2 | 1 | 0 | 5 |
-| **All** | **57** | **13** | **7** | **5** | **32** |
+| **All** | **58** | **13** | **8** | **5** | **32** |
 
 SP-01's "yes" is contradicted by another record (see Notes).
 
@@ -86,6 +86,7 @@ SP-01's "yes" is contradicted by another record (see Notes).
 | SP-15 | Leaving the Sequence tab | Tears down the timeline, references, statuses and unsaved propagated masks without asking, and does not save the open frame. Single reloads the image from disk, and coming back shows the setup screen (L ui/main_window.py:3043-3047, 4998-5035, 7242-7272; BR:925-937). | The timeline stays mounted, hidden, and is found as it was (W shell/CentreTabs.tsx:13-15, 96-101). | Legacy loses the run; the web keeps it. | S0 | yes: CP:115-116, VP:212-214 | Keep. |
 | SP-16 | New Timeline; Propagate a second time | Both discard unsaved propagated masks without a question (L ui/main_window.py:4998-5035, 4233-4239; BR:1200-1211). | Both ask while frames are unsaved (W sequence/TimelinePanel.tsx:371-381; W sequence/PropagationControl.tsx:163-179). | Legacy loses the run silently. | S0 | yes: CP:115-116, PR:214-224 | Keep. |
 | SP-17 | Closing the app or tab | Saves settings only (the stream window). The timeline, propagated masks and the open frame's edits go without a question (L ui/main_window.py:2064-2108; BR:881-893). | The browser's leave-page dialog while propagated frames are unsaved (W sequence/TimelinePanel.tsx:164-177), and CloseGuard for unsaved images. Neither app keeps the timeline. | Legacy loses work silently. | S0 | yes: BR:893, PR:206-208, PR:523-524 | Keep. |
+| SP-58 | Leaving a frame emptied by hand | With no segments, the save on leaving DELETES all seven sidecar formats, whatever formats are selected, and says "Deleted: ...". The frame is not marked saved, so it keeps its status and its propagated masks, and Save All writes those masks back (L ui/main_window.py:3499-3515; L ui/managers/save_export_manager.py:106-109, 523-542; L core/exporters/__init__.py:209-215). Enter on an empty frame deletes the same way. | Enter's save writes an EMPTY file in each selected format and deletes nothing (W workspace/saveState.ts:14-19; A api/src/annotations/service.ts:141-184). Any save counts as saved for the run (SP-02), so the frame turns saved, drops its masks, and Save All skips it. | Before Save All: legacy leaves no files, the web leaves empty ones, which count as labelled for Skip Labeled (BR:1297). After Save All: legacy's frame holds the propagated masks again, the web's stays empty. Found on 2026-09-25 while fixing SP-01, after this audit. | S0 | partly: the deletion is RULE-083's decision (BR:1329); the status half is not recorded | Owner to rule. The status half needs no deletion: leave an emptied frame's status and masks alone, as legacy's does. |
 | SP-18 | Building the timeline: first frame | Build opens frame 1 and says "Timeline built: N frames" (L ui/main_window.py:4949-4996). | Build moves the cursor to frame 1 and opens nothing. If the open image is in the range, the cursor jumps to it instead (W sequence/TimelinePanel.tsx:216-223, 335-339). | The view can show an image outside the new timeline while the header names frame 1. | S1 | no | Open the first frame on Build, asking first if the open image is unsaved. |
 | SP-19 | Review: which frame is current | The frame on screen is always the current frame. Navigation always completes (L ui/main_window.py:3414-3434). A file outside the timeline bounces back to the current frame (L ui/main_window.py:1447-1459; L ui/managers/file_navigation_manager.py:374-376; L ui/main_window.py:5395-5404). Trim opens the nearest kept frame (5290-5291). | The cursor moves before the open, and the open can be refused at the unsaved prompt (W sequence/TimelinePanel.tsx:238-240, 488-491; W workspace/WorkspaceProvider.tsx:485-488). An image outside the timeline, opened from the list or on the Single tab, leaves the cursor where it was (W sequence/TimelinePanel.tsx:335-339). Trim moves the cursor, not the view (406-416). | The header (W sequence/TimelinePanel.tsx:341-348), G (258-264) and the trim bounds (566-571) then act on a frame that is not on screen. | S1 | partly: showing an outside image is recorded (WT rules/p0Coverage.test.ts:65-69); the rest is not | Move the cursor only when the open succeeds, say "not in the timeline" in the header, and open the nearest frame after Trim. |
 | SP-20 | Choosing the range: which files | The rows between Start and End as the file list shows them, sorted and filtered, so searched-out or hidden files are left out (L utils/fast_file_manager.py:1971-1999; BR:1473). | Every image of the raw listing between the two picked names (W shell/App.tsx:344-347 passes `listed`; W sequence/timeline.ts:108-120). | With a filtered list, legacy's timeline is smaller, so propagation and Save All cover different frames. | S1 | partly: CP:50 (CP-14) keeps the listing ORDER for the pickers. Leaving out filtered rows is not addressed | Build from the rows as shown, filtered as on screen. |
@@ -236,6 +237,7 @@ SP-01's "yes" is contradicted by another record (see Notes).
      saved on the timeline and drop it from the run's kept masks.
    - Have Save All send expectedRevisions.
    This makes hand corrections stick.
+   SP-58, found while fixing SP-01, waits on the owner's ruling on RULE-083.
 3. **SP-05 and SP-06.** Give Save All the Enter path's request: the reference's class name, as
    RULE-082's answer asks, and pixel priority. Extend c11.goldens to compare `classAliases` and
    `pixelPriority` in the save request.
