@@ -132,13 +132,98 @@ describe("C1: the dataset browser", () => {
 
     const footer = document.querySelector(".dataset tfoot tr")!;
     expect(footer.querySelector("th")?.textContent).toBe("2 images in frames");
-    // .npz and .txt, then the Modified and Size columns, which have nothing to total.
+    // .npz and .txt, then the Modified and Size columns, which have nothing to total. A format no
+    // image has is blank, as legacy's footer is (fast_file_manager.py:956-958).
     expect([...footer.querySelectorAll("td")].map((cell) => cell.textContent)).toEqual([
       "1",
-      "0",
+      "",
       "",
       "",
     ]);
+  });
+
+  describe("the columns, as legacy's list has them (CP-63)", () => {
+    /** Every one of the ten columns switched on. */
+    const allOn = async () => {
+      const base = defaultSettings();
+      const on = Object.fromEntries(Object.keys(base.values).filter((key) => key.startsWith("file_manager_show_")).map((key) => [key, true]));
+      return { ...base, values: { ...base.values, ...on } };
+    };
+
+    it("orders them as legacy does, whatever order the API lists its formats in", async () => {
+      // fast_file_manager.py:277-288. The API's order is load priority, which put YOLO Det last.
+      show({ getSettings: allOn } as never);
+      await waitFor(() => expect(screen.getByText("a.png")).toBeTruthy());
+
+      expect(screen.getAllByRole("columnheader").map((cell) => cell.textContent)).toEqual([
+        "Name",
+        "NPZ OHE",
+        "NPZ CM",
+        "YOLO Det",
+        "YOLO Seg",
+        "COCO",
+        "VOC",
+        "CreateML",
+        "Modified",
+        "Size",
+      ]);
+      // The column menu offers them in the same order, Name first.
+      const switches = screen
+        .getAllByRole("checkbox")
+        .map((box) => box.getAttribute("aria-label"))
+        .filter((label) => label?.startsWith("Show the "));
+      expect(switches).toEqual([
+        "Show the Name column",
+        "Show the NPZ OHE column",
+        "Show the NPZ CM column",
+        "Show the YOLO Det column",
+        "Show the YOLO Seg column",
+        "Show the COCO column",
+        "Show the VOC column",
+        "Show the CreateML column",
+        "Show the Modified column",
+        "Show the Size column",
+      ]);
+    });
+
+    it("lets Name be hidden, as legacy's column menu does", async () => {
+      // fast_file_manager.py:1169, 406-414: Name is a checkable item like the other nine.
+      const putSettings = vi.fn(async (settings: unknown) => settings);
+      show({ putSettings } as never);
+      await waitFor(() => expect(screen.getByText("a.png")).toBeTruthy());
+
+      fireEvent.click(screen.getByLabelText("Show the Name column"));
+
+      await waitFor(() =>
+        expect(screen.getAllByRole("columnheader").map((cell) => cell.textContent)).toEqual([
+          "NPZ OHE",
+          "YOLO Det",
+          "Modified",
+          "Size",
+        ]),
+      );
+      expect(screen.queryByText("a.png")).toBeNull();
+      const saved = putSettings.mock.calls.at(-1)![0] as { values: Record<string, unknown> };
+      expect(saved.values["file_manager_show_name"]).toBe(false);
+    });
+
+    it("shows a file's date and size in legacy's formats", async () => {
+      // fast_file_manager.py:466-487, 527-533: "%Y-%m-%d %H:%M" in local time, and one decimal
+      // in every unit.
+      const modified = new Date(2026, 8, 6, 7, 5).getTime();
+      show({
+        listImages: async () =>
+          listing({
+            images: [
+              { key: "frames/a.png", name: "a.png", sidecars: sidecars(), annotated: false, sharesSidecarsWith: [], size: 912, modified },
+            ],
+          }),
+      });
+      await waitFor(() => expect(screen.getByText("a.png")).toBeTruthy());
+
+      const cells = [...document.querySelectorAll(".dataset tbody .dataset__detail")].map((cell) => cell.textContent);
+      expect(cells).toEqual(["2026-09-06 07:05", "912.0 B"]);
+    });
   });
 
   it("narrows the list to the names that match the search, as legacy's Search files does", async () => {

@@ -35,17 +35,6 @@ const GEOMETRY = dropped(
     + "restoring pixel widths would fight both.",
 );
 
-/**
- * `file_manager_show_name` is deliberately NOT honoured: the Image column holds the button that
- * opens the image, so hiding it would leave a table nothing can be opened from. Legacy lets you
- * hide it and it is a trap there -- one of the few places where copying the behaviour would be
- * copying a defect.
- */
-const NAME_COLUMN = dropped(
-  "the Image column holds the button that opens the image; hiding it, as legacy allows, leaves a "
-    + "table nothing can be opened from.",
-);
-
 export const HONOURED: Readonly<Record<string, Honoured>> = {
   window_width: GEOMETRY,
   window_height: GEOMETRY,
@@ -112,7 +101,9 @@ export const HONOURED: Readonly<Record<string, Honoured>> = {
   pixel_priority_enabled: read,
   pixel_priority_ascending: read,
 
-  file_manager_show_name: NAME_COLUMN,
+  // Dropped until 2026-09-26, when the owner asked for every feature to behave as legacy's: Name
+  // hides as legacy's column menu lets it (fast_file_manager.py:1169; CONTROL_PARITY.md CP-63).
+  file_manager_show_name: read,
   file_manager_show_npz: read,
   file_manager_show_txt: read,
   file_manager_show_seg: read,

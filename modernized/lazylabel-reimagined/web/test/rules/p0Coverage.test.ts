@@ -46,7 +46,7 @@ const TEST_ROOTS = [
  *
  * Each is legacy losing the user's work, and decision 7 is the single answer to all of them:
  * nothing is written or discarded without an explicit act. Copying them would mean copying the
- * defect -- which this project has refused to do once already, for `file_manager_show_name`.
+ * defect.
  */
 const DELIBERATELY_NOT_IMPLEMENTED: Readonly<Record<string, string>> = {
   "RULE-033":

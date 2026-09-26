@@ -1,114 +1,116 @@
 /**
- * Which of the dataset browser's format columns are shown — RULE-036's ten settings.
+ * The file list's columns: legacy's ten, in legacy's order, each shown by its RULE-036 setting.
  *
- * All ten were stored and read by nothing, so the table showed a column for every format the API
- * reported and a user could not hide one. On a folder whose images carry two of the seven formats,
- * five of the columns are a field of dots.
+ * Legacy's order is fixed (fast_file_manager.py:277-288): Name, the seven formats as NPZ OHE, NPZ
+ * CM, YOLO Det, YOLO Seg, COCO, VOC, CreateML, then Modified and Size. The list followed the API's
+ * load-priority order until 2026-09-26 (CONTROL_PARITY.md CP-63), which put YOLO Det last.
  *
  * THE MAPPING IS BY SUFFIX, NOT BY FORMAT NAME, because that is what legacy's settings are named
  * after and what the API's column list carries. `file_manager_show_npz` means the `.npz` column;
- * the format behind it is `NPZ`, and the two have agreed so far, but the setting was written
- * against the suffix and a rename of the format would not change which column a user hid.
+ * a rename of the format would not change which column a user hid.
  *
- * The IMAGE column has a setting too (`file_manager_show_name`) and is deliberately NOT honoured:
- * it holds the button that opens the image, so hiding it would leave a table nothing can be opened
- * from. Legacy lets you hide it and it is a trap there; this is one of the few places where
- * copying the behaviour would be copying a defect.
+ * NAME CAN BE HIDDEN, as legacy's column menu lets it be (fast_file_manager.py:1169, 406-414). It
+ * was always shown here until 2026-09-26; the owner asked for every feature to behave as legacy's.
  */
 
-/** Setting key by the suffix its column shows. */
-const BY_SUFFIX: Readonly<Record<string, string>> = {
-  ".npz": "file_manager_show_npz",
-  "_CM.npz": "file_manager_show_cm",
-  ".txt": "file_manager_show_txt",
-  "_seg.txt": "file_manager_show_seg",
-  "_coco.json": "file_manager_show_coco",
-  ".xml": "file_manager_show_voc",
-  "_createml.json": "file_manager_show_cml",
-};
-
+/** A status column as the API reports it: a format and the suffix its file carries. */
 export interface Column {
   readonly format: string;
   readonly suffix: string;
 }
 
-/**
- * Legacy's column names by the suffix each column shows (fast_file_manager.py:277-288, 450-458).
- * The list read ".npz", ".txt" and so on until 2026-09-26; the suffix is the header's tooltip now.
- */
-const LEGACY_NAME: Readonly<Record<string, string>> = {
-  ".npz": "NPZ OHE",
-  "_CM.npz": "NPZ CM",
-  ".txt": "YOLO Det",
-  "_seg.txt": "YOLO Seg",
-  "_coco.json": "COCO",
-  ".xml": "VOC",
-  "_createml.json": "CreateML",
-};
-
-/** What a column is called: legacy's name, or its suffix for a format legacy never had. */
-export function columnName(column: Column): string {
-  return LEGACY_NAME[column.suffix] ?? column.suffix;
+/** One column of the list. */
+export interface ListColumn {
+  /** "name", "modified", "size", or the format a status column shows. */
+  readonly id: string;
+  /** Legacy's header text. */
+  readonly title: string;
+  readonly kind: "name" | "format" | "modified" | "size";
+  /** The setting that shows it. None for a format legacy never had: that column is always shown. */
+  readonly setting?: string;
+  /** The suffix a status column's file carries, for its tooltip. */
+  readonly suffix?: string;
 }
 
+/** Legacy's seven status columns in its order, by the suffix each shows (fast_file_manager.py:277-288, 450-459). */
+const STATUS: readonly { readonly suffix: string; readonly title: string; readonly setting: string }[] = [
+  { suffix: ".npz", title: "NPZ OHE", setting: "file_manager_show_npz" },
+  { suffix: "_CM.npz", title: "NPZ CM", setting: "file_manager_show_cm" },
+  { suffix: ".txt", title: "YOLO Det", setting: "file_manager_show_txt" },
+  { suffix: "_seg.txt", title: "YOLO Seg", setting: "file_manager_show_seg" },
+  { suffix: "_coco.json", title: "COCO", setting: "file_manager_show_coco" },
+  { suffix: ".xml", title: "VOC", setting: "file_manager_show_voc" },
+  { suffix: "_createml.json", title: "CreateML", setting: "file_manager_show_cml" },
+];
+
 /**
- * The columns to render, in the API's order.
+ * Every column of the list, in legacy's order, whichever order the API reports its formats in.
  *
- * A column whose suffix nothing maps to is SHOWN. A new format added to the API without a setting
- * should appear rather than vanish: a user who cannot see a column does not know to look for the
- * switch that hides it.
+ * A format legacy never had goes after CreateML under its suffix, and has no setting: a column
+ * added to the API should appear rather than vanish, since a user who cannot see a column does not
+ * know to look for the switch that hides it.
  */
-export function visibleColumns(
-  columns: readonly Column[],
+export function listColumns(formats: readonly Column[]): readonly ListColumn[] {
+  const known = STATUS.flatMap((status): ListColumn[] => {
+    const column = formats.find((candidate) => candidate.suffix === status.suffix);
+    return column === undefined
+      ? []
+      : [{ id: column.format, title: status.title, kind: "format", setting: status.setting, suffix: column.suffix }];
+  });
+  const unknown = formats
+    .filter((column) => !STATUS.some((status) => status.suffix === column.suffix))
+    .map((column): ListColumn => ({ id: column.format, title: column.suffix, kind: "format", suffix: column.suffix }));
+  return [
+    { id: "name", title: "Name", kind: "name", setting: "file_manager_show_name" },
+    ...known,
+    ...unknown,
+    { id: "modified", title: "Modified", kind: "modified", setting: "file_manager_show_modified" },
+    { id: "size", title: "Size", kind: "size", setting: "file_manager_show_size" },
+  ];
+}
+
+/** The columns switched on. A missing setting is on; only `false` hides. */
+export function shownColumns(
+  columns: readonly ListColumn[],
   values: Readonly<Record<string, unknown>>,
-): readonly Column[] {
-  return columns.filter((column) => {
-    const key = BY_SUFFIX[column.suffix];
-    if (key === undefined) return true;
-    return values[key] !== false;
-  });
-}
-
-/** Every column the browser knows how to hide, for the control that hides them. */
-export function hideableColumns(columns: readonly Column[]): readonly (Column & { readonly setting: string })[] {
-  return columns.flatMap((column) => {
-    const setting = BY_SUFFIX[column.suffix];
-    return setting === undefined ? [] : [{ ...column, setting }];
-  });
+): readonly ListColumn[] {
+  return columns.filter((column) => column.setting === undefined || values[column.setting] !== false);
 }
 
 /**
- * A file size, as a person reads it — RULE-036's Size column.
- *
- * Binary units, which is what a file manager shows and what legacy's Qt view uses. One decimal
- * above a kilobyte and none below: "912 B" and "1.4 MB" are both what someone wants; "912.0 B" is
- * noise and "1 MB" hides the difference between 1.0 and 1.9.
+ * A file's size as legacy's list shows it (fast_file_manager.py:527-533): binary units and one
+ * decimal in every one of them, so "912.0 B" and "1.4 MB". Rounded as Python's `.1f` rounds, with
+ * an exact half going to the even tenth: 1280 bytes is "1.2 KB" there, where `toFixed` says 1.3.
  */
 export function formatSize(bytes: number | undefined): string {
   if (bytes === undefined) return "";
-  if (bytes < 1024) return `${bytes} B`;
-  const units = ["KB", "MB", "GB", "TB"];
-  let value = bytes / 1024;
-  let unit = 0;
-  while (value >= 1024 && unit < units.length - 1) {
-    value /= 1024;
-    unit += 1;
+  if (bytes < 0) return "-";
+  let divisor = 1;
+  for (const unit of ["B", "KB", "MB", "GB"]) {
+    if (bytes < 1024 * divisor) return `${tenths(bytes, divisor)} ${unit}`;
+    divisor *= 1024;
   }
-  return `${value.toFixed(1)} ${units[unit]}`;
+  return `${tenths(bytes, divisor)} TB`;
+}
+
+/** `bytes / divisor` to one decimal, in integers so an exact half is seen as one. */
+function tenths(bytes: number, divisor: number): string {
+  const scaled = bytes * 10;
+  let whole = Math.floor(scaled / divisor);
+  const rest = scaled - whole * divisor;
+  if (rest * 2 > divisor || (rest * 2 === divisor && whole % 2 === 1)) whole += 1;
+  return `${Math.floor(whole / 10)}.${whole % 10}`;
 }
 
 /**
- * A modified time, as a date a person can compare.
- *
- * The LOCALE's short date and time, because this column exists to answer "which of these did I
- * work on last" and a user compares those against their own clock. An unknown time is blank rather
- * than "unknown": a column of blanks reads as absent data, which it is, while a column of the word
- * "unknown" reads as an error.
+ * When a file was last written, as legacy's list shows it: local time as "%Y-%m-%d %H:%M", and "-"
+ * when the time could not be read (fast_file_manager.py:466-479). Blank when the listing was not
+ * asked for it.
  */
 export function formatModified(modified: number | null | undefined): string {
-  if (modified === undefined || modified === null) return "";
-  return new Date(modified).toLocaleString(undefined, {
-    dateStyle: "short",
-    timeStyle: "short",
-  });
+  if (modified === undefined) return "";
+  if (modified === null || modified <= 0) return "-";
+  const at = new Date(modified);
+  const two = (value: number): string => String(value).padStart(2, "0");
+  return `${at.getFullYear()}-${two(at.getMonth() + 1)}-${two(at.getDate())} ${two(at.getHours())}:${two(at.getMinutes())}`;
 }

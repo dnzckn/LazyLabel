@@ -32,7 +32,7 @@ import { useWorkspace } from "../workspace/WorkspaceProvider.jsx";
 
 import type { AnnotationsResult, ApiClient } from "../api/client.js";
 import { useSettings } from "../settings/SettingsProvider.jsx";
-import { columnName, formatModified, formatSize, hideableColumns, visibleColumns } from "./columns.js";
+import { formatModified, formatSize, listColumns, shownColumns, type ListColumn } from "./columns.js";
 import { SORT_ORDERS, needsDetails, sortImages } from "./sorting.js";
 
 export interface DatasetBrowserProps {
@@ -282,9 +282,10 @@ function ColumnedTable({
             ? "dataset__row--range"
             : undefined;
   const { settings, save } = useSettings();
-  // Filtered once: the header and every row must show the same columns, and two filters is two
-  // chances for them to disagree by one.
-  const shown = visibleColumns(listing.columns, settings.values);
+  // Legacy's ten columns in legacy's order (CP-63). Filtered once: the header and every row must
+  // show the same columns, and two filters is two chances for them to disagree by one.
+  const columns = listColumns(listing.columns);
+  const shown = shownColumns(columns, settings.values);
 
   const rawOrder = Number(settings.values["file_manager_sort_order"]);
   const order = Number.isInteger(rawOrder) ? rawOrder : 0;
@@ -322,8 +323,6 @@ function ColumnedTable({
     return { rows: reordered, inTimelineOrder: moved.length > 0 };
   }, [following, listing.images, needle, order, range]);
   useEffect(() => onShown?.(rows), [onShown, rows]);
-  const showModified = settings.values["file_manager_show_modified"] !== false;
-  const showSize = settings.values["file_manager_show_size"] !== false;
 
   return (
     <>
@@ -371,44 +370,27 @@ function ColumnedTable({
           </summary>
           {/* A dropdown, as legacy's 30px column menu is, so opening it does not push the list. */}
           <div className="dataset__columns-menu">
-          {/* The two detail columns sit with the format ones: to a user they are all "columns",
-              and separating them by what they cost the server would be exposing an implementation
-              detail as a category. */}
-          {([
-            { suffix: "Modified", setting: "file_manager_show_modified" },
-            { suffix: "Size", setting: "file_manager_show_size" },
-          ] as const).map((column) => (
-            <label key={column.setting}>
-              <input
-                type="checkbox"
-                checked={settings.values[column.setting] !== false}
-                aria-label={`Show the ${column.suffix} column`}
-                onChange={(event) =>
-                  void save({
-                    ...settings,
-                    values: { ...settings.values, [column.setting]: event.target.checked },
-                  })
-                }
-              />{" "}
-              {column.suffix}
-            </label>
-          ))}
-          {hideableColumns(listing.columns).map((column) => (
-            <label key={column.format} title={column.suffix}>
-              <input
-                type="checkbox"
-                checked={settings.values[column.setting] !== false}
-                aria-label={`Show the ${columnName(column)} column`}
-                onChange={(event) =>
-                  void save({
-                    ...settings,
-                    values: { ...settings.values, [column.setting]: event.target.checked },
-                  })
-                }
-              />{" "}
-              {columnName(column)}
-            </label>
-          ))}
+          {/* Legacy's ten, in its order, Name among them (fast_file_manager.py:1168-1178). */}
+          {columns.flatMap((column) => {
+            const setting = column.setting;
+            if (setting === undefined) return [];
+            return [
+              <label key={column.id} title={column.suffix}>
+                <input
+                  type="checkbox"
+                  checked={settings.values[setting] !== false}
+                  aria-label={`Show the ${column.title} column`}
+                  onChange={(event) =>
+                    void save({
+                      ...settings,
+                      values: { ...settings.values, [setting]: event.target.checked },
+                    })
+                  }
+                />{" "}
+                {column.title}
+              </label>,
+            ];
+          })}
           </div>
         </details>
         </div>
@@ -418,17 +400,11 @@ function ColumnedTable({
             <tr>
               {/* Legacy's column names (fast_file_manager.py:277-288), each format's suffix in its
                   tooltip. */}
-              <th scope="col">Name</th>
               {shown.map((column) => (
-                <th scope="col" key={column.format} title={column.suffix}>
-                  {columnName(column)}
+                <th scope="col" key={column.id} title={column.suffix}>
+                  {column.title}
                 </th>
               ))}
-              {/* RULE-036's other two columns. They are the reason the listing can be asked for
-                  details at all: each costs a stat per image on the server, so they are fetched
-                  only while one of them is switched on or a sort needs them. */}
-              {showModified && <th scope="col">Modified</th>}
-              {showSize && <th scope="col">Size</th>}
             </tr>
           </thead>
           <tbody>
@@ -438,48 +414,74 @@ function ColumnedTable({
                 aria-selected={openState?.image.key === image.key}
                 className={rangeClass(image.key)}
               >
-                <th scope="row">
-                  <button type="button" onClick={() => openImage(image)}>
-                    {image.name}
-                  </button>
-                  {image.sharesSidecarsWith.length > 0 && (
-                    <span role="status" className="collision">
-                      {" "}
-                      shares annotation files with {image.sharesSidecarsWith.join(", ")}
-                    </span>
-                  )}
-                </th>
                 {shown.map((column) => (
-                  <td key={column.format}>
-                    <span aria-label={image.sidecars[column.format] ? "present" : "absent"}>
-                      {image.sidecars[column.format] ? "✓" : ""}
-                    </span>
-                  </td>
+                  <Cell key={column.id} column={column} image={image} open={() => openImage(image)} />
                 ))}
-                {showModified && <td className="dataset__detail">{formatModified(image.modified)}</td>}
-                {showSize && <td className="dataset__detail">{formatSize(image.size)}</td>}
               </tr>
             ))}
           </tbody>
-          {/* Legacy's totals row: how many images, in its words (fast_file_manager.py:954-955), and
-              how many have each format. It said how many were already annotated until 2026-09-26;
-              the per-format totals beside it say that. */}
+          {/* Legacy's totals row: how many images, in its words, under Name, and how many have each
+              format, blank for none (fast_file_manager.py:948-959). */}
           <tfoot>
             <tr>
-              <th scope="row">
-                {listing.images.length} image{listing.images.length === 1 ? "" : "s"} in{" "}
-                {folderName(listing.folder)}
-              </th>
-              {shown.map((column) => (
-                <td key={column.format}>
-                  {listing.images.filter((image) => image.sidecars[column.format]).length}
-                </td>
-              ))}
-              {showModified && <td />}
-              {showSize && <td />}
+              {shown.map((column) => {
+                if (column.kind === "name") {
+                  return (
+                    <th scope="row" key={column.id}>
+                      {listing.images.length} image{listing.images.length === 1 ? "" : "s"} in{" "}
+                      {folderName(listing.folder)}
+                    </th>
+                  );
+                }
+                const count =
+                  column.kind === "format"
+                    ? listing.images.filter((image) => image.sidecars[column.id]).length
+                    : 0;
+                return <td key={column.id}>{count > 0 ? count : ""}</td>;
+              })}
             </tr>
           </tfoot>
         </table>
     </>
   );
+}
+
+/** One row's cell in one column, as legacy's model shows it (fast_file_manager.py:461-500). */
+function Cell({
+  column,
+  image,
+  open,
+}: {
+  readonly column: ListColumn;
+  readonly image: WireDatasetImage;
+  readonly open: () => void;
+}): ReactNode {
+  switch (column.kind) {
+    case "name":
+      return (
+        <th scope="row">
+          <button type="button" onClick={open}>
+            {image.name}
+          </button>
+          {image.sharesSidecarsWith.length > 0 && (
+            <span role="status" className="collision">
+              {" "}
+              shares annotation files with {image.sharesSidecarsWith.join(", ")}
+            </span>
+          )}
+        </th>
+      );
+    case "format":
+      return (
+        <td>
+          <span aria-label={image.sidecars[column.id] ? "present" : "absent"}>
+            {image.sidecars[column.id] ? "✓" : ""}
+          </span>
+        </td>
+      );
+    case "modified":
+      return <td className="dataset__detail">{formatModified(image.modified)}</td>;
+    case "size":
+      return <td className="dataset__detail">{formatSize(image.size)}</td>;
+  }
 }
