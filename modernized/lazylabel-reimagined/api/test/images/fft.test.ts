@@ -13,6 +13,7 @@ import {
   bandWeights,
   frequencyDistance,
   normalizeToByte,
+  quantize,
 } from "../../src/images/fft.js";
 
 const at = (d: Float64Array, width: number, y: number, x: number) => d[y * width + x]!;
@@ -123,5 +124,23 @@ describe("coming back to 8 bits", () => {
 
   it("copes with an empty plane", () => {
     expect(normalizeToByte(new Float64Array()).length).toBe(0);
+  });
+});
+
+describe("the intensity levels", () => {
+  it("put a value ON a threshold in the level BELOW it, as legacy's `<=` does", () => {
+    // _apply_intensity_thresholding (fft_threshold_widget.py:476-494): the first level is
+    // `value <= t0` and the rest `> t`. One threshold at 100: 100 is black, 101 white. The channel
+    // threshold's banding goes the other way, and posterizing with it put 100 at 255.
+    expect([99, 100, 101].map((v) => quantize(v, [100]))).toEqual([0, 0, 255]);
+  });
+
+  it("spread N + 1 levels evenly, truncated as numpy's assignment into uint8 truncates", () => {
+    // Two thresholds: 0, 127.5 -> 127, 255.
+    expect([60, 61, 180, 181].map((v) => quantize(v, [60, 180]))).toEqual([0, 127, 127, 255]);
+  });
+
+  it("leave an empty level between duplicates, as legacy's masks do", () => {
+    expect([127, 128].map((v) => quantize(v, [127, 127]))).toEqual([0, 255]);
   });
 });

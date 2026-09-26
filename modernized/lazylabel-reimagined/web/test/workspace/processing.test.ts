@@ -145,4 +145,18 @@ describe("the frequency filter's parameters", () => {
 
     expect(processingQuery({ ...NO_PROCESSING, frequencies: [1000], crop })).toContain("crop=");
   });
+
+  it("carries legacy's box on its own, which changes the image with no thresholds", () => {
+    // fft_threshold_widget.py:410-453: the transform and back, stretched to 0..255.
+    expect(processingQuery({ ...NO_PROCESSING, fft: true })).toBe("?fft=1");
+    expect(processingQuery({ ...NO_PROCESSING, fft: true, crop: { x1: 1, y1: 2, x2: 3, y2: 4 } })).toBe(
+      "?fft=1&crop=1%2C2%2C3%2C4",
+    );
+  });
+
+  it("keeps a cutoff's fraction, as the frequency bar leaves it", () => {
+    expect(processingQuery({ ...NO_PROCESSING, fft: true, frequencies: [3906.25, 507.8125] })).toBe(
+      "?fft=1&frequencies=507.8125%2C3906.25",
+    );
+  });
 });

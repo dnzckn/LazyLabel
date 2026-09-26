@@ -307,4 +307,64 @@ describe("reading the frequency parameters", () => {
   it("counts frequency parameters as something to do", () => {
     expect(isEmpty(processingFromQuery(new URLSearchParams("frequencies=1000")))).toBe(false);
   });
+
+  it("reads legacy's box, which is something to do on its own", () => {
+    // Ticked with no thresholds, legacy's filter still transforms and stretches
+    // (fft_threshold_widget.py:410-453).
+    const processing = processingFromQuery(new URLSearchParams("fft=1"));
+    expect(processing.fft).toBe(true);
+    expect(isEmpty(processing)).toBe(false);
+    expect(processingFromQuery(new URLSearchParams("")).fft).toBe(false);
+    expect(() => processingFromQuery(new URLSearchParams("fft=yes"))).toThrow(/fft must be 1/);
+  });
+
+  it("keeps a cutoff's fraction, as legacy's frequency bar leaves it", () => {
+    // x_to_value keeps the fraction for a 0..10000 bar (channel_threshold_widget.py:73-79).
+    expect(processingFromQuery(new URLSearchParams("frequencies=507.8125,3906.25")).frequencies).toEqual([507.8125, 3906.25]);
+    expect(() => processingFromQuery(new URLSearchParams("frequencies=12,,4"))).toThrow(/between 0 and 10000/);
+  });
+});
+
+describe("the filter on a crop", () => {
+  const grayFrame = (width: number, height: number) => ({ width, height, sourceChannels: 1 });
+  /** An 8x8 gray plane with structure at more than one frequency, as three equal channels. */
+  const structured = (): Uint8Array =>
+    Uint8Array.from({ length: 8 * 8 * 3 }, (_, i) => {
+      const pixel = Math.floor(i / 3);
+      const x = pixel % 8;
+      const y = Math.floor(pixel / 8);
+      return Math.round(128 + 60 * Math.sin((2 * Math.PI * x) / 8) + 20 * Math.sin((2 * Math.PI * (x + y)) / 3));
+    });
+
+  it("filters only the crop and writes it back, leaving the rest as it was", () => {
+    // _apply_fft_with_crop (image_adjustment_manager.py:655-663).
+    const data = structured();
+    const before = Uint8Array.from(data);
+
+    const out = applyFrequencyFilter(data, grayFrame(8, 8), { fft: true, frequencies: [1000], crop: [2, 2, 6, 6] });
+
+    expect(out).toBeNull();
+    let insideChanged = false;
+    for (let y = 0; y < 8; y += 1) {
+      for (let x = 0; x < 8; x += 1) {
+        const at = (y * 8 + x) * 3;
+        const inside = x >= 2 && x < 6 && y >= 2 && y < 6;
+        if (!inside) expect(data[at]).toBe(before[at]);
+        else if (data[at] !== before[at]) insideChanged = true;
+      }
+    }
+    expect(insideChanged).toBe(true);
+  });
+
+  it("writes 8-bit results into a 16-bit image as they are, as legacy's does", () => {
+    // Legacy assigns the filter's 0..255 into the 16-bit image and divides by 256 afterwards, so
+    // the crop comes out black; `legacy-fft-pipeline.json` holds the whole picture.
+    const wide = Uint16Array.from(structured(), (value) => value * 257);
+
+    applyFrequencyFilter(wide, grayFrame(8, 8), { fft: true, crop: [2, 2, 6, 6] });
+
+    for (let y = 2; y < 6; y += 1) {
+      for (let x = 2; x < 6; x += 1) expect(wide[(y * 8 + x) * 3]).toBeLessThanOrEqual(255);
+    }
+  });
 });

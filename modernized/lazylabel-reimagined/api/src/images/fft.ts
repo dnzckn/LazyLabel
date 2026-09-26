@@ -8,11 +8,17 @@
  * same time.
  *
  * `test/fixtures/goldens/legacy-fft.json` holds the end-to-end goldens, including two odd-sized cases that
- * distinguish legacy's `fftshift`-instead-of-`ifftshift` from the correct inverse.
+ * distinguish legacy's `fftshift`-instead-of-`ifftshift` from the correct inverse, and
+ * `legacy-fft-pipeline.json` legacy's own widget in its own pipeline.
+ *
+ * ONE THING IS NOT BIT FOR BIT, AND CANNOT BE. Where the filtered value lands within rounding noise
+ * of a whole level -- the box ticked with no cutoffs on an even-sized image, where the filter is the
+ * image transformed and back -- truncation follows the sign of the noise. Legacy's noise is scipy's
+ * pocketfft with twiddle factors from the C runtime's cos and sin, which disagree with V8's on about
+ * 4% of pocketfft's twiddle arguments, so a pixel there can come out one level apart.
  */
 
 import { dft2d, fftShift2d } from "./dft.js";
-import { posterize } from "./imageProcessing.js";
 
 /** The slider's range: 0..10000, giving 0.01% steps (`fft_threshold_widget.py:283-330`). */
 export const FREQUENCY_SLIDER_MAX = 10000;
@@ -159,11 +165,26 @@ export function filterFrequencies(
 
   const bytes = normalizeToByte(backRe);
 
-  // The intensity levels use the same banding as a channel threshold: N thresholds make N+1
-  // levels, `<=` for the first and `>` for the rest, each mapped to `level / N x 255` truncated.
   if (intensityThresholds.length > 0) {
-    for (let i = 0; i < bytes.length; i += 1) bytes[i] = posterize(bytes[i]!, intensityThresholds);
+    const sorted = [...intensityThresholds].sort((a, b) => a - b);
+    for (let i = 0; i < bytes.length; i += 1) bytes[i] = quantize(bytes[i]!, sorted);
   }
 
   return bytes;
+}
+
+/**
+ * The intensity levels (`_apply_intensity_thresholding`, lines 461-496): N sorted thresholds make
+ * N + 1 levels, `<=` for the first and `>` for the rest, so a value EQUAL to a threshold is in the
+ * level BELOW it, and level `i` becomes `i / N x 255`, truncated as numpy's assignment into a uint8
+ * array truncates.
+ *
+ * NOT the channel threshold's banding, whose bounds go the other way (a value equal to a marker is
+ * in the band ABOVE it, `channel_threshold_widget.py:548-566`). Posterizing with that one put every
+ * pixel exactly on a threshold a whole level too high: 255 where legacy has 0 for one threshold.
+ */
+export function quantize(value: number, sortedThresholds: readonly number[]): number {
+  let level = 0;
+  for (const threshold of sortedThresholds) if (value > threshold) level += 1;
+  return Math.trunc((level / sortedThresholds.length) * 255);
 }

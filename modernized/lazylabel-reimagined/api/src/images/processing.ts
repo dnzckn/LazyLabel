@@ -80,9 +80,18 @@ export interface Processing {
   readonly channels?: ChannelMarkers;
   /** `[x1, y1, x2, y2]`, the same inclusive-clamped corners RULE-018 stores. */
   readonly crop?: readonly [number, number, number, number] | null;
-  /** RULE-030's radial cutoffs, 0..10000. Empty for no frequency filtering. */
+  /**
+   * Legacy's "Enable FFT Frequency Thresholding" box (`fft_threshold_widget.py:170-172, 328-330`).
+   * Ticked, the filter runs even with no thresholds: the transform and back, then the plane
+   * stretched to 0..255 (lines 410-453), which is not the image it started as.
+   */
+  readonly fft?: boolean;
+  /**
+   * RULE-030's radial cutoffs, 0..10000, and FRACTIONAL: legacy's frequency bar keeps where on the
+   * track a marker sits, unrounded (`channel_threshold_widget.py:73-79`). Any given turns the filter on.
+   */
   readonly frequencies?: readonly number[];
-  /** RULE-030's posterization of the filtered result, 0..255. */
+  /** RULE-030's posterization of the filtered result, 0..255. Any given turns the filter on. */
   readonly intensities?: readonly number[];
 }
 
@@ -122,33 +131,51 @@ export function isEmpty(processing: Processing | undefined): boolean {
   return (processing.rescale == null || processing.rescale.max <= processing.rescale.min)
     && (processing.preset ?? null) === null
     && !anyMarkers
-    && (processing.frequencies ?? []).length === 0
-    && (processing.intensities ?? []).length === 0;
+    && !frequencyFiltering(processing);
+}
+
+/** Whether the FFT filter runs: legacy's box ticked, or thresholds asked for. */
+function frequencyFiltering(processing: Processing): boolean {
+  return processing.fft === true
+    || (processing.frequencies ?? []).length > 0
+    || (processing.intensities ?? []).length > 0;
 }
 
 /**
- * RULE-030's frequency filter, the third step of RULE-032's order.
+ * RULE-030's frequency filter, the third step of RULE-032's order, on the crop region.
  *
- * Returns a new 8-BIT interleaved buffer when it ran, or null when it did not. Eight bits whatever
- * the source was, because the rule says so: the filtered plane is min-max stretched to 0..255, and
- * there is no wider result to keep.
+ * Legacy runs it on the crop when there is one and writes the result back where the region was,
+ * into the image as it is, then converts to 8 bits (`image_adjustment_manager.py:402-407, 655-663`).
+ * The filter's output is 8-bit whatever the source: the plane is stretched to 0..255.
  *
- * GRAYSCALE ONLY, AND THE TEST IS ON THE DATA. The rule card says "2-D or exactly equal-channel
- * images", so an RGB file whose three channels happen to be identical — a grayscale scan saved as
- * colour, which is extremely common — IS processed. Testing `sourceChannels` instead would refuse
- * exactly those, and they are the images most likely to want this.
+ * - WITHOUT A CROP the whole image is the filter's output, so this returns a new 8-bit interleaved
+ *   buffer, and the 16-bit conversion must not run after it.
+ * - WITH ONE the region is written back into `samples` in place and this returns null, so the
+ *   conversion runs over the whole image as legacy's does. On a 16-bit image that divides the
+ *   region's 0..255 by 256 as well, and the region comes out black. That is legacy's arithmetic,
+ *   reproduced as the rest of RULE-024 is; it is recorded as a difference for the owner.
+ *
+ * GRAYSCALE ONLY, AND THE TEST IS ON THE DATA: an image whose three channels agree, which is what a
+ * grayscale source is once RULE-024 has made it its first channel. Legacy's box can be ticked on a
+ * colour image, and does nothing there (`fft_threshold_widget.py:328-330`).
  */
 export function applyFrequencyFilter(
   samples: Uint8Array | Uint16Array,
   frame: Frame,
   processing: Processing,
 ): Uint8Array | null {
+  if (!frequencyFiltering(processing)) return null;
+  if (!channelsAreEqual(samples)) return null;
   const frequencies = processing.frequencies ?? [];
   const intensities = processing.intensities ?? [];
-  if (frequencies.length === 0 && intensities.length === 0) return null;
-  if (!channelsAreEqual(samples)) return null;
 
-  const pixels = frame.width * frame.height;
+  const crop = processing.crop ?? null;
+  const [x1, y1, x2, y2] = clampRegion(frame, crop);
+  const width = x2 - x1;
+  const height = y2 - y1;
+  if (width <= 0 || height <= 0) return null;
+
+  const pixels = width * height;
   if (pixels > MAX_FFT_PIXELS) {
     throw new ImageTooLargeError(
       `the frequency filter is limited to ${MAX_FFT_PIXELS.toLocaleString()} pixels and this image `
@@ -158,21 +185,34 @@ export function applyFrequencyFilter(
   }
 
   // One plane out of the interleaved buffer. The three are equal, so any of them is the image.
-  const plane = samples instanceof Uint16Array
-    ? new Uint16Array(pixels)
-    : new Uint8Array(pixels);
-  for (let i = 0; i < pixels; i += 1) plane[i] = samples[i * 3]!;
-
-  const filtered = filterFrequencies(plane, frame.height, frame.width, frequencies, intensities);
-
-  const out = new Uint8Array(pixels * 3);
-  for (let i = 0; i < pixels; i += 1) {
-    const value = filtered[i]!;
-    out[i * 3] = value;
-    out[i * 3 + 1] = value;
-    out[i * 3 + 2] = value;
+  const plane = samples instanceof Uint16Array ? new Uint16Array(pixels) : new Uint8Array(pixels);
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) plane[y * width + x] = samples[((y + y1) * frame.width + (x + x1)) * 3]!;
   }
-  return out;
+
+  const filtered = filterFrequencies(plane, height, width, frequencies, intensities);
+
+  if (crop === null) {
+    const out = new Uint8Array(pixels * 3);
+    for (let i = 0; i < pixels; i += 1) {
+      const value = filtered[i]!;
+      out[i * 3] = value;
+      out[i * 3 + 1] = value;
+      out[i * 3 + 2] = value;
+    }
+    return out;
+  }
+
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const value = filtered[y * width + x]!;
+      const at = ((y + y1) * frame.width + (x + x1)) * 3;
+      samples[at] = value;
+      samples[at + 1] = value;
+      samples[at + 2] = value;
+    }
+  }
+  return null;
 }
 
 /** Whether every pixel's three channels agree, which is what makes an RGB buffer a grayscale image. */
@@ -308,8 +348,11 @@ export function processingFromQuery(query: URLSearchParams): Processing {
     channels[name] = values;
   }
 
-  const frequencies = numberList(query, "frequencies", 0, 10_000);
+  const frequencies = decimalList(query, "frequencies", 0, 10_000);
   const intensities = numberList(query, "intensities", 0, 255);
+  const fftRaw = query.get("fft");
+  if (fftRaw !== null && fftRaw !== "" && fftRaw !== "1") throw new Error("fft must be 1, or left out");
+  const fft = fftRaw === "1";
 
   const cropRaw = query.get("crop");
   let crop: readonly [number, number, number, number] | null = null;
@@ -334,6 +377,7 @@ export function processingFromQuery(query: URLSearchParams): Processing {
     rescale: rescaleMin === null || rescaleMax === null ? null : { min: rescaleMin, max: rescaleMax },
     channels,
     crop,
+    fft,
     frequencies,
     intensities,
   };
@@ -391,6 +435,28 @@ function numberList(
   const values = raw.split(",").map((part) => Number.parseInt(part.trim(), 10));
   if (values.some((value) => !Number.isInteger(value) || value < low || value > high)) {
     throw new Error(`${name} must be a comma-separated list of whole numbers between ${low} and ${high}`);
+  }
+  return values;
+}
+
+/**
+ * A comma-separated list of numbers within bounds, fractions allowed, or [] when absent.
+ *
+ * For the frequency cutoffs, which legacy keeps as the fraction of the track a marker sits at
+ * (`x_to_value`, `channel_threshold_widget.py:68-79`): 3906.25, not 3906. Rounding one moves a band
+ * edge, and on a large image that moves pixels between bands.
+ */
+function decimalList(
+  query: URLSearchParams,
+  name: string,
+  low: number,
+  high: number,
+): readonly number[] {
+  const raw = query.get(name);
+  if (raw === null || raw === "") return [];
+  const values = raw.split(",").map((part) => (part.trim() === "" ? Number.NaN : Number(part.trim())));
+  if (values.some((value) => !Number.isFinite(value) || value < low || value > high)) {
+    throw new Error(`${name} must be a comma-separated list of numbers between ${low} and ${high}`);
   }
   return values;
 }

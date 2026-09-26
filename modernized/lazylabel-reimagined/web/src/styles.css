@@ -1695,6 +1695,64 @@ fieldset input[type="text"] {
   stroke-width: 2px;
 }
 
+/* The FFT section's bars paint in fixed colours whatever the theme: white text, a dark track, grey
+   handle rules (fft_threshold_widget.py:37-108). */
+.threshold-bar--fft .threshold-bar__text {
+  fill: rgb(255 255 255);
+}
+
+.threshold-bar--fft .threshold-bar__track {
+  fill: rgb(50 50 50);
+  stroke: rgb(100 100 100);
+}
+
+.threshold-bar--fft .threshold-bar__handle {
+  fill: rgb(255 255 255);
+  stroke: rgb(150 150 150);
+  stroke-width: 1px;
+}
+
+.threshold-bar--fft .threshold-bar__handle--dragging {
+  fill: rgb(255 255 100);
+  stroke: rgb(200 200 50);
+  stroke-width: 2px;
+}
+
+/* FFT Threshold: legacy's group box of the enable box, the status line, two labelled bars and one
+   line of instructions, 4 px apart (fft_threshold_widget.py:163-219). */
+.fft {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+}
+
+.fft__enable {
+  display: flex;
+  align-items: center;
+  margin: 0;
+}
+
+/* Two lines each, bold 10px (lines 180-182, 194-198). */
+.fft__label {
+  font-weight: bold;
+  font-size: 10px;
+  white-space: pre-line;
+}
+
+.fft__label--frequency {
+  margin-top: 2px;
+}
+
+.fft__label--intensity {
+  margin-top: 5px;
+}
+
+.fft__instructions {
+  margin-top: 2px;
+  font-size: 8px;
+}
+
 /* Where in the dataset we are, and the folders below it. */
 .crumbs {
   margin-bottom: 0.3rem;

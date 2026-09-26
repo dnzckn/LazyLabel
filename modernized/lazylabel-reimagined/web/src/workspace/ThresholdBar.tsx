@@ -27,8 +27,9 @@ import { useLayoutEffect, useRef, useState, type PointerEvent, type ReactNode } 
 import {
   BAR_HEIGHT,
   BAR_MIN_WIDTH,
-  CHANNEL_COLOURS,
   bandsOf,
+  colourOf,
+  fftLabelsOf,
   handleAt,
   labelsOf,
   sameMarkers,
@@ -36,13 +37,15 @@ import {
   valueToX,
   withMarkerAt,
   withMarkerMoved,
-  type BarChannel,
 } from "./thresholdBar.js";
 
 export interface ThresholdBarProps {
-  /** Legacy's name for the channel, drawn at the bar's top left and choosing its colour. */
-  readonly channel: BarChannel;
-  /** 256 for an 8-bit image, 65536 for 16-bit. */
+  /**
+   * Legacy's name for the bar, drawn at its top left and choosing its colour: a channel's, or
+   * "Frequency Bands" and "Intensity Levels" for the FFT section's two, which are drawn grey.
+   */
+  readonly channel: string;
+  /** 256 for an 8-bit image, 65536 for 16-bit; 10000 and 255 for the FFT section's bars. */
   readonly maximum: number;
   /** The markers in LIST order, which a drag can leave unsorted, as legacy's list can be. */
   readonly markers: readonly number[];
@@ -50,6 +53,14 @@ export interface ThresholdBarProps {
   readonly enabled: boolean;
   /** A new list, after a double-click, a right-click, or when a dragged handle is let go. */
   readonly onChange: (markers: number[]) => void;
+  /**
+   * `fft` is legacy's `FFTThresholdSlider` (`fft_threshold_widget.py:24-139`): the same bar with its
+   * own paint -- dark colours whatever the theme, a percent or a whole level under each handle, and
+   * no spreading of crowded labels.
+   */
+  readonly variant?: "channel" | "fft";
+  /** Legacy's tooltip for the bar, where it has one. */
+  readonly title?: string;
 }
 
 interface Drag {
@@ -58,7 +69,15 @@ interface Drag {
   live: number[];
 }
 
-export function ThresholdBar({ channel, maximum, markers, enabled, onChange }: ThresholdBarProps): ReactNode {
+export function ThresholdBar({
+  channel,
+  maximum,
+  markers,
+  enabled,
+  onChange,
+  variant = "channel",
+  title,
+}: ThresholdBarProps): ReactNode {
   const box = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(BAR_MIN_WIDTH);
   // The drag itself lives in a ref, so the capture-lost event that follows a release sees that the
@@ -121,15 +140,23 @@ export function ThresholdBar({ channel, maximum, markers, enabled, onChange }: T
 
   const track = trackOf(width);
   const shown = live?.markers ?? markers;
-  const [red, green, blue] = CHANNEL_COLOURS[channel];
+  const [red, green, blue] = colourOf(channel);
+  const labels = variant === "fft" ? fftLabelsOf(shown, maximum, track) : labelsOf(shown, maximum, track);
 
   return (
     <div
       ref={box}
-      className={live === null ? "threshold-bar" : "threshold-bar threshold-bar--dragging"}
+      className={[
+        "threshold-bar",
+        variant === "fft" ? "threshold-bar--fft" : null,
+        live === null ? null : "threshold-bar--dragging",
+      ]
+        .filter((name) => name !== null)
+        .join(" ")}
       role="group"
       aria-label={`${channel} threshold`}
       aria-disabled={!enabled}
+      title={title}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
@@ -194,7 +221,7 @@ export function ThresholdBar({ channel, maximum, markers, enabled, onChange }: T
             ry={3}
           />
         ))}
-        {labelsOf(shown, maximum, track).map((label, index) => (
+        {labels.map((label, index) => (
           <text key={`label-${index}`} className="threshold-bar__text" x={label.x} y={label.y}>
             {label.text}
           </text>

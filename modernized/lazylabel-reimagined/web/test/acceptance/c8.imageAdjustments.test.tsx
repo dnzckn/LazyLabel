@@ -206,13 +206,28 @@ describe("C8: rescale and channel thresholds, which run on the server", () => {
     expect(screen.getByText("RGB image — rescale disabled")).toBeTruthy();
   });
 
-  it("puts a frequency cutoff on it (RULE-030)", async () => {
-    const { pixelsUrl } = await openImage();
-    await openPanel("FFT Threshold");
+  it("puts the FFT box and a frequency cutoff on it (RULE-030)", async () => {
+    // jsdom lays nothing out: the bar is given 296 px, a 256 px track from x=20.
+    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(
+      () =>
+        ({ x: 0, y: 0, left: 0, top: 0, width: 296, height: 60, right: 296, bottom: 60, toJSON: () => ({}) }) as DOMRect,
+    );
+    try {
+      const { pixelsUrl } = await openImage();
+      await openPanel("FFT Threshold");
 
-    fireEvent.change(screen.getByLabelText("Frequency cutoff"), { target: { value: "1000" } });
+      fireEvent.click(screen.getByRole("checkbox", { name: "Enable FFT Frequency Thresholding" }));
+      await waitFor(() => expect(lastQuery(pixelsUrl)).toBe("?fft=1"));
+      fireEvent.doubleClick(screen.getByRole("group", { name: "Frequency Bands threshold" }), {
+        clientX: 148,
+        clientY: 30,
+        button: 0,
+      });
 
-    await waitFor(() => expect(lastQuery(pixelsUrl)).toBe("?frequencies=1000"));
+      await waitFor(() => expect(lastQuery(pixelsUrl)).toBe("?fft=1&frequencies=5000"));
+    } finally {
+      vi.restoreAllMocks();
+    }
   });
 });
 

@@ -61,12 +61,15 @@ export function valueToX(value: number, maximum: number, track: Track): number {
 }
 
 /**
- * `x_to_value` (lines 68-79): clamped to the track, then truncated to a whole level. A channel
- * bar's maximum is 256 or 65536, both of which legacy truncates.
+ * `x_to_value` (lines 68-79): clamped to the track, then truncated to a whole level -- for a bar
+ * whose maximum is at most 256, or 65536, which is every channel bar and the FFT's intensity bar
+ * (255). Any other maximum keeps the fraction: the FFT's frequency bar, 0 to 10000, leaves a
+ * cutoff at 3906.25 where the track says it is.
  */
 export function xToValue(x: number, maximum: number, track: Track): number {
   const ratio = Math.max(0, Math.min(1, (x - track.left) / track.width));
-  return Math.trunc(ratio * maximum);
+  const value = ratio * maximum;
+  return maximum <= 256 || maximum === 65536 ? Math.trunc(value) : value;
 }
 
 /**
@@ -189,6 +192,35 @@ export function labelsOf(markers: readonly number[], maximum: number, track: Tra
 
   const baseline = track.top + track.height - 1 + 15;
   return adjusted.map(({ x, text }) => ({ x: Math.trunc(x - 15), y: baseline, text }));
+}
+
+/**
+ * The FFT section's labels (`fft_threshold_widget.py:110-119`): under each handle in LIST order,
+ * `drawText(x - 15, bottom + 15)`, with none of the channel bar's spreading apart. The frequency
+ * bar writes a percent, `round(value / 100)` as Python rounds, to even on an exact half; the
+ * intensity bar writes the whole level.
+ */
+export function fftLabelsOf(markers: readonly number[], maximum: number, track: Track): Label[] {
+  const baseline = track.top + track.height - 1 + 15;
+  return markers.map((value) => ({
+    x: valueToX(value, maximum, track) - 15,
+    y: baseline,
+    text: maximum === 10000 ? `${roundHalfToEven(value / 100)}%` : String(Math.trunc(value)),
+  }));
+}
+
+/** Python's `round` of a float: to nearest, ties to even. */
+function roundHalfToEven(value: number): number {
+  const floor = Math.floor(value);
+  const fraction = value - floor;
+  if (fraction > 0.5) return floor + 1;
+  if (fraction < 0.5) return floor;
+  return floor % 2 === 0 ? floor : floor + 1;
+}
+
+/** Legacy's colour for a bar: its channel's, or (150, 150, 150) for any other name (lines 53-55). */
+export function colourOf(name: string): readonly [number, number, number] {
+  return (CHANNEL_COLOURS as Readonly<Record<string, readonly [number, number, number]>>)[name] ?? [150, 150, 150];
 }
 
 /** Whether two marker lists are the same list, order included. */

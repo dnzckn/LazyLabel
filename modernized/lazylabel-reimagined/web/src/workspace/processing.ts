@@ -70,9 +70,14 @@ export interface ImageProcessing {
    */
   readonly enabled?: Readonly<Partial<Record<Channel, boolean>>>;
   readonly crop: Crop | null;
-  /** RULE-030's radial cutoffs, 0..10000. Empty for no frequency filtering. */
+  /**
+   * Legacy's "Enable FFT Frequency Thresholding" box (`fft_threshold_widget.py:170-172`). Ticked,
+   * the filter runs even with no thresholds; unticking it clears both lists (lines 236-251).
+   */
+  readonly fft?: boolean;
+  /** RULE-030's radial cutoffs, 0..10000, fractions kept as the bar leaves them. */
   readonly frequencies: readonly number[];
-  /** RULE-030's posterization of the filtered result, 0..255. */
+  /** RULE-030's posterization of the filtered result, whole levels 0..255. */
   readonly intensities: readonly number[];
 }
 
@@ -140,6 +145,9 @@ export function processingParams(processing: ImageProcessing): string {
     }
   }
 
+  // The box alone asks for the filter: with no thresholds it is still the transform and back,
+  // stretched to 0..255, which changes the image (fft_threshold_widget.py:410-453).
+  if (processing.fft === true) query.set("fft", "1");
   if (processing.frequencies.length > 0) {
     query.set("frequencies", [...processing.frequencies].sort((a, b) => a - b).join(","));
   }
