@@ -3,7 +3,7 @@
 Where the conversion stands, on branch `main-web`. `MODERNIZATION_BRIEF.md` is the plan and does
 not change as work lands; this file is the log against it, and is the one to read first.
 
-Last updated: 2026-09-25.
+Last updated: 2026-09-26.
 
 ## Short answer
 
@@ -76,6 +76,26 @@ Where the web app departs from legacy's look, the reason is written next to the 
 **Class names in `.npz` files cross both ways** (the owner's approval of 2026-09-25). The web app
 reads the desktop app's pickled class-name table as data, without unpickling it, and writes the same
 table, so there is no converter step. "What to do next", item 3, has the detail and the checks.
+
+**Using the app side by side with the PyQt6 one, 2026-09-26.** The owner worked in the web app and
+asked for what the desktop app does. Each ask was built against legacy's code and checked in a
+browser:
+- shapes drawn at all: polygons, boxes and circles went into the tables but never onto the image
+  (CP-68);
+- legacy's hover and yellow selection highlight (CP-69);
+- vertices selected and dragged;
+- the class table reordered by dragging and renamed by double-click;
+- settings that last between sessions, with Reset to Default (CP-71);
+- the channel threshold bar, with markers added, dragged and removed on the bar (CP-47);
+- the hotkey editor's category tabs (CP-62);
+- no explanatory paragraphs in any panel (CP-75). `web/test/shell/terse.test.tsx` fails any run
+  of text over 60 characters.
+
+The parity audits moved too. `CONTROL_PARITY.md` closed more than twenty items that day and
+`SEQUENCE_PARITY.md` 32, including the Sequence tab's whole layout, legacy's labels, tooltips and
+notices, the one-button Propagate and Abort, and a rerun defect found on the real GPU. Launching
+is one command since the same day: `npm install` in `modernized/`, then `npm start "<folder>"`,
+which serves the app and the API from one port (`DEPLOYABILITY.md` is the evaluation behind it).
 
 ## The suites, as of 2026-09-23
 
@@ -549,6 +569,22 @@ configured, so a green CI run says nothing about them — see `Running the live 
   move setting is turned on". This reverses decision 7 for navigation only. **Built** (2c1d1f1):
   leaving an image or timeline frame with unsaved changes saves it first, as legacy's does. With
   the setting off the web still asks, where legacy discards; closing still asks.
+
+**The owner's answers, 2026-09-26.** Asked about the differences that were still recorded
+decisions; each answer is an option they chose:
+- **"Match the desktop app exactly"** on silent loss. Leaving the Sequence tab and New Timeline
+  drop unsaved propagated frames without asking (SP-15, SP-16). Leaving a frame emptied by hand
+  deletes its seven sidecar files (SP-58), which reverses RULE-083's never-delete answer and the
+  delete-on-empty line in `CUTOVER.md`. Multi saves both sides on every move, whatever Auto-Save
+  on Navigate says (CP-67).
+- **"Reset per image (current web)"**: the crop and the FFT threshold do not carry over to the
+  next image (SP-10).
+- **"E/R toggle back; Ctrl+Plus/Minus zoom"**: pressing Select or Edit again returns to the
+  previous mode, as legacy's does (RULE-070); Ctrl+Plus and Ctrl+Minus keep zooming, since
+  legacy's own bindings for them never fire (CP-66).
+- **"Act on both, like the desktop app"**: in Multi, navigation, pan, fit, Ctrl+A, V, M, Esc and
+  Space act on both viewers, with linked selection and alias mirroring (CP-31). This reverses
+  decision 8 for those actions.
 
 
 1. **Propagation goldens: captured, and the model's half of Phase 6 exit criterion 2 is met.**
