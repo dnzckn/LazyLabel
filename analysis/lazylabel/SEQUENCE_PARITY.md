@@ -76,8 +76,8 @@ SP-01's "yes" is contradicted by another record (see Notes).
 | SP-05 | Saving: Save All class names | Each saved object gets its reference's class name: the open frame's alias for that class at Propagate, else "Class N" (L ui/main_window.py:4277-4280, 4787-4799). The name goes into the NPZ aliases and the COCO, VOC and CreateML labels (L ui/managers/save_export_manager.py:400-403, 424). | Seeds keep only the class id (W sequence/references.ts:155). Save All sends no classAliases (W sequence/saveAll.ts:147-151), so labels are the bare id (A app.ts:812, 831). A reviewed frame saved with Enter carries only its own file's aliases (W workspace/WorkspaceProvider.tsx:533). | A class legacy writes as "car" is written as "0". | S0 | partly: BR:1313 (RULE-082) says the object takes its reference's class AND alias, never "Class N". The web does only the second half | **Done 2026-09-25:** names fixed at Propagate from the open image's aliases, unsaved included, as legacy's (main_window.py:4277-4280); Save All names only each frame's own classes (4776, 4787-4799). Unnamed classes get no alias, per RULE-082's answer, where legacy writes 'Class N'. Still open: a reviewed frame saved with Enter carries only its own file's aliases. |
 | SP-06 | Saving: Save All pixel priority | Save All goes through the normal save (L ui/main_window.py:4813), which resolves overlaps with the pixel-priority settings (L ui/managers/save_export_manager.py:405-410). | Save All sends no pixelPriority (W sequence/saveAll.ts:147-151), and the API then treats it as off (A app.ts:821, 1042-1044). The Enter path does send it (W workspace/OpenImageView.tsx:732-737). | With pixel priority on, Save All writes overlapping masks of different classes differently. | S0 | no | **Done 2026-09-25:** Save All sends both pixel-priority settings with each save, and the API applies them through createFinalMaskTensor as for Enter; legacy's Save All goes through the ordinary save, which reads them at save time (main_window.py:4813, 1998; save_export_manager.py:112, 405-410). |
 | SP-07 | Review: what a propagated frame shows | Opening one merges its objects into one "Loaded" mask per class (L ui/main_window.py:3597-3606; L core/segment_manager.py:97-172). The segment table lists that, and the leaving auto-save writes it. Exporters write one instance per contour of each segment (L core/segment_manager.py:254-313; L core/exporters/yolo_detection.py:26-33). | One "AI" segment per tracked object, in the view and in whatever Enter writes (W sequence/PropagationControl.tsx:390-397; W sequence/saveAll.ts:53-66, 121-128). | For touching or overlapping objects of one class, legacy's file saved after a visit has one box or instance and the web's has two. The segment table has a row per object, not per class. Save All is per object in both. | S0 | code comment only (W sequence/saveAll.ts:114-120). BR:1430 calls legacy's workflow-dependence a suspected defect | **Done 2026-09-25:** opening a propagated frame merges its masks into one Loaded segment per class, as legacy's merge_segments_by_class does on a visit (main_window.py:3597-3606; segment_manager.py:97-172). Save All does not merge, in either app. |
-| SP-08 | Propagation: JPEG frames | A JPEG frame is symlinked into SAM 2's staging folder, so SAM 2 reads the original bytes (L models/sam2_model.py:788-796). | Every frame is decoded and re-encoded at JPEG quality 95 (I propagation.py:76-105). | On a JPEG sequence SAM 2 sees recompressed pixels. Masks and scores move, and a score near Min Conf can change which frames are flagged, and so which are written. **Unverified**: not measured, and the goldens use a PNG clip. | S0 | yes: IT test_differential_propagation.py:18-25 | Stage JPEG sources' original bytes, or measure on a JPEG clip and record the tolerance. |
-| SP-09 | Propagation: longer than the window, backward pass | Each window's outside references are staged at index 0 in both directions (L ui/managers/propagation_manager.py:990-1016), and SAM 2 is walked with no start frame (1062). A reverse walk then starts at index 0, the earliest seeded frame, and yields nothing. That empties every backward window after the first, and a first one with a reference outside it; their frames stay pending. | Outside references are staged after a backward window's frames, and the walk starts at the reference (I runner.py:106-132, 429-435). PR:345-347 shows the backward pass reaching frame 0. | Frames more than a window before the earliest reference are propagated, and written by Save All, only by the web. **Unverified** at runtime against legacy: read from both codes and SAM 2's default start frame, as I runner.py:112-116 states. | S0 | code comment only (I runner.py:112-116) | Keep. Record it on RULE-026 and add a streaming golden. |
+| SP-08 | Propagation: JPEG frames | A `.jpg` or `.jpeg` (any case) is linked into SAM 2's staging folder, or copied where the link is refused, so SAM 2 reads the file's own bytes; anything else is read with `cv2.imread` and written at quality 95 (L models/sam2_model.py:774-803). The image-cache branch (782-787) never runs: nothing assigns `_sequence_memory_cache` (L ui/main_window.py:4084). | A file named `.jpg`/`.jpeg` whose bytes are a JPEG is staged as those bytes; anything else is written at quality 95 (I service.py:210-229; I propagation.py:93-134). | None on JPEG files. Left: a file named `.jpg` holding another format is written again, where legacy hands its bytes to Pillow (SEC-02 decides by content). | S0 | yes: IT test_differential_staging.py:146-172, IT test_propagation_goldens.py:225-265 | **Done 2026-09-26** (`df58254`). Measured on IT goldens/propagation/synthetic-shapes-jpeg (the 24-frame clip as JPEG at quality 90): legacy staged every frame's own bytes (24 of 24; copies, as Windows refused the links). The re-encode had moved scores by up to 0.141, put the square's mask on its decoy on frames 0-3 (IoU 0.00 on frame 0) and flagged frames 2 and 3, which legacy does not. The port now gives legacy's masks and scores exactly and flags frames 4 and 11, as legacy does. |
+| SP-09 | Propagation: longer than the window, backward pass | Each window's outside references are staged first in both directions (L ui/managers/propagation_manager.py:990-1016) and the walk has no start frame (1062), so SAM 2 starts a reverse walk at index 0 and processes nothing (sam2_video_predictor.py:571-576). **Measured** on IT goldens/propagation/synthetic-shapes-streaming (34 frames, reference 12, window 10): the second backward window staged [12, 0-7] and answered nothing; frames 0-2 stayed pending in both scenarios and Save All never wrote them. The first backward window, reference inside it, answered every frame. | The reference is staged after a backward window's frames and the walk starts at it (I runner.py:108-137, 509-514), so frames 0-2 are propagated. Every other answer the port keeps is legacy's from the same window (IT test_propagation_streaming_golden.py:486-562). | Frames only a later backward window covers are propagated, and written by Save All, only by the web. | S0 | code comment and tests only (I runner.py:108-137; IT test_propagation_streaming_golden.py:202-243, 548-562) | **Measured 2026-09-26, kept** (`da6a04e`), as recommended. Owner to rule: keep, or match legacy and leave those frames pending. |
 | SP-10 | Saving: crop | Moving between frames does not clear the crop (L ui/main_window.py:3521-3575). One crop applies to every auto-saved frame and to Save All (L ui/managers/save_export_manager.py:412-417; BR:1311). | The crop is cleared on every open (W workspace/WorkspaceProvider.tsx:490-497), and Save All sends none (W sequence/saveAll.ts:147-151). | In legacy one crop blanks every saved frame outside it. On the web it applies only to the frame it was drawn on, when that frame is saved with Enter. | S0 | yes: decision 9 (MB:422), BR:767 | None while the decision stands. Say in the Sequence tab that a crop is per frame. |
 | SP-11 | Trim, then Save All | Trim resets the propagation engine (L ui/main_window.py:5251-5253). Save All then reports "No propagated frames to save" (4751-4759) while green frames remain (BR:1238). | Masks are keyed by image and survive (W sequence/timeline.ts:402-407; W sequence/TimelinePanel.tsx:399-405; W sequence/PropagationControl.tsx:318-354). Save All writes the remaining frames. | The web writes frames legacy cannot. | S0 | code comment only. BR:1238 calls legacy's a suspected defect | Keep; record on RULE-077. |
 | SP-12 | Clear references, then Save All | Clear All empties the engine's reference annotations (L ui/main_window.py:4003-4005), so Save All writes every object as class 0, "Class 0" (4788-4796; BR:1311). | The object-to-class map survives (W sequence/PropagationControl.tsx:145, 226). | Different class ids in the files. | S0 | yes: BR:1313 | Keep. |
@@ -105,7 +105,7 @@ SP-01's "yes" is contradicted by another record (see Notes).
 | SP-33 | Min Conf changed after a run | The engine re-flags from stored results, and Save All follows it. The timeline keeps its colours (L ui/main_window.py:4718-4723; L ui/managers/propagation_manager.py:1254-1268; BR:1172-1184). | The timeline re-flags (W sequence/TimelinePanel.tsx:598-608; W sequence/confidence.ts:163-186). A frame flagged with Keep Flagged off has no masks (W sequence/commit.ts:90-98). Lowering Min Conf turns it green, yet Save All withholds it (W sequence/saveAll.ts:101-106). | Green frames that will not be written. What is written is the same in both apps. | S1 | partly: the re-flag is deliberate (WT rules/p0Coverage.test.ts:70-74; PR:1339-1342). The green-but-empty case is not recorded | **Done 2026-09-26** (`efeba9f`, `16b3685`): a frame flagged with Keep Flagged off stays flagged at any Min Conf; Save All follows legacy's engine, re-flagging over what was stored; a flagged frame whose masks were kept turns green and is saved. Still different by design: the timeline re-flags the other frames as Min Conf moves. |
 | SP-34 | Min Conf across restarts | 0.99 at every launch. It is not a setting (L ui/widgets/sequence_widget.py:384-398; L ui/main_window.py:2096-2107). | A saved setting (W sequence/TimelinePanel.tsx:180-189, 598-603). | It survives a restart. | S1 | yes: decision 9 (MB:422) | Keep. |
 | SP-35 | New Timeline: what it resets | Resets the labels, trim, suggestions and the sort (L ui/widgets/sequence_widget.py:770-794; L ui/widgets/timeline_widget.py:86-100). | Resets the range, statuses and kept labels only (W sequence/TimelinePanel.tsx:371-386). Sort, the trim bounds and the notes carry into the next timeline, where Cut and Keep use the old bounds (406-416, 578-583). | A new timeline starts with the previous one's state. | S1 | no | **Done 2026-09-26**: New timeline also clears the sort, the trim bounds and note, the suggestions (and the prefetch's copy), and the run's scores and review masks, which would otherwise land on the same positions in the next timeline. |
-| SP-36 | Propagation: window overlaps | A frame only flagged in an earlier window is not in `propagated_frames`, so the next window processes it again and the UI commits it again, merging masks (L ui/managers/propagation_manager.py:1054, 1083-1085; L ui/main_window.py:4537-4569; BR:501). | Overlap frames keep the earlier window's result, whatever it was (I runner.py:455-458; I windows.py:13-16). | Such frames offer different masks for review. Save All excludes flagged frames in both. **Unverified**: no golden covers streaming. | S1 | code comment only (I windows.py:13-16) | Decide with a streaming golden. |
+| SP-36 | Propagation: window overlaps | A later window skips only frames the engine stored an object for (L ui/managers/propagation_manager.py:1054, 1083-1085); a frame an earlier window only flagged is answered again and committed on top, masks merged and the lower score kept (L ui/main_window.py:4537-4569; L ui/modes/sequence_view_mode.py:290-345). **Measured** on the streaming golden, Keep Flagged Masks off: frame 25 (window 2: disc flagged at 0.9724, square gone) was answered again by window 3, whose "square" (0.9963) is 96% the purple distractor rectangle; legacy kept that mask for review on a frame it still flags and counted the frame propagated. With Keep Flagged Masks on, nothing was answered twice. | Every frame keeps its first window's answer (I runner.py:535-540; I windows.py:151-165). | Frame 25 offers nothing for review on the web and the distractor under the square's class in legacy; the completion notice says 27 frames on the web and 28 in legacy. The timeline, the scores and Save All agree. In legacy, leaving the reviewed frame with Auto-Save on Navigate writes the distractor (L ui/main_window.py:3414-3434, 3480-3519). | S1 | code comment and tests only (WT acceptance/c11.goldens.test.tsx:115-147, 444-469; IT test_propagation_streaming_golden.py:246-303, 564-575) | **Measured 2026-09-26, kept for the owner** (`4face4b`): legacy's second answer puts a mask on a flagged frame that its own Keep Flagged Masks rule discards (L ui/main_window.py:4541-4543), taken from a window that starts cold. Owner to rule: keep, or match (the runner and the web's frame commit would both change). |
 | SP-37 | Enter on a sequence frame in Polygon mode | Does nothing: no finish, no save (L ui/managers/keyboard_event_manager.py:193-230; BR:793-794). | Finishes the polygon and saves, as in Single; the two tabs share one view (W shell/CentreTabs.tsx:7-12). | Legacy's defect is not reproduced. | S1 | no. BR:794 calls legacy's a suspected defect | Keep, and record it. |
 | SP-38 | Saving: when Save All can be pressed | Always shown and enabled, during a run too, when it writes what is committed; otherwise "No propagated frames to save" (L ui/main_window.py:3297-3305, 4757-4759). A failed write still marks the frame saved and drops its masks (BR:1311). | Shown only after the run has finished, and only with unsaved frames (W sequence/PropagationControl.tsx:494-509). Failures are listed and not marked saved (W sequence/saveAll.ts:153-157). | Nothing can be saved partway through a long run. | S1 | no | **Done 2026-09-26** (`f40d8ce`, `16b3685`): Save All is always shown and enabled, during a run too, with legacy's tooltip and notices ("No propagated frames to save", "Saving N frames...", "Saved N frames to NPZ"). A failed write is reported and the frame stays unsaved (legacy's defect, BR:1311, not reproduced). |
 | SP-39 | Statuses after a save: reference frames | A saved reference turns cyan, and the next Propagate repaints it pending (L ui/modes/sequence_view_mode.py:365-373, 143-159). | Role and state are separate, so it stays gold (W sequence/timeline.ts:13-18, 234-240). | The colour differs. | S1 | yes: BR:915-916 | Keep. |
@@ -161,66 +161,81 @@ SP-01's "yes" is contradicted by another record (see Notes).
 ## What the goldens and tests cover, and what they do not
 
 **Covered, against legacy:**
-- **The model's output.** IT test_propagation_goldens.py, with
-  IT goldens/propagation/synthetic-shapes.{json,npz} captured from legacy's own MainWindow methods
-  by IT fixtures/capture_propagation_goldens.py. With a SAM 2 checkpoint, the runner reproduces
-  legacy's per-object masks (IoU at least 0.98), empties and flags. The setup is fixed:
-  - a 23-frame PNG clip;
+- **The model's output, in one state.** IT test_propagation_goldens.py, with
+  IT goldens/propagation/synthetic-shapes and synthetic-shapes-jpeg, captured from legacy's own
+  MainWindow methods by IT fixtures/capture_propagation_goldens.py. With a SAM 2 checkpoint, the
+  runner reads its frames through the service as a job does and reproduces legacy's per-object
+  masks (IoU at least 0.98), empties and flags. The setup:
+  - a 24-frame clip, as PNG and again as JPEG at quality 90 (SP-08);
   - one reference frame (frame 8) with two objects;
   - both passes, in full-context mode;
   - Min Conf 0.99.
-- **What the app does with that output.** WT acceptance/c11.goldens.test.tsx runs the golden's four
-  scenarios: defaults, Keep Flagged on, and Skip Labeled on and off over labelled frames. It drives
-  TimelinePanel and PropagationControl with a fake client that replays legacy's model output, and
-  compares:
+- **The model's output, window by window.** IT test_propagation_streaming_golden.py, with
+  IT goldens/propagation/synthetic-shapes-streaming: the clip drawn on to 34 frames, the reference
+  on frame 12, the Stream window set to 10, giving four windows forward and two back. Without a
+  model, each window's staging is compared with legacy's byte for byte and in order. With one,
+  every answer the port keeps is compared with legacy's from the same window. SP-09's empty
+  backward window and SP-36's twice-answered frame are pinned.
+- **What SAM 2 is given.** IT test_differential_staging.py runs legacy's own
+  `Sam2Model.init_video_state` against the port's staging with no checkpoint. The files are
+  identical for JPEG under `.jpg`, `.jpeg` and `.JPG`, and for PNG (8-bit, 16-bit, grey, alpha),
+  BMP, TIFF and WebP.
+- **Which frames each window covers.** IT test_windows.py runs legacy's own `_propagate_chunked`,
+  lifted from its source, against the port's plan. It finds legacy beside the repository or on
+  PYTHONPATH.
+- **What the app does with that output.** WT acceptance/c11.goldens.test.tsx runs synthetic-shapes'
+  four scenarios and the streaming golden's two. It drives TimelinePanel and PropagationControl
+  with a fake client that replays legacy's model output in the port's order, and compares:
   - the timeline after the run and after Save All;
   - the tooltip confidences, to four decimals;
-  - which objects each frame offers for review, through the `onOpen` callback;
-  - which frames, objects and class ids Save All sends.
+  - which objects each frame offers for review;
+  - which frames, objects and class ids Save All sends;
+  - the completion and Save All notices, word for word.
+
+  On the streaming golden the only differences allowed are SP-36's two, named in one table
+  (c11.goldens:115-147).
+- **Across PyTorch versions.** Both new goldens were also captured in legacy's own venv (PyTorch
+  2.7.1, OpenCV 4.12). Flags, empties, timelines, kept masks and Save All frames were identical,
+  and scores within 0.0034.
 - **A forward-only live differential.** IT test_differential_propagation.py compares with legacy on
   PNG frames, seeded on frame 0, so there is no backward pass.
 - **Find Archetypes' frames.** IT test_differential_archetypes.py checks that it suggests the same
   frames as legacy's worker, on 90 frames in three scenes (PR:28-31).
-- **Manual full-stack runs** of the synthetic clip (PR:596-607, PR:1461-1469). These are not
-  automated.
+- **Manual full-stack runs** of the synthetic clip (PR:596-607, PR:1461-1469), and on 2026-09-26 in
+  a real browser on the GPU: 24 frames, one reference, frames 2 and 11 flagged as in the golden,
+  and Save All writing 21 frames. These are not automated.
 
 **Not covered:**
-1. **Anything after a frame is opened in the app.** The capture replaced
-   `_load_sequence_frame_segments` with a no-op (IT fixtures/capture_propagation_goldens.py:308),
-   and the web test replaces `onOpen` with a spy (WT acceptance/c11.goldens.test.tsx:241-243). So
-   none of these is compared: per-class merging (SP-07), navigation saving and the prompts (SP-01),
-   hand corrections (SP-02), reopening saved frames (SP-23), file-list and arrow opens (SP-22), and
-   the cursor and view (SP-18, SP-19).
+1. **Anything after a frame is opened in the app.** The capture replaces
+   `_load_sequence_frame_segments` with a no-op (IT fixtures/capture_propagation_goldens.py:394),
+   and the web test replaces `onOpen` with a spy (WT acceptance/c11.goldens.test.tsx:320). So none
+   of these is compared: per-class merging (SP-07), navigation saving and the prompts (SP-01), hand
+   corrections (SP-02), reopening saved frames (SP-23), and file-list and arrow opens (SP-22).
 2. **File contents.** The capture records only class ids and masks from `_save_output_to_npz`
-   (capture:310-319). The web test records only the class id and object of each segment
-   (c11.goldens:223-230). None of these is compared: class names (SP-05), pixel priority (SP-06), the
-   crop (SP-10), the formats, the image size, and the bytes written.
-3. **Reference seeding.** The capture substituted `_load_segments_for_reference_frame` (capture:307),
-   and the web test serves polygons from a fake `loadAnnotations`. Neither covers:
-   - the open frame's unsaved annotations (SP-04);
-   - class names from aliases;
-   - more than one reference frame.
-4. **Image sizes.** Every frame is one size, so mismatched references and frames are not covered
-   (SP-24, SP-25).
-5. **Streaming.** 23 frames fit in one window (PR:27). There are no overlaps, backward windows or
-   seams against legacy (SP-09, SP-36).
-6. **The propagation range.** Always the whole timeline (capture:337), and the web cannot set one
-   (SP-46).
-7. **Thresholds.** Only 0.99. No Min Conf change after a run, and no histogram (SP-33, SP-47).
-8. **Cancel, abort and errors.** None of these is compared with legacy (SP-13, SP-40). The web's own
-   tests use fakes.
-9. **Timeline operations.** None of these is compared with legacy:
-   - Clear Flags (SP-03);
-   - Sort (SP-27, SP-28);
-   - Trim (SP-11, SP-27);
-   - New Timeline;
-   - Clear references (SP-12);
-   - + All before and + All labeled (SP-24, SP-26);
-   - Find Archetypes' clearing, abort and H navigation (SP-29, SP-30).
+   (capture:413-422). Class names (SP-05), pixel priority (SP-06), the crop (SP-10), the formats,
+   the image size and the bytes written are not compared.
+3. **Reference seeding.** The capture substitutes `_load_segments_for_reference_frame`
+   (capture:393). Every golden has one reference frame, so the open frame's unsaved annotations
+   (SP-04), class names from aliases and several references are not covered.
+4. **Image sizes.** Every frame is one size (SP-24, SP-25).
+5. **Streaming beyond one run.** One clip, one window (10), one reference, the whole range. Not
+   captured: more than one reference across a seam, a range, windows that end on a skipped frame,
+   and SP-36's other path, an overlap frame where every object was empty in the earlier window. A
+   40-frame trial had frames like that, and the later window found them empty too.
+6. **The propagation range.** Always the whole timeline (capture:440).
+7. **Thresholds.** Only 0.99; no Min Conf change after a run and no histogram (SP-33, SP-47).
+8. **Cancel, abort and errors.** None of these is compared with legacy (SP-13, SP-40). The web's
+   own tests use fakes.
+9. **Timeline operations.** None of these is compared with legacy: Clear Flags (SP-03), Sort (SP-27,
+   SP-28), Trim (SP-11, SP-27), New Timeline, Clear references (SP-12), + All before and + All
+   labeled (SP-24, SP-26), and Find Archetypes' clearing, abort and H navigation (SP-29, SP-30).
 10. **Hand edits after propagation** and their interaction with Save All (SP-02).
-11. **JPEG frames.** The clip is PNG (SP-08).
-12. **Notices and counts.** The golden records them (capture:356-359, 390, 394), but the web test
-    does not compare them.
+11. **JPEG edge cases.** The golden's files are OpenCV's baseline JPEGs. Not covered: EXIF
+    orientation (both apps hand SAM 2 the stored bytes and measure sizes after OpenCV applies the
+    rotation), and a `.jpg` holding another format (the port writes it again; legacy hands it to
+    Pillow).
+12. **Notices.** The completion and Save All notices are compared (c11.goldens); the phase notices
+    are not.
 13. **Model choice and no AI** (SP-31, SP-32).
 14. **The web's other sequence tests** (WT sequence/TimelinePanel.test.tsx,
     WT sequence/propagation.test.tsx, WT acceptance/c10.sequenceTimeline.test.tsx and
@@ -250,8 +265,9 @@ SP-01's "yes" is contradicted by another record (see Notes).
    - freeze the timeline's images at Build.
 6. **SP-24, SP-25, SP-32, SP-31.** Check sizes when marking references, report dropped seeds and
    skipped frames, send the propagation model, and hide or disable propagation when there is no AI.
-7. **SP-07, SP-08, SP-09 and SP-36.** Owner decisions, backed by a JPEG clip and a streaming golden
-   captured from legacy the way synthetic-shapes was.
+7. **SP-07, SP-08, SP-09 and SP-36.** Done or measured 2026-09-26, with a JPEG clip and a streaming
+   golden captured from legacy the way synthetic-shapes was: SP-08 now matches legacy; SP-09 and
+   SP-36 are measured, and the web's behaviour is kept until the owner rules.
 8. **The remaining S1s:** SP-27, SP-28, SP-30, SP-29, SP-26, SP-33, SP-35, SP-38, SP-40, SP-37.
 9. **S2, in this order:** SP-45 (review group), SP-46 (range), SP-43 (zoom and scrub), SP-44 (trim),
    SP-47 (histogram), SP-41 (range setup and row colours), SP-49, SP-48, SP-42.
