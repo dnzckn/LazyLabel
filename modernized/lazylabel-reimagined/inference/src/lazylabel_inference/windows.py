@@ -15,6 +15,12 @@ begins cold at frame 250 has none. Five frames of overlap give the next window a
 RULE-026 keeps the EARLIER window's results for those five — the ones that were produced with
 memory behind them rather than from a standing start.
 
+Legacy keeps them only where its engine STORED an object (`propagation_manager.py:1054,
+1083-1085`). A frame the earlier window only flagged, with Keep Flagged Masks off, is answered
+again by the cold window and committed on top (SEQUENCE_PARITY.md SP-36). Measured on the
+streaming golden, the one such frame kept a "square" that is a distractor, on a frame legacy still
+flags. `novel_frames` keeps the earlier answer for every frame; that is kept for the owner to rule.
+
 Two details that look like bugs and are legacy's behaviour, kept deliberately because Phase 6's
 equivalence criterion compares against it:
 

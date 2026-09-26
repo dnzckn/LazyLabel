@@ -533,7 +533,9 @@ def _run_window(
     ):
         position = _position_of(result.source, sequence)
         # RULE-026: a frame covered by an earlier window keeps the EARLIER window's result, which
-        # was produced with temporal memory behind it rather than from a standing start.
+        # was produced with temporal memory behind it rather than from a standing start. Legacy
+        # takes this window's answer too for a frame the earlier one only flagged (SP-36); kept
+        # this way for the owner to rule, with the evidence in the streaming golden's tests.
         if position is None or position not in novel:
             continue
         if cancel is not None and cancel.is_set():

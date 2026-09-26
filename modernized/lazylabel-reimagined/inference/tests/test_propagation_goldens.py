@@ -28,7 +28,8 @@ Two halves, and neither needs the legacy app:
 
 The other half of the criterion -- which frames the timeline flags, what Keep Flagged Masks keeps,
 what Skip Labeled leaves alone and what Save All writes -- is the web app's behaviour, and
-`web/test/acceptance/c11.goldens.test.tsx` holds it against the same files.
+`web/test/acceptance/c11.goldens.test.tsx` holds it against `synthetic-shapes` and the streaming
+golden. The JPEG golden's one scenario is that same code on other scores, and is not replayed there.
 
     LAZYLABEL_TEST_CHECKPOINT=/path/to/sam2.1_hiera_large.pt python -m pytest tests/test_propagation_goldens.py
 """

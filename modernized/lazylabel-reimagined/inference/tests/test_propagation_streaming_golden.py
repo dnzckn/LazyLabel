@@ -18,6 +18,14 @@ and walks down from it (`runner.py:107-133, 497-502`), so it propagates them. Th
 difference this golden is allowed to show about the windows, and the tests below pin both sides of
 it: it is kept, per the parity audit's recommendation, and recorded for the owner.
 
+SEQUENCE_PARITY.md SP-36, MEASURED. Legacy's engine skips, in a later window, only the frames it
+stored an object for, so a frame an earlier window only flagged is answered again and committed on
+top. Here that is frame 25 with Keep Flagged Masks off: window 2 flagged the disc, window 3 came
+back with a "square" that is the purple distractor rectangle, and legacy keeps it for review on a
+frame it still flags. The port keeps every frame's first answer; that is kept too, for the owner to
+rule on, and `TestLegacysOverlapRule` holds what legacy did. The web's side -- what it offers for
+review and what Save All writes, against legacy's -- is `web/test/acceptance/c11.goldens.test.tsx`.
+
 Everything else must be legacy's: which frames each window stages, in which order, with which
 bytes; and, with a checkpoint, every answer the port keeps -- mask, emptiness, flag and score --
 against legacy's answer from the SAME window.
@@ -233,6 +241,65 @@ class TestLegacysSecondBackwardWindow:
         assert PENDING_IN_LEGACY == [
             frame for frame, window in first_window(golden).items() if window == 6
         ]
+
+
+class TestLegacysOverlapRule:
+    """SP-36's evidence: what legacy does with a frame an earlier window only flagged.
+
+    Legacy's engine skips, in a later window, only the frames it STORED an object for
+    (`propagation_manager.py:1054, 1083-1085`). A frame whose objects were all flagged -- none
+    stored, with Keep Flagged Masks off -- or all empty is answered again by the next window that
+    covers it, and the window commits that answer on top of the first: masks merged in, the lower
+    score kept (`main_window.py:4537-4569`, `sequence_view_mode.py:290-345`). The port keeps each
+    frame's first answer (RULE-026's card: "overlap frames keep the earlier window's results").
+
+    On this clip that happens once. The owner is to rule on it, and this is what they rule on.
+    """
+
+    def test_frame_25_is_answered_by_window_2_and_again_by_window_3(self, golden) -> None:
+        entries = golden["scenarios"]["defaults"]["redelivered"]["25"]
+
+        assert [(entry["walk"], entry["kind"], entry.get("object")) for entry in entries] == [
+            (2, "flagged", None),
+            (3, "mask", 2),
+        ]
+        # Window 2 flagged the disc and found the square gone; window 3's "square" passed.
+        assert entries[0]["confidence"] == pytest.approx(0.9724, abs=1e-4)
+        assert entries[1]["confidence"] == pytest.approx(0.9963, abs=1e-4)
+
+    def test_legacy_keeps_window_3_s_mask_on_a_frame_it_still_flags(self, golden) -> None:
+        record = golden["scenarios"]["defaults"]
+        disc = next(r for r in golden["results"] if (r["window"], r["frame"], r["object"]) == (2, 25, 1))
+
+        assert record["keepFlagged"] is False
+        assert record["view"][25] == record["timeline"][25] == "flagged"
+        # With Keep Flagged Masks off a flagged frame keeps no masks (`main_window.py:4541-4543`),
+        # and this one keeps window 3's square.
+        assert record["keptMasks"]["25"] == [2]
+        assert record["keptFrom"]["25"] == {"2": [3]}
+        # The score shown is the lower of the two windows', window 2's disc.
+        assert record["timelineConfidence"]["25"] == pytest.approx(disc["confidence"], abs=1e-9)
+        # Its engine counts the frame propagated as well as flagged, and Save All leaves it.
+        assert 25 in record["engine"]["propagated"] and 25 in record["engine"]["flagged"]
+        assert 25 not in {write["frame"] for write in record["saveAll"]["written"]}
+
+    def test_that_mask_is_the_purple_rectangle_not_the_square(self, golden, masks) -> None:
+        # Measured against what the clip draws: the square left the picture at frame 20, and the
+        # mask legacy keeps for it on frame 25 is almost all of a distractor. A user reviewing the
+        # flagged frame is shown that, labelled as the square's class.
+        shapes = synthetic_clip.drawn(25)
+        kept = masks["3:25:2"]
+
+        assert not shapes["square"].any()
+        assert kept.sum() == 961
+        assert (kept & shapes["rectangle distractor"]).sum() / kept.sum() > 0.9
+
+    def test_with_keep_flagged_masks_on_nothing_is_answered_twice(self, golden) -> None:
+        # Then legacy stores flagged objects too, so frame 25 counts as done after window 2.
+        record = golden["scenarios"]["keep-flagged"]
+
+        assert record["redelivered"] == {}
+        assert record["keptFrom"]["25"] == {"1": [2]}
 
 
 class Recorder:
@@ -493,3 +560,18 @@ class TestThePortAgainstIt:
             for frame in PENDING_IN_LEGACY
             for reference in golden["references"]
         }
+
+    def test_an_overlap_frame_keeps_its_first_window_s_answer(self, golden, masks, ported) -> None:
+        """SP-36, kept: frame 25 is window 2's answer, as legacy's engine first had it.
+
+        Window 2 flagged the disc and found no square. Legacy then took window 3's "square" -- the
+        purple rectangle (`TestLegacysOverlapRule`) -- and the port does not: its square on frame 25
+        is empty, and its disc is window 2's, flagged.
+        """
+        disc, square = ported[(2, 25, 1)], ported[(2, 25, 2)]
+        legacy_disc = next(r for r in golden["results"] if (r["window"], r["frame"], r["object"]) == (2, 25, 1))
+
+        assert not np.asarray(square.mask).any()
+        assert masks["3:25:2"].any()
+        assert disc.confidence == pytest.approx(legacy_disc["confidence"], abs=ACROSS_PYTORCH)
+        assert disc.confidence < golden["threshold"]

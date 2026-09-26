@@ -241,6 +241,46 @@ def bar_centre(frame: int) -> int:
     return 400 - 14 * frame
 
 
+def _layers(
+    frame: int, shapes: list[dict], xs: np.ndarray, ys: np.ndarray
+) -> list[tuple[str, np.ndarray, tuple[int, int, int], int]]:
+    """Everything drawn on a frame, back to front, as (name, whole mask, colour, label value)."""
+    layers = []
+    # Drawn back to front: distractors, the square, the disc, then the bar over everything.
+    for shape in shapes:
+        size = int(shape["size"])
+        cx = _bounce(int(shape["x"]), int(shape["vx"]), size, WIDTH - 1 - size, frame)
+        cy = _bounce(int(shape["y"]), int(shape["vy"]), size, HEIGHT - 1 - size, frame)
+        mask = _shape_mask(str(shape["kind"]), cx, cy, size, xs, ys)
+        layers.append((f"{shape['kind']} distractor", mask, shape["colour"], _DISTRACTOR))
+
+    # The decoys are distractors too, so they go under the objects they imitate: each object
+    # stays whole, and what the model sees is one same-coloured blob where they touch.
+    left, top = blue_decoy_corner(frame)
+    decoy = (xs >= left) & (xs < left + _SQUARE_SIDE) & (ys >= top) & (ys < top + _SQUARE_SIDE)
+    layers.append(("blue decoy", decoy, _SQUARE_COLOUR, _DISTRACTOR))
+
+    cx, cy = yellow_decoy_centre(frame)
+    decoy = (xs - cx) ** 2 + (ys - cy) ** 2 <= _DISC_RADIUS * _DISC_RADIUS
+    layers.append(("yellow decoy", decoy, _DISC_COLOUR, _DISTRACTOR))
+
+    left, top = square_corner(frame)
+    square = (xs >= left) & (xs < left + _SQUARE_SIDE) & (ys >= top) & (ys < top + _SQUARE_SIDE)
+    layers.append(("square", square, _SQUARE_COLOUR, SQUARE))
+
+    cx, cy = disc_centre(frame)
+    disc = (xs - cx) ** 2 + (ys - cy) ** 2 <= _DISC_RADIUS * _DISC_RADIUS
+    layers.append(("disc", disc, _DISC_COLOUR, DISC))
+
+    centre = bar_centre(frame)
+    bar = (
+        (xs >= centre - _BAR_HALF_WIDTH) & (xs <= centre + _BAR_HALF_WIDTH)
+        & (ys >= _BAR_TOP) & (ys < _BAR_BOTTOM)
+    )
+    layers.append(("bar", bar, _BAR_COLOUR, _BAR))
+    return layers
+
+
 def render(seed: int = SEED, frames: int = FRAMES) -> Clip:
     rng = random.Random(seed)
     background = _background(rng)
@@ -252,49 +292,26 @@ def render(seed: int = SEED, frames: int = FRAMES) -> Clip:
     for frame in range(frames):
         image = background.copy()
         labels = np.zeros((HEIGHT, WIDTH), dtype=np.int8)
-
-        # Drawn back to front: distractors, the square, the disc, then the bar over everything.
-        for shape in shapes:
-            size = int(shape["size"])
-            cx = _bounce(int(shape["x"]), int(shape["vx"]), size, WIDTH - 1 - size, frame)
-            cy = _bounce(int(shape["y"]), int(shape["vy"]), size, HEIGHT - 1 - size, frame)
-            mask = _shape_mask(str(shape["kind"]), cx, cy, size, xs, ys)
-            image[mask] = shape["colour"]
-            labels[mask] = _DISTRACTOR
-
-        # The decoys are distractors too, so they go under the objects they imitate: each object
-        # stays whole, and what the model sees is one same-coloured blob where they touch.
-        left, top = blue_decoy_corner(frame)
-        decoy = (xs >= left) & (xs < left + _SQUARE_SIDE) & (ys >= top) & (ys < top + _SQUARE_SIDE)
-        image[decoy] = _SQUARE_COLOUR
-        labels[decoy] = _DISTRACTOR
-
-        cx, cy = yellow_decoy_centre(frame)
-        decoy = (xs - cx) ** 2 + (ys - cy) ** 2 <= _DISC_RADIUS * _DISC_RADIUS
-        image[decoy] = _DISC_COLOUR
-        labels[decoy] = _DISTRACTOR
-
-        left, top = square_corner(frame)
-        square = (xs >= left) & (xs < left + _SQUARE_SIDE) & (ys >= top) & (ys < top + _SQUARE_SIDE)
-        image[square] = _SQUARE_COLOUR
-        labels[square] = SQUARE
-
-        cx, cy = disc_centre(frame)
-        disc = (xs - cx) ** 2 + (ys - cy) ** 2 <= _DISC_RADIUS * _DISC_RADIUS
-        image[disc] = _DISC_COLOUR
-        labels[disc] = DISC
-
-        centre = bar_centre(frame)
-        bar = (
-            (xs >= centre - _BAR_HALF_WIDTH) & (xs <= centre + _BAR_HALF_WIDTH)
-            & (ys >= _BAR_TOP) & (ys < _BAR_BOTTOM)
-        )
-        image[bar] = _BAR_COLOUR
-        labels[bar] = _BAR
+        for _name, mask, colour, label in _layers(frame, shapes, xs, ys):
+            image[mask] = colour
+            labels[mask] = label
 
         out.append((f"frame_{frame:03d}.png", image))
         visible.append({obj: labels == obj for obj in (DISC, SQUARE)})
     return Clip(frames=out, visible=visible)
+
+
+def drawn(frame: int, seed: int = SEED) -> dict[str, np.ndarray]:
+    """Every shape on a frame, whole and by name: what a mask is of, when it is not its object.
+
+    The names are "square", "disc", "bar", "blue decoy", "yellow decoy", and "<kind> distractor"
+    for the four that bounce about, the purple one being "rectangle distractor".
+    """
+    rng = random.Random(seed)
+    _background(rng)
+    shapes = _distractors(rng)
+    ys, xs = np.mgrid[0:HEIGHT, 0:WIDTH]
+    return {name: mask for name, mask, _colour, _label in _layers(frame, shapes, xs, ys)}
 
 
 def encoded(rgb: np.ndarray, suffix: str = ".png", quality: int | None = None) -> bytes:
