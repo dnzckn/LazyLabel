@@ -75,7 +75,8 @@ describe("negative points alone", () => {
 
     expect(outcome.kind).toBe("ignored");
     if (outcome.kind !== "ignored") throw new Error("expected it to be ignored");
-    expect(outcome.reason).toContain("add a positive one");
+    // What to do, and no more (2026-09-26); why is the code's comment.
+    expect(outcome.reason).toBe("add a positive point to segment");
   });
 
   it("stop being a problem once a positive point joins them", () => {

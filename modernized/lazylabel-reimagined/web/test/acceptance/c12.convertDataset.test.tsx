@@ -197,9 +197,29 @@ describe("C12: converting a dataset in the browser", () => {
     screen.getByRole("button", { name: /Write/ }).click();
 
     // Reported, never deleted. A converted dataset with an old COCO file beside a new NPZ is a
-    // trap for whatever reads it next.
-    await waitFor(() => expect(screen.getByText(/still\s+on disk/)).toBeTruthy());
-    expect(screen.getByText(/Nothing has been deleted/)).toBeTruthy();
+    // trap for whatever reads it next. One line since 2026-09-26, when the owner asked for no
+    // paragraphs; that nothing was deleted is what "still on disk" says.
+    await waitFor(() =>
+      expect(screen.getByText("Still on disk, not rewritten: COCO_JSON, PASCAL_VOC")).toBeTruthy(),
+    );
+  });
+
+  it("names a format that could not be written, with the API's reason as its tooltip", async () => {
+    show({
+      saveAnnotations: async () => ({
+        written: { NPZ: "r1" },
+        stale: [],
+        skippedEmpty: ["YOLO_DETECTION"],
+        note: "a selected format could not be rendered at all, so no file was written for it.",
+      }),
+    });
+
+    await openImage();
+    screen.getByRole("button", { name: /Write/ }).click();
+
+    // One line, the reason in the tooltip rather than a paragraph beside it (2026-09-26).
+    const shown = await screen.findByText("YOLO_DETECTION could not be written");
+    expect(shown.title).toBe("a selected format could not be rendered at all, so no file was written for it.");
   });
 
   it("says nothing was written when the save fails, rather than looking done", async () => {

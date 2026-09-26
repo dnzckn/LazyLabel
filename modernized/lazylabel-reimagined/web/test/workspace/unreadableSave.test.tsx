@@ -98,14 +98,17 @@ describe("an image whose annotations could not be read", () => {
     expect(writeButton().disabled).toBe(true);
   });
 
-  it("says why, rather than hiding the button", async () => {
+  it("says why in its tooltip, rather than hiding the button", async () => {
     // A missing button is indistinguishable from a bug; a disabled one that says why is an
-    // explanation, and it names the thing that would be lost.
+    // explanation. The why is the tooltip, as legacy explains a control it disables; it was a
+    // paragraph beside the button until 2026-09-26.
     mount(unreadable);
     await open();
 
-    expect(screen.getByText(/could not be read, so nothing can be written over them/)).toBeTruthy();
-    expect(screen.getByText(/replace a damaged file with an empty one/)).toBeTruthy();
+    expect(writeButton().title).toBe(
+      "This image's annotations could not be read, so nothing can be written over them",
+    );
+    expect(screen.queryByText(/replace a damaged file with an empty one/)).toBeNull();
   });
 
   it("writes nothing even if the button is pressed", async () => {

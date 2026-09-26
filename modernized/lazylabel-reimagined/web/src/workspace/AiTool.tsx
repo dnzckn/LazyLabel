@@ -169,9 +169,9 @@ export function AiTool({
         setEncoding(false);
         notify({
           severity: "error",
-          message: "The AI tools could not prepare this image",
-          // The service's own reason, unflattened: "AI unavailable" tells a user to give up.
-          detail: cause instanceof Error ? cause.message : String(cause),
+          // Legacy's words (sam_single_view_manager.py:346-348), with the service's own reason,
+          // unflattened: "AI unavailable" tells a user to give up.
+          message: `Error loading AI model: ${cause instanceof Error ? cause.message : String(cause)}`,
         });
       });
 
@@ -252,12 +252,11 @@ export function AiTool({
         // happened, and could not tell a slow model from a broken one.
         //
         // It is not queued and run later: a mask appearing seconds after a click the user has
-        // moved on from is worse than one that never appears.
+        // moved on from is worse than one that never appears. Legacy's words for both
+        // (ai_segment_manager.py:425-427; main_window.py:2222).
         notify({
           severity: "info",
-          message: encoding
-            ? "Still preparing this image, so that click was not sent"
-            : "This image is not ready for AI prompts, so that click was not sent",
+          message: encoding ? "AI model is updating, please wait..." : "AI model not available",
         });
         return;
       }
@@ -292,7 +291,8 @@ export function AiTool({
           setResult(null);
           notify({
             severity: "error",
-            message: "That prompt could not be run",
+            // Legacy's words (main_window.py:2276), and the service's reason under them.
+            message: "AI prediction failed",
             detail: cause instanceof Error ? cause.message : String(cause),
           });
         });
@@ -311,11 +311,8 @@ export function AiTool({
       const filtered = filterFragments(decodeMask(result.mask), fragmentThreshold);
 
       if (filtered.kept === 0) {
-        notify({
-          severity: "warning",
-          message: "Nothing was accepted",
-          detail: `Every piece of that mask was below the ${fragmentThreshold}% fragment threshold.`,
-        });
+        // Legacy's words (ai_segment_manager.py:163-165): every piece was under the threshold.
+        notify({ severity: "warning", message: "All segments filtered out by fragment threshold" });
         setResult(null);
         return;
       }
@@ -333,14 +330,10 @@ export function AiTool({
 
       if (filtered.holesFilled) {
         // RULE-027's recorded defect: above zero, the kept pieces are redrawn as filled outer
-        // contours, so a ring becomes a disc. Legacy changes the shape without saying so.
-        notify({
-          severity: "warning",
-          message: "Holes inside that mask were filled",
-          detail:
-            "The fragment filter redraws what it keeps as solid outlines, so interior gaps close. "
-            + "Set the fragment threshold to 0 to keep them.",
-        });
+        // contours, so a ring becomes a disc and interior gaps close; a threshold of 0 keeps them.
+        // Legacy changes the shape without saying so. The notice explained all that until the
+        // owner asked for messages as short as legacy's (2026-09-26).
+        notify({ severity: "warning", message: "Holes inside that mask were filled" });
       }
 
       setResult(null);
@@ -361,18 +354,20 @@ export function AiTool({
         onRefused={(reason) => notify({ severity: "warning", message: reason })}
         preview={result === null ? undefined : <Preview result={result} classId={classId} />}
       />
+      {/* Legacy's status line while the image is encoded (sam_single_view_manager.py:278). */}
       {encoding && (
         <p role="status" className="banner">
-          Preparing this image for the AI tools…
+          Loading image into AI model...
         </p>
       )}
 
       {/* RULE-062's message, which legacy shows for a box preview and not for a point one. Shown
-          for both here: the user needs to know a prediction is waiting whichever way they asked
-          for it, and the canvas cannot say so on a machine where the preview fails to paint. */}
+          for both here, in legacy's words for both (ai_segment_manager.py:515): the user needs to
+          know a prediction is waiting whichever way they asked for it, and the canvas cannot say
+          so on a machine where the preview fails to paint. */}
       {result !== null && (
         <p role="status" className="banner">
-          AI preview ready — press Space to accept it
+          Press spacebar to accept AI segment suggestion
         </p>
       )}
     </>
@@ -452,13 +447,10 @@ function asPolygonIfAsked(
 
   const converted = maskToPolygon(mask, epsilonFactorFor(autoPolygon.resolution));
   if (converted === null) {
-    notify({
-      severity: "warning",
-      message: "Kept this as a mask",
-      detail:
-        "Auto-Convert could not make a polygon of it -- at this resolution the shape comes out "
-        + "with fewer than three corners. Raise the polygon resolution for more detail.",
-    });
+    // At this resolution the shape comes out with fewer than three corners; a higher polygon
+    // resolution keeps more. Legacy falls back to the mask the same way (main_window.py:1808-1829)
+    // and says "Segment saved as AI" (ai_segment_manager.py:297-299).
+    notify({ severity: "warning", message: "Segment saved as AI" });
     return asMask;
   }
 

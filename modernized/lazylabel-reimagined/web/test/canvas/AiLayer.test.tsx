@@ -75,7 +75,7 @@ describe("placing points", () => {
     click(surface, 30, 40, 2);
 
     expect(onPrompt).not.toHaveBeenCalled();
-    expect(onRefused.mock.calls[0]?.[0]).toContain("add a positive one");
+    expect(onRefused.mock.calls[0]?.[0]).toBe("add a positive point to segment");
   });
 
   it("suppresses the context menu, since right-click is a prompt here", () => {

@@ -39,15 +39,15 @@ describe("C5: erasing", () => {
     await waitFor(() => expect(screen.getByLabelText("Dataset").textContent).toMatch(/AI/));
   });
 
-  it("says when there was nothing to erase, rather than looking inert", async () => {
-    // Legacy says "No segments to erase". Saying nothing leaves a user wondering whether the
-    // gesture registered at all.
+  it("says when there was nothing to erase, in legacy's words, rather than looking inert", async () => {
+    // polygon_drawing_manager.py:198. Saying nothing leaves a user wondering whether the gesture
+    // registered at all.
     await openImage();
     chooseTool("Poly (2)");
 
     drawTriangle(10, 10, true);
 
-    expect(await screen.findByText(/No annotations to erase/)).toBeTruthy();
+    expect(await screen.findByText("No segments to erase")).toBeTruthy();
   });
 });
 

@@ -213,7 +213,9 @@ export function App({ client }: { readonly client: ApiClient }): ReactNode {
         </p>
       )}
 
-      {/* The dataset folder is the source of truth, so losing it blocks everything. */}
+      {/* The dataset folder is the source of truth, so losing it blocks everything: nothing can be
+          loaded or saved until it is available. The banner said that too until the owner asked,
+          on 2026-09-26, for messages as short as legacy's. */}
       {health?.dataset === "unreadable" && (
         <p role="alert" className="banner banner--error">
           {/*
@@ -225,16 +227,15 @@ export function App({ client }: { readonly client: ApiClient }): ReactNode {
             */}
           {health?.datasetRoot === undefined
             ? "The dataset folder cannot be read."
-            : `The dataset folder ${health.datasetRoot} cannot be read.`}{" "}
-          Nothing can be loaded or saved until it is available.
+            : `The dataset folder ${health.datasetRoot} cannot be read.`}
         </p>
       )}
 
-      {/* Losing the database does not. Annotations are files, so labelling continues. */}
+      {/* Losing the database does not: annotations are files in the folder, so labelling continues,
+          which is why this is a status rather than an alert. */}
       {state.status === "unavailable" && (
         <p role="status" className="banner banner--warning">
-          Settings are unavailable, so preferences will not be remembered. Annotation work is
-          unaffected, because annotations are files in your folder. ({state.reason})
+          Settings are unavailable; preferences will not be remembered ({state.reason})
         </p>
       )}
 

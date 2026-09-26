@@ -70,6 +70,7 @@ export function StatusBar({
   healthError,
   theme,
 }: StatusBarProps): ReactNode {
+  const ai = health === null ? null : describeAi(health.ai);
   return (
     <footer className="status-bar" aria-label="Status">
       {/* Far left, where legacy puts it, and drawn as legacy's pill: the knob shows the theme IN
@@ -95,7 +96,7 @@ export function StatusBar({
 
       {healthError != null ? (
         <span className="status-bar__item status-bar__item--error">Server unreachable</span>
-      ) : health === null ? (
+      ) : health === null || ai === null ? (
         <span className="status-bar__item">Checking the server…</span>
       ) : (
         <>
@@ -116,8 +117,9 @@ export function StatusBar({
           {/* Legacy's device label: green on a GPU, grey without one (status_bar.py:234-254). */}
           <span
             className={`status-bar__item status-bar__device${health.ai.available ? " status-bar__item--good" : ""}`}
+            {...(ai.title === undefined ? {} : { title: ai.title })}
           >
-            {describeAi(health.ai)}
+            {ai.label}
           </span>
         </>
       )}
@@ -133,19 +135,31 @@ function imageTone(image: ImageState | null): string {
 }
 
 /**
- * What the AI half of the status bar says.
+ * What the AI half of the status bar says: legacy's device label, and a tooltip for what it leaves
+ * out.
  *
- * Three facts, and they fail independently: whether the model can run at all, what it runs on, and
- * whether it can propagate through a sequence. A deployment with SAM 1 only is a working install
- * with no propagation, and saying "AI ready" there would promise a feature that is not coming.
+ * The label is one of legacy's three, "GPU: name", "CPU Only" or "No AI" (status_bar.py:234-254),
+ * with "Device unknown" for a server that could not ask PyTorch, which legacy never meets. Three
+ * facts fail independently here -- whether the model can run at all, what it runs on, and whether it
+ * can propagate through a sequence -- so the two the label does not carry are its tooltip:
+ *
+ * - The reason the tools are off travels from the inference service through the API unflattened,
+ *   because "No AI" tells a user to give up and "PyTorch is not installed" tells them what to do.
+ *   Legacy says so when an AI action is tried; this said it in the bar until 2026-09-26.
+ * - A deployment with SAM 1 only is a working install with no propagation, and a bare device label
+ *   there would promise a feature that is not coming.
  */
-export function describeAi(ai: Health["ai"]): string {
-  if (!ai.available) {
-    // The reason travels from the inference service through the API to here, unflattened, because
-    // "AI unavailable" tells a user to give up and "PyTorch is not installed" tells them what to do.
-    return ai.reason ?? "AI tools unavailable";
-  }
+export function describeAi(ai: Health["ai"]): { readonly label: string; readonly title?: string } {
+  if (!ai.available) return { label: "No AI", title: ai.reason ?? "AI tools unavailable" };
 
-  const device = ai.accelerator === "unknown" ? "device unknown" : ai.accelerator;
-  return ai.videoCapable ? `AI ready on ${device}` : `AI ready on ${device}, no propagation`;
+  // The service reports a GPU's own name, or "GPU" when the device gave none (availability.py).
+  const label =
+    ai.accelerator === "unknown"
+      ? "Device unknown"
+      : ai.accelerator === "CPU"
+        ? "CPU Only"
+        : ai.accelerator === "GPU"
+          ? "GPU"
+          : `GPU: ${ai.accelerator}`;
+  return ai.videoCapable ? { label } : { label, title: "Propagation unavailable" };
 }

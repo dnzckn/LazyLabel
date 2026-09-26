@@ -108,7 +108,8 @@ async function ready(): Promise<void> {
   // these files run in parallel with CPU-bound ones, and a starved worker can take longer than a
   // second to deliver a resolved promise. Raising it does not weaken the assertion -- what is
   // being asserted is that the preview arrives, not how fast.
-  await screen.findByText(/AI preview ready/);
+  // Legacy's words (ai_segment_manager.py:515).
+  await screen.findByText("Press spacebar to accept AI segment suggestion");
 }
 
 /** Let a rejected prediction settle, which produces no message of its own. */
@@ -132,13 +133,16 @@ describe("preparing the image", () => {
 
     click(10, 10);
 
-    expect(await screen.findByText(/Still preparing this image/)).toBeTruthy();
+    // Legacy's words for a click while the image is loaded into the model
+    // (ai_segment_manager.py:425-427), under legacy's status line (sam_single_view_manager.py:278).
+    expect(await screen.findByText("AI model is updating, please wait...")).toBeTruthy();
+    expect(screen.getByText("Loading image into AI model...")).toBeTruthy();
 
     // Released and WAITED FOR before the test ends. Leaving the encode in flight lets it resolve
     // after cleanup has unmounted the component, which is a state update on a dead tree -- and it
     // failed one full-suite run out of several while passing this file every time.
     release({ handle: "h1", cached: true });
-    await waitFor(() => expect(screen.queryByText(/Preparing this image/)).toBeNull());
+    await waitFor(() => expect(screen.queryByText("Loading image into AI model...")).toBeNull());
   });
 
 
@@ -160,7 +164,7 @@ describe("preparing the image", () => {
     // A message on every image would be noise, and the whole point of the cache is no wait.
     mount({ embed: async () => ({ handle: "h1", cached: true }) });
 
-    await waitFor(() => expect(screen.queryByText(/Preparing this image/)).toBeNull());
+    await waitFor(() => expect(screen.queryByText("Loading image into AI model...")).toBeNull());
     expect(screen.queryByText(/ready for AI prompts/)).toBeNull();
   });
 
@@ -170,12 +174,12 @@ describe("preparing the image", () => {
     expect(await screen.findByText(/ready for AI prompts/)).toBeTruthy();
   });
 
-  it("carries the service's own reason when it fails", async () => {
+  it("carries the service's own reason when it fails, in legacy's words", async () => {
     // "AI unavailable" tells a user to give up; the reason tells them what to do.
+    // sam_single_view_manager.py:346-348.
     mount({ embed: async () => { throw new Error("PyTorch is not installed"); } });
 
-    expect(await screen.findByText(/could not prepare this image/)).toBeTruthy();
-    expect(screen.getByText(/PyTorch is not installed/)).toBeTruthy();
+    expect(await screen.findByText("Error loading AI model: PyTorch is not installed")).toBeTruthy();
   });
 
   it("does not prompt before the handle exists", async () => {

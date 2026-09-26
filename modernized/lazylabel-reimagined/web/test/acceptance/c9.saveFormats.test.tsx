@@ -135,16 +135,13 @@ describe("C9: a file that changed underneath", () => {
 
     // By TEXT, not by role: jsdom has no 2D canvas, so the canvas reports its own failure as an
     // alert too, and `getByRole("alert")` would find whichever came first.
+    // One sentence since 2026-09-26, the owner having asked for messages as short as legacy's; who
+    // could have written the file is the code's comment now. What the user needs before acting is
+    // the tooltip: the work is still on screen, and reopening the image would replace it -- the
+    // advice must not contradict that reassurance, as a first version's "reload" did.
     const shown = await screen.findByText(/Nothing was written/);
-    expect(shown.textContent).toMatch(/frames\/a\.npz changed since you loaded it/);
-    expect(shown.textContent).toMatch(/desktop app, another tab, or a script/);
-    expect(shown.textContent).toMatch(/Nothing here was lost/);
-    // The advice must not contradict the reassurance. The first version said the work was safe and
-    // then told the user to reload, which calls `openImage` and clears the segments -- discarding
-    // exactly what it had promised. There is no force-overwrite yet, so the instruction has to be
-    // the one that KEEPS the work.
-    expect(shown.textContent).toMatch(/WOULD replace them/);
-    expect(shown.textContent).not.toMatch(/^.*Reload the image to see/);
+    expect(shown.textContent).toBe("Nothing was written: frames/a.npz changed since you loaded it");
+    expect(shown.title).toMatch(/still yours; reopening the image replaces them/);
 
     // The recovery, offered only AFTER a refusal: an unconditional write is the thing the
     // conditional write exists to prevent, so it is a deliberate second press rather than a retry

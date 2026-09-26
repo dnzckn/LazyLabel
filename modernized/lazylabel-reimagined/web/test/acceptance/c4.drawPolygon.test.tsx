@@ -131,8 +131,8 @@ describe("C5: erasing with a shape", () => {
     await waitFor(() => expect(shown("types")).toBe("AI"));
   });
 
-  it("says when there was nothing to erase, rather than looking inert", async () => {
-    // Legacy says "No segments to erase"; saying nothing would leave a user wondering whether the
+  it("says when there was nothing to erase, in legacy's words, rather than looking inert", async () => {
+    // polygon_drawing_manager.py:198. Saying nothing would leave a user wondering whether the
     // gesture registered at all.
     await readyToDraw();
 
@@ -141,7 +141,7 @@ describe("C5: erasing with a shape", () => {
     clickCanvas(50, 50);
     fireEvent.keyDown(document, { key: " ", code: "Space", shiftKey: true });
 
-    expect(await screen.findByText(/No annotations to erase/)).toBeTruthy();
+    expect(await screen.findByText("No segments to erase")).toBeTruthy();
     expect(shown("count")).toBe("0");
   });
 });

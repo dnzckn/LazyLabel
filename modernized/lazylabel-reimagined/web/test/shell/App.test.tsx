@@ -78,7 +78,7 @@ describe("the application shell", () => {
     // The health facts moved into the status bar, which reports only what is WRONG -- a line that
     // always reads "dataset: ok" trains the eye to skip where "unreadable" would appear. So what
     // this waits for is the bar having reached the server at all.
-    await waitFor(() => expect(screen.getByLabelText("Status").textContent).toMatch(/AI ready/));
+    await waitFor(() => expect(screen.getByLabelText("Status").textContent).toMatch(/GPU: NVIDIA RTX 4090/));
   });
 
   it("blocks with an alert when the dataset folder cannot be read, NAMING it", async () => {
@@ -134,8 +134,9 @@ describe("the application shell", () => {
 
     const banner = await screen.findByRole("status");
     expect(banner.textContent).toMatch(/preferences will not be remembered/i);
-    // And it says why that is survivable, which is the fact the user needs.
-    expect(banner.textContent).toMatch(/annotations are files/i);
+    // And why: the reason the store gave. That annotation work is unaffected is said by its being
+    // a status rather than an alert, not by a second sentence (the owner, 2026-09-26).
+    expect(banner.textContent).toMatch(/locked/);
 
     // Not an alert: nothing is blocked.
     expect(screen.queryByRole("alert")).toBeNull();

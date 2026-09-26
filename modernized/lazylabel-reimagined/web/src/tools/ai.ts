@@ -73,13 +73,11 @@ export function release(
     const point: AiPoint = { x: to.x, y: to.y, positive: options.negative !== true };
     const next: AiPrompt = { ...prompt, points: [...prompt.points, point] };
 
-    // A prompt of only negative points has nothing to segment. Adding the point is still right --
-    // the user placed it, and a positive one may follow -- but asking for a prediction is not.
+    // A prompt of only negative points has nothing to segment: a negative point says what the
+    // object is not. Adding the point is still right -- the user placed it, and a positive one may
+    // follow -- but asking for a prediction is not. The refusal says what to do, and no more.
     if (!next.points.some((p) => p.positive)) {
-      return {
-        kind: "ignored",
-        reason: "a negative point says what the object is not; add a positive one to segment it",
-      };
+      return { kind: "ignored", reason: "add a positive point to segment" };
     }
 
     return { kind: "point", prompt: next };

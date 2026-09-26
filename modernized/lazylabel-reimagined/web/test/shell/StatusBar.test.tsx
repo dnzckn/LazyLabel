@@ -96,11 +96,12 @@ describe("the server", () => {
     expect(text()).not.toContain("Checking the server");
   });
 
-  it("names the device the model runs on", () => {
+  it("names the device the model runs on, in legacy's words", () => {
     // Legacy asks the machine the window is on. Here the model is on a server the user cannot see,
     // which is why "why is every click slow" is otherwise unanswerable to them.
+    // status_bar.py:241.
     bar();
-    expect(text()).toContain("AI ready on NVIDIA RTX 4090");
+    expect(text()).toContain("GPU: NVIDIA RTX 4090");
   });
 
   it("stays quiet about the things that are fine", () => {
@@ -122,8 +123,9 @@ describe("the server", () => {
 });
 
 describe("what the AI line says", () => {
-  it("gives the reason rather than just the fact when the tools are off", () => {
-    // "AI unavailable" tells a user to give up; "PyTorch is not installed" tells them what to do.
+  // Legacy's three labels (status_bar.py:234-254), with what they leave out in the tooltip.
+  it("says No AI when the tools are off, with the reason in its tooltip", () => {
+    // "No AI" tells a user to give up; "PyTorch is not installed" tells them what to do.
     expect(
       describeAi({
         available: false,
@@ -131,26 +133,46 @@ describe("what the AI line says", () => {
         videoCapable: false,
         accelerator: "unknown",
       }),
-    ).toContain("pip install");
+    ).toEqual({
+      label: "No AI",
+      title: "PyTorch is not installed. Install the AI extra: pip install lazylabel-inference[ai]",
+    });
+  });
+
+  it("puts the reason on the bar's tooltip, not in the bar", () => {
+    bar({
+      health: health({
+        ai: { available: false, reason: "PyTorch is not installed", videoCapable: false, accelerator: "unknown" },
+      }),
+    });
+    expect(text()).toContain("No AI");
+    expect(text()).not.toContain("PyTorch");
+    expect(screen.getByText("No AI").title).toBe("PyTorch is not installed");
   });
 
   it("falls back to a plain statement when no reason came back", () => {
     expect(
-      describeAi({ available: false, reason: null, videoCapable: false, accelerator: "unknown" }),
+      describeAi({ available: false, reason: null, videoCapable: false, accelerator: "unknown" }).title,
     ).toBe("AI tools unavailable");
   });
 
-  it("says propagation is missing rather than promising it", () => {
-    // A deployment with SAM 1 checkpoints only is a working install with no propagation. "AI
-    // ready" on its own would promise a feature that is never going to appear.
+  it("says CPU Only on a CPU, and that propagation is missing rather than promising it", () => {
+    // A deployment with SAM 1 checkpoints only is a working install with no propagation. A device
+    // label on its own would promise a feature that is never going to appear.
     expect(
       describeAi({ available: true, reason: null, videoCapable: false, accelerator: "CPU" }),
-    ).toBe("AI ready on CPU, no propagation");
+    ).toEqual({ label: "CPU Only", title: "Propagation unavailable" });
   });
 
   it("says the device is unknown rather than guessing", () => {
     expect(
       describeAi({ available: true, reason: null, videoCapable: true, accelerator: "unknown" }),
-    ).toBe("AI ready on device unknown");
+    ).toEqual({ label: "Device unknown" });
+  });
+
+  it("does not say GPU twice for a device that gave no name", () => {
+    expect(describeAi({ available: true, reason: null, videoCapable: true, accelerator: "GPU" })).toEqual({
+      label: "GPU",
+    });
   });
 });

@@ -235,7 +235,9 @@ describe("C1: the dataset browser", () => {
 
       await waitFor(() => expect(screen.getByText(/1 objects, read from/)).toBeTruthy());
       expect(screen.getByText("frames/a_seg.txt")).toBeTruthy();
-      expect(screen.getByText(/3 = stop sign/)).toBeTruthy();
+      // The file's class names are the class table's aliases. A line under the image listed them
+      // again ("3 = stop sign") until 2026-09-26.
+      expect(screen.queryByText(/3 = stop sign/)).toBeNull();
       expect(loadAnnotations).toHaveBeenCalledWith("p1", "frames/a.png", [1080, 1920]);
     });
 
@@ -260,9 +262,13 @@ describe("C1: the dataset browser", () => {
       await waitFor(() => expect(screen.getByText("a.png")).toBeTruthy());
       screen.getByRole("button", { name: "a.png" }).click();
 
-      // Never an empty canvas, and the user is told nothing was deleted.
-      await waitFor(() => expect(screen.getByRole("alert").textContent).toMatch(/none could be read/));
-      expect(screen.getByRole("alert").textContent).toMatch(/Nothing has been deleted/);
+      // Never an empty canvas. That nothing was deleted, which is true of this path, was said as
+      // well until the owner asked for messages as short as legacy's (2026-09-26).
+      await waitFor(() =>
+        expect(screen.getByRole("alert").textContent).toBe(
+          "Annotations for a.png could not be read: the NPZ annotation file could not be read",
+        ),
+      );
     });
 
     it("reports a recovery from a damaged higher-priority file (decision 15c)", async () => {
@@ -286,7 +292,9 @@ describe("C1: the dataset browser", () => {
 
       // The work was recovered, and saying so is what decision 15c requires.
       await waitFor(() =>
-        expect(screen.getByText(/higher-priority annotation file could not be read/)).toBeTruthy(),
+        expect(
+          screen.getByText("Loaded from YOLO_SEGMENTATION; could not read NPZ (not a zip archive)"),
+        ).toBeTruthy(),
       );
     });
 
@@ -312,7 +320,10 @@ describe("C1: the dataset browser", () => {
 
       // The one loss a converted file does not look like it has: the objects are right and the
       // names are gone, so a Pascal VOC export would say "3" where the original said "stop sign".
-      await waitFor(() => expect(screen.getByText(/class-name table in this file is not in the form LazyLabel saves/i)).toBeTruthy());
+      // One line since 2026-09-26, the consequence -- what saving to those formats would write --
+      // in its tooltip, because a user needs it before saving.
+      const banner = await screen.findByText("Class names could not be read from this file");
+      expect(banner.title).toMatch(/Pascal VOC or CreateML/);
     });
 
     it("says how many lines a readable file rejected", async () => {
@@ -335,7 +346,7 @@ describe("C1: the dataset browser", () => {
       screen.getByRole("button", { name: "a.png" }).click();
 
       // "412 unreadable lines" rather than one object and silence.
-      await waitFor(() => expect(screen.getByText(/412 lines or objects/)).toBeTruthy());
+      await waitFor(() => expect(screen.getByText("412 unreadable lines or objects skipped")).toBeTruthy());
     });
   });
 
@@ -360,7 +371,7 @@ describe("C1: the dataset browser", () => {
     expect(screen.getByText(/1920 x 1080, png/)).toBeTruthy();
   });
 
-  it("says when an image was converted from 16-bit, and how", async () => {
+  it("says when an image was converted from 16-bit", async () => {
     show({
       imageMetadata: async () => ({
         width: 64,
@@ -374,7 +385,7 @@ describe("C1: the dataset browser", () => {
     screen.getByRole("button", { name: "a.png" }).click();
 
     // RULE-024 is invisible unless it is said: the pixels on screen are not the pixels in the file.
-    await waitFor(() => expect(screen.getByText(/16-bit/)).toBeTruthy());
-    expect(screen.getByText("value / 256")).toBeTruthy();
+    // How they were converted (value / 256, truncated) was said too until 2026-09-26.
+    await waitFor(() => expect(screen.getByText("64 x 48, tiff, 16-bit")).toBeTruthy());
   });
 });

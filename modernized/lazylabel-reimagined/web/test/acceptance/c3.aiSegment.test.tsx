@@ -95,7 +95,7 @@ function mount(overrides: Partial<ApiClient> = {}) {
    * ONE promise, handed out by the stub and awaited by the test.
    *
    * The encode has to have finished before a click is worth making -- a prompt that arrives first
-   * is not sent, which is `AiTool`'s own rule. Waiting for the "Preparing this image" banner to go
+   * is not sent, which is `AiTool`'s own rule. Waiting for the "Loading image into AI model..." banner to go
    * looks like the way to know, and is not: `encoding` starts false and the effect sets it, so the
    * banner is absent at mount and an absence test passes before the encode has even started.
    *
@@ -194,7 +194,8 @@ async function readyToPrompt() {
  * paint needs it for the same reason this does.
  */
 async function previewReady(): Promise<void> {
-  await screen.findByText(/AI preview ready/);
+  // Legacy's words (ai_segment_manager.py:515).
+  await screen.findByText("Press spacebar to accept AI segment suggestion");
 }
 
 describe("flow 1, step by step", () => {

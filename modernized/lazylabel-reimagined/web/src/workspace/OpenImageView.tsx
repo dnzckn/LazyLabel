@@ -37,7 +37,7 @@ import { useNotifications } from "../notifications/NotificationProvider.jsx";
 import type { AnnotationsResult, ApiClient } from "../api/client.js";
 import { RESOLUTION_DEFAULT } from "../tools/autoPolygon.js";
 import { clampZoom } from "../canvas/fit.js";
-import { useHotkey } from "../hotkeys/HotkeyProvider.jsx";
+import { useHotkey, useKeyHint } from "../hotkeys/HotkeyProvider.jsx";
 import { CropLayer } from "../canvas/CropLayer.jsx";
 import { canSave } from "./saveState.js";
 import { PanLayer } from "../canvas/PanLayer.jsx";
@@ -59,7 +59,8 @@ export function OpenImageView({
 }): ReactNode {
   const { open, processing } = useWorkspace();
 
-  if (open === null) return <p className="open-image__empty">Choose an image to open it.</p>;
+  // Legacy's words for a viewer with nothing in it (main_window.py:3086).
+  if (open === null) return <p className="open-image__empty">No image loaded</p>;
 
   return (
     <OpenedImage
@@ -323,20 +324,20 @@ function OpenedImage({
         return;
       }
       if (outcome.kind === "nothing") {
-        // Legacy says "No segments to erase" here, and saying nothing at all would leave a user
-        // wondering whether the gesture registered.
-        notify({ severity: "info", message: "No annotations to erase" });
+        // Legacy's words, and saying nothing at all would leave a user wondering whether the
+        // gesture registered.
+        notify({ severity: "info", message: "No segments to erase" });
         return;
       }
       if (outcome.vanished > 0) {
         // RULE-009 discards every remaining piece of ten pixels or fewer, so an annotation can
-        // disappear entirely. Legacy does this silently; a deletion nobody is told about is the
-        // shape of defect decision 7 exists to remove.
+        // disappear entirely -- what remained of it was under the 10-pixel minimum. Legacy does
+        // this silently; a deletion nobody is told about is the shape of defect decision 7 exists
+        // to remove.
         notify({
           severity: "warning",
           message:
             `${outcome.vanished} annotation${outcome.vanished === 1 ? " was" : "s were"} removed completely`,
-          detail: "What remained of them was smaller than the 10-pixel minimum, so nothing was kept.",
           irreversible: false,
         });
       }
@@ -558,15 +559,11 @@ function OpenedImage({
       {/* A caption, not a heading: it names the picture without taking space above it. */}
       <span className="open-image__name">{image.name}</span>
       {metadata !== null && (
+        // A 16-bit image is shown and sent to the model as value / 256, truncated (RULE-024); the
+        // line said so until the owner asked for no explanations on 2026-09-26.
         <p className="provisional">
           {metadata.width} x {metadata.height}, {metadata.sourceFormat}
-          {metadata.sourceDepth === 16 && (
-            <>
-              {" "}
-              &mdash; 16-bit, shown and sent to the model as <code>value / 256</code> truncated
-              (RULE-024)
-            </>
-          )}
+          {metadata.sourceDepth === 16 ? ", 16-bit" : ""}
         </p>
       )}
 
@@ -598,10 +595,11 @@ function OpenedImage({
       {/* Three different answers, never collapsed into one. Decision 15d. */}
       {result?.kind === "none" && <p>This image has no annotation file.</p>}
 
+      {/* Decision 15d's banner. Nothing is deleted on this path (15c); the banner said so too until
+          the owner asked for messages as short as legacy's (2026-09-26). */}
       {result?.kind === "failed" && (
         <p role="alert" className="banner banner--error">
-          Annotations exist for {image.name} but none could be read: {result.message}. Nothing has
-          been deleted.
+          Annotations for {image.name} could not be read: {result.message}
         </p>
       )}
 
@@ -613,41 +611,37 @@ function OpenedImage({
           </p>
 
           {/* The desktop app's own name table is read as data; a table in any other shape is
-              refused. The masks are fine and the names are not, and a Pascal VOC or CreateML file
-              written now would say "3" where the original said "stop sign" without looking wrong. */}
+              refused, for safety. The objects and their class ids are fine and the NAMES are
+              missing, so a Pascal VOC or CreateML file written now would say "3" where the original
+              said "stop sign" without looking wrong -- which a user needs before saving, so it is
+              the tooltip rather than lost with the paragraph (2026-09-26). */}
           {result.annotations.unreadableAliases === true && (
-            <p role="status" className="banner banner--warning">
-              The class-name table in this file is not in the form LazyLabel saves, so it was not
-              read, for safety. The objects and their class ids are correct; the NAMES are missing.
-              Saving to Pascal VOC or CreateML now would write the ids where the names belong.
+            <p
+              role="status"
+              className="banner banner--warning"
+              title="Saving to Pascal VOC or CreateML now would write the class ids where the names belong"
+            >
+              Class names could not be read from this file
             </p>
           )}
 
           {result.annotations.rejected > 0 && (
             <p role="status" className="banner banner--warning">
-              {result.annotations.rejected} lines or objects in that file could not be read and were
-              skipped.
+              {result.annotations.rejected} unreadable lines or objects skipped
             </p>
           )}
 
-          {/* A recovery the user is not told about is what decision 15c forbids. */}
+          {/* A recovery the user is not told about is what decision 15c forbids: a higher-priority
+              annotation file could not be read, so these came from a lower one. */}
           {result.annotations.failures.length > 0 && (
             <p role="status" className="banner banner--warning">
-              A higher-priority annotation file could not be read, so these annotations came from{" "}
-              {result.annotations.sourceFormat} instead:{" "}
+              Loaded from {result.annotations.sourceFormat}; could not read{" "}
               {result.annotations.failures.map((f) => `${f.format} (${f.reason})`).join("; ")}
             </p>
           )}
 
-          {Object.keys(result.annotations.classAliases).length > 0 && (
-            <p>
-              Class names from that file:{" "}
-              {Object.entries(result.annotations.classAliases)
-                .map(([id, name]) => `${id} = ${name}`)
-                .join(", ")}
-            </p>
-          )}
-
+          {/* The file's class names are the class table's aliases; this line listed them again
+              until 2026-09-26. */}
         </>
       )}
       </div>
@@ -686,6 +680,7 @@ function ConvertButton({
   const { classAliases, segments, crop, activeSide, markSavedOn, imageState, revisions, registerSave } =
     useWorkspace();
   const { notify } = useNotifications();
+  const keyOf = useKeyHint();
 
   /*
    * WHETHER THIS IMAGE MAY BE WRITTEN AT ALL -- and until now the button never asked.
@@ -820,21 +815,14 @@ function ConvertButton({
           // retried the same broken thing.
           conflicted: conflict,
           /*
-           * THE ADVICE HAS TO BE COMPATIBLE WITH THE REASSURANCE, and the first version was not:
-           * it said the work was still on screen and then told the user to reload — which calls
-           * `openImage` and clears the segments, discarding exactly what it had just promised was
-           * safe. Written quickly, and only obvious once read as a whole.
-           *
-           * There is no force-overwrite yet, so the honest instruction is the one that keeps the
-           * work: open the file elsewhere to see what it says, and do not reload this image until
-           * the annotations on screen are somewhere else.
+           * ONE SENTENCE, the fact. It went on to say who could have written the file (the
+           * desktop app, another tab, a script), that the annotations on screen are still the
+           * user's, and that reloading the image WOULD replace them with what the file now says
+           * -- until the owner asked, on 2026-09-26, for messages as short as legacy's. The
+           * recovery is the "Save anyway" button beside it; reloading is still the one thing not
+           * to do before the annotations on screen are somewhere else.
            */
-          reason: conflict
-            ? `${key} changed since you loaded it — the desktop app, another tab, or a script `
-              + "wrote it. Nothing here was lost; the annotations on screen are still yours. "
-              + "Reloading this image WOULD replace them with what the file now says, so check "
-              + "the file another way first."
-            : reason,
+          reason: conflict ? `${key} changed since you loaded it` : reason,
         });
         return false;
       })
@@ -876,12 +864,12 @@ function ConvertButton({
   const saveNow = (): Promise<boolean> => {
     if (writing.current !== null) return writing.current;
     if (!writable) {
+      // Saving would replace a damaged file with an empty one. The way on is to move the file aside
+      // and reopen the image, or to repair it outside the app; the notice said so in a second
+      // paragraph until 2026-09-26.
       notify({
         severity: "warning",
         message: "Nothing was written: this image's annotations could not be read",
-        detail:
-          "Saving would replace a damaged file with an empty one. Move the file aside and reopen "
-          + "the image to start fresh, or repair it outside the app.",
       });
       return Promise.resolve(false);
     }
@@ -906,21 +894,29 @@ function ConvertButton({
         type="button"
         onClick={() => convert(revisions)}
         disabled={state.status === "saving" || !writable}
+        // Disabled with the reason in its tooltip, as legacy explains a control it disables; the
+        // reason was a paragraph beside it until 2026-09-26. Otherwise legacy's name for the save
+        // key (hotkeys.py:67), since legacy saves with the key rather than a button.
+        title={
+          writable
+            ? `Save Output${keyOf("save_output")}`
+            : "This image's annotations could not be read, so nothing can be written over them"
+        }
       >
         {state.status === "saving" ? "Writing…" : `Write ${formats.length} format${formats.length === 1 ? "" : "s"}`}
       </button>
 
-      {!writable && (
-        <p role="status" className="banner banner--warning">
-          This image&rsquo;s annotations could not be read, so nothing can be written over them:
-          saving now would replace a damaged file with an empty one. Move the file aside and
-          reopen the image to start fresh, or repair it outside the app.
-        </p>
-      )}
-
       {state.status === "failed" && (
         <>
-          <p role="alert" className="banner banner--error">
+          {/* For a conflict, what the user needs before acting is the tooltip: their work is still
+              on screen, and reopening the image would replace it with the file. */}
+          <p
+            role="alert"
+            className="banner banner--error"
+            {...(state.conflicted === true
+              ? { title: "The annotations on screen are still yours; reopening the image replaces them with the file" }
+              : {})}
+          >
             Nothing was written: {state.reason}
           </p>
 
@@ -928,8 +924,8 @@ function ConvertButton({
               thing the conditional write exists to prevent, so it is a deliberate second press
               rather than a setting or a retry that happens on its own. */}
           {state.conflicted === true && (
-            <button type="button" onClick={() => convert({})}>
-              Save anyway, overwriting what is there now
+            <button type="button" title="Overwrite what is there now" onClick={() => convert({})}>
+              Save anyway
             </button>
           )}
         </>
@@ -953,18 +949,22 @@ function ConvertButton({
             </p>
           )}
 
+          {/* Sidecars in formats that were not selected, still on disk and so possibly out of date
+              with what was just saved. Reported, never deleted (decision 15f). */}
           {state.result.stale.length > 0 && (
             <p role="status" className="banner banner--warning">
-              {state.result.stale.join(", ")} {state.result.stale.length === 1 ? "is" : "are"} still
-              on disk for this image and {state.result.stale.length === 1 ? "was" : "were"} not
-              rewritten, so {state.result.stale.length === 1 ? "it" : "they"} may now disagree with
-              what you just saved. Nothing has been deleted.
+              Still on disk, not rewritten: {state.result.stale.join(", ")}
             </p>
           )}
 
+          {/* The API's own two-sentence note on why is the tooltip, not a paragraph (2026-09-26). */}
           {state.result.skippedEmpty.length > 0 && (
-            <p role="status" className="banner banner--warning">
-              {state.result.skippedEmpty.join(", ")} could not be written: {state.result.note}
+            <p
+              role="status"
+              className="banner banner--warning"
+              {...(state.result.note === undefined ? {} : { title: state.result.note })}
+            >
+              {state.result.skippedEmpty.join(", ")} could not be written
             </p>
           )}
         </>
