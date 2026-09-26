@@ -255,6 +255,8 @@ export function TimelinePanel({
     return () => window.removeEventListener("beforeunload", ask);
   }, []);
   const [finding, setFinding] = useState(false);
+  /** Which Find is current: an aborted one's answer is dropped when it arrives (SP-29). */
+  const findRun = useRef(0);
   const [foundNote, setFoundNote] = useState<string | null>(null);
   /*
    * MIN CONF IS A PERSISTED SETTING, not panel state -- `propagation_confidence_threshold`, which
@@ -395,11 +397,24 @@ export function TimelinePanel({
    * threw a ReferenceError instead of saying anything.
    */
   const find = useCallback(async () => {
-    if (client === undefined || finding) return;
+    if (client === undefined) return;
+    /*
+     * A second press, or Ctrl+H, aborts, as legacy's does (`main_window.py:5044-5055`,
+     * SEQUENCE_PARITY.md SP-29). The request itself cannot be withdrawn, so its answer is
+     * dropped when it comes; the service finishes the work in the background.
+     */
+    if (finding) {
+      findRun.current += 1;
+      setFinding(false);
+      notify({ severity: "info", message: "Reference analysis cancelled" });
+      return;
+    }
+    const run = (findRun.current += 1);
     setFinding(true);
     setFoundNote(null);
     try {
       const answer = await client.findArchetypes(frames.map((frame) => frame.key));
+      if (run !== findRun.current) return; // aborted meanwhile
       setArchetypes(answer.suggested);
       onArchetypes?.(answer.suggested);
       // Earlier suggestions go first, as legacy's do (`main_window.py:5066-5067`, SP-30).
@@ -413,11 +428,11 @@ export function TimelinePanel({
             : `${answer.suggested.length} frames suggested from ${answer.clusters} scenes.`,
       );
     } catch (cause) {
-      setFoundNote(cause instanceof Error ? cause.message : String(cause));
+      if (run === findRun.current) setFoundNote(cause instanceof Error ? cause.message : String(cause));
     } finally {
-      setFinding(false);
+      if (run === findRun.current) setFinding(false);
     }
-  }, [client, finding, frames, onArchetypes, setOverrides]);
+  }, [client, finding, frames, notify, onArchetypes, setOverrides]);
 
   useHotkey("find_archetypes", () => {
     // Off its tab the key says where it works, as the shell's fallback does before this panel is
@@ -720,11 +735,11 @@ export function TimelinePanel({
         {client !== undefined && (
           <button
             type="button"
-            className="seq-button seq-button--purple"
+            // Legacy's Abort while it runs (sequence_widget.py:579-590), red as Propagate's is.
+            className={`seq-button ${finding ? "seq-button--red" : "seq-button--purple"}`}
             onClick={() => void find()}
-            disabled={finding}
           >
-            {finding ? "Finding…" : "Find archetypes"}
+            {finding ? "Abort" : "Find archetypes"}
           </button>
         )}
         <button type="button" onClick={() => setOverrides(clearFlags(frames))}>

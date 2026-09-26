@@ -7,7 +7,7 @@
  * JUMPS to, and a jump is the navigation neighbour-prefetching never helps with.
  */
 
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { WireDatasetImage } from "@lazylabel/contracts";
 
@@ -241,5 +241,28 @@ describe("suggestions over time (SP-30)", () => {
     fireEvent.keyDown(document, { key: "H" });
 
     await waitFor(() => expect(cells()[2]!.className).toContain("timeline__frame--current"));
+  });
+});
+
+describe("aborting (SP-29)", () => {
+  it("stops on a second press, in legacy's words, and drops the answer when it comes", async () => {
+    // Legacy's button reads Abort while it runs, and a press or Ctrl+H cancels with "Reference
+    // analysis cancelled" (sequence_widget.py:579-590; main_window.py:5044-5055). The web disabled it.
+    let release: (value: unknown) => void = () => undefined;
+    const { findArchetypes } = show(() => new Promise((resolve) => {
+      release = resolve;
+    }));
+    await build();
+    fireEvent.click(screen.getByRole("button", { name: /Find archetypes/ }));
+    await waitFor(() => expect(findArchetypes).toHaveBeenCalledTimes(1));
+
+    fireEvent.click(screen.getByRole("button", { name: "Abort" }));
+
+    expect(await screen.findByText("Reference analysis cancelled")).toBeTruthy();
+    expect(screen.getByRole("button", { name: /Find archetypes/ })).toBeTruthy();
+    await act(async () => {
+      release(found());
+    });
+    expect([...cells()].some((cell) => cell.getAttribute("aria-label")!.includes("suggested"))).toBe(false);
   });
 });
