@@ -69,6 +69,8 @@ export interface DatasetBrowserProps {
     readonly start: string | null;
     readonly end: string | null;
     readonly between: readonly string[];
+    /** The timeline's order while it is sorted: the range's rows are shown in it (SP-42). */
+    readonly order?: readonly string[] | null;
   } | null;
 }
 
@@ -289,15 +291,36 @@ function ColumnedTable({
   // Legacy's "Search files..." (fast_file_manager.py:1143-1213): a view of the list, by name.
   const [query, setQuery] = useState("");
   const needle = query.trim().toLowerCase();
+  /*
+   * THE TIMELINE'S ORDER, while the timeline is sorted: legacy's Sort puts the range's rows in the
+   * timeline's order, in the places they hold, and the sort reads "Timeline" until another is
+   * chosen or the timeline is unsorted (`main_window.py:3436-3455`;
+   * `fast_file_manager.py:360-373, 1239-1244, 1331-1358`, SEQUENCE_PARITY.md SP-42). So Left and
+   * Right follow the sorted timeline. `released` is the order a choice of sort left.
+   */
+  const timelineOrder = range?.order ?? null;
+  const [released, setReleased] = useState<readonly string[] | null>(null);
+  const following = timelineOrder !== null && timelineOrder !== released ? timelineOrder : null;
   // Memoized, because it is reported up: a new array every render would re-render the shell,
   // which re-renders this, which reports again.
-  const rows = useMemo(
-    () =>
-      sortImages(listing.images, order).filter(
-        (image) => needle === "" || image.name.toLowerCase().includes(needle),
-      ),
-    [listing.images, needle, order],
-  );
+  const { rows, inTimelineOrder } = useMemo(() => {
+    const shownRows = sortImages(listing.images, order).filter(
+      (image) => needle === "" || image.name.toLowerCase().includes(needle),
+    );
+    if (following === null || range === null || range === undefined) {
+      return { rows: shownRows, inTimelineOrder: false };
+    }
+    // The range's rows only, each into the place of one of them, as legacy's `reorderRows` does.
+    const inRange = new Set(range.between);
+    const at = new Map(shownRows.map((image, index) => [image.key, index]));
+    const moved = following.filter((key) => inRange.has(key) && at.has(key));
+    const places = moved.map((key) => at.get(key)!).sort((a, b) => a - b);
+    const reordered = [...shownRows];
+    places.forEach((place, n) => {
+      reordered[place] = shownRows[at.get(moved[n]!)!]!;
+    });
+    return { rows: reordered, inTimelineOrder: moved.length > 0 };
+  }, [following, listing.images, needle, order, range]);
   useEffect(() => onShown?.(rows), [onShown, rows]);
   const showModified = settings.values["file_manager_show_modified"] !== false;
   const showSize = settings.values["file_manager_show_size"] !== false;
@@ -319,20 +342,24 @@ function ColumnedTable({
         <label className="dataset__sort">
           <span className="visually-hidden">Order</span>
           <select
-            value={order}
+            value={inTimelineOrder ? "timeline" : order}
             aria-label="Sort order"
-            onChange={(event) =>
+            onChange={(event) => {
+              // A sort chosen leaves the timeline's order, as legacy's does (1239-1244).
+              setReleased(timelineOrder);
+              if (event.target.value === "timeline") return;
               void save({
                 ...settings,
                 values: { ...settings.values, file_manager_sort_order: Number(event.target.value) },
-              })
-            }
+              });
+            }}
           >
             {SORT_ORDERS.map((entry) => (
               <option key={entry.value} value={entry.value}>
                 {entry.label}
               </option>
             ))}
+            {inTimelineOrder && <option value="timeline">Timeline</option>}
           </select>
         </label>
 

@@ -415,10 +415,15 @@ describe("setting the range up, as legacy's Timeline Setup does (SP-41)", () => 
 
     openInView("frames/f02.png");
     fireEvent.click(button("Set Start"));
-    expect(onRange).toHaveBeenLastCalledWith({ start: "frames/f02.png", end: null, between: [] });
+    expect(onRange).toHaveBeenLastCalledWith({ start: "frames/f02.png", end: null, between: [], order: null });
     openInView("frames/f04.png");
     fireEvent.click(button("Set End"));
-    const range = { start: "frames/f02.png", end: "frames/f04.png", between: ["frames/f02.png", "frames/f03.png", "frames/f04.png"] };
+    const range = {
+      start: "frames/f02.png",
+      end: "frames/f04.png",
+      between: ["frames/f02.png", "frames/f03.png", "frames/f04.png"],
+      order: null,
+    };
     expect(onRange).toHaveBeenLastCalledWith(range);
 
     fireEvent.click(button("Build Timeline"));
@@ -426,7 +431,30 @@ describe("setting the range up, as legacy's Timeline Setup does (SP-41)", () => 
     expect(onRange).toHaveBeenLastCalledWith(range);
 
     fireEvent.click(screen.getByText("New timeline"));
-    await waitFor(() => expect(onRange).toHaveBeenLastCalledWith({ start: null, end: null, between: [] }));
+    await waitFor(() =>
+      expect(onRange).toHaveBeenLastCalledWith({ start: null, end: null, between: [], order: null }),
+    );
+  });
+
+  it("hands up the timeline's order while it is sorted, for the list to follow (SP-42)", async () => {
+    // Legacy's Sort hands the file list its display order, and Unsort an empty one
+    // (timeline_widget.py:705-715; main_window.py:3436-3455).
+    const onRange = vi.fn();
+    render(withSettings(<Timeline images={FOLDER} onRange={onRange} />));
+    build("0", "4");
+    await waitFor(() => expect(cells()[1]!.getAttribute("aria-label")).toMatch(/reference$/));
+
+    fireEvent.click(screen.getByText("Sort"));
+
+    expect(onRange.mock.lastCall![0].order).toEqual([
+      "frames/f02.png",
+      "frames/f05.png",
+      "frames/f01.png",
+      "frames/f03.png",
+      "frames/f04.png",
+    ]);
+    fireEvent.click(screen.getByText("Unsort"));
+    expect(onRange.mock.lastCall![0].order).toBeNull();
   });
 
   it("hands up no range while the Sequence tab is not the one in use", () => {

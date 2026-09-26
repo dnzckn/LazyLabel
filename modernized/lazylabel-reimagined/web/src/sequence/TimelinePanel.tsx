@@ -165,6 +165,11 @@ export interface SequenceRange {
   readonly end: string | null;
   /** The files from Start to End, as the list showed them when the second was set. */
   readonly between: readonly string[];
+  /**
+   * The timeline's order while it is sorted, for the list to put the range's rows in, as legacy's
+   * Sort does (`main_window.py:3436-3455`, SP-42); null while it is not.
+   */
+  readonly order: readonly string[] | null;
 }
 
 /** Legacy's steps, in its Timeline Setup group (`sequence_widget.py:142-152`). */
@@ -466,9 +471,11 @@ export function TimelinePanel({
   // down a new callback on every render.
   const onRangeNow = useRef(onRange);
   onRangeNow.current = onRange;
-  const rangeKey = active ? `${start ?? ""}|${end ?? ""}|${between.join("|")}` : null;
+  const rangeKey = active
+    ? `${start ?? ""}|${end ?? ""}|${between.join("|")}|${sortKeys === null ? "-" : sortKeys.join("|")}`
+    : null;
   useEffect(() => {
-    onRangeNow.current?.(rangeKey === null ? null : { start, end, between });
+    onRangeNow.current?.(rangeKey === null ? null : { start, end, between, order: sortKeys });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rangeKey]);
 

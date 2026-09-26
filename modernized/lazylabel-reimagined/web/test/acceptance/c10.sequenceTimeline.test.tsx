@@ -151,6 +151,36 @@ describe("C10: build a timeline and mark reference frames", () => {
     await waitFor(() => expect(Object.values(rowColours()).every((colour) => colour === "")).toBe(true));
   });
 
+  it("puts the range's rows in the list in the sorted timeline's order, which Left and Right follow (SP-42)", async () => {
+    // Legacy's Sort reorders the range's rows to the timeline's display order, the sort reads
+    // "Timeline", and Unsort, or another sort chosen, puts the list back (main_window.py:3436-3455;
+    // fast_file_manager.py:360-373, 1239-1244, 1331-1358).
+    await openSequence();
+    await buildRange();
+    fireEvent.click(screen.getByRole("button", { name: "+ All Labeled" }));
+    await waitFor(() => expect(cells()[1]!.getAttribute("aria-label")).toMatch(/reference$/));
+    const listed = () => [...document.querySelectorAll(".dataset tbody th")].map((cell) => cell.textContent);
+    const sortOrder = () => screen.getByLabelText("Sort order") as HTMLSelectElement;
+
+    fireEvent.click(screen.getByText("Sort"));
+
+    await waitFor(() => expect(listed()).toEqual(["f02.png", "f01.png", "f03.png", "f04.png"]));
+    expect(sortOrder().value).toBe("timeline");
+    fireEvent.click(screen.getByRole("button", { name: "f02.png" }));
+    await waitFor(() => expect(screen.getByLabelText("Status").textContent).toMatch(/f02\.png/));
+    fireEvent.keyDown(document, { key: "ArrowRight", code: "ArrowRight" });
+    await waitFor(() => expect(screen.getByLabelText("Status").textContent).toMatch(/f01\.png/));
+
+    fireEvent.click(screen.getByText("Unsort"));
+    await waitFor(() => expect(listed()).toEqual(["f01.png", "f02.png", "f03.png", "f04.png"]));
+    expect(sortOrder().value).toBe("0");
+
+    fireEvent.click(screen.getByText("Sort"));
+    await waitFor(() => expect(sortOrder().value).toBe("timeline"));
+    fireEvent.change(sortOrder(), { target: { value: "1" } });
+    await waitFor(() => expect(listed()).toEqual(["f04.png", "f03.png", "f02.png", "f01.png"]));
+  });
+
   it("builds a timeline over the chosen range", async () => {
     await openSequence();
 
