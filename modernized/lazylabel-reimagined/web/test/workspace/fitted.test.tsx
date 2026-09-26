@@ -106,7 +106,7 @@ function mount(size: { width: number; height: number }) {
 
 /** The canvas the open image is drawn on, once it is there. */
 async function openedCanvas(): Promise<HTMLCanvasElement> {
-  fireEvent.click(await screen.findByRole("button", { name: "a.png" }));
+  fireEvent.doubleClick(await screen.findByRole("button", { name: "a.png" }));
   return (await screen.findByRole("img", { name: /annotations?$/ })) as HTMLCanvasElement;
 }
 

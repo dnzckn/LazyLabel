@@ -146,9 +146,10 @@ export interface TimelinePanelProps {
    */
   readonly ai?: { readonly available: boolean; readonly videoCapable: boolean; readonly reason: string | null };
   /**
-   * The rows as the file list shows them, sorted and searched. Build takes the files between Start
-   * and End in this order, as legacy's takes the list's rows (`fast_file_manager.py:1971-1999`,
-   * SEQUENCE_PARITY.md SP-20). Absent, the listing as the browser gave it.
+   * The rows as the file list shows them, sorted, searched and not hidden. Build takes the files
+   * between Start and End in this order, as legacy's takes the list's rows
+   * (`fast_file_manager.py:1971-1999`, SEQUENCE_PARITY.md SP-20). Absent, the listing as the
+   * browser gave it.
    */
   readonly rows?: readonly WireDatasetImage[];
   /**
@@ -157,6 +158,11 @@ export interface TimelinePanelProps {
    * 501-513, 1900-1965`). Null while the Sequence tab is not in use, where legacy has no range.
    */
   readonly onRange?: (range: SequenceRange | null) => void;
+  /**
+   * Save All wrote these frames' files. The file list reads its format columns again, as legacy's
+   * does after Save All (`fast_file_manager.py:1385-1393`).
+   */
+  readonly onWritten?: (keys: readonly string[]) => void;
 }
 
 /** The Start and End a timeline is built between, and the rows between them when both are set. */
@@ -265,6 +271,7 @@ export function TimelinePanel({
   ai,
   rows,
   onRange,
+  onWritten,
 }: TimelinePanelProps): ReactNode {
   const aiReady = ai === undefined || ai.available;
   // Propagation needs a video-capable model as well as a reachable service.
@@ -1314,7 +1321,10 @@ export function TimelinePanel({
           onSkipped={setKeptLabels}
           onDiscarded={setDiscarded}
           onLeftOut={(keys) => setOverrides((previous) => markSkipped(previous ?? frames, keys))}
-          onSaved={(keys) => setOverrides((previous) => markSaved(previous ?? frames, keys))}
+          onSaved={(keys) => {
+            setOverrides((previous) => markSaved(previous ?? frames, keys));
+            onWritten?.(keys);
+          }}
           {...(savedElsewhere === undefined ? {} : { savedElsewhere })}
           {...(openAnnotations === undefined ? {} : { openAnnotations })}
           onRunStart={dropRun}

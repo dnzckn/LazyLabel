@@ -161,9 +161,9 @@ function mount() {
 async function openTimeline() {
   fireEvent.click(await screen.findByRole("tab", { name: "Sequence" }));
   // The whole folder, as a user sets it: each end opened from the list, then Set Start and Set End.
-  fireEvent.click(await screen.findByRole("button", { name: "f01.png" }));
+  fireEvent.doubleClick(await screen.findByRole("button", { name: "f01.png" }));
   fireEvent.click(screen.getByRole("button", { name: "Set Start" }));
-  fireEvent.click(screen.getByRole("button", { name: "f04.png" }));
+  fireEvent.doubleClick(screen.getByRole("button", { name: "f04.png" }));
   fireEvent.click(screen.getByRole("button", { name: "Set End" }));
   fireEvent.click(screen.getByRole("button", { name: "Build Timeline" }));
   // Building marks nothing since 2026-09-23, as in legacy: the reference is marked as a user marks it.

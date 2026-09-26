@@ -109,7 +109,7 @@ describe("C1: the dataset browser", () => {
     await waitFor(() => expect(screen.getByText("a.png")).toBeTruthy());
     expect(screen.getByText("b.png")).toBeTruthy();
 
-    // One column per format the user has left switched on, in load-priority order, under legacy's
+    // One column per format the user has left switched on, in legacy's order, under legacy's
     // column names (fast_file_manager.py:277-288), the suffix a user would recognize in each
     // header's tooltip. RULE-036's ten settings are honoured now, and five of them default to
     // FALSE in legacy -- so the default view is NPZ OHE and YOLO Det, not all seven. Showing every
@@ -316,7 +316,7 @@ describe("C1: the dataset browser", () => {
 
       show({ loadAnnotations });
       await waitFor(() => expect(screen.getByText("a.png")).toBeTruthy());
-      screen.getByRole("button", { name: "a.png" }).click();
+      fireEvent.doubleClick(screen.getByRole("button", { name: "a.png" }));
 
       await waitFor(() => expect(screen.getByText(/1 objects, read from/)).toBeTruthy());
       expect(screen.getByText("frames/a_seg.txt")).toBeTruthy();
@@ -329,7 +329,7 @@ describe("C1: the dataset browser", () => {
     it("distinguishes an image with no annotation file from one that could not be read", async () => {
       show({ loadAnnotations: async () => ({ kind: "none" }) });
       await waitFor(() => expect(screen.getByText("b.png")).toBeTruthy());
-      screen.getByRole("button", { name: "b.png" }).click();
+      fireEvent.doubleClick(screen.getByRole("button", { name: "b.png" }));
 
       await waitFor(() => expect(screen.getByText(/has no annotation file/)).toBeTruthy());
       expect(screen.queryByRole("alert")).toBeNull();
@@ -345,7 +345,7 @@ describe("C1: the dataset browser", () => {
       });
 
       await waitFor(() => expect(screen.getByText("a.png")).toBeTruthy());
-      screen.getByRole("button", { name: "a.png" }).click();
+      fireEvent.doubleClick(screen.getByRole("button", { name: "a.png" }));
 
       // Never an empty canvas. That nothing was deleted, which is true of this path, was said as
       // well until the owner asked for messages as short as legacy's (2026-09-26).
@@ -373,7 +373,7 @@ describe("C1: the dataset browser", () => {
       });
 
       await waitFor(() => expect(screen.getByText("a.png")).toBeTruthy());
-      screen.getByRole("button", { name: "a.png" }).click();
+      fireEvent.doubleClick(screen.getByRole("button", { name: "a.png" }));
 
       // The work was recovered, and saying so is what decision 15c requires.
       await waitFor(() =>
@@ -401,7 +401,7 @@ describe("C1: the dataset browser", () => {
       });
 
       await waitFor(() => expect(screen.getByText("a.png")).toBeTruthy());
-      screen.getByRole("button", { name: "a.png" }).click();
+      fireEvent.doubleClick(screen.getByRole("button", { name: "a.png" }));
 
       // The one loss a converted file does not look like it has: the objects are right and the
       // names are gone, so a Pascal VOC export would say "3" where the original said "stop sign".
@@ -428,7 +428,7 @@ describe("C1: the dataset browser", () => {
       });
 
       await waitFor(() => expect(screen.getByText("a.png")).toBeTruthy());
-      screen.getByRole("button", { name: "a.png" }).click();
+      fireEvent.doubleClick(screen.getByRole("button", { name: "a.png" }));
 
       // "412 unreadable lines" rather than one object and silence.
       await waitFor(() => expect(screen.getByText("412 unreadable lines or objects skipped")).toBeTruthy());
@@ -446,7 +446,7 @@ describe("C1: the dataset browser", () => {
 
     show({ imageMetadata, loadAnnotations } as never);
     await waitFor(() => expect(screen.getByText("a.png")).toBeTruthy());
-    screen.getByRole("button", { name: "a.png" }).click();
+    fireEvent.doubleClick(screen.getByRole("button", { name: "a.png" }));
 
     // The size has to be right before annotations are loaded: the text formats store normalized
     // coordinates, so a wrong one silently rescales every polygon.
@@ -467,7 +467,7 @@ describe("C1: the dataset browser", () => {
     } as never);
 
     await waitFor(() => expect(screen.getByText("a.png")).toBeTruthy());
-    screen.getByRole("button", { name: "a.png" }).click();
+    fireEvent.doubleClick(screen.getByRole("button", { name: "a.png" }));
 
     // RULE-024 is invisible unless it is said: the pixels on screen are not the pixels in the file.
     // How they were converted (value / 256, truncated) was said too until 2026-09-26.

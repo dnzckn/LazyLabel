@@ -7,7 +7,7 @@
  * persists, and that a save which is less than it looks says so.
  */
 
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { defaultSettings } from "@lazylabel/settings-schema";
@@ -94,7 +94,7 @@ function show(overrides: Record<string, unknown> = {}) {
 /** Open the one image in the listing and wait for its annotations. */
 async function openImage(): Promise<void> {
   await waitFor(() => expect(screen.getByRole("button", { name: "a.png" })).toBeTruthy());
-  screen.getByRole("button", { name: "a.png" }).click();
+  fireEvent.doubleClick(screen.getByRole("button", { name: "a.png" }));
   await waitFor(() => expect(screen.getByText(/1 objects, read from/)).toBeTruthy());
 }
 

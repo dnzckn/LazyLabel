@@ -313,11 +313,49 @@ describe("next and previous image (CONTROL_PARITY.md CP-14)", () => {
         "a.png",
       ]),
     );
-    fireEvent.click(screen.getByRole("button", { name: "b.png" }));
+    fireEvent.doubleClick(screen.getByRole("button", { name: "b.png" }));
     await waitFor(() => expect(opened).toEqual(["b.png"]));
 
     fireEvent.keyDown(document, { key: "ArrowRight", code: "ArrowRight" });
 
     await waitFor(() => expect(opened).toEqual(["b.png", "a.png"]));
+  });
+
+  it("step from the list's current row, skip hidden rows, and start at the first with none (CP-48)", async () => {
+    // fast_file_manager.py:1771-1843: from the table's current row, which a click moves without
+    // opening; with none -- nothing opened yet, or the current row hidden -- next opens the first.
+    const opened: string[] = [];
+    mount({
+      listImages: async () => ({
+        folder: "",
+        folders: [],
+        images: ["a.png", "b.png", "c.png", "d.png"].map(image),
+        annotatedCount: 0,
+        unrecognized: 0,
+        columns: [],
+      }),
+      loadAnnotations: async (_project: string, key: string) => {
+        opened.push(key);
+        return { kind: "none" };
+      },
+    } as unknown as Partial<ApiClient>);
+    await waitFor(() => expect(screen.getByRole("button", { name: "d.png" })).toBeTruthy());
+    const right = () => fireEvent.keyDown(document, { key: "ArrowRight", code: "ArrowRight" });
+
+    right();
+    await waitFor(() => expect(opened).toEqual(["a.png"]));
+
+    fireEvent.click(screen.getByRole("button", { name: "c.png" }));
+    right();
+    await waitFor(() => expect(opened).toEqual(["a.png", "d.png"]));
+
+    // b is the current row when it is hidden, so the next step starts again at the first row, and
+    // the one after it passes over b.
+    fireEvent.click(screen.getByRole("button", { name: "b.png" }));
+    fireEvent.click(screen.getByRole("button", { name: "Hide" }));
+    right();
+    await waitFor(() => expect(opened).toEqual(["a.png", "d.png", "a.png"]));
+    right();
+    await waitFor(() => expect(opened).toEqual(["a.png", "d.png", "a.png", "c.png"]));
   });
 });

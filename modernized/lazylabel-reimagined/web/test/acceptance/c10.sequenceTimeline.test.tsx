@@ -100,9 +100,9 @@ async function openSequence() {
 
 /** Legacy's range: the first frame opened from the list and Set Start, the last and Set End (SP-41). */
 async function setRange(first: string, last: string) {
-  fireEvent.click(await screen.findByRole("button", { name: first }));
+  fireEvent.doubleClick(await screen.findByRole("button", { name: first }));
   fireEvent.click(screen.getByRole("button", { name: "Set Start" }));
-  fireEvent.click(screen.getByRole("button", { name: last }));
+  fireEvent.doubleClick(screen.getByRole("button", { name: last }));
   fireEvent.click(screen.getByRole("button", { name: "Set End" }));
 }
 
@@ -157,33 +157,49 @@ describe("C10: build a timeline and mark reference frames", () => {
   });
 
   it("puts the range's rows in the list in the sorted timeline's order, which Left and Right follow (SP-42)", async () => {
-    // Legacy's Sort reorders the range's rows to the timeline's display order, the sort reads
-    // "Timeline", and Unsort, or another sort chosen, puts the list back (main_window.py:3436-3455;
-    // fast_file_manager.py:360-373, 1239-1244, 1331-1358).
+    // Legacy's Sort reorders the range's rows to the timeline's display order, and Unsort, or a
+    // header clicked, puts the list back (main_window.py:3436-3455; fast_file_manager.py:360-373,
+    // 1325-1358). While it is in the timeline's order no column is said to be sorted; the header
+    // keeps its arrow, as Qt's does.
     await openSequence();
     await buildRange();
     fireEvent.click(screen.getByRole("button", { name: "+ All Labeled" }));
     await waitFor(() => expect(cells()[1]!.getAttribute("aria-label")).toMatch(/reference$/));
     const listed = () => [...document.querySelectorAll(".dataset tbody th")].map((cell) => cell.textContent);
-    const sortOrder = () => screen.getByLabelText("Sort order") as HTMLSelectElement;
+    const nameHeader = () => screen.getByRole("columnheader", { name: "Name" });
 
     fireEvent.click(screen.getByText("Sort"));
 
     await waitFor(() => expect(listed()).toEqual(["f02.png", "f01.png", "f03.png", "f04.png"]));
-    expect(sortOrder().value).toBe("timeline");
-    fireEvent.click(screen.getByRole("button", { name: "f02.png" }));
+    expect(nameHeader().getAttribute("aria-sort")).toBeNull();
+    fireEvent.doubleClick(screen.getByRole("button", { name: "f02.png" }));
     await waitFor(() => expect(screen.getByLabelText("Status").textContent).toMatch(/f02\.png/));
     fireEvent.keyDown(document, { key: "ArrowRight", code: "ArrowRight" });
     await waitFor(() => expect(screen.getByLabelText("Status").textContent).toMatch(/f01\.png/));
 
     fireEvent.click(screen.getByText("Sorted"));
     await waitFor(() => expect(listed()).toEqual(["f01.png", "f02.png", "f03.png", "f04.png"]));
-    expect(sortOrder().value).toBe("0");
+    expect(nameHeader().getAttribute("aria-sort")).toBe("ascending");
 
     fireEvent.click(screen.getByText("Sort"));
-    await waitFor(() => expect(sortOrder().value).toBe("timeline"));
-    fireEvent.change(sortOrder(), { target: { value: "1" } });
+    await waitFor(() => expect(nameHeader().getAttribute("aria-sort")).toBeNull());
+    // Name was sorted ascending, so its header turns it around.
+    fireEvent.click(nameHeader().querySelector("button")!);
     await waitFor(() => expect(listed()).toEqual(["f04.png", "f03.png", "f02.png", "f01.png"]));
+    expect(nameHeader().getAttribute("aria-sort")).toBe("descending");
+  });
+
+  it("leaves a hidden row out of the range, as legacy's list does (CP-48, SP-20)", async () => {
+    // Build takes the rows the list shows between Start and End (fast_file_manager.py:1971-1999),
+    // and a hidden row is not shown (812-815).
+    await openSequence();
+    fireEvent.click(await screen.findByRole("button", { name: "f03.png" }));
+    fireEvent.click(screen.getByRole("button", { name: "Hide" }));
+
+    await buildRange("f01.png", "f04.png");
+
+    await waitFor(() => expect(cells()).toHaveLength(3));
+    expect([...cells()].map((cell) => cell.getAttribute("aria-label")).join(" ")).not.toMatch(/f03/);
   });
 
   it("builds a timeline over the chosen range", async () => {

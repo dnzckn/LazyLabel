@@ -1,96 +1,91 @@
 /**
- * The order the dataset browser lists images in — RULE-036's `file_manager_sort_order`.
+ * How the file list sorts: by a click on any column's header, the format columns too, as legacy's
+ * table does (fast_file_manager.py:1055-1063, 817-882; CONTROL_PARITY.md CP-48).
  *
- * Legacy's six, by dropdown index (`fast_file_manager.py:1250-1259`): name ascending and
- * descending, modified ascending and descending, size ascending and descending.
- *
- * ONLY THE TWO NAME ORDERS CAN BE HONOURED TODAY, and the reason is worth stating rather than
- * working around. `WireDatasetImage` carries no `modified` and no `size`, and `listing.ts` has an
- * explicit "ONE PASS, NOT SEVEN PER IMAGE" optimisation behind that: adding a stat per image to
- * every listing would pay for a column most folders never show. The shape that fits is a
- * `?details=1` the client asks for only when a sort or a column needs it, which is a contract
- * change and its own slice.
- *
- * So an order this app cannot perform falls back to NAME ASCENDING and says so through
- * `isSupported`, rather than silently returning the list in some other order. A user whose
- * imported legacy settings say "size, largest first" is told that is not available yet; they are
- * not shown a list sorted by name that claims to be sorted by size.
+ * `file_manager_sort_order` holds legacy's six stored orders by index (1250-1260): name, modified
+ * and size, each ascending and descending. It sets the order the list opens in, as legacy's
+ * `setDisplaySettings` applies it (1886-1891). A header click does not change it: legacy's never
+ * does either, since the handler that would (1239-1248) has no caller.
  */
 
-export const SORT_ORDERS = [
-  { value: 0, label: "Name (A–Z)", needsDetails: false },
-  { value: 1, label: "Name (Z–A)", needsDetails: false },
-  { value: 2, label: "Modified (oldest first)", needsDetails: true },
-  { value: 3, label: "Modified (newest first)", needsDetails: true },
-  { value: 4, label: "Size (smallest first)", needsDetails: true },
-  { value: 5, label: "Size (largest first)", needsDetails: true },
-] as const;
+/** A column the list is sorted by, and which way. */
+export interface SortKey {
+  /** "name", "modified", "size", or the format a status column shows. */
+  readonly column: string;
+  readonly descending: boolean;
+}
+
+/** Legacy's six stored orders, by index (fast_file_manager.py:1252-1259). */
+const STORED: readonly SortKey[] = [
+  { column: "name", descending: false },
+  { column: "name", descending: true },
+  { column: "modified", descending: false },
+  { column: "modified", descending: true },
+  { column: "size", descending: false },
+  { column: "size", descending: true },
+];
+
+/** The stored order the list opens in. Anything but the six is Name ascending, as legacy's `get` default is. */
+export function storedSort(order: unknown): SortKey {
+  return (typeof order === "number" && Number.isInteger(order) ? STORED[order] : undefined) ?? STORED[0]!;
+}
 
 /**
- * Whether this order needs the listing to have been asked for DETAILS.
- *
- * Four of the six sort by a file's date or size, which the listing carries only on request --
- * because filling them costs a stat per image, and a folder of ten thousand frames would pay for
- * it on every listing to serve a sort nobody chose.
+ * Whether sorting by this key needs each file's size and date, which the listing carries only when
+ * asked: filling them costs a stat per image on the server.
  */
-export function needsDetails(order: number): boolean {
-  return SORT_ORDERS.some((entry) => entry.value === order && entry.needsDetails);
+export function sortNeedsDetails(key: SortKey): boolean {
+  return key.column === "modified" || key.column === "size";
 }
 
-export function isSupported(order: number): boolean {
-  return SORT_ORDERS.some((entry) => entry.value === order);
+/**
+ * The sort a header click asks for, as Qt's header decides it: the column already sorted turns
+ * around, and any other sorts ascending.
+ */
+export function clickedSort(current: SortKey, column: string): SortKey {
+  return current.column === column
+    ? { column, descending: !current.descending }
+    : { column, descending: false };
 }
 
-
-interface Named {
+interface Sortable {
   readonly name: string;
+  readonly sidecars?: Readonly<Record<string, boolean>>;
   /** Present only when the listing was asked for details. */
   readonly size?: number;
   readonly modified?: number | null;
 }
 
 /**
- * Sort a listing, leaving the input alone.
+ * The rows sorted by one column, leaving the input alone.
  *
- * By LOWERCASED name, which is what the API already does when it builds the listing — so order 0
- * returns what arrived, in the same order, rather than a second sort that could disagree with the
- * server's on case. `localeCompare` is deliberately not used: the server's comparison is a plain
- * one, and two different collations applied to one list is how "a.png, B.png" and "B.png, a.png"
- * both look correct depending on who you ask.
+ * As legacy's proxy compares them (fast_file_manager.py:817-882): names lowercased and compared
+ * plainly, so frame_10 comes before frame_2; sizes and dates as numbers, one that could not be read
+ * counting as -1; a format column by whether the file is there, those without it first.
+ *
+ * STABLE, as Qt's sort is, and a descending sort does not reverse the rows that tie: they keep the
+ * order they arrived in. The caller passes the order on screen, so a second header click sorts
+ * within the first, as it does in legacy's list.
  */
-export function sortImages<T extends Named>(images: readonly T[], order: number): readonly T[] {
-  if (!isSupported(order) || order === 0) return images;
-
-  if (order === 1) {
-    return [...images].sort((a, b) => compareNames(b, a));
-  }
-
-  /*
-   * A DETAIL SORT WITH NO DETAILS FALLS BACK TO NAME, rather than putting every file it cannot
-   * measure at one end. That happens for one render after the order changes -- the listing has to
-   * be fetched again with `details=1` -- and for any store that cannot report a modified time at
-   * all, which the port allows.
-   *
-   * Ties break by NAME, so a folder whose files were all written in the same second has a stable,
-   * meaningful order rather than whatever the previous sort left behind.
-   */
-  const by = order === 2 || order === 3 ? "modified" : "size";
-  const descending = order === 3 || order === 5;
-  if (images.every((image) => image[by] === undefined || image[by] === null)) return images;
-
-  return [...images].sort((a, b) => {
-    const left = a[by] ?? null;
-    const right = b[by] ?? null;
-    // A file whose date or size is unknown sorts LAST whichever way the order runs: it is a gap in
-    // what is known, not a very small or very old file.
-    if (left === null || right === null) return left === right ? compareNames(a, b) : left === null ? 1 : -1;
-    if (left === right) return compareNames(a, b);
-    return descending ? right - left : left - right;
-  });
+export function sortRows<T extends Sortable>(rows: readonly T[], key: SortKey): readonly T[] {
+  const value = valueOf(key.column);
+  return [...rows].sort((a, b) => (key.descending ? compare(value(b), value(a)) : compare(value(a), value(b))));
 }
 
-function compareNames(a: Named, b: Named): number {
-  const left = a.name.toLowerCase();
-  const right = b.name.toLowerCase();
+function valueOf(column: string): (row: Sortable) => string | number {
+  switch (column) {
+    case "name":
+      return (row) => row.name.toLowerCase();
+    case "size":
+      // Undefined is a listing asked for no details: every row ties, and the order stands.
+      return (row) => row.size ?? 0;
+    case "modified":
+      return (row) => (row.modified === null ? -1 : row.modified ?? 0);
+    default:
+      return (row) => (row.sidecars?.[column] === true ? 1 : 0);
+  }
+}
+
+function compare(left: string | number, right: string | number): number {
   return left < right ? -1 : left > right ? 1 : 0;
 }

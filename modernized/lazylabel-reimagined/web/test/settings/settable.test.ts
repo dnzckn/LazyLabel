@@ -33,6 +33,8 @@ const NOT_EDITABLE: Readonly<Record<string, string>> = {
   default_model_type: "dropped: the model picker chooses from the manifest (`ai_model`)",
   default_model_filename: "dropped: checkpoints come from the manifest, never a file name",
   multi_view_grid_mode: "dropped: only two viewers ever existed behind the four-view setting",
+  file_manager_sort_order:
+    "legacy has none either: its headers sort without saving it (fast_file_manager.py:1239-1248 has no caller)",
   line_thickness: "import-only, as in legacy, which has no control for it either",
 };
 

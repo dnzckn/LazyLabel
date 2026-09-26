@@ -172,6 +172,6 @@ describe("C9: a file that changed underneath", () => {
 /** The harness mounts and opens in one step; this reuses the mount already made above. */
 async function openImageWithThatClient(): Promise<void> {
   await waitFor(() => expect(screen.getByRole("button", { name: "a.png" })).toBeTruthy());
-  fireEvent.click(screen.getByRole("button", { name: "a.png" }));
+  fireEvent.doubleClick(screen.getByRole("button", { name: "a.png" }));
   await waitFor(() => expect(screen.getByLabelText("Status").textContent).toMatch(/a\.png/));
 }

@@ -489,8 +489,8 @@ thead th {
   min-width: 0;
 }
 
-.dataset__sort select {
-  max-width: 8.5rem;
+.dataset__toolbar > button {
+  white-space: nowrap;
 }
 
 .dataset__columns {
@@ -542,7 +542,8 @@ thead th {
   color: var(--caution);
 }
 
-/* A name reads as the row's text, as in legacy's file table; the whole name is still a button. */
+/* A name reads as the row's text, as in legacy's file table: the row's click selects and its
+   double-click opens. The name is a button so the keyboard can reach the row. */
 .dataset button,
 .dataset button:hover:not(:disabled),
 .dataset button:active:not(:disabled) {
@@ -553,8 +554,65 @@ thead th {
   text-align: left;
 }
 
-.dataset button:hover:not(:disabled) {
-  text-decoration: underline;
+/* A Shift click selects rows, not their text. */
+.dataset tbody {
+  user-select: none;
+}
+
+/* A header sorts by its column. Qt's arrow: down while ascending, up while descending. */
+.dataset thead th button {
+  font-weight: inherit;
+}
+
+.dataset thead th[data-sort="ascending"] button::after {
+  content: " \25BE";
+}
+
+.dataset thead th[data-sort="descending"] button::after {
+  content: " \25B4";
+}
+
+/* Where dragged rows would land: above the row under the pointer, or below the last row. */
+.dataset tbody tr.dataset__row--drop > * {
+  box-shadow: inset 0 2px 0 var(--accent);
+}
+
+.dataset--drop-end tbody tr:last-child > * {
+  box-shadow: inset 0 -2px 0 var(--accent);
+}
+
+/* The list's right-click menu, as a QMenu draws it (fast_file_manager.py:1675-1688). */
+.file-menu {
+  position: fixed;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  min-width: 10rem;
+  padding: 4px 0;
+  background: var(--popup);
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.3);
+}
+
+.file-menu button {
+  border: none;
+  border-radius: 0;
+  padding: 4px 16px;
+  background: none;
+  color: var(--ink);
+  text-align: left;
+}
+
+.file-menu button:hover:not(:disabled),
+.file-menu button:focus-visible {
+  background: var(--accent-hover);
+}
+
+.file-menu__line {
+  height: 1px;
+  margin: 4px 0;
+  background: var(--rule);
 }
 
 /* Legacy's file table: bold headers, striped rows, the open image in blue-violet

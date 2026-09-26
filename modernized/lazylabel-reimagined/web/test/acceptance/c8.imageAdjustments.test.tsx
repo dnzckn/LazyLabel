@@ -106,7 +106,7 @@ function mount(sourceChannels = 1, loaded: unknown = { kind: "none" }) {
 async function openImage(sourceChannels = 1, loaded?: unknown) {
   const handles = mount(sourceChannels, loaded);
   await waitFor(() => expect(screen.getByRole("button", { name: "a.png" })).toBeTruthy());
-  fireEvent.click(screen.getByRole("button", { name: "a.png" }));
+  fireEvent.doubleClick(screen.getByRole("button", { name: "a.png" }));
   await waitFor(() => expect(screen.getByLabelText("Status").textContent).toMatch(/a\.png/));
   return handles;
 }
@@ -272,7 +272,7 @@ describe("C8: the Image tab's sections, as legacy lays them out", () => {
     expect(open("Channel Threshold")).toBe(false);
 
     await waitFor(() => expect(screen.getByRole("button", { name: "a.png" })).toBeTruthy());
-    fireEvent.click(screen.getByRole("button", { name: "a.png" }));
+    fireEvent.doubleClick(screen.getByRole("button", { name: "a.png" }));
 
     await waitFor(() =>
       expect([open("Rescale"), open("Channel Threshold"), open("FFT Threshold")]).toEqual([true, true, true]),

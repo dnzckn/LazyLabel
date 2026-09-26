@@ -14,7 +14,7 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
 import type { WireDatasetImage, WireSegment } from "@lazylabel/contracts";
 
 import { CAPABILITIES } from "../capabilities.js";
-import { DatasetBrowser } from "../dataset/DatasetBrowser.jsx";
+import { DatasetBrowser, type DatasetBrowserHandle } from "../dataset/DatasetBrowser.jsx";
 import { ExportFormats } from "../dataset/ExportFormats.jsx";
 import { NotificationHost, useNotifications } from "../notifications/NotificationProvider.jsx";
 import { OpenImageView } from "../workspace/OpenImageView.jsx";
@@ -69,7 +69,8 @@ export function App({ client }: { readonly client: ApiClient }): ReactNode {
   // The folder as the browser listed it, so the sequence timeline builds from the same answer
   // rather than fetching it again. Two fetches is two answers to one question.
   const [listed, setListed] = useState<readonly WireDatasetImage[]>([]);
-  // The rows the list SHOWS, sorted and searched: the order next and previous image step through.
+  // The rows the list SHOWS, sorted, searched and not hidden: the order the Multi tab's pair steps
+  // through and a sequence range is built from.
   const [shownRows, setShownRows] = useState<readonly WireDatasetImage[]>([]);
   /**
    * What Find Archetypes suggested, held HERE because two distant parts of the tree need it.
@@ -138,11 +139,9 @@ export function App({ client }: { readonly client: ApiClient }): ReactNode {
    * NEXT AND PREVIOUS IMAGE -- the keys an annotator presses more than any other, and the second
    * step of persona flow 1: label it, move on. They were dead while the reference promised them.
    *
-   * The shell owns them because the shell is what knows the FOLDER: the store holds what is open,
-   * the dataset browser holds the list, and this is where the two already meet. Stepping is done
-   * over the rows the browser SHOWS, sorted and searched, so the key moves to the row below the
-   * one open, as legacy's does. It stepped over the raw listing until 2026-09-25, which a sort or a
-   * search made a different order from the one on screen (`CONTROL_PARITY.md` CP-14).
+   * The shell binds them; the dataset browser steps, over the rows it SHOWS, sorted, searched and
+   * not hidden, as legacy's does. It stepped over the raw listing until 2026-09-25, which a sort or
+   * a search made a different order from the one on screen (`CONTROL_PARITY.md` CP-14).
    *
    * Unsaved work is still guarded: `openImage` saves it first with Auto-Save on Navigate on, as
    * legacy's does, and otherwise asks before discarding it, whatever route asked for the change. A
@@ -173,20 +172,16 @@ export function App({ client }: { readonly client: ApiClient }): ReactNode {
     for (const image of listed) seenImages.current.set(image.key, image);
   }, [listed]);
 
-  const step = useCallback(
-    (by: 1 | -1) => {
-      if (open === null || shownRows.length === 0) return;
-      const at = shownRows.findIndex((image) => image.key === open.image.key);
-      if (at < 0) return;
-      // Clamped, not wrapping. Legacy stops at the ends, and a folder that silently restarts is
-      // how a user re-labels the first image believing it is the last.
-      const next = shownRows[Math.min(shownRows.length - 1, Math.max(0, at + by))];
-      if (next === undefined || next.key === open.image.key) return;
-      const segments = reviewFor(next.key);
-      openImage(next, segments === undefined ? undefined : { segments });
-    },
-    [shownRows, open, openImage, reviewFor],
-  );
+  /*
+   * The list steps, as legacy's file manager does (fast_file_manager.py:1771-1843): from its current
+   * row, which a click moves as well as an open, over the rows it shows. It stepped from the open
+   * image until 2026-09-26, when a click in the list began to select without opening (CP-48).
+   */
+  const browser = useRef<DatasetBrowserHandle>(null);
+  const step = useCallback((by: 1 | -1) => browser.current?.step(by), []);
+  // Save All writes files the list shows ticks for; it reads them again after (CP-48).
+  const [writes, setWrites] = useState(0);
+  const onWritten = useCallback(() => setWrites((count) => count + 1), []);
 
   /*
    * IN THE MULTI TAB THE PAIR MOVES, as legacy's does (main_window.py:6491-6557; CP-31): by two rows
@@ -501,6 +496,7 @@ export function App({ client }: { readonly client: ApiClient }): ReactNode {
                   ? {}
                   : { ai: { available: health.ai.available, videoCapable: health.ai.videoCapable, reason: health.ai.reason } })}
                 onStatus={setSequenceStatus}
+                onWritten={onWritten}
                 {...(open === null ? {} : { openKey: open.image.key })}
                 onOpen={(key, segments) => {
                   const image = listed.find((entry) => entry.key === key) ?? seenImages.current.get(key);
@@ -516,12 +512,15 @@ export function App({ client }: { readonly client: ApiClient }): ReactNode {
         right={
           <>
             <DatasetBrowser
+              ref={browser}
               client={client}
               projectId="default"
               onListed={setListed}
               onShown={setShownRows}
               reviewSegments={reviewFor}
               range={sequenceRange}
+              root={health?.datasetRoot}
+              written={writes}
             />
 
             <Panel title="Segments">

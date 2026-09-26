@@ -149,7 +149,7 @@ const next = () => fireEvent.keyDown(document, { key: "ArrowRight", code: "Arrow
 /** Open a.png from the file list and draw one triangle on it, leaving it unsaved. */
 async function openAndDraw(): Promise<void> {
   await waitFor(() => expect(screen.getByRole("button", { name: "a.png" })).toBeTruthy());
-  fireEvent.click(screen.getByRole("button", { name: "a.png" }));
+  fireEvent.doubleClick(screen.getByRole("button", { name: "a.png" }));
   await waitFor(() => expect(status()).toMatch(/a\.png/));
   chooseTool("Poly (2)");
   drawTriangle(10, 10);
@@ -178,7 +178,7 @@ describe("with Auto-Save on Navigate on, legacy's default", () => {
     const { events, confirmNavigation } = mount();
     await openAndDraw();
 
-    fireEvent.click(screen.getByRole("button", { name: "b.png" }));
+    fireEvent.doubleClick(screen.getByRole("button", { name: "b.png" }));
 
     await waitFor(() => expect(status()).toMatch(/frames\/b\.png/));
     expect(events).toEqual(["load frames/a.png", "save frames/a.png", "load frames/b.png"]);
@@ -189,9 +189,9 @@ describe("with Auto-Save on Navigate on, legacy's default", () => {
     const { events, confirmNavigation } = mount();
     fireEvent.click(await screen.findByRole("tab", { name: "Sequence" }));
     // The range as legacy sets it: each end opened from the list, then Set Start and Set End (SP-41).
-    fireEvent.click(await screen.findByRole("button", { name: "a.png" }));
+    fireEvent.doubleClick(await screen.findByRole("button", { name: "a.png" }));
     fireEvent.click(screen.getByRole("button", { name: "Set Start" }));
-    fireEvent.click(screen.getByRole("button", { name: "b.png" }));
+    fireEvent.doubleClick(screen.getByRole("button", { name: "b.png" }));
     await waitFor(() => expect(status()).toMatch(/b\.png/));
     fireEvent.click(screen.getByRole("button", { name: "Set End" }));
     fireEvent.click(screen.getByRole("button", { name: "Build Timeline" }));

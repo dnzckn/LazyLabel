@@ -178,9 +178,9 @@ describe("the panels, as legacy's are", () => {
     fireEvent.click(await screen.findByRole("tab", { name: "Sequence" }));
     await screen.findByRole("button", { name: "Set Start" });
     expect(read()).toEqual([]);
-    fireEvent.click(await screen.findByRole("button", { name: "f01.png" }));
+    fireEvent.doubleClick(await screen.findByRole("button", { name: "f01.png" }));
     fireEvent.click(screen.getByRole("button", { name: "Set Start" }));
-    fireEvent.click(screen.getByRole("button", { name: "f05.png" }));
+    fireEvent.doubleClick(screen.getByRole("button", { name: "f05.png" }));
     fireEvent.click(screen.getByRole("button", { name: "Set End" }));
     expect(read()).toEqual([]);
 

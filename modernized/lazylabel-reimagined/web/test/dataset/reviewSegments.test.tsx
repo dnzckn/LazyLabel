@@ -69,7 +69,7 @@ describe("opening a timeline frame from the file list", () => {
   it("shows the run's masks for it, not its file", async () => {
     show((key) => (key === "frames/f02.png" ? [SQUARE] : undefined));
 
-    fireEvent.click(await screen.findByRole("button", { name: "f02.png" }));
+    fireEvent.doubleClick(await screen.findByRole("button", { name: "f02.png" }));
 
     await waitFor(() => expect(screen.getByTestId("opened").textContent).toBe("frames/f02.png:1"));
   });
@@ -77,7 +77,7 @@ describe("opening a timeline frame from the file list", () => {
   it("opens the file for anything the timeline has no masks for", async () => {
     show(() => undefined);
 
-    fireEvent.click(await screen.findByRole("button", { name: "f01.png" }));
+    fireEvent.doubleClick(await screen.findByRole("button", { name: "f01.png" }));
 
     await waitFor(() => expect(screen.getByTestId("opened").textContent).toBe("frames/f01.png:0"));
   });

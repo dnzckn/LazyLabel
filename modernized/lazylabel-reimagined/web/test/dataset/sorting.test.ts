@@ -1,84 +1,105 @@
 /**
- * The order the dataset browser lists images in — RULE-036's `file_manager_sort_order`.
- *
- * Six orders in legacy; two of them can be performed here, because `WireDatasetImage` carries no
- * `modified` and no `size` and `listing.ts` deliberately does not stat. The interesting part is
- * what happens to the other four.
+ * How the file list sorts: by any column's header, the format columns too, compared as legacy's
+ * proxy compares them (fast_file_manager.py:817-882; CONTROL_PARITY.md CP-48).
  */
 
 import { describe, expect, it } from "vitest";
 
-import { needsDetails, sortImages } from "../../src/dataset/sorting.js";
+import { clickedSort, sortNeedsDetails, sortRows, storedSort } from "../../src/dataset/sorting.js";
 
-const IMAGES = [{ name: "a.png" }, { name: "B.png" }, { name: "c.png" }];
-const names = (order: number) => sortImages(IMAGES, order).map((image) => image.name);
+const row = (name: string, extra: Record<string, unknown> = {}) => ({ name, ...extra });
+const names = (rows: readonly { name: string }[]) => rows.map((each) => each.name);
 
-describe("the orders that work", () => {
-  it("leaves order 0 exactly as it arrived", () => {
-    // The API already sorts by lowercased name when it builds the listing, so a second sort here
-    // could only disagree with the server's -- on case, most likely.
-    expect(sortImages(IMAGES, 0)).toBe(IMAGES);
+describe("the order the list opens in", () => {
+  it("is legacy's six stored orders by index", () => {
+    // fast_file_manager.py:1252-1259.
+    expect([0, 1, 2, 3, 4, 5].map(storedSort)).toEqual([
+      { column: "name", descending: false },
+      { column: "name", descending: true },
+      { column: "modified", descending: false },
+      { column: "modified", descending: true },
+      { column: "size", descending: false },
+      { column: "size", descending: true },
+    ]);
   });
 
-  it("reverses for order 1, case-insensitively", () => {
-    expect(names(1)).toEqual(["c.png", "B.png", "a.png"]);
+  it("is Name ascending for anything else, as legacy's default is", () => {
+    expect(storedSort(99)).toEqual({ column: "name", descending: false });
+    expect(storedSort(undefined)).toEqual({ column: "name", descending: false });
+    expect(storedSort("2")).toEqual({ column: "name", descending: false });
   });
 
-  it("never mutates the input", () => {
-    sortImages(IMAGES, 1);
-
-    expect(IMAGES.map((image) => image.name)).toEqual(["a.png", "B.png", "c.png"]);
+  it("needs the listing's details only to sort by date or size", () => {
+    expect(sortNeedsDetails({ column: "modified", descending: false })).toBe(true);
+    expect(sortNeedsDetails({ column: "size", descending: true })).toBe(true);
+    expect(sortNeedsDetails({ column: "name", descending: false })).toBe(false);
+    expect(sortNeedsDetails({ column: "NPZ", descending: false })).toBe(false);
   });
 });
 
-describe("the four that sort by a file's date or size", () => {
-  const dated = [
-    { name: "b.png", modified: 300, size: 30 },
-    { name: "a.png", modified: 100, size: 10 },
-    { name: "c.png", modified: 200, size: 20 },
-  ];
-  const by = (order: number) => sortImages(dated, order).map((image) => image.name);
+describe("a header click", () => {
+  it("turns the sorted column around, and sorts another ascending, as Qt's header does", () => {
+    expect(clickedSort({ column: "name", descending: false }, "name")).toEqual({ column: "name", descending: true });
+    expect(clickedSort({ column: "name", descending: true }, "name")).toEqual({ column: "name", descending: false });
+    expect(clickedSort({ column: "name", descending: true }, "NPZ")).toEqual({ column: "NPZ", descending: false });
+  });
+});
 
-  it("sorts oldest and newest first", () => {
-    expect(by(2)).toEqual(["a.png", "c.png", "b.png"]);
-    expect(by(3)).toEqual(["b.png", "c.png", "a.png"]);
+describe("sorting the rows", () => {
+  it("compares names lowercased and plainly, so frame_10 comes before frame_2", () => {
+    const rows = [row("frame_2.png"), row("Frame_10.png"), row("frame_1.png")];
+
+    expect(names(sortRows(rows, { column: "name", descending: false }))).toEqual([
+      "frame_1.png",
+      "Frame_10.png",
+      "frame_2.png",
+    ]);
+    expect(names(sortRows(rows, { column: "name", descending: true }))).toEqual([
+      "frame_2.png",
+      "Frame_10.png",
+      "frame_1.png",
+    ]);
   });
 
-  it("sorts smallest and largest first", () => {
-    expect(by(4)).toEqual(["a.png", "c.png", "b.png"]);
-    expect(by(5)).toEqual(["b.png", "c.png", "a.png"]);
+  it("sorts a format column by whether the file is there, those without it first", () => {
+    const rows = [
+      row("a.png", { sidecars: { NPZ: true } }),
+      row("b.png", { sidecars: { NPZ: false } }),
+      row("c.png", { sidecars: { NPZ: true } }),
+      row("d.png", { sidecars: {} }),
+    ];
+
+    expect(names(sortRows(rows, { column: "NPZ", descending: false }))).toEqual(["b.png", "d.png", "a.png", "c.png"]);
   });
 
-  it("breaks ties by NAME, so a folder written in one second is still ordered", () => {
-    const sameSecond = [{ name: "c.png", modified: 5 }, { name: "a.png", modified: 5 }, { name: "b.png", modified: 5 }];
+  it("keeps tied rows in the order given, descending too, as Qt's stable sort does", () => {
+    // Descending is not the ascending order reversed: a.png stays above c.png.
+    const rows = [
+      row("a.png", { sidecars: { NPZ: true } }),
+      row("b.png", { sidecars: { NPZ: false } }),
+      row("c.png", { sidecars: { NPZ: true } }),
+    ];
 
-    expect(sortImages(sameSecond, 2).map((i) => i.name)).toEqual(["a.png", "b.png", "c.png"]);
+    expect(names(sortRows(rows, { column: "NPZ", descending: true }))).toEqual(["a.png", "c.png", "b.png"]);
   });
 
-  it("sorts an UNKNOWN date last, whichever way the order runs", () => {
-    // A gap in what is known, not a very old or very small file. The port allows a store that
-    // cannot report a modified time at all.
-    const partial = [{ name: "a.png", modified: null }, { name: "b.png", modified: 10 }];
+  it("sorts by size and date as numbers, one that could not be read counting as -1", () => {
+    const rows = [
+      row("b.png", { size: 30, modified: 300 }),
+      row("a.png", { size: 10, modified: null }),
+      row("c.png", { size: 20, modified: 200 }),
+    ];
 
-    expect(sortImages(partial, 2).map((i) => i.name)).toEqual(["b.png", "a.png"]);
-    expect(sortImages(partial, 3).map((i) => i.name)).toEqual(["b.png", "a.png"]);
+    expect(names(sortRows(rows, { column: "size", descending: false }))).toEqual(["a.png", "c.png", "b.png"]);
+    expect(names(sortRows(rows, { column: "size", descending: true }))).toEqual(["b.png", "c.png", "a.png"]);
+    // fast_file_manager.py:859-866: an unreadable time is -1, the oldest.
+    expect(names(sortRows(rows, { column: "modified", descending: false }))).toEqual(["a.png", "c.png", "b.png"]);
   });
 
-  it("falls back to the order it was given when NOTHING carries the field", () => {
-    // One render after the order changes, before the listing has been refetched with details --
-    // and forever for a store that cannot report one. Better than putting every file it cannot
-    // measure at one end.
-    expect(sortImages(IMAGES, 3)).toBe(IMAGES);
-    expect(sortImages(IMAGES, 5)).toBe(IMAGES);
-  });
+  it("leaves rows with no size or date in the order given, and the input alone", () => {
+    const rows = [row("c.png"), row("a.png"), row("b.png")];
 
-  it("says which orders need the listing to carry details", () => {
-    for (const order of [2, 3, 4, 5]) expect(needsDetails(order), String(order)).toBe(true);
-    expect(needsDetails(0)).toBe(false);
-    expect(needsDetails(1)).toBe(false);
-  });
-
-  it("falls back for a value outside the six", () => {
-    expect(sortImages(IMAGES, 99)).toBe(IMAGES);
+    expect(names(sortRows(rows, { column: "size", descending: true }))).toEqual(["c.png", "a.png", "b.png"]);
+    expect(names(rows)).toEqual(["c.png", "a.png", "b.png"]);
   });
 });

@@ -101,7 +101,7 @@ export function mount(loaded: AnnotationsResult = { kind: "none" }) {
 export async function openImage(loaded?: AnnotationsResult) {
   const handles = mount(loaded);
   await waitFor(() => expect(screen.getByRole("button", { name: "a.png" })).toBeTruthy());
-  fireEvent.click(screen.getByRole("button", { name: "a.png" }));
+  fireEvent.doubleClick(screen.getByRole("button", { name: "a.png" }));
   await waitFor(() => expect(screen.getByLabelText("Status").textContent).toMatch(/a\.png/));
   return handles;
 }

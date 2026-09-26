@@ -154,7 +154,7 @@ function mount(names: readonly string[]) {
 /** a.png opened, the Multi tab chosen, and b.png paired with it: legacy's first pair of a folder. */
 async function pairUp(names: readonly string[] = ["a.png", "b.png", "c.png", "d.png"]): Promise<void> {
   mount(names);
-  fireEvent.click(await screen.findByRole("button", { name: "a.png" }));
+  fireEvent.doubleClick(await screen.findByRole("button", { name: "a.png" }));
   await waitFor(() => expect(pair()[0].classes).toEqual([0, 1]));
   fireEvent.click(screen.getByRole("tab", { name: "Multi" }));
   fireEvent.change(await screen.findByLabelText("Second image"), { target: { value: "frames/b.png" } });

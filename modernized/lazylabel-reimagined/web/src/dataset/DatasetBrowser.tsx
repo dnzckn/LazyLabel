@@ -12,28 +12,66 @@
  *   - Files that were not recognized. A folder of .avif files otherwise just looks empty, and the
  *     user has no way to tell "no images here" from "none of these count as images".
  *
+ * THE LIST WORKS AS LEGACY'S `FastFileManager` DOES (utils/fast_file_manager.py; CONTROL_PARITY.md
+ * CP-48). A click selects, Ctrl and Shift as in any table, and a double-click opens (1088-1089). A
+ * right-click offers Copy and Hide (1657-1706). Rows drag to another place (1034-1039, 1615-1655).
+ * Any header sorts, the format columns too (1055-1057, 817-882). Refresh reads the folder again, and
+ * Hide takes rows out of the list until Show All or Refresh (1190-1209, 1708-1727). Nothing is
+ * deleted; a hidden row is also out of next and previous image and of a sequence range, because
+ * those walk the rows the list shows.
+ *
  * The image's pixel size comes from the API rather than from the user, now that the image pipeline
  * can read it without decoding the whole file. That matters more than convenience: the text formats
  * store normalized coordinates, so a wrong size silently rescales every polygon.
  */
 
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type DragEvent,
+  type KeyboardEvent,
+  type MouseEvent,
+  type ReactNode,
+  type Ref,
+} from "react";
 
-import type {
-  WireDatasetImage,
-  WireDatasetListing,
-  WireImageMetadata,
-  WireLoadResponse,
-  WireSaveResponse,
-  WireSegment,
-} from "@lazylabel/contracts";
+import type { WireDatasetImage, WireDatasetListing, WireSegment } from "@lazylabel/contracts";
 
-import { useWorkspace } from "../workspace/WorkspaceProvider.jsx";
-
-import type { AnnotationsResult, ApiClient } from "../api/client.js";
+import type { ApiClient } from "../api/client.js";
+import { useNotifications } from "../notifications/NotificationProvider.jsx";
 import { useSettings } from "../settings/SettingsProvider.jsx";
+import { useWorkspace } from "../workspace/WorkspaceProvider.jsx";
+import { copyText } from "./clipboard.js";
 import { formatModified, formatSize, listColumns, shownColumns, type ListColumn } from "./columns.js";
-import { SORT_ORDERS, needsDetails, sortImages } from "./sorting.js";
+import {
+  NO_SELECTION,
+  clickRow,
+  copiedNames,
+  filePath,
+  keepShown,
+  moveKeys,
+  placeInOrder,
+  reconcile,
+  selectOnly,
+  selectedKeys,
+  type Selection,
+} from "./fileList.js";
+import { clickedSort, sortNeedsDetails, sortRows, storedSort, type SortKey } from "./sorting.js";
+
+/** What the shell asks of the list. */
+export interface DatasetBrowserHandle {
+  /**
+   * Next (1) or previous (-1) image: the row below or above the list's current row, which a click
+   * moves as well as an open. With none, next opens the first row and previous the last, as after
+   * a Refresh or when the current row was hidden (fast_file_manager.py:1771-1843).
+   */
+  readonly step: (by: 1 | -1) => void;
+}
 
 export interface DatasetBrowserProps {
   readonly client: ApiClient;
@@ -48,11 +86,10 @@ export interface DatasetBrowserProps {
    */
   readonly onListed?: (images: readonly WireDatasetImage[]) => void;
   /**
-   * The rows the table SHOWS, sorted and searched, in the order on screen.
+   * The rows the table SHOWS, sorted, searched and not hidden, in the order on screen.
    *
-   * Next and previous image step through these, as legacy's do (fast_file_manager.py:1771-1843,
-   * 1971-1999). They walked the raw listing, so with a sort or a search the key went somewhere
-   * other than the row below the one open (`CONTROL_PARITY.md` CP-14).
+   * The Multi tab's pair steps through these, and a sequence range is built from them, as legacy's
+   * are (fast_file_manager.py:1465-1503, 1971-1999; CONTROL_PARITY.md CP-14).
    */
   readonly onShown?: (images: readonly WireDatasetImage[]) => void;
   /**
@@ -72,12 +109,25 @@ export interface DatasetBrowserProps {
     /** The timeline's order while it is sorted: the range's rows are shown in it (SP-42). */
     readonly order?: readonly string[] | null;
   } | null;
+  /** The dataset folder's own path on the server, which Copy path puts before a file's key. */
+  readonly root?: string | undefined;
+  /**
+   * Changes when annotation files were written other than by the open image's save, as Save All
+   * writes them. The list reads the folder's status again, as legacy's does after a save
+   * (fast_file_manager.py:611-692); the open image's own saves are seen through the workspace.
+   */
+  readonly written?: number;
+  readonly ref?: Ref<DatasetBrowserHandle>;
 }
 
 type ListingState =
   | { readonly status: "loading" }
   | { readonly status: "ready"; readonly listing: WireDatasetListing }
   | { readonly status: "failed"; readonly reason: string };
+
+const NO_IMAGES: readonly WireDatasetImage[] = [];
+const NO_KEYS: readonly string[] = [];
+const NOTHING_HIDDEN: ReadonlySet<string> = new Set();
 
 export function DatasetBrowser({
   client,
@@ -87,6 +137,9 @@ export function DatasetBrowser({
   onShown,
   reviewSegments,
   range,
+  root,
+  written,
+  ref,
 }: DatasetBrowserProps): ReactNode {
   const [state, setState] = useState<ListingState>({ status: "loading" });
   /*
@@ -100,13 +153,13 @@ export function DatasetBrowser({
    * `folder` is still the prop, and it seeds this. Somewhere to start, not somewhere to stay.
    */
   const [here, setHere] = useState(folder);
-  useEffect(() => setHere(folder), [folder]);
   // Opening belongs to the workspace store: the list is one of five things that ask what is open,
   // and whichever one holds the state becomes the owner of a question that is not its own.
-  const { open: openState, openImage: openInStore } = useWorkspace();
+  const { open: openState, openImage: openInStore, saveCounts } = useWorkspace();
+  const { notify } = useNotifications();
   // A timeline frame opens with the run's masks while the Sequence tab is in use (SP-22).
   const openImage = useCallback(
-    (image: WireDatasetListing["images"][number]) => {
+    (image: WireDatasetImage) => {
       const segments = reviewSegments?.(image.key);
       openInStore(image, segments === undefined ? undefined : { segments });
     },
@@ -114,22 +167,85 @@ export function DatasetBrowser({
   );
   const { settings, save } = useSettings();
 
+  // How the list is arranged and what is picked in it: kept across a reload of the same folder.
+  const [generation, setGeneration] = useState(0);
+  // Legacy's "Search files..." (fast_file_manager.py:1150-1161, 1233-1237): a view of the list, by name.
+  const [query, setQuery] = useState("");
+  /** The header last clicked, or null for the stored order the list opens in. */
+  const [sortKey, setSortKey] = useState<SortKey | null>(null);
+  /** The order rows that tie in a sort keep: the order on screen when the header was clicked. */
+  const [base, setBase] = useState<readonly string[] | null>(null);
+  /** A dragged order, which replaces the sort until a header is clicked (legacy's custom order). */
+  const [custom, setCustom] = useState<readonly string[] | null>(null);
+  const [hidden, setHidden] = useState<ReadonlySet<string>>(NOTHING_HIDDEN);
+  const [selection, setSelection] = useState<Selection>(NO_SELECTION);
+  const [menu, setMenu] = useState<{ readonly x: number; readonly y: number } | null>(null);
+  /** Where dragged rows would land: before this row, at the end when null, nowhere when undefined. */
+  const [dropBefore, setDropBefore] = useState<string | null | undefined>(undefined);
+  const dragging = useRef<ReadonlySet<string> | null>(null);
+
+  /*
+   * THE TIMELINE'S ORDER, while the timeline is sorted: legacy's Sort puts the range's rows in the
+   * timeline's order, in the places they hold, until another sort is chosen or the timeline is
+   * unsorted (`main_window.py:3436-3455`; `fast_file_manager.py:360-373, 1325-1358`,
+   * SEQUENCE_PARITY.md SP-42). So Left and Right follow the sorted timeline. `released` is the
+   * order a header click, a drag or a Refresh left.
+   */
+  const timelineOrder = range?.order ?? null;
+  const [released, setReleased] = useState<readonly string[] | null>(null);
+  /**
+   * The range a drag took the colours off. Legacy's first drag out of a sorted list clears the
+   * range's highlight (fast_file_manager.py:1633-1638), and its timeline Sort then has no rows to
+   * reorder; Set Start or Set End colours a new one.
+   */
+  const [cleared, setCleared] = useState<readonly string[] | null>(null);
+  const lastBetween = useRef<readonly string[]>(NO_KEYS);
+  useEffect(() => {
+    if (range !== null && range !== undefined && range.between.length > 0) lastBetween.current = range.between;
+  }, [range]);
+
+  /** Legacy's `setDirectory` (1215-1224): a folder read again shows every row, sorted, none picked. */
+  const resetView = useCallback(() => {
+    setHidden(NOTHING_HIDDEN);
+    setCustom(null);
+    setBase(null);
+    setSelection(NO_SELECTION);
+    setMenu(null);
+    setReleased(timelineOrder);
+  }, [timelineOrder]);
+
+  const goTo = useCallback(
+    (path: string) => {
+      resetView();
+      setHere(path);
+    },
+    [resetView],
+  );
+  const seeded = useRef(folder);
+  useEffect(() => {
+    if (seeded.current === folder) return;
+    seeded.current = folder;
+    goTo(folder);
+  }, [folder, goTo]);
+
+  const stored = storedSort(settings.values["file_manager_sort_order"]);
+  const sort = sortKey ?? stored;
+
   /*
    * Whether this listing needs each file's size and date -- one stat per image on the server.
    *
-   * Asked for only when the CHOSEN SORT needs it, or when a column that shows it is switched on.
-   * Only this side knows either, which is why the flag is the client's to send: a server that
-   * always stat-ted would pay for a folder of ten thousand frames on every listing to serve a sort
-   * nobody chose, and one that never did could not serve it at all.
+   * Asked for only when the sort needs it, or when a column that shows it is switched on. Only this
+   * side knows either, which is why the flag is the client's to send: a server that always stat-ted
+   * would pay for a folder of ten thousand frames on every listing to serve a sort nobody chose,
+   * and one that never did could not serve it at all.
    *
-   * It is part of the effect's dependencies, so switching to a date sort refetches WITH details
-   * rather than sorting the rows it already has by a field they do not carry.
+   * It is part of the effect's dependencies, so sorting by date refetches WITH details rather than
+   * sorting the rows it already has by a field they do not carry.
    */
-  const { settings: listSettings } = useSettings();
   const wantsDetails =
-    needsDetails(Number(listSettings.values["file_manager_sort_order"] ?? 0))
-    || listSettings.values["file_manager_show_modified"] === true
-    || listSettings.values["file_manager_show_size"] === true;
+    sortNeedsDetails(sort)
+    || settings.values["file_manager_show_modified"] === true
+    || settings.values["file_manager_show_size"] === true;
 
   useEffect(() => {
     let cancelled = false;
@@ -151,18 +267,217 @@ export function DatasetBrowser({
     return () => {
       cancelled = true;
     };
-  }, [client, projectId, here, onListed, wantsDetails]);
+  }, [client, projectId, here, onListed, wantsDetails, generation]);
 
-  // No table, no rows: a folder that is loading, failed or empty shows none, and the previous
-  // folder's must not linger as the order the image keys step through.
-  const tableless = state.status !== "ready" || state.listing.images.length === 0;
+  /*
+   * AFTER A SAVE, THE FORMAT COLUMNS ARE READ AGAIN, as legacy re-checks a saved image's files
+   * (fast_file_manager.py:611-645, 651-692). Quietly: the list stays as it is, hidden rows, order
+   * and selection too, and only what changed on disk changes. They went stale until 2026-09-26.
+   */
+  const lastWrite = useRef({ saveCounts, written });
   useEffect(() => {
-    if (tableless) onShown?.([]);
-  }, [onShown, tableless]);
+    if (lastWrite.current.saveCounts === saveCounts && lastWrite.current.written === written) return;
+    lastWrite.current = { saveCounts, written };
+    let cancelled = false;
+    client
+      .listImages(projectId, here, wantsDetails)
+      .then((listing) => {
+        if (cancelled) return;
+        setState({ status: "ready", listing });
+        onListed?.(listing.images);
+      })
+      // The list shown stays; the next save or a Refresh reads it again.
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [client, projectId, here, onListed, wantsDetails, saveCounts, written]);
 
-  const where = folderName(here);
+  const listing = state.status === "ready" ? state.listing : null;
+  const images = listing?.images ?? NO_IMAGES;
+  const between = range?.between ?? NO_KEYS;
+  // Coloured only once both ends are set, as legacy's list is (main_window.py:4938-4947).
+  const coloured = range !== null && range !== undefined && between.length > 0 && between !== cleared ? range : null;
+  const following = coloured !== null && timelineOrder !== null && timelineOrder !== released ? timelineOrder : null;
+
+  /*
+   * THE ROWS: the listing in the dragged order or sorted by the header, the timeline's order over
+   * the range while it is followed, and then only the rows not hidden whose name matches the
+   * search -- the order legacy's source model, its reorder and its proxy make them in.
+   *
+   * Memoized, because it is reported up: a new array every render would re-render the shell,
+   * which re-renders this, which reports again.
+   */
+  const { rows, ordered, inCustomOrder } = useMemo(() => {
+    const byKey = new Map(images.map((image) => [image.key, image]));
+    const keys = images.map((image) => image.key);
+    const arranged =
+      custom !== null
+        ? reconcile(custom, keys)
+        : sortRows(reconcile(base, keys).map((key) => byKey.get(key)!), sort).map((image) => image.key);
+    const placed = following === null ? null : placeInOrder(arranged, between, following);
+    const inOrder = placed?.order ?? arranged;
+    const needle = query.trim().toLowerCase();
+    const shown = inOrder
+      .map((key) => byKey.get(key)!)
+      .filter((image) => !hidden.has(image.key) && (needle === "" || image.name.toLowerCase().includes(needle)));
+    return { rows: shown, ordered: inOrder, inCustomOrder: custom !== null || placed?.placed === true };
+  }, [base, between, custom, following, hidden, images, query, sort]);
+  const rowKeys = useMemo(() => rows.map((image) => image.key), [rows]);
+  const shownKeys = useMemo(() => new Set(rowKeys), [rowKeys]);
+  const inRange = useMemo(() => new Set(coloured?.between ?? NO_KEYS), [coloured]);
+  const rowOf = useMemo(() => new Map(rows.map((image) => [image.key, image])), [rows]);
+  useEffect(() => onShown?.(rows), [onShown, rows]);
+
+  // A row the list stops showing leaves the selection, and the current row with it, as in Qt.
+  useEffect(() => setSelection((current) => keepShown(current, shownKeys)), [shownKeys]);
+
+  // Opening an image selects its row and makes it the current one (fast_file_manager.py:1745-1759,
+  // file_navigation_manager.py:359), whichever way it was opened.
+  const openKey = openState?.image.key ?? null;
+  const shownNow = useRef(shownKeys);
+  useEffect(() => {
+    shownNow.current = shownKeys;
+  }, [shownKeys]);
+  useEffect(() => {
+    if (openKey === null) return;
+    setSelection(shownNow.current.has(openKey) ? selectOnly(openKey) : NO_SELECTION);
+  }, [openKey]);
+
+  // Legacy's Unsort (`resetHighlightedSort`, 1353-1358): a list in the timeline's order, or in a
+  // dragged one, goes back to the stored order. Not New Timeline, which takes the range away.
+  const lastOrder = useRef<readonly string[] | null>(null);
+  useEffect(() => {
+    if (range === null || range === undefined) return;
+    const before = lastOrder.current;
+    lastOrder.current = timelineOrder;
+    if (before === null || timelineOrder !== null || range.between.length === 0) return;
+    if (before !== released || custom !== null) {
+      setCustom(null);
+      setBase(null);
+      setSortKey(null);
+    }
+  }, [custom, range, released, timelineOrder]);
+
+  const step = useCallback(
+    (by: 1 | -1) => {
+      if (rows.length === 0) return;
+      const at = selection.cursor === null ? -1 : rowKeys.indexOf(selection.cursor);
+      const target = at < 0 ? rows[by === 1 ? 0 : rows.length - 1] : rows[at + by];
+      // Clamped, not wrapping: legacy stops at the ends.
+      if (target === undefined) return;
+      // The row moves when the image does, so a refused open leaves it where it was.
+      if (target.key === openKey) setSelection(selectOnly(target.key));
+      else openImage(target);
+    },
+    [openImage, openKey, rowKeys, rows, selection.cursor],
+  );
+  useImperativeHandle(ref, () => ({ step }), [step]);
+
+  const refresh = (): void => {
+    resetView();
+    setGeneration((count) => count + 1);
+  };
+
+  /** Legacy's Hide (1708-1722): the selected rows leave the list, and the selection is cleared. */
+  const hideSelected = (): void => {
+    const chosen = selectedKeys(selection).filter((key) => shownKeys.has(key));
+    if (chosen.length === 0) return;
+    setHidden((previous) => new Set([...previous, ...chosen]));
+    setSelection((current) => ({ ...current, committed: [], extent: [] }));
+  };
+
+  /** A header click (1325-1329): out of a dragged or timeline order, sorted by that column. */
+  const sortBy = (column: string): void => {
+    setBase(ordered);
+    setCustom(null);
+    setReleased(timelineOrder);
+    setSortKey(clickedSort(sort, column));
+  };
+
+  const onRowClick = (event: MouseEvent, key: string): void => {
+    setMenu(null);
+    setSelection((current) =>
+      clickRow(current, key, { shift: event.shiftKey, toggle: event.ctrlKey || event.metaKey }, rowKeys),
+    );
+  };
+
+  /*
+   * A RIGHT-CLICK on a row that is not selected selects it alone; on a selected one, or with Shift or
+   * Ctrl held, the selection stays. Either way the row becomes the current one, as Qt's press
+   * makes it (fast_file_manager.py:1657-1690).
+   */
+  const onRowContextMenu = (event: MouseEvent, key: string): void => {
+    event.preventDefault();
+    const keep = event.shiftKey || event.ctrlKey || event.metaKey || selectedKeys(selection).includes(key);
+    const next = keep ? { ...selection, anchor: key, cursor: key } : selectOnly(key);
+    setSelection(next);
+    if (selectedKeys(next).length === 0) return;
+    // From the keyboard there is no pointer: the menu opens at the row.
+    const box = (event.currentTarget as Element).getBoundingClientRect();
+    const fromKeys = event.clientX === 0 && event.clientY === 0;
+    setMenu({ x: fromKeys ? box.left : event.clientX, y: fromKeys ? box.bottom : event.clientY });
+  };
+
+  const closeMenu = useCallback(() => setMenu(null), []);
+
+  const copy = (text: string): void => {
+    void copyText(text).then((copied) => {
+      if (!copied) notify({ severity: "warning", message: "Could not copy to the clipboard" });
+    });
+  };
+
+  /*
+   * DRAGGING ROWS (fast_file_manager.py:1034-1039, 885-909, 1615-1655). The selection moves, or the
+   * row under the pointer alone when it is not selected, and lands before the row it is dropped on,
+   * or at the end below the last. The list leaves its sort for that order until a header is clicked,
+   * and the moved rows stay selected.
+   */
+  const onDragStart = (event: DragEvent, key: string): void => {
+    let current = selection;
+    if (!selectedKeys(current).includes(key)) {
+      current = selectOnly(key);
+      setSelection(current);
+    }
+    const moving = new Set(selectedKeys(current).filter((each) => shownKeys.has(each)));
+    dragging.current = moving;
+    setMenu(null);
+    // Legacy's own type for dragged rows (322-332).
+    event.dataTransfer?.setData("application/x-lazylabel-file-rows", [...moving].join("\n"));
+    if (event.dataTransfer) event.dataTransfer.effectAllowed = "move";
+  };
+
+  const dropTarget = (event: DragEvent): string | null =>
+    (event.target as Element).closest?.("tbody tr[data-key]")?.getAttribute("data-key") ?? null;
+
+  const onDragOver = (event: DragEvent): void => {
+    if (dragging.current === null) return;
+    event.preventDefault();
+    if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
+    const before = dropTarget(event);
+    setDropBefore((previous) => (previous === before ? previous : before));
+  };
+
+  const endDrag = (): void => {
+    dragging.current = null;
+    setDropBefore(undefined);
+  };
+
+  const onDrop = (event: DragEvent): void => {
+    const moving = dragging.current;
+    if (moving === null) return;
+    event.preventDefault();
+    const before = dropTarget(event);
+    endDrag();
+    if (!inCustomOrder) setCleared(lastBetween.current);
+    const next = moveKeys(ordered, moving, before);
+    setCustom(next);
+    setReleased(timelineOrder);
+    setSelection((current) => ({ ...current, committed: next.filter((key) => moving.has(key)), extent: [] }));
+  };
 
   // Legacy's words while scanning and on a failure (fast_file_manager.py:1225, main_window.py:7330).
+  const where = folderName(here);
   if (state.status === "loading") return <p>Loading: {where}</p>;
   if (state.status === "failed") {
     return (
@@ -172,21 +487,44 @@ export function DatasetBrowser({
     );
   }
 
-  const { listing } = state;
-
+  const ready = state.listing;
   // "a/b/c" as ["a", "b", "c"], each with the path that reaches it, so a crumb can be clicked.
   const crumbs = here === "" ? [] : here.split("/").filter((part) => part !== "");
   // Defaulted, because this arrives over the wire. A server that predates the field should leave
   // the browser working exactly as it did -- no navigation -- rather than blanking the pane with
   // a TypeError, which is what reading `.length` off an absent field does.
-  const folders = listing.folders ?? [];
+  const folders = ready.folders ?? [];
+
+  // Legacy's ten columns in legacy's order (CP-63). Filtered once: the header and every row must
+  // show the same columns, and two filters is two chances for them to disagree by one.
+  const columns = listColumns(ready.columns);
+  const shown = shownColumns(columns, settings.values);
+  const picked = new Set(selectedKeys(selection));
+  // The selected rows the list shows, in the order Qt lists a selection, which Copy writes them in.
+  const menuRows =
+    menu === null ? NO_IMAGES : selectedKeys(selection).flatMap((key) => (shownKeys.has(key) ? rowOf.get(key) ?? [] : []));
+
+  const rangeClass = (key: string): string | undefined =>
+    coloured === null
+      ? undefined
+      : key === coloured.start
+        ? "dataset__row--start"
+        : key === coloured.end
+          ? "dataset__row--end"
+          : inRange.has(key)
+            ? "dataset__row--range"
+            : undefined;
+  // The header keeps its arrow in a dragged or timeline order, as Qt's does; a screen reader is
+  // told the list is sorted only while it is.
+  const arrow = (column: ListColumn): "ascending" | "descending" | undefined =>
+    sort.column === column.id ? (sort.descending ? "descending" : "ascending") : undefined;
 
   return (
     <section className="dataset-browser">
       <h2 className="visually-hidden">Images</h2>
 
       <nav className="crumbs" aria-label="Folder">
-        <button type="button" onClick={() => setHere("")} disabled={here === ""}>
+        <button type="button" onClick={() => goTo("")} disabled={here === ""}>
           Dataset
         </button>
         {crumbs.map((name, index) => (
@@ -194,7 +532,7 @@ export function DatasetBrowser({
             {" / "}
             <button
               type="button"
-              onClick={() => setHere(crumbs.slice(0, index + 1).join("/"))}
+              onClick={() => goTo(crumbs.slice(0, index + 1).join("/"))}
               disabled={index === crumbs.length - 1}
             >
               {name}
@@ -207,7 +545,7 @@ export function DatasetBrowser({
         <ul className="crumbs__folders">
           {folders.map((name) => (
             <li key={name}>
-              <button type="button" onClick={() => setHere(here === "" ? name : `${here}/${name}`)}>
+              <button type="button" onClick={() => goTo(here === "" ? name : `${here}/${name}`)}>
                 {name}/
               </button>
             </li>
@@ -215,24 +553,168 @@ export function DatasetBrowser({
         </ul>
       )}
 
-      {listing.unrecognized > 0 && (
+      {ready.unrecognized > 0 && (
         <p role="status" className="dataset__unrecognized">
-          {listing.unrecognized} file{listing.unrecognized === 1 ? "" : "s"} not recognized
+          {ready.unrecognized} file{ready.unrecognized === 1 ? "" : "s"} not recognized
         </p>
       )}
 
-      {listing.images.length === 0 ? (
+      {/* Legacy's header row (fast_file_manager.py:1143-1213): search, the column menu, Refresh,
+          Hide, and Show All while rows are hidden. */}
+      <div className="dataset__toolbar">
+        <input
+          type="search"
+          className="dataset__search"
+          value={query}
+          placeholder="Search files..."
+          aria-label="Search files"
+          onChange={(event) => setQuery(event.target.value)}
+        />
+        <details className="dataset__columns">
+          {/* Legacy's 30px column menu button, "⚏" (fast_file_manager.py:47). */}
+          <summary aria-label="Columns" title="Columns">
+            ⚏
+          </summary>
+          {/* A dropdown, as legacy's column menu is, so opening it does not push the list. */}
+          <div className="dataset__columns-menu">
+            {/* Legacy's ten, in its order, Name among them (fast_file_manager.py:1168-1178). */}
+            {columns.flatMap((column) => {
+              const setting = column.setting;
+              if (setting === undefined) return [];
+              return [
+                <label key={column.id} title={column.suffix}>
+                  <input
+                    type="checkbox"
+                    checked={settings.values[setting] !== false}
+                    aria-label={`Show the ${column.title} column`}
+                    onChange={(event) =>
+                      void save({
+                        ...settings,
+                        values: { ...settings.values, [setting]: event.target.checked },
+                      })
+                    }
+                  />{" "}
+                  {column.title}
+                </label>,
+              ];
+            })}
+          </div>
+        </details>
+        <button type="button" onClick={refresh}>
+          Refresh
+        </button>
+        <button type="button" title="Hide selected files from the list" onClick={hideSelected}>
+          Hide
+        </button>
+        {hidden.size > 0 && (
+          <button type="button" title="Restore all hidden files" onClick={() => setHidden(NOTHING_HIDDEN)}>
+            Show All ({hidden.size})
+          </button>
+        )}
+      </div>
+
+      {ready.images.length === 0 ? (
         // Legacy's empty footer (fast_file_manager.py:952-953). A folder holding only folders is
         // the normal shape of a dataset root; they are listed just above, so a place to go through
         // does not read as a failure.
         <p>No images in {where}</p>
       ) : (
-        <ColumnedTable
-          listing={listing}
-          openState={openState}
-          openImage={openImage}
-          onShown={onShown}
-          range={range ?? null}
+        <table
+          className={[
+            "dataset",
+            coloured === null ? "" : "dataset--ranged",
+            dropBefore === null ? "dataset--drop-end" : "",
+          ].filter((name) => name !== "").join(" ")}
+          onDragOver={onDragOver}
+          onDrop={onDrop}
+          onDragLeave={(event) => {
+            if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDropBefore(undefined);
+          }}
+        >
+          <thead>
+            <tr>
+              {/* Legacy's column names (fast_file_manager.py:277-288), each format's suffix in its
+                  tooltip. A click sorts by the column, again turns it around. */}
+              {shown.map((column) => (
+                <th
+                  scope="col"
+                  key={column.id}
+                  title={column.suffix}
+                  data-sort={arrow(column)}
+                  aria-sort={inCustomOrder ? undefined : arrow(column)}
+                >
+                  <button type="button" onClick={() => sortBy(column.id)}>
+                    {column.title}
+                  </button>
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((image) => (
+              <tr
+                key={image.key}
+                data-key={image.key}
+                aria-selected={picked.has(image.key)}
+                className={[rangeClass(image.key), dropBefore === image.key ? "dataset__row--drop" : undefined]
+                  .filter((name) => name !== undefined)
+                  .join(" ") || undefined}
+                draggable
+                onClick={(event) => onRowClick(event, image.key)}
+                onDoubleClick={() => openImage(image)}
+                onContextMenu={(event) => onRowContextMenu(event, image.key)}
+                onDragStart={(event) => onDragStart(event, image.key)}
+                onDragEnd={endDrag}
+              >
+                {shown.map((column) => (
+                  <Cell key={column.id} column={column} image={image} />
+                ))}
+              </tr>
+            ))}
+          </tbody>
+          {/* Legacy's totals row: how many images, in its words, under Name, and how many have each
+              format, blank for none (fast_file_manager.py:948-959). Hidden rows count. */}
+          <tfoot>
+            <tr>
+              {shown.map((column) => {
+                if (column.kind === "name") {
+                  return (
+                    <th scope="row" key={column.id}>
+                      {ready.images.length} image{ready.images.length === 1 ? "" : "s"} in{" "}
+                      {folderName(ready.folder)}
+                    </th>
+                  );
+                }
+                const count =
+                  column.kind === "format"
+                    ? ready.images.filter((image) => image.sidecars[column.id]).length
+                    : 0;
+                return <td key={column.id}>{count > 0 ? count : ""}</td>;
+              })}
+            </tr>
+          </tfoot>
+        </table>
+      )}
+
+      {menu !== null && menuRows.length > 0 && (
+        <FileMenu
+          at={menu}
+          onClose={closeMenu}
+          items={[
+            {
+              label: menuRows.length === 1 ? "Copy filename" : `Copy ${menuRows.length} filenames`,
+              run: () => copy(copiedNames(menuRows.map((image) => image.name))),
+            },
+            {
+              label: menuRows.length === 1 ? "Copy path" : `Copy ${menuRows.length} paths`,
+              run: () => copy(menuRows.map((image) => filePath(root, image.key)).join("\n")),
+            },
+            null,
+            {
+              label: menuRows.length === 1 ? "Hide file" : `Hide ${menuRows.length} files`,
+              run: hideSelected,
+            },
+          ]}
         />
       )}
       {/* The formats to write are in Application Settings, where legacy's Export Formats is. */}
@@ -248,221 +730,15 @@ function folderName(path: string): string {
   return path.split("/").filter((part) => part !== "").pop() ?? "Dataset";
 }
 
-/**
- * The listing as a table, with only the columns the user has left switched on.
- *
- * Its own component because the columns have to be derived from the SETTINGS and the listing
- * together, and the listing only exists inside the ready branch -- deriving it above would be
- * reading a variable that is not in scope yet, which is what the first attempt did.
- */
-function ColumnedTable({
-  listing,
-  openState,
-  openImage,
-  onShown,
-  range,
-}: {
-  readonly listing: WireDatasetListing;
-  readonly openState: { readonly image: { readonly key: string } } | null;
-  readonly openImage: (image: WireDatasetListing["images"][number]) => void;
-  readonly onShown?: ((images: readonly WireDatasetImage[]) => void) | undefined;
-  readonly range: DatasetBrowserProps["range"];
-}): ReactNode {
-  // Coloured only once both ends are set, as legacy's list is (main_window.py:4938-4947).
-  const coloured = range !== null && range !== undefined && range.between.length > 0 ? range : null;
-  const inRange = useMemo(() => new Set(coloured?.between ?? []), [coloured]);
-  const rangeClass = (key: string): string | undefined =>
-    coloured === null
-      ? undefined
-      : key === coloured.start
-        ? "dataset__row--start"
-        : key === coloured.end
-          ? "dataset__row--end"
-          : inRange.has(key)
-            ? "dataset__row--range"
-            : undefined;
-  const { settings, save } = useSettings();
-  // Legacy's ten columns in legacy's order (CP-63). Filtered once: the header and every row must
-  // show the same columns, and two filters is two chances for them to disagree by one.
-  const columns = listColumns(listing.columns);
-  const shown = shownColumns(columns, settings.values);
-
-  const rawOrder = Number(settings.values["file_manager_sort_order"]);
-  const order = Number.isInteger(rawOrder) ? rawOrder : 0;
-  // Legacy's "Search files..." (fast_file_manager.py:1143-1213): a view of the list, by name.
-  const [query, setQuery] = useState("");
-  const needle = query.trim().toLowerCase();
-  /*
-   * THE TIMELINE'S ORDER, while the timeline is sorted: legacy's Sort puts the range's rows in the
-   * timeline's order, in the places they hold, and the sort reads "Timeline" until another is
-   * chosen or the timeline is unsorted (`main_window.py:3436-3455`;
-   * `fast_file_manager.py:360-373, 1239-1244, 1331-1358`, SEQUENCE_PARITY.md SP-42). So Left and
-   * Right follow the sorted timeline. `released` is the order a choice of sort left.
-   */
-  const timelineOrder = range?.order ?? null;
-  const [released, setReleased] = useState<readonly string[] | null>(null);
-  const following = timelineOrder !== null && timelineOrder !== released ? timelineOrder : null;
-  // Memoized, because it is reported up: a new array every render would re-render the shell,
-  // which re-renders this, which reports again.
-  const { rows, inTimelineOrder } = useMemo(() => {
-    const shownRows = sortImages(listing.images, order).filter(
-      (image) => needle === "" || image.name.toLowerCase().includes(needle),
-    );
-    if (following === null || range === null || range === undefined) {
-      return { rows: shownRows, inTimelineOrder: false };
-    }
-    // The range's rows only, each into the place of one of them, as legacy's `reorderRows` does.
-    const inRange = new Set(range.between);
-    const at = new Map(shownRows.map((image, index) => [image.key, index]));
-    const moved = following.filter((key) => inRange.has(key) && at.has(key));
-    const places = moved.map((key) => at.get(key)!).sort((a, b) => a - b);
-    const reordered = [...shownRows];
-    places.forEach((place, n) => {
-      reordered[place] = shownRows[at.get(moved[n]!)!]!;
-    });
-    return { rows: reordered, inTimelineOrder: moved.length > 0 };
-  }, [following, listing.images, needle, order, range]);
-  useEffect(() => onShown?.(rows), [onShown, rows]);
-
-  return (
-    <>
-        {/* RULE-036's ten column settings, none of which had a reader -- the table showed every
-            format the API reported and a user could not hide one. On a folder whose images carry
-            two of the seven formats, five columns are a field of dots. */}
-        <div className="dataset__toolbar">
-        <input
-          type="search"
-          className="dataset__search"
-          value={query}
-          placeholder="Search files..."
-          aria-label="Search files"
-          onChange={(event) => setQuery(event.target.value)}
-        />
-        <label className="dataset__sort">
-          <span className="visually-hidden">Order</span>
-          <select
-            value={inTimelineOrder ? "timeline" : order}
-            aria-label="Sort order"
-            onChange={(event) => {
-              // A sort chosen leaves the timeline's order, as legacy's does (1239-1244).
-              setReleased(timelineOrder);
-              if (event.target.value === "timeline") return;
-              void save({
-                ...settings,
-                values: { ...settings.values, file_manager_sort_order: Number(event.target.value) },
-              });
-            }}
-          >
-            {SORT_ORDERS.map((entry) => (
-              <option key={entry.value} value={entry.value}>
-                {entry.label}
-              </option>
-            ))}
-            {inTimelineOrder && <option value="timeline">Timeline</option>}
-          </select>
-        </label>
-
-
-        <details className="dataset__columns">
-          {/* Legacy's 30px column menu button, "⚏" (fast_file_manager.py:47). */}
-          <summary aria-label="Columns" title="Columns">
-            ⚏
-          </summary>
-          {/* A dropdown, as legacy's 30px column menu is, so opening it does not push the list. */}
-          <div className="dataset__columns-menu">
-          {/* Legacy's ten, in its order, Name among them (fast_file_manager.py:1168-1178). */}
-          {columns.flatMap((column) => {
-            const setting = column.setting;
-            if (setting === undefined) return [];
-            return [
-              <label key={column.id} title={column.suffix}>
-                <input
-                  type="checkbox"
-                  checked={settings.values[setting] !== false}
-                  aria-label={`Show the ${column.title} column`}
-                  onChange={(event) =>
-                    void save({
-                      ...settings,
-                      values: { ...settings.values, [setting]: event.target.checked },
-                    })
-                  }
-                />{" "}
-                {column.title}
-              </label>,
-            ];
-          })}
-          </div>
-        </details>
-        </div>
-
-        <table className={coloured === null ? "dataset" : "dataset dataset--ranged"}>
-          <thead>
-            <tr>
-              {/* Legacy's column names (fast_file_manager.py:277-288), each format's suffix in its
-                  tooltip. */}
-              {shown.map((column) => (
-                <th scope="col" key={column.id} title={column.suffix}>
-                  {column.title}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((image) => (
-              <tr
-                key={image.key}
-                aria-selected={openState?.image.key === image.key}
-                className={rangeClass(image.key)}
-              >
-                {shown.map((column) => (
-                  <Cell key={column.id} column={column} image={image} open={() => openImage(image)} />
-                ))}
-              </tr>
-            ))}
-          </tbody>
-          {/* Legacy's totals row: how many images, in its words, under Name, and how many have each
-              format, blank for none (fast_file_manager.py:948-959). */}
-          <tfoot>
-            <tr>
-              {shown.map((column) => {
-                if (column.kind === "name") {
-                  return (
-                    <th scope="row" key={column.id}>
-                      {listing.images.length} image{listing.images.length === 1 ? "" : "s"} in{" "}
-                      {folderName(listing.folder)}
-                    </th>
-                  );
-                }
-                const count =
-                  column.kind === "format"
-                    ? listing.images.filter((image) => image.sidecars[column.id]).length
-                    : 0;
-                return <td key={column.id}>{count > 0 ? count : ""}</td>;
-              })}
-            </tr>
-          </tfoot>
-        </table>
-    </>
-  );
-}
-
 /** One row's cell in one column, as legacy's model shows it (fast_file_manager.py:461-500). */
-function Cell({
-  column,
-  image,
-  open,
-}: {
-  readonly column: ListColumn;
-  readonly image: WireDatasetImage;
-  readonly open: () => void;
-}): ReactNode {
+function Cell({ column, image }: { readonly column: ListColumn; readonly image: WireDatasetImage }): ReactNode {
   switch (column.kind) {
     case "name":
       return (
         <th scope="row">
-          <button type="button" onClick={open}>
-            {image.name}
-          </button>
+          {/* A button so the row can be reached and selected from the keyboard; the row's click
+              selects and its double-click opens. */}
+          <button type="button">{image.name}</button>
           {image.sharesSidecarsWith.length > 0 && (
             <span role="status" className="collision">
               {" "}
@@ -484,4 +760,89 @@ function Cell({
     case "size":
       return <td className="dataset__detail">{formatSize(image.size)}</td>;
   }
+}
+
+/** A menu entry, or null for the line between entries. */
+type MenuItem = { readonly label: string; readonly run: () => void } | null;
+
+/**
+ * Legacy's right-click menu over the list, where it was clicked, until an entry is chosen, Escape
+ * is pressed or the pointer goes down elsewhere (fast_file_manager.py:1675-1690).
+ */
+function FileMenu({
+  at,
+  items,
+  onClose,
+}: {
+  readonly at: { readonly x: number; readonly y: number };
+  readonly items: readonly MenuItem[];
+  readonly onClose: () => void;
+}): ReactNode {
+  const box = useRef<HTMLDivElement>(null);
+  const [place, setPlace] = useState(at);
+
+  // Kept on screen, as a Qt menu is: the list is the window's right-hand column.
+  useLayoutEffect(() => {
+    const size = box.current?.getBoundingClientRect();
+    if (size === undefined) return;
+    const x = Math.max(0, Math.min(at.x, window.innerWidth - size.width));
+    const y = Math.max(0, Math.min(at.y, window.innerHeight - size.height));
+    setPlace({ x, y });
+  }, [at]);
+
+  useEffect(() => {
+    box.current?.querySelector("button")?.focus();
+  }, []);
+
+  useEffect(() => {
+    const away = (event: Event): void => {
+      if (!(event.target instanceof Node) || !box.current?.contains(event.target)) onClose();
+    };
+    document.addEventListener("pointerdown", away, true);
+    return () => document.removeEventListener("pointerdown", away, true);
+  }, [onClose]);
+
+  // The menu's keys are the menu's: none reaches the application's shortcuts behind it.
+  const onKeyDown = (event: KeyboardEvent<HTMLDivElement>): void => {
+    event.stopPropagation();
+    const entries = [...(box.current?.querySelectorAll("button") ?? [])];
+    const at = entries.indexOf(document.activeElement as HTMLButtonElement);
+    if (event.key === "Escape") {
+      event.preventDefault();
+      onClose();
+    } else if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      event.preventDefault();
+      const by = event.key === "ArrowDown" ? 1 : -1;
+      entries[(at + by + entries.length) % entries.length]?.focus();
+    }
+  };
+
+  return (
+    <div
+      ref={box}
+      role="menu"
+      aria-label="File"
+      className="file-menu"
+      style={{ left: place.x, top: place.y }}
+      onKeyDown={onKeyDown}
+    >
+      {items.map((item, index) =>
+        item === null ? (
+          <div key={`line-${index}`} role="separator" className="file-menu__line" />
+        ) : (
+          <button
+            key={item.label}
+            type="button"
+            role="menuitem"
+            onClick={() => {
+              onClose();
+              item.run();
+            }}
+          >
+            {item.label}
+          </button>
+        ),
+      )}
+    </div>
+  );
 }

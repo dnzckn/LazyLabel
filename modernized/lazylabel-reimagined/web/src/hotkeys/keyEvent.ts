@@ -394,10 +394,11 @@ export function browserReservation(key: string): BrowserReservation | null {
  * A listener in the CAPTURE phase hears them first, though, so the AI and polygon layers -- which
  * capture on purpose, to run before the dispatcher -- cleared their points on the Escape that closed
  * the hotkey dialog, and finished a polygon on an Enter pressed on its Close button. Legacy's modal
- * dialogs block the window's shortcuts.
+ * dialogs block the window's shortcuts, and so does a menu it opens: Escape closes the file list's
+ * menu and does nothing else.
  */
 export function isInModal(target: EventTarget | null): boolean {
-  return target instanceof Element && target.closest('[aria-modal="true"]') !== null;
+  return target instanceof Element && target.closest('[aria-modal="true"], [role="menu"]') !== null;
 }
 
 /**

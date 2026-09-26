@@ -115,9 +115,8 @@ export const HONOURED: Readonly<Record<string, Honoured>> = {
   // on the server, so the browser fetches them only while one of these is on or a sort needs them.
   file_manager_show_modified: read,
   file_manager_show_size: read,
-  // Read, and honest about its limits: only the two NAME orders can be performed, because the
-  // listing carries no `modified` and no `size`. The other four fall back to name and the browser
-  // says so, rather than showing a list sorted by name that claims to be sorted by size.
+  // Read: the order the file list opens in, as legacy's `setDisplaySettings` applies it. The
+  // headers sort without changing it, as legacy's do (CP-48).
   file_manager_sort_order: read,
 
   propagation_confidence_threshold: read,
