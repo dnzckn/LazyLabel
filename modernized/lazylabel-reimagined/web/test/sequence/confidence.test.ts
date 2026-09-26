@@ -201,6 +201,16 @@ describe("re-flagging the timeline (the legacy defect, designed out)", () => {
     const next = applyThreshold(FRAMES, SCORES, 0.9);
     expect(applyThreshold(next, SCORES, 0.91)).toBe(next);
   });
+
+  it("keeps a frame flagged whose masks were discarded, however low Min Conf goes (SP-33)", () => {
+    // Flagged with Keep Flagged Masks off, it has nothing Save All could write. Turned green, it
+    // promised a save that never came; legacy's stays red (main_window.py:4718-4723).
+    const raised = applyThreshold(FRAMES, SCORES, 0.99, new Set(["f1.png"]));
+    const lowered = applyThreshold(raised, SCORES, 0.9, new Set(["f1.png"]));
+
+    expect(lowered[1]!.state).toBe("flagged");
+    expect(lowered[2]!.state).toBe("propagated");
+  });
 });
 
 describe("what Save All writes (RULE-060)", () => {

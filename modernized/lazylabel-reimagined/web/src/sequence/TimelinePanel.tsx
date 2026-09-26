@@ -260,6 +260,8 @@ export function TimelinePanel({
   );
   /** RULE-081: the frames Skip Labeled kept this run, by image key -- shown brown, never stored. */
   const [keptLabels, setKeptLabels] = useState<ReadonlySet<string>>(new Set());
+  /** Flagged with Keep Flagged Masks off, so without masks: flagged at any Min Conf (SP-33). */
+  const [discarded, setDiscarded] = useState<ReadonlySet<string>>(new Set());
   /** RULE-077's two trim bounds, as positions in the timeline. Order between them does not matter. */
   const [bounds, setBounds] = useState<readonly [number | null, number | null]>([null, null]);
   const [trimNote, setTrimNote] = useState<string | null>(null);
@@ -500,13 +502,14 @@ export function TimelinePanel({
    * previous run's colours in place.
    */
   const scoreKey = JSON.stringify(ownScores);
+  const discardedKey = [...discarded].sort().join("|");
   useEffect(() => {
     if (Object.keys(ownScores).length === 0) return;
-    setOverrides((previous) => applyThreshold(previous ?? frames, ownScores, threshold));
+    setOverrides((previous) => applyThreshold(previous ?? frames, ownScores, threshold, discarded));
     // `frames` is derived from `overrides`, so depending on it here would re-enter this effect on
     // its own result. The scores and the threshold are what should trigger a re-flag.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [scoreKey, threshold]);
+  }, [scoreKey, threshold, discardedKey]);
 
   /**
    * C10: ask which frames are worth annotating by hand, and mark them.
@@ -641,6 +644,7 @@ export function TimelinePanel({
     }
     setTimeline(null);
     setKeptLabels(new Set());
+    setDiscarded(new Set());
     unsavedRef.current = 0;
     // Everything else the old timeline held, as legacy's reset clears it (`sequence_widget.py:770-794`,
     // SEQUENCE_PARITY.md SP-35): the sort, the trim bounds, the suggestions, and the run's scores and
@@ -747,6 +751,7 @@ export function TimelinePanel({
   const dropRun = () => {
     setOwnScores({});
     setKeptLabels(new Set());
+    setDiscarded(new Set());
     setOverrides((previous) => resetForPropagation(previous ?? frames));
   };
 
@@ -841,6 +846,7 @@ export function TimelinePanel({
           confirmDiscard={confirmDiscard}
           onSegments={setPropagated}
           onSkipped={setKeptLabels}
+          onDiscarded={setDiscarded}
           onLeftOut={(keys) => setOverrides((previous) => markSkipped(previous ?? frames, keys))}
           onSaved={(keys) => setOverrides((previous) => markSaved(previous ?? frames, keys))}
           {...(savedElsewhere === undefined ? {} : { savedElsewhere })}
@@ -947,7 +953,7 @@ export function TimelinePanel({
           // The TIMELINE moves with the number, not only the set a save would use. Legacy
           // recomputes one and not the other, so the colours point at one set of frames to review
           // while Save All skips another -- and nothing says the two disagree.
-          setOverrides(applyThreshold(frames, allScores, next));
+          setOverrides(applyThreshold(frames, allScores, next, discarded));
         }}
       />
       )}

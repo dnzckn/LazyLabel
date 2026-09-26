@@ -159,11 +159,18 @@ export function thresholdPosition(view: Histogram, threshold: number): number {
  * a reference frame is ground truth the user drew -- neither becomes flagged because a number
  * changed. `saved` is left alone for the same reason: it is already on disk, and re-flagging it
  * would claim a file needs review that the save has finished with.
+ *
+ * `held` names the frames whose masks were DISCARDED when they were flagged, with Keep Flagged
+ * Masks off: they stay flagged whatever the threshold, since lowering it cannot bring the masks
+ * back and Save All will not write them. Turned green, they promised a save that never came
+ * (SEQUENCE_PARITY.md SP-33); legacy's stay red, as its timeline keeps its colours
+ * (`main_window.py:4718-4723`).
  */
 export function applyThreshold(
   frames: readonly Frame[],
   scores: Readonly<Record<number, number>>,
   threshold: number,
+  held: ReadonlySet<string> = new Set(),
 ): readonly Frame[] {
   let changed = false;
   const next = frames.map((frame) => {
@@ -174,7 +181,7 @@ export function applyThreshold(
     // "propagated" is the un-flagged resting state of a frame that has a score: raising the
     // threshold flags it, lowering it back must let it go again. A one-way flag would make the
     // control feel broken the first time someone overshot and corrected.
-    const state = isFlagged(confidence, threshold) ? "flagged" : "propagated";
+    const state = held.has(frame.key) || isFlagged(confidence, threshold) ? "flagged" : "propagated";
     if (state === frame.state) return frame;
     changed = true;
     return { ...frame, state } as Frame;

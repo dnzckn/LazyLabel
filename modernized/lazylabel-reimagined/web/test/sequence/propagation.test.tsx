@@ -1365,6 +1365,50 @@ describe("RULE-056: not losing propagated work without asking", () => {
     expect(f02().getAttribute("title")).toContain("confidence 0.9990");
   });
 
+  describe("Min Conf lowered after a run (SP-33)", () => {
+    /*
+     * Legacy re-flags from its stored results and Save All follows, but its timeline keeps its
+     * colours (main_window.py:4718-4723; propagation_manager.py:1254-1268). A frame whose masks went
+     * with Keep Flagged Masks off stays red, and Save All has nothing to write for it. The web
+     * turned it green, and still wrote nothing.
+     */
+    const cell = (at: number) => screen.getByLabelText("Timeline").querySelectorAll("button")[at]!;
+    const minConf = () => screen.getByLabelText("Minimum confidence") as HTMLInputElement;
+    const UNSURE = [{ source: "frames/f02.png", objectId: 1, mask: MASK, confidence: 0.95 }];
+
+    async function propagateUntilDone(keepFlagged = false) {
+      fireEvent.click(screen.getByText("Build timeline"));
+      fireEvent.click(screen.getByRole("button", { name: "+ All labeled" }));
+      await waitFor(() => expect(cell(0).getAttribute("aria-label")).toMatch(/reference$/));
+      if (keepFlagged) fireEvent.click(screen.getByLabelText("Keep flagged masks"));
+      fireEvent.click(screen.getByRole("button", { name: /^Propagate/ }));
+      await screen.findByText("Propagated 1 frame", undefined, { timeout: 3000 });
+      await waitFor(() => expect(cell(1).getAttribute("aria-label")).toMatch(/flagged$/));
+    }
+
+    it("keeps a frame flagged whose masks were discarded", async () => {
+      panel(() => true, false, undefined, { results: UNSURE });
+      await propagateUntilDone();
+
+      fireEvent.change(minConf(), { target: { value: "0.9" } });
+
+      await waitFor(() => expect(minConf().value).toBe("0.9"));
+      expect(cell(1).getAttribute("aria-label")).toMatch(/flagged$/);
+      expect(screen.queryByRole("button", { name: /^Save \d+ frame/ })).toBeNull();
+    });
+
+    it("lets a flagged frame whose masks were kept go green, and be saved", async () => {
+      // Legacy's Save All then writes it: its engine no longer flags it, and it has its masks.
+      panel(() => true, false, undefined, { results: UNSURE });
+      await propagateUntilDone(true);
+
+      fireEvent.change(minConf(), { target: { value: "0.9" } });
+
+      await waitFor(() => expect(cell(1).getAttribute("aria-label")).toMatch(/propagated$/));
+      expect(await screen.findByRole("button", { name: "Save 1 frame" })).toBeTruthy();
+    });
+  });
+
   it("marks the frames the run left out Skipped, brown, and says so as legacy does (SP-25)", async () => {
     // Legacy marks them Skipped and notifies before it propagates (main_window.py:4149-4162;
     // sequence_view_mode.py:586-596). The web left them out silently, and left them pending.

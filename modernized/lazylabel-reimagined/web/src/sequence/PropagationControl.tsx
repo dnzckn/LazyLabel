@@ -93,6 +93,12 @@ export interface PropagationControlProps {
    * timeline to mark Skipped, as legacy marks them (`main_window.py:4149-4162`, SP-25).
    */
   readonly onLeftOut?: (keys: readonly string[]) => void;
+  /**
+   * The frames whose masks were discarded when they were flagged, with Keep Flagged Masks off: the
+   * timeline keeps them flagged whatever Min Conf becomes, since nothing can be written for them
+   * (SP-33).
+   */
+  readonly onDiscarded?: (keys: ReadonlySet<string>) => void;
   /** The frames a Save All wrote, so the timeline can show them saved. */
   readonly onSaved?: (keys: readonly string[]) => void;
   /**
@@ -133,6 +139,7 @@ export function PropagationControl({
   confirmDiscard = (message) => window.confirm(message),
   onSkipped,
   onLeftOut,
+  onDiscarded,
   onSaved,
   savedElsewhere,
   openAnnotations,
@@ -425,15 +432,22 @@ export function PropagationControl({
     const known = new Map<string, string>();
     /** The state each commit gives its frame at today's Min Conf, whatever the timeline shows. */
     const verdicts = new Map<string, FrameState>();
+    /** Flagged with Keep Flagged Masks off: no masks, so flagged at any Min Conf (SP-33). */
+    const discarded = new Set<string>();
 
     for (const [key, result] of committed.current) {
       const at = position.get(key);
       if (at === undefined) continue; // trimmed off the timeline
       if (result.kind === "scored") {
         scores[at] = result.score;
-        verdicts.set(key, isFlagged(result.score, threshold) ? "flagged" : "propagated");
-        if (result.kept.length > 0) kept.set(key, result.kept);
-        else known.set(key, "its masks were discarded when it was flagged, with Keep Flagged Masks off");
+        if (result.kept.length > 0) {
+          kept.set(key, result.kept);
+          verdicts.set(key, isFlagged(result.score, threshold) ? "flagged" : "propagated");
+        } else {
+          discarded.add(key);
+          verdicts.set(key, "flagged");
+          known.set(key, "its masks were discarded when it was flagged, with Keep Flagged Masks off");
+        }
       } else if (result.kind === "skipped") {
         verdicts.set(key, "skipped");
         if (result.painted) painted.add(key);
@@ -453,7 +467,7 @@ export function PropagationControl({
         corrected.push(key);
       }
     }
-    return { scores, empty: empty.sort((a, b) => a - b), painted, kept, known, corrected, verdicts };
+    return { scores, empty: empty.sort((a, b) => a - b), painted, kept, known, corrected, verdicts, discarded };
     // `committed` is a ref, filled just above from these same inputs, and `frames` is read only
     // for its keys and positions, which `framesKey` stands for.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -472,6 +486,15 @@ export function PropagationControl({
     onSkipped?.(view.painted);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [onSkipped, paintedKey]);
+
+  // Through a ref, keyed on the frames alone: the panel hands down a new callback every render.
+  const onDiscardedNow = useRef(onDiscarded);
+  onDiscardedNow.current = onDiscarded;
+  const discardedKey = [...view.discarded].sort().join("|");
+  useEffect(() => {
+    onDiscardedNow.current?.(view.discarded);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [discardedKey]);
 
   // A frame the user saved themselves is saved: shown so on the timeline, as Save All's are. Keyed
   // on the frames alone, with the callback through a ref: the panel hands down a new `onSaved` on
