@@ -39,6 +39,10 @@ export function TabList({ label, tabs, current, onChoose, tabId, panelId }: TabL
         : null;
       if (to === null) return;
       event.preventDefault();
+      // The tab list's, not the page's: Left and Right are also previous and next IMAGE, and the
+      // dispatcher heard them too, so moving between tabs by keyboard changed the image as well
+      // (`CONTROL_PARITY.md` CP-19).
+      event.stopPropagation();
       const next = tabs[to]!.id;
       onChoose(next);
       buttons.current[next]?.focus();

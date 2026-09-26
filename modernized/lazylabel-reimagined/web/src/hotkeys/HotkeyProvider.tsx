@@ -128,7 +128,7 @@ export function HotkeyProvider({
 
     const onKeyDown = (event: Event): void => {
       const keyboardEvent = event as KeyboardEvent;
-      if (isTypingTarget(keyboardEvent.target)) return;
+      if (isTypingTarget(keyboardEvent.target, keyboardEvent.key)) return;
 
       const key = keyStringFor(keyboardEvent);
       if (key === null) return;

@@ -9,11 +9,11 @@
 
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { useEffect, useState, type ReactNode } from "react";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { defaultSettings } from "@lazylabel/settings-schema";
 
-import { HotkeyProvider } from "../../src/hotkeys/HotkeyProvider.jsx";
+import { HotkeyProvider, useHotkey } from "../../src/hotkeys/HotkeyProvider.jsx";
 import { NotificationHost, NotificationProvider } from "../../src/notifications/NotificationProvider.jsx";
 import { CentreTabs as Bare, type CentreTabsProps } from "../../src/shell/CentreTabs.jsx";
 import { useSequenceActive } from "../../src/sequence/sequenceActive.js";
@@ -168,6 +168,32 @@ describe("the centre tabs", () => {
     expect(tab("Single").tabIndex).toBe(0);
     expect(tab("Multi").tabIndex).toBe(-1);
     expect(tab("Sequence").tabIndex).toBe(-1);
+  });
+});
+
+describe("the tab list's own keys", () => {
+  it("does not also change the image when an arrow moves between tabs", () => {
+    // Left and Right are previous and next image too, and the dispatcher heard them as well, so
+    // moving between tabs by keyboard changed the image (CONTROL_PARITY.md CP-19).
+    const nextImage = vi.fn();
+    function NextImage(): ReactNode {
+      useHotkey("load_next_image", nextImage);
+      return null;
+    }
+    render(
+      <NotificationProvider>
+        <HotkeyProvider bindings={defaultSettings().hotkeys}>
+          <Bare viewer={<View />} multi={(viewer) => <div>{viewer}</div>} sequence={<Counter />} />
+          <NextImage />
+        </HotkeyProvider>
+      </NotificationProvider>,
+    );
+    tab("Single").focus();
+
+    fireEvent.keyDown(tab("Single"), { key: "ArrowRight", code: "ArrowRight" });
+
+    expect(tab("Multi").getAttribute("aria-selected")).toBe("true");
+    expect(nextImage).not.toHaveBeenCalled();
   });
 });
 

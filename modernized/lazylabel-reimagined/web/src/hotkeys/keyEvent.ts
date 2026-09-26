@@ -131,7 +131,15 @@ export function isInModal(target: EventTarget | null): boolean {
  * delete the selected segments. Legacy gets this from Qt's focus handling; in a browser it has to
  * be asked for explicitly, and forgetting it is the classic web-app keyboard bug.
  */
-export function isTypingTarget(target: EventTarget | null): boolean {
+/**
+ * The keys a focused `<select>` keeps, to move through its options. Every other key is a hotkey, as
+ * legacy's window shortcuts keep working with a combo box focused. The whole select counted as a
+ * typing target, so after choosing a Filter Class every key was dead until focus moved
+ * (`CONTROL_PARITY.md` CP-18).
+ */
+const SELECT_KEYS: ReadonlySet<string> = new Set(["ArrowUp", "ArrowDown", "Home", "End", "PageUp", "PageDown"]);
+
+export function isTypingTarget(target: EventTarget | null, key?: string): boolean {
   if (target === null || !(target instanceof Element)) return false;
 
   const element = target as HTMLElement;
@@ -142,7 +150,9 @@ export function isTypingTarget(target: EventTarget | null): boolean {
   if (editable !== null && editable !== undefined && editable !== "false") return true;
 
   const tag = element.tagName;
-  if (tag === "TEXTAREA" || tag === "SELECT") return true;
+  if (tag === "TEXTAREA") return true;
+  // Without the key, the answer is the cautious one: some keys are the select's.
+  if (tag === "SELECT") return key === undefined || SELECT_KEYS.has(key);
   if (tag !== "INPUT") return false;
 
   // Checkboxes, radios and buttons do not swallow text, so a hotkey over one is still a hotkey.

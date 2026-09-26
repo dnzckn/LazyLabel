@@ -126,4 +126,19 @@ describe("isTypingTarget", () => {
     expect(isTypingTarget(element("<div></div>"))).toBe(false);
     expect(isTypingTarget(null)).toBe(false);
   });
+
+  it("keeps only a select's own keys for it, leaving every other key a hotkey", () => {
+    // A focused select took every key, so after choosing a Filter Class nothing worked until focus
+    // moved. Legacy's window shortcuts keep working with a combo box focused (CONTROL_PARITY.md
+    // CP-18); the select keeps what moves through its options.
+    const select = element("<select></select>");
+    for (const key of ["ArrowUp", "ArrowDown", "Home", "End", "PageUp", "PageDown"]) {
+      expect(isTypingTarget(select, key), key).toBe(true);
+    }
+    for (const key of ["v", "m", "1", "ArrowRight", "Enter", " "]) {
+      expect(isTypingTarget(select, key), key).toBe(false);
+    }
+    // A text field keeps every key whatever it is.
+    expect(isTypingTarget(element('<input type="text">'), "v")).toBe(true);
+  });
 });
