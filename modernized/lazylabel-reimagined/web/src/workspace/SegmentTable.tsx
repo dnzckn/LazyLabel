@@ -112,8 +112,7 @@ export function SegmentTable(): ReactNode {
   });
   useHotkey("select_all", () => {
     // Legacy selects every row the table SHOWS (right_panel.py:378-380), so under a filter only
-    // that class's annotations. Toggling would make one key mean two things depending on state,
-    // which is the shape RULE-070 is a defect card about.
+    // that class's annotations -- every time: unlike Select and Edit (RULE-070), it does not toggle.
     setSelection(rows.map(({ index }) => index));
   });
   useHotkey("escape", clearSelection);

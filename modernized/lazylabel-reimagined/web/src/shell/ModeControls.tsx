@@ -4,7 +4,8 @@
  *
  * RADIOS DRAWN AS BUTTONS. The modes are exclusive, and a radio group says so to a screen reader and
  * to the keyboard without any code; each label is the button. The key in each label is read from
- * the user's bindings, so a remapped key is the one shown.
+ * the user's bindings, so a remapped key is the one shown. Select, Edit and Pan toggle, keys and
+ * buttons alike, as legacy's do: pressed again, each goes back to the mode before it (RULE-070).
  *
  * WHERE REACT'S EXTRA TOOLS WENT. "Edit" is not a drawing tool here: the vertex handles appear on
  * the selected shapes while no drawing tool is active, so Edit (R) means "no tool" -- which is also
@@ -43,8 +44,11 @@ const MODES: readonly {
   { tool: "none", label: "Edit", action: "edit_mode", tooltip: "Edit segments and polygons" },
 ];
 
+/** The modes whose key and button go back to the mode before them when pressed again (RULE-070). */
+const TOGGLED: ReadonlySet<Tool> = new Set<Tool>(["select", "none", "pan"]);
+
 export function ModeControls({ onHotkeys }: { readonly onHotkeys: () => void }): ReactNode {
-  const { activeTool, setActiveTool, segments, selected, toggleRecentClass } = useWorkspace();
+  const { activeTool, setActiveTool, toggleTool, segments, selected, toggleRecentClass } = useWorkspace();
   const keyOf = useKeyHint();
   const { notify } = useNotifications();
 
@@ -53,6 +57,7 @@ export function ModeControls({ onHotkeys }: { readonly onHotkeys: () => void }):
    * which then carry their vertex handles. With nothing selected, or only masks, legacy refuses in
    * its own words and STAYS IN THE MODE IT WAS IN (mode_manager.py:55-112) -- the words being the
    * only thing that separates "the key is not bound" from "this shape has no vertices to drag".
+   * It asks in Edit too, before going back: with nothing editable selected there, R stays in Edit.
    *
    * Until 2026-09-26 the tool was cleared on a refusal anyway, so R on a mask left the user out of
    * the mode they were drawing in. Legacy keeps it (CONTROL_PARITY.md CP-16).
@@ -63,23 +68,27 @@ export function ModeControls({ onHotkeys }: { readonly onHotkeys: () => void }):
       notify({ severity: "info", message: outcome.reason });
       return;
     }
-    setActiveTool("none");
+    toggleTool("none");
   };
+
+  /** A toggled mode's key or button: Edit asks first, the other two do not (mode_manager.py:43-53). */
+  const toggle = (tool: Tool) => (tool === "none" ? edit() : toggleTool(tool));
 
   /*
    * THE KEYS -- legacy's own bindings, imported with the settings so a remapping is honoured.
    *
-   * SET DIRECTLY, NOT TOGGLED. RULE-070 is a defect card: legacy means Selection and Edit to toggle
-   * back to the previous mode, and records the mode just left every time, so E R R E leaves you in
-   * selection unable to get back to AI without pressing 1. A tool key that sometimes does something
-   * else is worse than one that always does the same thing.
+   * 1 TO 4 SET THEIR MODE; E, Q AND R TOGGLE, as legacy's do (main_window.py:995-1001): pressed
+   * again, each goes back to the mode before it (RULE-070, `tools/modes.ts`). The owner chose that
+   * on 2026-09-26, reversing the recorded decision to set them every time. Legacy's previous mode is
+   * whatever was just left, so with a polygon selected E R R E goes Selection, Edit, Selection,
+   * Edit, and 1 is the way back to AI; that is kept too.
    */
   useHotkey("sam_mode", () => setActiveTool("ai"));
   useHotkey("polygon_mode", () => setActiveTool("polygon"));
   useHotkey("bbox_mode", () => setActiveTool("box"));
   useHotkey("circle_mode", () => setActiveTool("circle"));
-  useHotkey("selection_mode", () => setActiveTool("select"));
-  useHotkey("pan_mode", () => setActiveTool("pan"));
+  useHotkey("selection_mode", () => toggle("select"));
+  useHotkey("pan_mode", () => toggle("pan"));
   /*
    * Legacy's X (RULE-086), with its words (main_window.py:2697-2738). It lives beside the tool keys
    * because it is the same kind of thing: what the next stroke will be, chosen without reaching for
@@ -119,7 +128,12 @@ export function ModeControls({ onHotkeys }: { readonly onHotkeys: () => void }):
               name="tool"
               className="mode-button__input"
               checked={activeTool === mode.tool}
-              onChange={() => (mode.tool === "none" ? edit() : setActiveTool(mode.tool))}
+              onChange={() => (TOGGLED.has(mode.tool) ? toggle(mode.tool) : setActiveTool(mode.tool))}
+              // Legacy's Select and Edit buttons toggle as their keys do (main_window.py:862-863;
+              // control_panel.py:652-660). A checked radio sends no change, so its click goes back.
+              onClick={() => {
+                if (activeTool === mode.tool && TOGGLED.has(mode.tool)) toggle(mode.tool);
+              }}
             />
             {mode.label}
             {keyOf(mode.action)}
@@ -138,7 +152,11 @@ export function ModeControls({ onHotkeys }: { readonly onHotkeys: () => void }):
             name="tool"
             className="mode-button__input"
             checked={activeTool === "pan"}
-            onChange={() => setActiveTool("pan")}
+            // What Q does, pressed again too.
+            onChange={() => toggle("pan")}
+            onClick={() => {
+              if (activeTool === "pan") toggle("pan");
+            }}
           />
           Pan{keyOf("pan_mode")}
         </label>

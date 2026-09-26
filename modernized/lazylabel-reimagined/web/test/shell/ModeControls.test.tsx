@@ -24,7 +24,7 @@ function Tool(): React.ReactNode {
 
 /** Put an annotation on the image and select everything, as the segment table would. */
 function Seed(): React.ReactNode {
-  const { addSegment, segments, setSelection } = useWorkspace();
+  const { addSegment, segments, setSelection, clearSelection } = useWorkspace();
   const polygon: WireSegment = { type: "Polygon", classId: 0, vertices: [[1, 1], [9, 1], [9, 9]] };
   const mask: WireSegment = { type: "AI", classId: 1 };
   return (
@@ -32,6 +32,7 @@ function Seed(): React.ReactNode {
       <button type="button" onClick={() => addSegment(polygon)}>add polygon</button>
       <button type="button" onClick={() => addSegment(mask)}>add mask</button>
       <button type="button" onClick={() => setSelection(segments.map((_, index) => index))}>select all</button>
+      <button type="button" onClick={clearSelection}>select none</button>
     </>
   );
 }
@@ -157,6 +158,118 @@ describe("Edit with nothing it can edit (CP-16, RULE-046)", () => {
 
     expect(await screen.findByText("No editable shapes selected!")).toBeTruthy();
     expect(screen.getByTestId("tool").textContent).toBe("box");
+  });
+});
+
+describe("Select, Edit and Pan pressed again go back, as legacy's toggles do (RULE-070)", () => {
+  /*
+   * The owner's decision of 2026-09-26, "E/R toggle back", reversing the recorded one that set the
+   * mode every time. Legacy's E, Q and R are toggles and 1-4 are not (main_window.py:995-1001;
+   * mode_manager.py:43-53, 171-184), and so are its Select and Edit buttons (main_window.py:862-863).
+   */
+  const tool = () => screen.getByTestId("tool").textContent;
+  const press = (key: string) => fireEvent.keyDown(document, { key });
+
+  /** A polygon on the image, selected, so Edit (R) is allowed. */
+  function polygonSelected(): void {
+    fireEvent.click(screen.getByText("add polygon"));
+    fireEvent.click(screen.getByText("select all"));
+  }
+
+  it("goes E R R E as the card says: Selection, Edit, Selection, then Edit without asking", async () => {
+    // RULE-070's example. Legacy's previous mode is whatever was just left: the view model's setter
+    // records it on every change, over ModeManager's wish to skip Selection and Edit
+    // (single_view_viewmodel.py:127-142; mode_manager.py:123-124, 182-183). So the second R goes
+    // back to Selection, not AI, and the last E goes back to Edit -- with nothing selected, because
+    // only R asks for an editable shape. 1 is the way back to AI.
+    mount();
+    polygonSelected();
+    press("1");
+    expect(tool()).toBe("ai");
+
+    press("E");
+    expect(tool()).toBe("select");
+    press("R");
+    expect(tool()).toBe("none");
+    press("R");
+    expect(tool()).toBe("select");
+    fireEvent.click(screen.getByText("select none"));
+    press("E");
+
+    expect(tool()).toBe("none");
+    expect(screen.queryByText("No editable shapes selected!")).toBeNull();
+    press("1");
+    expect(tool()).toBe("ai");
+  });
+
+  it("goes back from Edit to the drawing mode on R, with a polygon selected", () => {
+    mount();
+    polygonSelected();
+    press("2");
+
+    press("R");
+    expect(tool()).toBe("none");
+    press("R");
+
+    expect(tool()).toBe("polygon");
+  });
+
+  it("asks before going back from Edit too: with nothing editable selected, R stays in Edit", async () => {
+    // handle_edit_mode_request checks the selection before toggle_edit_mode (mode_manager.py:55-112).
+    mount();
+    polygonSelected();
+    press("3");
+    press("R");
+    expect(tool()).toBe("none");
+    fireEvent.click(screen.getByText("select none"));
+
+    press("R");
+
+    expect(await screen.findByText("No editable shapes selected!")).toBeTruthy();
+    expect(tool()).toBe("none");
+  });
+
+  it("goes back when the Select button is clicked while it is on, as legacy's button does", () => {
+    mount();
+    fireEvent.click(screen.getByRole("radio", { name: "Box (3)" }));
+    fireEvent.click(screen.getByRole("radio", { name: "Select (E)" }));
+    expect(tool()).toBe("select");
+
+    fireEvent.click(screen.getByRole("radio", { name: "Select (E)" }));
+
+    expect(tool()).toBe("box");
+    expect((screen.getByRole("radio", { name: "Box (3)" }) as HTMLInputElement).checked).toBe(true);
+  });
+
+  it("goes back when the Edit button is clicked while it is on, with a polygon selected", () => {
+    mount();
+    polygonSelected();
+    fireEvent.click(screen.getByRole("radio", { name: "Circle (4)" }));
+    fireEvent.click(screen.getByRole("radio", { name: "Edit (R)" }));
+    expect(tool()).toBe("none");
+
+    fireEvent.click(screen.getByRole("radio", { name: "Edit (R)" }));
+
+    expect(tool()).toBe("circle");
+  });
+
+  it("goes back from Pan when its button is clicked again, as Q does", () => {
+    mount();
+    fireEvent.click(screen.getByRole("radio", { name: "AI (1)" }));
+    fireEvent.click(screen.getByRole("radio", { name: "Pan (Q)" }));
+    expect(tool()).toBe("pan");
+
+    fireEvent.click(screen.getByRole("radio", { name: "Pan (Q)" }));
+
+    expect(tool()).toBe("ai");
+  });
+
+  it("keeps 1 to 4 as settings: pressed again, a drawing mode stays", () => {
+    mount();
+    press("2");
+    press("2");
+
+    expect(tool()).toBe("polygon");
   });
 });
 

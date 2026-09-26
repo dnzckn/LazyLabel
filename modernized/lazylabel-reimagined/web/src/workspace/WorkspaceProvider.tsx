@@ -48,6 +48,7 @@ import type { Crop } from "../tools/crop.js";
 import { NO_PROCESSING, type ImageProcessing } from "./processing.js";
 import { linkedAdd, linkedErase, type LinkedAdd } from "../split/linkedAdd.js";
 import { erase, type EraseResult } from "../tools/erase.js";
+import { chooseMode, toggleMode, type ModeState } from "../tools/modes.js";
 import type { ImageSize } from "../split/linked.js";
 
 /** Every tool the workspace offers. */
@@ -330,7 +331,13 @@ export interface WorkspaceContextValue {
    * picking the polygon tool and then clicking the other pane should draw a polygon.
    */
   readonly activeTool: Tool;
+  /** Legacy's `set_mode`: what AI, Polygon, Box and Circle do. Records the tool left (RULE-070). */
   readonly setActiveTool: (tool: Tool) => void;
+  /**
+   * Legacy's `toggle_mode`, what Select (E), Pan (Q) and Edit (R) do: the tool, or the one before it
+   * when the tool is already in force -- RULE-070, by the owner's decision of 2026-09-26.
+   */
+  readonly toggleTool: (tool: Tool) => void;
   /** The class new annotations take, or null to use the next free id. */
   readonly activeClassId: number | null;
   readonly setActiveClassId: (classId: number | null) => void;
@@ -439,7 +446,15 @@ export function WorkspaceProvider({
 }): ReactNode {
   const [sides, setSides] = useState<readonly [SideState, SideState]>([EMPTY_SIDE, EMPTY_SIDE]);
   const [activeSide, setActiveSide] = useState<SideIndex>(0);
-  const [activeTool, setActiveTool] = useState<Tool>("none");
+  /*
+   * The tool and the one before it, legacy's `mode` and `previous_mode`, which Select, Pan and Edit
+   * go back to (RULE-070; `tools/modes.ts` has legacy's rules). One record, so the two cannot be a
+   * render apart. Nothing precedes the first tool, so going back from it stays put.
+   */
+  const [mode, setMode] = useState<ModeState>({ tool: "none", previous: "none" });
+  const activeTool = mode.tool;
+  const setActiveTool = useCallback((tool: Tool) => setMode((current) => chooseMode(current, tool)), []);
+  const toggleTool = useCallback((tool: Tool) => setMode((current) => toggleMode(current, tool)), []);
   const [activeClassId, setActiveClassIdState] = useState<number | null>(null);
   /*
    * Legacy's `last_toggled_class_id`, for its X (RULE-086): the class most recently made active or
@@ -1146,6 +1161,7 @@ export function WorkspaceProvider({
       revisions,
       activeTool,
       setActiveTool,
+      toggleTool,
       activeClassId,
       setActiveClassId,
       toggleActiveClass,
@@ -1204,6 +1220,8 @@ export function WorkspaceProvider({
       sides,
       saveCounts,
       zoom,
+      setActiveTool,
+      toggleTool,
       toggleActiveClass,
       toggleRecentClass,
       toggleSelected,

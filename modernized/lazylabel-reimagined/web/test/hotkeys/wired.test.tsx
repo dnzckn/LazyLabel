@@ -124,12 +124,12 @@ describe("the tool keys", () => {
     expect(chosen()).toBe("Poly (2)");
   });
 
-  it("SETS the tool rather than toggling back, which is RULE-070's defect", async () => {
-    // Legacy means Selection and Edit to toggle back to the previous mode, and records the mode
-    // just left every time -- so E R R E leaves you in selection, unable to reach AI without
-    // pressing 1. The card calls it a defect. A tool key that sometimes does something else is
-    // worse than one that always does the same thing. (Nothing is selected here, so R is refused
-    // and changes nothing, as legacy's is; entering Edit is covered in ModeControls.test.tsx.)
+  it("goes BACK to the mode before Select when E is pressed again, as legacy's toggle does (RULE-070)", async () => {
+    // Legacy toggles Selection: E in Selection returns to the mode it left (mode_manager.py:43-45,
+    // 171-184). The owner chose that on 2026-09-26 ("E/R toggle back"); until then this key set
+    // Selection every time. Nothing is selected here, so R is refused and changes nothing on the
+    // way, as legacy's is (mode_manager.py:95-109); the E R R E sequence with a polygon selected
+    // is in ModeControls.test.tsx.
     mount();
     await waitFor(() => expect(screen.getByText("Mode Controls")).toBeTruthy());
 
@@ -141,10 +141,23 @@ describe("the tool keys", () => {
     await waitFor(() => expect(screen.getByText(/No editable shapes selected/)).toBeTruthy());
     expect(chosen()).toBe("Select (E)");
 
-    // The fourth press in legacy's sequence. Selection, every time, not "back to AI".
     fireEvent.keyDown(document, { key: keyFor("selection_mode") });
 
-    await waitFor(() => expect(chosen()).toBe("Select (E)"));
+    await waitFor(() => expect(chosen()).toBe("AI (1)"));
+  });
+
+  it("goes back from Pan on Q, as legacy's toggle does (RULE-070)", async () => {
+    // mode_manager.py:47-49: Q is a toggle like E.
+    mount();
+    await waitFor(() => expect(screen.getByText("Mode Controls")).toBeTruthy());
+    fireEvent.keyDown(document, { key: keyFor("circle_mode") });
+    await waitFor(() => expect(chosen()).toBe("Circle (4)"));
+
+    fireEvent.keyDown(document, { key: keyFor("pan_mode") });
+    await waitFor(() => expect(chosen()).toBe("Pan (Q)"));
+    fireEvent.keyDown(document, { key: keyFor("pan_mode") });
+
+    await waitFor(() => expect(chosen()).toBe("Circle (4)"));
   });
 });
 
