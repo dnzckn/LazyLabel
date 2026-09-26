@@ -10,7 +10,7 @@
  * other things ask the same question and a prop chain would make this one the owner by accident.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 import { normalizeExportFormats } from "@lazylabel/settings-schema";
 import type {
@@ -36,6 +36,7 @@ import { useNotifications } from "../notifications/NotificationProvider.jsx";
 
 import type { AnnotationsResult, ApiClient } from "../api/client.js";
 import { RESOLUTION_DEFAULT } from "../tools/autoPolygon.js";
+import { clampZoom } from "../canvas/fit.js";
 import { useHotkey } from "../hotkeys/HotkeyProvider.jsx";
 import { CropLayer } from "../canvas/CropLayer.jsx";
 import { canSave } from "./saveState.js";
@@ -160,6 +161,76 @@ function OpenedImage({
   useHotkey("pan_right", () => pan(1, 0));
   useHotkey("pan_up", () => pan(0, -1));
   useHotkey("pan_down", () => pan(0, 1));
+
+  /*
+   * THE WHEEL ZOOMS, as legacy's does: 1.25x a notch in, 0.8x a notch out, about the point under
+   * the pointer (photo_viewer.py:180-185, with AnchorUnderMouse at :28). It scrolled the pane
+   * instead, so the gesture every desktop viewer zooms with scrolled the picture away
+   * (`CONTROL_PARITY.md` CP-17).
+   *
+   * By the notch, not the event: a mouse sends 100 pixels a notch, a trackpad a stream of small
+   * deltas, and zooming on each of those would fly past any size a user wanted. Listened to
+   * natively, because React's wheel handler is passive and cannot stop the scroll.
+   */
+  const { setZoom } = useWorkspace();
+  const zoomNow = useRef(1);
+  zoomNow.current = zoom ?? fitted ?? 1;
+  const wheelTravel = useRef(0);
+  /** Where the pane should scroll once the new zoom is drawn, to keep the pointed-at point put. */
+  const pendingScroll = useRef<{ readonly left: number; readonly top: number } | null>(null);
+
+  const attachWheel = useCallback(
+    (element: HTMLElement | null) => {
+      if (element === null) return undefined;
+      const onWheel = (event: WheelEvent) => {
+        event.preventDefault();
+        wheelTravel.current += event.deltaY * (event.deltaMode === 1 ? 100 / 3 : event.deltaMode === 2 ? 100 : 1);
+        const notches = Math.trunc(wheelTravel.current / 100);
+        if (notches === 0) return;
+        wheelTravel.current -= notches * 100;
+
+        const from = zoomNow.current;
+        // Up, away from the user, is a negative delta and zooms in.
+        const to = clampZoom(from * (notches < 0 ? 1.25 : 0.8) ** Math.abs(notches));
+        if (to === from) return;
+
+        const box = element.getBoundingClientRect();
+        const x = event.clientX - box.left;
+        const y = event.clientY - box.top;
+        pendingScroll.current = {
+          left: (element.scrollLeft + x) * (to / from) - x,
+          top: (element.scrollTop + y) * (to / from) - y,
+        };
+        zoomNow.current = to;
+        setZoom(to);
+      };
+      element.addEventListener("wheel", onWheel, { passive: false });
+      return () => element.removeEventListener("wheel", onWheel);
+    },
+    [setZoom],
+  );
+
+  useLayoutEffect(() => {
+    const target = pendingScroll.current;
+    const pane = scrollRef.current;
+    if (target === null || pane === null) return;
+    pendingScroll.current = null;
+    pane.scrollLeft = Math.max(0, target.left);
+    pane.scrollTop = Math.max(0, target.top);
+  }, [zoom]);
+
+  // One ref for the pane: measured for fitting, and listened to for the wheel.
+  const attachScrollPane = useCallback(
+    (element: HTMLDivElement | null) => {
+      const unmeasure = attachPane(element);
+      const unlisten = attachWheel(element);
+      return () => {
+        unmeasure?.();
+        unlisten?.();
+      };
+    },
+    [attachPane, attachWheel],
+  );
   const { notify } = useNotifications();
   // Only a context failure falls back to the plain image. A picture that will not DECODE is the
   // canvas's own business -- it reports that and still draws the annotations, which is worth more
@@ -283,7 +354,7 @@ function OpenedImage({
               measured from. Zoomed, it scrolls. */}
           <div
             className={zoom === null ? "canvas-scroll canvas-scroll--fit" : "canvas-scroll"}
-            ref={attachPane}
+            ref={attachScrollPane}
           >
           <div className="canvas-stack">
             {canvasFailed ? (

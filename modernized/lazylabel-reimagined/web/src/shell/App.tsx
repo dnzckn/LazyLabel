@@ -31,6 +31,7 @@ import { FragmentPanel } from "../workspace/FragmentPanel.jsx";
 import { SegmentTable } from "../workspace/SegmentTable.jsx";
 import { processingQuery } from "../workspace/processing.js";
 import { useWorkspace } from "../workspace/WorkspaceProvider.jsx";
+import { clampZoom } from "../canvas/fit.js";
 import { Panel, Workspace } from "./Panel.jsx";
 import { CentreTabs } from "./CentreTabs.jsx";
 import { ModeControls } from "./ModeControls.jsx";
@@ -405,7 +406,7 @@ function ZoomControl(): ReactNode {
   // image is shown at: fitting enlarges a small image, and doubling from 1 would shrink it.
   const step = (by: 1 | -1) => {
     const from = zoom ?? fitted ?? 1;
-    setZoom(Math.min(8, Math.max(0.125, by === 1 ? from * 2 : from / 2)));
+    setZoom(clampZoom(by === 1 ? from * 2 : from / 2));
   };
 
   /*

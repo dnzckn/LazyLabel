@@ -132,6 +132,35 @@ describe("the open image fills its pane", () => {
     expect(shown(canvas)[0]).toBeCloseTo(417);
   });
 
+  it("zooms 1.25x a wheel notch in and 0.8x a notch out, as legacy's wheel does", async () => {
+    // The wheel scrolled the pane instead (CONTROL_PARITY.md CP-17).
+    mount({ width: 400, height: 300 });
+    const canvas = await openedCanvas();
+    await waitFor(() => expect(shown(canvas)[0]).toBeCloseTo(928));
+    const pane = document.querySelector(".canvas-scroll") as HTMLElement;
+
+    const up = new WheelEvent("wheel", { deltaY: -100, bubbles: true, cancelable: true });
+    pane.dispatchEvent(up);
+    expect(up.defaultPrevented).toBe(true);
+    await waitFor(() => expect(shown(canvas)[0]).toBeCloseTo(1160));
+
+    pane.dispatchEvent(new WheelEvent("wheel", { deltaY: 100, bubbles: true, cancelable: true }));
+    await waitFor(() => expect(shown(canvas)[0]).toBeCloseTo(928));
+  });
+
+  it("zooms a trackpad's small deltas only once they add up to a notch", async () => {
+    mount({ width: 400, height: 300 });
+    const canvas = await openedCanvas();
+    await waitFor(() => expect(shown(canvas)[0]).toBeCloseTo(928));
+    const pane = document.querySelector(".canvas-scroll") as HTMLElement;
+
+    for (let i = 0; i < 3; i += 1) pane.dispatchEvent(new WheelEvent("wheel", { deltaY: -25, cancelable: true }));
+    expect(shown(canvas)[0]).toBeCloseTo(928);
+
+    pane.dispatchEvent(new WheelEvent("wheel", { deltaY: -25, cancelable: true }));
+    await waitFor(() => expect(shown(canvas)[0]).toBeCloseTo(1160));
+  });
+
   it("zooms in from the size fitting shows, and Fit goes back to it", async () => {
     // Doubling from 1:1 would have made "zoom in" SHRINK this image from 232% to 200%.
     mount({ width: 400, height: 300 });

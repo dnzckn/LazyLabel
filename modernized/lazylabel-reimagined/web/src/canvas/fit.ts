@@ -12,6 +12,14 @@ export interface Size {
   readonly height: number;
 }
 
+/** How far zooming goes either way, for the buttons, the keys and the wheel alike. */
+export const ZOOM_MIN = 0.125;
+export const ZOOM_MAX = 8;
+
+export function clampZoom(zoom: number): number {
+  return Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, zoom));
+}
+
 /**
  * CSS pixels per image pixel that show the whole image as large as the pane allows, or null when
  * either size is not known yet (a pane not laid out measures 0).
