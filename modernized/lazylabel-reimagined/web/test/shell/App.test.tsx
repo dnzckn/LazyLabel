@@ -275,3 +275,45 @@ describe("the theme", () => {
     expect((saved[0] as { values: Record<string, unknown> }).values["dark_mode"]).toBe(false);
   });
 });
+
+describe("next and previous image (CONTROL_PARITY.md CP-14)", () => {
+  const image = (name: string) => ({ key: name, name, sidecars: {}, annotated: false, sharesSidecarsWith: [] });
+
+  it("move through the rows as the list SHOWS them, sorted, as legacy's do", async () => {
+    // Sorted Z-A, the row below b.png is a.png. The key stepped through the raw listing (a, b, c)
+    // and opened c.png, the row ABOVE.
+    const opened: string[] = [];
+    mount({
+      getSettings: async () => {
+        const base = defaultSettings();
+        return { ...base, values: { ...base.values, file_manager_sort_order: 1 } };
+      },
+      listImages: async () => ({
+        folder: "",
+        folders: [],
+        images: [image("a.png"), image("b.png"), image("c.png")],
+        annotatedCount: 0,
+        unrecognized: 0,
+        columns: [],
+      }),
+      loadAnnotations: async (_project: string, key: string) => {
+        opened.push(key);
+        return { kind: "none" };
+      },
+    } as unknown as Partial<ApiClient>);
+
+    await waitFor(() =>
+      expect([...document.querySelectorAll(".dataset tbody tr")].map((row) => row.textContent?.slice(0, 5))).toEqual([
+        "c.png",
+        "b.png",
+        "a.png",
+      ]),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "b.png" }));
+    await waitFor(() => expect(opened).toEqual(["b.png"]));
+
+    fireEvent.keyDown(document, { key: "ArrowRight", code: "ArrowRight" });
+
+    await waitFor(() => expect(opened).toEqual(["b.png", "a.png"]));
+  });
+});

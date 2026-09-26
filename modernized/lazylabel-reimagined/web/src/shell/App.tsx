@@ -61,6 +61,8 @@ export function App({ client }: { readonly client: ApiClient }): ReactNode {
   // The folder as the browser listed it, so the sequence timeline builds from the same answer
   // rather than fetching it again. Two fetches is two answers to one question.
   const [listed, setListed] = useState<readonly WireDatasetImage[]>([]);
+  // The rows the list SHOWS, sorted and searched: the order next and previous image step through.
+  const [shownRows, setShownRows] = useState<readonly WireDatasetImage[]>([]);
   /**
    * What Find Archetypes suggested, held HERE because two distant parts of the tree need it.
    *
@@ -128,9 +130,9 @@ export function App({ client }: { readonly client: ApiClient }): ReactNode {
    *
    * The shell owns them because the shell is what knows the FOLDER: the store holds what is open,
    * the dataset browser holds the list, and this is where the two already meet. Stepping is done
-   * over `listed`, the same array the browser rendered, so the key and a click move through the
-   * same order -- a second source for "what is next" would eventually disagree with the one the
-   * user can see.
+   * over the rows the browser SHOWS, sorted and searched, so the key moves to the row below the
+   * one open, as legacy's does. It stepped over the raw listing until 2026-09-25, which a sort or a
+   * search made a different order from the one on screen (`CONTROL_PARITY.md` CP-14).
    *
    * Unsaved work is still guarded: `openImage` asks before discarding it, whatever route asked for
    * the change. A hotkey that bypassed the prompt would be the fastest possible way to lose a
@@ -138,15 +140,15 @@ export function App({ client }: { readonly client: ApiClient }): ReactNode {
    */
   const step = useCallback(
     (by: 1 | -1) => {
-      if (open === null || listed.length === 0) return;
-      const at = listed.findIndex((image) => image.key === open.image.key);
+      if (open === null || shownRows.length === 0) return;
+      const at = shownRows.findIndex((image) => image.key === open.image.key);
       if (at < 0) return;
       // Clamped, not wrapping. Legacy stops at the ends, and a folder that silently restarts is
       // how a user re-labels the first image believing it is the last.
-      const next = listed[Math.min(listed.length - 1, Math.max(0, at + by))];
+      const next = shownRows[Math.min(shownRows.length - 1, Math.max(0, at + by))];
       if (next !== undefined && next.key !== open.image.key) openImage(next);
     },
-    [listed, open, openImage],
+    [shownRows, open, openImage],
   );
 
   useHotkey("load_next_image", () => step(1));
@@ -358,7 +360,7 @@ export function App({ client }: { readonly client: ApiClient }): ReactNode {
         }
         right={
           <>
-            <DatasetBrowser client={client} projectId="default" onListed={setListed} />
+            <DatasetBrowser client={client} projectId="default" onListed={setListed} onShown={setShownRows} />
 
             <Panel title="Segments">
               <SegmentTable />

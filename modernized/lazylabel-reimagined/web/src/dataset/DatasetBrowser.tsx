@@ -17,7 +17,7 @@
  * store normalized coordinates, so a wrong size silently rescales every polygon.
  */
 
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 
 import type {
   WireDatasetImage,
@@ -46,6 +46,14 @@ export interface DatasetBrowserProps {
    * views of the same dataset come to disagree.
    */
   readonly onListed?: (images: readonly WireDatasetImage[]) => void;
+  /**
+   * The rows the table SHOWS, sorted and searched, in the order on screen.
+   *
+   * Next and previous image step through these, as legacy's do (fast_file_manager.py:1771-1843,
+   * 1971-1999). They walked the raw listing, so with a sort or a search the key went somewhere
+   * other than the row below the one open (`CONTROL_PARITY.md` CP-14).
+   */
+  readonly onShown?: (images: readonly WireDatasetImage[]) => void;
 }
 
 type ListingState =
@@ -58,6 +66,7 @@ export function DatasetBrowser({
   projectId,
   folder = "",
   onListed,
+  onShown,
 }: DatasetBrowserProps): ReactNode {
   const [state, setState] = useState<ListingState>({ status: "loading" });
   /*
@@ -115,6 +124,13 @@ export function DatasetBrowser({
       cancelled = true;
     };
   }, [client, projectId, here, onListed, wantsDetails]);
+
+  // No table, no rows: a folder that is loading, failed or empty shows none, and the previous
+  // folder's must not linger as the order the image keys step through.
+  const tableless = state.status !== "ready" || state.listing.images.length === 0;
+  useEffect(() => {
+    if (tableless) onShown?.([]);
+  }, [onShown, tableless]);
 
   if (state.status === "loading") return <p>Loading the folder…</p>;
   if (state.status === "failed") {
@@ -184,7 +200,7 @@ export function DatasetBrowser({
             : "This folder has no images LazyLabel can open."}
         </p>
       ) : (
-        <ColumnedTable listing={listing} openState={openState} openImage={openImage} />
+        <ColumnedTable listing={listing} openState={openState} openImage={openImage} onShown={onShown} />
       )}
       {/* The formats to write are in Application Settings, where legacy's Export Formats is. */}
     </section>
@@ -202,10 +218,12 @@ function ColumnedTable({
   listing,
   openState,
   openImage,
+  onShown,
 }: {
   readonly listing: WireDatasetListing;
   readonly openState: { readonly image: { readonly key: string } } | null;
   readonly openImage: (image: WireDatasetListing["images"][number]) => void;
+  readonly onShown?: ((images: readonly WireDatasetImage[]) => void) | undefined;
 }): ReactNode {
   const { settings, save } = useSettings();
   // Filtered once: the header and every row must show the same columns, and two filters is two
@@ -217,9 +235,16 @@ function ColumnedTable({
   // Legacy's "Search files..." (fast_file_manager.py:1143-1213): a view of the list, by name.
   const [query, setQuery] = useState("");
   const needle = query.trim().toLowerCase();
-  const rows = sortImages(listing.images, order).filter(
-    (image) => needle === "" || image.name.toLowerCase().includes(needle),
+  // Memoized, because it is reported up: a new array every render would re-render the shell,
+  // which re-renders this, which reports again.
+  const rows = useMemo(
+    () =>
+      sortImages(listing.images, order).filter(
+        (image) => needle === "" || image.name.toLowerCase().includes(needle),
+      ),
+    [listing.images, needle, order],
   );
+  useEffect(() => onShown?.(rows), [onShown, rows]);
   const showModified = settings.values["file_manager_show_modified"] !== false;
   const showSize = settings.values["file_manager_show_size"] !== false;
 
