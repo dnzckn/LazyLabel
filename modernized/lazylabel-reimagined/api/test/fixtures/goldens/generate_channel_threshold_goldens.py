@@ -20,8 +20,11 @@ That array is what the viewer shows once thresholding is active (`apply_image_pr
 lines 357-424, runs the same steps) and what SAM is given under Operate On View. A 2-D result is
 shown as Grayscale8, so it is widened to RGB here, which is what the API returns.
 
-The rescale and FFT widgets are stood in by inactive fakes: their own goldens cover them, and here
-they would only be noise.
+The rescale widget is legacy's own too, because a rescale runs just before the threshold and
+decides which band a pixel lands in: its arithmetic is float32 (`rescale_widget.py:378-391`), and
+on 16-bit data that truncates differently from float64 often enough to move a pixel across a
+marker. Cases with a window set its handles the way a drag does (lines 155-166). The FFT widget is
+an inactive fake; its own golden covers it.
 
 Nothing is written into the legacy tree: bytecode writing is off before anything is loaded.
 """
@@ -71,30 +74,29 @@ def load(relative: str, name: str):
 
 APP = QApplication.instance() or QApplication([])
 ctw = load("ui/widgets/channel_threshold_widget.py", "legacy_channel_threshold_widget")
+rsw = load("ui/widgets/rescale_widget.py", "legacy_rescale_widget")
 iam = load("ui/managers/image_adjustment_manager.py", "legacy_image_adjustment_manager")
 
 
-class Inactive:
-    """The rescale and FFT widgets, switched off."""
-
-    def has_active_rescaling(self):
-        return False
+class InactiveFft:
+    """The FFT widget, switched off."""
 
     def is_active(self):
         return False
 
 
 class Panel:
-    """The three control-panel calls the manager makes, forwarding the channel one to the widget."""
+    """The control-panel calls the manager makes, forwarded to legacy's own widgets."""
 
     def __init__(self):
         self.widget = ctw.ChannelThresholdWidget()
+        self.rescale = rsw.RescaleWidget()
 
     def update_channel_threshold_for_image(self, image_array):
         self.widget.update_for_image(image_array)
 
-    def update_rescale_for_image(self, *_args):
-        pass
+    def update_rescale_for_image(self, image_array, crop_coords=None):
+        self.rescale.update_for_image(image_array, crop_coords)
 
     def update_fft_threshold_for_image(self, *_args):
         pass
@@ -106,13 +108,13 @@ class Panel:
         return self.widget
 
     def get_rescale_widget(self):
-        return Inactive()
+        return self.rescale
 
     def get_fft_threshold_widget(self):
-        return Inactive()
+        return InactiveFft()
 
 
-def legacy_view(path, markers, crop):
+def legacy_view(path, markers, crop, rescale_window=None):
     panel = Panel()
     window = SimpleNamespace(
         current_image_path=str(path),
@@ -134,11 +136,15 @@ def legacy_view(path, markers, crop):
         bar.checkbox.setChecked(True)
         bar.slider.set_indicators(values)
 
-    active = panel.widget.has_active_thresholding()
+    if rescale_window is not None:
+        # Where a drag of the two handles leaves them (rescale_widget.py:155-166).
+        panel.rescale.slider._min_val, panel.rescale.slider._max_val = rescale_window
+
+    processed = panel.widget.has_active_thresholding() or panel.rescale.has_active_rescaling()
     view = manager.get_current_modified_image()
     if view.ndim == 2:
         view = np.stack([view, view, view], axis=2)
-    return channels, active, view
+    return channels, processed, view
 
 
 def write_png(folder, name, rgb_or_gray):
@@ -187,8 +193,34 @@ def images():
             [u16(np.where(v16 % 2 == 0, 65535, 0)), u16(v16 * 0), u16(np.where(v16 % 2 == 0, 65535, 0))],
             axis=2,
         ),
+        "rescale16": RESCALED,
     }
 
+
+# A 16-bit window under which legacy's float32 rescale and a float64 one disagree on thousands of
+# values, by one level each.
+WINDOW16 = (3279, 61249)
+
+
+def float32_rescale(values, low, high, top):
+    """`apply_rescaling`'s arithmetic, for choosing values; the goldens themselves come from legacy."""
+    v = np.clip(values.astype(np.float32), low, high)
+    return ((v - low) / (high - low) * top).astype(np.uint16 if top > 255 else np.uint8)
+
+
+def rescale16():
+    """32x32 gray16: every value where the two precisions disagree under WINDOW16, then an even spread."""
+    everything = np.arange(65536)
+    low, high = WINDOW16
+    wide = np.trunc((np.clip(everything, low, high) - low) / (high - low) * 65535).astype(np.int64)
+    narrow = float32_rescale(everything, low, high, 65535).astype(np.int64)
+    disagree = everything[wide != narrow][:512]
+    spread = np.linspace(0, 65535, 1024 - disagree.size).astype(np.int64)
+    chosen = np.concatenate([disagree, spread])
+    return chosen.reshape(32, 32).astype(np.uint16), int(disagree[0]), int(narrow[disagree[0]])
+
+
+RESCALED, FIRST_DISAGREEING, ITS_LEGACY_LEVEL = rescale16()
 
 CASES = [
     ("gray8", {"Gray": [128]}, None),
@@ -222,6 +254,13 @@ CASES = [
     ("neargray16", {"Gray": [32768]}, None),
     ("neargray16", {"Gray": [16384, 49152]}, (3, 3, 13, 13)),
     ("wrapgray16", {"Gray": [30000]}, None),
+    # Rescale in front of the threshold, as legacy orders them (image_adjustment_manager.py:619-630).
+    ("gray8", {"Gray": [128]}, None, (50, 200)),
+    ("rescale16", {}, None, WINDOW16),
+    # The marker sits exactly on the level legacy's float32 rescale gives the first disagreeing
+    # value: legacy puts that pixel in the top band, a float64 rescale one level below it.
+    ("rescale16", {"Gray": [ITS_LEGACY_LEVEL]}, None, WINDOW16),
+    ("rescale16", {"Gray": [ITS_LEGACY_LEVEL, 50000]}, (4, 4, 28, 28), WINDOW16),
 ]
 
 
@@ -230,11 +269,15 @@ def main():
     cases = []
     with tempfile.TemporaryDirectory() as folder:
         paths = {name: write_png(folder, name, array) for name, array in made.items()}
-        for image, markers, crop in CASES:
+        for entry in CASES:
+            image, markers, crop, window = (*entry, None)[:4]
             path = paths[image]
-            channels, active, view = legacy_view(path, markers, crop)
-            query = [f"{PARAMETER[name]}={','.join(str(v) for v in sorted(values))}"
-                     for name, values in markers.items() if values]
+            channels, processed, view = legacy_view(path, markers, crop, window)
+            query = []
+            if window is not None:
+                query += [f"rescaleMin={window[0]}", f"rescaleMax={window[1]}"]
+            query += [f"{PARAMETER[name]}={','.join(str(v) for v in sorted(values))}"
+                      for name, values in markers.items() if values]
             if crop is not None:
                 query.append(f"crop={','.join(str(v) for v in crop)}")
             cases.append(
@@ -242,9 +285,10 @@ def main():
                     "image": image,
                     "markers": markers,
                     "crop": list(crop) if crop is not None else None,
+                    "window": list(window) if window is not None else None,
                     "query": "&".join(query),
                     "channels": channels,
-                    "active": bool(active),
+                    "processed": bool(processed),
                     "width": int(view.shape[1]),
                     "height": int(view.shape[0]),
                     "rgb": base64.b64encode(np.ascontiguousarray(view).tobytes()).decode("ascii"),

@@ -25,11 +25,19 @@ export const MAX_16_BIT = 65535;
  *
  * `max <= min` leaves the image ALONE rather than dividing by zero or blanking it. A user dragging
  * the handles past each other should see nothing happen, not lose their image.
+ *
+ * IN SINGLE PRECISION, AS LEGACY'S IS. It converts the image to float32 and does each step there
+ * (`rescale_widget.py:378-391`), so the quotient and the product are each rounded to float32 before
+ * the truncation. On 8-bit data that never changes the answer — every window was checked — but on
+ * 16-bit data float64 lands one level lower for some values under most windows, and a threshold
+ * marker on that level then puts the pixel in the other band. `Math.fround` after each operation
+ * is exactly numpy's float32 result, because double precision holds a float32 operation exactly
+ * enough for one rounding.
  */
 export function rescale(value: number, min: number, max: number, outputMax = MAX_8_BIT): number {
   if (max <= min) return value;
   const clipped = Math.min(max, Math.max(min, value));
-  return Math.trunc(((clipped - min) / (max - min)) * outputMax);
+  return Math.trunc(Math.fround(Math.fround((clipped - min) / (max - min)) * outputMax));
 }
 
 

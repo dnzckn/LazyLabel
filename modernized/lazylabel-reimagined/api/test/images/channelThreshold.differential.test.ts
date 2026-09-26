@@ -17,6 +17,11 @@
  *     one Gray bar for it, as legacy does. Asking the file header answers "colour".
  *   - SUCH AN IMAGE IS PROCESSED AS ITS FIRST CHANNEL. Legacy collapses it to red before
  *     thresholding, so the result is gray, not three near-identical channels thresholded apart.
+ *
+ * And one thing about what comes BEFORE the threshold: legacy's rescale is float32
+ * (`rescale_widget.py:378-391`). On 16-bit data that truncates one level away from float64 often
+ * enough to matter, and a marker on that level puts the pixel in a different band. The rescale
+ * cases use legacy's own RescaleWidget, and one sets its marker exactly on such a level.
  */
 
 import { readFile } from "node:fs/promises";
@@ -40,10 +45,13 @@ interface Case {
   readonly image: string;
   readonly markers: Readonly<Record<string, readonly number[]>>;
   readonly crop: readonly number[] | null;
+  /** A rescale window set in front of the threshold, or null. */
+  readonly window: readonly number[] | null;
   readonly query: string;
   /** The bars legacy's widget offers for this file: ["Gray"], ["Red", "Green", "Blue"] or []. */
   readonly channels: readonly string[];
-  readonly active: boolean;
+  /** Whether legacy shows the processed pixels: a threshold or a rescale is active. */
+  readonly processed: boolean;
   readonly width: number;
   readonly height: number;
   /** Legacy's result, widened to RGB when it is a single channel, base64. */
@@ -70,17 +78,18 @@ function firstDifference(actual: Uint8Array, expected: Uint8Array, width: number
 }
 
 describe("the golden file", () => {
-  it("covers gray, colour, near-gray, 16-bit and a crop, or it proves less than it claims", () => {
+  it("covers gray, colour, near-gray, 16-bit, a crop and a rescale, or it proves less than it claims", () => {
     const images = new Set(golden.cases.map((c) => c.image));
-    for (const name of ["gray8", "rgb8", "neargray8", "gray16", "rgb16", "neargray16"]) {
+    for (const name of ["gray8", "rgb8", "neargray8", "gray16", "rgb16", "neargray16", "rescale16"]) {
       expect(images.has(name)).toBe(true);
     }
     expect(golden.cases.some((c) => c.crop !== null)).toBe(true);
+    expect(golden.cases.some((c) => c.window !== null && Object.keys(c.markers).length > 0)).toBe(true);
   });
 });
 
 describe("the pixels, against legacy's own pipeline", () => {
-  for (const testCase of golden.cases.filter((c) => c.active)) {
+  for (const testCase of golden.cases.filter((c) => c.processed)) {
     it(`${testCase.image} with ${testCase.query}`, async () => {
       const decoded = await decodeImage(
         png(testCase.image),
