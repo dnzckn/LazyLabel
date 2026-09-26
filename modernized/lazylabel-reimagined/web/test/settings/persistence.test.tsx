@@ -260,7 +260,8 @@ describe("Reset to Default", () => {
     expect(autoSave().checked).toBe(true);
     expect(format(/^NPZ \.npz/).checked && format(/YOLO_DETECTION/).checked).toBe(true);
     expect(format(/COCO_JSON/).checked).toBe(false);
-    expect(document.documentElement.dataset["theme"]).toBe("dark");
+    // The theme is applied by an effect after the render that says "ready", so it is waited for.
+    await waitFor(() => expect(document.documentElement.dataset["theme"]).toBe("dark"));
   });
 });
 

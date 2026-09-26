@@ -49,10 +49,12 @@ async function textFiles(dir: string, into: string[]): Promise<string[]> {
   return into;
 }
 
-/** Tab, line feed and carriage return are text. Every other byte below space, and DEL, is not. */
-function isControl(byte: number): boolean {
-  return (byte < 32 && byte !== 9 && byte !== 10 && byte !== 13) || byte === 127;
-}
+/**
+ * Tab, line feed and carriage return are text. Every other byte below space, and DEL, is not.
+ * One search over each file's bytes as Latin-1, where a byte and a character are the same number:
+ * a callback per byte took over the suite's 20 s under a full parallel run.
+ */
+const CONTROL = /[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/;
 
 it("finds no raw control character in any text file", async () => {
   const files: string[] = [];
@@ -63,16 +65,13 @@ it("finds no raw control character in any text file", async () => {
 
   const found: string[] = [];
   for (const file of files) {
-    const bytes = await readFile(file);
-    if (!bytes.some(isControl)) continue;
-    let line = 1;
-    for (const byte of bytes) {
-      if (byte === 10) line += 1;
-      else if (isControl(byte)) {
-        found.push(`${path.relative(path.join(HERE, "..", "..", "..", ".."), file)}:${line} (byte ${byte})`);
-        break;
-      }
-    }
+    const text = (await readFile(file)).toString("latin1");
+    const at = text.search(CONTROL);
+    if (at < 0) continue;
+    const line = text.slice(0, at).split("\n").length;
+    found.push(
+      `${path.relative(path.join(HERE, "..", "..", "..", ".."), file)}:${line} (byte ${text.charCodeAt(at)})`,
+    );
   }
 
   expect(
