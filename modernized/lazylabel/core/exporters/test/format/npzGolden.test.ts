@@ -14,6 +14,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
+import { readLegacyAliasNpy } from "../../src/format/legacyAliases.js";
 import { renderNpz } from "../../src/format/npz.js";
 import { renderNpzClassMap } from "../../src/format/npzClassMap.js";
 import { decodeNpy } from "../../src/util/npy.js";
@@ -24,8 +25,8 @@ async function members(archive: Uint8Array): Promise<Map<string, ReturnType<type
   const out = new Map<string, ReturnType<typeof decodeNpy>>();
   for (const entry of await readZip(archive)) {
     const name = entry.name.replace(/\.npy$/, "");
-    // The legacy alias member is a pickle, which this library refuses by design; skip it here and
-    // let the alias comparison in tools/compare_npz.py cover the values.
+    // The class-name table is a pickled object array, not a numeric one; the tests below compare it
+    // by the names it carries, since NumPy pickles it as protocol 4 and this library as protocol 2.
     if (name === "class_aliases") continue;
     out.set(name, decodeNpy(entry.data));
   }
@@ -88,12 +89,20 @@ describe("NPZ archives match the legacy arrays", () => {
     });
   }
 
-  it("writes the alias table under a name the legacy loader skips", async () => {
-    const { context } = buildExportContext("two-classes-sparse-ids");
-    const names = (await readZip((await renderNpz(context))!)).map((entry) => entry.name);
-    // Writing a unicode scalar under "class_aliases" makes the legacy loader raise and read zero
-    // segments, which silently downgrades a user's masks to a lower-priority sidecar.
-    expect(names).toContain("class_aliases_json.npy");
-    expect(names).not.toContain("class_aliases.npy");
-  });
+  for (const id of CASE_IDS) {
+    it(`class names for ${id}, in both archives`, async () => {
+      const { context } = buildExportContext(id);
+      for (const [produced, file] of [
+        [(await renderNpz(context))!, "image.npz"],
+        [(await renderNpzClassMap(context))!, "image_CM.npz"],
+      ] as const) {
+        const ours = (await readZip(produced)).find((entry) => entry.name === "class_aliases.npy");
+        const theirs = (await readZip(golden(id, file))).find((entry) => entry.name === "class_aliases.npy");
+        expect(ours, `${file} carries the desktop app's class_aliases member`).toBeDefined();
+        const names = readLegacyAliasNpy(ours!.data);
+        expect(names).not.toBeNull();
+        expect(names, file).toEqual(readLegacyAliasNpy(theirs!.data));
+      }
+    });
+  }
 });

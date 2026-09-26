@@ -10,15 +10,11 @@
  * file legacy wrote for the same case — a real conversion against real legacy output rather than
  * against our own earlier output.
  *
- * ONE THING THE CONVERSION CANNOT CARRY BY ITSELF, and it is the architecture's known migration
- * gap rather than a defect here. A legacy NPZ stores its class names as a PICKLED Python dict,
- * which nothing in this stack will unpickle (SEC-01). The masks read perfectly; the names do not.
- * So the tests below split in two:
- *
- *   - with the names supplied, which is what the pickle converter will do, every format is
- *     byte-identical to legacy's;
- *   - without them, the load REPORTS that a class-name table was refused, so a conversion cannot
- *     quietly write "3" where the original said "stop sign".
+ * THE CLASS NAMES TRAVEL WITH THE FILE. A legacy NPZ stores them as a PICKLED Python dict. Since
+ * the owner's decision of 2026-09-25 this stack reads that table as data, never unpickling it
+ * (SEC-01), so a conversion carries the names the desktop app saved. There is no converter step,
+ * and nothing is supplied by hand. A table in any other shape is still refused, and the load
+ * REPORTS that, so a conversion cannot quietly write "3" where the original said "stop sign".
  *
  * Decision 10's line-ending rule applies throughout: legacy opens text files in text mode and emits
  * CRLF on Windows, so text outputs are compared after normalizing.
@@ -29,7 +25,7 @@ import { tmpdir } from "node:os";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { parseNpz } from "@lazylabel/annotation-formats";
+import { parseNpz, readZip, writeZip } from "@lazylabel/annotation-formats";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { createApp, type App } from "../../src/app.js";
@@ -63,6 +59,14 @@ const { cases } = JSON.parse(await readFile(path.join(GOLDENS, "manifest.json"),
 /** Decision 10: legacy writes CRLF on Windows and LF elsewhere; the target always writes LF. */
 const normalize = (text: string) => text.replace(/\r\n/g, "\n");
 
+/** A `class_aliases` member with the same .npy header, holding `os.system("ls")` as its pickle. */
+function runsACommand(member: Uint8Array): Uint8Array {
+  const headerEnd = 10 + (member[8]! | (member[9]! << 8));
+  const ascii = (text: string) => Array.from(text, (c) => c.charCodeAt(0));
+  const pickle = [0x80, 0x02, ...ascii("cos\nsystem\n"), 0x58, 2, 0, 0, 0, ...ascii("ls"), 0x85, 0x52, 0x2e];
+  return Uint8Array.from([...member.subarray(0, headerEnd), ...pickle]);
+}
+
 const TEXT_FORMATS = ["YOLO_DETECTION", "YOLO_SEGMENTATION", "COCO_JSON", "PASCAL_VOC", "CREATEML"];
 
 describe("C12: convert a labelled folder into other formats", () => {
@@ -94,11 +98,8 @@ describe("C12: convert a labelled folder into other formats", () => {
   }
 
   /**
-   * The class names the converter will restore.
-   *
-   * The goldens' manifest records what legacy wrote them as, which is exactly what unpickling the
-   * legacy alias table would recover. Supplying them here is standing in for the converter, so the
-   * byte-identity claim is about the CONVERSION and not about the pickle gap.
+   * The class names legacy saved, as the goldens' manifest records them: what reading the file's
+   * own name table must recover.
    */
   function aliases(golden: GoldenCase): Record<string, string> {
     return Object.fromEntries(
@@ -122,14 +123,15 @@ describe("C12: convert a labelled folder into other formats", () => {
       const annotations = jsonBody(loaded) as WireLoadResponse;
       expect(annotations.sourceFormat).toBe("NPZ");
 
-      // Step 2: choose the formats the pipeline needs, and save.
+      // Step 2: choose the formats the pipeline needs, and save. The names are the ones the load
+      // read out of the file, so this is the whole conversion, names included.
       const formats = Object.keys(golden.outputs);
       const saved = await app.handle(
         put("/projects/p1/images/frames/image.png/annotations", {
           imageSize: size,
           formats,
           segments: annotations.segments,
-          classAliases: aliases(golden),
+          classAliases: annotations.classAliases,
         }),
       );
       expect(saved.status, caseId).toBe(200);
@@ -144,31 +146,16 @@ describe("C12: convert a labelled folder into other formats", () => {
     });
   }
 
-  describe("the class names a legacy NPZ will not give up", () => {
+  describe("the class names a desktop-saved NPZ carries", () => {
     const [caseId, golden] = Object.entries(cases).find(
       ([, c]) => c.classLabels.some((label) => !/^\d+$/.test(label)) && c.outputs["NPZ"],
     )!;
 
-    it("reports that a class-name table was refused rather than reading it", async () => {
-      const size = await seed(caseId, golden);
-      const annotations = jsonBody(
-        await app.handle(get("/projects/p1/images/frames/image.png/annotations", size)),
-      ) as WireLoadResponse;
+    const load = async (size: [number, number]) =>
+      jsonBody(await app.handle(get("/projects/p1/images/frames/image.png/annotations", size))) as WireLoadResponse;
 
-      // The masks are fine. The names are pickled, and refusing to execute a pickle is deliberate
-      // (SEC-01) — but losing them silently is what would make a conversion quietly wrong.
-      expect(annotations.segments.length).toBeGreaterThan(0);
-      expect(annotations.classAliases).toEqual({});
-      expect(annotations.unreadableAliases).toBe(true);
-    });
-
-    it("writes bare class ids when the names are not supplied, which is why the warning exists", async () => {
-      const size = await seed(caseId, golden);
-      const annotations = jsonBody(
-        await app.handle(get("/projects/p1/images/frames/image.png/annotations", size)),
-      ) as WireLoadResponse;
-
-      await app.handle(
+    const saveVoc = (size: [number, number], annotations: WireLoadResponse) =>
+      app.handle(
         put("/projects/p1/images/frames/image.png/annotations", {
           imageSize: size,
           formats: ["PASCAL_VOC"],
@@ -177,32 +164,50 @@ describe("C12: convert a labelled folder into other formats", () => {
         }),
       );
 
-      // Pascal VOC carries NAMES, not ids, so this file now says "3" where legacy said "cat".
-      // Nothing about it looks wrong, which is exactly why the loss has to be reported on the way in.
-      const written = await readFile(path.join(root, "frames", "image.xml"), "utf-8");
-      const expected = await readFile(path.join(GOLDENS, caseId, "image.xml"), "utf-8");
-      expect(normalize(written)).not.toBe(normalize(expected));
-      expect(written).toMatch(/<name>\d+<\/name>/);
+    it("reads them out of the file, with nothing reported refused", async () => {
+      const annotations = await load(await seed(caseId, golden));
+
+      expect(annotations.segments.length).toBeGreaterThan(0);
+      expect(annotations.classAliases).toEqual(aliases(golden));
+      expect(annotations.unreadableAliases).toBeUndefined();
     });
 
-    it("matches legacy once the names are supplied, as the converter will supply them", async () => {
+    it("carries them into a format that stores names, matching legacy", async () => {
       const size = await seed(caseId, golden);
-      const annotations = jsonBody(
-        await app.handle(get("/projects/p1/images/frames/image.png/annotations", size)),
-      ) as WireLoadResponse;
-
-      await app.handle(
-        put("/projects/p1/images/frames/image.png/annotations", {
-          imageSize: size,
-          formats: ["PASCAL_VOC"],
-          segments: annotations.segments,
-          classAliases: aliases(golden),
-        }),
-      );
+      await saveVoc(size, await load(size));
 
       const written = await readFile(path.join(root, "frames", "image.xml"), "utf-8");
       const expected = await readFile(path.join(GOLDENS, caseId, "image.xml"), "utf-8");
       expect(normalize(written)).toBe(normalize(expected));
+    });
+
+    it("reports a name table it will not read, since a conversion then writes bare ids", async () => {
+      const size = await seed(caseId, golden);
+      // Swap the file's table for one that would run a command if anything unpickled it. It is
+      // refused rather than executed or guessed at, and the masks still load.
+      const file = path.join(root, "frames", "image.npz");
+      const entries = await readZip(new Uint8Array(await readFile(file)));
+      await writeFile(
+        file,
+        await writeZip(
+          entries.map((entry) =>
+            entry.name === "class_aliases.npy" ? { name: entry.name, data: runsACommand(entry.data) } : entry,
+          ),
+        ),
+      );
+
+      const annotations = await load(size);
+      expect(annotations.segments.length).toBeGreaterThan(0);
+      expect(annotations.classAliases).toEqual({});
+      expect(annotations.unreadableAliases).toBe(true);
+
+      // Pascal VOC carries NAMES, not ids, so this file now says "3" where legacy said "cat".
+      // Nothing about it looks wrong, which is exactly why the loss has to be reported on the way in.
+      await saveVoc(size, annotations);
+      const written = await readFile(path.join(root, "frames", "image.xml"), "utf-8");
+      const expected = await readFile(path.join(GOLDENS, caseId, "image.xml"), "utf-8");
+      expect(normalize(written)).not.toBe(normalize(expected));
+      expect(written).toMatch(/<name>\d+<\/name>/);
     });
   });
 

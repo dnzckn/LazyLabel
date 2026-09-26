@@ -73,6 +73,10 @@ It found two real defects on the way, both fixed with tests:
 
 Where the web app departs from legacy's look, the reason is written next to the item.
 
+**Class names in `.npz` files cross both ways** (the owner's approval of 2026-09-25). The web app
+reads the desktop app's pickled class-name table as data, without unpickling it, and writes the same
+table, so there is no converter step. "What to do next", item 3, has the detail and the checks.
+
 ## The suites, as of 2026-09-23
 
 All **seven** green, every one run on 2026-09-23. The `contracts` package was
@@ -80,12 +84,12 @@ missing from this table entirely, which is how a table stops being a census.
 
 | Package | Passing | Note |
 |---|---|---|
-| exporters | 1991 | the seven formats, byte-for-byte against goldens legacy wrote; rerun 2026-09-25 |
-| web | 1260 | rerun 2026-09-25 after the visual parity work (104 files); includes the four propagation-golden scenarios (16 tests against legacy's own sequence mode), the tile planning and legacy's reference buttons |
+| exporters | 2024 | the seven formats, byte-for-byte against goldens legacy wrote; rerun 2026-09-25 after the class-name work (30 files) |
+| web | 1264 | rerun 2026-09-25 after the class-name work (104 files); includes the four propagation-golden scenarios (16 tests against legacy's own sequence mode), the tile planning and legacy's reference buttons |
 | inference | 605 | plus 45 skipped: the differentials and the golden comparison, which need real checkpoints. With them: 650 passed, 0 skipped. Both on CPython 3.12.11 with PyTorch 2.10, which the package has required since 2026-09-23 |
-| api | 478 | rerun 2026-09-25 with the acceptance corpus (36 files); plus 4 skipped (SEC-09's symlink tests, where the OS will not make a link, as on this machine); no todo left, since C8 is built |
+| api | 482 | rerun 2026-09-25 after the class-name work, on the corpus as legacy wrote it (36 files); plus 4 skipped (SEC-09's symlink tests, where the OS will not make a link, as on this machine); no todo left, since C8 is built |
 | settings-schema | 55 | includes the rule-fixed defaults |
-| converter | 30 | the pickled-alias rewrite |
+| converter | 30 | the pickled-alias rewrite; no longer needed since 2026-09-25, kept for its record |
 | contracts | 36 | the wire shapes both sides agree on, and the tile pyramid's geometry |
 
 Each figure is read from that package's own run. Four commit messages this week quoted a count
@@ -530,8 +534,9 @@ configured, so a green CI run says nothing about them — see `Running the live 
   architectures so we have effectively two mains for now". `main` stays the PyQt6 app and
   `main-web` the React/Node app. Nothing is merged, and `main-web` has not been pushed.
 - **Backups and pickled datasets: not needed**, the owner's answer of 2026-09-25. That answer
-  predates a finding, though: every NPZ the desktop app writes pickles its class names (item 2), so
-  any dataset the PyQt6 app saves needs the converter before the web app can read its names.
+  predates a finding, though: every NPZ the desktop app writes pickles its class names (item 2).
+  That is now moot: the owner approved reading and writing that table as data (item 3), so no
+  dataset needs the converter.
 - **Docker is skipped for now**; the deployment stays unverified, and says so.
 - **The backup refs from stripping co-author trailers are deleted**
   (`backup/main-web-with-trailers`, `refs/original/refs/heads/main-web`).
@@ -618,8 +623,9 @@ configured, so a green CI run says nothing about them — see `Running the live 
 
    Legacy's own save path writes them once per pixel-priority setting (off, ascending,
    descending), in all seven formats. The same script records what legacy writes when it opens
-   each image and saves it again: the oracle. Every archive is then converted by the real
-   converter, in-process, because a dataset reaches the web app converted.
+   each image and saves it again: the oracle. Since item 3, every file is kept exactly as legacy
+   wrote it, pickled class names included. Before that, every archive was run through the
+   converter first.
    `api/test/acceptance/corpus.test.ts` holds the port to two claims, over every image, format and
    setting:
    - **The same annotations saved give what legacy wrote.** 30 of 30. With priority forced off,
@@ -638,33 +644,48 @@ configured, so a green CI run says nothing about them — see `Running the live 
      on a dataset with more than one shape per image; `--oracle` fixes that.
    - **Every NPZ the desktop app writes pickles its class names**, not only old ones:
      `np.savez_compressed(..., class_aliases=dict)` stores a dict as an object array. Every dataset
-     the PyQt6 app saves therefore needs `lazylabel-convert-aliases` before the web app can read
-     its names. The masks load either way.
-   - **The harness compared NPZ bytes**, which cannot match by design: the port stores the names as
-     JSON. It now compares every member's dtype, shape and values, and the names as JSON, which is
-     how Phase 1's goldens were always compared. Its advice named a command that does not exist
-     (`python -m lazylabel_converter`); it now names `lazylabel-convert-aliases`.
+     the PyQt6 app saves therefore needed `lazylabel-convert-aliases` before the web app could read
+     its names. The masks loaded either way. Item 3 removed the need.
+   - **The harness compared NPZ bytes**, which cannot match by design: the two apps pickle the names
+     differently. It now compares every member's dtype, shape and values, and the names by value,
+     which is how Phase 1's goldens were always compared.
 
-   For a real corpus, if one ever comes: convert its archives into a copy of it, then run the same
-   command. Without `--oracle`, differences in the instance formats on images with several shapes
-   are legacy's behaviour, not the port's.
+   For a real corpus, if one ever comes: run the same command on it as it is. Without `--oracle`,
+   differences in the instance formats on images with several shapes are legacy's behaviour, not
+   the port's.
 
-3. **Open, the owner's call: class names in `.npz` files (asked 2026-09-25).** The owner's datasets
-   are ordinary: images with txt, npz and json files. But every `.npz` the desktop app writes
-   holds its class-name table as a pickle, which numpy does automatically for a dict. The table is
-   there even when it is empty. The web app refuses that member (SEC-01;
-   `exporters/src/format/aliases.ts`), with three consequences:
-   - every desktop-saved `.npz` shows a "names could not be read" warning in the web app, even
-     with no names;
-   - names given in the desktop app are missing in the web app;
-   - the desktop app ignores the web app's JSON table (`class_aliases_json`), so web-saved names
-     are missing there.
+3. **Done: class names in `.npz` files cross both ways (asked and approved 2026-09-25).** Every
+   `.npz` the desktop app writes holds its class-name table as a pickle, which numpy does
+   automatically for a dict, even an empty one. The web app used to refuse that member, so
+   desktop-saved names were missing in the web app and web-saved JSON names
+   (`class_aliases_json`) were missing in the desktop app. The owner asked "so you're saying you
+   can't make npz work for web?" and answered "ok" to the proposal below.
 
-   The proposed fix, not started: the web app reads the pickled table as plain data. That is safe
-   because Node cannot execute a Python pickle. It would accept only the one shape legacy writes,
-   a numpy object array holding a dict of int to str, and refuse anything else. It would also write
-   the table in legacy's format, so both apps read each other's files unchanged. The security rule
-   would become "nothing ever executes a pickle". Waiting on a yes.
+   - **Reading.** `exporters/src/format/legacyAliases.ts` reads the table as DATA. It walks the
+     pickle's opcodes and accepts only what legacy writes: `_reconstruct` of an `ndarray` with dtype
+     `O8`, holding one dict of integer ids to strings. The only globals it accepts are NumPy's
+     `_reconstruct` (under `numpy.core` or `numpy._core`), `ndarray` and `dtype`. Any other opcode,
+     global or shape is refused and reported as unreadable, as before. Nothing is ever called, and
+     the payload is capped at 1 MiB and 200,000 operations. The security rule is now "nothing ever
+     executes a pickle", and SEC-01 holds.
+   - **Writing.** Both NPZ writers emit legacy's `class_aliases` member, a protocol-2 pickle naming
+     `numpy.core.multiarray`, which NumPy 1.x and 2.x both load. `class_aliases_json` is still read,
+     for files written before. The converter is no longer needed and is kept only for its record.
+   - **Checked with the desktop app's own code.** Legacy's `_load_npz` and `load_npz_class_map`,
+     run with warnings as errors, read `{0: 'cell', 5: '細胞', 300: 'three hundred', 40000: 'big
+     id'}` back from web-written archives. `exporters/tools/compare_npz.py` now also checks that
+     legacy's loader reads each golden's names back from our archives. Before anything unpickles
+     one, it checks with `pickletools` that our pickle names only those three globals: 24 of 24.
+     `compare_readers.py` now holds the NPZ names to legacy too: 12 cases and 7 formats match.
+   - **The acceptance corpus was regenerated with no converter step**, so every file is legacy's
+     bytes. `npm run acceptance -- <corpus> --oracle <re-saves>` exits 0: 30 of 30 identical. The
+     harness compares names by value, since NumPy pickles as protocol 4 and the port as protocol 2.
+     Its "needs the converter" outcome became "unreadable class names", for a table in any other
+     shape. In Windows PowerShell, run it as `npm.cmd run acceptance -- ...`: `npm` resolves to
+     `npm.ps1`, which swallows the `--`, so `--oracle` never arrives and every instance format
+     "differs". `api/README.md` says so.
+   - **The web app's warning** now reads "The class-name table in this file is not in the form
+     LazyLabel saves", and shows only for such a table.
 
 The three decisions this list used to end with are answered, above: Ctrl+Plus keeps zooming, the
 timeline keeps legacy's behaviour, and image tiles get built. The measurement that framed the tiles
@@ -706,7 +727,7 @@ new code. Three of the five had not been.** Checked 2026-09-23:
 
 | finding | state | what was wrong |
 | --- | --- | --- |
-| SEC-01 pickle | **held** | only the converter unpickles, through a restricted `find_class`; the NPZ reader refuses `\|O` arrays |
+| SEC-01 pickle | **held** | nothing in the web stack unpickles. Since 2026-09-25 the NPZ reader parses the desktop app's `\|O` class-name table as data and refuses any other. The converter, no longer needed, unpickles only through a restricted `find_class` |
 | SEC-02 decoder by content | **fixed** | the inference service read the dataset with `cv2.imread`, bypassing the API's allow-list, so EXR or JPEG 2000 bytes in a `.png` reached OpenCV's unaudited codecs |
 | SEC-03 checkpoint pickle | **fixed** | the runtime guard only ever ran in CI; with `TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD` set, a SAM 1 checkpoint executed code -- reproduced |
 | SEC-04 failed load deleting sidecars | **held** | no auto-save, and `canSave` refuses writing back an image whose load failed |

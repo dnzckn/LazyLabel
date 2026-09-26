@@ -94,7 +94,7 @@ describe("class map export (RULE-003)", () => {
     );
     expect(archive).not.toBeNull();
     expect((await readZip(archive!)).map((entry) => entry.name).sort()).toEqual([
-      "class_aliases_json.npy",
+      "class_aliases.npy",
       "class_map.npy",
       "class_order.npy",
       "foreground.npy",

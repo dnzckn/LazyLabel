@@ -92,20 +92,10 @@ def compare_case(case: str, produced: dict) -> list[str]:
                 )
 
         # Aliases the file establishes. The port returns only those; legacy mutates its own store,
-        # which starts empty here, so the two are directly comparable.
-        #
-        # One expected exception: these goldens were written by the legacy exporter, so their alias
-        # table is a PICKLE. Refusing to unpickle is the point of decision 4, so the port reads no
-        # aliases from them and legacy reads them all. That gap closes for files the port writes,
-        # which carry the same names as JSON; compare_npz.py checks those.
-        pickled_aliases = fmt in ("NPZ", "NPZ_CLASS_MAP")
-        if pickled_aliases:
-            if ours["aliases"]:
-                problems.append(
-                    f"{case}/{fmt}: the port read aliases {ours['aliases']} out of a pickled table; "
-                    "it must never unpickle (SEC-01)"
-                )
-        elif ours["aliases"] != theirs["aliases"]:
+        # which starts empty here, so the two are directly comparable. That now includes the NPZ
+        # formats: the port reads legacy's pickled table as data, without unpickling it (the owner's
+        # decision of 2026-09-25), so it must read the same names legacy does.
+        if ours["aliases"] != theirs["aliases"]:
             problems.append(f"{case}/{fmt}: aliases {ours['aliases']} != legacy {theirs['aliases']}")
 
     return problems

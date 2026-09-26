@@ -24,10 +24,13 @@ export { pyRepr } from "./format/pyRepr.js";
 export { MalformedAnnotationError } from "./format/labels.js";
 export { MalformedXmlError } from "./format/xml.js";
 export { CompressionError } from "./util/zip.js";
-// The archive reader, for comparing two NPZ files ARRAY BY ARRAY: the API's acceptance tool holds
-// the port's archives to legacy's that way, since the two zips are laid out differently by design
-// (the alias table is JSON here, pickled there) and equal bytes were never the claim.
-export { readZip } from "./util/zip.js";
+// The archive reader and the class-name table reader, for comparing two NPZ files ARRAY BY ARRAY
+// and names by value: the API's acceptance tool holds the port's archives to legacy's that way.
+// Both carry legacy's `class_aliases` member, but NumPy pickles it as protocol 4 and this library
+// as protocol 2, so equal bytes were never the claim. The writer lets the API's tests build an
+// archive whose name table is refused.
+export { readZip, writeZip } from "./util/zip.js";
+export { readLegacyAliasNpy } from "./format/legacyAliases.js";
 
 // Choosing which annotation file wins, and reporting the ones that cannot be read.
 export {

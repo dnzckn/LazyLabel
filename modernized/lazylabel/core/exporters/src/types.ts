@@ -135,10 +135,11 @@ export interface LoadedAnnotations {
   /**
    * The file carries a class-name table this reader will not read.
    *
-   * A legacy NPZ stores its aliases as a pickled Python dict, which is refused rather than executed
-   * (SEC-01). The masks load perfectly; the names do not. Silence here is what would let a
-   * conversion write "3" where the original said "stop sign" -- in Pascal VOC and CreateML, which
-   * carry names rather than ids, with nothing about the output looking wrong.
+   * An NPZ's names are a pickled Python dict. The one shape the desktop app writes is read as data
+   * (legacyAliases.ts); anything else is refused rather than executed (SEC-01). The masks still load;
+   * the names do not. Silence here is what would let a conversion write "3" where the original said
+   * "stop sign" -- in Pascal VOC and CreateML, which carry names rather than ids, with nothing about
+   * the output looking wrong.
    */
   readonly unreadableAliases?: boolean;
 }

@@ -75,10 +75,11 @@ export interface WireLoadResponse {
   /** How many lines or objects the reader skipped as unreadable. */
   readonly rejected: number;
   /**
-   * The file holds class names this reader will not read: a legacy NPZ's pickled alias table.
+   * The file holds class names this reader will not read: an NPZ name table that is not the pickled
+   * dict the desktop app writes (that one is read, as data), or a JSON table that is not ids to names.
    *
-   * The masks are fine. Saving in another format without converting the names first writes the
-   * class ids where the names should be, and nothing about the result looks wrong.
+   * The masks are fine. Saving in another format now writes the class ids where the names should
+   * be, and nothing about the result looks wrong.
    */
   readonly unreadableAliases?: boolean;
   /**

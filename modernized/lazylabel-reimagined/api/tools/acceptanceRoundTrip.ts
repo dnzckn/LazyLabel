@@ -5,7 +5,8 @@
  * included, via the converter." The corpus is the owner's — real folders of real annotations, of
  * the kinds this tool is actually used on — and no synthetic fixture substitutes for it. What can
  * exist before the corpus does is the harness, so the criterion is one command rather than a
- * research task.
+ * research task. Since the owner's decision of 2026-09-25 the pickled NPZ files need no converter:
+ * the stack reads the desktop app's pickled class names as data, so they are read as they are.
  *
  *     npm run acceptance -- /path/to/corpus
  *
@@ -25,9 +26,11 @@
  * nothing — the same normalisation Phase 1's goldens use.
  *
  * THE NPZ FORMATS ARE COMPARED ARRAY BY ARRAY, every member's dtype, shape and values, and the
- * class names as JSON. Byte equality was never the claim: the port's archives hold the names as
- * JSON where legacy's pickle them (decision 4, SEC-01), so the two zips are laid out differently
- * even when every array in them is the same. Phase 1's NPZ goldens are held to legacy the same way.
+ * class names by value. Byte equality was never the claim: both archives carry legacy's pickled
+ * `class_aliases` table, but NumPy pickles it as protocol 4 and the port as protocol 2, so the two
+ * zips differ even when every array and every name in them is the same. An archive the port wrote
+ * before 2026-09-25 carries the names as JSON in `class_aliases_json` instead, and its names are
+ * compared the same way. Phase 1's NPZ goldens are held to legacy the same way.
  *
  * LEGACY'S OWN FILES DO NOT SURVIVE LEGACY'S OWN ROUND TRIP, found 2026-09-25 on the synthetic
  * corpus. The NPZ holds one mask per CLASS, so opening an image merges every instance of a class,
@@ -48,6 +51,7 @@ import * as path from "node:path";
 import {
   createFinalMaskTensor,
   createInstanceContours,
+  readLegacyAliasNpy,
   readZip,
   type ExportContext,
 } from "@lazylabel/annotation-formats";
@@ -62,7 +66,7 @@ const TEXT_FORMATS = new Set(["YOLO_DETECTION", "YOLO_SEGMENTATION", "COCO_JSON"
 
 export interface ImageOutcome {
   readonly key: string;
-  readonly status: "identical" | "differs" | "unreadable" | "skipped" | "needs-converter";
+  readonly status: "identical" | "differs" | "unreadable" | "skipped" | "names-unread";
   readonly detail: string;
   /** Which formats were compared, and which of them differed. */
   readonly formats: readonly string[];
@@ -124,43 +128,74 @@ function npyParts(bytes: Uint8Array): NpyParts {
   };
 }
 
-/** Every member of an NPZ, split. */
-async function archiveMembers(archive: Uint8Array): Promise<Map<string, NpyParts>> {
-  const members = new Map<string, NpyParts>();
+/** An NPZ's arrays, split, and its class names, whichever table carries them. */
+interface ArchiveContents {
+  readonly arrays: Map<string, NpyParts>;
+  /** Null when the archive has a name table that cannot be read. */
+  readonly names: ReadonlyMap<number, string> | null;
+}
+
+async function archiveContents(archive: Uint8Array): Promise<ArchiveContents> {
+  const arrays = new Map<string, NpyParts>();
+  // undefined: no such table; null: a table that cannot be read.
+  let pickled: Map<number, string> | null | undefined;
+  let json: Map<number, string> | null | undefined;
   for (const entry of await readZip(archive)) {
-    members.set(entry.name.replace(/\.npy$/, ""), npyParts(entry.data));
+    const name = entry.name.replace(/\.npy$/, "");
+    if (name === "class_aliases") pickled = readLegacyAliasNpy(entry.data);
+    else if (name === "class_aliases_json") json = jsonNames(npyParts(entry.data));
+    else arrays.set(name, npyParts(entry.data));
   }
-  return members;
+  // The table the library itself reads: legacy's when it is readable, then the JSON one.
+  const names = pickled ?? json ?? (pickled === null || json === null ? null : new Map<number, string>());
+  return { arrays, names };
 }
 
 /**
  * Whether two NPZ archives hold the same arrays: the same members, each with the same dtype, shape
- * and memory order and the same values, and the same class names. An archive that cannot be read
- * is never the same as anything.
+ * and memory order and the same values, and the same class names. An archive that cannot be read,
+ * or whose names cannot be, is never the same as anything.
  */
 export async function sameArchive(before: Uint8Array, after: Uint8Array): Promise<boolean> {
-  let a: Map<string, NpyParts>;
-  let b: Map<string, NpyParts>;
+  let a: ArchiveContents;
+  let b: ArchiveContents;
   try {
-    [a, b] = await Promise.all([archiveMembers(before), archiveMembers(after)]);
+    [a, b] = await Promise.all([archiveContents(before), archiveContents(after)]);
   } catch {
     return false;
   }
-  if (a.size !== b.size) return false;
-  for (const [name, x] of a) {
-    const y = b.get(name);
+  if (a.names === null || b.names === null || !sameNames(a.names, b.names)) return false;
+  if (a.arrays.size !== b.arrays.size) return false;
+  for (const [name, x] of a.arrays) {
+    const y = b.arrays.get(name);
     if (y === undefined) return false;
-    if (name === "class_aliases_json") {
-      // The class names: the same table, however the JSON is spaced or escaped. The dtype's width
-      // follows the text's length, so it is not compared.
-      if (!sameJson(unicodeScalar(x), unicodeScalar(y))) return false;
-      continue;
-    }
     if (x.descr !== y.descr || x.shape !== y.shape || x.fortran !== y.fortran) return false;
     if (x.body.length !== y.body.length) return false;
     for (let i = 0; i < x.body.length; i += 1) if (x.body[i] !== y.body[i]) return false;
   }
   return true;
+}
+
+function sameNames(a: ReadonlyMap<number, string>, b: ReadonlyMap<number, string>): boolean {
+  if (a.size !== b.size) return false;
+  for (const [id, name] of a) if (b.get(id) !== name) return false;
+  return true;
+}
+
+/** The names in a `class_aliases_json` table, or null when it is not JSON of ids to names. */
+function jsonNames(parts: NpyParts): Map<number, string> | null {
+  try {
+    const parsed: unknown = JSON.parse(unicodeScalar(parts));
+    if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) return null;
+    const names = new Map<number, string>();
+    for (const [id, name] of Object.entries(parsed as Record<string, unknown>)) {
+      if (!/^-?\d+$/.test(id) || typeof name !== "string") return null;
+      names.set(Number.parseInt(id, 10), name);
+    }
+    return names;
+  } catch {
+    return null;
+  }
 }
 
 /** A NumPy unicode scalar's text: UTF-32, little-endian, NUL-padded. */
@@ -174,21 +209,6 @@ function unicodeScalar(parts: NpyParts): string {
     text += String.fromCodePoint(code);
   }
   return text;
-}
-
-function sameJson(a: string, b: string): boolean {
-  try {
-    return JSON.stringify(sortedKeys(JSON.parse(a))) === JSON.stringify(sortedKeys(JSON.parse(b)));
-  } catch {
-    return false;
-  }
-}
-
-function sortedKeys(value: unknown): unknown {
-  if (value === null || typeof value !== "object" || Array.isArray(value)) return value;
-  return Object.fromEntries(
-    Object.entries(value as Record<string, unknown>).sort(([x], [y]) => (x < y ? -1 : x > y ? 1 : 0)),
-  );
 }
 
 /** The comparison each format gets: arrays for the archives, bytes after EOL for the rest. */
@@ -221,16 +241,16 @@ export function summarize(outcomes: readonly DatasetOutcome[]): {
   let failed = 0;
 
   for (const dataset of outcomes) {
-    const counts = { identical: 0, differs: 0, unreadable: 0, skipped: 0, "needs-converter": 0 };
+    const counts = { identical: 0, differs: 0, unreadable: 0, skipped: 0, "names-unread": 0 };
     for (const image of dataset.images) counts[image.status] += 1;
-    // A file needing the converter is a FAILURE of this criterion, not a warning: the criterion
-    // says pickled files are included, and a corpus that passes only because its pickled datasets
+    // A file whose names could not be read is a FAILURE of this criterion, not a warning: its
+    // rewrite puts ids where the names belong, and a corpus that passes only because those files
     // were counted as something else has not been checked.
-    failed += counts.differs + counts.unreadable + counts["needs-converter"];
+    failed += counts.differs + counts.unreadable + counts["names-unread"];
 
     lines.push(
       `${dataset.folder}: ${counts.identical} identical, ${counts.differs} differ, `
-        + `${counts["needs-converter"]} need the converter, ${counts.unreadable} unreadable, `
+        + `${counts["names-unread"]} with unreadable class names, ${counts.unreadable} unreadable, `
         + `${counts.skipped} without annotations`,
     );
     // Only the failures are listed. A corpus of two hundred datasets printing every filename is a
@@ -238,7 +258,7 @@ export function summarize(outcomes: readonly DatasetOutcome[]): {
     for (const image of dataset.images) {
       if (image.status === "differs") {
         lines.push(`    ${image.key}: ${image.differing.join(", ")} differ`);
-      } else if (image.status === "unreadable" || image.status === "needs-converter") {
+      } else if (image.status === "unreadable" || image.status === "names-unread") {
         lines.push(`    ${image.key}: ${image.detail}`);
       }
     }
@@ -329,23 +349,21 @@ async function roundTripImage(
   // older one looks like a clean round trip and is not.
   const outcome = read.outcome;
 
-  // PICKLED CLASS NAMES, which the criterion names explicitly: "pickled NPZ files included, via
-  // the converter". The masks load perfectly and the NAMES do not (SEC-01 refuses to unpickle),
-  // so a round trip of this file writes ids where the names belong -- in Pascal VOC and CreateML
-  // especially, which carry names rather than ids, with nothing about the output looking wrong.
+  // A CLASS-NAME TABLE THAT WAS REFUSED. The desktop app's own pickled table is read as data, so
+  // this is a table in some other shape, which is refused rather than executed (SEC-01). The masks
+  // load perfectly and the NAMES do not, so a round trip of this file writes ids where the names
+  // belong -- in Pascal VOC and CreateML especially, which carry names rather than ids, with
+  // nothing about the output looking wrong.
   //
   // Reported as its own outcome rather than as "differs". The bytes DO differ, and saying only
-  // that sends someone hunting a rounding bug in the exporters when the answer is one command.
+  // that sends someone hunting a rounding bug in the exporters when the cause is the name table.
   if (outcome.unreadableAliases === true) {
     return {
       key,
-      status: "needs-converter",
-      // The command as the converter installs it. It writes the converted ARCHIVES only, to a new
-      // folder, so the images and the other annotation files are copied beside them after.
+      status: "names-unread",
       detail:
-        "its class names are stored in the old pickled format and were not read. Convert the "
-        + "dataset's archives into a new folder with `lazylabel-convert-aliases <dataset> "
-        + "<new folder>`, then copy the images and the other annotation files beside them",
+        "its class-name table is not in the form LazyLabel writes, so the names were not read "
+        + "and a rewrite would put class ids where the names belong",
       formats: [...present],
       differing: [],
     };

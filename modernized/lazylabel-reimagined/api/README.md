@@ -46,18 +46,22 @@ LAZYLABEL_DATASET_ROOT=/path/to/your/images npm start
 `npm run acceptance -- <corpus> --oracle <legacy re-saves>` opens every annotated image under the
 corpus, saves it again the way the web app does, and compares every file with what the DESKTOP app
 writes when it opens and saves the same image. Both paths must be absolute. Text formats are compared
-after normalising line endings; the NPZ formats array by array, with the class names as JSON,
-because the web app stores the names as JSON where the desktop app pickles them. Exit 0 is a pass,
-1 means files differed, and 2 means nothing was compared.
+after normalising line endings; the NPZ formats array by array, with the class names by value,
+because both apps pickle the name table but in different pickle protocols. Exit 0 is a pass, 1
+means files differed, and 2 means nothing was compared.
+
+In Windows PowerShell, run it as `npm.cmd run acceptance -- ...`: plain `npm` resolves to `npm.ps1`,
+which swallows the `--`, so `--oracle` never reaches the tool and every instance format "differs".
 
 - **The oracle matters.** The desktop app does not reproduce its own files either. Its NPZ holds
   one mask per class, so opening an image merges a class's instances, and the YOLO, COCO, Pascal
   VOC and CreateML files it writes afterwards differ from the ones it wrote first. Without
   `--oracle`, the files are compared with the originals, and those differences show up as failures
   that are the desktop app's behaviour, not this app's.
-- **The class names need the converter.** Every NPZ the desktop app writes pickles its class names,
-  which nothing here will unpickle (SEC-01). Convert the archives into a copy of the corpus first
-  with `lazylabel-convert-aliases`, from `../converter`.
+- **The class names need no converter.** Every NPZ the desktop app writes pickles its class names.
+  Since 2026-09-25 the web app reads that table as data and writes it the same way, never unpickling
+  anything (SEC-01), so a corpus is used exactly as the desktop app saved it. A name table in any
+  other shape is refused, and the image is reported as having unreadable class names.
 
 `tools/generate_acceptance_corpus.py` writes the synthetic corpus the owner chose, and its oracle,
 with the desktop app's own code. `test/acceptance/corpus.test.ts` runs both checks over it on every

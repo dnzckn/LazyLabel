@@ -26,34 +26,30 @@ load returns one revision and claiming to guard the rest would be a claim the cl
 
 **The two can read each other's work.** That is not a coincidence, it is decision 5 — the
 annotation sidecars beside your images are the source of truth in both. The web app writes the
-same seven formats byte-for-byte identically to legacy (Phase 1, proven against goldens legacy
-itself wrote), so a folder labelled in one opens in the other. The one exception is below.
+same seven formats identically to legacy (Phase 1, proven against goldens legacy itself wrote), so
+a folder labelled in one opens in the other.
 
-## The one thing that does not round-trip: pickled class names
+## Class names cross both ways
 
-A legacy NPZ stores its class-alias table as a **pickled Python dict**. Nothing in the web stack
-unpickles one (SEC-01), so its masks load perfectly and its names do not.
+A legacy NPZ stores its class-alias table as a **pickled Python dict**. Since the owner's decision
+of 2026-09-25 the web app handles it exactly as the desktop app does:
 
-This matters most where you would not notice. Pascal VOC and CreateML carry *names* rather than
-ids, so re-exporting an unconverted dataset writes `3` where the original said `stop sign`, and
-nothing about the output looks wrong.
+- **Reading.** It reads the desktop app's table as data, without unpickling it (SEC-01 still
+  holds: nothing in the web stack executes a pickle). It accepts exactly the structure the desktop
+  app writes, a NumPy object array holding one dict of class ids to names, and refuses anything
+  else.
+- **Writing.** It writes the same `class_aliases` member, so the desktop app reads the names in
+  web-saved files. That was checked with the desktop app's own loader, and `exporters/tools/
+  compare_npz.py` repeats the check for every golden case.
 
-```bash
-cd modernized/lazylabel-reimagined/converter
-python -m pip install -e .
-lazylabel-convert-aliases /path/to/labelled/folder /path/to/converted
-```
+So there is no converter step. A table the web app refuses is reported on load, with a warning
+before exporting, because Pascal VOC and CreateML carry *names* rather than ids. Re-exporting
+without the names would write `3` where the original said `stop sign`, and nothing about the output
+would look wrong. The acceptance round-trip names it too: `npm run acceptance` counts such files as
+having unreadable class names.
 
-It rewrites the alias table as JSON in a unicode array (decision 4) without executing the pickle,
-and refuses rather than guessing when a file contains something outside its allow-list of six
-numpy symbols. It writes to a **separate destination**; your originals are not touched.
-
-The web app reports the loss on load and warns before exporting, so an unconverted dataset is
-visible rather than silent. The acceptance round-trip names it too:
-
-```bash
-cd modernized/lazylabel-reimagined/api && npm run acceptance -- /path/to/corpus
-```
+The archives are equal array for array and name for name, but not byte for byte: NumPy pickles
+the table as protocol 4 and the web app as protocol 2, which NumPy 1.x and 2.x both load.
 
 ## Before the switch
 
@@ -68,12 +64,10 @@ Each of these is checkable, and none of them is an opinion.
       desktop app writes. For real datasets: `npm run acceptance -- <corpus> --oracle
       <legacy re-saves>`. Without the oracle, instance-format differences on images with several
       shapes are the desktop app's own behaviour on reopening, not the web app's.
-- [ ] **Every dataset with pickled aliases has been converted**, and the converted copies are the
-      ones in use. The round-trip above is what proves it; the converter's own summary is what
-      tells you which files it refused. **Every NPZ the desktop app writes pickles its class
-      names**, so this means every dataset it has saved, and every one it saves while both apps are
-      in use (the owner keeps both, 2026-09-25). The owner answered "not needed" before that was
-      known.
+- [x] **No dataset needs converting.** Met 2026-09-25: the web app reads and writes the desktop
+      app's pickled class names as data, so every dataset works as the desktop app saved it, including
+      every one it saves while both apps are in use (the owner keeps both). The acceptance corpus
+      is used exactly as legacy wrote it and round-trips with no converter step.
 - [ ] **The live differential suites have been run with real checkpoints**, not just CI. They skip
       themselves when no checkpoint is configured, so a green CI run says nothing about them —
       `PROGRESS.md` has the command and the expected counts.
@@ -90,9 +84,8 @@ Each of these is checkable, and none of them is an opinion.
 ## What a user does
 
 1. Keep the desktop app installed. It is 2.0.8 and it keeps working.
-2. Convert any datasets with pickled class names, to a new folder.
-3. Point the web app at that folder — `DATASET_ROOT` in `deploy/example.env`.
-4. Work in whichever one suits the task. The files are the same files.
+2. Point the web app at the dataset folder — `DATASET_ROOT` in `deploy/example.env`.
+3. Work in whichever one suits the task. The files are the same files, class names included.
 
 There is no import step and no database to populate. That is the point of decision 5: the
 annotations were always files in a folder, and they still are.
@@ -124,7 +117,9 @@ Being straight about both, because a cutover document that only lists gains is a
 
 **Gained, beyond the obvious:**
 
-- **Nothing unpickles anything** (SEC-01), and checkpoints load hash-checked and weights-only.
+- **Nothing unpickles anything** (SEC-01), and checkpoints load hash-checked and weights-only. The
+  desktop app's pickled class names are read as data instead, which only accepts the one shape
+  the desktop app writes.
 - **Explicit save semantics** (decision 7): nothing is deleted without an act, a damaged file never
   hides or overwrites a valid one, and an emptied image writes an empty file rather than having
   its files removed.

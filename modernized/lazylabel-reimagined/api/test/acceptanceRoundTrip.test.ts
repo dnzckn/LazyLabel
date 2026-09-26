@@ -12,6 +12,7 @@ import { tmpdir } from "node:os";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { readLegacyAliasNpy, readZip, writeZip } from "@lazylabel/annotation-formats";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import {
@@ -53,19 +54,51 @@ describe("comparing bytes", () => {
   });
 });
 
+const CORPUS = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "fixtures",
+  "acceptance-corpus",
+  "priority-off",
+);
+const archive = async (name: string) => new Uint8Array(await readFile(path.join(CORPUS, name)));
+
+/** An archive with its class-name table swapped for another. */
+async function withNameTable(npz: Uint8Array, table: { name: string; data: Uint8Array }): Promise<Uint8Array> {
+  const entries = (await readZip(npz)).filter((entry) => entry.name !== "class_aliases.npy");
+  return writeZip([...entries, table]);
+}
+
+/** The JSON table the port wrote before 2026-09-25: a NumPy unicode scalar, UTF-32 little-endian. */
+function jsonTable(names: Record<string, string>): { name: string; data: Uint8Array } {
+  const codes = Array.from(JSON.stringify(names), (c) => c.codePointAt(0)!);
+  const header = `{'descr': '<U${codes.length}', 'fortran_order': False, 'shape': (), }`;
+  const padded = `${header}${" ".repeat((64 - ((11 + header.length) % 64)) % 64)}\n`;
+  const data = new Uint8Array(10 + padded.length + codes.length * 4);
+  data.set([0x93, ...Array.from("NUMPY", (c) => c.charCodeAt(0)), 1, 0, padded.length & 0xff, padded.length >> 8]);
+  data.set(Array.from(padded, (c) => c.charCodeAt(0)), 10);
+  const view = new DataView(data.buffer);
+  codes.forEach((code, i) => view.setUint32(10 + padded.length + i * 4, code, true));
+  return { name: "class_aliases_json.npy", data };
+}
+
+/** A `class_aliases` member with the same .npy header, holding `os.system("ls")` as its pickle. */
+function runsACommand(member: Uint8Array): { name: string; data: Uint8Array } {
+  const headerEnd = 10 + (member[8]! | (member[9]! << 8));
+  const ascii = (text: string) => Array.from(text, (c) => c.charCodeAt(0));
+  const pickle = [0x80, 0x02, ...ascii("cos\nsystem\n"), 0x58, 2, 0, 0, 0, ...ascii("ls"), 0x85, 0x52, 0x2e];
+  return { name: "class_aliases.npy", data: Uint8Array.from([...member.subarray(0, headerEnd), ...pickle]) };
+}
+
+async function nameTable(npz: Uint8Array): Promise<Uint8Array> {
+  return (await readZip(npz)).find((entry) => entry.name === "class_aliases.npy")!.data;
+}
+
 /*
- * The archives are compared array by array: the port stores class names as JSON where legacy
- * pickles them, so equal bytes were never the claim. These use archives legacy wrote for the
- * acceptance corpus (converted, as a real dataset would be).
+ * The archives are compared array by array, and the class names by value: legacy and the port both
+ * pickle the names, in different protocols, so equal bytes were never the claim. These use archives
+ * legacy wrote for the acceptance corpus, exactly as it wrote them.
  */
 describe("comparing archives", () => {
-  const corpus = path.resolve(
-    path.dirname(fileURLToPath(import.meta.url)),
-    "fixtures",
-    "acceptance-corpus",
-    "priority-off",
-  );
-  const archive = async (name: string) => new Uint8Array(await readFile(path.join(corpus, name)));
 
   it("finds an archive the same as itself, for both NPZ formats", async () => {
     const npz = await archive("image_00.npz");
@@ -92,6 +125,29 @@ describe("comparing archives", () => {
 
   it("compares the text formats as bytes after line endings, as before", async () => {
     expect(await sameFile("YOLO_DETECTION", bytes("0 0.5 0.5\r\n"), bytes("0 0.5 0.5\n"))).toBe(true);
+  });
+
+  it("compares the class names by value, whichever table holds them", async () => {
+    const npz = await archive("image_00.npz");
+    const names = readLegacyAliasNpy(await nameTable(npz))!;
+    expect(names.size).toBeGreaterThan(0);
+    const record = Object.fromEntries([...names].map(([id, name]) => [String(id), name]));
+
+    // The same names in the JSON table the port wrote before 2026-09-25: the same archive.
+    expect(await sameArchive(npz, await withNameTable(npz, jsonTable(record)))).toBe(true);
+
+    // One name different: not the same archive, though every array is.
+    const [firstId] = Object.keys(record);
+    const renamed = { ...record, [firstId!]: `${record[firstId!]} (renamed)` };
+    expect(await sameArchive(npz, await withNameTable(npz, jsonTable(renamed)))).toBe(false);
+  });
+
+  it("never finds an archive whose name table is refused the same as anything, itself included", async () => {
+    const npz = await archive("image_00.npz");
+    const refused = await withNameTable(npz, runsACommand(await nameTable(npz)));
+
+    expect(await sameArchive(refused, refused)).toBe(false);
+    expect(await sameArchive(npz, refused)).toBe(false);
   });
 });
 
@@ -160,26 +216,26 @@ describe("the report", () => {
     expect(lines.join("\n")).toContain("the npz is truncated");
   });
 
-  it("FAILS on a file whose class names are pickled, and says which command fixes it", () => {
-    // The criterion says "pickled NPZ files included, via the converter". Such a file's masks load
-    // perfectly and its NAMES do not, so the bytes differ -- and reporting only that sends someone
-    // hunting a rounding bug in the exporters when the answer is one command. A corpus that passed
-    // only because its pickled datasets were counted as something else has not been checked.
+  it("FAILS on a file whose class names could not be read, and says why", () => {
+    // Such a file's masks load perfectly and its NAMES do not, so its rewrite puts ids where the
+    // names belong -- and reporting only "differs" sends someone hunting a rounding bug in the
+    // exporters when the cause is the name table. A corpus that passed only because those files
+    // were counted as something else has not been checked.
     const { lines, failed } = summarize([
       {
         folder: "frames",
         images: [
           outcome({
-            status: "needs-converter",
-            detail: "its class names are stored in the old pickled format. Run the converter.",
+            status: "names-unread",
+            detail: "its class-name table is not in the form LazyLabel writes",
           }),
         ],
       },
     ]);
 
     expect(failed).toBe(1);
-    expect(lines[0]).toContain("1 need the converter");
-    expect(lines.join(" ")).toContain("Run the converter");
+    expect(lines[0]).toContain("1 with unreadable class names");
+    expect(lines.join(" ")).toContain("not in the form LazyLabel writes");
   });
 
   it("does not fail on an image with no annotations at all", () => {
@@ -265,6 +321,29 @@ describe("round-tripping a folder on disk", () => {
     await roundTripFolder(root, "frames");
 
     expect((await readdir(path.join(root, "frames"))).sort()).toEqual(before);
+  });
+
+  it("reads a desktop-saved NPZ's class names as they are, with no converter", async () => {
+    await writeFile(path.join(root, "frames", "image_00.png"), await archive("image_00.png"));
+    await writeFile(path.join(root, "frames", "image_00.npz"), await archive("image_00.npz"));
+
+    const outcome = await roundTripFolder(root, "frames");
+
+    expect(outcome.images[0]!.status).toBe("identical");
+  });
+
+  it("reports a file whose class-name table is refused, rather than a difference", async () => {
+    const npz = await archive("image_00.npz");
+    await writeFile(path.join(root, "frames", "image_00.png"), await archive("image_00.png"));
+    await writeFile(
+      path.join(root, "frames", "image_00.npz"),
+      await withNameTable(npz, runsACommand(await nameTable(npz))),
+    );
+
+    const outcome = await roundTripFolder(root, "frames");
+
+    expect(outcome.images[0]!.status).toBe("names-unread");
+    expect(outcome.images[0]!.detail).toMatch(/class-name table/);
   });
 });
 

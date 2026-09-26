@@ -24,11 +24,11 @@ The oracle is needed because legacy's files do not survive its own round trip: t
 mask per CLASS, so opening it merges every instance of a class into one, and the instance formats
 written after that list one entry per class region rather than one per drawn shape.
 
-Every archive is then run through the converter (converter/src, the real code, in-process),
-because legacy pickles its class names and nothing in the web stack will unpickle (SEC-01): a
-dataset reaches the web app converted, and this corpus is in that state. Everything else is legacy's
-bytes, unchanged. `corpus.json` declares every case in fixtures.json's shape, so the port can be
-given the same annotations.
+Every file is legacy's bytes, unchanged, pickled class names included: since the owner's decision
+of 2026-09-25 the web stack reads legacy's pickled name table as data (never unpickling it,
+SEC-01), so a dataset reaches the web app exactly as the desktop app saved it, with no converter
+step. `corpus.json` declares every case in fixtures.json's shape, so the port can be given the same
+annotations.
 
 Deterministic: the same seed writes the same corpus. Nothing here writes into legacy/.
 """
@@ -61,8 +61,6 @@ SETTINGS = {
 # Names for some classes, and none for others: an unnamed class is written under its id.
 NAMES = ["cell", "nucleus", "vehicle", "person", "tree", "Zelle", "細胞", "héron", "boîte", "road"]
 
-sys.path.insert(0, str(HERE.parent.parent / "converter" / "src"))
-
 try:
     from PyQt6.QtCore import QPointF
     from PyQt6.QtGui import QImage
@@ -70,9 +68,8 @@ try:
     from lazylabel.core.exporters import EXPORTERS, ExportContext
     from lazylabel.core.file_manager import FileManager
     from lazylabel.core.segment_manager import SegmentManager
-    from lazylabel_converter.aliases import read_legacy_aliases, rewrite_archive
 except ImportError as exc:  # pragma: no cover - environment problem, not a test failure
-    sys.exit(f"cannot import the legacy package or the converter: {exc}\n"
+    sys.exit(f"cannot import the legacy package: {exc}\n"
              "Run with PYTHONPATH=<repo>/legacy/lazylabel/src and the legacy app's venv.")
 
 
@@ -199,26 +196,23 @@ def resave(image_path: pathlib.Path, image_size, priority, out_path: pathlib.Pat
 
 
 def publish(source: pathlib.Path, destination: pathlib.Path, pictures: bool) -> None:
-    """Copy one folder of legacy output, converting its archives on the way."""
+    """Copy one folder of legacy output as legacy wrote it."""
     destination.mkdir(parents=True, exist_ok=True)
     for path in sorted(source.iterdir()):
         if path.suffix == ".png" and not pictures:
             continue
-        if path.suffix == ".npz":
-            archive = path.read_bytes()
-            converted = rewrite_archive(archive, read_legacy_aliases(archive).aliases)
-            (destination / path.name).write_bytes(converted)
-        else:
-            shutil.copyfile(path, destination / path.name)
+        shutil.copyfile(path, destination / path.name)
 
 
 def main() -> None:
     rng = random.Random(SEED)
     cases = [random_case(rng, index) for index in range(IMAGES)]
 
+    # Only the folders this script writes: each root's .gitattributes keeps legacy's bytes exact in git.
     for folder in (CORPUS, ORACLE):
-        if folder.exists():
-            shutil.rmtree(folder)
+        for setting in SETTINGS:
+            if (folder / setting).exists():
+                shutil.rmtree(folder / setting)
 
     declared = []
     with tempfile.TemporaryDirectory(prefix="lazylabel-corpus-") as scratch:

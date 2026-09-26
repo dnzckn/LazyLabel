@@ -7,8 +7,9 @@ Each file in that directory must be named <case id>.npz and is compared with
 ../goldens/<case id>/image.npz, which the legacy exporter wrote.
 
 Equivalence rules come from MODERNIZATION_BRIEF.md decision 10: NPZ members must be array-identical,
-except the class alias table, which is JSON in a unicode scalar rather than a pickle (decision 4).
-The alias tables are therefore compared by value, after reading each side in its own encoding.
+except the class alias table. Both sides store it as legacy's pickled `class_aliases` member (the
+owner's decision of 2026-09-25), but NumPy pickles it as protocol 4 and the TypeScript library as
+protocol 2, so the tables are compared by the names they carry.
 
 Exit status is non-zero if anything differs, so this can gate Phase 1's exit criteria.
 """
@@ -17,33 +18,44 @@ from __future__ import annotations
 
 import json
 import pathlib
+import pickletools
 import sys
+import zipfile
 
 import numpy as np
 
 HERE = pathlib.Path(__file__).resolve().parent
 GOLDENS = HERE.parent / "goldens"
 
+# The globals legacy's table needs: NumPy's array reconstruction and nothing else.
+ALLOWED_GLOBALS = {"numpy.core.multiarray _reconstruct", "numpy ndarray", "numpy dtype"}
 
-def read_aliases(archive: np.lib.npyio.NpzFile) -> dict[int, str]:
-    """Read an alias table under either member name.
 
-    This library writes JSON text under `class_aliases_json`; the legacy exporter writes a pickled
-    dict under `class_aliases`. The names differ deliberately, so that the legacy loader skips ours
-    instead of crashing on it.
-    """
-    key = next((k for k in ("class_aliases_json", "class_aliases") if k in archive.files), None)
-    if key is None:
-        return {}
-    value = archive[key]
-    if value.dtype == object:  # legacy pickle
-        return {int(k): str(v) for k, v in value.item().items()}
-    return {int(k): str(v) for k, v in json.loads(str(value)).items()}
+def pickle_globals(path: pathlib.Path) -> set[str]:
+    """Every global our alias table's pickle names, read by pickletools, which executes nothing."""
+    with zipfile.ZipFile(path) as archive:
+        raw = archive.read("class_aliases.npy")
+    body = raw[raw.index(b"\n", 10) + 1 :]  # the pickle follows the .npy header's newline
+    return {
+        str(arg) if op.name == "GLOBAL" else op.name  # STACK_GLOBAL takes its names from the stack
+        for op, arg, _ in pickletools.genops(body)
+        if op.name in ("GLOBAL", "STACK_GLOBAL")
+    }
+
+
+def read_aliases(path: pathlib.Path) -> dict[int, str]:
+    """Read an alias table: legacy's pickled `class_aliases`, or the JSON one written before it."""
+    with np.load(path, allow_pickle=True) as archive:
+        if "class_aliases" in archive.files:
+            return {int(k): str(v) for k, v in archive["class_aliases"].item().items()}
+        if "class_aliases_json" in archive.files:
+            return {int(k): str(v) for k, v in json.loads(str(archive["class_aliases_json"])).items()}
+    return {}
 
 
 def compare(case: str, produced: pathlib.Path, golden: pathlib.Path, keys: tuple[str, ...]) -> list[str]:
     problems: list[str] = []
-    # Our own output must never need pickle; that is the point of decision 4.
+    # The arrays never need pickle; only the alias table does, and it is checked separately below.
     with np.load(produced, allow_pickle=False) as ours, np.load(golden, allow_pickle=True) as theirs:
         for key in keys:
             if key not in ours.files:
@@ -61,19 +73,26 @@ def compare(case: str, produced: pathlib.Path, golden: pathlib.Path, keys: tuple
             elif key == "mask" and a.dtype != b.dtype:
                 problems.append(f"{case}: mask dtype {a.dtype} != golden {b.dtype}")
 
-        ours_aliases = read_aliases(ours)
-        theirs_aliases = read_aliases(theirs)
-        if ours_aliases != theirs_aliases:
-            problems.append(f"{case}: aliases {ours_aliases} != golden {theirs_aliases}")
+    # Check what our table's pickle would call BEFORE letting NumPy unpickle it.
+    unexpected = pickle_globals(produced) - ALLOWED_GLOBALS
+    if unexpected:
+        problems.append(f"{case}: our alias table names globals it must not: {sorted(unexpected)}")
+        return problems
+
+    ours_aliases = read_aliases(produced)
+    theirs_aliases = read_aliases(golden)
+    if ours_aliases != theirs_aliases:
+        problems.append(f"{case}: aliases {ours_aliases} != golden {theirs_aliases}")
     return problems
 
 
-def legacy_can_read(produced: pathlib.Path, is_class_map: bool) -> list[str]:
-    """The desktop app must still open what the web app writes, until Phase 6 cutover (decision 1).
+def legacy_can_read(produced: pathlib.Path, is_class_map: bool, expected_aliases: dict[int, str]) -> list[str]:
+    """The desktop app must open what the web app writes, masks AND class names.
 
     This is the check that caught the alias member name: a NumPy unicode scalar under the legacy
     name `class_aliases` makes FileManager._restore_aliases raise outside its own try, so the whole
     legacy load fails with zero segments and the app quietly falls back to a lower-priority sidecar.
+    Since the owner's decision of 2026-09-25 it also checks the names legacy reads back.
     """
     try:
         from lazylabel.core.file_manager import FileManager
@@ -94,6 +113,8 @@ def legacy_can_read(produced: pathlib.Path, is_class_map: bool) -> list[str]:
         return [f"{produced.stem}: the legacy loader raised {type(exc).__name__}: {exc}"]
     if not manager.segments:
         return [f"{produced.stem}: the legacy loader read zero segments"]
+    if manager.class_aliases != expected_aliases:
+        return [f"{produced.stem}: the legacy loader read names {manager.class_aliases}, not {expected_aliases}"]
     return []
 
 
@@ -116,7 +137,8 @@ def main() -> None:
             problems.append(f"{path.stem}: no golden at {golden}")
             continue
         found = compare(path.stem, path, golden, keys)
-        found += legacy_can_read(path, is_class_map)
+        if not found:  # only let the legacy loader unpickle a table that passed the globals check
+            found += legacy_can_read(path, is_class_map, read_aliases(golden))
         problems.extend(found)
         print(f"{'FAIL' if found else 'ok  '}  {path.stem}")
 

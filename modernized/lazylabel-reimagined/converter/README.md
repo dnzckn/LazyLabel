@@ -2,6 +2,13 @@
 
 Rewrites a legacy LazyLabel `.npz` or `_CM.npz` so its class names survive the move to the web app.
 
+> **No longer needed (2026-09-25).** The owner decided the web app handles `.npz` files exactly as
+> the desktop app does. It now reads the desktop app's pickled `class_aliases` table as data, without
+> unpickling anything, and writes the same table itself, so names cross between the two apps in both
+> directions with no conversion step. The format library's `src/format/legacyAliases.ts` does this.
+> Files this converter already wrote still load: the web app reads `class_aliases_json` too. What
+> follows describes the converter as it was built.
+
 ```bash
 python -m pip install -e ".[dev]"
 lazylabel-convert-aliases /path/to/labelled/folder /path/to/converted

@@ -519,14 +519,14 @@ function OpenedImage({
             <code>{result.annotations.sourceFile}</code> ({result.annotations.sourceFormat}).
           </p>
 
-          {/* The architecture's migration gap, made visible: masks convert perfectly and names
-              do not, and a Pascal VOC or CreateML file written now would say "3" where the
-              original said "stop sign" without looking wrong. */}
+          {/* The desktop app's own name table is read as data; a table in any other shape is
+              refused. The masks are fine and the names are not, and a Pascal VOC or CreateML file
+              written now would say "3" where the original said "stop sign" without looking wrong. */}
           {result.annotations.unreadableAliases === true && (
             <p role="status" className="banner banner--warning">
-              This file stores its class names in the old pickled format, which is not read for
-              safety. The objects and their class ids are correct; the NAMES are missing. Saving to
-              Pascal VOC or CreateML now would write the ids where the names belong.
+              The class-name table in this file is not in the form LazyLabel saves, so it was not
+              read, for safety. The objects and their class ids are correct; the NAMES are missing.
+              Saving to Pascal VOC or CreateML now would write the ids where the names belong.
             </p>
           )}
 

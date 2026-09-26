@@ -12,9 +12,10 @@
  *     raises rather than wrapping, and so does this one.
  */
 
-import { ALIAS_MEMBER, readAliasMember } from "./aliases.js";
+import { LEGACY_ALIAS_MEMBER, readAliasMember } from "./aliases.js";
+import { encodeLegacyAliasNpy } from "./legacyAliases.js";
 import { assertPixels } from "../limits.js";
-import { decodeNpy, encodeNpy, encodeNpyString } from "../util/npy.js";
+import { decodeNpy, encodeNpy } from "../util/npy.js";
 import { readZip, writeZip } from "../util/zip.js";
 import type { ExportContext, LoadedAnnotations, Segment , RenderOptions } from "../types.js";
 
@@ -59,7 +60,7 @@ export async function renderNpzClassMap(ctx: ExportContext, options?: RenderOpti
   }
   if (!anyActive && options?.writeEmpty !== true) return null;
 
-  const aliases = Object.fromEntries([...ctx.classAliases].map(([id, name]) => [String(id), name]));
+  // The names in legacy's own member and layout, so the desktop app reads them (2026-09-25).
   return writeZip([
     { name: "class_map.npy", data: encodeUint16(classMap, height, width) },
     { name: "foreground.npy", data: encodeNpy({ dtype: "bool", shape: [height, width], data: foreground }) },
@@ -67,7 +68,7 @@ export async function renderNpzClassMap(ctx: ExportContext, options?: RenderOpti
       name: "class_order.npy",
       data: encodeNpy({ dtype: "int64", shape: [channels], data: Float64Array.from(ctx.classOrder) }),
     },
-    { name: `${ALIAS_MEMBER}.npy`, data: encodeNpyString(JSON.stringify(aliases)) },
+    { name: `${LEGACY_ALIAS_MEMBER}.npy`, data: encodeLegacyAliasNpy(ctx.classAliases) },
   ]);
 }
 

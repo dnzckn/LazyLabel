@@ -5,8 +5,9 @@
  *
  * `test/fixtures/acceptance-corpus` is ten randomized images -- polygons, circles and masks over two
  * to five classes, overlapping on purpose, some classes named (non-ASCII among them) -- saved by the
- * LEGACY app's own code once per pixel-priority setting, in all seven formats, then converted as a
- * real dataset would be (legacy pickles its class names; SEC-01). `acceptance-oracle` is what legacy
+ * LEGACY app's own code once per pixel-priority setting, in all seven formats, and kept exactly as
+ * legacy wrote them, pickled class names included: since the owner's decision of 2026-09-25 the port
+ * reads those as data, so no converter step comes between. `acceptance-oracle` is what legacy
  * writes when it opens each of those images and saves it again. `tools/generate_acceptance_corpus.py`
  * wrote both, with legacy at 2a7d5d8.
  *
@@ -20,7 +21,8 @@
  *      region, in class order.
  *
  * Text formats are compared after decision 10's line-ending normalisation; the NPZ formats array by
- * array, with the class names as JSON, because the port stores the names as JSON by design.
+ * array, with the class names by value, because NumPy pickles the name table as protocol 4 and the
+ * port as protocol 2.
  */
 
 import { mkdtemp, readFile, rm } from "node:fs/promises";

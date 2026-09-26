@@ -283,7 +283,7 @@ describe("C1: the dataset browser", () => {
       );
     });
 
-    it("warns when the class names are in the old pickled format", async () => {
+    it("warns when the file's class-name table could not be read", async () => {
       show({
         loadAnnotations: async () => ({
           kind: "loaded",
@@ -305,7 +305,7 @@ describe("C1: the dataset browser", () => {
 
       // The one loss a converted file does not look like it has: the objects are right and the
       // names are gone, so a Pascal VOC export would say "3" where the original said "stop sign".
-      await waitFor(() => expect(screen.getByText(/class names in the old pickled format/i)).toBeTruthy());
+      await waitFor(() => expect(screen.getByText(/class-name table in this file is not in the form LazyLabel saves/i)).toBeTruthy());
     });
 
     it("says how many lines a readable file rejected", async () => {

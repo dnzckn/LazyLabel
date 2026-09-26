@@ -4,20 +4,18 @@
  * Writer ported from legacy/lazylabel/src/lazylabel/core/exporters/npz.py:15-30.
  * Reader ported from FileManager._load_npz (file_manager.py:224-280) and _add_mask_stack (:268-280).
  *
- * One deliberate deviation, approved as decision 4: the legacy writer stores `class_aliases` as a
- * pickled Python dict, so loading one executes arbitrary code (SEC-01). Here the aliases travel as
- * JSON inside a NumPy unicode scalar, and a pickled member is refused rather than unpickled.
+ * The class names travel exactly as legacy stores them: `class_aliases`, a pickled Python dict in a
+ * 0-d object array (owner's decision, 2026-09-25). Unpickling in Python executes whatever the file
+ * says (SEC-01), so this library never unpickles. It writes that structure byte by byte and reads
+ * it as data (legacyAliases.ts), and names cross between the desktop app and the web app both ways.
  *
- * The JSON lives under the name `class_aliases_json`, NOT `class_aliases`, and that detail is
- * load-bearing. Legacy's _restore_aliases (file_manager.py:335-343) calls `.item()` on the member
- * inside a try and then `.items()` on the result OUTSIDE it; for a unicode scalar `.item()` returns
- * a str, so `.items()` raises and the whole legacy load fails with zero segments. Under the new
- * name legacy takes its `if "class_aliases" not in data: return` early exit and reads the masks
- * normally, losing only the alias names. Both names are accepted on read.
+ * Before that decision the names were JSON under `class_aliases_json` (decision 4). The reader still
+ * accepts that member, for the files written then; see aliases.ts.
  */
 
-import { ALIAS_MEMBER, readAliasMember } from "./aliases.js";
-import { decodeNpy, encodeNpy, encodeNpyString } from "../util/npy.js";
+import { LEGACY_ALIAS_MEMBER, readAliasMember } from "./aliases.js";
+import { encodeLegacyAliasNpy } from "./legacyAliases.js";
+import { decodeNpy, encodeNpy } from "../util/npy.js";
 import { readZip, writeZip } from "../util/zip.js";
 import type { BinaryMask, ExportContext, LoadedAnnotations, Segment , RenderOptions } from "../types.js";
 
@@ -30,14 +28,14 @@ export async function renderNpz(ctx: ExportContext, options?: RenderOptions): Pr
   // is empty, and the alias table is "{}". It reads back through parseNpz as zero segments.
   if (height * width * channels === 0 && options?.writeEmpty !== true) return null;
 
-  const aliases = Object.fromEntries([...ctx.classAliases].map(([id, name]) => [String(id), name]));
+  // The names in legacy's own member and layout, so the desktop app reads them (2026-09-25).
   return writeZip([
     { name: "mask.npy", data: encodeNpy({ dtype: "uint8", shape: [height, width, channels], data }) },
     {
       name: "class_order.npy",
       data: encodeNpy({ dtype: "int64", shape: [channels], data: Float64Array.from(ctx.classOrder) }),
     },
-    { name: `${ALIAS_MEMBER}.npy`, data: encodeNpyString(JSON.stringify(aliases)) },
+    { name: `${LEGACY_ALIAS_MEMBER}.npy`, data: encodeLegacyAliasNpy(ctx.classAliases) },
   ]);
 }
 

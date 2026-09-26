@@ -70,6 +70,18 @@ Each traces to an approved decision in the brief's section 7.
    its early exit and reads the masks, losing only the names. Verified by running the legacy loader
    against this library's output, and gated by `tools/compare_npz.py`. The offline converter for
    existing pickled files is a Phase 4 deliverable.
+
+   **Superseded 2026-09-25 by the owner's decision** that the web app handles `.npz` files exactly
+   as the desktop app does. The library now writes legacy's own `class_aliases` member and reads it
+   as DATA (`src/format/legacyAliases.ts`). It walks the pickle's opcodes and accepts only the
+   structure legacy writes, `_reconstruct` of an `ndarray` with dtype `O8` holding one dict of
+   integer ids to strings, naming no global but NumPy's three. It never executes anything and
+   refuses everything else, so SEC-01 still holds. Written as a protocol-2 pickle naming
+   `numpy.core.multiarray`, which NumPy 1.x and 2.x both load. Names now cross between the two
+   apps in both directions. `tools/compare_npz.py` checks that legacy's loader reads the names back
+   for every golden, and that our pickle names only those globals, before anything unpickles it.
+   `class_aliases_json` is still read, for files written before, and the converter is no longer
+   needed.
 2. **A damaged file is reported, and the chain continues** (decisions 7 and 15c, as revised on
    2026-09-17). In legacy, the loaders that catch their own errors return normally, so a corrupt
    file yields an empty canvas and the chain stops there; the ones that raise let it continue. With
