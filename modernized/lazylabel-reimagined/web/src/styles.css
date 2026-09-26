@@ -1911,6 +1911,25 @@ fieldset input[type="text"] {
 .timeline__count--end { color: var(--seq-end); }
 .timeline__count--trim { color: var(--seq-trim); }
 
+/* Legacy's trim markers (timeline_widget.py:380-420): red triangles centred 3px above the bar,
+   pointing out of the range, 60% of a frame's width between 4px and 8px. */
+.timeline__frame--trim-left::before,
+.timeline__frame--trim-right::before {
+  content: "";
+  position: absolute;
+  top: -3px;
+  left: 50%;
+  width: clamp(4px, 60%, 8px);
+  aspect-ratio: 1;
+  transform: translate(-50%, -50%);
+  background: rgb(220 50 50);
+  clip-path: polygon(0 50%, 100% 0, 100% 100%);
+}
+
+.timeline__frame--trim-right::before {
+  clip-path: polygon(100% 50%, 0 0, 0 100%);
+}
+
 /* Legacy's control row under the bar: small bold buttons (timeline_widget.py:516-611). */
 .timeline__controls {
   display: flex;

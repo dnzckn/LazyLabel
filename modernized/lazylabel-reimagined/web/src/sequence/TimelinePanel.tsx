@@ -887,6 +887,12 @@ export function TimelinePanel({
     go(event.clientX);
   };
 
+  /** A trim bound as legacy's labels show it: the frame's file name, or "Not set". */
+  const boundName = (at: number | null): string => {
+    const frame = at === null ? undefined : frames[at];
+    return frame === undefined ? "Not set" : (frame.key.split("/").pop() ?? frame.key);
+  };
+
   /**
    * Clear Suggested: the purple frames back to pending and the list emptied, as legacy's
    * `clear_suggested_frames` does (`sequence_view_mode.py:502-509`, `main_window.py:5170-5181`).
@@ -946,7 +952,14 @@ export function TimelinePanel({
             <li key={frame.key}>
               <button
                 type="button"
-                className={`timeline__frame${index === current ? " timeline__frame--current" : ""}`}
+                // Legacy's red trim triangles above the bar, ◄ on the left bound and ► on the right
+                // (timeline_widget.py:380-420), under the blue current-frame marker.
+                className={
+                  "timeline__frame"
+                  + (index === current ? " timeline__frame--current" : "")
+                  + (index === bounds[0] ? " timeline__frame--trim-left" : "")
+                  + (index === bounds[1] ? " timeline__frame--trim-right" : "")
+                }
                 // Pending is legacy's grey for the theme in force (timeline_widget.py:316), so it
                 // comes from the stylesheet; every other state has one colour in both.
                 style={{
@@ -1143,28 +1156,62 @@ export function TimelinePanel({
         </fieldset>
       )}
 
-      {/* RULE-077. The bounds are set from the current frame, which is where a user's attention
-          already is -- asking them to type two numbers would be asking them to count. */}
-      <div className="timeline__controls">
-        <button type="button" onClick={() => setBounds([current, bounds[1]])}>
-          Trim from here
-        </button>
-        <button type="button" onClick={() => setBounds([bounds[0], current])}>
-          Trim to here
-        </button>
-        <button type="button" className="seq-button seq-button--brown" onClick={() => applyTrim("cut")}>
-          Cut
-        </button>
-        <button type="button" className="seq-button seq-button--dark-green" onClick={() => applyTrim("keep")}>
-          Keep
-        </button>
-        <span className="field__value">
-          {bounds[0] === null && bounds[1] === null
-            ? "no trim bounds set"
-            : `bounds ${bounds[0] === null ? "—" : bounds[0] + 1} to `
-              + `${bounds[1] === null ? "—" : bounds[1] + 1}`}
-        </span>
-      </div>
+      {/* Legacy's Trim group (sequence_widget.py:468-539, 934-940): the bounds by file name, set
+          from the current frame, Clear Trim with either set, Cut and Keep only with both. Shown
+          without AI too, as legacy's is. */}
+      <fieldset className="timeline__group">
+        <legend>Trim</legend>
+        <p className="timeline__count">
+          Left: <strong className="timeline__count--trim">{boundName(bounds[0])}</strong>
+        </p>
+        <p className="timeline__count">
+          Right: <strong className="timeline__count--trim">{boundName(bounds[1])}</strong>
+        </p>
+        <div className="timeline__controls">
+          <button
+            type="button"
+            title="Mark current frame as trim left bound"
+            onClick={() => setBounds([current, bounds[1]])}
+          >
+            Set Left
+          </button>
+          <button
+            type="button"
+            title="Mark current frame as trim right bound"
+            onClick={() => setBounds([bounds[0], current])}
+          >
+            Set Right
+          </button>
+        </div>
+        <div className="timeline__controls">
+          <button
+            type="button"
+            title="Reset trim selection"
+            disabled={bounds[0] === null && bounds[1] === null}
+            onClick={() => setBounds([null, null])}
+          >
+            Clear Trim
+          </button>
+          <button
+            type="button"
+            className="seq-button seq-button--brown"
+            title="Remove all frames within the selected range (inclusive)"
+            disabled={bounds[0] === null || bounds[1] === null}
+            onClick={() => applyTrim("cut")}
+          >
+            Cut
+          </button>
+          <button
+            type="button"
+            className="seq-button seq-button--dark-green"
+            title={"Keep only the frames within the selected range,\nremove everything outside it"}
+            disabled={bounds[0] === null || bounds[1] === null}
+            onClick={() => applyTrim("keep")}
+          >
+            Keep
+          </button>
+        </div>
+      </fieldset>
 
       {trimNote !== null && (
         <p className="timeline__counts" role="status">

@@ -292,8 +292,8 @@ describe("RULE-058: the open frame keeps its unsaved work through finish, Save A
     expect(status()).toMatch(UNSAVED);
 
     // 3. A trim that keeps only the open frame.
-    fireEvent.click(screen.getByRole("button", { name: "Trim from here" }));
-    fireEvent.click(screen.getByRole("button", { name: "Trim to here" }));
+    fireEvent.click(screen.getByRole("button", { name: "Set Left" }));
+    fireEvent.click(screen.getByRole("button", { name: "Set Right" }));
     fireEvent.click(screen.getByRole("button", { name: "Keep" }));
     await screen.findByText(/Removed 3 frames from the timeline/);
     expect(status()).toMatch(UNSAVED);

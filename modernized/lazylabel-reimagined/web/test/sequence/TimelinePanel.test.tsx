@@ -524,9 +524,9 @@ describe("using it", () => {
     fireEvent.click(screen.getByText("Sort"));
     await waitFor(() => expect(cells()[0]!.getAttribute("aria-label")).toContain("frames/f02.png"));
     fireEvent.click(cells()[1]!);
-    fireEvent.click(screen.getByText("Trim from here"));
+    fireEvent.click(screen.getByText("Set Left"));
     fireEvent.click(cells()[2]!);
-    fireEvent.click(screen.getByText("Trim to here"));
+    fireEvent.click(screen.getByText("Set Right"));
 
     fireEvent.click(screen.getByText("New timeline"));
     build("0", "4", { references: false });
@@ -534,8 +534,8 @@ describe("using it", () => {
 
     expect(cells()[0]!.getAttribute("aria-label")).toContain("frames/f01.png");
     expect(screen.getByText("Sort")).toBeTruthy();
-    fireEvent.click(screen.getByText("Cut"));
-    expect(await screen.findByText(/Set both trim bounds first/)).toBeTruthy();
+    expect(screen.getByText(/^Left:/).textContent).toBe("Left: Not set");
+    expect((screen.getByRole("button", { name: "Cut" }) as HTMLButtonElement).disabled).toBe(true);
   });
 
   it("goes back to the range picker on New timeline", async () => {
@@ -918,10 +918,59 @@ describe("trimming the timeline — RULE-077", () => {
   /** Sets both bounds from a cell, since the controls take them from the current frame. */
   function boundsFrom(first: number, second: number) {
     fireEvent.click(cells()[first]!);
-    fireEvent.click(screen.getByText("Trim from here"));
+    fireEvent.click(screen.getByText("Set Left"));
     fireEvent.click(cells()[second]!);
-    fireEvent.click(screen.getByText("Trim to here"));
+    fireEvent.click(screen.getByText("Set Right"));
   }
+  const button = (name: string) => screen.getByRole("button", { name }) as HTMLButtonElement;
+
+  it("names the bounds by file and marks them on the bar, as legacy's Trim group does (SP-44)", async () => {
+    // Legacy's Left and Right labels show the file names, and red triangles mark the bounds on the
+    // bar (sequence_widget.py:475-490; main_window.py:5185-5207; timeline_widget.py:380-420). The web
+    // showed "bounds 2 to 3", and nothing on the bar.
+    show();
+    build("0", "4");
+    await waitFor(() => expect(cells()).toHaveLength(5));
+    expect(screen.getByText(/^Left:/).textContent).toBe("Left: Not set");
+
+    boundsFrom(1, 3);
+
+    expect(screen.getByText(/^Left:/).textContent).toBe("Left: f02.png");
+    expect(screen.getByText(/^Right:/).textContent).toBe("Right: f04.png");
+    expect(cells()[1]!.className).toContain("timeline__frame--trim-left");
+    expect(cells()[3]!.className).toContain("timeline__frame--trim-right");
+  });
+
+  it("offers Cut and Keep only with both bounds, and Clear Trim with either, as legacy does (SP-44)", async () => {
+    // sequence_widget.py:934-940. The web's were always enabled and refused with a note.
+    show();
+    build("0", "4");
+    await waitFor(() => expect(cells()).toHaveLength(5));
+    expect([button("Clear Trim").disabled, button("Cut").disabled, button("Keep").disabled]).toEqual([true, true, true]);
+
+    fireEvent.click(cells()[1]!);
+    fireEvent.click(screen.getByText("Set Left"));
+    expect([button("Clear Trim").disabled, button("Cut").disabled, button("Keep").disabled]).toEqual([false, true, true]);
+
+    fireEvent.click(cells()[3]!);
+    fireEvent.click(screen.getByText("Set Right"));
+    expect([button("Cut").disabled, button("Keep").disabled]).toEqual([false, false]);
+  });
+
+  it("clears both bounds and their markers with Clear Trim (SP-44)", async () => {
+    // main_window.py:5338-5344; sequence_widget.py:921-932.
+    show();
+    build("0", "4");
+    await waitFor(() => expect(cells()).toHaveLength(5));
+    boundsFrom(1, 3);
+
+    fireEvent.click(button("Clear Trim"));
+
+    expect(screen.getByText(/^Right:/).textContent).toBe("Right: Not set");
+    expect([...cells()].some((cell) => cell.className.includes("--trim-"))).toBe(false);
+    expect(button("Cut").disabled).toBe(true);
+    expect(cells()).toHaveLength(5);
+  });
 
   it("cuts what is between the markers ON SCREEN when the timeline is sorted (SP-27)", async () => {
     show();
@@ -1004,17 +1053,6 @@ describe("trimming the timeline — RULE-077", () => {
 
     await waitFor(() => expect(cells()).toHaveLength(3));
     expect(cells()[0]!.getAttribute("aria-label")).toContain("frames/f02.png");
-  });
-
-  it("refuses without both bounds, rather than guessing one", async () => {
-    show();
-    build("0", "4");
-    await waitFor(() => expect(cells()).toHaveLength(5));
-
-    fireEvent.click(screen.getByText("Cut"));
-
-    expect(await screen.findByText(/Set both trim bounds first/)).toBeTruthy();
-    expect(cells()).toHaveLength(5);
   });
 
   it("refuses to empty the timeline", async () => {
