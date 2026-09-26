@@ -295,7 +295,8 @@ Solid colours with black bold text (sequence_widget.py:173-202, 268-305, 517-550
       named button.
 11. **File list.** A search box, striped rows, the open row highlighted in rgba(100,100,200,.5), bold
     headers, ✓ marks, and a totals footer.
-    - **Done 2026-09-25.** Search, sort order and a Columns dropdown in one toolbar row; ✓ where a
+    - **Done 2026-09-25.** Search and a Columns dropdown in one toolbar row (the sort order dropdown
+      went on 2026-09-26: legacy sorts by header, CP-48); ✓ where a
       file is and nothing where it is not (the marks keep their present/absent labels); a footer
       with the image and annotated counts and a total per format. The table fits the 350px column
       without scrolling sideways. The heading is for screen readers only.
