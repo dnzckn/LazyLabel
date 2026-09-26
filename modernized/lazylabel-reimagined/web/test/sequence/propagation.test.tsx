@@ -1428,6 +1428,17 @@ describe("RULE-056: not losing propagated work without asking", () => {
     expect(f02().getAttribute("title")).toContain("confidence 0.9990");
   });
 
+  it("puts Min Conf and Hist in the propagation row, where legacy's are (SP-47)", async () => {
+    // sequence_widget.py:314-406: Range, the checkboxes, Window, Min Conf and Hist, in one row.
+    panel(() => true);
+    fireEvent.click(screen.getByText("Build timeline"));
+
+    const row = (await screen.findByRole("button", { name: "Hist" })).closest(".timeline__propagation-actions");
+    expect(row).not.toBeNull();
+    expect(row!.contains(screen.getByLabelText("Minimum confidence"))).toBe(true);
+    expect(row!.contains(screen.getByLabelText("Skip labeled"))).toBe(true);
+  });
+
   describe("Min Conf lowered after a run (SP-33)", () => {
     /*
      * Legacy re-flags from its stored results and Save All follows, but its timeline keeps its

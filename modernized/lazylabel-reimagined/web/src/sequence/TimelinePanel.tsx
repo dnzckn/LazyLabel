@@ -70,8 +70,10 @@ import {
   applyThreshold,
   clampThreshold,
   histogram,
+  niceTicks,
   thresholdPosition,
 } from "./confidence.js";
+import { Dialog } from "../shell/Dialog.jsx";
 
 export interface TimelinePanelProps {
   /** The folder as the browser listed it, in its order. */
@@ -887,6 +889,22 @@ export function TimelinePanel({
     go(event.clientX);
   };
 
+  // Min Conf and Hist, in the Propagation row as legacy's are; hidden without AI, as it is.
+  const confidence = videoReady ? (
+    <ConfidencePanel
+      scores={allScores}
+      threshold={threshold}
+      onThreshold={(value) => {
+        const next = clampThreshold(value);
+        void save({ ...settings, values: { ...settings.values, propagation_confidence_threshold: next } });
+        // The TIMELINE moves with the number, not only the set a save would use. Legacy
+        // recomputes one and not the other, so the colours point at one set of frames to review
+        // while Save All skips another -- and nothing says the two disagree.
+        setOverrides(applyThreshold(frames, allScores, next, discarded));
+      }}
+    />
+  ) : null;
+
   /** A trim bound as legacy's labels show it: the frame's file name, or "Not set". */
   const boundName = (at: number | null): string => {
     const frame = at === null ? undefined : frames[at];
@@ -1056,6 +1074,7 @@ export function TimelinePanel({
           {...(openAnnotations === undefined ? {} : { openAnnotations })}
           onRunStart={dropRun}
           onCleared={dropRun}
+          options={confidence}
         />
       )}
 
@@ -1225,20 +1244,8 @@ export function TimelinePanel({
         </p>
       )}
 
-      {videoReady && (
-      <ConfidencePanel
-        scores={allScores}
-        threshold={threshold}
-        onThreshold={(value) => {
-          const next = clampThreshold(value);
-          void save({ ...settings, values: { ...settings.values, propagation_confidence_threshold: next } });
-          // The TIMELINE moves with the number, not only the set a save would use. Legacy
-          // recomputes one and not the other, so the colours point at one set of frames to review
-          // while Save All skips another -- and nothing says the two disagree.
-          setOverrides(applyThreshold(frames, allScores, next, discarded));
-        }}
-      />
-      )}
+      {/* Without a propagation control to sit in, Min Conf stands alone. */}
+      {client === undefined && confidence}
 
       <p className="panel__missing">
         Propagation agrees with legacy frame for frame on a recorded test clip: the masks, the
@@ -1310,15 +1317,10 @@ function RangePicker({
 }
 
 /**
- * The confidence histogram, and the one number that decides what you review — RULE-035, RULE-060.
- *
- * Step 5 of the "carry labels through a sequence" flow. Propagation scores cluster just under 1,
- * which is why the chart does not start at 0: a 0-to-1 axis draws every score in the last bin and
- * shows the user one spike.
- *
- * DRAWN AS AN SVG, not a canvas. It is fifty rectangles and a line; a canvas would need a ref, a
- * device-pixel-ratio dance and a redraw effect to say the same thing, and none of it would be
- * readable by a screen reader or a test.
+ * Min Conf, and the "Hist" button beside it -- legacy's (`sequence_widget.py:383-404`,
+ * `main_window.py:4725-4739`, SEQUENCE_PARITY.md SP-47). The number is the persisted setting that
+ * decides what is flagged and what Save All writes (RULE-060). Hist opens the histogram, whose line
+ * is dragged and applied; with no scores it says so, as legacy's does.
  */
 function ConfidencePanel({
   scores,
@@ -1329,15 +1331,14 @@ function ConfidencePanel({
   readonly threshold: number;
   readonly onThreshold: (value: number) => void;
 }): ReactNode {
-  const values = Object.values(scores);
-  const view = histogram(values, threshold);
-  const tallest = Math.max(1, ...view.bins);
-  const marker = thresholdPosition(view, threshold);
+  const { notify } = useNotifications();
+  // The scores as they were when it opened: legacy's dialog is handed a list, not a live view.
+  const [shownScores, setShownScores] = useState<readonly number[] | null>(null);
 
   return (
-    <div className="confidence">
-      <label className="crop__field">
-        <span>Min Conf</span>
+    <span className="confidence">
+      <label>
+        Min Conf:{" "}
         <input
           type="number"
           min={0}
@@ -1345,60 +1346,210 @@ function ConfidencePanel({
           step={THRESHOLD_STEP}
           value={threshold}
           aria-label="Minimum confidence"
+          title={
+            "Minimum confidence threshold (0-1).\nFrames scoring below this are flagged red\n"
+            + "for manual review. Default 0.99 is strict."
+          }
           onChange={(event) => onThreshold(Number(event.target.value))}
         />
       </label>
-
-      {values.length === 0 ? (
-        <p className="panel__missing">
-          No confidence scores yet — propagation has not run. The threshold above is still the one
-          it will use, and a frame scoring below it will be flagged for review and left out of Save
-          All.
-        </p>
-      ) : (
-        <>
-          <svg
-            className="confidence__chart"
-            viewBox="0 0 100 30"
-            preserveAspectRatio="none"
-            role="img"
-            aria-label={`${values.length} frames scored, ${view.below} below ${threshold}`}
-          >
-            {view.bins.map((count, bin) => (
-              <rect
-                key={bin}
-                x={(bin / view.bins.length) * 100}
-                y={30 - (count / tallest) * 30}
-                width={100 / view.bins.length}
-                height={(count / tallest) * 30}
-                /* Coloured by which side of the threshold the BIN is, so the split the number
-                   makes is visible without reading the counts underneath. */
-                className={
-                  view.from + ((bin + 1) / view.bins.length) * (view.to - view.from) <= threshold
-                    ? "confidence__bar confidence__bar--below"
-                    : "confidence__bar"
-                }
-              />
-            ))}
-            <line
-              x1={marker * 100}
-              x2={marker * 100}
-              y1={0}
-              y2={30}
-              className="confidence__threshold"
-              vectorEffect="non-scaling-stroke"
-            />
-          </svg>
-
-          <p className="confidence__counts">
-            <span>{view.from.toFixed(2)}</span>
-            <span>
-              {view.below} below ({Math.round(view.belowFraction * 100)}%), {view.above} above
-            </span>
-            <span>1.00</span>
-          </p>
-        </>
+      <button
+        type="button"
+        title="Show confidence score histogram"
+        onClick={() => {
+          const values = Object.values(scores);
+          if (values.length === 0) notify({ severity: "info", message: "No confidence scores available yet" });
+          else setShownScores(values);
+        }}
+      >
+        Hist
+      </button>
+      {shownScores !== null && (
+        <HistogramDialog
+          scores={shownScores}
+          threshold={threshold}
+          onApply={(value) => {
+            setShownScores(null);
+            onThreshold(value);
+          }}
+          onClose={() => setShownScores(null)}
+        />
       )}
-    </div>
+    </span>
+  );
+}
+
+/** The histogram's drawing area, in legacy's pixels (`confidence_histogram_dialog.py:26-31`). */
+const PLOT = { width: 580, height: 300, left: 50, top: 20, right: 20, bottom: 30 } as const;
+const PLOT_W = PLOT.width - PLOT.left - PLOT.right;
+const PLOT_H = PLOT.height - PLOT.top - PLOT.bottom;
+/** Legacy's colours: a dark plot in either theme, green and red bars, a gold threshold. */
+const HIST = { ground: "rgb(43 43 43)", above: "rgb(76 175 80)", below: "rgb(244 67 54)", gold: "rgb(255 193 7)", text: "rgb(200 200 200)", grid: "rgb(70 70 70)" } as const;
+
+/** Python's `f"{x:.0f}"`, which rounds an exact half to even. */
+function wholePercent(value: number): string {
+  const floor = Math.floor(value);
+  return String(value - floor === 0.5 ? (floor % 2 === 0 ? floor : floor + 1) : Math.round(value));
+}
+
+/**
+ * Legacy's "Confidence Score Distribution" (`confidence_histogram_dialog.py:21-303`): fifty bins
+ * from just under the lowest score to 1, a bar green from the bin holding the threshold up and red
+ * below it, the gold line with a triangle at each end, the counts either side, and the threshold
+ * dragged by its line -- the view rescaling as it moves, as legacy's does. Apply sets Min Conf;
+ * Close and Escape leave it.
+ *
+ * AN SVG, not a canvas: fifty rectangles and a line, which a test and a screen reader can read.
+ */
+function HistogramDialog({
+  scores,
+  threshold,
+  onApply,
+  onClose,
+}: {
+  readonly scores: readonly number[];
+  readonly threshold: number;
+  readonly onApply: (value: number) => void;
+  readonly onClose: () => void;
+}): ReactNode {
+  const [value, setValue] = useState(Math.max(0, Math.min(1, threshold)));
+  const view = histogram(scores, value);
+  const span = view.to - view.from;
+  const tallest = Math.max(1, ...view.bins);
+  const binWidth = PLOT_W / view.bins.length;
+  const cut = span > 0 ? Math.trunc(((value - view.from) / span) * view.bins.length) : 0;
+  const lineX = PLOT.left + thresholdPosition(view, value) * PLOT_W;
+  const below = scores.filter((score) => score < value).length;
+  const above = scores.length - below;
+  const total = scores.length || 1;
+
+  const yTicks = [...new Set(niceTicks(0, tallest, 5).map((tick) => Math.max(0, Math.round(tick))))].sort((a, b) => a - b);
+  if (yTicks.at(-1) !== tallest) yTicks.push(tallest);
+  if (!yTicks.includes(0)) yTicks.unshift(0);
+  const xTicks = niceTicks(view.from, view.to, 6);
+  const labelX = lineX + 4 + 50 > PLOT.left + PLOT_W ? lineX - 54 : lineX + 4;
+
+  // What a drag reads: the view at the last render, as legacy maps x through its current range.
+  const live = useRef({ from: view.from, span });
+  live.current = { from: view.from, span };
+  const svg = useRef<SVGSVGElement>(null);
+  const stopDrag = useRef<(() => void) | null>(null);
+  useEffect(() => () => stopDrag.current?.(), []);
+
+  const startDrag = (event: ReactMouseEvent<SVGSVGElement>): void => {
+    const rect = svg.current?.getBoundingClientRect();
+    if (event.button !== 0 || rect === undefined || rect.width <= 0) return;
+    const scale = rect.width / PLOT.width;
+    // Within 8 pixels of the line, as legacy's press is (`confidence_histogram_dialog.py:234-238`).
+    if (Math.abs(event.clientX - (rect.left + lineX * scale)) >= 8) return;
+    event.preventDefault();
+    const move = (moved: MouseEvent): void => {
+      const box = svg.current?.getBoundingClientRect();
+      if (box === undefined || box.width <= 0) return;
+      const x = ((moved.clientX - box.left) / box.width) * PLOT.width;
+      const { from, span: range } = live.current;
+      setValue(Math.max(0, Math.min(1, from + ((x - PLOT.left) / PLOT_W) * range)));
+    };
+    const stop = (): void => {
+      window.removeEventListener("mousemove", move);
+      window.removeEventListener("mouseup", stop);
+      stopDrag.current = null;
+    };
+    stopDrag.current?.();
+    stopDrag.current = stop;
+    window.addEventListener("mousemove", move);
+    window.addEventListener("mouseup", stop);
+  };
+
+  return (
+    <Dialog title="Confidence Score Distribution" onClose={onClose} closeButton={false}>
+      <p>{scores.length} frames with confidence scores</p>
+      <svg
+        ref={svg}
+        className="confidence__chart"
+        viewBox={`0 0 ${PLOT.width} ${PLOT.height}`}
+        role="img"
+        aria-label="Confidence score histogram"
+        onMouseDown={startDrag}
+      >
+        <rect width={PLOT.width} height={PLOT.height} fill={HIST.ground} />
+        {view.bins.map((count, bin) => {
+          if (count === 0) return null;
+          const height = Math.trunc((count / tallest) * PLOT_H);
+          return (
+            <rect
+              key={bin}
+              className={bin >= cut ? "confidence__bar--above" : "confidence__bar--below"}
+              x={Math.trunc(PLOT.left + bin * binWidth)}
+              y={Math.trunc(PLOT.top + PLOT_H - height)}
+              width={Math.max(Math.trunc(binWidth), 1)}
+              height={height}
+              fill={bin >= cut ? HIST.above : HIST.below}
+            />
+          );
+        })}
+        {yTicks.map((tick) => {
+          const y = PLOT.top + PLOT_H - Math.trunc((tick / tallest) * PLOT_H);
+          return (
+            <g key={`y${tick}`}>
+              <text x={PLOT.left - 4} y={y + 4} textAnchor="end" fill={HIST.text} fontSize={11}>
+                {tick}
+              </text>
+              {tick > 0 && tick < tallest && (
+                <line x1={PLOT.left} x2={PLOT.left + PLOT_W} y1={y} y2={y} stroke={HIST.grid} strokeDasharray="1 2" />
+              )}
+            </g>
+          );
+        })}
+        {xTicks.map((tick) => {
+          const x = span > 0 ? PLOT.left + Math.trunc(((tick - view.from) / span) * PLOT_W) : PLOT.left;
+          return (
+            <g key={`x${tick}`}>
+              <line x1={x} x2={x} y1={PLOT.top + PLOT_H} y2={PLOT.top + PLOT_H + 4} stroke={HIST.text} />
+              <text x={x} y={PLOT.top + PLOT_H + 17} textAnchor="middle" fill={HIST.text} fontSize={11}>
+                {tick.toFixed(span >= 0.5 ? 1 : 2)}
+              </text>
+            </g>
+          );
+        })}
+        <line
+          className="confidence__threshold"
+          x1={lineX}
+          x2={lineX}
+          y1={PLOT.top}
+          y2={PLOT.top + PLOT_H}
+          stroke={HIST.gold}
+          strokeWidth={2}
+        />
+        <polygon
+          points={`${lineX},${PLOT.top} ${lineX - 6},${PLOT.top - 6} ${lineX + 6},${PLOT.top - 6}`}
+          fill={HIST.gold}
+        />
+        <polygon
+          points={`${lineX},${PLOT.top + PLOT_H} ${lineX - 6},${PLOT.top + PLOT_H + 6} ${lineX + 6},${PLOT.top + PLOT_H + 6}`}
+          fill={HIST.gold}
+        />
+        {/* The hand cursor's band: 8 pixels either side of the line, as legacy's hit test is. */}
+        <rect className="confidence__grip" x={lineX - 8} y={PLOT.top} width={16} height={PLOT_H} fill="transparent" />
+        <text x={PLOT.left + 4} y={PLOT.top + 14} fill={HIST.below} fontSize={12}>
+          Below: {below} ({wholePercent((below / total) * 100)}%)
+        </text>
+        <text x={PLOT.left + PLOT_W - 140} y={PLOT.top + 14} fill={HIST.above} fontSize={12}>
+          Above: {above} ({wholePercent((above / total) * 100)}%)
+        </text>
+        <text x={labelX} y={PLOT.top + PLOT_H - 4} fill={HIST.gold} fontSize={12}>
+          {value.toFixed(4)}
+        </text>
+      </svg>
+      <p>Threshold: {value.toFixed(4)}</p>
+      <div className="dialog__actions">
+        <button type="button" onClick={() => onApply(value)}>
+          Apply
+        </button>
+        <button type="button" onClick={onClose}>
+          Close
+        </button>
+      </div>
+    </Dialog>
   );
 }

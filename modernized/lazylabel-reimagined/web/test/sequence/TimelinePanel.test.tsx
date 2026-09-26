@@ -588,38 +588,105 @@ describe("the confidence histogram", () => {
   const setThreshold = (value: number) =>
     fireEvent.change(threshold(), { target: { value: String(value) } });
 
+  const hist = () => fireEvent.click(screen.getByRole("button", { name: "Hist" }));
+  const dialog = () => screen.queryByRole("dialog", { name: "Confidence Score Distribution" });
+  const chart = () => dialog()!.querySelector("svg")!;
+  /** The chart as a browser lays it out: 580 pixels wide, as its viewBox is, from the left edge. */
+  const laidOut = () => {
+    chart().getBoundingClientRect = () =>
+      ({ left: 0, width: 580, top: 0, height: 300, right: 580, bottom: 300, x: 0, y: 0, toJSON: () => ({}) }) as DOMRect;
+  };
+  /** Where the gold line is, in the chart's pixels. */
+  const lineX = () => Number(dialog()!.querySelector(".confidence__threshold")!.getAttribute("x1"));
+
   it("offers Min Conf at 0.99 as soon as there is a timeline, before any score exists", () => {
     // REACHABLE before the data is, which is the point of building it now. A histogram nobody can
-    // open until the model lands is a histogram nobody has ever run. It sits with the timeline
-    // rather than above it because there is nothing to threshold without frames.
+    // open until the model lands is a histogram nobody has ever run.
     withScores({});
 
     expect(threshold().value).toBe("0.99");
-    expect(screen.getByText(/No confidence scores yet/)).toBeTruthy();
   });
 
-  it("says what the threshold will do, rather than drawing an empty chart", () => {
+  it("says there are no scores, in legacy's words, rather than opening an empty histogram (SP-47)", async () => {
+    // main_window.py:4729-4732.
     withScores({});
 
-    expect(screen.getByText(/flagged for review and left out of Save All/)).toBeTruthy();
-    expect(screen.queryByRole("img")).toBeNull();
+    hist();
+
+    expect(await screen.findByText("No confidence scores available yet")).toBeTruthy();
+    expect(dialog()).toBeNull();
   });
 
-  it("draws the scores and counts which side of the threshold they fall", () => {
+  it("opens legacy's histogram on Hist, and counts which side of the threshold the scores fall (SP-47)", () => {
+    // confidence_histogram_dialog.py:214-224, 264-297. The web drew an always-visible chart.
     withScores({ 0: 0.95, 1: 0.97, 2: 0.995 });
+    expect(dialog()).toBeNull();
 
-    expect(screen.getByRole("img").getAttribute("aria-label")).toBe(
-      "3 frames scored, 2 below 0.99",
-    );
-    expect(screen.getByText(/2 below \(67%\), 1 above/)).toBeTruthy();
+    hist();
+
+    expect(dialog()).toBeTruthy();
+    expect(screen.getByText("3 frames with confidence scores")).toBeTruthy();
+    expect(screen.getByText("Below: 2 (67%)")).toBeTruthy();
+    expect(screen.getByText("Above: 1 (33%)")).toBeTruthy();
+    expect(screen.getByText("Threshold: 0.9900")).toBeTruthy();
   });
 
   it("starts the axis below the lowest score, not at zero", () => {
     // RULE-035. Propagation scores cluster just under 1 and a 0-to-1 axis is one spike.
     withScores({ 0: 0.95, 1: 0.97, 2: 0.995 });
+    hist();
 
-    expect(screen.getByText("0.93")).toBeTruthy();
-    expect(screen.getByText("1.00")).toBeTruthy();
+    const ticks = [...chart().querySelectorAll("text")].map((text) => text.textContent);
+    expect(ticks).toContain("0.93");
+    expect(ticks).toContain("1.00");
+    expect(ticks).not.toContain("0.92");
+  });
+
+  it("colours a bar green from the bin holding the threshold up, red below it, as legacy does (SP-47)", () => {
+    // confidence_histogram_dialog.py:128-141: 0.989 is below 0.99 but in its bin, so green.
+    withScores({ 0: 0.95, 2: 0.989 });
+    hist();
+
+    expect(chart().querySelectorAll(".confidence__bar--below")).toHaveLength(1);
+    expect(chart().querySelectorAll(".confidence__bar--above")).toHaveLength(1);
+    expect(chart().querySelector(".confidence__bar--above")!.getAttribute("fill")).toBe("rgb(76 175 80)");
+  });
+
+  it("drags the gold line, and Apply makes it Min Conf (SP-47)", async () => {
+    // confidence_histogram_dialog.py:234-261; main_window.py:4736-4739.
+    const saved = withScores({ 0: 0.95, 1: 0.97, 2: 0.995 });
+    hist();
+    laidOut();
+
+    fireEvent.mouseDown(chart(), { button: 0, clientX: lineX() + 3 });
+    fireEvent.mouseMove(window, { clientX: 50 }); // the plot's left edge: the view's low end, 0.93
+    fireEvent.mouseUp(window);
+
+    expect(screen.getByText(/^Threshold: /).textContent).toBe("Threshold: 0.9300");
+    fireEvent.click(screen.getByRole("button", { name: "Apply" }));
+
+    expect(dialog()).toBeNull();
+    await waitFor(() => expect(threshold().value).toBe("0.93"));
+    expect(saved["propagation_confidence_threshold"]).toBe(0.93);
+  });
+
+  it("moves nothing on a press away from the line, and Close keeps Min Conf (SP-47)", () => {
+    withScores({ 0: 0.95, 1: 0.97, 2: 0.995 });
+    hist();
+    laidOut();
+
+    fireEvent.mouseDown(chart(), { button: 0, clientX: lineX() - 30 });
+    fireEvent.mouseMove(window, { clientX: 50 });
+    fireEvent.mouseUp(window);
+    expect(screen.getByText(/^Threshold: /).textContent).toBe("Threshold: 0.9900");
+
+    fireEvent.mouseDown(chart(), { button: 0, clientX: lineX() });
+    fireEvent.mouseMove(window, { clientX: 50 });
+    fireEvent.mouseUp(window);
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+
+    expect(dialog()).toBeNull();
+    expect(threshold().value).toBe("0.99");
   });
 
   it("MOVES THE TIMELINE when the threshold changes, not just the counts", () => {

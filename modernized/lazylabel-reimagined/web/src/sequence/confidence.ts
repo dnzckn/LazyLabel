@@ -136,6 +136,26 @@ export function histogram(scores: readonly number[], threshold: number): Histogr
 }
 
 /**
+ * Legacy's axis ticks (`confidence_histogram_dialog.py:93-116`): about `maxTicks` values at a step
+ * of 1, 2 or 5 times a power of ten, from the first multiple of the step at or above `lo` to `hi`.
+ * The same float arithmetic, so the same ticks.
+ */
+export function niceTicks(lo: number, hi: number, maxTicks = 6): readonly number[] {
+  const span = hi - lo;
+  if (span <= 0) return [lo];
+  const raw = span / maxTicks;
+  const magnitude = 10 ** Math.floor(Math.log10(raw));
+  const residual = raw / magnitude;
+  const step =
+    residual <= 1.5 ? magnitude : residual <= 3.5 ? 2 * magnitude : residual <= 7.5 ? 5 * magnitude : 10 * magnitude;
+  const ticks: number[] = [];
+  for (let at = Math.ceil(lo / step) * step; at <= hi + step * 0.001; at += step) {
+    ticks.push(Math.round(at * 1e10) / 1e10);
+  }
+  return ticks;
+}
+
+/**
  * Where the threshold sits across the histogram's width, as a fraction in [0, 1].
  *
  * Its own function because the chart and any marker over it must agree, and computing it twice is

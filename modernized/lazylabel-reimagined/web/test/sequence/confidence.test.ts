@@ -16,6 +16,7 @@ import {
   frameConfidence,
   histogram,
   isFlagged,
+  niceTicks,
   saveableFrames,
   thresholdPosition,
 } from "../../src/sequence/confidence.js";
@@ -144,6 +145,24 @@ describe("the histogram (RULE-035)", () => {
     const view = histogram([], 0.99);
     expect(view.belowFraction).toBe(0);
     expect(view.bins.reduce((a, b) => a + b, 0)).toBe(0);
+  });
+});
+
+describe("the histogram's axis ticks (SP-47)", () => {
+  // Legacy's _nice_ticks (confidence_histogram_dialog.py:93-116): a step of 1, 2 or 5 times a power
+  // of ten, from the first multiple at or above the low end.
+  it("steps by a hundredth over the view propagation scores give", () => {
+    expect(niceTicks(0.95 - 0.02, 1, 6)).toEqual([0.93, 0.94, 0.95, 0.96, 0.97, 0.98, 0.99, 1]);
+  });
+
+  it("steps by a tenth over half the axis, and by whole counts up the side", () => {
+    expect(niceTicks(0.5, 1, 6)).toEqual([0.5, 0.6, 0.7, 0.8, 0.9, 1]);
+    expect(niceTicks(0, 7, 5)).toEqual([0, 1, 2, 3, 4, 5, 6, 7]);
+    expect(niceTicks(0, 40, 5)).toEqual([0, 10, 20, 30, 40]);
+  });
+
+  it("gives the one value of an empty range", () => {
+    expect(niceTicks(1, 1)).toEqual([1]);
   });
 });
 

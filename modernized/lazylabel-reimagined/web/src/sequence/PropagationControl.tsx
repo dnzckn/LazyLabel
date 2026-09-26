@@ -125,6 +125,11 @@ export interface PropagationControlProps {
    * state, its guard and its keys stay here -- while it sits where a user looks for it.
    */
   readonly saveSlot?: HTMLElement | null;
+  /**
+   * What the timeline puts in this row after the checkboxes: Min Conf and Hist, where legacy's
+   * Propagation group has them (`sequence_widget.py:383-404`).
+   */
+  readonly options?: ReactNode;
 }
 
 export function PropagationControl({
@@ -144,6 +149,7 @@ export function PropagationControl({
   savedElsewhere,
   openAnnotations,
   saveSlot,
+  options,
   projectId = "default",
 }: PropagationControlProps): ReactNode {
   const { settings } = useSettings();
@@ -721,6 +727,7 @@ export function PropagationControl({
           />{" "}
           Skip labeled
         </label>
+        {options}
         {!streaming && frames.length > Number(settings.values["stream_window_size"] ?? 250) && (
           // RULE-026's warning: 12.6 MB a frame, all held at once without streaming. Said before
           // the run rather than discovered as an out-of-memory partway through it.
