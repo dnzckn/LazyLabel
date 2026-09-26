@@ -11,31 +11,41 @@
  * the state the app starts in, so a first click on the canvas never draws. Pan has
  * no button in legacy; it sits beside Hotkeys, where the grid leaves room. Crop is drawn from the
  * Border Crop section, as legacy's is (control_panel.py:500).
+ *
+ * TOOLTIPS, NOT HINTS. Each button carries legacy's tooltip with its key (control_panel.py:254-317,
+ * 327-358), and nothing is printed under the card. It used to say that holding Shift as a shape
+ * is finished erases with it -- releasing a box or circle, or closing a polygon with Shift+Enter
+ * -- which is legacy's gesture and which legacy leaves to its hotkey list.
  */
 
 import type { ReactNode } from "react";
 
-import { useHotkey, useHotkeyContext } from "../hotkeys/HotkeyProvider.jsx";
+import { useHotkey, useKeyHint } from "../hotkeys/HotkeyProvider.jsx";
 import { useNotifications } from "../notifications/NotificationProvider.jsx";
 import { useSettings } from "../settings/SettingsProvider.jsx";
 import { enterEditMode } from "../tools/edit.js";
 import { HistoryControls } from "../workspace/HistoryControls.jsx";
 import { useWorkspace, type Tool } from "../workspace/WorkspaceProvider.jsx";
 
-/** The grid, in legacy's order, with the action whose key each label shows. */
-const MODES: readonly { readonly tool: Tool; readonly label: string; readonly action: string }[] = [
-  { tool: "ai", label: "AI", action: "sam_mode" },
-  { tool: "polygon", label: "Poly", action: "polygon_mode" },
-  { tool: "box", label: "Box", action: "bbox_mode" },
-  { tool: "circle", label: "Circle", action: "circle_mode" },
-  { tool: "select", label: "Select", action: "selection_mode" },
+/** The grid, in legacy's order, with the action whose key each label shows and legacy's tooltip. */
+const MODES: readonly {
+  readonly tool: Tool;
+  readonly label: string;
+  readonly action: string;
+  readonly tooltip: string;
+}[] = [
+  { tool: "ai", label: "AI", action: "sam_mode", tooltip: "Switch to AI Mode for AI segmentation" },
+  { tool: "polygon", label: "Poly", action: "polygon_mode", tooltip: "Switch to Polygon Drawing Mode" },
+  { tool: "box", label: "Box", action: "bbox_mode", tooltip: "Switch to Bounding Box Drawing Mode" },
+  { tool: "circle", label: "Circle", action: "circle_mode", tooltip: "Switch to Circle Drawing Mode" },
+  { tool: "select", label: "Select", action: "selection_mode", tooltip: "Toggle segment selection" },
   // Edit is "no drawing tool": see the module comment.
-  { tool: "none", label: "Edit", action: "edit_mode" },
+  { tool: "none", label: "Edit", action: "edit_mode", tooltip: "Edit segments and polygons" },
 ];
 
 export function ModeControls({ onHotkeys }: { readonly onHotkeys: () => void }): ReactNode {
   const { activeTool, setActiveTool, segments, selected, toggleRecentClass } = useWorkspace();
-  const { bindings } = useHotkeyContext();
+  const keyOf = useKeyHint();
   const { notify } = useNotifications();
 
   /*
@@ -93,11 +103,6 @@ export function ModeControls({ onHotkeys }: { readonly onHotkeys: () => void }):
   });
   useHotkey("edit_mode", edit);
 
-  const keyOf = (action: string): string => {
-    const key = bindings[action]?.primary;
-    return key === undefined || key === null || key === "" ? "" : ` (${key})`;
-  };
-
   return (
     <section className="mode-card">
       <fieldset className="mode-card__modes">
@@ -106,6 +111,8 @@ export function ModeControls({ onHotkeys }: { readonly onHotkeys: () => void }):
           <label
             key={mode.tool}
             className={`mode-button${activeTool === mode.tool ? " mode-button--on" : ""}`}
+            // Legacy's "{tooltip} ({key})" (control_panel.py:327-331).
+            title={`${mode.tooltip}${keyOf(mode.action)}`}
           >
             <input
               type="radio"
@@ -121,7 +128,11 @@ export function ModeControls({ onHotkeys }: { readonly onHotkeys: () => void }):
       </fieldset>
 
       <div className="mode-card__row">
-        <label className={`mode-button mode-button--small${activeTool === "pan" ? " mode-button--on" : ""}`}>
+        <label
+          className={`mode-button mode-button--small${activeTool === "pan" ? " mode-button--on" : ""}`}
+          // No button in legacy, so its hotkey's name, which is legacy's (hotkeys.py:52).
+          title={`Pan Mode${keyOf("pan_mode")}`}
+        >
           <input
             type="radio"
             name="tool"
@@ -131,20 +142,18 @@ export function ModeControls({ onHotkeys }: { readonly onHotkeys: () => void }):
           />
           Pan{keyOf("pan_mode")}
         </label>
-        <button type="button" className="mode-card__hotkeys" aria-label="Show hotkeys" onClick={onHotkeys}>
+        <button
+          type="button"
+          className="mode-card__hotkeys"
+          aria-label="Show hotkeys"
+          title="Configure keyboard shortcuts"
+          onClick={onHotkeys}
+        >
           <span aria-hidden="true">⌨</span> Hotkeys
         </button>
       </div>
 
       <HistoryControls />
-
-      {/* Shift erases with whichever shape is active, which is legacy's gesture and is not
-          discoverable by looking at the buttons. It is read when the shape is FINISHED -- a box or
-          circle released, a polygon closed. */}
-      <p className="mode-card__hint">
-        Hold Shift as you finish a shape to erase with it: release a box or circle with Shift held,
-        or close a polygon with Shift+Enter.
-      </p>
     </section>
   );
 }

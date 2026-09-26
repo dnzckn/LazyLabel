@@ -171,6 +171,24 @@ export function useHotkeyContext(): HotkeyContextValue {
   return value;
 }
 
+/**
+ * An action's key as legacy writes it after a button's label or tooltip -- " (2)", " (Ctrl+P)",
+ * or " (V/Backspace)" for two actions -- or "" when none has a key. Read from the user's own
+ * bindings, so a remapped key is the one shown.
+ */
+export function useKeyHint(): (...actions: readonly string[]) => string {
+  const { bindings } = useHotkeyContext();
+  return useCallback(
+    (...actions: readonly string[]) => {
+      const keys = actions
+        .map((action) => bindings[action]?.primary)
+        .filter((key): key is string => typeof key === "string" && key !== "");
+      return keys.length === 0 ? "" : ` (${keys.join("/")})`;
+    },
+    [bindings],
+  );
+}
+
 /** Run `handler` when the user triggers `action`. */
 export function useHotkey(action: string, handler: HotkeyHandler): void {
   const { register } = useHotkeyContext();

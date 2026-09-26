@@ -1066,12 +1066,6 @@ fieldset input[type="text"] {
   margin: 6px 0 0;
 }
 
-.mode-card__hint {
-  margin: 6px 0 0;
-  color: var(--muted);
-  font-size: 11px;
-}
-
 /* Legacy's centred bold "Settings" over the tabs (control_panel.py:216-222). */
 .settings-label {
   margin: 4px 0 2px;

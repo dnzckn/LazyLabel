@@ -80,6 +80,27 @@ describe("the Mode Controls card", () => {
     mount({ ...bindings, polygon_mode: { ...bindings["polygon_mode"]!, primary: "P" } });
 
     expect(screen.getByRole("radio", { name: "Poly (P)" })).toBeTruthy();
+    expect(screen.getByRole("radio", { name: "Poly (P)" }).closest("label")?.title).toBe(
+      "Switch to Polygon Drawing Mode (P)",
+    );
+  });
+
+  it("carries legacy's tooltips, key included, and prints no hint under the card", () => {
+    // control_panel.py:254-317, 327-331; the owner, 2026-09-26, on explanations under controls.
+    mount();
+
+    const tooltips = screen.getAllByRole("radio").map((radio) => radio.closest("label")?.title);
+    expect(tooltips).toEqual([
+      "Switch to AI Mode for AI segmentation (1)",
+      "Switch to Polygon Drawing Mode (2)",
+      "Switch to Bounding Box Drawing Mode (3)",
+      "Switch to Circle Drawing Mode (4)",
+      "Toggle segment selection (E)",
+      "Edit segments and polygons (R)",
+      "Pan Mode (Q)",
+    ]);
+    expect(screen.getByRole("button", { name: "Show hotkeys" }).title).toBe("Configure keyboard shortcuts");
+    expect(document.querySelector(".mode-card p")).toBeNull();
   });
 
   it("starts on Edit, which is no drawing tool, so a first click never draws", () => {
