@@ -461,6 +461,16 @@ export function TimelinePanel({
     setTrimNote(`Removed ${outcome.removed} frame${outcome.removed === 1 ? "" : "s"} from the timeline. No files were touched.`);
   };
 
+  /**
+   * What a run left on the timeline, dropped when the next one starts and when one is cleared, as
+   * legacy's `clear_propagation_results` drops it (`sequence_view_mode.py:143-159`, RULE-076).
+   */
+  const dropRun = () => {
+    setOwnScores({});
+    setKeptLabels(new Set());
+    setOverrides((previous) => resetForPropagation(previous ?? frames));
+  };
+
   const counts = summarize(frames);
   const order = sorted ? sortedOrder(shown) : shown.map((frame) => frame.index);
   const allScores = { ...scores, ...ownScores };
@@ -557,11 +567,8 @@ export function TimelinePanel({
           onSaved={(keys) => setOverrides((previous) => markSaved(previous ?? frames, keys))}
           {...(savedElsewhere === undefined ? {} : { savedElsewhere })}
           {...(openAnnotations === undefined ? {} : { openAnnotations })}
-          onRunStart={() => {
-            setOwnScores({});
-            setKeptLabels(new Set());
-            setOverrides((previous) => resetForPropagation(previous ?? frames));
-          }}
+          onRunStart={dropRun}
+          onCleared={dropRun}
         />
       )}
 

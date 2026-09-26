@@ -1113,6 +1113,41 @@ describe("RULE-056: not losing propagated work without asking", () => {
     expect(screen.getByRole("button", { name: /Save 1 frame/ })).toBeTruthy();
   });
 
+  it("DISCARDS the run on a yes: nothing left to ask about, the timeline pending, no mask to review", async () => {
+    /*
+     * Found 2026-09-25: Clear asked and, on a yes, discarded nothing. It emptied the hook's masks
+     * while the control's per-frame commits -- what the unsaved count, the review segments and the
+     * paint are built from -- survived. The tab still asked on close, frame 2 stayed propagated
+     * with its score, and opening it still showed the run's mask.
+     *
+     * Legacy has no Clear (SEQUENCE_PARITY.md SP-57). Its clear before each new run is the meaning
+     * given to this one: masks and scores gone, every frame but a reference or a skipped one
+     * pending again (sequence_view_mode.py:143-159).
+     */
+    const confirm = vi.fn((_message: string) => true);
+    const opened: { key: string; segments: readonly WireSegment[] | undefined }[] = [];
+    panel(confirm, false, undefined, { onOpen: (key, segments) => opened.push({ key, segments }) });
+    await propagateAndWait();
+    const propagated = await screen.findByRole("button", { name: "Frame 2, frames/f02.png, propagated" });
+    expect(propagated.title).toMatch(/confidence/);
+
+    fireEvent.click(screen.getByRole("button", { name: "Clear" }));
+    expect(confirm).toHaveBeenCalledTimes(1);
+
+    const pending = await screen.findByRole("button", { name: "Frame 2, frames/f02.png, pending" });
+    expect(pending.title).not.toMatch(/confidence/);
+    expect(screen.queryByRole("button", { name: /Save 1 frame/ })).toBeNull();
+    expect(closeTab()).toBe(false);
+
+    // Opening the frame shows its file: no run's mask is handed over with it.
+    fireEvent.click(pending);
+    expect(opened.at(-1)).toEqual({ key: "frames/f02.png", segments: undefined });
+
+    // Nothing is left for New timeline to ask about.
+    fireEvent.click(screen.getByText("New timeline"));
+    expect(confirm).toHaveBeenCalledTimes(1);
+  });
+
   it("counts a SECOND run's frames as unsaved, even where the first run's were saved", async () => {
     /*
      * Found in a real browser on 2026-09-23: the set of frames written was never cleared, so once

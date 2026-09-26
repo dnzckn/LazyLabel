@@ -76,6 +76,11 @@ export interface PropagationControlProps {
    */
   readonly onRunStart?: () => void;
   /**
+   * The finished run was cleared: the panel drops what it holds from it, as it does when a run
+   * starts. Legacy clears a run the same way before each new one (`sequence_view_mode.py:143-159`).
+   */
+  readonly onCleared?: () => void;
+  /**
    * The propagated segments, by frame position — RULE-090.
    *
    * Handed up because opening a frame belongs to the shell, not to this control. Built here
@@ -124,6 +129,7 @@ export function PropagationControl({
   onUnsaved,
   unsavedRef,
   onRunStart,
+  onCleared,
   onSegments,
   confirmDiscard = (message) => window.confirm(message),
   onSkipped,
@@ -429,6 +435,28 @@ export function PropagationControl({
   const done = job !== null && !progress.running;
 
   /*
+   * CLEAR THROWS THE RUN AWAY. Legacy has no Clear (`SEQUENCE_PARITY.md` SP-57); what it does
+   * before every new run is the nearest thing, and this is that without the run that follows:
+   * the masks and scores go, and the timeline goes back to pending except for references and
+   * skipped frames (`sequence_view_mode.py:143-159`, `propagation_manager.py:484-493`).
+   *
+   * The COMMITS go with the masks. The counts, the review segments and the timeline's paint are all
+   * built from them, and until 2026-09-26 only the hook's masks went: Clear asked, and on a yes
+   * discarded nothing. The tab still asked on close, and New timeline and Propagate asked about
+   * frames just discarded. Every frame kept its paint, its score, and the mask a revisit showed.
+   */
+  const clear = () => {
+    if (!mayDiscard("Clearing")) return;
+    reset();
+    committed.current = new Map();
+    setWritten(new Set());
+    setPolicy(NO_POLICY);
+    setUnusable([]);
+    setSaved(null);
+    onCleared?.();
+  };
+
+  /*
    * WHAT SAVE ALL WRITES, AND WHAT THE LOSS GUARDS COUNT, IS WHAT THE COMMIT DECIDED, never the
    * timeline's paint. Clear Flags repaints every frame pending, and legacy's does nothing more: its
    * Save All still writes every propagated, unflagged frame (`main_window.py:3457-3478`). Planned
@@ -592,11 +620,7 @@ export function PropagationControl({
         {done && (
           <button
             type="button"
-            onClick={() => {
-              if (!mayDiscard("Clearing")) return;
-              reset();
-              setWritten(new Set());
-            }}
+            onClick={clear}
             disabled={saving !== null}
           >
             Clear
