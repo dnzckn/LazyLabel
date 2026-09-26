@@ -481,6 +481,18 @@ export function TimelinePanel({
     setTimeline(null);
     setKeptLabels(new Set());
     unsavedRef.current = 0;
+    // Everything else the old timeline held, as legacy's reset clears it (`sequence_widget.py:770-794`,
+    // SEQUENCE_PARITY.md SP-35): the sort, the trim bounds, the suggestions, and the run's scores and
+    // masks, which would otherwise land on the same positions in the next timeline.
+    setSorted(false);
+    setBounds([null, null]);
+    setTrimNote(null);
+    setArchetypes([]);
+    onArchetypes?.([]);
+    setFoundNote(null);
+    setOwnScores({});
+    setPropagated(new Map());
+    setCurrent(0);
   };
 
 

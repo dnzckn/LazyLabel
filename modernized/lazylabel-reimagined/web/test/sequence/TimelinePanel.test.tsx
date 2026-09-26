@@ -293,6 +293,29 @@ describe("using it", () => {
     );
   });
 
+  it("starts a NEW timeline unsorted and with no trim bounds, as legacy's reset does (SP-35)", async () => {
+    // Legacy clears the sort, the trim bounds and the suggestions (sequence_widget.py:770-794). The
+    // web carried them into the next timeline, where Cut and Keep used the old bounds.
+    show();
+    build("0", "4");
+    await waitFor(() => expect(cells()).toHaveLength(5));
+    fireEvent.click(screen.getByText("Sort"));
+    await waitFor(() => expect(cells()[0]!.getAttribute("aria-label")).toContain("frames/f02.png"));
+    fireEvent.click(cells()[1]!);
+    fireEvent.click(screen.getByText("Trim from here"));
+    fireEvent.click(cells()[2]!);
+    fireEvent.click(screen.getByText("Trim to here"));
+
+    fireEvent.click(screen.getByText("New timeline"));
+    build("0", "4", { references: false });
+    await waitFor(() => expect(cells()).toHaveLength(5));
+
+    expect(cells()[0]!.getAttribute("aria-label")).toContain("frames/f01.png");
+    expect(screen.getByText("Sort")).toBeTruthy();
+    fireEvent.click(screen.getByText("Cut"));
+    expect(await screen.findByText(/Set both trim bounds first/)).toBeTruthy();
+  });
+
   it("goes back to the range picker on New timeline", async () => {
     show();
     build("0", "4");
