@@ -55,8 +55,9 @@ const DELIBERATELY_NOT_IMPLEMENTED: Readonly<Record<string, string>> = {
     + "settings schema names the same bindings `zoom_in` and `zoom_out`. Wiring them to the "
     + "multiplier would recreate the exact defect `fit_view` had: a key doing something other "
     + "than its name, listed under that name in the hotkey reference. They zoom here, and the "
-    + "annotation size keeps its slider. The rest of the rule -- radius 0.3x, line 0.5x, WASD "
-    + "panning 10% of the view -- is built and proven in `canvas/sizing.test.ts`.",
+    + "annotation size keeps its slider. The rest of the rule is built: radius 0.3x and line 0.5x, "
+    + "proven in `canvas/sizing.test.ts`, and WASD panning 10% of the view, proven in "
+    + "`workspace/unreadableSave.test.tsx` (it panned 64 pixels whatever the view until 2026-09-25).",
   "RULE-042":
     "decision 7's sibling for class names: legacy accepts any alias, including an empty one and a "
     + "duplicate, and the exporters then write files whose class names collide. This validates on "

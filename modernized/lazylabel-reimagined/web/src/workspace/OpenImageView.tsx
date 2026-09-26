@@ -147,14 +147,21 @@ function OpenedImage({
   useEffect(() => setFitted(fitted), [fitted, setFitted]);
   useEffect(() => () => setFitted(null), [setFitted]);
   const rawPan = Number(settings.values["pan_multiplier"]);
-  const panStep = 64 * (Number.isFinite(rawPan) && rawPan > 0 ? Math.min(10, rawPan) : 1);
+  const panMultiplier = Number.isFinite(rawPan) && rawPan > 0 ? Math.min(10, rawPan) : 1;
   const pan = useCallback(
     (dx: number, dy: number) => {
-      // `scrollBy` clamps at the ends itself, so pressing into an edge does nothing rather than
-      // needing a bound here that would have to agree with the browser's.
-      scrollRef.current?.scrollBy({ left: dx * panStep, top: dy * panStep, behavior: "auto" });
+      const pane = scrollRef.current;
+      if (pane === null) return;
+      // A tenth of the view a press, its width across and its height down, times pan_multiplier,
+      // as legacy's (viewport_manager.py:60-79). It was 64 pixels whatever the view's size
+      // (`CONTROL_PARITY.md` CP-25). `scrollBy` clamps at the ends itself, so pressing into an
+      // edge does nothing rather than needing a bound here that would have to agree with the
+      // browser's.
+      const left = dx * Math.trunc(pane.clientWidth * 0.1 * panMultiplier);
+      const top = dy * Math.trunc(pane.clientHeight * 0.1 * panMultiplier);
+      pane.scrollBy({ left, top, behavior: "auto" });
     },
-    [panStep],
+    [panMultiplier],
   );
 
   useHotkey("pan_left", () => pan(-1, 0));
@@ -454,7 +461,7 @@ function OpenedImage({
                 width={metadata.width}
                 height={metadata.height}
                 pane={scrollRef}
-                multiplier={panStep / 64}
+                multiplier={panMultiplier}
               />
             )}
 

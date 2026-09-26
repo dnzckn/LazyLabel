@@ -58,7 +58,7 @@ Paths: **L** = `legacy/lazylabel/src/lazylabel/`, **W** = `modernized/lazylabel-
 | CP-22 | Enter does not accept a pending AI preview before saving. | L `ui/managers/keyboard_event_manager.py:187-234` | `canvas/AiLayer.tsx` | **done** 2026-09-25 |
 | CP-23 | X swaps with the previous class, and only class-table clicks set it. Legacy toggles the most recently used class on and off; adding a segment counts. | L `ui/main_window.py:2712-2738`, `core/segment_manager.py:42, 409-419` | `workspace/WorkspaceProvider.tsx:400-411` | reported (RULE-086 keeps legacy's behaviour) |
 | CP-24 | Z restores the last non-zero fragment value only if Z set it to 0; legacy tracks every slider move. Slider to 0, then Z, gives 100. | L `ui/main_window.py:162-166, 1320-1324` | `workspace/FragmentPanel.tsx` | **done** 2026-09-25 |
-| CP-25 | WASD pans 64 px × pan_multiplier; legacy pans 10% of the view × pan_multiplier. `p0Coverage.test.ts:58-59` claims the 10% step is built. | L `ui/managers/viewport_manager.py:60-79` | `workspace/OpenImageView.tsx:149-156` | reported |
+| CP-25 | WASD pans 64 px × pan_multiplier; legacy pans 10% of the view × pan_multiplier. `p0Coverage.test.ts:58-59` claims the 10% step is built. | L `ui/managers/viewport_manager.py:60-79` | `workspace/OpenImageView.tsx` | **done** 2026-09-25 |
 | CP-26 | A right press adds a negative AI point at once in legacy; on the web a right-drag becomes a box. | L `ui/handlers/single_view_mouse_handler.py:137-139` | `canvas/AiLayer.tsx:75, 109`, `tools/ai.ts:70-101` | reported |
 | CP-27 | G adds a reference without legacy's image-size check, so the size-mismatch note can never appear. | L `ui/main_window.py:3887-3908, 3936-3979` | `sequence/TimelinePanel.tsx:511`, `sequence/timeline.ts:354-358` | reported |
 | CP-28 | Propagate and Find Archetypes are offered with no AI; Find Archetypes cannot be aborted. | hidden or disabled without AI: L `ui/widgets/sequence_widget.py:274-278, 307-311, 825-835`; a second press aborts: `ui/main_window.py:5044-5055` | `shell/App.tsx:337-339`, `sequence/TimelinePanel.tsx` | reported |
@@ -104,7 +104,7 @@ Paths: **L** = `legacy/lazylabel/src/lazylabel/`, **W** = `modernized/lazylabel-
   with CP-12.
 - `VISUAL_PARITY.md` marks the timeline done without zoom, scrub or trim marks (CP-41), and says
   the segment row click works "as in legacy" (CP-15).
-- `W test/rules/p0Coverage.test.ts:58-59` claims the 10% pan step is built (CP-25).
+- `W test/rules/p0Coverage.test.ts:58-59` claimed the 10% pan step was built; corrected with CP-25.
 
 ## Recorded decisions (not work)
 

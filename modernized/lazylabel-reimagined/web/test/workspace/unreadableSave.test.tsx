@@ -153,30 +153,37 @@ describe("an image with no annotation file at all", () => {
 describe("panning the zoomed image", () => {
   const keyFor = (action: string) => defaultSettings().hotkeys[action]!.primary;
 
-  it("scrolls the pane, which is the thing that moves", async () => {
-    // A transform on the canvas would be a second way to position the image, and the two would
-    // disagree the moment a user touched the scrollbar.
-    mount(empty);
-    await open();
+  /** The pane, sized as jsdom cannot lay it out, with its scroll recorded. */
+  function sizedPane(width: number, height: number) {
     const pane = document.querySelector(".canvas-scroll") as HTMLElement;
+    Object.defineProperty(pane, "clientWidth", { configurable: true, value: width });
+    Object.defineProperty(pane, "clientHeight", { configurable: true, value: height });
     const by = vi.fn();
     pane.scrollBy = by as unknown as typeof pane.scrollBy;
+    return by;
+  }
+
+  it("scrolls the pane a tenth of its width, which is the thing that moves", async () => {
+    // A transform on the canvas would be a second way to position the image, and the two would
+    // disagree the moment a user touched the scrollbar. A tenth of the view a press, as legacy's
+    // (viewport_manager.py:60-79); it was 64 pixels whatever the view (CONTROL_PARITY.md CP-25).
+    mount(empty);
+    await open();
+    const by = sizedPane(900, 600);
 
     fireEvent.keyDown(document, { key: keyFor("pan_right"), code: "KeyD" });
 
-    expect(by).toHaveBeenCalledWith({ left: 64, top: 0, behavior: "auto" });
+    expect(by).toHaveBeenCalledWith({ left: 90, top: 0, behavior: "auto" });
   });
 
-  it("moves the other way for the opposite key", async () => {
+  it("moves the other way, a tenth of the HEIGHT, for the opposite key", async () => {
     mount(empty);
     await open();
-    const pane = document.querySelector(".canvas-scroll") as HTMLElement;
-    const by = vi.fn();
-    pane.scrollBy = by as unknown as typeof pane.scrollBy;
+    const by = sizedPane(900, 600);
 
     fireEvent.keyDown(document, { key: keyFor("pan_up"), code: "KeyW" });
 
-    expect(by).toHaveBeenCalledWith({ left: 0, top: -64, behavior: "auto" });
+    expect(by).toHaveBeenCalledWith({ left: 0, top: -60, behavior: "auto" });
   });
 });
 
