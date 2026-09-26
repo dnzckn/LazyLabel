@@ -371,8 +371,9 @@ describe("in the Multi view, every move saves BOTH sides first (CP-67)", () => {
    * (main_window.py:6491-6557; CP-31). The save comes first, whatever Auto-Save on Navigate says,
    * changed or not, even where nothing then moves, and an empty viewer's files are deleted with no
    * message (main_window.py:6496-6497, 6529-6530, 6559-6636; file_navigation_manager.py:401-403).
-   * The owner's decision of 2026-09-26: "Match the desktop app exactly". The web saved only the
-   * side being edited, only with the setting on, and asked about the other.
+   * The owner's decision of 2026-09-26: "Match the desktop app exactly", then, later that day,
+   * saving on a move is "only if the user has the save on navigation setting turned on". So the
+   * web saves both only with the setting on, where legacy saves whatever it says.
    */
   const FOUR = ["a.png", "b.png", "c.png", "d.png"];
 
@@ -411,8 +412,11 @@ describe("in the Multi view, every move saves BOTH sides first (CP-67)", () => {
     expect(confirmNavigation).not.toHaveBeenCalled();
   });
 
-  it("saves both with Auto-Save on Navigate OFF, and asks nothing", async () => {
-    const { events, confirmNavigation } = mount({ a: TRIANGLE_AT_REV_A, names: FOUR });
+  it("saves nothing with Auto-Save on Navigate OFF: the changed side is asked about", async () => {
+    // Legacy saves both whatever the setting says. The owner, 2026-09-26: saving on a move is "only
+    // if the user has the save on navigation setting turned on". So, off, the move is the Single
+    // view's: the untouched side moves, and the side with work on it asks before it is dropped.
+    const { events, confirmNavigation } = mount({ a: TRIANGLE_AT_REV_A, names: FOUR, answer: false });
     await pairUp();
     fireEvent.click(autoSave());
     await waitFor(() => expect(autoSave().checked).toBe(false));
@@ -421,9 +425,11 @@ describe("in the Multi view, every move saves BOTH sides first (CP-67)", () => {
 
     next();
 
-    await waitFor(() => expect(events).toHaveLength(4));
-    expect(events.slice(0, 2)).toEqual(["save frames/a.png", "save frames/b.png"]);
-    expect(confirmNavigation).not.toHaveBeenCalled();
+    await waitFor(() => expect(events).toContain("load frames/c.png"));
+    expect(confirmNavigation).toHaveBeenCalledTimes(1);
+    expect(confirmNavigation.mock.calls[0]![0]).toMatch(/Open d\.png anyway\?/);
+    expect(events.filter((event) => event.startsWith("save") || event.startsWith("delete"))).toEqual([]);
+    expect(events).not.toContain("load frames/d.png");
   });
 
   it("saves them as Enter would: the selected formats, each side's own annotations and revision", async () => {

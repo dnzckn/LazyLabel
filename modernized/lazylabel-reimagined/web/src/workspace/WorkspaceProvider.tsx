@@ -660,6 +660,11 @@ export function WorkspaceProvider({
       SIDES.map((each) => savers.current[each]?.().saveSide).find((lent) => lent !== undefined),
     [],
   );
+  /** Auto-Save on Navigate, as the mounted save button reads it; off when none is mounted. */
+  const autoSaveOn = useCallback(
+    (): boolean => SIDES.map((each) => savers.current[each]?.()).find((lent) => lent !== undefined)?.enabled === true,
+    [],
+  );
   const savePair = useCallback((): Promise<boolean> => {
     const saveSide = pairSaver();
     if (saveSide === undefined) return Promise.resolve(true);
@@ -698,20 +703,28 @@ export function WorkspaceProvider({
       }
 
       /*
-       * IN THE MULTI VIEW, A MOVE SAVES BOTH SIDES FIRST, changed or not and whatever Auto-Save on
-       * Navigate says, and a side with no segments has its seven sidecars deleted without a word:
-       * legacy's multi-view save, run before every pair move (main_window.py:6496-6497, 6529-6530;
-       * file_navigation_manager.py:401-403). The owner's decision of 2026-09-26, "Match the desktop
-       * app exactly" (CONTROL_PARITY.md CP-67). A file chosen in the list and a new partner chosen
-       * for the pair come here; the pair's next and previous run `savePair` themselves, before they
-       * know whether anything moves, and say so with `pairSaved`.
+       * IN THE MULTI VIEW, WITH AUTO-SAVE ON NAVIGATE ON, A MOVE SAVES BOTH SIDES FIRST, changed or
+       * not, and a side with no segments has its seven sidecars deleted without a word: legacy's
+       * multi-view save, run before every pair move (main_window.py:6496-6497, 6529-6530;
+       * file_navigation_manager.py:401-403; CONTROL_PARITY.md CP-67). Legacy runs it whatever the
+       * setting says; the owner, 2026-09-26: saving on a move is "only if the user has the save on
+       * navigation setting turned on". With it off, each side is asked about as in the Single view.
+       * A file chosen in the list and a new partner chosen for the pair come here; the pair's next
+       * and previous run `savePair` themselves, before they know whether anything moves, and say so
+       * with `pairSaved`.
        *
        * The move waits for the save. One that fails keeps the pair where it is, with the reason
        * said, where legacy logs it and moves on. Once both are written the move is made, and the
        * side asked about as any move asks -- which, both being saved, is nothing, unless the side
        * was edited while the save was in flight or could not be read.
        */
-      if (multiView && options?.discard !== true && options?.pairSaved !== true && pairSaver() !== undefined) {
+      if (
+        multiView
+        && options?.discard !== true
+        && options?.pairSaved !== true
+        && autoSaveOn()
+        && pairSaver() !== undefined
+      ) {
         const held: Leaving = { image, options, written: false };
         leaving.current[side] = held;
         void savePair().then((saved) => {

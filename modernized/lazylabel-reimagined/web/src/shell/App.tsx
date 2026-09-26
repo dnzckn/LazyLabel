@@ -228,13 +228,21 @@ export function App({ client }: { readonly client: ApiClient }): ReactNode {
   // The latest: the one a key press finds reads the sides as they were before the save.
   const movePairNow = useRef(movePair);
   movePairNow.current = movePair;
+  // Both sides are saved first only with Auto-Save on Navigate on (the owner, 2026-09-26: saving on
+  // a move is "only if the user has the save on navigation setting turned on"). With it off, each
+  // side's open asks about its own changes, as in the Single view.
+  const autoSave = settings.values["auto_save"] !== false;
   const stepPair = useCallback(
     (by: 1 | -1) => {
+      if (!autoSave) {
+        movePairNow.current(by);
+        return;
+      }
       void savePair().then((saved) => {
         if (saved) movePairNow.current(by);
       });
     },
-    [savePair],
+    [autoSave, savePair],
   );
 
   useHotkey("load_next_image", () => (multiView ? stepPair(1) : step(1)));

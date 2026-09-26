@@ -344,12 +344,18 @@ describe("next and previous image (CONTROL_PARITY.md CP-14)", () => {
     await waitFor(() => expect(screen.getByRole("button", { name: "d.png" })).toBeTruthy());
     const right = () => fireEvent.keyDown(document, { key: "ArrowRight", code: "ArrowRight" });
 
+    // Each open is waited for until it is on screen: leaving an image saves it first, changed or
+    // not, so a key pressed before the open settles would step from the image being left.
+    const shown = (name: string) =>
+      waitFor(() => expect(screen.getByLabelText("Status").textContent).toContain(`${name} — `));
     right();
     await waitFor(() => expect(opened).toEqual(["a.png"]));
+    await shown("a.png");
 
     fireEvent.click(screen.getByRole("button", { name: "c.png" }));
     right();
     await waitFor(() => expect(opened).toEqual(["a.png", "d.png"]));
+    await shown("d.png");
 
     // b is the current row when it is hidden, so the next step starts again at the first row, and
     // the one after it passes over b.
@@ -358,7 +364,7 @@ describe("next and previous image (CONTROL_PARITY.md CP-14)", () => {
     right();
     await waitFor(() => expect(opened).toEqual(["a.png", "d.png", "a.png"]));
     // Open, so the list's current row has moved to it: the open waited for d.png's leaving save.
-    await waitFor(() => expect(screen.getByLabelText("Status").textContent).toContain("a.png — "));
+    await shown("a.png");
     right();
     await waitFor(() => expect(opened).toEqual(["a.png", "d.png", "a.png", "c.png"]));
   });
