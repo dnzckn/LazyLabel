@@ -42,6 +42,7 @@ import { FIND_ARCHETYPES_ELSEWHERE, useSequenceActive } from "./sequenceActive.j
 
 import {
   buildTimeline,
+  folderOf,
   clearFlags,
   clearReferences,
   colourOf,
@@ -496,6 +497,26 @@ export function TimelinePanel({
   };
 
 
+  /*
+   * + All labeled asks the dataset NOW which frames have labels, as legacy probes the disk at the
+   * click (`main_window.py:3966`, SEQUENCE_PARITY.md SP-26). It used the listing fetched when the
+   * folder opened, which no save refreshes, so frames labelled this session were missed. The
+   * listing the panel was given is the fallback when the dataset cannot be asked.
+   */
+  const markAllLabeled = async () => {
+    let labelled: ReadonlySet<string> = annotated;
+    const first = frames[0];
+    if (client !== undefined && first !== undefined) {
+      try {
+        const listing = await client.listImages("default", folderOf(first.key));
+        labelled = new Set(listing.images.filter((image) => image.annotated).map((image) => image.key));
+      } catch {
+        // Keep the listing the panel was given.
+      }
+    }
+    setOverrides((previous) => markReferences(previous ?? frames, labelled));
+  };
+
   /**
    * Cut or Keep — RULE-077.
    *
@@ -653,7 +674,7 @@ export function TimelinePanel({
         <button type="button" onClick={() => setOverrides(markAllBefore(frames, current, order))}>
           + All before
         </button>
-        <button type="button" onClick={() => setOverrides(markReferences(frames, annotated))}>
+        <button type="button" onClick={() => void markAllLabeled()}>
           + All labeled
         </button>
         <button type="button" onClick={() => setOverrides(clearReferences(frames))}>

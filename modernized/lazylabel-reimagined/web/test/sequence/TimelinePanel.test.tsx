@@ -105,6 +105,32 @@ describe("a built timeline is a fixed list of files (SP-21)", () => {
   });
 });
 
+describe("+ All labeled (SP-26)", () => {
+  it("asks the dataset at the click, so what was labelled since the folder opened counts", async () => {
+    // Legacy probes the disk at the click (main_window.py:3966). The panel used the listing from when
+    // the folder opened, which no save refreshes.
+    const client = {
+      listImages: async () => ({
+        folder: "frames",
+        folders: [],
+        annotatedCount: 2,
+        unrecognized: 0,
+        columns: [],
+        images: FOLDER.map((each) => ({ ...each, annotated: each.name === "f02.png" || each.name === "f04.png" })),
+      }),
+    } as unknown as ApiClient;
+    render(withSettings(<TimelinePanel images={FOLDER} client={client} />));
+    build("0", "4", { references: false });
+    await waitFor(() => expect(cells()).toHaveLength(5));
+
+    fireEvent.click(screen.getByRole("button", { name: "+ All labeled" }));
+
+    await waitFor(() => expect(cells()[3]!.getAttribute("aria-label")).toContain("reference"));
+    expect(cells()[1]!.getAttribute("aria-label")).toContain("reference");
+    expect(cells()[4]!.getAttribute("aria-label")).not.toContain("reference");
+  });
+});
+
 describe("the header (SP-19)", () => {
   it("names an image opened from outside the timeline instead of a frame that is not on screen", async () => {
     const onStatus = vi.fn();

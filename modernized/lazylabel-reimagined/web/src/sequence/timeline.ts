@@ -96,6 +96,12 @@ export function colourOf(frame: Frame): readonly [number, number, number] {
   return frame.isReference ? STATE_COLOURS.reference : STATE_COLOURS[frame.state];
 }
 
+/** The folder a dataset key sits in, as the listing API names it: "" for the dataset's root. */
+export function folderOf(key: string): string {
+  const slash = key.lastIndexOf("/");
+  return slash < 0 ? "" : key.slice(0, slash);
+}
+
 /**
  * Build a timeline from a range of a file list.
  *

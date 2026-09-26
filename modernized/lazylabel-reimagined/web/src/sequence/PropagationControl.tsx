@@ -32,13 +32,7 @@ import { clampThreshold, DEFAULT_THRESHOLD, isFlagged } from "./confidence.js";
 import { usePropagation } from "./usePropagation.js";
 import { referenceMasks, type OpenAnnotations } from "./references.js";
 import { plannedSave, saveAll, segmentsFor } from "./saveAll.js";
-import type { Frame, FrameState } from "./timeline.js";
-
-/** The folder a dataset key sits in, as the listing API names it: "" for the dataset's root. */
-function folderOf(key: string): string {
-  const slash = key.lastIndexOf("/");
-  return slash < 0 ? "" : key.slice(0, slash);
-}
+import { folderOf, type Frame, type FrameState } from "./timeline.js";
 
 const NO_POLICY: CommitPolicy = { keepFlagged: false, skip: new Set(), references: new Set() };
 
