@@ -14,7 +14,7 @@
  * its target is not the active class the tooltip claims (RULE-019).
  */
 
-import { useCallback, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useState, type MouseEvent, type ReactNode } from "react";
 
 import type { WireSegment } from "@lazylabel/contracts";
 
@@ -29,6 +29,54 @@ export function SegmentTable(): ReactNode {
   // Legacy's "Filter Class:" (right_panel.py:126-140). A view of the list, not a selection: the
   // positions every action takes are still positions in the whole list.
   const [filter, setFilter] = useState("all");
+  /** The row a Shift+click extends from: the last one clicked without Shift. */
+  const [anchor, setAnchor] = useState<number | null>(null);
+
+  const classes = [...new Set(segments.map((segment) => segment.classId ?? null))].sort(
+    (a, b) => (a ?? -1) - (b ?? -1),
+  );
+  // A class that has gone (merged away, deleted) no longer filters anything out of sight.
+  const filtering = filter !== "all" && classes.some((classId) => String(classId) === filter);
+  const passes = useCallback(
+    (index: number) => !filtering || String(segments[index]?.classId ?? null) === filter,
+    [filter, filtering, segments],
+  );
+  const rows = segments
+    .map((segment, index) => ({ segment, index }))
+    .filter(({ index }) => passes(index));
+
+  /*
+   * THE SELECTION IS ONLY EVER ROWS THE TABLE SHOWS, as legacy's is: its selection is the table's
+   * selected rows (right_panel.py:351-359), and refiltering keeps only those still shown
+   * (segment_table_manager.py:154-160). Here the filter hid rows without deselecting them, so Delete
+   * or Merge after choosing a filter reached annotations the user could no longer see.
+   */
+  useEffect(() => {
+    if (!filtering) return;
+    const kept = selected.filter(passes);
+    if (kept.length !== selected.length) setSelection(kept);
+  }, [filtering, passes, selected, setSelection]);
+
+  /*
+   * A click as a table takes it, as legacy's does (Qt's extended selection): a plain click selects
+   * that row alone, Ctrl or Cmd adds or removes it, and Shift selects the run of shown rows from the
+   * last row clicked. It toggled on every click, and said "as in legacy" while it did. The checkbox
+   * still toggles: it is the same choice for the keyboard and for a screen reader.
+   */
+  const clickRow = (event: MouseEvent, index: number) => {
+    if (event.shiftKey && anchor !== null) {
+      const shown = rows.map((row) => row.index);
+      const from = shown.indexOf(anchor);
+      const to = shown.indexOf(index);
+      if (from >= 0 && to >= 0) {
+        setSelection(shown.slice(Math.min(from, to), Math.max(from, to) + 1));
+        return;
+      }
+    }
+    if (event.ctrlKey || event.metaKey) toggleSelected(index);
+    else setSelection([index]);
+    setAnchor(index);
+  };
 
   const onMerge = useCallback(() => {
     applySegments(merge(segments, selected).segments, "Merge");
@@ -60,9 +108,10 @@ export function SegmentTable(): ReactNode {
     if (selected.length > 0) onDelete();
   });
   useHotkey("select_all", () => {
-    // Legacy selects every annotation on the image. Toggling would make one key mean two things
-    // depending on state, which is the shape RULE-070 is a defect card about.
-    setSelection(segments.map((_, index) => index));
+    // Legacy selects every row the table SHOWS (right_panel.py:378-380), so under a filter only
+    // that class's annotations. Toggling would make one key mean two things depending on state,
+    // which is the shape RULE-070 is a defect card about.
+    setSelection(rows.map(({ index }) => index));
   });
   useHotkey("escape", clearSelection);
 
@@ -76,15 +125,6 @@ export function SegmentTable(): ReactNode {
 
 
   const target = selected.length > 0 ? mergeTarget(segments, selected) : null;
-
-  const classes = [...new Set(segments.map((segment) => segment.classId ?? null))].sort(
-    (a, b) => (a ?? -1) - (b ?? -1),
-  );
-  // A class that has gone (merged away, deleted) no longer filters anything out of sight.
-  const filtering = filter !== "all" && classes.some((classId) => String(classId) === filter);
-  const rows = segments
-    .map((segment, index) => ({ segment, index }))
-    .filter(({ segment }) => !filtering || String(segment.classId ?? null) === filter);
 
   return (
     <>
@@ -121,10 +161,8 @@ export function SegmentTable(): ReactNode {
               className="class-row"
               style={{ backgroundColor: swatch(segment) }}
               aria-selected={selected.includes(index)}
-              // A click anywhere on the row selects it, as in legacy; the checkbox is the same
-              // choice for the keyboard and for a screen reader.
               onClick={(event) => {
-                if ((event.target as HTMLElement).closest("input") === null) toggleSelected(index);
+                if ((event.target as HTMLElement).closest("input") === null) clickRow(event, index);
               }}
             >
               <td>

@@ -241,13 +241,53 @@ describe("as legacy's table", () => {
     expect(rowsShown()).toEqual(["1:2", "2:5", "3:2"]);
   });
 
+  const clickRow = (position: number, init: MouseEventInit = {}) =>
+    fireEvent.click(
+      screen.getByRole("table").querySelectorAll("tbody tr")[position]!.querySelector("td:nth-child(2)")!,
+      init,
+    );
+  const checked = () =>
+    [...screen.getByRole("table").querySelectorAll<HTMLInputElement>("tbody input")].map((box) => box.checked);
+
   it("selects a row when it is clicked, as legacy's does", async () => {
     await mount([polygon(2), polygon(5)]);
 
-    fireEvent.click(screen.getByRole("table").querySelectorAll("tbody tr")[1]!.querySelector("td:nth-child(2)")!);
+    clickRow(1);
 
     await waitFor(() => expect(screen.getByRole("status").textContent).toBe("1 of 2 selected"));
     expect((row(1) as HTMLInputElement).checked).toBe(true);
+  });
+
+  it("REPLACES the selection on a plain click, as a table does, rather than adding to it", async () => {
+    // It toggled on every click while saying "as in legacy"; legacy's is Qt's extended selection.
+    await mount([polygon(2), polygon(5), polygon(7)]);
+
+    clickRow(0);
+    clickRow(2);
+    await waitFor(() => expect(checked()).toEqual([false, false, true]));
+
+    clickRow(2);
+    expect(checked()).toEqual([false, false, true]);
+  });
+
+  it("adds and removes a row with Ctrl or Cmd held", async () => {
+    await mount([polygon(2), polygon(5), polygon(7)]);
+
+    clickRow(0);
+    clickRow(2, { ctrlKey: true });
+    await waitFor(() => expect(checked()).toEqual([true, false, true]));
+
+    clickRow(0, { metaKey: true });
+    await waitFor(() => expect(checked()).toEqual([false, false, true]));
+  });
+
+  it("selects the run of shown rows with Shift held", async () => {
+    await mount([polygon(2), polygon(5), polygon(7), polygon(9)]);
+
+    clickRow(1);
+    clickRow(3, { shiftKey: true });
+
+    await waitFor(() => expect(checked()).toEqual([false, true, true, true]));
   });
 
   it("paints each row in its class's colour", async () => {
@@ -257,5 +297,43 @@ describe("as legacy's table", () => {
       .backgroundColor;
     // Class 0 is legacy's HSV(0, 220, 220).
     expect(painted).toBe("rgb(220, 30, 30)");
+  });
+});
+
+describe("the filter and the selection", () => {
+  const filterTo = (value: string) => fireEvent.change(screen.getByLabelText("Filter Class:"), { target: { value } });
+  const press = (code: string, init: KeyboardEventInit = {}) =>
+    fireEvent.keyDown(document, { code, key: code.replace(/^Key/, "").toLowerCase(), ...init });
+
+  it("selects only the rows the filter shows on Select All, as legacy's selectAll does", async () => {
+    await mount([polygon(2), polygon(5), polygon(2)]);
+    filterTo("2");
+
+    press("KeyA", { ctrlKey: true });
+
+    await waitFor(() => expect(screen.getByRole("status").textContent).toBe("2 of 3 selected"));
+  });
+
+  it("never deletes a class the filter hides: Ctrl+A then V leaves it alone", async () => {
+    // Ctrl+A selected every annotation whatever the filter showed, so the delete that followed
+    // removed classes the user could not see.
+    await mount([polygon(2), polygon(5), polygon(2)]);
+    filterTo("2");
+
+    press("KeyA", { ctrlKey: true });
+    await waitFor(() => expect(screen.getByRole("status").textContent).toBe("2 of 3 selected"));
+    press("KeyV");
+
+    await waitFor(() => expect(shown("classes")).toBe("5"));
+  });
+
+  it("drops the rows a new filter hides from the selection, as legacy's refilter does", async () => {
+    await mount([polygon(2), polygon(5), polygon(2)]);
+    fireEvent.click(row(1)); // class 5, selected by its checkbox
+    await waitFor(() => expect(screen.getByRole("status").textContent).toBe("1 of 3 selected"));
+
+    filterTo("2");
+
+    await waitFor(() => expect(screen.getByRole("status").textContent).toBe("3 annotations"));
   });
 });

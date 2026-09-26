@@ -258,9 +258,12 @@ Solid colours with black bold text (sequence_widget.py:173-202, 268-305, 517-550
    - Take "What is built" out of the working UI; App.test.tsx:167-171 needs updating.
    - **Done 2026-09-25.** Differences from legacy, each kept on purpose:
      - The Type column stays: whether a row is a polygon or a mask decides what can be done to it.
-     - The segment ids are 1-based as legacy's are; Filter Class only hides rows, and every action
-       still takes positions in the whole list.
-     - A click on a row selects it, as in legacy; the checkbox is the same choice for the keyboard.
+     - The segment ids are 1-based as legacy's are, and every action takes positions in the whole
+       list. Filter Class hides rows AND, as legacy's does, drops them from the selection, so Select
+       All and Delete reach only the rows shown (fixed 2026-09-25, `CONTROL_PARITY.md` CP-03).
+     - A click on a row selects it alone, Ctrl or Cmd adds or removes it, and Shift selects a run,
+       as legacy's table does (CP-15; until 2026-09-25 every click toggled). The checkbox is the
+       same choice for the keyboard.
      - Clicking a class id makes that class ACTIVE (bold, with an orange ◆), and clicking it again
        goes back to the next free id. Nothing on screen could set the active class before; only
        the X key toggled it.
