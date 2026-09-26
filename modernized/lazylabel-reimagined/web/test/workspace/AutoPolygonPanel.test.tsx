@@ -90,11 +90,43 @@ function mount(segments: readonly WireSegment[] = []) {
 }
 
 const pressP = () => fireEvent.keyDown(document, { key: "p", code: "KeyP" });
+/** Legacy's checkable "Auto-Convert: OFF" button (control_panel.py:406-418). */
+const toggleButton = () => screen.findByRole("button", { name: /^Auto-Convert: (ON|OFF)$/ });
+
+describe("the section, in legacy's words", () => {
+  it("is legacy's toggle button, which says its state, with legacy's tooltip", async () => {
+    mount();
+    const toggle = await toggleButton();
+
+    expect(toggle.textContent).toBe("Auto-Convert: OFF");
+    expect(toggle.getAttribute("aria-pressed")).toBe("false");
+    expect(toggle.title).toBe(
+      "When enabled, AI segments are automatically converted to polygons\n"
+        + "when you accept them (Spacebar). Toggle with P key.",
+    );
+  });
+
+  it("shows the resolution between legacy's Simple and Detailed once it is on, and no paragraph", async () => {
+    mount();
+    fireEvent.click(await toggleButton());
+
+    const slider = await screen.findByRole("slider", { name: "Polygon resolution" });
+    expect(screen.getByText("Polygon Resolution:")).toBeTruthy();
+    expect(slider.closest("label")?.textContent).toBe("SimpleDetailed");
+    expect(slider.closest("label")?.title).toBe(
+      "Adjust how closely the polygon follows the AI mask.\nSimple = fewer points, Detailed = more points.",
+    );
+    expect(screen.getByRole("button", { name: "Auto-Convert: ON" }).getAttribute("aria-pressed")).toBe("true");
+    expect([...document.querySelectorAll("p")].map((p) => p.textContent)).not.toContainEqual(
+      expect.stringMatching(/accepted AI mask/),
+    );
+  });
+});
 
 describe("P, legacy's Toggle Auto-Convert AI to Polygon", () => {
   it("turns Auto-Convert on and says so, and off again on the next press", async () => {
     const { saved } = mount();
-    await screen.findByRole("checkbox", { name: "Convert AI masks to polygons" });
+    await toggleButton();
 
     pressP();
     await waitFor(() => expect(saved.at(-1)?.values["auto_polygon_enabled"]).toBe(true));
@@ -116,17 +148,17 @@ describe("P, legacy's Toggle Auto-Convert AI to Polygon", () => {
     expect(screen.getByTestId("types").textContent).toBe("AI");
   });
 
-  it("says which way it went when the box is clicked too, as legacy's button does", async () => {
+  it("says which way it went when the button is clicked too, as legacy's button does", async () => {
     mount();
 
-    fireEvent.click(await screen.findByRole("checkbox", { name: "Convert AI masks to polygons" }));
+    fireEvent.click(await toggleButton());
 
     expect(await screen.findByText("Auto-Convert AI to Polygon: ON")).toBeTruthy();
   });
 });
 
 describe("converting the masks already on the image", () => {
-  const button = () => screen.getByRole("button", { name: "Convert this image's masks to polygons" }) as HTMLButtonElement;
+  const button = () => screen.getByRole("button", { name: "Convert Masks" }) as HTMLButtonElement;
 
   it("turns each mask into a polygon, in one step", async () => {
     mount([mask(1, [2, 2, 12, 12]), mask(2, [14, 14, 19, 19])]);

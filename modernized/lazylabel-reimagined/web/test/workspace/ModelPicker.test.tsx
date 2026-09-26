@@ -64,16 +64,17 @@ describe("listing what is installed", () => {
   });
 
   it("says which cannot propagate, rather than promising it", async () => {
-    // A SAM 1-only install is a working install with no propagation, and "AI ready" alone would
+    // A SAM 1-only install is a working install with no propagation, and a model name alone would
     // promise a feature that is never going to appear.
     mount([usable("SAM 1 huge", { family: "sam1", videoCapable: false })]);
 
     expect(await screen.findByText(/no propagation/)).toBeTruthy();
   });
 
-  it("asks the user to choose when nothing is chosen yet", async () => {
+  it("says, in legacy's words, that no model is loaded when nothing is chosen yet", async () => {
+    // model_selection_widget.py:163.
     mount([usable("SAM 2.1 large")]);
-    expect(await screen.findByText(/Choose a model/)).toBeTruthy();
+    expect(await screen.findByText("Current: No model loaded")).toBeTruthy();
   });
 
   it("marks the chosen one", async () => {
@@ -82,11 +83,14 @@ describe("listing what is installed", () => {
     await waitFor(() =>
       expect((screen.getByRole("radio", { name: /SAM 1 huge/ }) as HTMLInputElement).checked).toBe(true),
     );
-    expect(screen.queryByText(/Choose a model/)).toBeNull();
+    expect(screen.queryByText("Current: No model loaded")).toBeNull();
   });
 });
 
 describe("models that cannot be used", () => {
+  /** The reason a disabled model gives, which is its row's tooltip, as legacy explains a disabled control. */
+  const reasonFor = (radio: HTMLElement): string | undefined => radio.closest("label")?.title;
+
   it("shows a corrupt checkpoint, disabled, with its reason", async () => {
     // Present and unverified is the case worth showing: a picker that listed only the working ones
     // makes a corrupt checkpoint indistinguishable from an absent one, and the two have different
@@ -98,7 +102,8 @@ describe("models that cannot be used", () => {
 
     const broken = await screen.findByRole("radio", { name: /SAM 1 huge/ });
     expect((broken as HTMLInputElement).disabled).toBe(true);
-    expect(screen.getByText(/sha256 does not match/)).toBeTruthy();
+    expect(reasonFor(broken)).toBe("sha256 does not match the manifest");
+    expect(reasonFor(screen.getByRole("radio", { name: /SAM 2.1 large/ }))).toBe("");
   });
 
   it("lists the embedder, but not as a model to segment with", async () => {
@@ -111,20 +116,22 @@ describe("models that cannot be used", () => {
 
     const embedder = await screen.findByRole("radio", { name: /MobileNetV3 small/ });
     expect((embedder as HTMLInputElement).disabled).toBe(true);
-    expect(screen.getByText(/Find Archetypes uses this model; it cannot segment/)).toBeTruthy();
+    expect(reasonFor(embedder)).toBe("Find Archetypes uses this model; it cannot segment");
   });
 
   it("shows a missing one too, and says it is missing", async () => {
     mount([usable("SAM 2.1 tiny", { present: false, verified: false, detail: "not in the model directory" })]);
 
-    expect(await screen.findByText(/not in the model directory/)).toBeTruthy();
+    expect(reasonFor(await screen.findByRole("radio", { name: /SAM 2.1 tiny/ }))).toBe("not in the model directory");
   });
 
   it("falls back to a reason of its own when the service gave none", async () => {
     // "Unavailable" sends a user looking; saying which of the two problems it is tells them where.
     mount([usable("SAM 1 huge", { verified: false, detail: null })]);
 
-    expect(await screen.findByText(/does not match its recorded hash/)).toBeTruthy();
+    expect(reasonFor(await screen.findByRole("radio", { name: /SAM 1 huge/ }))).toBe(
+      "does not match its recorded hash",
+    );
   });
 });
 
@@ -140,10 +147,10 @@ describe("choosing one", () => {
 });
 
 describe("when there is nothing to choose from", () => {
-  it("explains an empty manifest rather than showing a blank panel", async () => {
+  it("says there are none rather than showing a blank panel", async () => {
     mount([]);
 
-    expect(await screen.findByText(/no models in its manifest/)).toBeTruthy();
+    expect(await screen.findByText("No models available")).toBeTruthy();
   });
 
   it("reports a failure to list them", async () => {

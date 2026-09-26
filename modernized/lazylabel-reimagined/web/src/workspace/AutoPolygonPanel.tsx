@@ -8,13 +8,18 @@
  *
  * OFF by default, as legacy has it. A conversion approximates, and approximating someone's
  * annotation without being asked is the sort of help that loses a boundary they cared about.
+ *
+ * LEGACY'S CONTROLS AND WORDS (control_panel.py:398-461): the "Auto-Convert: OFF" toggle button and
+ * the "Polygon Resolution:" slider between "Simple" and "Detailed", each explained in its tooltip.
+ * The paragraph printed under them until 2026-09-26 also said that only the largest piece of a mask
+ * is converted, as legacy converts it; that is announced when it happens (`AiTool`).
  */
 
 import { useCallback, type ReactNode } from "react";
 
 import { decodeMask } from "@lazylabel/contracts";
 
-import { useHotkey } from "../hotkeys/HotkeyProvider.jsx";
+import { useHotkey, useHotkeyContext } from "../hotkeys/HotkeyProvider.jsx";
 import { useNotifications } from "../notifications/NotificationProvider.jsx";
 import { useSettings } from "../settings/SettingsProvider.jsx";
 import {
@@ -59,6 +64,8 @@ export function AutoPolygonPanel(): ReactNode {
   const { notify } = useNotifications();
   const { segments, applySegments } = useWorkspace();
   const toggle = useAutoConvertToggle();
+  // Legacy's tooltip names P; the key the user bound is the one named here.
+  const toggleKey = useHotkeyContext().bindings["convert_to_polygons"]?.primary || "P";
 
   const enabled = settings.values["auto_polygon_enabled"] === true;
   const resolution = resolutionOf(settings.values["polygon_resolution"]);
@@ -101,48 +108,56 @@ export function AutoPolygonPanel(): ReactNode {
 
   return (
     <>
-      <label className="split__link">
-        <input
-          type="checkbox"
-          checked={enabled}
-          aria-label="Convert AI masks to polygons"
-          onChange={toggle}
-        />{" "}
-        Auto-Convert to polygon
-      </label>
+      {/* Legacy's checkable button, which says its state in its text (control_panel.py:406-418,
+          889). */}
+      <button
+        type="button"
+        className="auto-polygon__toggle"
+        aria-pressed={enabled}
+        title={
+          "When enabled, AI segments are automatically converted to polygons\n"
+          + `when you accept them (Spacebar). Toggle with ${toggleKey} key.`
+        }
+        onClick={toggle}
+      >
+        Auto-Convert: {enabled ? "ON" : "OFF"}
+      </button>
 
       {/* Shown only when it does something. A resolution slider above a switched-off toggle is a
           control that looks live and changes nothing, which is the whole class of defect this
           setting was part of. */}
       {enabled && (
-        <label className="crop__field">
-          <span>Polygon resolution</span>
-          <input
-            type="range"
-            min={RESOLUTION_MIN}
-            max={RESOLUTION_MAX}
-            value={resolution}
-            aria-label="Polygon resolution"
-            onChange={(event) => set("polygon_resolution", Number(event.target.value))}
-          />
-          {/* A span rather than an <output>, whose implicit `status` role would announce this as a
-              live region beside the app's real status messages. */}
-          <span className="field__value">{resolution}</span>
-        </label>
+        <>
+          <p className="auto-polygon__label">Polygon Resolution:</p>
+          <label
+            className="auto-polygon__resolution"
+            title={
+              "Adjust how closely the polygon follows the AI mask.\n"
+              + "Simple = fewer points, Detailed = more points."
+            }
+          >
+            <span>Simple</span>
+            <input
+              type="range"
+              min={RESOLUTION_MIN}
+              max={RESOLUTION_MAX}
+              value={resolution}
+              aria-label="Polygon resolution"
+              onChange={(event) => set("polygon_resolution", Number(event.target.value))}
+            />
+            <span>Detailed</span>
+          </label>
+        </>
       )}
 
-      <p className="panel__missing">
-        {enabled
-          ? "An accepted AI mask becomes a polygon whose corners you can drag. Higher resolution "
-            + "keeps more corners and follows the mask more closely; lower gives a simpler shape. "
-            + "Only the largest piece is converted, as the desktop app does, and you are told when "
-            + "smaller ones are dropped."
-          : "An accepted AI mask stays a mask: you can erase into it, but it has no corners to "
-            + "drag. Turn this on to get an editable polygon instead."}
-      </p>
-
-      <button type="button" onClick={convertMasks} disabled={!convertable}>
-        Convert this image&apos;s masks to polygons
+      {/* Not legacy's: see `convertMasks` above. */}
+      <button
+        type="button"
+        onClick={convertMasks}
+        disabled={!convertable}
+        title="Convert this image's AI masks to polygons"
+      >
+        Convert Masks
       </button>
     </>
   );

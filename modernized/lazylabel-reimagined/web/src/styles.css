@@ -907,6 +907,13 @@ fieldset input[type="text"] {
   margin: 0;
 }
 
+/* Legacy's small italic line under a control (fragment_threshold_widget.py:60-63). */
+.panel__caption {
+  margin: 0;
+  font-size: 9px;
+  font-style: italic;
+}
+
 /* The drawing layer sits over the image, in the same box.
  *
  * "THE SAME BOX" IS LOAD-BEARING AND IT WAS NOT TRUE. Every drawing layer is `inset: 0` of this
@@ -1161,6 +1168,41 @@ fieldset input[type="text"] {
   white-space: nowrap;
 }
 
+/* Legacy's AI → Polygon section (control_panel.py:400-456): the Auto-Convert toggle, an
+   accentButton, purple while on (theme.py:225-230, 266-273); then "Polygon Resolution:" over a slider
+   between "Simple" and "Detailed". */
+.auto-polygon__toggle {
+  display: block;
+  width: 100%;
+  margin-bottom: 6px;
+  padding: 6px 12px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.auto-polygon__toggle[aria-pressed="true"],
+.auto-polygon__toggle[aria-pressed="true"]:hover:not(:disabled) {
+  background: var(--toggle-on);
+  border: 2px solid var(--toggle-on-rule);
+  color: #ffffff;
+}
+
+.auto-polygon__label {
+  margin: 0 0 2px;
+}
+
+.auto-polygon__resolution {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 6px;
+}
+
+.auto-polygon__resolution input[type="range"] {
+  flex: 1;
+  min-width: 0;
+}
+
 .models {
   list-style: none;
   margin: 0;
@@ -1169,12 +1211,6 @@ fieldset input[type="text"] {
 
 .models__detail {
   color: var(--muted);
-}
-
-.models__why {
-  margin: 0 0 0.5rem 1.4rem;
-  color: var(--warning-ink);
-  font-size: 11px;
 }
 
 /* Legacy's "Class Order:" over the class table. */

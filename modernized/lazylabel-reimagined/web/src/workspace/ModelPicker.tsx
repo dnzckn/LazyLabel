@@ -7,9 +7,14 @@
  * tiny config around large weights. It does not error; the user just gets worse masks from a model
  * they believe is their fine-tuned large.
  *
- * MODELS THAT CANNOT BE USED ARE STILL SHOWN, with the reason and disabled. A picker that listed
- * only the working ones makes a corrupt checkpoint indistinguishable from an absent one — and the
- * two have different fixes: re-download it, or go and find it.
+ * MODELS THAT CANNOT BE USED ARE STILL SHOWN, disabled, with the reason in the row's tooltip -- the
+ * way legacy explains a control it disables. A picker that listed only the working ones makes a
+ * corrupt checkpoint indistinguishable from an absent one -- and the two have different fixes:
+ * re-download it, or go and find it.
+ *
+ * AN EMPTY MANIFEST says only that. A checkpoint the manifest does not list is not loadable, and
+ * deliberately: adding one is an explicit act with a hash attached. The panel said so in a
+ * paragraph until the owner asked, on 2026-09-26, for legacy's panels without them.
  */
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
@@ -125,12 +130,7 @@ export function ModelPicker({ client }: { readonly client: ApiClient }): ReactNo
   }
 
   if (state.models.length === 0) {
-    return (
-      <p className="panel__missing">
-        The inference service has no models in its manifest. A checkpoint that is not listed there
-        is not loadable, which is deliberate — adding one is an explicit act with a hash attached.
-      </p>
-    );
+    return <p className="panel__missing">No models available</p>;
   }
 
   return (
@@ -144,7 +144,18 @@ export function ModelPicker({ client }: { readonly client: ApiClient }): ReactNo
 
           return (
             <li key={model.name}>
-              <label>
+              <label
+                // The reason, not just the fact. "Unavailable" sends a user looking; "the file is
+                // not in the model directory" tells them where to look.
+                {...(usable
+                  ? {}
+                  : {
+                      title:
+                        !model.segmenter && model.present && model.verified
+                          ? "Find Archetypes uses this model; it cannot segment"
+                          : (model.detail ?? (model.present ? "does not match its recorded hash" : "not installed")),
+                    })}
+              >
                 <input
                   type="radio"
                   name="ai_model"
@@ -158,24 +169,13 @@ export function ModelPicker({ client }: { readonly client: ApiClient }): ReactNo
                   {model.videoCapable ? "" : ", no propagation"}
                 </span>
               </label>
-
-              {!usable && (
-                // The reason, not just the fact. "Unavailable" sends a user looking; "the file is
-                // not in the model directory" tells them where to look.
-                <p className="models__why" role="status">
-                  {!model.segmenter && model.present && model.verified
-                    ? "Find Archetypes uses this model; it cannot segment"
-                    : (model.detail ?? (model.present ? "does not match its recorded hash" : "not installed"))}
-                </p>
-              )}
             </li>
           );
         })}
       </ul>
 
-      {chosen === "" && (
-        <p className="panel__missing">Choose a model to use the AI tools.</p>
-      )}
+      {/* Legacy's line under its model list when none is loaded (model_selection_widget.py:163). */}
+      {chosen === "" && <p className="panel__missing">Current: No model loaded</p>}
     </>
   );
 }

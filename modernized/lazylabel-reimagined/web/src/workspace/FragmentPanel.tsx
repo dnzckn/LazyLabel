@@ -11,6 +11,11 @@
  * on. A toggle without memory would come back at zero and they would have to retype the number
  * every time. From a stored 0 the first press goes to the rule's own default rather than doing
  * nothing, which is the other half of the same idea.
+ *
+ * LEGACY'S WORDS (fragment_threshold_widget.py:27-63): "Filter:", its tooltips and its one italic
+ * line. The paragraph printed here until 2026-09-26 also said that the kept pieces have their holes
+ * filled and that the toggle key checks a small piece; the owner asked for no paragraphs, and the
+ * hole filling is announced when it happens (`AiTool`).
  */
 
 import { useCallback, useEffect, useRef, type ReactNode } from "react";
@@ -51,8 +56,20 @@ export function FragmentPanel(): ReactNode {
 
   return (
     <>
-      <label className="crop__field">
-        <span>Fragment filter</span>
+      {/* Legacy's row: the label in a narrow right-aligned column, the value, then the slider. */}
+      <label
+        className="adjustment"
+        title="Filter out small AI segments. 0=no filtering, 50=drop <50% of largest, 100=only keep largest"
+      >
+        <span className="adjustment__label">
+          Filter:{" "}
+          {/* A span, not an <output>: that element carries an implicit `status` role, so a slider
+              value would be announced as a live region alongside the app's real status messages --
+              and would answer to the same role query they do. */}
+          <span className="adjustment__value" title="Fragment threshold value (0-100)">
+            {threshold}
+          </span>
+        </span>
         <input
           type="range"
           min={MIN_THRESHOLD}
@@ -61,20 +78,8 @@ export function FragmentPanel(): ReactNode {
           aria-label="Fragment threshold"
           onChange={(event) => set(Number(event.target.value))}
         />
-        {/* A span, not an <output>: that element carries an implicit `status` role, so a slider
-            value would be announced as a live region alongside the app's real status messages --
-            and would answer to the same role query they do. */}
-        <span className="field__value">{threshold}%</span>
       </label>
-
-      <p className="panel__missing">
-        {threshold <= MIN_THRESHOLD
-          ? "Off: an accepted AI mask keeps every piece it found, holes included."
-          : `Pieces smaller than ${threshold}% of the largest one are dropped from an accepted AI `
-            + "mask, and the holes in what remains are filled. You are told how many went."}
-        {" "}Press the toggle key to switch it off and back on at the same value — which is how you
-        check whether a small piece was real.
-      </p>
+      <p className="panel__caption">Filters small AI segments relative to the largest segment</p>
     </>
   );
 }

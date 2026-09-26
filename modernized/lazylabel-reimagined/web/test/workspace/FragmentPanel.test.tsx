@@ -59,10 +59,18 @@ describe("the control", () => {
     await waitFor(() => expect(saved["fragment_threshold"]).toBe(40));
   });
 
-  it("says what it does, differently when it is off", async () => {
+  it("says what it does in legacy's words: a label, its tooltip and one line", async () => {
+    // fragment_threshold_widget.py:36-63. A paragraph explaining the filter and its key was printed
+    // here until the owner asked for legacy's panels without them (2026-09-26).
     mount(0);
+    await waitFor(() => expect(slider()).toBeTruthy());
 
-    await waitFor(() => expect(screen.getByText(/Off: an accepted AI mask keeps every piece/)).toBeTruthy());
+    const row = slider().closest("label")!;
+    expect(row.textContent?.trim().startsWith("Filter:")).toBe(true);
+    expect(row.title).toBe(
+      "Filter out small AI segments. 0=no filtering, 50=drop <50% of largest, 100=only keep largest",
+    );
+    expect(screen.getByText("Filters small AI segments relative to the largest segment")).toBeTruthy();
   });
 });
 
