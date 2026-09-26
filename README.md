@@ -17,16 +17,15 @@ desktop app, so the two can work on one folder. The desktop app is unchanged on 
 its instructions are [further down](#desktop-app-pyqt6-branch-main-pypi-208).
 
 **You need** [Git](https://git-scm.com/downloads) and [Node.js](https://nodejs.org/) **22.13 or
-later** (the current 22 or 24 LTS). Nothing else: no Python, no compiler, no GPU. Check with
-`node --version`; an older Node 22 stops with `No such built-in module: node:sqlite`.
+later** (the current 22 or 24 LTS). Nothing else: no Python, no compiler, no GPU.
 
-**Windows (PowerShell):**
+**Windows (PowerShell or cmd):**
 
 ```powershell
 git clone -b main-web https://github.com/dnzckn/LazyLabel.git
 cd LazyLabel\modernized
 npm install
-$env:LAZYLABEL_DATASET_ROOT = "C:\path\to\your\images"; npm start
+npm start "C:\path\to\your\images"
 ```
 
 **macOS and Linux (bash or zsh):**
@@ -35,19 +34,36 @@ $env:LAZYLABEL_DATASET_ROOT = "C:\path\to\your\images"; npm start
 git clone -b main-web https://github.com/dnzckn/LazyLabel.git
 cd LazyLabel/modernized
 npm install
-LAZYLABEL_DATASET_ROOT="/path/to/your/images" npm start
+npm start "/path/to/your/images"
 ```
 
-`npm install` installs and builds every package, in under a minute. `npm start` starts LazyLabel
-on your folder of images; open **<http://127.0.0.1:8787/>**. One program, one address: the app
-and its API are served together. Ctrl+C stops it.
+`npm install` installs and builds everything, in under a minute. `npm start` prints
+`LazyLabel is running at http://127.0.0.1:8787/` and opens it in your browser: one program, one
+address, the app and its API together. Ctrl+C stops it. Next time, `npm start` alone is enough;
+after a `git pull`, run `npm install` again first.
+
+**Options** go through the launcher beside `package.json`, which takes them the same way in every
+shell. `--help` lists them all.
+
+```powershell
+.\lazylabel.cmd "C:\path\to\your\images" --port 8790 --no-open     # PowerShell or cmd
+```
+
+```bash
+./lazylabel.sh "/path/to/your/images" --port 8790 --no-open        # bash or zsh
+```
+
+(`npm start -- "<folder>" --port 8790` works too, except in PowerShell, whose `npm` is `npm.ps1`
+and drops the `--`, so the options reach npm instead. Type `npm.cmd` there for any npm script that
+takes options after `--`.)
 
 - **The AI tools (SAM) are optional.** Without them everything else works and the status bar says
-  "No AI". Adding them is a separate Python service:
-  [`modernized/lazylabel-reimagined/README.md`](modernized/lazylabel-reimagined/README.md#running-it).
-- **In PowerShell, `npm` drops `--`.** `npm` there is `npm.ps1`, which swallows the `--` before a
-  script's own options, so they reach npm instead of the script. Type `npm.cmd` instead, as in
-  `npm.cmd run acceptance -- <corpus> --oracle <dir>`.
+  "No AI". Adding them is a separate Python service
+  ([how](modernized/lazylabel-reimagined/README.md#running-it)); then start LazyLabel with
+  `--inference http://127.0.0.1:8788`.
+- **When something is wrong, the launcher says what to do:** a Node.js that is too old, a folder
+  that is not there, a port already in use (it names a free one, or opens the LazyLabel already
+  running for that folder).
 - The API keeps its settings database in `<your folder>\.lazylabel\`.
 
 ---

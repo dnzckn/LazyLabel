@@ -78,6 +78,48 @@ jobs:
       - name: Test
         run: npm test -w ${{ matrix.workspace }}
 
+  # The root README's quick start, run as written on a fresh runner of each OS: `npm install`, then
+  # `npm start "<folder>"`, then the app and its API answer on one port (DEPLOYABILITY.md R1 to R4).
+  # The two commands a new user types are the ones nothing else in CI ran, and they were written and
+  # checked on Windows alone. BROWSER=none because a runner has no screen; the launcher honours it.
+  quickstart:
+    name: quick start (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    defaults:
+      run:
+        working-directory: modernized
+        shell: bash
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: modernized/package-lock.json
+
+      - name: npm install
+        run: npm install --no-audit --no-fund
+
+      - name: npm start "<folder>", and the app answers
+        env:
+          BROWSER: none
+        run: |
+          images="$RUNNER_TEMP/my images"
+          mkdir -p "$images"
+          npm start "$images" > "$RUNNER_TEMP/lazylabel.log" 2>&1 &
+          for attempt in $(seq 1 60); do
+            grep -q "LazyLabel is running at http://127.0.0.1:8787/" "$RUNNER_TEMP/lazylabel.log" && break
+            sleep 1
+          done
+          cat "$RUNNER_TEMP/lazylabel.log"
+          curl -fsS http://127.0.0.1:8787/ | grep -q '<div id="root">'
+          curl -fsS http://127.0.0.1:8787/api/health | grep -q '"dataset":"ok"'
+
   inference:
     name: inference service
     runs-on: ubuntu-latest

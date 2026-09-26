@@ -75,15 +75,22 @@ No build script may call npm itself: each nested `npm run` adds a `node_modules\
 PATH for every folder above the package, and four levels took PATH past what cmd.exe reads, so
 `tsc` stopped being found halfway through an install (`api/test/workspace.test.ts` says more).
 
-To run it, from `modernized/`, then open <http://127.0.0.1:8787/>. The API serves the built web
-app itself, so this one process on this one port is the whole app:
+To run it, from `modernized/`: `npm start "/path/to/your/images"`. That is the launcher,
+`api/src/cli.ts`: it checks the Node version, starts the API, which serves the built web app on the
+same port, prints the address and opens the browser. Its options (`--help` lists them) go through
+`lazylabel.cmd` or `lazylabel.sh` beside `package.json`, because PowerShell's npm drops the `--`
+that `npm start` needs before them. Each option sets the variable of the same meaning in the API's
+[README](api/README.md#running-it), and every variable still works on its own.
+
+The API without the launcher, configured only by those variables, is `npm start` in `api/`, which
+is what the Docker image runs:
 
 ```bash
-LAZYLABEL_DATASET_ROOT=/path/to/your/images npm start
+LAZYLABEL_DATASET_ROOT=/path/to/your/images npm start -w lazylabel-reimagined/api
 ```
 
 ```powershell
-$env:LAZYLABEL_DATASET_ROOT = "C:\path\to\your\images"; npm start
+$env:LAZYLABEL_DATASET_ROOT = "C:\path\to\your\images"; npm start -w lazylabel-reimagined/api
 ```
 
 To work on the web app with hot reload, run the Vite dev server beside it, `npm run dev` in a
@@ -113,15 +120,15 @@ rather than a broken one: everything but SAM prompts and propagation works. To a
    ```powershell
    cd inference; $env:LAZYLABEL_MODEL_DIR = "C:\path\to\checkpoints"; $env:LAZYLABEL_DATASET_ROOT = "C:\path\to\your\images"; python -m lazylabel_inference.server
    ```
-4. **Restart the API and tell it where the service is**, from `modernized/`. Without this variable
-   the API does not look for one, and `/health` says so:
+4. **Restart LazyLabel and tell it where the service is**, from `modernized/`. Without it the API
+   does not look for one, and `/health` says so:
 
    ```bash
-   LAZYLABEL_DATASET_ROOT=/path/to/your/images LAZYLABEL_INFERENCE_URL=http://127.0.0.1:8788 npm start
+   ./lazylabel.sh "/path/to/your/images" --inference http://127.0.0.1:8788
    ```
 
    ```powershell
-   $env:LAZYLABEL_DATASET_ROOT = "C:\path\to\your\images"; $env:LAZYLABEL_INFERENCE_URL = "http://127.0.0.1:8788"; npm start
+   .\lazylabel.cmd "C:\path\to\your\images" --inference http://127.0.0.1:8788
    ```
 
 The address is logged at startup either way, so `"inference":"none"` in the first line tells you

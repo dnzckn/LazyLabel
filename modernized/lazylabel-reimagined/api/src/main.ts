@@ -1,10 +1,16 @@
 /**
- * Process entry point: build the adapters the configuration names, and listen.
+ * Starting the API: build the adapters the configuration names, and listen.
+ *
+ * `startApi` is shared by two entry points. This file is the one a deployment runs,
+ * `node dist/src/main.js` with its configuration in the environment, as the Docker image does.
+ * `cli.ts` is the one a person runs, `npm start "<folder>"`, and it reaches this file only after it
+ * has checked the Node version, because importing this file loads `node:sqlite`.
  */
 
 import * as fs from "node:fs/promises";
+import type { Server } from "node:http";
+import type { AddressInfo } from "node:net";
 import * as path from "node:path";
-import { pathToFileURL } from "node:url";
 
 import { createApp } from "./app.js";
 import { DirectoryBlobStore } from "./adapters/directoryBlobStore.js";
@@ -13,6 +19,7 @@ import { SqliteMetadataStore } from "./adapters/sqliteMetadataStore.js";
 import { loadConfig } from "./config.js";
 import { createLogger } from "./http/log.js";
 import { builtWebRoot } from "./http/staticWeb.js";
+import { appUrl, describeStartFailure, isEntryPoint } from "./launcher.js";
 import { createServer } from "./server.js";
 import { importDesktopSettingsOnce } from "./settings/legacyImport.js";
 import type { AppDeps } from "./app.js";
@@ -69,10 +76,22 @@ export function buildDeps(
   };
 }
 
-async function main(): Promise<void> {
-  const config = loadConfig();
-  const logger = createLogger();
+export interface RunningApi {
+  /** Where a browser on this computer reaches it. */
+  readonly url: string;
+  /** The port it listens on: the configured one, or the one the system chose for port 0. */
+  readonly port: number;
+  /** The web app's build it serves at `/`, or null when it serves only its routes. */
+  readonly webRoot: string | null;
+  /** Stop listening, then close the settings store. */
+  close(): Promise<void>;
+}
 
+/**
+ * Build everything the configuration names and listen. Rejects with the listen error itself, so an
+ * entry point can tell a busy port (`EADDRINUSE`) from everything else, and closes what it opened.
+ */
+export async function startApi(config: Config, logger: Logger): Promise<RunningApi> {
   const blobStore = new DirectoryBlobStore(config.datasetRoot);
   if (!(await blobStore.healthy())) {
     // Fail at startup, not on the first request. A running API pointed at a folder that is not
@@ -117,29 +136,68 @@ async function main(): Promise<void> {
   // does: then this one process on this one port is the whole app (DEPLOYABILITY.md R3).
   const webRoot = builtWebRoot(config.webRoot);
   const server = createServer(app, { webRoot });
-  server.listen(config.port, config.host, () => {
-    logger.log("info", "listening", {
-      url: `http://${config.host.includes(":") ? `[${config.host}]` : config.host}:${config.port}/`,
-      web:
-        webRoot
-        ?? (config.webRoot === null
-          ? "not served (LAZYLABEL_WEB_DIST is empty)"
-          : `not built, so only the API's routes are served: ${config.webRoot} has no index.html`),
-      host: config.host,
-      port: config.port,
-      datasetRoot: config.datasetRoot,
-      database: config.databasePath,
-      // Logged either way: "inference: none" at startup is how an operator learns the AI tools
-      // will be unavailable before a user clicks an object and finds out.
-      inference: config.inferenceUrl ?? "none",
-    });
+  try {
+    await listen(server, config.port, config.host);
+  } catch (cause) {
+    await metadataStore.close();
+    throw cause;
+  }
+
+  const port = (server.address() as AddressInfo).port;
+  const url = appUrl(config.host, port);
+  logger.log("info", "listening", {
+    url,
+    web:
+      webRoot
+      ?? (config.webRoot === null
+        ? "not served (LAZYLABEL_WEB_DIST is empty)"
+        : `not built, so only the API's routes are served: ${config.webRoot} has no index.html`),
+    host: config.host,
+    port,
+    datasetRoot: config.datasetRoot,
+    database: config.databasePath,
+    // Logged either way: "inference: none" at startup is how an operator learns the AI tools
+    // will be unavailable before a user clicks an object and finds out.
+    inference: config.inferenceUrl ?? "none",
   });
+
+  return {
+    url,
+    port,
+    webRoot,
+    close: () =>
+      new Promise<void>((resolve) => {
+        // Idle keep-alive connections would hold `close` open until they time out.
+        server.closeIdleConnections();
+        server.close(() => resolve());
+      }).then(() => metadataStore.close()),
+  };
+}
+
+/** `server.listen`, as a promise that rejects with the listen error rather than throwing it later. */
+function listen(server: Server, port: number, host: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const failed = (cause: Error): void => {
+      server.off("listening", listening);
+      reject(cause);
+    };
+    const listening = (): void => {
+      server.off("error", failed);
+      resolve();
+    };
+    server.once("error", failed);
+    server.once("listening", listening);
+    server.listen(port, host);
+  });
+}
+
+async function main(): Promise<void> {
+  const logger = createLogger();
+  const api = await startApi(loadConfig(), logger);
 
   const shutdown = (signal: string): void => {
     logger.log("info", "shutting down", { signal });
-    server.close(() => {
-      void metadataStore.close().then(() => process.exit(0));
-    });
+    void api.close().then(() => process.exit(0));
   };
   process.on("SIGINT", () => shutdown("SIGINT"));
   process.on("SIGTERM", () => shutdown("SIGTERM"));
@@ -152,16 +210,13 @@ async function main(): Promise<void> {
  * environment, and exits the process when the configuration is absent -- so the wiring could not
  * be tested at all, which is how it came to be untested in the first place. A module that cannot
  * be imported without side effects is a module whose contents cannot be checked.
+ *
+ * The comparison resolves links on both sides (`isEntryPoint` says why): comparing the module's URL
+ * with the path as typed made the API exit 0 without a word when started through a junction.
  */
-const isEntryPoint =
-  process.argv[1] !== undefined
-  && import.meta.url === pathToFileURL(process.argv[1]).href;
-
-if (isEntryPoint) {
+if (isEntryPoint(import.meta.url, process.argv[1])) {
   main().catch((cause: unknown) => {
-    createLogger().log("error", "the API could not start", {
-      reason: cause instanceof Error ? cause.message : String(cause),
-    });
+    createLogger().log("error", "the API could not start", { reason: describeStartFailure(cause) });
     process.exit(1);
   });
 }

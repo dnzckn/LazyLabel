@@ -55,6 +55,27 @@ $env:LAZYLABEL_DATASET_ROOT = "C:\path\to\your\images"; npm start
 | `LAZYLABEL_LEGACY_SETTINGS_DIR` | `~/.config/lazylabel` | Where the desktop app kept `settings.json` and `hotkeys.json`. Read once, at startup, while this database holds no settings; after that the stored settings are the truth and these files are never read again. Empty turns the import off. |
 | `LAZYLABEL_WEB_DIST` | `../web/dist` | The web app's build, which this API serves at `/` beside its routes, so one process on one port is the whole app. The default is where the workspace's `npm install` builds it; if it holds no `index.html` the API serves its routes alone and says so at startup. Empty turns it off, for an API behind a separate web server. |
 
+### The launcher
+
+`src/cli.ts` is what a person runs: `npm start "<folder>"` in `modernized/`, or
+`lazylabel.cmd` / `lazylabel.sh` beside it with options (DEPLOYABILITY.md R4). The folder sets
+`LAZYLABEL_DATASET_ROOT`, and `--port`, `--host`, `--db` and `--inference` set `LAZYLABEL_PORT`,
+`LAZYLABEL_HOST`, `LAZYLABEL_DB` and `LAZYLABEL_INFERENCE_URL`, winning over the variables; relative
+paths are taken from where the command was typed. Beyond the API above, it:
+
+- checks the Node version before loading anything that needs `node:sqlite` (22.13 or later, or 23.4
+  on the odd line), and hides that module's ExperimentalWarning;
+- refuses a folder that is not there, and a web app that has not been built, saying what to run;
+- prints the address, the folder, where settings are kept and whether the AI tools are on, then
+  opens the browser, unless `--no-open` or `BROWSER=none`;
+- logs warnings and errors but not every request, unless `--verbose`;
+- on a busy port, opens the LazyLabel already serving the same folder, or names a free port and
+  the command that uses it; on a port the system refuses (Windows reserves some ranges), says so.
+
+It has no import guard, so it cannot exit silently the way the API's own guard once did when
+started through a directory junction; that guard now compares real paths (`src/launcher.ts`,
+`isEntryPoint`). Its decisions live in `src/launcher.ts` and are tested in `test/launcher.test.ts`.
+
 ### The acceptance round trip (Phase 6's exit criterion 4)
 
 `npm run acceptance -- <corpus> --oracle <legacy re-saves>` opens every annotated image under the

@@ -84,6 +84,18 @@ describe("the workspace", () => {
     }
   });
 
+  it("starts the launcher with npm start, and both shims start the same file", async () => {
+    // The quick start's second command, and the two ways to give it options. A rename of the
+    // launcher that missed one of them would leave a user a "Cannot find module" instead of an app.
+    const launcher = "lazylabel-reimagined/api/dist/src/cli.js";
+    const cmd = await readFile(path.join(MODERNIZED, "lazylabel.cmd"), "utf-8");
+    const sh = await readFile(path.join(MODERNIZED, "lazylabel.sh"), "utf-8");
+
+    expect(root.scripts?.["start"]).toBe(`node ${launcher}`);
+    expect(cmd).toContain(`node "%~dp0${launcher.replaceAll("/", "\\")}" %*`);
+    expect(sh).toContain(`exec node "$(dirname "$0")/${launcher}" "$@"`);
+  });
+
   it("states one Node floor, the one node:sqlite needs", () => {
     // node:sqlite needs a flag before 22.13, and without it the API dies at its first import.
     expect(root.engines?.node).toBe(">=22.13");

@@ -1,0 +1,4 @@
+# The two launchers need their own line endings wherever they are checked out: sh would read a
+# carriage return as part of the last argument, and cmd.exe misreads some LF-only batch files.
+*.sh  text eol=lf
+*.cmd text eol=crlf
