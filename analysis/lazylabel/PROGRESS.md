@@ -581,10 +581,12 @@ decisions; each answer is an option they chose:
   next image (SP-10).
 - **"E/R toggle back; Ctrl+Plus/Minus zoom"**: pressing Select or Edit again returns to the
   previous mode, as legacy's does (RULE-070); Ctrl+Plus and Ctrl+Minus keep zooming, since
-  legacy's own bindings for them never fire (CP-66).
+  legacy's own bindings for them never fire (CP-66). **Built** (`68079b6`): E, Q and R toggle as
+  legacy's do, since legacy's "previous" includes Pan.
 - **"Act on both, like the desktop app"**: in Multi, navigation, pan, fit, Ctrl+A, V, M, Esc and
   Space act on both viewers, with linked selection and alias mirroring (CP-31). This reverses
-  decision 8 for those actions.
+  decision 8 for those actions. **Built** (`0e96d6a`): next/previous move the pair, and a linked
+  pair shares its selection and class names. CP-31 lists what still differs.
 
 
 1. **Propagation goldens: captured, and the model's half of Phase 6 exit criterion 2 is met.**
