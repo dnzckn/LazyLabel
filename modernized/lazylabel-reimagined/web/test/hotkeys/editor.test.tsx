@@ -36,10 +36,11 @@ function mount(options: {
   confirm?: (message: string) => boolean;
   putSettings?: (next: StoredSettings) => Promise<unknown>;
   listen?: { action: string; onFire: () => void };
+  stored?: StoredSettings;
 } = {}) {
   const saved: StoredSettings[] = [];
   const client = {
-    getSettings: async () => defaultSettings(),
+    getSettings: async () => options.stored ?? defaultSettings(),
     putSettings:
       options.putSettings
       ?? (async (next: StoredSettings) => {
@@ -238,6 +239,28 @@ describe("Reset to defaults", () => {
 
     await waitFor(() => expect(saved).toHaveLength(1));
     expect(saved[0]!.hotkeys).toEqual(defaultSettings().hotkeys);
+  });
+});
+
+describe("a conflict that came in with an imported legacy file", () => {
+  it("is named, so it can be fixed", async () => {
+    // The import keeps a hand-edited conflict (RULE-049's edge case) and only its log said so.
+    const base = defaultSettings();
+    mount({
+      stored: { ...base, hotkeys: { ...base.hotkeys, delete_segments: { primary: "M", secondary: null } } },
+    });
+
+    const banner = await screen.findByRole("alert");
+    expect(banner.textContent).toContain("M is bound to both");
+    expect(banner.textContent).toContain("Delete Selected Segments");
+    expect(banner.textContent).toContain("Merge Selected Segments");
+  });
+
+  it("is not claimed when there is none", async () => {
+    mount();
+
+    await keyField("merge_segments");
+    expect(screen.queryByRole("alert")).toBeNull();
   });
 });
 

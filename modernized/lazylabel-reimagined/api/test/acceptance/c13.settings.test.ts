@@ -206,6 +206,40 @@ describe("C13: keeping settings and hotkeys across sessions", () => {
       expect(body.values.window_width).toBe(999);
     });
 
+    it("still saves everything else when a conflict came in with an imported legacy file", async () => {
+      // The import keeps a hand-edited conflict rather than locking the user out (RULE-049's edge
+      // case). Refusing it on every save then refused the theme, every slider and the formats,
+      // since each save sends the whole settings -- until the user found the pair on their own.
+      const base = defaultSettings();
+      const imported = { ...base.hotkeys, delete_segments: { primary: "M", secondary: null } };
+      await metadata.putSettings("me", { schemaVersion: 1, values: base.values, hotkeys: imported });
+
+      const response = await app.handle(
+        put("/users/me/settings", { values: { ...base.values, dark_mode: false }, hotkeys: imported }),
+      );
+
+      expect(response.status).toBe(200);
+      expect(jsonBody(await app.handle(get("/users/me/settings"))).values.dark_mode).toBe(false);
+    });
+
+    it("refuses a NEW conflict even while an imported one is kept", async () => {
+      const base = defaultSettings();
+      const imported = { ...base.hotkeys, delete_segments: { primary: "M", secondary: null } };
+      await metadata.putSettings("me", { schemaVersion: 1, values: base.values, hotkeys: imported });
+
+      const response = await app.handle(
+        put("/users/me/settings", {
+          values: base.values,
+          hotkeys: { ...imported, pan_up: { primary: "X", secondary: null } },
+        }),
+      );
+
+      expect(response.status).toBe(422);
+      const problem = jsonBody(response);
+      expect(problem.detail.conflicts).toHaveLength(1);
+      expect(problem.detail.conflicts[0]).toMatchObject({ key: "X" });
+    });
+
     it("accepts a rebinding to a key nobody holds", async () => {
       const base = defaultSettings();
       const response = await app.handle(

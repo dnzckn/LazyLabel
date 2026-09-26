@@ -868,6 +868,11 @@ async function getSettings(deps: AppDeps): Promise<ApiResponse> {
   return json(200, stored);
 }
 
+/** One conflict, whichever of its two actions a report happens to list first. */
+function conflictId(conflict: { readonly key: string; readonly action: string; readonly heldBy: string }): string {
+  return `${conflict.key}|${[conflict.action, conflict.heldBy].sort().join("|")}`;
+}
+
 async function putSettings(deps: AppDeps, request: ApiRequest): Promise<ApiResponse> {
   const body = parseJsonObject(request.body);
   const values = body["values"];
@@ -893,7 +898,14 @@ async function putSettings(deps: AppDeps, request: ApiRequest): Promise<ApiRespo
   // RULE-049. The browser refuses a conflicting key in the rebinding dialog, using the same
   // function from the same package; this refuses it again on arrival, because a client is not a
   // permission and a hand-written request is a client.
-  const conflicts = findConflicts(bindings);
+  //
+  // Only a conflict the request ADDS. One already stored came from importing a hand-edited legacy
+  // `hotkeys.json`, which RULE-049's edge case keeps rather than locking the user out of their
+  // configuration. Refusing it here refused every later save -- the theme, a slider, the export
+  // formats -- since each sends the whole settings, until the user found the pair on their own.
+  const previous = (await deps.metadataStore.getSettings("me")) ?? defaultSettings();
+  const stored = new Set(findConflicts(previous.hotkeys).map(conflictId));
+  const conflicts = findConflicts(bindings).filter((conflict) => !stored.has(conflictId(conflict)));
   if (conflicts.length > 0) {
     throw unprocessable("a key is bound to more than one action", { conflicts });
   }
@@ -906,15 +918,15 @@ async function putSettings(deps: AppDeps, request: ApiRequest): Promise<ApiRespo
 
   // Every OTHER unknown key is stored exactly as it arrived. RULE-088's fix is not a validation
   // step to be added later; it is the absence of one here.
-  const stored: StoredSettings = {
+  const next: StoredSettings = {
     schemaVersion: SETTINGS_SCHEMA_VERSION,
     values: corrected,
     hotkeys: bindings,
   };
-  await deps.metadataStore.putSettings("me", stored);
+  await deps.metadataStore.putSettings("me", next);
 
   return json(200, {
-    ...stored,
+    ...next,
     // Say what was corrected rather than returning the request's own body and letting the client
     // believe it stored what it sent.
     ...(exportFormats.warnings.length > 0 ? { corrections: exportFormats.warnings } : {}),

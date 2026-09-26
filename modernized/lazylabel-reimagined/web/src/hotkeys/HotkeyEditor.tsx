@@ -29,6 +29,7 @@ import {
   canRebind,
   checkAssignment,
   defaultSettings,
+  findConflicts,
   type HotkeyBinding,
 } from "@lazylabel/settings-schema";
 
@@ -61,6 +62,13 @@ export function HotkeyEditor({
   const bindings = settings.hotkeys;
   const entries = Object.entries(bindings);
   const liveCount = entries.filter(([action]) => isLive(action)).length;
+  /*
+   * Conflicts already stored. This dialog refuses a new one, so they can only have come in with an
+   * imported legacy `hotkeys.json` edited by hand, which the import keeps rather than lock anyone
+   * out (RULE-049's edge case). Nothing named them until now: the import's log did, and a user
+   * reads a dialog, not a log.
+   */
+  const conflicts = findConflicts(bindings);
 
   const commit = useCallback(
     async (next: Readonly<Record<string, HotkeyBinding>>) => {
@@ -160,6 +168,15 @@ export function HotkeyEditor({
       {notice !== null && (
         <p role="status" className={`banner banner--${notice.tone}`}>
           {notice.text}
+        </p>
+      )}
+
+      {conflicts.length > 0 && (
+        <p role="alert" className="banner banner--warning">
+          {conflicts
+            .map((conflict) => `${conflict.key} is bound to both ${described(conflict.heldBy)} and ${described(conflict.action)}`)
+            .join("; ")}
+          . Rebind one of each pair: until then the key does only one of them.
         </p>
       )}
 

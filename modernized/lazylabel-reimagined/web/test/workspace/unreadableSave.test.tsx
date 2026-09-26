@@ -123,11 +123,14 @@ describe("an image whose annotations could not be read", () => {
     const { saveAnnotations } = mount(unreadable);
     await open();
 
-    for (const action of ["save_output", "save_output_alt"]) {
-      fireEvent.keyDown(document, { key: defaultSettings().hotkeys[action]!.primary });
-    }
-
-    await waitFor(() => expect(screen.getAllByText(/Nothing was written/).length).toBeGreaterThan(0));
+    // Pressed inside the wait: the key's handler registers in an effect after the button renders,
+    // and under a loaded test run a single press could arrive before it.
+    await waitFor(() => {
+      for (const action of ["save_output", "save_output_alt"]) {
+        fireEvent.keyDown(document, { key: defaultSettings().hotkeys[action]!.primary });
+      }
+      expect(screen.getAllByText(/Nothing was written/).length).toBeGreaterThan(0);
+    });
     expect(saveAnnotations).not.toHaveBeenCalled();
   });
 });
