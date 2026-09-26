@@ -169,11 +169,18 @@ describe("with Auto-Save on Navigate on, legacy's default", () => {
   it("saves the frame being left when moving along the sequence timeline (SP-01)", async () => {
     const { events, confirmNavigation } = mount();
     fireEvent.click(await screen.findByRole("tab", { name: "Sequence" }));
-    fireEvent.click(await screen.findByText("Build timeline"));
+    // The range as legacy sets it: each end opened from the list, then Set Start and Set End (SP-41).
+    fireEvent.click(await screen.findByRole("button", { name: "a.png" }));
+    fireEvent.click(screen.getByRole("button", { name: "Set Start" }));
+    fireEvent.click(screen.getByRole("button", { name: "b.png" }));
+    await waitFor(() => expect(status()).toMatch(/b\.png/));
+    fireEvent.click(screen.getByRole("button", { name: "Set End" }));
+    fireEvent.click(screen.getByRole("button", { name: "Build Timeline" }));
     const cells = () => screen.getByLabelText("Timeline").querySelectorAll("button");
     await waitFor(() => expect(cells()).toHaveLength(2));
-    // Build opens the first frame, as legacy's does (SP-18).
-    await waitFor(() => expect(status()).toMatch(/a\.png/));
+    // Build opens the first frame, as legacy's does (SP-18). The two opens that set the range go.
+    await waitFor(() => expect(events).toEqual(["load frames/a.png", "load frames/b.png", "load frames/a.png"]));
+    events.splice(0, 2);
     chooseTool("Poly (2)");
     drawTriangle(10, 10);
     await waitFor(() => expect(screen.getByLabelText(/^Select Polygon 1/)).toBeTruthy());

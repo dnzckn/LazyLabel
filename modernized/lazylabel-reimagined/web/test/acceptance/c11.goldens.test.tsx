@@ -42,7 +42,7 @@ import { defaultSettings } from "@lazylabel/settings-schema";
 import type { ApiClient, WirePropagationFrame, WirePropagationJob } from "../../src/api/client.js";
 import { HotkeyProvider } from "../../src/hotkeys/HotkeyProvider.jsx";
 import { NotificationProvider } from "../../src/notifications/NotificationProvider.jsx";
-import { TimelinePanel } from "../../src/sequence/TimelinePanel.jsx";
+import { Timeline, buildRange } from "../sequence/harness.jsx";
 import { SettingsProvider } from "../../src/settings/SettingsProvider.jsx";
 
 afterEach(cleanup);
@@ -234,7 +234,7 @@ function mount(scenario: Scenario) {
     <NotificationProvider>
       <SettingsProvider client={client}>
         <HotkeyProvider bindings={defaultSettings().hotkeys}>
-          <TimelinePanel
+          <Timeline
             images={listing(new Set([REFERENCE, ...scenario.labeled])).images as never}
             client={client}
             confirmDiscard={() => true}
@@ -260,7 +260,8 @@ const confidences = () =>
   );
 
 async function propagate(scenario: Scenario) {
-  fireEvent.click(await screen.findByText("Build timeline"));
+  await screen.findByRole("button", { name: "Set Start" });
+  buildRange();
   await waitFor(() => expect(cells()).toHaveLength(KEYS.length));
   // The reference, marked as a user marks it: open the frame, then "+ Add Current".
   fireEvent.click(cells()[REFERENCE]!);

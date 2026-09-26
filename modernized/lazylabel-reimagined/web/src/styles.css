@@ -567,6 +567,24 @@ thead th {
   background: var(--stripe);
 }
 
+/* A sequence range: the stripes go, Start is light green, End red, and the rows between dark
+   green, as legacy's list colours them (fast_file_manager.py:303-309, 501-513, 1360-1365). */
+.dataset--ranged tbody tr:nth-child(even) {
+  background: none;
+}
+
+.dataset tbody tr.dataset__row--range {
+  background: rgb(50 90 50);
+}
+
+.dataset tbody tr.dataset__row--start {
+  background: rgb(100 200 100);
+}
+
+.dataset tbody tr.dataset__row--end {
+  background: rgb(200 80 80);
+}
+
 .dataset tbody tr[aria-selected="true"] {
   background: rgb(100 100 200 / 0.5);
 }
@@ -1900,6 +1918,13 @@ fieldset input[type="text"] {
   margin: 0 0 4px;
 }
 
+/* Legacy's five setup steps, at 11px (sequence_widget.py:142-152). */
+.timeline__steps {
+  margin: 0 0 6px;
+  padding-left: 1.4em;
+  font-size: 11px;
+}
+
 .timeline__count strong {
   font-weight: 700;
 }
@@ -2217,6 +2242,8 @@ fieldset input[type="text"] {
 .seq-button--blue { --seq: #2196f3; }
 .seq-button--amber { --seq: #ffc107; }
 .seq-button--red { --seq: #f44336; --seq-ink: #ffffff; }
+/* Set End: legacy's red with black text (sequence_widget.py:181-185). */
+.seq-button--end { --seq: #f44336; }
 .seq-button--purple { --seq: #9c27b0; --seq-hover: #ab47bc; --seq-ink: #ffffff; }
 .seq-button--brown { --seq: #8b4513; --seq-hover: #a0522d; --seq-ink: #ffffff; }
 .seq-button--dark-green { --seq: #2e7d32; --seq-hover: #388e3c; --seq-ink: #ffffff; }

@@ -145,7 +145,36 @@ export interface TimelinePanelProps {
    * 307-311, 825-835`; `main_window.py:4020-4022, 4710-4712, 5041-5043`).
    */
   readonly ai?: { readonly available: boolean; readonly videoCapable: boolean; readonly reason: string | null };
+  /**
+   * The rows as the file list shows them, sorted and searched. Build takes the files between Start
+   * and End in this order, as legacy's takes the list's rows (`fast_file_manager.py:1971-1999`,
+   * SEQUENCE_PARITY.md SP-20). Absent, the listing as the browser gave it.
+   */
+  readonly rows?: readonly WireDatasetImage[];
+  /**
+   * The range for the file list to colour: Start, End and the rows between them when both are
+   * set, as legacy's list does until Clear or New Timeline (`fast_file_manager.py:303-309,
+   * 501-513, 1900-1965`). Null while the Sequence tab is not in use, where legacy has no range.
+   */
+  readonly onRange?: (range: SequenceRange | null) => void;
 }
+
+/** The Start and End a timeline is built between, and the rows between them when both are set. */
+export interface SequenceRange {
+  readonly start: string | null;
+  readonly end: string | null;
+  /** The files from Start to End, as the list showed them when the second was set. */
+  readonly between: readonly string[];
+}
+
+/** Legacy's steps, in its Timeline Setup group (`sequence_widget.py:142-152`). */
+const SETUP_STEPS = [
+  "Navigate to start frame in file list",
+  "Click 'Set Start'",
+  "Navigate to end frame",
+  "Click 'Set End'",
+  "Click 'Build Timeline'",
+] as const;
 
 /** Legacy's zoom and pan steps (`timeline_widget.py:511-514, 673`). */
 const ZOOM_STEP = 1.5;
@@ -188,6 +217,11 @@ function referenceList(frames: readonly Frame[]): string {
   return `Frames: ${numbers.slice(0, 3).join(", ")}... (${numbers.length} total) ★`;
 }
 
+/** A key's file name, as legacy names a path (`Path(path).name`). */
+function fileName(key: string): string {
+  return key.split("/").pop() ?? key;
+}
+
 /** The frames' keys in Sort's order, as it stands now. */
 function sortedKeys(frames: readonly Frame[]): readonly string[] {
   return sortedOrder(frames).map((index) => frames[index]!.key);
@@ -217,6 +251,8 @@ export function TimelinePanel({
   openAnnotations,
   onReviewLookup,
   ai,
+  rows,
+  onRange,
 }: TimelinePanelProps): ReactNode {
   const aiReady = ai === undefined || ai.available;
   // Propagation needs a video-capable model as well as a reachable service.
@@ -240,7 +276,7 @@ export function TimelinePanel({
      * The files it was built from, FROZEN at Build: a built timeline is a fixed list of paths, as
      * legacy's is (`sequence_view_mode.py:123-126`), whatever folder the browser shows later.
      */
-    readonly range: { readonly from: number; readonly to: number; readonly keys: readonly string[] };
+    readonly range: { readonly keys: readonly string[] };
     readonly overrides: readonly Frame[] | null;
   } | null>(null);
   const range = timeline?.range ?? null;
@@ -358,7 +394,6 @@ export function TimelinePanel({
     Number(settings.values["propagation_confidence_threshold"] ?? DEFAULT_THRESHOLD),
   );
 
-  const keys = useMemo(() => images.map((image) => image.key), [images]);
   const annotated = useMemo(
     () => new Set(images.filter((image) => image.annotated).map((image) => image.key)),
     [images],
@@ -393,20 +428,49 @@ export function TimelinePanel({
    * the new timeline while the header named frame 1 (`SEQUENCE_PARITY.md` SP-18). The open goes
    * through the workspace, which saves or asks about unsaved work as any other open does.
    */
+  /*
+   * LEGACY'S TIMELINE SETUP (`sequence_widget.py:135-208, 837-872`; `main_window.py:4897-4996`,
+   * SEQUENCE_PARITY.md SP-41): Set Start and Set End take the image on screen, Clear forgets both,
+   * and Build takes the list's rows from one to the other, inclusive, in the order the list shows
+   * them. The web had two pickers defaulting to the first and last image, so one click built the
+   * whole folder, and nothing showed the range in the list. Kept after Build, as legacy's is, until
+   * New Timeline.
+   */
+  const [start, setStart] = useState<string | null>(null);
+  const [end, setEnd] = useState<string | null>(null);
+  const [between, setBetween] = useState<readonly string[]>([]);
+  const listRows = rows ?? images;
+  /** The rows from `from` to `to` in the list's order, inclusive, or none when either is not in it. */
+  const rowsBetween = (from: string, to: string): readonly string[] => {
+    const order = listRows.map((image) => image.key);
+    const [a, b] = [order.indexOf(from), order.indexOf(to)];
+    return a < 0 || b < 0 ? [] : order.slice(Math.min(a, b), Math.max(a, b) + 1);
+  };
+
   const build = useCallback(
-    (from: number, to: number) => {
-      const built = buildTimeline(keys, from, to);
-      setTimeline({ range: { from, to, keys: built.map((frame) => frame.key) }, overrides: null });
+    (files: readonly string[]) => {
+      const built = buildTimeline(files, 0, files.length - 1);
+      setTimeline({ range: { keys: built.map((frame) => frame.key) }, overrides: null });
       setCurrent(0);
       if (built.length === 0) return;
       onOpen?.(built[0]!.key);
       notify({ severity: "info", message: `Timeline built: ${built.length} frames` });
     },
-    [keys, notify, onOpen],
+    [notify, onOpen],
   );
   // Whether the Sequence tab is showing: its keys act only there, as legacy's act only in sequence
   // mode, although the panel stays mounted on the other tabs.
   const active = useSequenceActive();
+
+  // The range for the file list, while the Sequence tab is in use. Through a ref: the shell hands
+  // down a new callback on every render.
+  const onRangeNow = useRef(onRange);
+  onRangeNow.current = onRange;
+  const rangeKey = active ? `${start ?? ""}|${end ?? ""}|${between.join("|")}` : null;
+  useEffect(() => {
+    onRangeNow.current?.(rangeKey === null ? null : { start, end, between });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rangeKey]);
 
   /**
    * RULE-090's masks for a frame, merged one per class as legacy merges them when it opens the frame
@@ -666,15 +730,86 @@ export function TimelinePanel({
           + (currentScore === undefined ? "" : ` -- Conf: ${currentScore.toFixed(4)}`);
   useEffect(() => onStatus?.(status), [onStatus, status]);
 
-  if (images.length === 0) {
-    return <p className="panel__missing">A sequence is built from a folder of images.</p>;
-  }
-
   if (frames.length === 0) {
+    /** Set Start or Set End from the image on screen, in legacy's words (`main_window.py:4897-4923`). */
+    const setBound = (which: "start" | "end"): void => {
+      if (openKey === undefined) {
+        notify({ severity: "info", message: "Please load an image first" });
+        return;
+      }
+      const [nextStart, nextEnd] = which === "start" ? [openKey, end] : [start, openKey];
+      setStart(nextStart);
+      setEnd(nextEnd);
+      // The list is coloured once both are set, over its rows between them then (1900-1965).
+      setBetween(nextStart !== null && nextEnd !== null ? rowsBetween(nextStart, nextEnd) : []);
+      notify({
+        severity: "info",
+        message: `${which === "start" ? "Start" : "End"} frame set: ${fileName(openKey)}`,
+      });
+    };
     return (
       <>
         {!videoReady && <PropagateHint active={active} hint={aiHint} />}
-        <RangePicker images={images} onBuild={build} />
+        <fieldset className="timeline__group">
+          <legend>Timeline Setup</legend>
+          <ol className="timeline__steps">
+            {SETUP_STEPS.map((stepText) => (
+              <li key={stepText}>{stepText}</li>
+            ))}
+          </ol>
+          <p className="timeline__count">
+            Start: <strong className="timeline__count--start">{start === null ? "Not set" : fileName(start)}</strong>
+          </p>
+          <p className="timeline__count">
+            End: <strong className="timeline__count--end">{end === null ? "Not set" : fileName(end)}</strong>
+          </p>
+          <div className="timeline__controls">
+            <button
+              type="button"
+              className="seq-button seq-button--green"
+              title="Mark current file as sequence start"
+              onClick={() => setBound("start")}
+            >
+              Set Start
+            </button>
+            <button
+              type="button"
+              className="seq-button seq-button--end"
+              title="Mark current file as sequence end"
+              onClick={() => setBound("end")}
+            >
+              Set End
+            </button>
+          </div>
+          <div className="timeline__controls">
+            <button
+              type="button"
+              title="Clear start/end selection"
+              disabled={start === null && end === null}
+              onClick={() => {
+                setStart(null);
+                setEnd(null);
+                setBetween([]);
+                notify({ severity: "info", message: "Sequence range cleared" });
+              }}
+            >
+              Clear
+            </button>
+            <button
+              type="button"
+              className="seq-button seq-button--blue"
+              title="Build timeline from selected range"
+              disabled={start === null || end === null}
+              onClick={() => {
+                const files = start === null || end === null ? [] : rowsBetween(start, end);
+                if (files.length === 0) notify({ severity: "info", message: "No files in selected range" });
+                else build(files);
+              }}
+            >
+              Build Timeline
+            </button>
+          </div>
+        </fieldset>
       </>
     );
   }
@@ -704,6 +839,10 @@ export function TimelinePanel({
     setTimeline(null);
     setKeptLabels(new Set());
     setDiscarded(new Set());
+    // And the range, with its colours in the list, as legacy's exit clears both (main_window.py:5017-5025).
+    setStart(null);
+    setEnd(null);
+    setBetween([]);
     unsavedRef.current = 0;
     // Everything else the old timeline held, as legacy's reset clears it (`sequence_widget.py:770-794`,
     // SEQUENCE_PARITY.md SP-35): the sort, the trim bounds, the suggestions, and the run's scores and
@@ -1296,66 +1435,6 @@ export function TimelinePanel({
         Propagation agrees with legacy frame for frame on a recorded test clip: the masks, the
         flags, Keep flagged masks, Skip labeled and Save All. What has not been shown is the same
         for a sequence longer than the streaming window, which no recording covers yet.
-      </p>
-    </div>
-  );
-}
-
-/**
- * Choosing the first and last frame, which is how legacy builds a timeline.
- *
- * Two selects over the folder rather than a typed range: the frames have names, and a user picks
- * "from this one to that one" by looking at them. A pair of indices would be faster to implement
- * and would make the user count.
- */
-function RangePicker({
-  images,
-  onBuild,
-}: {
-  readonly images: readonly WireDatasetImage[];
-  readonly onBuild: (from: number, to: number) => void;
-}): ReactNode {
-  const [from, setFrom] = useState(0);
-  const [to, setTo] = useState(images.length - 1);
-
-  return (
-    <div className="timeline__range">
-      <label className="crop__field">
-        <span>First frame</span>
-        <select
-          value={from}
-          aria-label="First frame"
-          onChange={(event) => setFrom(Number(event.target.value))}
-        >
-          {images.map((image, index) => (
-            <option key={image.key} value={index}>
-              {image.name}
-            </option>
-          ))}
-        </select>
-      </label>
-      <label className="crop__field">
-        <span>Last frame</span>
-        <select
-          value={to}
-          aria-label="Last frame"
-          onChange={(event) => setTo(Number(event.target.value))}
-        >
-          {images.map((image, index) => (
-            <option key={image.key} value={index}>
-              {image.name}
-            </option>
-          ))}
-        </select>
-      </label>
-      <button type="button" className="seq-button seq-button--blue" onClick={() => onBuild(from, to)}>
-        Build timeline
-      </button>
-      {/* Said here because it changed on 2026-09-23, to legacy's behaviour: building used to mark
-          every annotated frame as a reference. */}
-      <p className="panel__missing">
-        Building marks no references. Mark the frames propagation runs from afterwards: click a
-        frame and Mark as reference, or + All labeled for every annotated one.
       </p>
     </div>
   );

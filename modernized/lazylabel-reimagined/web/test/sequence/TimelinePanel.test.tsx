@@ -7,7 +7,6 @@
  */
 
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { WireDatasetImage } from "@lazylabel/contracts";
 
@@ -17,8 +16,8 @@ import type { ApiClient } from "../../src/api/client.js";
 import { HotkeyProvider } from "../../src/hotkeys/HotkeyProvider.jsx";
 import { NotificationHost, NotificationProvider } from "../../src/notifications/NotificationProvider.jsx";
 import { SettingsProvider } from "../../src/settings/SettingsProvider.jsx";
-import { TimelinePanel } from "../../src/sequence/TimelinePanel.jsx";
 import { SequenceActiveContext } from "../../src/sequence/sequenceActive.js";
+import { Timeline, buildRange, openInView } from "./harness.jsx";
 
 /**
  * Min Conf is a PERSISTED setting, so the panel needs the settings context above it.
@@ -63,60 +62,40 @@ const FOLDER = [
 
 function show(images: readonly WireDatasetImage[] = FOLDER) {
   const onOpen = vi.fn();
-  render(withSettings(<TimelinePanel images={images} onOpen={onOpen} />));
+  render(withSettings(<Timeline images={images} onOpen={onOpen} />));
   return { onOpen };
 }
 
 /**
- * The shell's side of opening a frame: `openKey` follows an open that happens, and stays where it
- * was when the workspace refuses one -- a Cancel at its question about unsaved work.
+ * The panel with a view that may refuse an open, as the workspace does at a Cancel to its question
+ * about unsaved work: `openKey` stays where it was (SP-19).
  */
-function Shell({
-  initial,
-  refuse = false,
-  onOpen,
-  onStatus,
-}: {
-  readonly initial?: string;
-  readonly refuse?: boolean;
-  readonly onOpen: (key: string) => void;
-  readonly onStatus?: (status: string) => void;
-}) {
-  const [openKey, setOpenKey] = useState(initial);
-  return (
-    <TimelinePanel
-      images={FOLDER}
-      {...(openKey === undefined ? {} : { openKey })}
-      {...(onStatus === undefined ? {} : { onStatus })}
-      onOpen={(key) => {
-        onOpen(key);
-        if (!refuse) setOpenKey(key);
-      }}
-    />
-  );
-}
-
 function showShell(options: { readonly initial?: string; readonly refuse?: boolean } = {}) {
   const onOpen = vi.fn();
   const onStatus = vi.fn();
-  render(withSettings(<Shell {...options} onOpen={onOpen} onStatus={onStatus} />));
+  render(
+    withSettings(
+      <Timeline
+        images={FOLDER}
+        {...(options.initial === undefined ? {} : { openKey: options.initial })}
+        refuse={options.refuse === true}
+        onOpen={onOpen}
+        onStatus={onStatus}
+      />,
+    ),
+  );
   return { onOpen, onStatus };
 }
 
 /**
- * Build a timeline and, unless told not to, mark its annotated frames with "+ All Labeled".
+ * Build a timeline from the list's `from`-th to `to`-th image, as a user does (SP-41), and, unless
+ * told not to, mark its annotated frames with "+ All Labeled".
  *
  * Building marks nothing since 2026-09-23, as in legacy, so a test about using references has to
  * make some -- and "+ All Labeled" is how a user gets the setup these tests were written against.
  */
 function build(from?: string, to?: string, { references = true } = {}) {
-  if (from !== undefined) {
-    fireEvent.change(screen.getByLabelText("First frame"), { target: { value: from } });
-  }
-  if (to !== undefined) {
-    fireEvent.change(screen.getByLabelText("Last frame"), { target: { value: to } });
-  }
-  fireEvent.click(screen.getByText("Build timeline"));
+  buildRange(from === undefined ? 0 : Number(from), to === undefined ? undefined : Number(to));
   if (references) fireEvent.click(screen.getByRole("button", { name: "+ All Labeled" }));
 }
 
@@ -130,7 +109,7 @@ describe("a built timeline is a fixed list of files (SP-21)", () => {
   it("keeps its frames when the browser lists another folder", async () => {
     // Legacy's timeline is the paths it was built from (sequence_view_mode.py:123-126). The web's was
     // rebuilt from whichever folder the browser listed, at the old positions.
-    const { rerender } = render(withSettings(<TimelinePanel images={FOLDER} />));
+    const { rerender } = render(withSettings(<Timeline images={FOLDER} />));
     build("1", "3", { references: false });
     await waitFor(() => expect(cells()).toHaveLength(3));
     const before = [...cells()].map((cell) => cell.getAttribute("aria-label"));
@@ -139,7 +118,7 @@ describe("a built timeline is a fixed list of files (SP-21)", () => {
       ...image(name),
       key: `other/${name}`,
     }));
-    rerender(withSettings(<TimelinePanel images={elsewhere} />));
+    rerender(withSettings(<Timeline images={elsewhere} />));
 
     expect([...cells()].map((cell) => cell.getAttribute("aria-label"))).toEqual(before);
     expect(before[0]).toContain("frames/f02.png");
@@ -160,7 +139,7 @@ describe("+ All Labeled (SP-26)", () => {
         images: FOLDER.map((each) => ({ ...each, annotated: each.name === "f02.png" || each.name === "f04.png" })),
       }),
     } as unknown as ApiClient;
-    render(withSettings(<TimelinePanel images={FOLDER} client={client} />));
+    render(withSettings(<Timeline images={FOLDER} client={client} />));
     build("0", "4", { references: false });
     await waitFor(() => expect(cells()).toHaveLength(5));
 
@@ -190,7 +169,7 @@ describe("reference sizes (SP-24)", () => {
   }
 
   it("refuses G on a frame of another size, in legacy's words", async () => {
-    render(withSettings(<TimelinePanel images={FOLDER} client={sized()} />));
+    render(withSettings(<Timeline images={FOLDER} client={sized()} />));
     build("0", "4", { references: false });
     await waitFor(() => expect(cells()).toHaveLength(5));
     fireEvent.click(cells()[1]!); // f02
@@ -205,7 +184,7 @@ describe("reference sizes (SP-24)", () => {
   });
 
   it("leaves a frame of another size out of + All Labeled, and says how many", async () => {
-    render(withSettings(<TimelinePanel images={FOLDER} client={sized()} />));
+    render(withSettings(<Timeline images={FOLDER} client={sized()} />));
     build("0", "4", { references: false });
     await waitFor(() => expect(cells()).toHaveLength(5));
 
@@ -230,7 +209,7 @@ describe("with no AI (SP-31)", () => {
   const NO_AI = { available: false, videoCapable: false, reason: "the inference service could not be reached" };
 
   it("hides what cannot work, keeps Trim and New timeline, and says why on Ctrl+P and Ctrl+H", async () => {
-    render(withSettings(<TimelinePanel images={FOLDER} client={client} ai={NO_AI} />));
+    render(withSettings(<Timeline images={FOLDER} client={client} ai={NO_AI} />));
     build("0", "4", { references: false });
     await waitFor(() => expect(cells()).toHaveLength(5));
 
@@ -247,7 +226,7 @@ describe("with no AI (SP-31)", () => {
   it("keeps Find Archetypes when the service is up but no model can propagate", async () => {
     render(
       withSettings(
-        <TimelinePanel images={FOLDER} client={client} ai={{ available: true, videoCapable: false, reason: null }} />,
+        <Timeline images={FOLDER} client={client} ai={{ available: true, videoCapable: false, reason: null }} />,
       ),
     );
     build("0", "4", { references: false });
@@ -261,8 +240,11 @@ describe("with no AI (SP-31)", () => {
 describe("the header (SP-19)", () => {
   it("names an image opened from outside the timeline instead of a frame that is not on screen", async () => {
     const onStatus = vi.fn();
-    render(withSettings(<TimelinePanel images={FOLDER} onStatus={onStatus} openKey="frames/f05.png" />));
+    render(withSettings(<Timeline images={FOLDER} onStatus={onStatus} />));
     build("0", "2", { references: false });
+    await waitFor(() => expect(cells()).toHaveLength(3));
+
+    openInView("frames/f05.png");
 
     await waitFor(() => expect(onStatus).toHaveBeenLastCalledWith("f05.png -- not in the timeline"));
   });
@@ -277,22 +259,27 @@ describe("the cursor moves when the frame opens (SP-19)", () => {
    */
   const current = () => [...cells()].findIndex((cell) => cell.className.includes("timeline__frame--current"));
 
-  it("stays on the frame on screen when the open is refused", async () => {
-    const { onOpen, onStatus } = showShell({ initial: "frames/f01.png", refuse: true });
-    build("0", "4", { references: false });
+  /** A timeline over the whole folder with f01 on screen, in a view that refuses every open. */
+  async function refusing(references = false) {
+    const shown = showShell({ refuse: true });
+    build("0", "4", { references });
     await waitFor(() => expect(cells()).toHaveLength(5));
+    openInView("frames/f01.png");
+    return shown;
+  }
+
+  it("stays on the frame on screen when the open is refused", async () => {
+    const { onOpen, onStatus } = await refusing();
 
     fireEvent.click(cells()[2]!);
 
-    expect(onOpen).toHaveBeenLastCalledWith("frames/f03.png");
+    expect(onOpen).toHaveBeenLastCalledWith("frames/f03.png", undefined);
     expect(current()).toBe(0);
     expect(onStatus).toHaveBeenLastCalledWith("f01.png (1/5)");
   });
 
   it("marks the frame on screen with G, not the one whose open was refused", async () => {
-    showShell({ initial: "frames/f01.png", refuse: true });
-    build("0", "4", { references: false });
-    await waitFor(() => expect(cells()).toHaveLength(5));
+    await refusing();
     fireEvent.click(cells()[2]!);
 
     fireEvent.click(screen.getByText("+ Add Current"));
@@ -302,8 +289,7 @@ describe("the cursor moves when the frame opens (SP-19)", () => {
   });
 
   it("stays put when a key's open is refused too", async () => {
-    showShell({ initial: "frames/f01.png", refuse: true });
-    build("0", "4");
+    await refusing(true);
     await waitFor(() => expect(cells()[1]!.getAttribute("aria-label")).toMatch(/reference$/));
 
     pressKey("next_reference_frame");
@@ -337,18 +323,123 @@ describe("building the timeline (SP-18)", () => {
   });
 });
 
-describe("before a timeline exists", () => {
-  it("says a sequence needs a folder", () => {
+describe("setting the range up, as legacy's Timeline Setup does (SP-41)", () => {
+  /*
+   * Set Start and Set End take the image on screen and show its name; Clear is enabled with either,
+   * Build Timeline only with both; and Build takes the rows between them as the list shows them
+   * (sequence_widget.py:135-208, 837-872; main_window.py:4897-4996; fast_file_manager.py:1971-1999).
+   * The web had two pickers defaulting to the first and last image, so one click built the folder.
+   */
+  const button = (name: string) => screen.getByRole("button", { name }) as HTMLButtonElement;
+  const start = () => screen.getByText(/^Start:/).textContent;
+  const end = () => screen.getByText(/^End:/).textContent;
+  const keysOnBar = () => [...cells()].map((cell) => cell.getAttribute("aria-label")!.split(", ")[1]);
+
+  it("shows legacy's steps, nothing set, and Build Timeline disabled, with any folder", () => {
     show([]);
-    expect(screen.getByText(/built from a folder of images/)).toBeTruthy();
+
+    expect(screen.getByRole("group", { name: "Timeline Setup" })).toBeTruthy();
+    expect(screen.getByText("Click 'Set Start'")).toBeTruthy();
+    expect([start(), end()]).toEqual(["Start: Not set", "End: Not set"]);
+    expect(button("Build Timeline").disabled).toBe(true);
+    expect(button("Clear").disabled).toBe(true);
   });
 
-  it("offers the frames by NAME, not by number", () => {
-    // A user picks "from this one to that one" by looking at them. Indices would be faster to
-    // implement and would make the user count.
+  it("asks for an image on screen first, in legacy's words", async () => {
     show();
-    expect(screen.getByLabelText("First frame")).toBeTruthy();
-    expect(screen.getAllByText("f03.png").length).toBeGreaterThan(0);
+
+    fireEvent.click(button("Set Start"));
+
+    expect(await screen.findByText("Please load an image first")).toBeTruthy();
+    expect(start()).toBe("Start: Not set");
+  });
+
+  it("sets Start and End from the image on screen, names them, and says so", async () => {
+    show();
+
+    openInView("frames/f02.png");
+    fireEvent.click(button("Set Start"));
+    expect(start()).toBe("Start: f02.png");
+    expect(await screen.findByText("Start frame set: f02.png")).toBeTruthy();
+    expect([button("Clear").disabled, button("Build Timeline").disabled]).toEqual([false, true]);
+
+    openInView("frames/f04.png");
+    fireEvent.click(button("Set End"));
+    expect(end()).toBe("End: f04.png");
+    expect(await screen.findByText("End frame set: f04.png")).toBeTruthy();
+    expect(button("Build Timeline").disabled).toBe(false);
+  });
+
+  it("builds from the rows between them as the list shows them, either way round (SP-20)", async () => {
+    // A list sorted and searched: f05, f03, f01. Legacy takes its rows, not the folder's.
+    render(withSettings(<Timeline images={FOLDER} rows={[FOLDER[4]!, FOLDER[2]!, FOLDER[0]!]} />));
+
+    openInView("frames/f01.png");
+    fireEvent.click(button("Set Start"));
+    openInView("frames/f05.png");
+    fireEvent.click(button("Set End"));
+    fireEvent.click(button("Build Timeline"));
+
+    await waitFor(() => expect(cells()).toHaveLength(3));
+    expect(keysOnBar()).toEqual(["frames/f05.png", "frames/f03.png", "frames/f01.png"]);
+  });
+
+  it("says so when an end is not in the list, as legacy's does", async () => {
+    show();
+    openInView("other/x01.png");
+    fireEvent.click(button("Set Start"));
+    openInView("frames/f03.png");
+    fireEvent.click(button("Set End"));
+
+    fireEvent.click(button("Build Timeline"));
+
+    expect(await screen.findByText("No files in selected range")).toBeTruthy();
+    expect(screen.queryByLabelText("Timeline")).toBeNull();
+  });
+
+  it("clears both, in legacy's words", async () => {
+    show();
+    openInView("frames/f02.png");
+    fireEvent.click(button("Set Start"));
+
+    fireEvent.click(button("Clear"));
+
+    expect(await screen.findByText("Sequence range cleared")).toBeTruthy();
+    expect(start()).toBe("Start: Not set");
+    expect(button("Clear").disabled).toBe(true);
+  });
+
+  it("hands the range up for the list to colour, keeps it once built, and forgets it at New timeline", async () => {
+    const onRange = vi.fn();
+    render(withSettings(<Timeline images={FOLDER} onRange={onRange} />));
+
+    openInView("frames/f02.png");
+    fireEvent.click(button("Set Start"));
+    expect(onRange).toHaveBeenLastCalledWith({ start: "frames/f02.png", end: null, between: [] });
+    openInView("frames/f04.png");
+    fireEvent.click(button("Set End"));
+    const range = { start: "frames/f02.png", end: "frames/f04.png", between: ["frames/f02.png", "frames/f03.png", "frames/f04.png"] };
+    expect(onRange).toHaveBeenLastCalledWith(range);
+
+    fireEvent.click(button("Build Timeline"));
+    await waitFor(() => expect(cells()).toHaveLength(3));
+    expect(onRange).toHaveBeenLastCalledWith(range);
+
+    fireEvent.click(screen.getByText("New timeline"));
+    await waitFor(() => expect(onRange).toHaveBeenLastCalledWith({ start: null, end: null, between: [] }));
+  });
+
+  it("hands up no range while the Sequence tab is not the one in use", () => {
+    const onRange = vi.fn();
+    render(
+      withSettings(
+        <SequenceActiveContext.Provider value={false}>
+          <Timeline images={FOLDER} onRange={onRange} />
+        </SequenceActiveContext.Provider>,
+      ),
+    );
+
+    expect(onRange).toHaveBeenLastCalledWith(null);
   });
 });
 
@@ -411,7 +502,7 @@ describe("building one", () => {
 
   it("reports legacy's header for the frame in view: its name, its place and its score", async () => {
     const onStatus = vi.fn();
-    render(withSettings(<TimelinePanel images={FOLDER} onStatus={onStatus} />));
+    render(withSettings(<Timeline images={FOLDER} onStatus={onStatus} />));
     expect(onStatus).toHaveBeenLastCalledWith("No sequence loaded");
 
     build("0", "2");
@@ -426,12 +517,11 @@ describe("building one", () => {
     // Legacy moves its timeline to a file opened from the list when the file is in the sequence,
     // so the header, the marker and the picture never disagree.
     const onStatus = vi.fn();
-    render(
-      withSettings(<TimelinePanel images={FOLDER} onStatus={onStatus} openKey="frames/f03.png" />),
-    );
-
+    render(withSettings(<Timeline images={FOLDER} onStatus={onStatus} />));
     build("0", "4");
     await waitFor(() => expect(cells()).toHaveLength(5));
+
+    openInView("frames/f03.png");
 
     expect(onStatus).toHaveBeenLastCalledWith("f03.png (3/5)");
     expect(cells()[2]!.className).toContain("timeline__frame--current");
@@ -538,14 +628,16 @@ describe("using it", () => {
     expect((screen.getByRole("button", { name: "Cut" }) as HTMLButtonElement).disabled).toBe(true);
   });
 
-  it("goes back to the range picker on New timeline", async () => {
+  it("goes back to Timeline Setup on New timeline, with the range cleared, as legacy's does", async () => {
+    // main_window.py:4998-5035: the range is forgotten, and the setup shows "Not set".
     show();
     build("0", "4");
     await waitFor(() => expect(cells()).toHaveLength(5));
 
     fireEvent.click(screen.getByText("New timeline"));
 
-    expect(await screen.findByText("Build timeline")).toBeTruthy();
+    expect(await screen.findByRole("button", { name: "Build Timeline" })).toBeTruthy();
+    expect(screen.getByText(/^Start:/).textContent).toBe("Start: Not set");
   });
 });
 
@@ -577,10 +669,9 @@ describe("the confidence histogram", () => {
   /** Frames 0..4 of the folder, with propagation scores on three of them. */
   function withScores(scores: Record<number, number>) {
     const saved: Record<string, unknown> = {};
-    render(withSettings(<TimelinePanel images={FOLDER} scores={scores} />, saved));
-    fireEvent.click(screen.getByText("Build timeline"));
+    render(withSettings(<Timeline images={FOLDER} scores={scores} />, saved));
     // f02 is a reference in these tests, marked the way a user marks it since building stopped doing so.
-    fireEvent.click(screen.getByRole("button", { name: "+ All Labeled" }));
+    build();
     return saved;
   }
 
@@ -865,7 +956,7 @@ describe("the Review group (SP-45)", () => {
   const button = (name: string) => screen.getByRole("button", { name }) as HTMLButtonElement;
 
   function flagTwo() {
-    render(withSettings(<TimelinePanel images={FOLDER} scores={{ 0: 0.95, 2: 0.97, 3: 0.995 }} />));
+    render(withSettings(<Timeline images={FOLDER} scores={{ 0: 0.95, 2: 0.97, 3: 0.995 }} />));
     build("0", "4");
     fireEvent.change(screen.getByLabelText("Minimum confidence"), { target: { value: "0.98" } });
   }
@@ -962,7 +1053,7 @@ describe("the frame keys", () => {
     render(
       withSettings(
         <SequenceActiveContext.Provider value={false}>
-          <TimelinePanel images={FOLDER} />
+          <Timeline images={FOLDER} />
         </SequenceActiveContext.Provider>,
       ),
     );

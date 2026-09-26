@@ -61,6 +61,15 @@ export interface DatasetBrowserProps {
    * main_window.py:1447-1455, 3591-3606). Undefined opens the file.
    */
   readonly reviewSegments?: (key: string) => readonly WireSegment[] | undefined;
+  /**
+   * The sequence range to colour: Start light green, End red and the rows between dark green, once
+   * both are set, as legacy's list colours them (`fast_file_manager.py:303-309, 501-513`).
+   */
+  readonly range?: {
+    readonly start: string | null;
+    readonly end: string | null;
+    readonly between: readonly string[];
+  } | null;
 }
 
 type ListingState =
@@ -75,6 +84,7 @@ export function DatasetBrowser({
   onListed,
   onShown,
   reviewSegments,
+  range,
 }: DatasetBrowserProps): ReactNode {
   const [state, setState] = useState<ListingState>({ status: "loading" });
   /*
@@ -215,7 +225,13 @@ export function DatasetBrowser({
         // does not read as a failure.
         <p>No images in {where}</p>
       ) : (
-        <ColumnedTable listing={listing} openState={openState} openImage={openImage} onShown={onShown} />
+        <ColumnedTable
+          listing={listing}
+          openState={openState}
+          openImage={openImage}
+          onShown={onShown}
+          range={range ?? null}
+        />
       )}
       {/* The formats to write are in Application Settings, where legacy's Export Formats is. */}
     </section>
@@ -242,12 +258,27 @@ function ColumnedTable({
   openState,
   openImage,
   onShown,
+  range,
 }: {
   readonly listing: WireDatasetListing;
   readonly openState: { readonly image: { readonly key: string } } | null;
   readonly openImage: (image: WireDatasetListing["images"][number]) => void;
   readonly onShown?: ((images: readonly WireDatasetImage[]) => void) | undefined;
+  readonly range: DatasetBrowserProps["range"];
 }): ReactNode {
+  // Coloured only once both ends are set, as legacy's list is (main_window.py:4938-4947).
+  const coloured = range !== null && range !== undefined && range.between.length > 0 ? range : null;
+  const inRange = useMemo(() => new Set(coloured?.between ?? []), [coloured]);
+  const rangeClass = (key: string): string | undefined =>
+    coloured === null
+      ? undefined
+      : key === coloured.start
+        ? "dataset__row--start"
+        : key === coloured.end
+          ? "dataset__row--end"
+          : inRange.has(key)
+            ? "dataset__row--range"
+            : undefined;
   const { settings, save } = useSettings();
   // Filtered once: the header and every row must show the same columns, and two filters is two
   // chances for them to disagree by one.
@@ -355,7 +386,7 @@ function ColumnedTable({
         </details>
         </div>
 
-        <table className="dataset">
+        <table className={coloured === null ? "dataset" : "dataset dataset--ranged"}>
           <thead>
             <tr>
               {/* Legacy's column names (fast_file_manager.py:277-288), each format's suffix in its
@@ -375,7 +406,11 @@ function ColumnedTable({
           </thead>
           <tbody>
             {rows.map((image) => (
-              <tr key={image.key} aria-selected={openState?.image.key === image.key}>
+              <tr
+                key={image.key}
+                aria-selected={openState?.image.key === image.key}
+                className={rangeClass(image.key)}
+              >
                 <th scope="row">
                   <button type="button" onClick={() => openImage(image)}>
                     {image.name}

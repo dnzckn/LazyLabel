@@ -25,7 +25,7 @@ import { FrequencyPanel } from "../workspace/FrequencyPanel.jsx";
 import { RescalePanel } from "../workspace/RescalePanel.jsx";
 import { SplitView } from "../split/SplitView.jsx";
 import { CloseGuard } from "../workspace/CloseGuard.jsx";
-import { TimelinePanel } from "../sequence/TimelinePanel.jsx";
+import { TimelinePanel, type SequenceRange } from "../sequence/TimelinePanel.jsx";
 import { CropPanel } from "../workspace/CropPanel.jsx";
 import { ModelPicker, useDefaultModel } from "../workspace/ModelPicker.jsx";
 import { AutoPolygonPanel, useAutoConvertKey } from "../workspace/AutoPolygonPanel.jsx";
@@ -78,6 +78,8 @@ export function App({ client }: { readonly client: ApiClient }): ReactNode {
   const [archetypes, setArchetypes] = useState<readonly string[]>([]);
   // Legacy's "Sequence Mode: ..." line: the timeline knows the frame, the shell draws the header.
   const [sequenceStatus, setSequenceStatus] = useState("No sequence loaded");
+  // The sequence range the file list colours, as the timeline hands it up (SP-41).
+  const [sequenceRange, setSequenceRange] = useState<SequenceRange | null>(null);
 
   // A preference the user chose wins; a default they never chose yields to the operating system.
   // That matters most when settings are UNREACHABLE: dark_mode defaults to true, so honouring the
@@ -420,6 +422,10 @@ export function App({ client }: { readonly client: ApiClient }): ReactNode {
               <TimelinePanel
                 client={client}
                 images={listed}
+                // Build takes the rows between Start and End as the list shows them (SP-20, SP-41),
+                // and the list colours the range it hands back.
+                rows={shownRows}
+                onRange={setSequenceRange}
                 savedElsewhere={saveCounts}
                 // An open reference frame seeds from what is on screen, not its file (SP-04), and
                 // the open image's class names at Propagate are the ones Save All writes (SP-05).
@@ -453,6 +459,7 @@ export function App({ client }: { readonly client: ApiClient }): ReactNode {
               onListed={setListed}
               onShown={setShownRows}
               reviewSegments={reviewFor}
+              range={sequenceRange}
             />
 
             <Panel title="Segments">

@@ -17,7 +17,7 @@ import type { ApiClient } from "../../src/api/client.js";
 import { HotkeyProvider } from "../../src/hotkeys/HotkeyProvider.jsx";
 import { NotificationHost, NotificationProvider } from "../../src/notifications/NotificationProvider.jsx";
 import { SettingsProvider } from "../../src/settings/SettingsProvider.jsx";
-import { TimelinePanel } from "../../src/sequence/TimelinePanel.jsx";
+import { Timeline, buildRange } from "./harness.jsx";
 import { markSuggested } from "../../src/sequence/timeline.js";
 import type { Frame } from "../../src/sequence/timeline.js";
 
@@ -61,7 +61,7 @@ function show(answer: () => unknown) {
       <NotificationHost />
       <SettingsProvider client={client}>
         <HotkeyProvider bindings={defaultSettings().hotkeys}>
-          <TimelinePanel images={FOLDER} client={client} onArchetypes={onArchetypes} />
+          <Timeline images={FOLDER} client={client} onArchetypes={onArchetypes} />
         </HotkeyProvider>
       </SettingsProvider>
     </NotificationProvider>,
@@ -72,7 +72,7 @@ function show(answer: () => unknown) {
 const cells = () => screen.getByLabelText("Timeline").querySelectorAll("button");
 
 async function build() {
-  fireEvent.click(screen.getByText("Build timeline"));
+  buildRange();
   await waitFor(() => expect(cells()).toHaveLength(5));
 }
 
@@ -162,7 +162,7 @@ describe("asking for them", () => {
         <NotificationHost />
         <SettingsProvider client={{ getSettings: async () => defaultSettings() } as never}>
           <HotkeyProvider bindings={defaultSettings().hotkeys}>
-            <TimelinePanel images={FOLDER} />
+            <Timeline images={FOLDER} />
           </HotkeyProvider>
         </SettingsProvider>
       </NotificationProvider>,

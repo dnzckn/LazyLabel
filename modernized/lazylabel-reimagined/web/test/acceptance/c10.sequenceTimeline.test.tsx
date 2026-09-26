@@ -95,39 +95,73 @@ function mount() {
 async function openSequence() {
   mount();
   fireEvent.click(await screen.findByRole("tab", { name: "Sequence" }));
-  await waitFor(() => expect(screen.getByText("Build timeline")).toBeTruthy());
+  await waitFor(() => expect(screen.getByRole("button", { name: "Set Start" })).toBeTruthy());
+}
+
+/** Legacy's range: the first frame opened from the list and Set Start, the last and Set End (SP-41). */
+async function setRange(first: string, last: string) {
+  fireEvent.click(await screen.findByRole("button", { name: first }));
+  fireEvent.click(screen.getByRole("button", { name: "Set Start" }));
+  fireEvent.click(screen.getByRole("button", { name: last }));
+  fireEvent.click(screen.getByRole("button", { name: "Set End" }));
+}
+
+/** A timeline over `first` to `last`, the whole folder by default. */
+async function buildRange(first = "f01.png", last = "f04.png") {
+  await setRange(first, last);
+  fireEvent.click(screen.getByRole("button", { name: "Build Timeline" }));
 }
 
 const cells = () => screen.getByLabelText("Timeline").querySelectorAll("button");
+/** How the file list colours each row, by name: start, end, range, or nothing. */
+const rowColours = () =>
+  Object.fromEntries(
+    [...document.querySelectorAll(".dataset tbody tr")].map((row) => [
+      row.querySelector("th")!.textContent,
+      /dataset__row--(\w+)/.exec(row.className)?.[1] ?? "",
+    ]),
+  );
 
 describe("C10: build a timeline and mark reference frames", () => {
   it("is reachable from the shell", async () => {
     await openSequence();
 
-    expect(screen.getByLabelText("First frame")).toBeTruthy();
-    expect(screen.getByLabelText("Last frame")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Set End" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Build Timeline" })).toBeTruthy();
   });
 
-  it("offers the folder's frames by name", async () => {
+  it("colours the range in the file list as legacy's does, and not on the Single tab (SP-41)", async () => {
+    // Start light green, End red, the rows between dark green, once both are set, until New
+    // Timeline (fast_file_manager.py:303-309, 501-513, 1900-1965; main_window.py:4938-4947, 5017-5019).
     await openSequence();
+    await setRange("f02.png", "f04.png");
 
-    const options = [...(screen.getByLabelText("First frame") as HTMLSelectElement).options];
-    expect(options.map((option) => option.textContent)).toEqual(FRAMES.map((f) => f.name));
+    expect(rowColours()).toEqual({ "f01.png": "", "f02.png": "start", "f03.png": "range", "f04.png": "end" });
+
+    fireEvent.click(screen.getByRole("tab", { name: "Single" }));
+    await waitFor(() => expect(Object.values(rowColours()).every((colour) => colour === "")).toBe(true));
+    fireEvent.click(screen.getByRole("tab", { name: "Sequence" }));
+    await waitFor(() => expect(rowColours()["f02.png"]).toBe("start"));
+
+    fireEvent.click(screen.getByRole("button", { name: "Build Timeline" }));
+    await waitFor(() => expect(cells()).toHaveLength(3));
+    expect(rowColours()["f03.png"]).toBe("range");
+
+    fireEvent.click(screen.getByText("New timeline"));
+    await waitFor(() => expect(Object.values(rowColours()).every((colour) => colour === "")).toBe(true));
   });
 
   it("builds a timeline over the chosen range", async () => {
     await openSequence();
 
-    fireEvent.change(screen.getByLabelText("First frame"), { target: { value: "1" } });
-    fireEvent.change(screen.getByLabelText("Last frame"), { target: { value: "3" } });
-    fireEvent.click(screen.getByText("Build timeline"));
+    await buildRange("f02.png", "f04.png");
 
     await waitFor(() => expect(cells()).toHaveLength(3));
   });
 
   it("marks no reference by itself, as legacy does not (the owner's call, 2026-09-23)", async () => {
     await openSequence();
-    fireEvent.click(screen.getByText("Build timeline"));
+    await buildRange();
 
     await waitFor(() => expect(cells()).toHaveLength(4));
     const labels = [...cells()].map((cell) => cell.getAttribute("aria-label"));
@@ -138,7 +172,7 @@ describe("C10: build a timeline and mark reference frames", () => {
     // The capability's second half, and it needs no new endpoint: the folder listing already says
     // which images are annotated.
     await openSequence();
-    fireEvent.click(screen.getByText("Build timeline"));
+    await buildRange();
     fireEvent.click(screen.getByRole("button", { name: "+ All Labeled" }));
 
     await waitFor(() => expect(cells()).toHaveLength(4));
@@ -149,7 +183,7 @@ describe("C10: build a timeline and mark reference frames", () => {
 
   it("counts the references above the timeline", async () => {
     await openSequence();
-    fireEvent.click(screen.getByText("Build timeline"));
+    await buildRange();
     fireEvent.click(screen.getByRole("button", { name: "+ All Labeled" }));
 
     expect(await screen.findByText(/4 frames, 1 reference/)).toBeTruthy();
@@ -158,7 +192,7 @@ describe("C10: build a timeline and mark reference frames", () => {
   it("opens a frame in the workspace when its cell is clicked", async () => {
     // The join that makes the timeline a navigation control rather than a picture.
     await openSequence();
-    fireEvent.click(screen.getByText("Build timeline"));
+    await buildRange();
     await waitFor(() => expect(cells()).toHaveLength(4));
 
     fireEvent.click(cells()[2]!);
@@ -172,7 +206,7 @@ describe("C10: build a timeline and mark reference frames", () => {
     // the slice looks like. The panel says how far agreement with legacy has been shown -- on the
     // synthetic-shapes golden since 2026-09-23 -- and where it stops.
     await openSequence();
-    fireEvent.click(screen.getByText("Build timeline"));
+    await buildRange();
 
     await waitFor(() => expect(cells()).toHaveLength(4));
     expect(screen.getByRole("button", { name: /^Propagate/ })).toBeTruthy();
@@ -185,9 +219,7 @@ describe("C10: build a timeline and mark reference frames", () => {
     // A range over f03 and f04 only, neither of which is annotated -- so the timeline has no
     // reference in it. The default range does have one, which is why this picks its own.
     await openSequence();
-    fireEvent.change(screen.getByLabelText("First frame"), { target: { value: "2" } });
-    fireEvent.change(screen.getByLabelText("Last frame"), { target: { value: "3" } });
-    fireEvent.click(screen.getByText("Build timeline"));
+    await buildRange("f03.png", "f04.png");
 
     await waitFor(() => expect(cells()).toHaveLength(2));
     expect(screen.getByRole("button", { name: /^Propagate/ })).toHaveProperty("disabled", true);

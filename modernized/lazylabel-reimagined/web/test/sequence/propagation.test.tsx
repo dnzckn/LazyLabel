@@ -33,7 +33,7 @@ import type {
 import { HotkeyProvider } from "../../src/hotkeys/HotkeyProvider.jsx";
 import { NotificationHost, NotificationProvider } from "../../src/notifications/NotificationProvider.jsx";
 import { Panel } from "../../src/shell/Panel.jsx";
-import { TimelinePanel } from "../../src/sequence/TimelinePanel.jsx";
+import { Timeline, buildRange } from "./harness.jsx";
 import { SequenceActiveContext } from "../../src/sequence/sequenceActive.js";
 import { PropagationControl } from "../../src/sequence/PropagationControl.jsx";
 import type { OpenAnnotations } from "../../src/sequence/references.js";
@@ -1003,7 +1003,7 @@ describe("RULE-056: not losing propagated work without asking", () => {
 
     const tree = (saves?: ReadonlyMap<string, number>, open = openAnnotations) => {
       const timeline = (
-        <TimelinePanel
+        <Timeline
           images={FOLDER as never}
           client={client}
           confirmDiscard={confirmDiscard}
@@ -1046,7 +1046,7 @@ describe("RULE-056: not losing propagated work without asking", () => {
   }
 
   async function propagateAndWait() {
-    fireEvent.click(screen.getByText("Build timeline"));
+    buildRange();
     // Building marks nothing since 2026-09-23, as in legacy: the reference is marked as a user marks it.
     fireEvent.click(screen.getByRole("button", { name: "+ All Labeled" }));
     await waitFor(() =>
@@ -1114,7 +1114,7 @@ describe("RULE-056: not losing propagated work without asking", () => {
 
     fireEvent.click(screen.getByText("New timeline"));
 
-    expect(await screen.findByText("Build timeline")).toBeTruthy();
+    expect(await screen.findByRole("button", { name: "Build Timeline" })).toBeTruthy();
   });
 
   it("does NOT ask when there is nothing to lose", async () => {
@@ -1122,7 +1122,7 @@ describe("RULE-056: not losing propagated work without asking", () => {
     // makes it useless on the day it matters.
     const confirm = vi.fn((_message: string) => true);
     panel(confirm);
-    fireEvent.click(screen.getByText("Build timeline"));
+    buildRange();
     // Building marks nothing since 2026-09-23, as in legacy: the reference is marked as a user marks it.
     fireEvent.click(screen.getByRole("button", { name: "+ All Labeled" }));
     await waitFor(() =>
@@ -1505,7 +1505,7 @@ describe("RULE-056: not losing propagated work without asking", () => {
   it("puts Min Conf and Hist in the propagation row, where legacy's are (SP-47)", async () => {
     // sequence_widget.py:314-406: Range, the checkboxes, Window, Min Conf and Hist, in one row.
     panel(() => true);
-    fireEvent.click(screen.getByText("Build timeline"));
+    buildRange();
 
     const row = (await screen.findByRole("button", { name: "Hist" })).closest(".timeline__propagation-actions");
     expect(row).not.toBeNull();
@@ -1525,7 +1525,7 @@ describe("RULE-056: not losing propagated work without asking", () => {
     const UNSURE = [{ source: "frames/f02.png", objectId: 1, mask: MASK, confidence: 0.95 }];
 
     async function propagateUntilDone(keepFlagged = false) {
-      fireEvent.click(screen.getByText("Build timeline"));
+      buildRange();
       fireEvent.click(screen.getByRole("button", { name: "+ All Labeled" }));
       await waitFor(() => expect(cell(0).getAttribute("aria-label")).toMatch(/reference$/));
       if (keepFlagged) fireEvent.click(screen.getByLabelText("Keep flagged masks"));
@@ -1601,7 +1601,7 @@ describe("RULE-056: not losing propagated work without asking", () => {
 
   it("lets the tab close without asking when nothing propagated is waiting to be saved", async () => {
     panel(() => true);
-    fireEvent.click(screen.getByText("Build timeline"));
+    buildRange();
     // Building marks nothing since 2026-09-23, as in legacy: the reference is marked as a user marks it.
     fireEvent.click(screen.getByRole("button", { name: "+ All Labeled" }));
     await waitFor(() =>
