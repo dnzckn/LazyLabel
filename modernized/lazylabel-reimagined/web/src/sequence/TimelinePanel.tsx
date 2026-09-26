@@ -42,6 +42,7 @@ import { FIND_ARCHETYPES_ELSEWHERE, useSequenceActive } from "./sequenceActive.j
 
 import {
   buildTimeline,
+  clearSuggested,
   folderOf,
   clearFlags,
   clearReferences,
@@ -56,6 +57,7 @@ import {
   showKeptLabels,
   sortedOrder,
   step,
+  stepAmong,
   summarize,
   type Frame,
   type Target,
@@ -317,7 +319,10 @@ export function TimelinePanel({
 
   const navigate = useCallback(
     (target: Target, direction: 1 | -1) => {
-      const next = step(frames, current, target, direction);
+      const next =
+        target === "suggested"
+          ? stepAmong(frames, current, new Set(archetypes), direction)
+          : step(frames, current, target, direction);
       if (next === null) {
         // Legacy says so rather than doing nothing (main_window.py:4673-4706, 5158-5168).
         notify({ severity: "info", message: NOTHING_TO_STEP_TO[target] });
@@ -327,7 +332,10 @@ export function TimelinePanel({
       const frame = frames[next];
       if (frame !== undefined) onOpen?.(frame.key, propagatedFor(frame));
     },
-    [current, frames, notify, onOpen],
+    // `propagated` stands for propagatedFor, which reads it: without it, H and N handed a frame the
+    // masks of an earlier render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [archetypes, current, frames, notify, onOpen, propagated],
   );
 
   /*
@@ -394,7 +402,8 @@ export function TimelinePanel({
       const answer = await client.findArchetypes(frames.map((frame) => frame.key));
       setArchetypes(answer.suggested);
       onArchetypes?.(answer.suggested);
-      setOverrides(markSuggested(frames, answer.suggested));
+      // Earlier suggestions go first, as legacy's do (`main_window.py:5066-5067`, SP-30).
+      setOverrides(markSuggested(clearSuggested(frames), answer.suggested));
       setFoundNote(
         answer.suggested.length === 0
           ? "No distinct scenes were found — this sequence is too uniform to suggest frames."

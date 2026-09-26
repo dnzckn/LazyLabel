@@ -318,6 +318,32 @@ export function step(
   return null;
 }
 
+/**
+ * H and Shift+H: the next suggestion from `from`, wrapping, over the STORED list of suggestions,
+ * as legacy walks its list whatever the frames' statuses have become since
+ * (`sequence_view_mode.py:519-537`, SEQUENCE_PARITY.md SP-30). Following the purple state lost a
+ * suggestion a Propagate had repainted pending, or one that had become a reference.
+ */
+export function stepAmong(
+  frames: readonly Frame[],
+  from: number,
+  keys: ReadonlySet<string>,
+  direction: 1 | -1 = 1,
+): number | null {
+  if (frames.length === 0) return null;
+  for (let offset = 1; offset <= frames.length; offset += 1) {
+    const at = (((from + offset * direction) % frames.length) + frames.length) % frames.length;
+    const frame = frames[at];
+    if (frame !== undefined && keys.has(frame.key)) return frame.index;
+  }
+  return null;
+}
+
+/** Earlier suggestions back to pending, as legacy clears them before a new Find (`sequence_view_mode.py:503-509`). */
+export function clearSuggested(frames: readonly Frame[]): readonly Frame[] {
+  return frames.map((frame) => (frame.state === "suggested" ? { ...frame, state: "pending" as const } : frame));
+}
+
 /** How many frames are in each state, for the counts the timeline shows above itself. */
 export function summarize(frames: readonly Frame[]): {
   readonly total: number;

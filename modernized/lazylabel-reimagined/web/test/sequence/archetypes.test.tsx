@@ -206,3 +206,40 @@ describe("markSuggested", () => {
     expect(marked[1]!.state).toBe("pending");
   });
 });
+
+describe("suggestions over time (SP-30)", () => {
+  /*
+   * Legacy clears earlier suggestions before a new Find (main_window.py:5066-5067), and H walks
+   * the stored list whatever the frames have become since (sequence_view_mode.py:519-537). The web
+   * added to earlier suggestions, and H followed the purple colour, so it lost a suggestion a
+   * Propagate repainted pending or one that became a reference.
+   */
+  it("clears the earlier suggestions when Find runs again", async () => {
+    let calls = 0;
+    show(() => (calls++ === 0 ? found() : found({ suggested: ["frames/f02.png"] })));
+    await build();
+    fireEvent.click(screen.getByRole("button", { name: /Find archetypes/ }));
+    await waitFor(() => expect(cells()[2]!.getAttribute("aria-label")).toContain("suggested"));
+
+    fireEvent.click(screen.getByRole("button", { name: /Find archetypes/ }));
+
+    await waitFor(() => expect(cells()[1]!.getAttribute("aria-label")).toContain("suggested"));
+    expect(cells()[2]!.getAttribute("aria-label")).not.toContain("suggested");
+    expect(cells()[4]!.getAttribute("aria-label")).not.toContain("suggested");
+  });
+
+  it("H reaches a suggestion that has since become a reference", async () => {
+    show(found);
+    await build();
+    fireEvent.click(screen.getByRole("button", { name: /Find archetypes/ }));
+    await waitFor(() => expect(cells()[2]!.getAttribute("aria-label")).toContain("suggested"));
+    fireEvent.click(cells()[2]!);
+    fireEvent.click(screen.getByText("Mark as reference"));
+    await waitFor(() => expect(cells()[2]!.getAttribute("aria-label")).toContain("reference"));
+    fireEvent.click(cells()[0]!);
+
+    fireEvent.keyDown(document, { key: "H" });
+
+    await waitFor(() => expect(cells()[2]!.className).toContain("timeline__frame--current"));
+  });
+});
