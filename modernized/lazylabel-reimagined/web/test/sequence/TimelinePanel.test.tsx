@@ -85,6 +85,20 @@ function build(from?: string, to?: string, { references = true } = {}) {
 
 const cells = () => screen.getByLabelText("Timeline").querySelectorAll("button");
 
+describe("building the timeline (SP-18)", () => {
+  it("opens the first frame and says how many frames it holds, as legacy's Build does", async () => {
+    // Legacy loads frame 1 and notifies "Timeline built: N frames" (main_window.py:4992-4996). The
+    // web moved the cursor and opened nothing, so the view could show an image outside the timeline
+    // while the header named frame 1.
+    const { onOpen } = show();
+    build("1", "3", { references: false });
+
+    await waitFor(() => expect(cells()).toHaveLength(3));
+    expect(onOpen).toHaveBeenCalledWith("frames/f02.png");
+    expect(await screen.findByText("Timeline built: 3 frames")).toBeTruthy();
+  });
+});
+
 describe("before a timeline exists", () => {
   it("says a sequence needs a folder", () => {
     show([]);
@@ -223,6 +237,8 @@ describe("using it", () => {
     const { onOpen } = show();
     build("0", "4");
     await waitFor(() => expect(cells()).toHaveLength(5));
+    // Building opened frame 1 (SP-18); what matters is that Next flagged opens nothing more.
+    onOpen.mockClear();
 
     fireEvent.click(screen.getByText("Next flagged"));
 

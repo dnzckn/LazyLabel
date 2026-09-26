@@ -172,7 +172,7 @@ describe("with Auto-Save on Navigate on, legacy's default", () => {
     fireEvent.click(await screen.findByText("Build timeline"));
     const cells = () => screen.getByLabelText("Timeline").querySelectorAll("button");
     await waitFor(() => expect(cells()).toHaveLength(2));
-    fireEvent.click(cells()[0]!);
+    // Build opens the first frame, as legacy's does (SP-18).
     await waitFor(() => expect(status()).toMatch(/a\.png/));
     chooseTool("Poly (2)");
     drawTriangle(10, 10);

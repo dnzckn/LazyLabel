@@ -262,15 +262,25 @@ export function TimelinePanel({
    */
   const shown = useMemo(() => showKeptLabels(frames, keptLabels), [frames, keptLabels]);
 
+  const { notify } = useNotifications();
+
+  /*
+   * Build opens the first frame and says so, as legacy's does (`main_window.py:4992-4996`). It
+   * moved the cursor and opened nothing until 2026-09-26, so the view could show an image outside
+   * the new timeline while the header named frame 1 (`SEQUENCE_PARITY.md` SP-18). The open goes
+   * through the workspace, which saves or asks about unsaved work as any other open does.
+   */
   const build = useCallback(
     (from: number, to: number) => {
       setTimeline({ range: { from, to }, overrides: null });
       setCurrent(0);
+      const built = buildTimeline(keys, from, to);
+      if (built.length === 0) return;
+      onOpen?.(built[0]!.key);
+      notify({ severity: "info", message: `Timeline built: ${built.length} frames` });
     },
-    [],
+    [keys, notify, onOpen],
   );
-
-  const { notify } = useNotifications();
   // Whether the Sequence tab is showing: its keys act only there, as legacy's act only in sequence
   // mode, although the panel stays mounted on the other tabs.
   const active = useSequenceActive();
