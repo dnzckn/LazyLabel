@@ -28,11 +28,11 @@ import { useNotifications } from "../notifications/NotificationProvider.jsx";
 import { useSequenceActive } from "./sequenceActive.js";
 
 import { commitFrame, type CommitPolicy, type Committed } from "./commit.js";
-import { clampThreshold, DEFAULT_THRESHOLD } from "./confidence.js";
+import { clampThreshold, DEFAULT_THRESHOLD, isFlagged } from "./confidence.js";
 import { usePropagation } from "./usePropagation.js";
 import { referenceMasks } from "./references.js";
 import { plannedSave, saveAll, segmentsFor } from "./saveAll.js";
-import type { Frame } from "./timeline.js";
+import type { Frame, FrameState } from "./timeline.js";
 
 /** The folder a dataset key sits in, as the listing API names it: "" for the dataset's root. */
 function folderOf(key: string): string {
@@ -344,15 +344,19 @@ export function PropagationControl({
     const painted = new Set<string>();
     const kept = new Map<string, readonly WirePropagationFrame[]>();
     const known = new Map<string, string>();
+    /** The state each commit gives its frame at today's Min Conf, whatever the timeline shows. */
+    const verdicts = new Map<string, FrameState>();
 
     for (const [key, result] of committed.current) {
       const at = position.get(key);
       if (at === undefined) continue; // trimmed off the timeline
       if (result.kind === "scored") {
         scores[at] = result.score;
+        verdicts.set(key, isFlagged(result.score, threshold) ? "flagged" : "propagated");
         if (result.kept.length > 0) kept.set(key, result.kept);
         else known.set(key, "its masks were discarded when it was flagged, with Keep Flagged Masks off");
       } else if (result.kind === "skipped") {
+        verdicts.set(key, "skipped");
         if (result.painted) painted.add(key);
         known.set(key, "it already has labels, and Skip Labeled leaves them alone");
       } else if (result.kind === "empty") {
@@ -370,7 +374,7 @@ export function PropagationControl({
         corrected.push(key);
       }
     }
-    return { scores, empty: empty.sort((a, b) => a - b), painted, kept, known, corrected };
+    return { scores, empty: empty.sort((a, b) => a - b), painted, kept, known, corrected, verdicts };
     // `committed` is a ref, filled just above from these same inputs, and `frames` is read only
     // for its keys and positions, which `framesKey` stands for.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -404,8 +408,22 @@ export function PropagationControl({
   const job = progress.job;
   const done = job !== null && !progress.running;
 
-  const { writable, withheld } = plannedSave(frames, view.kept, view.known);
-  const unsaved = writable.filter((frame) => !written.has(frame.key));
+  /*
+   * WHAT SAVE ALL WRITES, AND WHAT THE LOSS GUARDS COUNT, IS WHAT THE COMMIT DECIDED, never the
+   * timeline's paint. Clear Flags repaints every frame pending, and legacy's does nothing more: its
+   * Save All still writes every propagated, unflagged frame (`main_window.py:3457-3478`). Planned
+   * from the paint, Save All wrote nothing after one, and New timeline, Clear, Propagate and a
+   * closing tab stopped asking (`SEQUENCE_PARITY.md` SP-03). A frame already saved this run, by
+   * Save All or by the user (SP-02), is not planned at all.
+   */
+  const corrected = new Set(view.corrected);
+  const planned = frames
+    .filter((frame) => !written.has(frame.key) && !corrected.has(frame.key))
+    .map((frame) => {
+      const verdict = frame.isReference ? undefined : view.verdicts.get(frame.key);
+      return verdict === undefined ? frame : { ...frame, state: verdict };
+    });
+  const { writable: unsaved, withheld } = plannedSave(planned, view.kept, view.known);
 
   // Written during render, read by a click handler. The same "latest value" pattern the AI tool
   // uses for its prediction, and for the same reason: an effect would be one render too late.
@@ -436,12 +454,12 @@ export function PropagationControl({
 
   const write = useCallback(async () => {
     setSaved(null);
-    setSaving({ done: 0, total: writable.length });
+    setSaving({ done: 0, total: unsaved.length });
     try {
       const outcome = await saveAll({
         client,
         projectId,
-        frames,
+        frames: planned,
         masks: view.kept,
         known: view.known,
         classes,
@@ -461,7 +479,7 @@ export function PropagationControl({
     } finally {
       setSaving(null);
     }
-  }, [classes, client, frames, onSaved, projectId, settings.values, view.kept, view.known, writable.length]);
+  }, [classes, client, onSaved, planned, projectId, settings.values, unsaved.length, view.kept, view.known]);
 
   return (
     <div className="timeline__propagation">

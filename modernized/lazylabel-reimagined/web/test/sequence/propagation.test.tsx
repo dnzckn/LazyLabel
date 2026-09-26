@@ -833,6 +833,24 @@ describe("RULE-056: not losing propagated work without asking", () => {
     await waitFor(() => expect(screen.queryByRole("button", { name: /Save \d+ frames?/ })).toBeNull());
   });
 
+  it("keeps what Save All writes, and asking before losing it, when Clear flags repaints", async () => {
+    // Legacy's Clear Flags only repaints: Save All still writes every propagated, unflagged frame
+    // (main_window.py:3457-3478). Here it emptied Save All and silenced every guard with it
+    // (SEQUENCE_PARITY.md SP-03).
+    panel(() => true);
+    await propagateAndWait();
+    // The flags a user clears are the ones on screen: the run's scores have reached the timeline.
+    await screen.findByRole("button", { name: "Frame 2, frames/f02.png, propagated" });
+
+    fireEvent.click(screen.getByRole("button", { name: "Clear flags" }));
+
+    // Still a repaint, as in legacy...
+    expect(screen.getByRole("button", { name: "Frame 2, frames/f02.png, pending" })).toBeTruthy();
+    // ...and nothing more.
+    expect(screen.getByRole("button", { name: /Save 1 frame/ })).toBeTruthy();
+    expect(closeTab()).toBe(true);
+  });
+
   it("offers the Save beside the timeline bar, where legacy's Save All is", async () => {
     panel(() => true);
     await propagateAndWait();

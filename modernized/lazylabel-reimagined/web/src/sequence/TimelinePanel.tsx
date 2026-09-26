@@ -17,7 +17,15 @@
  * legacy does — it runs the whole sequence and writes an empty mask over every frame.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+  type SetStateAction,
+} from "react";
 
 import type { WireDatasetImage } from "@lazylabel/contracts";
 
@@ -133,8 +141,34 @@ export function TimelinePanel({
   openKey,
   savedElsewhere,
 }: TimelinePanelProps): ReactNode {
-  const [range, setRange] = useState<{ from: number; to: number } | null>(null);
-  const [overrides, setOverrides] = useState<readonly Frame[] | null>(null);
+  /*
+   * The timeline -- its range and what has been painted over it -- as ONE state, so that a repaint
+   * can tell which timeline it was made for.
+   *
+   * Some repaints land after a later click: the threshold applied when scores arrive, Save All
+   * marking frames saved, a run resetting statuses. Each computes `previous ?? frames` with the
+   * `frames` of the render that scheduled it. While the range and the overrides were two states,
+   * one of those flushed just after New timeline found no overrides, fell back to the discarded
+   * frames and set them again, and `frames` preferred them to the missing range: the range picker
+   * never came back, and nothing threw (found with SEQUENCE_PARITY.md SP-03's fix, whose Save
+   * button appears before the scores reach this panel). A repaint for a timeline that has been
+   * discarded or rebuilt since is now dropped.
+   */
+  const [timeline, setTimeline] = useState<{
+    readonly range: { readonly from: number; readonly to: number };
+    readonly overrides: readonly Frame[] | null;
+  } | null>(null);
+  const range = timeline?.range ?? null;
+  const overrides = timeline?.overrides ?? null;
+  const setOverrides = useCallback(
+    (next: SetStateAction<readonly Frame[] | null>) =>
+      setTimeline((live) =>
+        live === null || live.range !== range
+          ? live
+          : { range: live.range, overrides: typeof next === "function" ? next(live.overrides) : next },
+      ),
+    [range],
+  );
   const [sorted, setSorted] = useState(false);
   const [current, setCurrent] = useState(0);
   // Where the propagation's Save button is drawn: beside the bar, as legacy's Save All is.
@@ -218,9 +252,8 @@ export function TimelinePanel({
 
   const build = useCallback(
     (from: number, to: number) => {
-      setOverrides(null);
+      setTimeline({ range: { from, to }, overrides: null });
       setCurrent(0);
-      setRange({ from, to });
     },
     [],
   );
@@ -262,7 +295,7 @@ export function TimelinePanel({
   // derives the whole set when the timeline is built and nothing re-derives it while they work.
   const markCurrent = useCallback(
     () => setOverrides(markReference(frames, current)),
-    [current, frames],
+    [current, frames, setOverrides],
   );
   useHotkey("add_reference_frame", () => active && markCurrent());
 
@@ -323,7 +356,7 @@ export function TimelinePanel({
     } finally {
       setFinding(false);
     }
-  }, [client, finding, frames, onArchetypes]);
+  }, [client, finding, frames, onArchetypes, setOverrides]);
 
   useHotkey("find_archetypes", () => {
     // Off its tab the key says where it works, as the shell's fallback does before this panel is
@@ -382,8 +415,7 @@ export function TimelinePanel({
     ) {
       return;
     }
-    setRange(null);
-    setOverrides(null);
+    setTimeline(null);
     setKeptLabels(new Set());
     unsavedRef.current = 0;
   };
