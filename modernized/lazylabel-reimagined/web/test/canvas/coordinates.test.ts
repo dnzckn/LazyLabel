@@ -4,7 +4,7 @@
 
 import { describe, expect, it } from "vitest";
 
-import { locate, project, scale, type DisplayBox } from "../../src/canvas/coordinates.js";
+import { locate, project, scale, wholePixel, type DisplayBox } from "../../src/canvas/coordinates.js";
 
 const IMAGE = { width: 200, height: 100 };
 
@@ -29,6 +29,21 @@ describe("locating a click", () => {
     const squashed: DisplayBox = { left: 0, top: 0, width: 200, height: 25 };
 
     expect(locate(at(100, 12.5), squashed, IMAGE).point).toEqual({ x: 100, y: 50 });
+  });
+
+  it("lands a click on a pixel's edge on that pixel, at 100%, 200% and 50%", () => {
+    // What is truncated must not be a hair under the whole number it is (`wholePixel`): legacy's
+    // scene position is exact there. Dividing first, (d / 800) * 800 is below d for 37 columns.
+    for (const [shown, scaleBy] of [[800, 1], [1600, 2], [400, 0.5]] as const) {
+      const box: DisplayBox = { left: 0, top: 0, width: shown, height: shown / 2 };
+      const wrong: number[] = [];
+      for (let column = 0; column < 800; column += 1) {
+        const point = locate(at(column * scaleBy, 0), box, { width: 800, height: 400 }).point;
+        if (wholePixel(point).x !== column) wrong.push(column);
+      }
+
+      expect(wrong).toEqual([]);
+    }
   });
 
   it("keeps fractional coordinates rather than rounding to a pixel", () => {

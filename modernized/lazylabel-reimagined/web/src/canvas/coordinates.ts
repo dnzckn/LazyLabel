@@ -85,9 +85,13 @@ export function locate(
     return { kind: "outside", point: { x: Number.NaN, y: Number.NaN } };
   }
 
+  // MULTIPLIED BEFORE IT IS DIVIDED, because the point is truncated after (`wholePixel`). At 100%,
+  // 200% or 50% a click on a pixel's edge is a whole number, as legacy's scene position is there,
+  // and dividing first lands some of them just below it: 37 of the 800 columns of an image 800 wide
+  // at 100%, each truncated into the column before.
   const point: ImagePoint = {
-    x: ((client.clientX - box.left) / box.width) * image.width,
-    y: ((client.clientY - box.top) / box.height) * image.height,
+    x: ((client.clientX - box.left) * image.width) / box.width,
+    y: ((client.clientY - box.top) * image.height) / box.height,
   };
 
   // Legacy's `QRect(0, 0, w, h).contains(pos.toPoint())`: the rounded point within 0..w-1.
