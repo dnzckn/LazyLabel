@@ -166,7 +166,8 @@ const press = (key: string, code: string, modifiers: { ctrlKey?: boolean } = {})
   fireEvent.keyDown(document, { key, code, ...modifiers });
 const editRight = () => fireEvent.click(screen.getByLabelText("Edit the right image"));
 const editLeft = () => fireEvent.click(screen.getByLabelText("Edit the left image"));
-const link = () => fireEvent.click(screen.getByLabelText("Link the two images"));
+/** The pair starts linked, as legacy's does (multi_view_coordinator.py:46); this unticks it. */
+const unlink = () => fireEvent.click(screen.getByLabelText("Link the two images"));
 /** A row's checkbox in the segment table, which shows the image being edited. */
 const tick = (row: number) => fireEvent.click(screen.getByRole("checkbox", { name: new RegExp(`^Select Polygon ${row},`) }));
 
@@ -254,6 +255,7 @@ describe("the pan keys and Fit act on both halves", () => {
 describe("V, M, Escape and Ctrl+A act on both images", () => {
   it("deletes each image's own selection on V, unlinked too, in one undo step", async () => {
     await pairUp();
+    unlink();
     tick(1);
     editRight();
     tick(2);
@@ -273,6 +275,7 @@ describe("V, M, Escape and Ctrl+A act on both images", () => {
     // _assign_selected_to_class merges every viewer with a selection (main_window.py:1647-1656);
     // assign_segments_to_class takes the lowest selected class (segment_manager.py:65-85).
     await pairUp();
+    unlink();
     tick(1);
     tick(2);
     editRight();
@@ -288,6 +291,7 @@ describe("V, M, Escape and Ctrl+A act on both images", () => {
 
   it("clears both selections on Escape", async () => {
     await pairUp();
+    unlink();
     tick(1);
     editRight();
     tick(3);
@@ -300,7 +304,6 @@ describe("V, M, Escape and Ctrl+A act on both images", () => {
 
   it("selects every annotation of both images on Ctrl+A while linked", async () => {
     await pairUp();
-    link();
 
     press("a", "KeyA", { ctrlKey: true });
 
@@ -309,6 +312,7 @@ describe("V, M, Escape and Ctrl+A act on both images", () => {
 
   it("selects only the image being edited on Ctrl+A while unlinked, as legacy's does", async () => {
     await pairUp();
+    unlink();
     editRight();
 
     press("a", "KeyA", { ctrlKey: true });
@@ -339,8 +343,10 @@ describe("a file opened from the list in the Multi tab", () => {
 
 describe("R looks at both images' selections", () => {
   it("enters Edit when the image NOT being edited has a polygon selected, as legacy's does", async () => {
-    // mode_manager.py:60-86: in the multi view R checks every viewer's selected rows.
+    // mode_manager.py:60-86: in the multi view R checks every viewer's selected rows. Unlinked, so
+    // the selection is the left image's alone.
     await pairUp();
+    unlink();
     tick(1);
     editRight();
 
@@ -358,7 +364,6 @@ describe("a linked pair shares its selection and its class names", () => {
     // _sync_multi_view_selection replaces the other table's selection with this one's rows,
     // skipping rows past its end (main_window.py:6284-6319).
     await pairUp();
-    link();
     editRight();
 
     tick(1);
@@ -369,6 +374,7 @@ describe("a linked pair shares its selection and its class names", () => {
 
   it("leaves the other image's selection alone while unlinked", async () => {
     await pairUp();
+    unlink();
 
     tick(2);
 
@@ -380,7 +386,6 @@ describe("a linked pair shares its selection and its class names", () => {
     // agrees on names with ids of its own (RULE-092), so b.png's "car" is its class 1, and its
     // class 0, "tree", keeps its name.
     await pairUp();
-    link();
 
     const name = await editClassName(0);
     fireEvent.change(name, { target: { value: "auto" } });
@@ -397,6 +402,7 @@ describe("a linked pair shares its selection and its class names", () => {
 
   it("renames only the image being edited while unlinked", async () => {
     await pairUp();
+    unlink();
 
     const name = await editClassName(0);
     fireEvent.change(name, { target: { value: "auto" } });
@@ -413,7 +419,6 @@ describe("Space finishes what is drawn in both images while linked", () => {
     // (main_window.py:5680-5700; keyboard_event_manager.py:99-123). Here the shape is drawn once
     // and the store puts it in both (RULE-092), which is the same pair of annotations.
     await pairUp();
-    link();
     chooseTool("Poly (2)");
 
     drawTriangle(60, 20);
@@ -433,8 +438,22 @@ describe("outside the Multi tab", () => {
     await waitFor(() => expect(keys()).toEqual(["frames/b.png", "frames/b.png"]));
   });
 
+  it("draws into the image being edited alone, though the pair is linked", async () => {
+    // Legacy's link lives in its multi view. Linked from the start, a second image left open
+    // behind the Single tab would otherwise take every shape drawn there, unseen.
+    await pairUp();
+    fireEvent.click(screen.getByRole("tab", { name: "Single" }));
+    chooseTool("Poly (2)");
+
+    drawTriangle(60, 20);
+
+    await waitFor(() => expect(pair()[0].classes.length).toBe(3));
+    expect(pair()[1].classes).toEqual([0, 1, 2]);
+  });
+
   it("clears only the selection of the image being edited on Escape", async () => {
     await pairUp();
+    unlink();
     editRight();
     tick(1);
     editLeft();

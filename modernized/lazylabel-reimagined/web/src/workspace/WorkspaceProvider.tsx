@@ -46,7 +46,7 @@ import { onNavigateAway, provenanceFromLoad, type ImageState } from "./saveState
 import { toggle } from "../tools/selection.js";
 import type { Crop } from "../tools/crop.js";
 import { NO_PROCESSING, type ImageProcessing } from "./processing.js";
-import { linkedAdd, linkedErase, type LinkedAdd } from "../split/linkedAdd.js";
+import { linkedAdd, linkedClass, linkedErase, type LinkedAdd } from "../split/linkedAdd.js";
 import { erase, type EraseResult } from "../tools/erase.js";
 import { chooseMode, toggleMode, type ModeState } from "../tools/modes.js";
 import type { ImageSize } from "../split/linked.js";
@@ -244,7 +244,13 @@ export interface LeaveSave {
 
 export type LinkReport =
   | { readonly kind: "linked"; readonly classId: number; readonly allocated: boolean; readonly image: string }
-  | { readonly kind: "refused"; readonly reason: string; readonly erase?: boolean }
+  | {
+      readonly kind: "refused";
+      readonly reason: string;
+      readonly erase?: boolean;
+      /** The image it WAS done in, when that is the other one; the one being edited when absent. */
+      readonly where?: string;
+    }
   | { readonly kind: "erased"; readonly image: string; readonly count: number };
 
 /** What one erase did, so the caller can say it: legacy's "No segments to erase", and the pieces lost. */
@@ -272,13 +278,13 @@ export interface WorkspaceContextValue {
   /** Both slots, for the split view. Everything below resolves from `sides[activeSide]`. */
   readonly sides: readonly [SideState, SideState];
   /**
-   * Whether one annotation drawn in either image should land in BOTH — C14, RULE-092.
+   * Whether one annotation drawn in either image should land in BOTH — C14, RULE-092 — and one AI
+   * prompt be asked of both. Only in the Multi tab, where legacy's link lives.
    *
-   * OFF by default, which reverses the first split view's "starts linked, as legacy does".
-   * Legacy's default does not bind here: decision 8 rebuilt multi-view from the rules rather than
-   * porting a half-migrated feature, and this app's rule is that nothing reaches a file the user
-   * did not act on. An annotation appearing in an image they were not looking at is exactly that.
-   * Turning it on is one click, in the panel that made the pair.
+   * ON by default, as legacy's pair starts (multi_view_coordinator.py:46), by the owner's word of
+   * 2026-09-27: the Multi tab exists to prompt the AI at the same coordinates in both images. It
+   * was off before, when an annotation appearing in the image not being looked at was judged to
+   * need an explicit act; the Linked box beside the panes is in plain sight either way.
    */
   readonly linked: boolean;
   readonly setLinked: (linked: boolean) => void;
@@ -340,6 +346,17 @@ export interface WorkspaceContextValue {
    * here, and no tool has to know a pair exists.
    */
   readonly eraseWith: (eraser: WireSegment) => EraseOutcome;
+  /**
+   * Add EACH image's own annotation, by side, as ONE recorded step: a linked pair's AI accept.
+   *
+   * Nothing is mirrored. Each image's model answered the same prompt about its own pixels, and
+   * each keeps its own answer, as legacy's viewers do (ai_segment_manager.py:321-379). Only the
+   * class crosses: both arrive with the class chosen in the image being edited, and the other
+   * image files its own under the class of the same NAME there (`linkedClass`). Either may be null.
+   */
+  readonly addEach: (bySide: readonly [WireSegment | null, WireSegment | null], label?: string) => void;
+  /** Erase each image with its OWN eraser, by side, as one recorded step: the linked AI erase. */
+  readonly eraseEach: (bySide: readonly [WireSegment | null, WireSegment | null]) => EraseOutcome;
   /**
    * Replace one annotation in place, recording it.
    *
@@ -602,10 +619,16 @@ export function WorkspaceProvider({
   /** How many times each image has been saved this session by the ordinary save, by key. */
   const [saveCounts, setSaveCounts] = useState<ReadonlyMap<string, number>>(new Map());
   const [quietWrites, setQuietWrites] = useState(0);
-  const [linked, setLinked] = useState(false);
+  // Linked from the start, as legacy's pair is (multi_view_coordinator.py:46; the owner, 2026-09-27).
+  const [linked, setLinked] = useState(true);
   // The split view says so while it is mounted (`multiView` on the context).
   const [multiView, setMultiView] = useState(false);
-  /** Whether what is done to one side's selection or class names is done to the other's too. */
+  /**
+   * Whether what is done to one side is done to the other too: its annotations, erasers, selection
+   * and class names. Only while the Multi tab shows the pair, where legacy's link lives -- with the
+   * link on from the start, a second image left open behind the Single tab would otherwise take
+   * every shape drawn there.
+   */
   const mirroring = linked && multiView;
   const [linkReport, setLinkReport] = useState<LinkReport | null>(null);
   // Measured by the view, which is the only thing that knows the pane's size.
@@ -932,13 +955,14 @@ export function WorkspaceProvider({
        * THE LINKED HALF -- C14, RULE-092. One annotation drawn once, landing in both images.
        *
        * Decided here rather than in the drawing tools, and that is the whole reason this is cheap:
-       * every tool, the AI prompt and the hotkeys all reach the store through this one function,
-       * so none of them has to know a pair exists. `linkedAdd` holds the rules and the refusals.
+       * every drawing tool and the hotkeys reach the store through this one function, so none of
+       * them has to know a pair exists. `linkedAdd` holds the rules and the refusals. A linked AI
+       * accept does not come here: each image keeps its own model's answer (`addEach`).
        */
       const sourceSize = sizeOf(source);
       const targetSize = sizeOf(target);
       const plan =
-        linked && target.open !== null && sourceSize !== null && targetSize !== null
+        mirroring && target.open !== null && sourceSize !== null && targetSize !== null
           ? linkedAdd(
               { segment, aliases: source.classAliases, size: sourceSize },
               { segments: target.segments, aliases: target.classAliases, size: targetSize },
@@ -1008,7 +1032,96 @@ export function WorkspaceProvider({
         redo: insert,
       });
     },
-    [activeSide, history, linked, sides, updateSide],
+    [activeSide, history, mirroring, sides, updateSide],
+  );
+
+  /*
+   * A LINKED PAIR'S AI ACCEPT: each image's own answer to the one prompt, in its own image, as ONE
+   * recorded step whose undo takes both back. Legacy records one step per viewer
+   * (ai_segment_manager.py:371-381); one here, as a linked shape is one, because the user pressed
+   * Space once. Only the class crosses (`linkedClass`).
+   */
+  const addEach = useCallback(
+    (bySide: readonly [WireSegment | null, WireSegment | null], label = "Accept AI mask") => {
+      const at = activeSide;
+      const other = otherSide(at);
+      const here = bySide[at];
+      const source = sides[at];
+      const target = sides[other];
+      const plan =
+        bySide[other] === null || target.open === null
+          ? null
+          : linkedClass(bySide[other]!, source.classAliases, {
+              segments: target.segments,
+              aliases: target.classAliases,
+            });
+      const there = plan !== null && plan.kind === "linked" ? plan : null;
+      if (here === null && there === null) return;
+
+      // Accepting USES the class, which makes it the class X toggles (RULE-086), as addSegment does.
+      const used = here?.classId ?? null;
+      if (used !== null) lastToggledClassId.current = used;
+
+      const index = source.segments.length;
+      const targetIndex = target.segments.length;
+      const targetAliasesBefore = target.classAliases;
+      const insert = () => {
+        if (here !== null) {
+          updateSide(at, (current) => ({
+            ...current,
+            segments: [...current.segments.slice(0, index), here, ...current.segments.slice(index)],
+            dirty: true,
+          }));
+        }
+        if (there === null) return;
+        updateSide(other, (current) => ({
+          ...current,
+          segments: [
+            ...current.segments.slice(0, targetIndex),
+            there.segment,
+            ...current.segments.slice(targetIndex),
+          ],
+          classAliases: there.aliases,
+          dirty: true,
+        }));
+      };
+      const remove = () => {
+        if (here !== null) {
+          updateSide(at, (current) => ({
+            ...current,
+            segments: current.segments.filter((_, i) => i !== index),
+            dirty: true,
+          }));
+        }
+        if (there === null) return;
+        updateSide(other, (current) => ({
+          ...current,
+          segments: current.segments.filter((_, i) => i !== targetIndex),
+          classAliases: targetAliasesBefore,
+          dirty: true,
+        }));
+      };
+      insert();
+
+      const targetName = target.open?.image.name ?? "";
+      setLinkReport(
+        here !== null && there !== null
+          ? { kind: "linked", classId: there.classId, allocated: there.allocated, image: targetName }
+          : here !== null
+            ? { kind: "refused", reason: plan?.kind === "refused" ? plan.reason : `no prediction in ${targetName}` }
+            : { kind: "refused", reason: "no prediction in this image", where: targetName },
+      );
+
+      const both = here !== null && there !== null;
+      history.record({
+        label: both ? `${label} (both images)` : label,
+        bytes: (here === null ? 0 : estimateBytes(here)) + (there === null ? 0 : estimateBytes(there.segment)),
+        scope: [...(here === null ? [] : [sideScope(at)]), ...(there === null ? [] : [sideScope(other)])],
+        undo: remove,
+        redo: insert,
+      });
+    },
+    [activeSide, history, sides, updateSide],
   );
 
   const updateSegment = useCallback(
@@ -1142,7 +1255,7 @@ export function WorkspaceProvider({
        */
       const targetSize = sizeOf(target);
       const plan =
-        linked && target.open !== null && targetSize !== null
+        mirroring && target.open !== null && targetSize !== null
           ? linkedErase(eraser, sourceSize, targetSize)
           : null;
       let there: EraseResult | null = null;
@@ -1158,55 +1271,42 @@ export function WorkspaceProvider({
             : { kind: "erased", image: target.open?.image.name ?? "", count: there?.erased.length ?? 0 },
       );
 
-      const hereChanged = here.erased.length > 0;
-      const thereChanged = there !== null && there.erased.length > 0;
-      if (!hereChanged && !thereChanged) return { kind: "nothing" };
-
-      const beforeHere = source.segments;
-      const beforeThere = target.segments;
-      const afterThere = there?.segments ?? beforeThere;
-      const put = (side: SideIndex, value: readonly WireSegment[]) =>
-        updateSide(side, (current) => ({
-          ...current,
-          segments: value,
-          dirty: true,
-          // Cleared rather than remapped, as applySegments does: erase does not keep positions.
-          selected: [],
-        }));
-      const apply = () => {
-        if (hereChanged) put(at, here.segments);
-        if (thereChanged) put(other, afterThere);
-      };
-      const revert = () => {
-        if (hereChanged) put(at, beforeHere);
-        if (thereChanged) put(other, beforeThere);
-      };
-      apply();
-
-      const count = here.erased.length + (there?.erased.length ?? 0);
-      const where = thereChanged ? (hereChanged ? " (both images)" : " (the other image)") : "";
-      const fresh = (next: readonly WireSegment[], previous: readonly WireSegment[]) =>
-        next.reduce((total, segment) => total + (previous.includes(segment) ? 0 : estimateBytes(segment)), 0);
-      history.record({
-        label: `Erase from ${count} annotation${count === 1 ? "" : "s"}${where}`,
-        bytes:
-          (hereChanged ? fresh(here.segments, beforeHere) : 0)
-          + (thereChanged ? fresh(afterThere, beforeThere) : 0),
-        // Scoped to every side it changed, so closing either drops the entry: half an inverse
-        // would restore annotations into an image that is no longer open.
-        scope: [...(hereChanged ? [sideScope(at)] : []), ...(thereChanged ? [sideScope(other)] : [])],
-        undo: revert,
-        redo: apply,
-      });
-
-      return {
-        kind: "erased",
-        erased: count,
-        vanished: here.vanished.length + (there?.vanished.length ?? 0),
-        bothImages: hereChanged && thereChanged,
-      };
+      return recordErase(updateSide, history, { at, before: [source.segments, target.segments] }, here, there);
     },
-    [activeSide, history, linked, sides, updateSide],
+    [activeSide, history, mirroring, sides, updateSide],
+  );
+
+  /*
+   * A LINKED PAIR'S AI ERASE, Shift+Space: each image cut by its OWN prediction's mask, as legacy
+   * erases each target viewer with its own preview (ai_segment_manager.py:341-360). Nothing is
+   * mirrored, so two images of different sizes erase too. One recorded step, as eraseWith's.
+   */
+  const eraseEach = useCallback(
+    (bySide: readonly [WireSegment | null, WireSegment | null]): EraseOutcome => {
+      const at = activeSide;
+      const other = otherSide(at);
+      const source = sides[at];
+      const target = sides[other];
+      const cut = (side: SideState, eraser: WireSegment | null): EraseResult | null => {
+        const size = sizeOf(side);
+        if (eraser === null || size === null || side.open === null) return null;
+        const mask = maskOf(eraser, size);
+        return mask === null ? null : erase(side.segments, mask, size);
+      };
+      const here = cut(source, bySide[at]);
+      const there = cut(target, bySide[other]);
+      if (here === null && there === null) return { kind: "empty-shape" };
+
+      const targetName = target.open?.image.name ?? "";
+      setLinkReport(
+        there === null
+          ? { kind: "refused", reason: `no prediction in ${targetName}`, erase: true }
+          : { kind: "erased", image: targetName, count: there.erased.length },
+      );
+
+      return recordErase(updateSide, history, { at, before: [source.segments, target.segments] }, here, there);
+    },
+    [activeSide, history, sides, updateSide],
   );
 
   const applySegments = useCallback(
@@ -1465,6 +1565,8 @@ export function WorkspaceProvider({
       segments,
       addSegment,
       eraseWith,
+      addEach,
+      eraseEach,
       updateSegment,
       replaceSegments,
       history,
@@ -1503,9 +1605,11 @@ export function WorkspaceProvider({
       activeSide,
       activeTool,
       addSegment,
+      addEach,
       applyClasses,
       applySegments,
       eraseWith,
+      eraseEach,
       classAliases,
       fitted,
       clearSelection,
@@ -1584,6 +1688,66 @@ function classNamed(side: SideState, name: string): number | null {
 }
 
 /** The pixels an eraser covers in an image of this size, or null when it covers none. */
+/**
+ * What an erase cut from this side and, when linked, the other, applied as ONE recorded step: one
+ * undo puts back both. `before` is each side's annotations as they stood, by side from `at`.
+ */
+function recordErase(
+  updateSide: (side: SideIndex, change: (current: SideState) => SideState) => void,
+  history: History,
+  pair: { readonly at: SideIndex; readonly before: readonly [readonly WireSegment[], readonly WireSegment[]] },
+  here: EraseResult | null,
+  there: EraseResult | null,
+): EraseOutcome {
+  const { at } = pair;
+  const other = otherSide(at);
+  const [beforeHere, beforeThere] = pair.before;
+  const hereChanged = here !== null && here.erased.length > 0;
+  const thereChanged = there !== null && there.erased.length > 0;
+  if (!hereChanged && !thereChanged) return { kind: "nothing" };
+
+  const afterHere = here?.segments ?? beforeHere;
+  const afterThere = there?.segments ?? beforeThere;
+  const put = (side: SideIndex, value: readonly WireSegment[]) =>
+    updateSide(side, (current) => ({
+      ...current,
+      segments: value,
+      dirty: true,
+      // Cleared rather than remapped, as applySegments does: erase does not keep positions.
+      selected: [],
+    }));
+  const apply = () => {
+    if (hereChanged) put(at, afterHere);
+    if (thereChanged) put(other, afterThere);
+  };
+  const revert = () => {
+    if (hereChanged) put(at, beforeHere);
+    if (thereChanged) put(other, beforeThere);
+  };
+  apply();
+
+  const count = (here?.erased.length ?? 0) + (there?.erased.length ?? 0);
+  const where = thereChanged ? (hereChanged ? " (both images)" : " (the other image)") : "";
+  const fresh = (next: readonly WireSegment[], previous: readonly WireSegment[]) =>
+    next.reduce((total, segment) => total + (previous.includes(segment) ? 0 : estimateBytes(segment)), 0);
+  history.record({
+    label: `Erase from ${count} annotation${count === 1 ? "" : "s"}${where}`,
+    bytes: (hereChanged ? fresh(afterHere, beforeHere) : 0) + (thereChanged ? fresh(afterThere, beforeThere) : 0),
+    // Scoped to every side it changed, so closing either drops the entry: half an inverse
+    // would restore annotations into an image that is no longer open.
+    scope: [...(hereChanged ? [sideScope(at)] : []), ...(thereChanged ? [sideScope(other)] : [])],
+    undo: revert,
+    redo: apply,
+  });
+
+  return {
+    kind: "erased",
+    erased: count,
+    vanished: (here?.vanished.length ?? 0) + (there?.vanished.length ?? 0),
+    bothImages: hereChanged && thereChanged,
+  };
+}
+
 function maskOf(eraser: WireSegment, size: ImageSize): BinaryMask | null {
   if (eraser.mask !== undefined) return decodeMask(eraser.mask);
   if (eraser.vertices === undefined) return null;

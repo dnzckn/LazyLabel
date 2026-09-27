@@ -32,7 +32,7 @@ import type {
 
 import { AnnotationCanvas, segmentAt } from "../canvas/AnnotationCanvas.jsx";
 import { useSettings } from "../settings/SettingsProvider.jsx";
-import { useWorkspace, type LeaveSave, type SideIndex } from "./WorkspaceProvider.jsx";
+import { useWorkspace, type EraseOutcome, type LeaveSave, type SideIndex } from "./WorkspaceProvider.jsx";
 import type { Crop } from "../tools/crop.js";
 import { PolygonLayer, toWireVertices } from "../canvas/PolygonLayer.jsx";
 import { AiTool } from "./AiTool.jsx";
@@ -130,7 +130,7 @@ function OpenedImage({
   const { classAliases } = useWorkspace();
   const { segments, addSegment, replaceSegments, activeTool, activeClassId, selected, toggleSelected } =
     useWorkspace();
-  const { eraseWith } = useWorkspace();
+  const { eraseWith, addEach, eraseEach } = useWorkspace();
   // The crop is the store's, not this view's: the SAVE path reads it, so a crop dragged here and
   // held locally would be one the panel showed and the file never saw.
   const { crop, setCrop, zoom, processing, setFitted } = useWorkspace();
@@ -322,12 +322,8 @@ function OpenedImage({
    * eraser removes is exactly what would have been written -- the alternative is an eraser that
    * agrees with the outline on screen and disagrees with the file.
    */
-  const eraseAndSay = useCallback(
-    (eraser: WireSegment) => {
-      // The store erases -- here, and at the same pixels in the other image while a pair is linked
-      // (RULE-092) -- so what is left for this view is saying what happened.
-      const outcome = eraseWith(eraser);
-
+  const sayErased = useCallback(
+    (outcome: EraseOutcome) => {
       if (outcome.kind === "empty-shape") {
         notify({ severity: "warning", message: "that shape covers no pixels, so nothing was erased" });
         return;
@@ -350,8 +346,12 @@ function OpenedImage({
         });
       }
     },
-    [eraseWith, notify],
+    [notify],
   );
+
+  // The store erases -- here, and at the same pixels in the other image while a pair is linked
+  // (RULE-092) -- so what is left for this view is saying what happened.
+  const eraseAndSay = useCallback((eraser: WireSegment) => sayErased(eraseWith(eraser)), [eraseWith, sayErased]);
 
   /** A drawn shape erases by being rasterized first -- the same path a saved annotation takes. */
   const applyErase = useCallback(
@@ -455,6 +455,9 @@ function OpenedImage({
                       onErase={(segment) =>
                         segment.mask === undefined ? undefined : eraseAndSay(segment)
                       }
+                      // A linked pair in the Multi tab: each image's own answer, in its own image.
+                      onAcceptEach={(bySide) => addEach(bySide, "Accept AI mask")}
+                      onEraseEach={(bySide) => sayErased(eraseEach(bySide))}
                     />
                   ))}
 

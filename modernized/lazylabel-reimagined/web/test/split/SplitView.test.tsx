@@ -218,6 +218,8 @@ describe("choosing the pair", () => {
     mount({ confirm });
     await openLeft();
     await pairWith("right.png");
+    // Unlinked, so the stroke is the second image's alone.
+    fireEvent.click(screen.getByLabelText("Link the two images"));
     fireEvent.click(screen.getByLabelText("Edit the right image"));
     fireEvent.click(screen.getByText("draw"));
 
@@ -259,6 +261,8 @@ describe("what each pane draws", () => {
     await openLeft();
     await pairWith("right.png");
     await waitFor(() => expect(canvases()).toEqual(["2 annotations", "5 annotations"]));
+    // Unlinked, so only the image being edited changes.
+    fireEvent.click(screen.getByLabelText("Link the two images"));
 
     fireEvent.click(screen.getByText("draw"));
 
@@ -320,6 +324,7 @@ describe("which side the tools act on", () => {
     await openLeft();
     await pairWith("right.png");
     await waitFor(() => expect(canvases()).toEqual(["2 annotations", "5 annotations"]));
+    fireEvent.click(screen.getByLabelText("Link the two images"));
 
     fireEvent.click(screen.getByLabelText("Edit the right image"));
     fireEvent.click(screen.getByText("draw"));
@@ -370,24 +375,30 @@ describe("saying which of the two you are getting", () => {
 });
 
 describe("drawing into both at once", () => {
-  /** Turn linking on for a settled pair, then draw. */
+  /** A settled pair, linked as it starts. */
   async function linkedPair(second = "right.png"): Promise<void> {
     await openLeft();
     await pairWith(second);
     await waitFor(() => expect(canvases().length).toBe(2));
-    fireEvent.click(screen.getByLabelText("Link the two images"));
   }
 
-  it("is OFF until asked for, so a stroke cannot reach an image by surprise", async () => {
+  it("is ON from the start, as legacy's pair is", async () => {
+    // multi_view_coordinator.py:46, and the owner's word of 2026-09-27: the Multi tab exists to
+    // prompt both images at the same coordinates. It was off until then.
     mount({ counts: { "frames/left.png": 1, "frames/right.png": 1 } });
-    await openLeft();
-    await pairWith("right.png");
-    await waitFor(() => expect(canvases()).toEqual(["1 annotation", "1 annotation"]));
+    await linkedPair();
+
+    expect((screen.getByLabelText("Link the two images") as HTMLInputElement).checked).toBe(true);
+  });
+
+  it("keeps a stroke to the image being edited once unticked", async () => {
+    mount({ counts: { "frames/left.png": 1, "frames/right.png": 1 } });
+    await linkedPair();
+    fireEvent.click(screen.getByLabelText("Link the two images"));
 
     fireEvent.click(screen.getByText("draw"));
 
     await waitFor(() => expect(canvases()).toEqual(["2 annotations", "1 annotation"]));
-    expect((screen.getByLabelText("Link the two images") as HTMLInputElement).checked).toBe(false);
   });
 
   it("puts one drawn annotation into BOTH images", async () => {
@@ -430,7 +441,6 @@ describe("drawing into both at once", () => {
     await openLeft();
     await pairWith("third.png");
     await waitFor(() => expect(canvases().length).toBe(2));
-    fireEvent.click(screen.getByLabelText("Link the two images"));
 
     fireEvent.click(screen.getByText("draw mask"));
 

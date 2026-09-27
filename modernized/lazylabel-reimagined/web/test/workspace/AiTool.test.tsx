@@ -350,6 +350,40 @@ describe("accepting", () => {
   });
 });
 
+describe("Escape", () => {
+  it("takes the preview away with the points, as legacy's does", async () => {
+    // keyboard_event_manager.py:306-313 removes the preview mask with the points. The mask stayed
+    // on screen until 2026-09-27, over a prompt that no longer existed, and Space then said there
+    // was nothing to accept.
+    const { onAccept } = mount({});
+    await waitFor(() => expect(surface()).toBeTruthy());
+    click(10, 10);
+    await ready();
+
+    fireEvent.keyDown(document, { key: "Escape" });
+
+    await waitFor(() => expect(screen.queryByText("Press spacebar to accept AI segment suggestion")).toBeNull());
+    expect(document.querySelector('[data-testid="ai-mask"]')).toBeNull();
+    fireEvent.keyDown(document, { key: " ", code: "Space" });
+    expect(onAccept).not.toHaveBeenCalled();
+  });
+
+  it("drops an answer still on its way, so it cannot land after the prompt went", async () => {
+    let answer: (value: WireSegmentResponse) => void = () => {};
+    mount({ segment: () => new Promise((resolve) => { answer = resolve; }) });
+    await waitFor(() => expect(surface()).toBeTruthy());
+    click(10, 10);
+
+    fireEvent.keyDown(document, { key: "Escape" });
+    await act(async () => {
+      answer(response());
+      await Promise.resolve();
+    });
+
+    expect(screen.queryByText("Press spacebar to accept AI segment suggestion")).toBeNull();
+  });
+});
+
 describe("Auto-Convert", () => {
   it("accepts a MASK when the setting is off, which is the default", async () => {
     // A conversion approximates. Approximating someone's annotation without being asked is the

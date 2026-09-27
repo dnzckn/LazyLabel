@@ -15,9 +15,15 @@
  *
  * A FAILED PROMPT CLEARS THE PREVIEW. Leaving the previous mask up after a failure shows an answer
  * to a question nobody asked — the user's last click is not in it, and they have no way to tell.
+ *
+ * IN A LINKED PAIR EVERY PROMPT IS ASKED OF BOTH IMAGES, each of its own model, and each image
+ * shows its own answer: the Multi tab's reason to exist (`split/pairAi.ts`). Legacy asks each
+ * target viewer's model about its own image (main_window.py:6645-6720, 6778-6804), and Space makes
+ * each viewer's preview that viewer's own segment (ai_segment_manager.py:301-392). The other image
+ * is encoded once, after this one, and asked through the same route with its own handle.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 import { decodeMask, encodeMask, type WireSegment } from "@lazylabel/contracts";
 
@@ -26,10 +32,20 @@ import { segmentPixels } from "../canvas/AnnotationCanvas.jsx";
 import { filterFragments } from "../tools/fragments.js";
 import { SETTLE_MS, prefetchOrder } from "./prefetch.js";
 import { useNotifications } from "../notifications/NotificationProvider.jsx";
-import type { AiPrompt } from "../tools/ai.js";
-import type { ApiClient, WireSegmentResponse } from "../api/client.js";
+import { NOTHING_TO_ACCEPT, type AiPrompt } from "../tools/ai.js";
+import type { ApiClient, WireSegmentRequest, WireSegmentResponse } from "../api/client.js";
 import type { BinaryMask } from "@lazylabel/annotation-formats";
 import { epsilonFactorFor, maskToPolygon } from "../tools/autoPolygon.js";
+import { PairAiContext, outsideOf, type PairAi } from "../split/pairAi.js";
+import { processingParams } from "./processing.js";
+import type { SideIndex } from "./WorkspaceProvider.jsx";
+
+/** Each image's own annotation from its own prediction, by side; null where there is none. */
+export type BySide = readonly [WireSegment | null, WireSegment | null];
+
+/** Legacy's words for a prompt made while the image is loaded into the model, and for no model. */
+const UPDATING = "AI model is updating, please wait...";
+const UNAVAILABLE = "AI model not available";
 
 export interface AiToolProps {
   readonly client: ApiClient;
@@ -84,6 +100,15 @@ export interface AiToolProps {
   };
   readonly onAccept: (segment: WireSegment) => void;
   readonly onErase: (mask: WireSegment) => void;
+  /**
+   * Space in a linked pair: each image's own annotation, from its own prediction, by side. Either
+   * may be null -- no prediction there, or all of it under the fragment threshold -- as legacy
+   * skips such a viewer and accepts the other (ai_segment_manager.py:321-336). Both carry this
+   * image's class; the store files the other image's under the class of the same NAME there.
+   */
+  readonly onAcceptEach?: (bySide: BySide) => void;
+  /** Shift+Space in a linked pair: each image erased with its own prediction's mask, by side. */
+  readonly onEraseEach?: (bySide: BySide) => void;
 }
 
 export function AiTool({
@@ -100,11 +125,17 @@ export function AiTool({
   operateOnView,
   onAccept,
   onErase,
+  onAcceptEach,
+  onEraseEach,
 }: AiToolProps): ReactNode {
   const { notify } = useNotifications();
   const [handle, setHandle] = useState<string | null>(null);
   const [encoding, setEncoding] = useState(false);
-  const [result, setResult] = useState<WireSegmentResponse | null>(null);
+  /** The Multi tab's linked pair, whose prompt and answers are held for both images; else null. */
+  const pair = useContext(PairAiContext);
+  const [own, setResult] = useState<WireSegmentResponse | null>(null);
+  /** What this image shows: its own answer, or in a linked pair the pair's answer for it. */
+  const result = pair === null ? own : pair.results[pair.active];
 
   /** Rises with every prompt; an answer with a stale number is thrown away. */
   const latest = useRef(0);
@@ -131,7 +162,7 @@ export function AiTool({
    * registered.
    */
   const current = useRef<WireSegmentResponse | null>(null);
-  current.current = result;
+  current.current = own;
 
   // One encode per image. Cleared when the image changes so a handle cannot outlive its pixels.
   const viewKey = operateOnView === undefined ? "" : JSON.stringify(operateOnView);
@@ -184,6 +215,62 @@ export function AiTool({
     // model work per keystroke anywhere in the app. Serialising the four numbers means the encode
     // happens when the view actually changes, which is what RULE-089 asks for.
   }, [client, imageKey, model, notify, viewKey]);
+
+  /*
+   * THE OTHER IMAGE OF A LINKED PAIR, encoded once, AFTER this one: the click the user is waiting
+   * on is answered here first, and on one GPU the two encodes are one queue. Legacy loads each
+   * viewer's image into that viewer's own model (sam_multi_view_manager.py:192-252). Its view is
+   * its own -- the same adjustments, the other half's processing -- as that half is drawn.
+   */
+  const otherKey = pair?.other.key ?? null;
+  const otherName = pair?.other.name ?? "";
+  const otherProcessing = pair === null ? "" : processingParams(pair.other.processing);
+  const adjustmentsKey = operateOnView === undefined ? "" : JSON.stringify(operateOnView.adjustments);
+  const [otherHandle, setOtherHandle] = useState<string | null>(null);
+  const [otherEncoding, setOtherEncoding] = useState(false);
+  const ready = handle !== null;
+
+  useEffect(() => {
+    setOtherHandle(null);
+    if (otherKey === null || !ready) {
+      setOtherEncoding(false);
+      return undefined;
+    }
+
+    let cancelled = false;
+    setOtherEncoding(true);
+    client
+      .embed({
+        image: otherKey,
+        model,
+        ...(operateOnView === undefined
+          ? {}
+          : otherProcessing === ""
+            ? { adjustments: operateOnView.adjustments }
+            : { adjustments: operateOnView.adjustments, processing: otherProcessing }),
+      })
+      .then((response) => {
+        if (cancelled) return;
+        setOtherHandle(response.handle);
+        setOtherEncoding(false);
+        encoded.current.add(otherKey);
+      })
+      .catch((cause: unknown) => {
+        if (cancelled) return;
+        setOtherEncoding(false);
+        notify({
+          severity: "error",
+          message: `Error loading AI model: ${cause instanceof Error ? cause.message : String(cause)}`,
+          detail: otherName,
+        });
+      });
+
+    return () => {
+      cancelled = true;
+    };
+    // The adjustments by their VALUES, as the encode above keys on them.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [client, model, notify, otherKey, otherName, otherProcessing, ready, adjustmentsKey]);
 
   /**
    * RULE-091: encode the neighbours before anyone asks for them.
@@ -243,9 +330,69 @@ export function AiTool({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [handle, imageKey, model, viewKey, folderKeys.join("\u0000"), archetypes.join("\u0000")]);
 
+  /**
+   * One image of a linked pair asked for its own prediction, landing as the pair's answer for it.
+   * A failure there shows nothing there, as a legacy viewer whose prediction fails shows nothing
+   * new (main_window.py:6798-6804), and says so, naming the image.
+   */
+  const askSide = useCallback(
+    (held: PairAi, side: SideIndex, sideHandle: string, prompt: AiPrompt, name: string) => {
+      const ticket = held.ask(side);
+      client
+        .segment(requestFor(sideHandle, prompt))
+        .then((response) => {
+          held.answer(side, ticket, response);
+        })
+        .catch((cause: unknown) => {
+          if (!held.answer(side, ticket, null)) return;
+          const reason = cause instanceof Error ? cause.message : String(cause);
+          notify({ severity: "error", message: "AI prediction failed", detail: `${name}: ${reason}` });
+        });
+    },
+    [client, notify],
+  );
+
+  /**
+   * THE SAME PROMPT, AT THE SAME PIXELS, ASKED OF EACH IMAGE'S OWN MODEL -- legacy's linked AI
+   * click and box (main_window.py:6645-6720). Each image gets its own answer, so the contours
+   * follow each image. An image that cannot be asked shows nothing: still encoding, no model, or
+   * the prompt outside it (`outsideOf`).
+   */
+  const promptBoth = useCallback(
+    (held: PairAi, prompt: AiPrompt) => {
+      const waiting = new Set<string>();
+
+      if (handle === null) {
+        held.answer(held.active, held.ask(held.active), null);
+        waiting.add(encoding ? UPDATING : UNAVAILABLE);
+      } else {
+        askSide(held, held.active, handle, prompt, imageKey);
+      }
+
+      const other = held.other;
+      const outside = outsideOf(prompt, other);
+      if (outside !== null) {
+        held.answer(other.side, held.ask(other.side), null);
+        notify({ severity: "warning", message: outside });
+      } else if (otherHandle === null) {
+        held.answer(other.side, held.ask(other.side), null);
+        waiting.add(otherEncoding ? UPDATING : UNAVAILABLE);
+      } else {
+        askSide(held, other.side, otherHandle, prompt, other.name);
+      }
+
+      for (const message of waiting) notify({ severity: "info", message });
+    },
+    [askSide, encoding, handle, imageKey, notify, otherEncoding, otherHandle],
+  );
 
   const onPrompt = useCallback(
     (prompt: AiPrompt) => {
+      if (pair !== null) {
+        promptBoth(pair, prompt);
+        return;
+      }
+
       if (handle === null) {
         // A click that lands while the image is still encoding used to be dropped in silence. The
         // banner says the image is being prepared, but a user who clicks anyway -- which is what
@@ -255,11 +402,7 @@ export function AiTool({
         // It is not queued and run later: a mask appearing seconds after a click the user has
         // moved on from is worse than one that never appears. Legacy's words for both
         // (ai_segment_manager.py:425-427; main_window.py:2222).
-        notify({
-          severity: "warning",
-          message: encoding ? "AI model is updating, please wait..." : "AI model not available",
-          durationMs: 2_000,
-        });
+        notify({ severity: "warning", message: encoding ? UPDATING : UNAVAILABLE, durationMs: 2_000 });
         return;
       }
 
@@ -267,20 +410,7 @@ export function AiTool({
       const mine = latest.current;
 
       client
-        .segment({
-          handle,
-          ...(prompt.points.length > 0 ? { points: prompt.points.map((p) => ({ ...p })) } : {}),
-          ...(prompt.box === null
-            ? {}
-            : {
-                box: [
-                  Math.min(prompt.box[0].x, prompt.box[1].x),
-                  Math.min(prompt.box[0].y, prompt.box[1].y),
-                  Math.max(prompt.box[0].x, prompt.box[1].x),
-                  Math.max(prompt.box[0].y, prompt.box[1].y),
-                ] as const,
-              }),
-        })
+        .segment(requestFor(handle, prompt))
         .then((response) => {
           // Out of order: a later prompt has already answered, and showing this one would move the
           // preview backwards as the user refines it.
@@ -299,11 +429,70 @@ export function AiTool({
           });
         });
     },
-    [client, encoding, handle, notify],
+    [client, encoding, handle, notify, pair, promptBoth],
+  );
+
+  /**
+   * SPACE IN A LINKED PAIR: each image's own prediction becomes that image's own annotation, as
+   * legacy's `_accept_multi_view` does for each target viewer (ai_segment_manager.py:301-392): the
+   * fragment filter and Auto-Convert apply to each, and an image with nothing left is skipped
+   * while the other is kept. Shift+Space erases each image with its own mask (:341-360).
+   */
+  const acceptEach = useCallback(
+    (held: PairAi, asEraser: boolean) => {
+      const results = held.resultsNow();
+      const bySide: [WireSegment | null, WireSegment | null] = [null, null];
+      let predicted = false;
+      let dropped = 0;
+      let holesFilled = false;
+
+      for (const side of [held.active, held.other.side]) {
+        const answer = results[side];
+        if (answer === null) continue;
+        predicted = true;
+        const filtered = filterFragments(decodeMask(answer.mask), fragmentThreshold);
+        if (filtered.kept === 0) continue;
+        dropped += filtered.dropped;
+        holesFilled ||= filtered.holesFilled;
+        bySide[side] = asEraser
+          ? { type: "AI", classId, mask: encodeMask(filtered.mask) }
+          : asPolygonIfAsked(filtered.mask, classId, autoPolygon, notify);
+      }
+      held.clear();
+
+      if (bySide[0] === null && bySide[1] === null) {
+        notify({
+          severity: "warning",
+          // Legacy's words for each case (ai_segment_manager.py:163-165, 403).
+          message: predicted ? "All segments filtered out by fragment threshold" : NOTHING_TO_ACCEPT,
+        });
+        return;
+      }
+
+      if (asEraser) {
+        if (onEraseEach !== undefined) onEraseEach(bySide);
+        else if (bySide[held.active] !== null) onErase(bySide[held.active]!);
+      } else if (onAcceptEach !== undefined) {
+        onAcceptEach(bySide);
+      } else if (bySide[held.active] !== null) {
+        onAccept(bySide[held.active]!);
+      }
+
+      if (dropped > 0) {
+        notify({ severity: "info", message: `Dropped ${dropped} fragment${dropped === 1 ? "" : "s"}` });
+      }
+      if (holesFilled) notify({ severity: "warning", message: "Holes inside that mask were filled" });
+    },
+    [autoPolygon, classId, fragmentThreshold, notify, onAccept, onAcceptEach, onErase, onEraseEach],
   );
 
   const accept = useCallback(
     (asEraser: boolean) => {
+      if (pair !== null) {
+        acceptEach(pair, asEraser);
+        return;
+      }
+
       const result = current.current;
       if (result === null) {
         // Legacy's plain message (ai_segment_manager.py:128).
@@ -343,8 +532,25 @@ export function AiTool({
     },
     // No `result`: it is read from the ref above, which is the whole point. Leaving it in would
     // put the stale closure back, one render later.
-    [autoPolygon, classId, fragmentThreshold, notify, onAccept, onErase],
+    [acceptEach, autoPolygon, classId, fragmentThreshold, notify, onAccept, onErase, pair],
   );
+
+  /*
+   * ESCAPE TAKES THE PREVIEW WITH THE POINTS, as legacy's does (keyboard_event_manager.py:306-313),
+   * and in a linked pair both images' (315-319). It left the mask on screen until 2026-09-27, over
+   * a prompt that no longer existed. An answer still in flight is dropped too.
+   */
+  const onClear = useCallback(() => {
+    if (pair !== null) {
+      pair.clear();
+      return;
+    }
+    latest.current += 1;
+    setResult(null);
+  }, [pair]);
+
+  // A linked pair's prediction is waiting when either image has one.
+  const waiting = pair === null ? own !== null : pair.results.some((answer) => answer !== null);
 
   return (
     <>
@@ -355,10 +561,11 @@ export function AiTool({
         onPrompt={onPrompt}
         onAccept={accept}
         onRefused={(reason) => notify({ severity: "warning", message: reason })}
-        preview={result === null ? undefined : <Preview result={result} classId={classId} />}
+        onClear={onClear}
+        preview={result === null ? undefined : <AiPreview result={result} classId={classId} />}
       />
       {/* Legacy's status line while the image is encoded (sam_single_view_manager.py:278). */}
-      {encoding && (
+      {(encoding || otherEncoding) && (
         <p role="status" className="banner">
           Loading image into AI model...
         </p>
@@ -368,13 +575,31 @@ export function AiTool({
           for both here, in legacy's words for both (ai_segment_manager.py:515): the user needs to
           know a prediction is waiting whichever way they asked for it, and the canvas cannot say
           so on a machine where the preview fails to paint. */}
-      {result !== null && (
+      {waiting && (
         <p role="status" className="banner">
           Press spacebar to accept AI segment suggestion
         </p>
       )}
     </>
   );
+}
+
+/** The segment request for a prompt: its points, and its box with the corners ordered. */
+function requestFor(handle: string, prompt: AiPrompt): WireSegmentRequest {
+  return {
+    handle,
+    ...(prompt.points.length > 0 ? { points: prompt.points.map((p) => ({ ...p })) } : {}),
+    ...(prompt.box === null
+      ? {}
+      : {
+          box: [
+            Math.min(prompt.box[0].x, prompt.box[1].x),
+            Math.min(prompt.box[0].y, prompt.box[1].y),
+            Math.max(prompt.box[0].x, prompt.box[1].x),
+            Math.max(prompt.box[0].y, prompt.box[1].y),
+          ] as const,
+        }),
+  };
 }
 
 /**
@@ -385,8 +610,11 @@ export function AiTool({
  *
  * Memoized on the mask, because painting and encoding it is real work and a parent re-render --
  * of which there is one per pointermove while a box is being drawn -- must not redo it.
+ *
+ * Exported for the Multi tab, whose other half draws its own image's answer to a linked prompt.
+ * The group is there whenever a mask is, painted or not.
  */
-function Preview({
+export function AiPreview({
   result,
   classId,
 }: {
@@ -416,17 +644,19 @@ function Preview({
     }
   }, [classId, result.mask]);
 
-  if (drawn === null) return null;
-
   return (
-    <image
-      data-testid="ai-preview"
-      href={drawn.href}
-      x={drawn.x}
-      y={drawn.y}
-      width={drawn.width}
-      height={drawn.height}
-    />
+    <g data-testid="ai-mask">
+      {drawn !== null && (
+        <image
+          data-testid="ai-preview"
+          href={drawn.href}
+          x={drawn.x}
+          y={drawn.y}
+          width={drawn.width}
+          height={drawn.height}
+        />
+      )}
+    </g>
   );
 }
 

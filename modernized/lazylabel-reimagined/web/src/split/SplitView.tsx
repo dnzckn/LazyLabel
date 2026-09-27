@@ -27,16 +27,23 @@
  *
  * LINKED, one annotation drawn once lands in BOTH at the same pixel, as ONE undo entry, with the
  * two images agreeing on the class NAME while each keeps its own id for it. The decision lives in
- * the store's `addSegment` rather than here, which is why it cost so little: every tool, the AI
- * prompt and the hotkeys already reach the store through that one function, so none of them has to
- * know a pair exists. This panel owns the switch and shows what the last one did — including the
+ * the store's `addSegment` rather than here, which is why it cost so little: every drawing tool and
+ * the hotkeys already reach the store through that one function, so none of them has to know a
+ * pair exists. This panel owns the switch and shows what the last one did — including the
  * refusals, which is the part worth surfacing: a shape that falls outside the other image is
  * refused there rather than moved, and the user is looking at the first image when they draw.
  *
- * It is OFF by default, reversing this view's first "starts linked, as legacy does". Legacy's
- * default does not bind: decision 8 rebuilt multi-view from the rules rather than porting a
- * half-migrated feature, and an annotation appearing in an image the user was not looking at is
- * precisely what decision 7 says must follow an explicit act.
+ * THE AI PROMPT IS WHAT LINKS, NOT ITS ANSWER -- the owner, 2026-09-27: the Multi tab exists to
+ * prompt the models "using the same coordinates across both images", with contours that "can vary
+ * slightly". Every point and box placed on either image is placed on both, drawn in both halves,
+ * and asked of each image's own model; each half shows its own preview, Space makes each image's
+ * preview its own annotation in one undo step, and Escape clears both, as legacy's linked viewers
+ * do (main_window.py:6645-6720; ai_segment_manager.py:301-392; `pairAi.ts`). The accepted mask was
+ * copied pixel for pixel into the other image until then, so the two contours could not differ.
+ *
+ * It is ON from the start, as legacy's pair is (multi_view_coordinator.py:46), since 2026-09-27;
+ * it was off before, when an annotation appearing in an image the user was not looking at was
+ * judged to need an explicit act. The box stays beside the panes, in plain sight.
  *
  * ERASING LINKS TOO, since 2026-09-23 -- the store's `eraseWith`, for the same reason adding is
  * cheap: every eraser reaches it as one segment. Legacy mirrors both. So, since 2026-09-26, do the
@@ -61,10 +68,17 @@ import { useCallback, useEffect, useMemo, useRef, type ReactNode, type RefObject
 
 import type { WireDatasetImage, WireSegment } from "@lazylabel/contracts";
 
+import type { WireSegmentResponse } from "../api/client.js";
+import { AiMarks } from "../canvas/AiLayer.jsx";
 import { AnnotationCanvas } from "../canvas/AnnotationCanvas.jsx";
+import { scale as pixelsPerScreenPixel } from "../canvas/coordinates.js";
 import { panPane } from "../canvas/panStep.js";
 import { useFittedPane } from "../canvas/useFittedPane.js";
+import { useSizing } from "../canvas/useSizing.js";
 import { ViewKindContext } from "../canvas/viewKind.js";
+import type { AiPrompt } from "../tools/ai.js";
+import { AiPreview } from "../workspace/AiTool.jsx";
+import { classForNewSegment } from "../workspace/classes.js";
 import type { ImageProcessing } from "../workspace/processing.js";
 import {
   useWorkspace,
@@ -72,6 +86,7 @@ import {
   type SideState,
 } from "../workspace/WorkspaceProvider.jsx";
 import { describePair, type ImageSize } from "./linked.js";
+import { PairAiContext, usePairAi, type Pairing } from "./pairAi.js";
 import { PairPanContext, type PairPan } from "./pairPan.js";
 
 export interface SplitViewProps {
@@ -102,7 +117,56 @@ export interface SplitViewProps {
 export function SplitView({ images, pixelsUrl, tileUrl, viewer }: SplitViewProps): ReactNode {
   const { sides, activeSide, setActiveSide, openImageOn, closeSide, linked, setLinked, linkReport, setMultiView } =
     useWorkspace();
+  const { activeTool, activeClassId } = useWorkspace();
   const [left, right] = sides;
+
+  /*
+   * A LINKED PAIR'S AI PROMPT, held here so both halves draw it and it outlives the view moving to
+   * the other half (`pairAi.ts`). Only while both images are measured, linked, and the AI tool is
+   * chosen; anything else, a different pair included, starts it again.
+   */
+  const otherIndex: SideIndex = activeSide === 0 ? 1 : 0;
+  const otherSide = sides[otherIndex];
+  const otherOpen = otherSide.open;
+  const otherSize = sizeOf(otherSide);
+  const activeSize = sizeOf(sides[activeSide]);
+  const pairKey = left.open === null || right.open === null ? "" : `${left.open.image.key}\u0000${right.open.image.key}`;
+  const pairing = useMemo<Pairing | null>(
+    () =>
+      !linked || activeTool !== "ai" || viewer === undefined || pairKey === "" || otherOpen === null
+      || otherSize === null || activeSize === null
+        ? null
+        : {
+            key: pairKey,
+            active: activeSide,
+            other: {
+              side: otherIndex,
+              key: otherOpen.image.key,
+              name: otherOpen.image.name,
+              width: otherSize.width,
+              height: otherSize.height,
+              processing: otherSide.processing,
+            },
+          },
+    // The sizes by their numbers: `sizeOf` builds a fresh object every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [
+      linked,
+      activeTool,
+      viewer === undefined,
+      pairKey,
+      activeSide,
+      otherIndex,
+      otherOpen,
+      otherSize?.width,
+      otherSize?.height,
+      activeSize === null,
+      otherSide.processing,
+    ],
+  );
+  const pairAi = usePairAi(pairing);
+  // The class the view's tool gives a new annotation, whose colour the other half's preview takes.
+  const aiClassId = classForNewSegment(sides[activeSide].segments, activeClassId);
 
   // The store's word for legacy's `view_mode == "multi"`: while this is on screen, the keys legacy
   // applies to both viewers act on both sides (CP-31).
@@ -217,7 +281,7 @@ export function SplitView({ images, pixelsUrl, tileUrl, viewer }: SplitViewProps
           notification list, because a refusal is about the pair the user is looking at. */}
       {linkReport !== null && linkReport.kind === "refused" && (
         <p role="alert" className="banner banner--warning">
-          {linkReport.erase === true ? "Erased in this image only" : "Added to this image only"}:{" "}
+          {linkReport.erase === true ? "Erased in" : "Added to"} {linkReport.where ?? "this image"} only:{" "}
           {linkReport.reason}
         </p>
       )}
@@ -269,7 +333,9 @@ export function SplitView({ images, pixelsUrl, tileUrl, viewer }: SplitViewProps
                     {/* Legacy's Multi tab has a mouse handler of its own, and the view's layers
                         follow it here (`canvas/viewKind.ts`). */}
                     <ViewKindContext.Provider value="multi">
-                      <PairPanContext.Provider value={panOtherHalf}>{viewer}</PairPanContext.Provider>
+                      <PairPanContext.Provider value={panOtherHalf}>
+                        <PairAiContext.Provider value={pairAi}>{viewer}</PairAiContext.Provider>
+                      </PairPanContext.Provider>
                     </ViewKindContext.Provider>
                   </div>
                 ) : (
@@ -278,6 +344,10 @@ export function SplitView({ images, pixelsUrl, tileUrl, viewer }: SplitViewProps
                     picture={side === 0 ? leftPicture : rightPicture}
                     pixelsUrl={pixelsUrl}
                     {...(tileUrl === undefined ? {} : { tileUrl })}
+                    // The linked prompt, drawn here too, with this image's own answer to it.
+                    {...(pairAi === null
+                      ? {}
+                      : { ai: { prompt: pairAi.prompt, result: pairAi.results[side], classId: aiClassId } })}
                   />
                 )}
               </figure>
@@ -322,12 +392,14 @@ function Pane({
   picture,
   pixelsUrl,
   tileUrl,
+  ai,
 }: {
   readonly side: SideState;
   /** Kept pointing at the picture's scrolling box, which the pan keys move. */
   readonly picture: RefObject<HTMLDivElement | null>;
   readonly pixelsUrl: (key: string, processing: ImageProcessing) => string;
   readonly tileUrl?: (key: string, processing: ImageProcessing, z: number, x: number, y: number) => string;
+  readonly ai?: PairPromptProps;
 }): ReactNode {
   const open = side.open;
   if (open === null) return null;
@@ -354,6 +426,7 @@ function Pane({
       picture={picture}
       pixelsUrl={pixelsUrl}
       {...(tileUrl === undefined ? {} : { tileUrl })}
+      {...(ai === undefined ? {} : { ai })}
     />
   );
 }
@@ -369,12 +442,14 @@ function SidePicture({
   picture,
   pixelsUrl,
   tileUrl,
+  ai,
 }: {
   readonly side: SideState;
   readonly size: ImageSize;
   readonly picture: RefObject<HTMLDivElement | null>;
   readonly pixelsUrl: (key: string, processing: ImageProcessing) => string;
   readonly tileUrl?: (key: string, processing: ImageProcessing, z: number, x: number, y: number) => string;
+  readonly ai?: PairPromptProps;
 }): ReactNode {
   const { attach, scale } = useFittedPane(size, picture);
   const key = side.open?.image.key ?? "";
@@ -394,7 +469,51 @@ function SidePicture({
         // Highlighted as the view highlights its own: a linked pair selects the same rows in both
         // images, and legacy highlights them in the other viewer (main_window.py:6319).
         selected={side.selected}
-      />
+      >
+        {ai !== undefined && <PairPrompt {...ai} width={size.width} height={size.height} />}
+      </AnnotationCanvas>
     </div>
+  );
+}
+
+interface PairPromptProps {
+  readonly prompt: AiPrompt;
+  /** This image's own model's answer to the prompt, or null: none yet, failed, or not asked. */
+  readonly result: WireSegmentResponse | null;
+  readonly classId: number;
+}
+
+/**
+ * A linked AI prompt over the half not being edited: the same points and box at the same pixels,
+ * and THIS image's own answer to them, as legacy draws each point and each viewer's own preview in
+ * every target viewer (main_window.py:6666-6672, 6741-6776, 6806-6851). Clicks pass through it, so
+ * a click on the half still makes it the one edited.
+ */
+function PairPrompt({
+  prompt,
+  result,
+  classId,
+  width,
+  height,
+}: PairPromptProps & { readonly width: number; readonly height: number }): ReactNode {
+  const sizing = useSizing();
+  const surface = useRef<SVGSVGElement>(null);
+  // Image pixels per screen pixel, so a dot is the size the view draws it at any zoom.
+  const box = surface.current?.getBoundingClientRect();
+  const perPixel =
+    box === undefined || box.width <= 0 || box.height <= 0
+      ? { x: 1, y: 1 }
+      : pixelsPerScreenPixel(box, { width, height });
+  return (
+    <svg
+      ref={surface}
+      className="split__prompt"
+      viewBox={`0 0 ${width} ${height}`}
+      preserveAspectRatio="none"
+      aria-label="AI prompt"
+    >
+      {result !== null && <AiPreview result={result} classId={classId} />}
+      <AiMarks prompt={prompt} classId={classId} perPixel={perPixel} sizing={sizing} />
+    </svg>
   );
 }

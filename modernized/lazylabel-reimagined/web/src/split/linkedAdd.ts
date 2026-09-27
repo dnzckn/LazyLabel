@@ -61,22 +61,37 @@ export function linkedAdd(source: LinkedSource, target: LinkedTarget): LinkedAdd
   // unclassified object in an image the user was not looking at. Legacy has no such state -- every
   // annotation there gets the active class -- so there is no behaviour to match, only a choice,
   // and refusing is the one that cannot surprise anyone.
-  if (segment.classId === null) {
-    return { kind: "refused", reason: "an annotation with no class cannot be linked" };
-  }
-
-  const identity = {
-    alias: source.aliases[String(segment.classId)] ?? null,
-    sourceId: segment.classId,
-  };
-  const assignment = resolveClass(
-    identity,
-    target.aliases,
-    target.segments.flatMap((entry) => (entry.classId === null ? [] : [entry.classId])),
-  );
+  if (segment.classId === null) return UNCLASSIFIED;
 
   const geometry = mirrorGeometry(segment, source.size, target.size);
   if (geometry.kind === "refused") return geometry;
+
+  return linkedClass({ ...segment, ...geometry.parts }, source.aliases, target);
+}
+
+const UNCLASSIFIED: LinkedAdd = { kind: "refused", reason: "an annotation with no class cannot be linked" };
+
+/**
+ * The other image's OWN annotation, filed under the class of the same NAME there -- the class half
+ * of `linkedAdd`, with no geometry to mirror.
+ *
+ * What a linked AI accept needs. Legacy asks each image's own model and keeps each image's own
+ * answer (ai_segment_manager.py:321-379), so the only thing that crosses is the class: `segment`
+ * carries it as `sourceAliases`, the image being edited, knows it, and it comes back renumbered
+ * for the target by `resolveClass`.
+ */
+export function linkedClass(
+  segment: WireSegment,
+  sourceAliases: Readonly<Record<string, string>>,
+  target: Pick<LinkedTarget, "segments" | "aliases">,
+): LinkedAdd {
+  if (segment.classId === null) return UNCLASSIFIED;
+
+  const assignment = resolveClass(
+    { alias: sourceAliases[String(segment.classId)] ?? null, sourceId: segment.classId },
+    target.aliases,
+    target.segments.flatMap((entry) => (entry.classId === null ? [] : [entry.classId])),
+  );
 
   const aliases =
     assignment.alias === null
@@ -85,7 +100,7 @@ export function linkedAdd(source: LinkedSource, target: LinkedTarget): LinkedAdd
 
   return {
     kind: "linked",
-    segment: { ...segment, ...geometry.parts, classId: assignment.classId },
+    segment: { ...segment, classId: assignment.classId },
     aliases,
     allocated: assignment.allocated,
     classId: assignment.classId,

@@ -36,7 +36,9 @@ import {
   type Release,
 } from "../tools/ai.js";
 import { useSizing } from "./useSizing.js";
+import type { Sizing } from "./sizing.js";
 import { ViewKindContext } from "./viewKind.js";
+import { PairAiContext } from "../split/pairAi.js";
 import { useHotkey } from "../hotkeys/HotkeyProvider.jsx";
 import { isInModal } from "../hotkeys/keyEvent.js";
 import { isApplePlatform } from "../platform.js";
@@ -54,6 +56,11 @@ export interface AiLayerProps {
    * with no positive one to segment from. Legacy is silent for most of these.
    */
   readonly onRefused?: (reason: string) => void;
+  /**
+   * Escape or the clear key took the prompt away: the parent drops the preview with it, as legacy's
+   * Escape removes the preview mask with the points (keyboard_event_manager.py:306-313, 315-319).
+   */
+  readonly onClear?: () => void;
   /** Drawn under the prompt marks, when the parent has a prediction to show. */
   readonly preview?: ReactNode;
 }
@@ -67,12 +74,22 @@ export function AiLayer({
   onPrompt,
   onAccept,
   onRefused,
+  onClear,
   preview,
 }: AiLayerProps): ReactNode {
   const sizing = useSizing();
   const view = useContext(ViewKindContext);
   const surfaceRef = useRef<SVGSVGElement>(null);
-  const [prompt, setPrompt] = useState<AiPrompt>(EMPTY_PROMPT);
+  /*
+   * A LINKED PAIR'S PROMPT IS THE PAIR'S. In the Multi tab, linked, every point and box placed here
+   * is placed in the other image too, at the same pixel (main_window.py:6645-6720), so the prompt
+   * is held by the split view: the other half draws it, and it outlives this layer when the other
+   * half is made the one edited (`split/pairAi.ts`). Anywhere else it is this layer's own.
+   */
+  const pair = useContext(PairAiContext);
+  const [own, setOwn] = useState<AiPrompt>(EMPTY_PROMPT);
+  const prompt = pair === null ? own : pair.prompt;
+  const setPrompt = pair === null ? setOwn : pair.setPrompt;
   const [from, setFrom] = useState<ImagePoint | null>(null);
   const [to, setTo] = useState<ImagePoint | null>(null);
   /** The button that started the gesture waiting for its release. */
@@ -171,6 +188,7 @@ export function AiLayer({
   useHotkey("clear_points", () => {
     undone.current = [];
     setPrompt(clear());
+    onClear?.();
   });
 
   /*
@@ -206,6 +224,7 @@ export function AiLayer({
         event.preventDefault();
         undone.current = [];
         setPrompt(clear());
+        onClear?.();
         return;
       }
 
@@ -258,7 +277,7 @@ export function AiLayer({
     // CAPTURE, so this runs before the dispatcher's listener, which bubbles.
     document.addEventListener("keydown", onKeyDown, true);
     return () => document.removeEventListener("keydown", onKeyDown, true);
-  }, [accept, onAccept, onPrompt, onRefused, prompt]);
+  }, [accept, onAccept, onClear, onPrompt, onRefused, prompt, setPrompt]);
 
   const box = boxOf();
   const perPixel = box === null ? { x: 1, y: 1 } : scale(box, image);
@@ -285,18 +304,7 @@ export function AiLayer({
     >
       {preview}
 
-      {prompt.box !== null && (
-        <rect
-          data-testid="ai-box"
-          x={Math.min(prompt.box[0].x, prompt.box[1].x)}
-          y={Math.min(prompt.box[0].y, prompt.box[1].y)}
-          width={Math.abs(prompt.box[1].x - prompt.box[0].x)}
-          height={Math.abs(prompt.box[1].y - prompt.box[0].y)}
-          fill="none"
-          stroke={`rgb(${r}, ${g}, ${b})`}
-          strokeWidth={Math.max(perPixel.x, perPixel.y) * sizing.line}
-        />
-      )}
+      <AiMarks prompt={prompt} classId={classId} perPixel={perPixel} sizing={sizing} />
 
       {dragging && (
         <rect
@@ -308,6 +316,44 @@ export function AiLayer({
           fill="none"
           stroke={`rgb(${r}, ${g}, ${b})`}
           strokeDasharray={`${perPixel.x * 3} ${perPixel.x * 3}`}
+          strokeWidth={Math.max(perPixel.x, perPixel.y) * sizing.line}
+        />
+      )}
+    </svg>
+  );
+}
+
+/**
+ * The prompt as placed: the box, and a dot for each point.
+ *
+ * Its own component because a linked pair's prompt is drawn in BOTH halves of the Multi tab, as
+ * legacy draws each point in every target viewer (main_window.py:6666-6672, 6741-6776); the half
+ * not being edited draws it through this too, so the two cannot disagree about what was placed.
+ * `perPixel` is image pixels per screen pixel, which keeps a dot one size on screen at any zoom.
+ */
+export function AiMarks({
+  prompt,
+  classId,
+  perPixel,
+  sizing,
+}: {
+  readonly prompt: AiPrompt;
+  readonly classId: number;
+  readonly perPixel: { readonly x: number; readonly y: number };
+  readonly sizing: Sizing;
+}): ReactNode {
+  const { r, g, b } = classColor(classId);
+  return (
+    <>
+      {prompt.box !== null && (
+        <rect
+          data-testid="ai-box"
+          x={Math.min(prompt.box[0].x, prompt.box[1].x)}
+          y={Math.min(prompt.box[0].y, prompt.box[1].y)}
+          width={Math.abs(prompt.box[1].x - prompt.box[0].x)}
+          height={Math.abs(prompt.box[1].y - prompt.box[0].y)}
+          fill="none"
+          stroke={`rgb(${r}, ${g}, ${b})`}
           strokeWidth={Math.max(perPixel.x, perPixel.y) * sizing.line}
         />
       )}
@@ -328,7 +374,7 @@ export function AiLayer({
           strokeWidth={Math.max(perPixel.x, perPixel.y) * sizing.line}
         />
       ))}
-    </svg>
+    </>
   );
 }
 

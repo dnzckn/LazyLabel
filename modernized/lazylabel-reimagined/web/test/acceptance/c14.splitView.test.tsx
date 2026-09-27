@@ -121,13 +121,14 @@ const canvases = () =>
   screen.queryAllByRole("img").map((c) => c.getAttribute("aria-label"));
 const shown = (id: string) => screen.getByTestId(id).textContent;
 
-/** Both images open and drawn, ready to be linked. */
+/** Both images open and drawn, and linked, as legacy's pair starts (multi_view_coordinator.py:46). */
 async function pair(): Promise<void> {
   mount();
   fireEvent.click(screen.getByText("open a"));
   await waitFor(() => expect(screen.getByLabelText("Second image")).toBeTruthy());
   fireEvent.change(screen.getByLabelText("Second image"), { target: { value: "frames/b.png" } });
   await waitFor(() => expect(canvases()).toEqual(["1 annotation", "1 annotation"]));
+  expect((screen.getByLabelText("Link the two images") as HTMLInputElement).checked).toBe(true);
 }
 
 describe("C14: two images, compared", () => {
@@ -155,7 +156,6 @@ describe("C14: two images, compared", () => {
 describe("C14: annotating both together", () => {
   it("puts one drawn annotation into both images", async () => {
     await pair();
-    fireEvent.click(screen.getByLabelText("Link the two images"));
 
     fireEvent.click(screen.getByText("draw"));
 
@@ -167,7 +167,6 @@ describe("C14: annotating both together", () => {
     // number across would produce two files that both say "class 0" and mean different things --
     // worse than a visible mismatch, because every export would then look consistent.
     await pair();
-    fireEvent.click(screen.getByLabelText("Link the two images"));
 
     fireEvent.click(screen.getByText("draw"));
 
@@ -182,7 +181,6 @@ describe("C14: annotating both together", () => {
     // One action, one entry. Two entries would mean a user pressing undo once was left with the
     // pair half-changed, which is the state the whole arrangement exists to prevent.
     await pair();
-    fireEvent.click(screen.getByLabelText("Link the two images"));
     fireEvent.click(screen.getByText("draw"));
     await waitFor(() => expect(canvases()).toEqual(["2 annotations", "2 annotations"]));
 
@@ -198,7 +196,6 @@ describe("C14: annotating both together", () => {
     // annotation that brought it has gone would put a class in the file that nothing uses, and it
     // would be written on the next save.
     await pair();
-    fireEvent.click(screen.getByLabelText("Link the two images"));
     fireEvent.click(screen.getByText("draw"));
     await waitFor(() => expect(canvases()).toEqual(["2 annotations", "2 annotations"]));
 
@@ -210,7 +207,6 @@ describe("C14: annotating both together", () => {
 
   it("marks BOTH images unsaved, so neither can be left behind", async () => {
     await pair();
-    fireEvent.click(screen.getByLabelText("Link the two images"));
 
     fireEvent.click(screen.getByText("draw"));
 
@@ -232,7 +228,6 @@ describe("C14: erasing both together (RULE-092)", () => {
    */
   async function drawnInBoth(): Promise<void> {
     await pair();
-    fireEvent.click(screen.getByLabelText("Link the two images"));
     fireEvent.click(screen.getByText("draw"));
     await waitFor(() => expect(canvases()).toEqual(["2 annotations", "2 annotations"]));
   }

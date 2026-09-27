@@ -388,8 +388,14 @@ describe("in the Multi view, every move saves BOTH sides first (CP-67)", () => {
     await screen.findByRole("button", { name: /^Write \d+ format/ });
   }
 
-  /** Draw on the right side, b.png, leaving it unsaved. */
+  /**
+   * Draw on the right side, b.png, leaving it unsaved -- and it alone: the pair starts linked, as
+   * legacy's does (multi_view_coordinator.py:46), so in the Multi tab it is unlinked first. On the
+   * Single tab nothing links, and the box is not there.
+   */
   async function drawOnRight(): Promise<void> {
+    const link = screen.queryByLabelText("Link the two images") as HTMLInputElement | null;
+    if (link?.checked === true) fireEvent.click(link);
     chooseTool("Poly (2)");
     drawTriangle(10, 10);
     await waitFor(() => expect(status()).toMatch(/frames\/b\.png — 1 segment, unsaved/));

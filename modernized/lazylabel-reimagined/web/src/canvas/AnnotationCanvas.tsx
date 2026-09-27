@@ -59,6 +59,11 @@ export interface AnnotationCanvasProps {
   readonly selected?: readonly number[];
   /** Edit mode: a selected shape is highlighted in its own colour rather than yellow. */
   readonly editing?: boolean;
+  /**
+   * Drawn over the picture, in the box that is exactly the picture: the Multi tab's other half
+   * draws a linked AI prompt and that image's own preview here.
+   */
+  readonly children?: ReactNode;
 }
 
 /**
@@ -123,6 +128,7 @@ export function AnnotationCanvas({
   hovered = null,
   selected = NONE_SELECTED,
   editing = false,
+  children,
 }: AnnotationCanvasProps): ReactNode {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   /*
@@ -354,6 +360,7 @@ export function AnnotationCanvas({
       height={height}
       aria-hidden="true"
     />
+    {children}
     </div>
   );
 }
