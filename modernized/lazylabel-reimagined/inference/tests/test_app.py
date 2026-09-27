@@ -71,7 +71,7 @@ class TestHealth:
         status, body = call(no_torch, "GET", "/health")
         assert status == 503
         assert not body["ai"]["available"]
-        assert "pip install" in body["reason"]
+        assert "npm run ai:setup" in body["reason"]
 
         no_models = Deps(models=[], model_dir=tmp_path, availability=available)
         status, body = call(no_models, "GET", "/health")

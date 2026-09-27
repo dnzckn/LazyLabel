@@ -30,6 +30,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from .availability import INSTALL_HINT
 from .manifest import ModelEntry
 from .prompts import InferenceError, ModelNotLoadedError
 
@@ -219,7 +220,7 @@ def load_embedder(entry: ModelEntry, model_dir: Path, *, device: str | None = No
     except ImportError as cause:
         raise ModelNotLoadedError(
             f"the AI stack is not installed: {cause}. "
-            "Install the AI extra: pip install lazylabel-inference[ai]"
+            f"{INSTALL_HINT}."
         ) from cause
 
     resolved = device or ("cuda" if torch.cuda.is_available() else "cpu")

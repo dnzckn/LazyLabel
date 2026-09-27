@@ -22,6 +22,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Protocol
 
+from .availability import INSTALL_HINT
 from .manifest import ModelEntry
 from .prompts import (
     ImageNotSetError,
@@ -209,7 +210,7 @@ def load_backend(entry: ModelEntry, model_dir: Path, *, device: str | None = Non
     except ImportError as cause:
         raise ModelNotLoadedError(
             f"the AI stack is not installed: {cause}. "
-            "Install the AI extra: pip install lazylabel-inference[ai]"
+            f"{INSTALL_HINT}."
         ) from cause
 
     resolved = device or ("cuda" if torch.cuda.is_available() else "cpu")
@@ -391,7 +392,7 @@ def load_video_predictor(entry: ModelEntry, model_dir: Path, *, device: str | No
     except ImportError as cause:
         raise ModelNotLoadedError(
             f"the AI stack is not installed: {cause}. "
-            "Install the AI extra: pip install lazylabel-inference[ai]"
+            f"{INSTALL_HINT}."
         ) from cause
 
     resolved = device or ("cuda" if torch.cuda.is_available() else "cpu")

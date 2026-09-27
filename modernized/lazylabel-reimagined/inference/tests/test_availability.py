@@ -98,8 +98,16 @@ class TestCheckAvailability:
         assert not check_availability(torch_version=below, has_sam=True).available
 
     def test_carries_an_install_hint_for_the_user(self) -> None:
+        # DEPLOYABILITY.md R6: the AI stack is installed by one command, not by a pip extra.
         result = check_availability(torch_version=None, has_sam=False)
-        assert "pip install" in result.install_hint
+        assert "npm run ai:setup" in result.install_hint
+        assert "pip install" not in result.install_hint
+
+    def test_the_commonest_reason_with_its_hint_is_one_short_line(self) -> None:
+        # The web shows the reason as one run of text, and its terse guard allows 60 characters
+        # (web/test/terse.ts).
+        result = check_availability(torch_version=None, has_sam=False)
+        assert len(f"{result.reason} {result.install_hint}") <= 60
 
 
 class TestAccelerator:

@@ -24,6 +24,10 @@ from typing import Any, Final
 
 MIN_TORCH_VERSION = (2, 7, 1)
 
+# What installs the AI stack: one command since DEPLOYABILITY.md R6, which a pip extra was before it.
+# Short, because the web shows it after the reason as one line, and its terse guard allows 60.
+INSTALL_HINT: Final = "Run npm run ai:setup"
+
 # None is a real answer -- "PyTorch is not installed" -- so it cannot also mean "not supplied, go and
 # look". A sentinel keeps the two apart; without it a caller saying "pretend torch is absent" gets
 # whatever happens to be installed, which is a test that passes for the wrong reason.
@@ -81,7 +85,7 @@ class Availability:
 
     @property
     def install_hint(self) -> str:
-        return "Install the AI extra: pip install lazylabel-inference[ai]"
+        return INSTALL_HINT
 
 
 def check_availability(
