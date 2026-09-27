@@ -142,6 +142,18 @@ describe("Reset to Default, legacy's section reset (CP-50)", () => {
     expect((await toggleButton()).textContent).toBe("Auto-Convert: OFF");
     expect(screen.getByRole("button", { name: "Reset to Default" }).title).toBe("Reset auto-polygon settings to defaults");
   });
+
+  it("says legacy's \"Auto-polygon settings reset to defaults\"", async () => {
+    // Legacy's reset emits the toggle's OFF and then `auto_polygon_reset`, whose handler's notice
+    // replaces the toggle's (control_panel.py:929-939; main_window.py:1746-1753, 1768-1770). The
+    // web's reset said nothing until 2026-09-27, found in a real browser.
+    mount();
+    fireEvent.click(await toggleButton());
+
+    fireEvent.click(screen.getByRole("button", { name: "Reset to Default" }));
+
+    expect(await screen.findByText("Auto-polygon settings reset to defaults")).toBeTruthy();
+  });
 });
 
 describe("P, legacy's Toggle Auto-Convert AI to Polygon", () => {

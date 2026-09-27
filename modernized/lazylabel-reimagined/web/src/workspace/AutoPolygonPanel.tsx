@@ -151,7 +151,7 @@ export function AutoPolygonPanel(): ReactNode {
       <button
         type="button"
         title="Reset auto-polygon settings to defaults"
-        onClick={() =>
+        onClick={() => {
           void save({
             ...settings,
             values: {
@@ -159,8 +159,11 @@ export function AutoPolygonPanel(): ReactNode {
               auto_polygon_enabled: DEFAULT_SETTINGS.auto_polygon_enabled,
               polygon_resolution: DEFAULT_SETTINGS.polygon_resolution,
             },
-          })
-        }
+          });
+          // Legacy's reset says the toggle's OFF and then this, which replaces it (main_window.py:
+          // 1746-1753, 1768-1770). It said nothing until 2026-09-27.
+          notify({ severity: "info", message: "Auto-polygon settings reset to defaults" });
+        }}
       >
         Reset to Default
       </button>
