@@ -14,6 +14,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -1095,7 +1096,14 @@ function ConvertButton({
   const saveUnchanged = (): Promise<boolean> =>
     writing.current ?? (writable ? convert(revisions, true) : Promise.resolve(true));
   lent.current = { enabled: settings.values["auto_save"] !== false, save: saveNow, saveUnchanged, saveSide };
-  useEffect(() => registerSave(activeSide, () => lent.current), [activeSide, registerSave]);
+  /*
+   * LENT IN THE COMMIT THAT SHOWS THE IMAGE, a layout effect rather than a passive one. This button
+   * mounts with the image's size, in the same render as its annotations, and a passive effect runs
+   * in a later task: a move made in between -- a key the browser dispatches first, as it does with
+   * a held arrow key -- found no save lent and left the image unsaved. The autoSave suite missed
+   * its leaving save that way, now and then, whenever its key came first.
+   */
+  useLayoutEffect(() => registerSave(activeSide, () => lent.current), [activeSide, registerSave]);
 
   return (
     <div>
