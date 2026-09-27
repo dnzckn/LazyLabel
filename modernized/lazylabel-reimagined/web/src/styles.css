@@ -1033,6 +1033,23 @@ fieldset input[type="text"] {
   border-radius: 0;
 }
 
+/* The AI tool's messages ("Press spacebar to accept AI segment suggestion") are under the picture
+   but OUT OF THE STACK'S FLOW. In it, they made the stack a line taller than the picture: every
+   drawing layer stretched down by that line, so a preview sat up to 3% below its object and a
+   correcting click landed as far off, and the fitted picture jumped up by half a line. */
+.canvas-stack > .banner {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  margin: 0;
+  line-height: normal;
+  white-space: nowrap;
+}
+
+.canvas-stack > .banner + .banner {
+  top: calc(100% + 2.5em);
+}
+
 /* The picture and its annotations: two canvases of one size, the annotations laid over the
    picture so hovering repaints them alone. The box is the picture's, with nothing added. */
 .annotation-canvas {

@@ -6,11 +6,13 @@
  * the image's pixel size. So anything that makes that box differ from the image silently misplaces
  * every vertex. It is not a rendering nicety; it is the coordinate system.
  *
- * TWO THINGS HAD MADE IT DIFFER, and both were found by measuring a running app rather than here:
+ * THREE THINGS HAD MADE IT DIFFER, and all were found by measuring a running app rather than here:
  *
  *   - the canvas's `margin: 0.5rem 0 1rem` made the stack 24px taller than the picture, which on a
  *     32x24 image put the y scale out by a factor of two and shifted every point up by 8px;
- *   - the canvas's 1px border sat inside the scaled box, stretching every coordinate by 34/32.
+ *   - the canvas's 1px border sat inside the scaled box, stretching every coordinate by 34/32;
+ *   - the AI tool's messages, paragraphs in the stack's flow under the picture, made it 20px
+ *     taller while a prediction waited (2026-09-27).
  *
  * NO UNIT TEST COULD HAVE CAUGHT EITHER, and that is the reason this file is a CSS test rather
  * than a rendering one. jsdom does no layout, so the acceptance harness mocks
@@ -64,6 +66,15 @@ describe("the drawing surface is the image", () => {
     const plain = ruleFor(".canvas");
     expect(plain).toMatch(/margin:/);
     expect(plain).toMatch(/border:/);
+  });
+
+  it("keeps the AI tool's messages out of the stack's flow", () => {
+    // They are paragraphs rendered inside the stack, under the picture. In its flow they grew it by
+    // a line, and every layer with it: the preview sat up to 3% below its object, and a correcting
+    // click landed as far off (found 2026-09-27 by measuring the running app).
+    const banner = ruleFor(".canvas-stack > .banner");
+    expect(banner).toMatch(/position:\s*absolute\s*;/);
+    expect(banner).toMatch(/top:\s*100%\s*;/);
   });
 
   it("leaves every drawing layer at inset 0, which is what makes the box the box", () => {
