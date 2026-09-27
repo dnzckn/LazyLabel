@@ -415,7 +415,7 @@ describe("when one image cannot answer", () => {
 
     click(50, 40);
 
-    expect(await screen.findByText("AI prediction failed")).toBeTruthy();
+    expect(await screen.findByText(/AI prediction failed/)).toBeTruthy();
     await waitFor(() => expect(within(halves()[0]!).getByTestId("ai-mask")).toBeTruthy());
     expect(within(halves()[1]!).queryByTestId("ai-mask")).toBeNull();
 
@@ -432,7 +432,7 @@ describe("when one image cannot answer", () => {
 
     click(150, 80);
 
-    expect(await screen.findByText("The prompt is outside c.png")).toBeTruthy();
+    expect(await screen.findByText(/The prompt is outside c\.png/)).toBeTruthy();
     await waitFor(() => expect(within(halves()[0]!).getByTestId("ai-mask")).toBeTruthy());
     expect(askedOf(segment)).toEqual(["a.png"]);
     expect(within(halves()[1]!).queryByTestId("ai-mask")).toBeNull();
