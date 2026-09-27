@@ -15,40 +15,86 @@ requires-python = ">=3.12"
 # OpenCV too, and this said "deliberately empty" long after that stopped being true: a fresh CI
 # environment could not even collect the suite.
 #
-# OpenCV is NOT declared, on purpose. It ships as two distributions, opencv-python and
-# opencv-python-headless, that install the same cv2 package; declaring either puts a second copy
-# beside an environment's existing one, and removing either later breaks both. A machine that runs
-# the desktop app already has opencv-python. The image and CI install the headless build explicitly.
+# OpenCV is the `server` extra below rather than a dependency. It ships as two distributions,
+# opencv-python and opencv-python-headless, that install the same cv2 package; declaring either
+# here would put a second copy beside an environment's existing one, and removing either later
+# breaks both. A machine that runs the desktop app already has opencv-python. The environment
+# `npm run ai:setup` creates is this service's alone, so it asks for the headless build by name.
 dependencies = ["numpy"]
 
 [project.optional-dependencies]
-# Phase 3. Pinned then, not now: a version pinned before the code exists is a guess that ages.
 ai = [
     # RULE-084's floor, which is doing security work as well as feature work: segment-anything's
     # build_sam calls plain torch.load with no weights_only, so it is safe only because PyTorch 2.6
     # changed that default. assert_weights_only_loading() is what keeps that checked.
     #
-    # 2.10.0 since 2026-09-23: the version every suite passed on under CPython 3.12. Two things
-    # were learned doing so, and both are in `tests/conftest.py`: PyTorch 2.10 cannot load its
-    # DLLs on Windows once PyQt6 6.9 is loaded, and it keeps more GPU memory between test modules
-    # than 2.7.1 did. SAM 2's masks also move slightly with the PyTorch version where the model is
-    # unsure, which is why the propagation golden records the one it was captured on.
-    "torch>=2.10.0",
+    # EXACTLY 2.10.0 since 2026-09-26 (DEPLOYABILITY.md R6): the version every suite passed on
+    # under CPython 3.12, on 2026-09-23. As a floor it let a fresh install pick whatever PyPI had
+    # that day -- 2.14.0, CPU-only on Windows and CUDA 13 on Linux -- which no suite had run. Move
+    # the pin, here and in `cpu` and `cu128`, when a newer pair has passed the live suites. Two
+    # things were learned on 2.10, and both are in `tests/conftest.py`: PyTorch 2.10 cannot load
+    # its DLLs on Windows once PyQt6 6.9 is loaded, and it keeps more GPU memory between test
+    # modules than 2.7.1 did. SAM 2's masks also move slightly with the PyTorch version where the
+    # model is unsure, which is why the propagation golden records the one it was captured on.
+    "torch==2.10.0",
     # SEC-12: pinned to exactly what every differential suite ran against, read from this
     # environment's install records on 2026-09-23. segment-anything has one release. SAM 2 is not on
     # PyPI, and was NOT DECLARED AT ALL until then -- so an install of this extra, the image's
     # included, could not load a SAM 2 model. It is named by commit: a branch would move, and the
     # masks with it, under a suite that still passed.
+    #
+    # pip installs SAM 2 from this git URL, which needs git and builds it (set SAM2_BUILD_CUDA=0:
+    # the CUDA extension needs a compiler and only fills holes in masks). uv installs the same
+    # commit from `vendor/`, prebuilt: see [tool.uv.sources].
     "segment-anything==1.0",
     "SAM-2 @ git+https://github.com/facebookresearch/sam2.git@2b90b9f5ceec907a1c18123530e92e794ad901a4",
     # Find Archetypes: MobileNetV3-small for the features, HDBSCAN for the clustering, Pillow for
     # the transform chain. sklearn 1.3 is where HDBSCAN moved into sklearn.cluster.
-    "torchvision",
+    "torchvision==0.25.0",
     "scikit-learn>=1.3",
     "pillow",
 ]
+# What the HTTP service needs beyond `ai`: every route that reads an image decodes it with OpenCV.
+server = ["opencv-python-headless"]
+# WHICH PyTorch build, one of the two. PyPI's torch is CPU-only on Windows and CUDA 13 on Linux, so
+# the build is chosen here, from PyTorch's own indexes, rather than left to whatever PyPI serves:
+# `cu128` for an NVIDIA driver that supports CUDA 12.8 or later, `cpu` for everything else,
+# macOS included. `npm run ai:setup` picks one from `nvidia-smi`. The versions repeat `ai`'s.
+cpu = ["torch==2.10.0", "torchvision==0.25.0"]
+cu128 = ["torch==2.10.0", "torchvision==0.25.0"]
 # Pillow builds the PNGs the decoder allow-list tests feed the service (SEC-02).
 dev = ["pytest>=8", "pillow"]
+
+# uv's documented PyTorch pattern (docs.astral.sh/uv/guides/integration/pytorch), and `uv.lock`
+# beside this file records the resolution: `uv sync --locked --extra ai --extra server --extra
+# cu128` (or `cpu`) installs exactly what was locked, on any machine. `npm run ai:setup` runs that.
+[tool.uv]
+conflicts = [[{ extra = "cpu" }, { extra = "cu128" }]]
+
+[tool.uv.sources]
+torch = [
+    { index = "pytorch-cpu", extra = "cpu" },
+    { index = "pytorch-cu128", extra = "cu128" },
+]
+torchvision = [
+    { index = "pytorch-cpu", extra = "cpu" },
+    { index = "pytorch-cu128", extra = "cu128" },
+]
+# The git URL's commit, built once with SAM2_BUILD_CUDA=0: pure Python (py3-none-any), 177,863
+# bytes, Apache-2.0, SHA-256 86ee27153b23fbb3f15ec6a12234b86543102a6ecf182d1f62af2374efd1bb63.
+# Building from git needed git, and SAM 2's build requirements pull a second PyTorch into the
+# isolated build environment just to skip the extension. NOTICE, at the repository root, says how.
+sam-2 = { path = "vendor/sam_2-1.0-py3-none-any.whl" }
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true
 
 [tool.setuptools.packages.find]
 where = ["src"]

@@ -2,3 +2,16 @@ LazyLabel
 Copyright 2026 Deniz N. Cakan
 
 Licensed under the Apache License, Version 2.0.
+
+This product includes SAM 2 (https://github.com/facebookresearch/sam2), commit
+2b90b9f5ceec907a1c18123530e92e794ad901a4, unmodified, as a prebuilt wheel:
+  modernized/lazylabel-reimagined/inference/vendor/sam_2-1.0-py3-none-any.whl
+  177,863 bytes, SHA-256 86ee27153b23fbb3f15ec6a12234b86543102a6ecf182d1f62af2374efd1bb63
+Copyright (c) Meta Platforms, Inc. and affiliates. Licensed under the Apache License, Version 2.0:
+  modernized/lazylabel-reimagined/inference/vendor/sam2.LICENSE
+The wheel's metadata also carries SAM 2's LICENSE_cctorch (BSD 3-Clause, the same text as
+vendor/sam2.LICENSE_cctorch), which covers the source of SAM 2's optional CUDA extension. The wheel
+contains no such source: it is pure Python (py3-none-any), the sam2 and training packages and their
+YAML configs. Built from that commit with SAM2_BUILD_CUDA=0, SOURCE_DATE_EPOCH=315532800 and no
+build isolation (uv build --wheel --no-build-isolation), under CPython 3.12 with setuptools 84.0.0
+and wheel 0.48.0.

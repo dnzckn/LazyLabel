@@ -20,6 +20,7 @@
     "test": "npm test --workspaces --if-present",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "start": "node lazylabel-reimagined/api/dist/src/cli.js",
-    "dev": "npm run dev -w lazylabel-reimagined/web"
+    "dev": "npm run dev -w lazylabel-reimagined/web",
+    "ai:setup": "node scripts/ai-setup.mjs"
   }
 }

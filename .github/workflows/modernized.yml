@@ -142,12 +142,19 @@ jobs:
           python-version: "3.12"
       # No [ai] extra, on purpose: PyTorch is gigabytes, and every test that needs it also needs a
       # checkpoint CI does not have, so those skip and say why. Everything else runs -- including
-      # SEC-02's decoder allow-list, which needs OpenCV. It is installed here rather than declared by
-      # the package, because its two distributions conflict (pyproject.toml says more).
+      # SEC-02's decoder allow-list, which needs OpenCV: the [server] extra, the headless build
+      # (pyproject.toml says why it is an extra rather than a dependency).
       - name: Install
-        run: python -m pip install --quiet -e ".[dev]" opencv-python-headless
+        run: python -m pip install --quiet -e ".[dev,server]"
       - name: Test
         run: python -m pytest -q
+      # `npm run ai:setup` installs with `uv sync --locked`, which refuses a lockfile that no longer
+      # matches pyproject.toml. So an edit to the dependencies without `uv lock` would fail every
+      # user's AI setup and nothing here; this fails it here. The uv that wrote uv.lock, pinned.
+      - name: uv.lock matches pyproject.toml
+        run: |
+          python -m pip install --quiet uv==0.7.13
+          uv lock --locked
 
   # Phase 4 entry criterion 3: the LIVE image-load path has characterization tests. They pin down
   # what the legacy code does today, defects included, so the rewrite can be compared against
