@@ -26,6 +26,7 @@ import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
+import { createInterface } from "node:readline";
 import { fileURLToPath } from "node:url";
 
 import { startAiService, type AiService } from "./aiService.js";
@@ -40,14 +41,18 @@ import {
   browserCommand,
   busyPortAdvice,
   describeStartFailure,
+  dialogFolder,
+  folderDialogs,
   folderProblem,
   freePort,
   freePortNear,
   nodeVersionProblem,
   parseArguments,
   sameFolder,
+  typedFolder,
   whatHoldsPort,
   type AiPlan,
+  type FolderDialog,
 } from "./launcher.js";
 
 /** The workspace folder, `modernized/`, four levels above this file in the build (dist/src/cli.js). */
@@ -78,7 +83,18 @@ async function run(): Promise<number | null> {
     return 0;
   }
   if (parsed.kind === "error") return fail(`${parsed.message}\n\n${USAGE}`, 2);
-  const { env, verbose } = parsed.options;
+  const { verbose } = parsed.options;
+  let { env } = parsed.options;
+  if (parsed.options.askForFolder) {
+    const chosen = await askForFolder();
+    if (chosen === null) {
+      return fail(
+        "No folder was chosen, so LazyLabel did not start. Start it again and choose the folder that holds your images.",
+        1,
+      );
+    }
+    env = { ...env, LAZYLABEL_DATASET_ROOT: path.resolve(chosen) };
+  }
   // BROWSER=none is the convention other development servers honour, for a machine with no screen.
   const open = parsed.options.open && process.env["BROWSER"] !== "none";
 
@@ -241,6 +257,53 @@ async function portReserved(config: Config): Promise<number> {
     }),
     1,
   );
+}
+
+/**
+ * `--choose-folder` with no folder named (DEPLOYABILITY.md R11): the system's folder dialog, then,
+ * where there is none or it was closed, a question in this window. Null when neither gave a folder.
+ */
+async function askForFolder(): Promise<string | null> {
+  for (const dialog of folderDialogs(process.platform, process.env, os.homedir())) {
+    const shown = await showDialog(dialog);
+    if (shown === "missing") continue;
+    if (shown !== null) return shown;
+    break;
+  }
+  process.stdout.write(
+    "\nWhich folder of images should LazyLabel open? Type or paste its path, or drag the folder into\n"
+      + "this window, then press Enter. Enter alone stops.\n> ",
+  );
+  return new Promise((resolve) => {
+    const input = createInterface({ input: process.stdin, terminal: false });
+    let answered = false;
+    input.once("line", (line) => {
+      answered = true;
+      input.close();
+      resolve(typedFolder(line, process.platform, os.homedir()));
+    });
+    input.once("close", () => {
+      if (!answered) resolve(null);
+    });
+  });
+}
+
+/** The folder the dialog printed; null when it was closed or failed; "missing" when it is not installed. */
+function showDialog(dialog: FolderDialog): Promise<string | null | "missing"> {
+  return new Promise((resolve) => {
+    let output = "";
+    try {
+      const child = spawn(dialog.command, [...dialog.args], { stdio: ["ignore", "pipe", "ignore"], windowsHide: true });
+      child.stdout.setEncoding("utf8");
+      child.stdout.on("data", (chunk: string) => {
+        output += chunk;
+      });
+      child.once("error", () => resolve("missing"));
+      child.once("close", (code) => resolve(code === 0 ? dialogFolder(output) : null));
+    } catch {
+      resolve("missing");
+    }
+  });
 }
 
 function openBrowser(url: string): void {
