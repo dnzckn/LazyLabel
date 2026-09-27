@@ -291,6 +291,28 @@ describe("with Auto-Save on, leaving an image saves it CHANGED OR NOT, as legacy
     expect(screen.getByLabelText("Timeline saves").textContent).toBe("[]");
   });
 
+  it("says legacy's \"Saved: ...\", naming the files written, as it moves on", async () => {
+    // Legacy's leaving save is Enter's, `save_single_view_output`, which ends in a green 3 s
+    // "Saved: a.npz, a.txt" in the status bar (save_export_manager.py:121-126). Found missing in a
+    // real browser on 2026-09-27: a move rewrote the file and said nothing at all.
+    mount({ a: TRIANGLE_AT_REV_A });
+    await openA();
+
+    next();
+
+    expect(await screen.findByText("Saved: a.npz, a.txt")).toBeTruthy();
+  });
+
+  it("says \"Saved: ...\" after Enter's save too, in the status bar", async () => {
+    mount();
+    await openAndDraw();
+
+    fireEvent.keyDown(document, { key: "Enter", code: "Enter" });
+
+    const said = await screen.findByText("Saved: a.npz, a.txt");
+    expect(said.closest("footer")?.getAttribute("aria-label")).toBe("Status");
+  });
+
   it("deletes an untouched image's files when it has no segments, in legacy's words", async () => {
     const { events } = mount();
     await openA();
@@ -568,6 +590,8 @@ describe("in the Multi view, every move saves BOTH sides first (CP-67)", () => {
     expect(await screen.findByText("Multi-view annotations saved!")).toBeTruthy();
     expect(events).toEqual(["save frames/a.png", "save frames/b.png"]);
     expect(status()).toMatch(/frames\/b\.png — 1 segment, saved/);
+    // Each side's save is silent, as legacy's multi-view save of a viewer is (6559-6636).
+    expect(screen.queryByText(/^Saved:/)).toBeNull();
   });
 
   it("saves both from the Write button too, which names Enter's save", async () => {

@@ -48,7 +48,7 @@ import type { AnnotationsResult, ApiClient } from "../api/client.js";
 import { RESOLUTION_DEFAULT } from "../tools/autoPolygon.js";
 import { useHotkey, useKeyHint } from "../hotkeys/HotkeyProvider.jsx";
 import { CropLayer } from "../canvas/CropLayer.jsx";
-import { canSave, deletionNotice } from "./saveState.js";
+import { canSave, deletionNotice, savedNotice } from "./saveState.js";
 import { PanLayer } from "../canvas/PanLayer.jsx";
 import { panPane } from "../canvas/panStep.js";
 import { useFittedPane } from "../canvas/useFittedPane.js";
@@ -821,6 +821,10 @@ function ConvertButton({
       .saveAnnotations(projectId, image.key, saveRequest(written, size, formats, settings.values, expected))
       .then((result) => {
         setState({ status: "saved", result });
+        // Legacy's "Saved: a.npz, a.txt" in the status bar, by Enter or on leaving the image
+        // (save_export_manager.py:121-126). Said by nothing until 2026-09-27.
+        const said = savedNotice(image.name, result.written);
+        if (said !== null) notify(said);
         /*
          * THE IMAGE IS NO LONGER UNSAVED, and nothing said so until now. `markSaved` existed on
          * the store, was covered by its own test, was exposed on the context -- and had no caller
@@ -896,6 +900,7 @@ function ConvertButton({
     crop,
     formats,
     image.key,
+    image.name,
     markSavedOn,
     notify,
     projectId,

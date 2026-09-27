@@ -51,6 +51,8 @@
  * alone; that half lives on the server, and `WireSaveResponse.stale` carries it back.
  */
 
+import { FORMAT_SUFFIX, outputPathFor, type AnnotationFormat } from "@lazylabel/annotation-formats";
+
 /** Where an image's in-memory annotations came from. The reason saving can be unsafe. */
 export type Provenance =
   /** Read from an annotation file that parsed. Safe to write back. */
@@ -246,6 +248,24 @@ export function deletionNotice(deleted: readonly string[]): {
   if (deleted.length === 0) return { severity: "warning", message: "No segments to save." };
   const names = deleted.map((key) => key.split("/").pop() ?? key);
   return { severity: "info", message: `Deleted: ${names.join(", ")}` };
+}
+
+/**
+ * What legacy says after a save that wrote (`save_export_manager.py:121-126`): "Saved: " and the
+ * written files' names, a green 3 s message, whichever way the save came -- Enter, the Write
+ * button, or leaving the image with Auto-Save on Navigate, which is the same save
+ * (file_navigation_manager.py:156-160, 270-274). The API reports what it wrote by format; each
+ * file is the image's name with that format's suffix. Null when nothing was written, where legacy
+ * says nothing either. The web said nothing at all until 2026-09-27 (CP-64).
+ */
+export function savedNotice(
+  imageName: string,
+  written: Readonly<Record<string, string>>,
+): { readonly severity: "success"; readonly message: string } | null {
+  const names = Object.keys(written)
+    .filter((format): format is AnnotationFormat => format in FORMAT_SUFFIX)
+    .map((format) => outputPathFor(imageName, format));
+  return names.length === 0 ? null : { severity: "success", message: `Saved: ${names.join(", ")}` };
 }
 
 /**
