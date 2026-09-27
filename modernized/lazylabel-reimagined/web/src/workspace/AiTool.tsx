@@ -239,7 +239,8 @@ export function AiTool({
   const [otherHandle, setOtherHandle] = useState<string | null>(null);
   const [otherEncoding, setOtherEncoding] = useState(false);
   const [otherSettled, setOtherSettled] = useState(false);
-  /** A linked prompt waiting for the other image's encode (see where it is asked, below). */
+  /** Linked prompts waiting for an image's encode, this one's or the other's (asked below). */
+  const queuedForThis = useRef<AiPrompt | null>(null);
   const queuedForOther = useRef<AiPrompt | null>(null);
   const ready = handle !== null;
 
@@ -378,9 +379,14 @@ export function AiTool({
     (held: PairAi, prompt: AiPrompt) => {
       const waiting = new Set<string>();
 
+      // An image still being loaded into its model is asked once it is (below), as legacy's Multi
+      // view loads a viewer's image first and then predicts (main_window.py:6794-6797). The single
+      // view refuses instead, as legacy's does (ai_segment_manager.py:425-427).
+      queuedForThis.current = null;
       if (handle === null) {
         held.answer(held.active, held.ask(held.active), null);
-        waiting.add(encoding ? UPDATING : UNAVAILABLE);
+        if (encoding) queuedForThis.current = prompt;
+        else waiting.add(UNAVAILABLE);
       } else {
         askSide(held, held.active, handle, prompt, imageKey);
       }
@@ -393,9 +399,9 @@ export function AiTool({
         notify({ severity: "warning", message: outside });
       } else if (otherHandle === null) {
         held.answer(other.side, held.ask(other.side), null);
-        // Still being loaded into its model: asked once it is (below), as legacy's is.
-        if (otherEncoding && handle !== null) queuedForOther.current = prompt;
-        else waiting.add(otherEncoding ? UPDATING : UNAVAILABLE);
+        // Its encode starts once this image's has landed, so it waits for this one's too.
+        if (otherEncoding || (encoding && handle === null)) queuedForOther.current = prompt;
+        else waiting.add(UNAVAILABLE);
       } else {
         askSide(held, other.side, otherHandle, prompt, other.name);
       }
@@ -420,6 +426,16 @@ export function AiTool({
     if (otherHandle === null || pair === null || pair.prompt !== queued) return;
     askSide(pair, pair.other.side, otherHandle, queued, pair.other.name);
   }, [askSide, otherHandle, otherSettled, pair]);
+
+  // The same for THIS image, when the prompt came while it was still being encoded (2026-09-27: a
+  // click at once on a fresh pair was drawn in both halves and asked of neither).
+  useEffect(() => {
+    const queued = queuedForThis.current;
+    if (queued === null || !settled) return;
+    queuedForThis.current = null;
+    if (handle === null || pair === null || pair.prompt !== queued) return;
+    askSide(pair, pair.active, handle, queued, imageKey);
+  }, [askSide, handle, imageKey, pair, settled]);
 
   const onPrompt = useCallback(
     (prompt: AiPrompt) => {

@@ -358,6 +358,44 @@ describe("a prompt placed while the other image is still being encoded", () => {
   });
 });
 
+describe("a prompt placed while THIS image is still being encoded", () => {
+  it("is asked of both images once each is encoded", async () => {
+    // Legacy's Multi view loads the viewer's image first when it must, then predicts
+    // (main_window.py:6778-6804). A click at once on a fresh pair was drawn in both halves and
+    // asked of neither: no preview, and Space and Enter saved nothing (found 2026-09-27).
+    let release = () => {};
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const { embed, segment } = mount(new Set(), {}, new Map([["frames/a.png", gate]]));
+    fireEvent.doubleClick(await screen.findByRole("button", { name: "a.png" }));
+    await waitFor(() => expect(pair()[0].aliases).toEqual(ALIASES["frames/a.png"]));
+    fireEvent.click(screen.getByRole("tab", { name: "Multi" }));
+    fireEvent.change(await screen.findByLabelText("Second image"), { target: { value: "frames/b.png" } });
+    await waitFor(() => expect(halves()[1]!.querySelector("canvas")).not.toBeNull());
+    chooseTool("AI (1)");
+    await waitFor(() => expect(embed.mock.calls.map(([request]) => request.image)).toContain("frames/a.png"));
+
+    click(50, 40);
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(segment).not.toHaveBeenCalled();
+    expect(screen.queryByText("AI model is updating, please wait...")).toBeNull();
+
+    await act(async () => {
+      release();
+      await gate;
+    });
+
+    await waitFor(() => expect(askedOf(segment).sort()).toEqual(["a.png", "b.png"]));
+    await waitFor(() => expect(halves().map((half) => within(half).queryByTestId("ai-mask") !== null)).toEqual([true, true]));
+
+    press(" ", "Space");
+    await waitFor(() => expect(pair().map((side) => side.found)).toEqual([["a.png"], ["b.png"]]));
+  });
+});
+
 describe("Space: each image's own answer becomes its own annotation", () => {
   it("adds each image's own mask, not a copy of the other's", async () => {
     await pairUp();
