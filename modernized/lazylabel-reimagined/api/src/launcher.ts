@@ -25,7 +25,8 @@ Options:
   --port <number>      the port to serve on (default 8787)
   --host <address>     the address to listen on (default 127.0.0.1, this computer only)
   --db <file>          where settings and hotkeys are kept, or :memory: to keep them nowhere
-  --inference <url>    the AI inference service, such as http://127.0.0.1:8788 (default: none)
+  --inference <url>    an AI inference service already running, such as http://127.0.0.1:8788
+                       (default: start the one npm run ai:setup installed, when there is one)
   --no-open            do not open the browser (BROWSER=none does the same)
   --verbose            log every request
   -h, --help           show this
@@ -258,6 +259,12 @@ export async function whatHoldsPort(
   return { kind: "other" };
 }
 
+/** `port` when it is free on `host` and not in `avoid`, else a free one near it, or null. */
+export async function freePort(port: number, host: string, avoid: readonly number[]): Promise<number | null> {
+  if (!avoid.includes(port) && (await isFree(port, host))) return port;
+  return freePortNear(port, host, avoid);
+}
+
 /**
  * A port near `port` that is free on `host` now, or null. `avoid` holds ports taken by design even
  * while nothing listens on them yet, such as the inference service's default.
@@ -311,6 +318,103 @@ export function busyPortAdvice(options: {
           + ". Start LazyLabel on another port"
         : `Port ${port} is in use by another program. Start LazyLabel on another port`;
   return `${why}, from the modernized folder:\n  ${shim} "${folder}" --port ${freePort ?? "<another port>"}`;
+}
+
+/**
+ * Where checkpoints go when nobody says: per user, outside the repository and every dataset.
+ * `%LOCALAPPDATA%\LazyLabel\models` on Windows, `~/Library/Application Support/LazyLabel/models`
+ * on macOS, `${XDG_DATA_HOME:-~/.local/share}/lazylabel/models` elsewhere. `npm run ai:models`
+ * fetches into the same folder (`lazylabel_inference/fetch.py`, `scripts/lib/ai.mjs`), and
+ * `test/aiScripts.test.ts` holds the three copies to one table.
+ */
+export function defaultModelDir(env: NodeJS.ProcessEnv, platform: NodeJS.Platform, home: string): string {
+  if (platform === "win32") {
+    const local = (env["LOCALAPPDATA"] ?? "").trim();
+    return path.win32.join(local !== "" ? local : path.win32.join(home, "AppData", "Local"), "LazyLabel", "models");
+  }
+  if (platform === "darwin") return path.posix.join(home, "Library", "Application Support", "LazyLabel", "models");
+  // The XDG spec says a relative XDG_DATA_HOME is invalid and is to be ignored.
+  const data = (env["XDG_DATA_HOME"] ?? "").trim();
+  return path.posix.join(data.startsWith("/") ? data : path.posix.join(home, ".local", "share"), "lazylabel", "models");
+}
+
+/** What `npm start` does about the AI tools. */
+export type AiPlan =
+  /** An inference service was named (--inference, LAZYLABEL_INFERENCE_URL): use it, start nothing. */
+  | { readonly kind: "external"; readonly url: string }
+  /** Installed, with models: start the service with the app. */
+  | {
+      readonly kind: "start";
+      readonly python: string;
+      readonly modelDir: string;
+      /** Its source folder, so an environment without the package installed still runs this copy. */
+      readonly cwd: string;
+    }
+  /** Not installed, or no models yet: the app runs without AI, and `reason` says what to run. */
+  | { readonly kind: "off"; readonly reason: string };
+
+/**
+ * Whether `npm start` starts the inference service, from what is installed (DEPLOYABILITY.md R8).
+ *
+ * It does when there is a Python for it -- LAZYLABEL_PYTHON, else the `.venv` that
+ * `npm run ai:setup` makes -- and a manifest -- LAZYLABEL_MODEL_MANIFEST, else `manifest.json` in
+ * LAZYLABEL_MODEL_DIR or the per-user folder `npm run ai:models` fills. Without them the app runs
+ * as it always has, with no AI, and says which command adds it.
+ */
+export function aiPlan(context: {
+  readonly env: NodeJS.ProcessEnv;
+  readonly platform: NodeJS.Platform;
+  readonly home: string;
+  /** `lazylabel-reimagined/inference`, where `npm run ai:setup` puts `.venv`. */
+  readonly inference: string;
+  readonly exists: (file: string) => boolean;
+}): AiPlan {
+  const { env, platform, home, inference, exists } = context;
+  const join = platform === "win32" ? path.win32.join : path.posix.join;
+
+  const url = (env["LAZYLABEL_INFERENCE_URL"] ?? "").trim();
+  if (url !== "") return { kind: "external", url };
+
+  const named = (env["LAZYLABEL_PYTHON"] ?? "").trim();
+  const python =
+    named !== ""
+      ? path.resolve(named)
+      : platform === "win32"
+        ? join(inference, ".venv", "Scripts", "python.exe")
+        : join(inference, ".venv", "bin", "python");
+  if (!exists(python)) {
+    return {
+      kind: "off",
+      reason: named !== "" ? `LAZYLABEL_PYTHON names ${python}, which is not there` : "run npm run ai:setup",
+    };
+  }
+
+  const namedDir = (env["LAZYLABEL_MODEL_DIR"] ?? "").trim();
+  const modelDir = namedDir !== "" ? path.resolve(namedDir) : defaultModelDir(env, platform, home);
+  const namedManifest = (env["LAZYLABEL_MODEL_MANIFEST"] ?? "").trim();
+  const manifest = namedManifest !== "" ? path.resolve(namedManifest) : join(modelDir, "manifest.json");
+  if (!exists(manifest)) {
+    return { kind: "off", reason: `no models in ${modelDir} yet: run npm run ai:models sam2.1-large` };
+  }
+  return { kind: "start", python, modelDir, cwd: join(inference, "src") };
+}
+
+/**
+ * One line of the inference service's output as `npm start` shows it, marked as the service's, or
+ * null to leave it out. Like the API's own, a line per request is left out unless --verbose; its
+ * warnings, errors and anything that is not a log record, such as a traceback, always show.
+ */
+export function aiLogLine(line: string, verbose: boolean): string | null {
+  if (line.trim() === "") return null;
+  if (!verbose) {
+    try {
+      const record = JSON.parse(line) as { readonly level?: unknown; readonly message?: unknown } | null;
+      if (record?.level === "info" && record.message === "request handled") return null;
+    } catch {
+      // Not a log record: shown as it is.
+    }
+  }
+  return `[ai] ${line}`;
 }
 
 /** A start-up failure as one sentence, with what to do when there is something to do. */

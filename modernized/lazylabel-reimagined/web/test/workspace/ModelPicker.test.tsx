@@ -11,10 +11,11 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { defaultSettings } from "@lazylabel/settings-schema";
 
-import type { ApiClient, WireModelStatus, WireUnloadResult } from "../../src/api/client.js";
+import { ApiError, type ApiClient, type WireModelStatus, type WireUnloadResult } from "../../src/api/client.js";
 import { NotificationHost, NotificationProvider } from "../../src/notifications/NotificationProvider.jsx";
 import { ModelPicker, currentLine, defaultModel, useDefaultModel } from "../../src/workspace/ModelPicker.jsx";
 import { SettingsProvider } from "../../src/settings/SettingsProvider.jsx";
+import { longTexts } from "../terse.js";
 
 afterEach(cleanup);
 
@@ -84,6 +85,26 @@ function mount(models: readonly WireModelStatus[] | Error, chosen = "", controls
     answered: () => act(() => listeners.forEach((listener) => listener())),
   };
 }
+
+describe("with no inference service", () => {
+  const NONE = "no inference service is configured, so the AI tools are unavailable";
+
+  it("says, in one short line, the command that adds the AI tools, with the API's reason in its tooltip", async () => {
+    // DEPLOYABILITY.md R8: `npm start` before `npm run ai:setup`. The section printed the API's
+    // reason after "The models could not be listed:", 99 characters that named no fix.
+    mount(new ApiError(503, "inference_unavailable", NONE));
+
+    const hint = await screen.findByText("AI tools off: run npm run ai:setup");
+    expect(hint.title).toBe(NONE);
+    expect(longTexts(document.body)).toEqual([]);
+  });
+
+  it("still gives every other reason the models could not be listed", async () => {
+    mount(new ApiError(503, "manifest_unreadable", "manifest.json is not valid JSON"));
+    expect(await screen.findByText("The models could not be listed: manifest.json is not valid JSON")).toBeTruthy();
+    expect(screen.queryByText(/ai:setup/)).toBeNull();
+  });
+});
 
 describe("listing what is installed", () => {
   it("offers each model by its manifest name", async () => {

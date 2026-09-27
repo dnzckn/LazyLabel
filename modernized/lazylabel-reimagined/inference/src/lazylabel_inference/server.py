@@ -46,12 +46,26 @@ def serve(handle: Callable[[Request], Response], host: str, port: int, logger: L
 
         def _write(self, response: Response) -> None:
             payload = response.body.encode("utf-8")
-            self.send_response(response.status)
-            for name, value in response.headers.items():
-                self.send_header(name, value)
-            self.send_header("content-length", str(len(payload)))
-            self.end_headers()
-            self.wfile.write(payload)
+            try:
+                self.send_response(response.status)
+                for name, value in response.headers.items():
+                    self.send_header(name, value)
+                self.send_header("content-length", str(len(payload)))
+                self.end_headers()
+                self.wfile.write(payload)
+            except (BrokenPipeError, ConnectionAbortedError, ConnectionResetError) as exc:
+                # The client went away before its answer: a request that timed out on the first
+                # /health, which imports PyTorch, or a tab closed during an encode. That is one
+                # line, not the standard library's traceback per failed write, which read like a
+                # crash (DEPLOYABILITY.md walkthrough row 30).
+                self.close_connection = True
+                logger.log(
+                    "info",
+                    "the client went away before its answer was sent",
+                    path=urlparse(self.path).path,
+                    status=response.status,
+                    reason=type(exc).__name__,
+                )
 
         do_GET = _respond
         do_POST = _respond

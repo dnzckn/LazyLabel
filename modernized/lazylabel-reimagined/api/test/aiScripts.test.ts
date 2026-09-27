@@ -15,6 +15,8 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { beforeAll, describe, expect, it } from "vitest";
 
+import { defaultModelDir } from "../src/launcher.js";
+
 const MODERNIZED = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
 
 type Cuda = { readonly major: number; readonly minor: number } | null;
@@ -113,5 +115,9 @@ describe("npm run ai:models", () => {
 
   it.each(MODEL_FOLDERS)("puts models, by default, per user: %j on %s", (env, platform, home, expected) => {
     expect(ai.defaultModelDir(env, platform, home)).toBe(expected);
+  });
+
+  it.each(MODEL_FOLDERS)("puts them where npm start looks: %j on %s", (env, platform, home, expected) => {
+    expect(defaultModelDir(env, platform, home)).toBe(expected);
   });
 });

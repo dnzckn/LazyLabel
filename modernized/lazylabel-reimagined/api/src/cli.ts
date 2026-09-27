@@ -5,10 +5,16 @@
  * `VAR=value cmd` is bash and a positional argument reaches the program intact from PowerShell,
  * cmd and bash alike (measured through npm, 2026-09-26). Everything else has a default, so nothing
  * needs configuring: port 8787 on this computer only, settings in the user's own settings file,
- * the web app from the workspace's build, and no AI until an inference service is named, which is
- * the supported "No AI" state rather than an error. Options go through `lazylabel.cmd` or
- * `lazylabel.sh` beside `modernized/package.json`, because PowerShell's npm drops the `--` they
- * would need after `npm start`.
+ * the web app from the workspace's build, and the AI tools when they are installed. Options go
+ * through `lazylabel.cmd` or `lazylabel.sh` beside `modernized/package.json`, because PowerShell's
+ * npm drops the `--` they would need after `npm start`.
+ *
+ * THE AI TOOLS START WITH THE APP (DEPLOYABILITY.md R8) once `npm run ai:setup` has made their
+ * environment and `npm run ai:models` has put a model in the per-user folder: the inference service
+ * runs as this process's child, on a free port, with the same folder of images, its lines marked
+ * `[ai]`, and it stops when this does. Without them the app runs with no AI, the supported "No AI"
+ * state rather than an error, and says which command adds it. `--inference <url>` uses a service
+ * that is already running instead, and starts none.
  *
  * THIS FILE IS ALWAYS THE PROCESS, so it has no import guard and cannot exit silently the way the
  * API's guard did through a directory junction. And nothing it imports statically may load
@@ -17,28 +23,38 @@
  */
 
 import { spawn } from "node:child_process";
+import { existsSync } from "node:fs";
+import * as os from "node:os";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { startAiService, type AiService } from "./aiService.js";
 import { ConfigError, loadConfig, type Config } from "./config.js";
 import { createLogger } from "./http/log.js";
 import { builtWebRoot } from "./http/staticWeb.js";
 import {
   USAGE,
+  aiLogLine,
+  aiPlan,
   appUrl,
   browserCommand,
   busyPortAdvice,
   describeStartFailure,
   folderProblem,
+  freePort,
   freePortNear,
   nodeVersionProblem,
   parseArguments,
   sameFolder,
   whatHoldsPort,
+  type AiPlan,
 } from "./launcher.js";
 
 /** The workspace folder, `modernized/`, four levels above this file in the build (dist/src/cli.js). */
 const WORKSPACE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "..", "..");
+
+/** The inference service's package, where `npm run ai:setup` puts its `.venv`. */
+const INFERENCE = path.join(WORKSPACE, "lazylabel-reimagined", "inference");
 
 /** The inference service's default port: never offered as a free one, since AI would want it. */
 const INFERENCE_PORT = 8788;
@@ -101,10 +117,35 @@ async function run(): Promise<number | null> {
     // --no-experimental-sqlite, say: the one failure left that the check cannot see.
     return fail(`LazyLabel could not load its settings store: ${describeStartFailure(cause)}`, 1);
   }
+
+  // The AI tools first, so the API starts knowing where they are, or that there are none.
+  const plan = aiPlan({
+    env: { ...process.env, ...env },
+    platform: process.platform,
+    home: os.homedir(),
+    inference: INFERENCE,
+    exists: existsSync,
+  });
+  let ai: AiService | null = null;
+  let aiState: string;
+  if (plan.kind === "start") {
+    const started = await startAi(plan, config, verbose);
+    if (typeof started === "string") {
+      aiState = `off: ${started}`;
+    } else {
+      ai = started;
+      config = { ...config, inferenceUrl: ai.url };
+      aiState = `on, from the inference service at ${ai.url}, with the models in ${plan.modelDir}`;
+    }
+  } else {
+    aiState = plan.kind === "off" ? `off: ${plan.reason}` : `from the inference service at ${config.inferenceUrl}`;
+  }
+
   let api: Awaited<ReturnType<typeof startApi>>;
   try {
     api = await startApi(config, logger);
   } catch (cause) {
+    await ai?.stop();
     const code = (cause as NodeJS.ErrnoException | null)?.code;
     if (code === "EADDRINUSE") return portTaken(config, open);
     if (code === "EACCES") return portReserved(config);
@@ -112,24 +153,60 @@ async function run(): Promise<number | null> {
   }
 
   const settings = config.databasePath === ":memory:" ? "in memory, lost when LazyLabel stops" : config.databasePath;
-  const ai =
-    config.inferenceUrl === null
-      ? "off: no inference service is set (see lazylabel-reimagined/inference/README.md)"
-      : `from the inference service at ${config.inferenceUrl}`;
   console.log(
     `\nLazyLabel is running at ${api.url}  (Ctrl+C to stop)\n`
       + `  images:   ${config.datasetRoot}\n`
       + `  settings: ${settings}\n`
-      + `  AI tools: ${ai}\n`,
+      + `  AI tools: ${aiState}\n`,
   );
   if (open) openBrowser(api.url);
 
+  let stopping = false;
+  void ai?.exited.then((code) => {
+    if (!stopping) {
+      console.error(
+        `[ai] The inference service stopped (exit code ${code}); the AI tools are off until LazyLabel restarts.`,
+      );
+    }
+  });
   const stop = (): void => {
-    void api.close().then(() => process.exit(0));
+    stopping = true;
+    void Promise.all([api.close(), ai?.stop()]).then(() => process.exit(0));
   };
   process.once("SIGINT", stop);
   process.once("SIGTERM", stop);
   return null;
+}
+
+/**
+ * The inference service `npm run ai:setup` installed, started with the app on a free port and the
+ * API's own folder of images, once it says it is listening; or why it is not, in a few words.
+ */
+async function startAi(
+  plan: Extract<AiPlan, { kind: "start" }>,
+  config: Config,
+  verbose: boolean,
+): Promise<AiService | string> {
+  const port = await freePort(INFERENCE_PORT, "127.0.0.1", [config.port]);
+  if (port === null) return `no port near ${INFERENCE_PORT} was free for the inference service`;
+  console.log(`Starting the AI tools with ${plan.python}`);
+  try {
+    return await startAiService({
+      command: plan.python,
+      args: ["-m", "lazylabel_inference.server"],
+      cwd: plan.cwd,
+      env: { ...process.env, LAZYLABEL_DATASET_ROOT: config.datasetRoot, LAZYLABEL_MODEL_DIR: plan.modelDir },
+      host: "127.0.0.1",
+      port,
+      onLine: (line) => {
+        const shown = aiLogLine(line, verbose);
+        if (shown !== null) process.stdout.write(`${shown}\n`);
+      },
+    });
+  } catch (cause) {
+    return `the inference service did not start (${cause instanceof Error ? cause.message : String(cause)}); `
+      + "npm run doctor says why";
+  }
 }
 
 /**

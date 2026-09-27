@@ -70,7 +70,19 @@ paths are taken from where the command was typed. Beyond the API above, it:
   opens the browser, unless `--no-open` or `BROWSER=none`;
 - logs warnings and errors but not every request, unless `--verbose`;
 - on a busy port, opens the LazyLabel already serving the same folder, or names a free port and
-  the command that uses it; on a port the system refuses (Windows reserves some ranges), says so.
+  the command that uses it; on a port the system refuses (Windows reserves some ranges), says so;
+- starts the AI tools with the app when they are installed (DEPLOYABILITY.md R8): when there is a
+  Python for them and a model manifest, it runs `python -m lazylabel_inference.server` as its
+  child, with the same folder of images and a free port from 8788, points the API at it, shows its
+  lines marked `[ai]`, and stops it on exit. Otherwise it says which command adds them:
+  `npm run ai:setup`, then `npm run ai:models sam2.1-large`. `--inference <url>` uses a service
+  that is already running instead, and starts none (`src/aiService.ts`, `test/aiLaunch.test.ts`).
+
+| Variable | Default | What it is |
+|---|---|---|
+| `LAZYLABEL_PYTHON` | the Python in `../inference/.venv` | The Python that runs the AI tools. `npm run ai:setup` makes the default; name another environment with the inference package's `ai` and `server` extras. |
+| `LAZYLABEL_MODEL_DIR` | per user: `%LOCALAPPDATA%\LazyLabel\models`, `~/Library/Application Support/LazyLabel/models`, or `${XDG_DATA_HOME:-~/.local/share}/lazylabel/models` | Where the checkpoints and their `manifest.json` are, which `npm run ai:models` fills. Passed on to the service. |
+| `LAZYLABEL_MODEL_MANIFEST` | `<model dir>/manifest.json` | The model manifest. The AI tools start only when it is there. |
 
 It has no import guard, so it cannot exit silently the way the API's own guard once did when
 started through a directory junction; that guard now compares real paths (`src/launcher.ts`,

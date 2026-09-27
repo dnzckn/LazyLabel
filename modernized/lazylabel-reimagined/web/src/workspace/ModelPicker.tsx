@@ -27,6 +27,9 @@ import { useNotifications } from "../notifications/NotificationProvider.jsx";
 import { useSettings } from "../settings/SettingsProvider.jsx";
 import type { ApiClient, WireModelStatus } from "../api/client.js";
 
+/** How the API says it was started with no inference service (`api/src/app.ts`, `inferenceOf`). */
+const NOT_CONFIGURED = /no inference service is configured/;
+
 type State =
   | { readonly status: "loading" }
   | { readonly status: "ready"; readonly models: readonly WireModelStatus[] }
@@ -288,6 +291,16 @@ function ModelList({
   if (state.status === "loading") return <p>Looking for models…</p>;
 
   if (state.status === "failed") {
+    // No inference service at all is the app as `npm start` runs it before `npm run ai:setup`
+    // (DEPLOYABILITY.md R8), and the fix is that one command. The API's own words, which ran to a
+    // paragraph here, go in the tooltip.
+    if (NOT_CONFIGURED.test(state.reason)) {
+      return (
+        <p className="panel__missing" title={state.reason}>
+          AI tools off: run npm run ai:setup
+        </p>
+      );
+    }
     return (
       <p role="alert" className="banner banner--error">
         The models could not be listed: {state.reason}
