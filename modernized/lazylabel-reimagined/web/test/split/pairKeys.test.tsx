@@ -391,7 +391,7 @@ describe("R looks at both images' selections", () => {
     await waitFor(() =>
       expect((screen.getByRole("radio", { name: "Edit (R)" }) as HTMLInputElement).checked).toBe(true),
     );
-    expect(screen.queryByText("No editable shapes selected!")).toBeNull();
+    expect(screen.queryByText(/No editable shapes selected!/)).toBeNull();
   });
 });
 
