@@ -507,8 +507,9 @@ The engineering the brief names is done. What is left is mostly the owner's to d
 check to repeat before the switch. In order:
 
 1. **Ask the owner** about the pending decisions under "What remains": SP-57's two web-only
-   extras, R10 and R11. RULE-024's 16-bit overflow was decided on 2026-09-27, "Fix it in the web",
-   and is fixed (`ff56922`; `CONTROL_PARITY.md` CP-72).
+   extras and R10. RULE-024's 16-bit overflow was decided on 2026-09-27, "Fix it in the web", and
+   is fixed (`ff56922`; `CONTROL_PARITY.md` CP-72). R11 was decided and built the same day; its
+   first Release is a `web-v*` tag away.
 2. **Run the live differential suites again with real checkpoints** (CUTOVER.md asks for it when
    the inference service changes, and it changed on 2026-09-26: SP-08, SP-25, CP-49 and R7 to R9).
    "Running the live suites" has the command. Leave `LAZYLABEL_TEST_SAM1_CHECKPOINT` unset while
@@ -641,8 +642,6 @@ needs is already in one store rather than scattered across managers.
 - **R10: the Docker deployment, run for real.** CI builds its images and nothing has run them: the
   `ai` profile is broken, there is no CPU profile, and the inference image has never been built
   (`DEPLOYABILITY.md` R10). It is CUTOVER.md's one unticked box.
-- **R11: a release zip with no prerequisites.** A portable Node, a double-click launcher and "Open
-  Folder" in the app, for annotators who will not install Node (`DEPLOYABILITY.md` R11).
 
 **Before the switch.** The live differential suites, run again with real checkpoints ("What to do
 next", item 2). The deployment box waits on R10.
@@ -676,6 +675,12 @@ passive effect, which runs in a task after the commit that shows the image. A mo
 between found no save, and left the image unsaved. The save is lent in a layout effect now, in the
 same commit (`6fb821a`); 16 runs after, all passed. A held arrow key could reach the same window in
 a browser, so the race was the app's, not only the test's.
+
+**R11, the no-install release zip, built 2026-09-27** (the owner: "Build it"). A portable Node, the
+built app and a double-click launcher per OS, from `.github/workflows/release.yml`; the launcher
+shows the system's folder dialog, so nobody types a path. The Windows zip is 39.7 MB, and it started
+from a scratch folder and served the app and `/api/health` (`DEPLOYABILITY.md` R11). The first
+Release waits on a `web-v*` tag; macOS signing and notarisation are not done.
 
 **Recorded differences.** Everything else is written where it belongs, each with its reason: the
 "Not matched" and "Still different" notes in `CONTROL_PARITY.md`, the "Keep" rows in

@@ -16,6 +16,26 @@ by a small Node.js program on your own machine. It reads and writes the same ann
 desktop app, so the two can work on one folder. The desktop app is unchanged on `main` and on PyPI;
 its instructions are [further down](#desktop-app-pyqt6-branch-main-pypi-208).
 
+### Download and run
+
+To annotate by hand you need nothing installed, not even Node.js:
+
+1. Download the zip for your computer from the
+   [LazyLabel web releases](https://github.com/dnzckn/LazyLabel/releases?q=web-v&expanded=true):
+   `LazyLabel-web-windows-x64.zip`, `LazyLabel-web-macos-arm64.zip` (Apple silicon) or
+   `LazyLabel-web-linux-x64.zip`.
+2. Unzip it and double-click **Start LazyLabel**: `Start LazyLabel.cmd` on Windows,
+   `Start LazyLabel.command` on macOS. On Linux, run `./start-lazylabel.sh` in a terminal.
+3. Choose your folder of images in the dialog. LazyLabel opens in your browser; closing its window
+   stops it.
+
+Each zip carries its own Node.js and serves this computer only. The first time, Windows may ask
+whether to run the launcher (More info, then Run anyway). macOS says it cannot check it, because the
+zip is not yet signed: open System Settings, Privacy & Security, and choose Open Anyway. The AI tools
+are not in the zip; they need the install from source below.
+
+### From source
+
 **You need** [Git](https://git-scm.com/downloads) and [Node.js](https://nodejs.org/) **22.13 or
 later** (the current 22 or 24 LTS). Nothing else: no Python, no compiler, no GPU.
 
