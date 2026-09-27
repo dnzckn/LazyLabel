@@ -15,9 +15,11 @@ import { readFile } from "node:fs/promises";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import sharp from "sharp";
 import { describe, expect, it } from "vitest";
 
-import { decodeImage, readImageMetadata, to8Bit } from "../../src/images/pipeline.js";
+import { decodeImage, isEffectivelyGray, readImageMetadata, to8Bit } from "../../src/images/pipeline.js";
+import { processingFromQuery } from "../../src/images/processing.js";
 
 interface Case {
   readonly file: string;
@@ -111,5 +113,51 @@ describe("RULE-024's conversion, in isolation", () => {
     for (let v = 0; v < 65536; v += 1) {
       expect(converted[v]).toBe(Math.floor(v / 256));
     }
+  });
+});
+
+/*
+ * A DELIBERATE DIFFERENCE FROM LEGACY, the owner's decision of 2026-09-27: "Fix it in the web".
+ * Legacy decides gray from int16 differences (image_adjustment_manager.py:556). A sample above
+ * 32767 wraps negative, so channels 32768 or more apart come out 65536 minus that far apart, and
+ * exactly 32768 apart comes out -32768, which np.abs leaves negative. The web takes the true
+ * difference. Each colour case below is gray to legacy's arithmetic.
+ */
+describe("RULE-024's gray test on 16-bit samples, without legacy's int16 wrap", () => {
+  it("calls channels 32768 or more apart colour, where the wrap made them close", () => {
+    // int16(65535) - int16(0) is -1 - 0: legacy's difference is 1.
+    expect(isEffectivelyGray(Uint16Array.from([65535, 0, 0]))).toBe(false);
+    expect(isEffectivelyGray(Uint16Array.from([0, 65535, 0]))).toBe(false);
+    expect(isEffectivelyGray(Uint16Array.from([0, 65535, 65535]))).toBe(false);
+    // Exactly 32768 apart: legacy's difference is -32768, under any tolerance.
+    expect(isEffectivelyGray(Uint16Array.from([0, 32768, 0]))).toBe(false);
+    // 64768 apart: legacy's difference is 768, its tolerance exactly.
+    expect(isEffectivelyGray(Uint16Array.from([0, 64768, 64768]))).toBe(false);
+  });
+
+  it("keeps legacy's tolerance of 768, above the wrap point as below it", () => {
+    expect(isEffectivelyGray(Uint16Array.from([1000, 1768, 1000]))).toBe(true);
+    expect(isEffectivelyGray(Uint16Array.from([1000, 1769, 1769]))).toBe(false);
+    expect(isEffectivelyGray(Uint16Array.from([65535, 64767, 65535]))).toBe(true);
+    expect(isEffectivelyGray(Uint16Array.from([40000, 40769, 40769]))).toBe(false);
+    expect(isEffectivelyGray(Uint16Array.from([32767, 32768, 33535]))).toBe(true);
+  });
+
+  it("shows bright green bright once processing is on, where the red channel showed it black", async () => {
+    // Bright green, green just past the wrap point, and black. To legacy this file is gray, and its
+    // processing path keeps the red channel alone, which is 0 at every pixel.
+    const file = await sharp(Uint16Array.from([0, 65535, 0, 0, 32768, 0, 0, 0, 0]), {
+      raw: { width: 3, height: 1, channels: 3 },
+    })
+      .toColourspace("rgb16")
+      .png()
+      .toBuffer();
+    const bytes = new Uint8Array(file);
+
+    // A colour image's Green bar, one marker below both greens: each goes to the top band.
+    const decoded = await decodeImage(bytes, processingFromQuery(new URLSearchParams("markers_g=30000")));
+    expect([...decoded.data]).toEqual([0, 255, 0, 0, 255, 0, 0, 0, 0]);
+    expect(decoded.sourceChannels).toBe(3);
+    expect(await readImageMetadata(bytes)).toMatchObject({ sourceDepth: 16, sourceChannels: 3 });
   });
 });

@@ -153,7 +153,7 @@ function frequencyFiltering(processing: Processing): boolean {
  * - WITH ONE the region is written back into `samples` in place and this returns null, so the
  *   conversion runs over the whole image as legacy's does. On a 16-bit image that divides the
  *   region's 0..255 by 256 as well, and the region comes out black. That is legacy's arithmetic,
- *   reproduced as the rest of RULE-024 is; it is recorded as a difference for the owner.
+ *   reproduced; it is recorded as a difference for the owner.
  *
  * GRAYSCALE ONLY, AND THE TEST IS ON THE DATA: an image whose three channels agree, which is what a
  * grayscale source is once RULE-024 has made it its first channel. Legacy's box can be ticked on a

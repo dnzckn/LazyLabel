@@ -26,6 +26,12 @@ on 16-bit data that truncates differently from float64 often enough to move a pi
 marker. Cases with a window set its handles the way a drag does (lines 155-166). The FFT widget is
 an inactive fake; its own golden covers it.
 
+ONE DELIBERATE DIFFERENCE. Legacy's gray test casts 16-bit samples to int16 and wraps
+(`image_adjustment_manager.py:556`); the owner decided on 2026-09-27 that the web takes the true
+differences instead (RULE-024). So `_is_grayscale_3ch` is replaced by the same test in int32, and a
+case whose image the snapshot's own test answers differently is marked "rederived". Only `vivid16`
+is: to legacy it is one Gray bar and its red channel; here, three bars and its own colours.
+
 Nothing is written into the legacy tree: bytecode writing is off before anything is loaded.
 """
 
@@ -76,6 +82,28 @@ APP = QApplication.instance() or QApplication([])
 ctw = load("ui/widgets/channel_threshold_widget.py", "legacy_channel_threshold_widget")
 rsw = load("ui/widgets/rescale_widget.py", "legacy_rescale_widget")
 iam = load("ui/managers/image_adjustment_manager.py", "legacy_image_adjustment_manager")
+
+# Legacy's gray test as the snapshot has it, kept to mark the cases whose answer changes below.
+LEGACY_IS_GRAY = iam.ImageAdjustmentManager._is_grayscale_3ch
+
+
+def is_gray_without_the_wrap(image_array):
+    """Legacy's `_is_grayscale_3ch` (image_adjustment_manager.py:546-560) with int32 for int16.
+
+    The one deliberate difference from legacy in these goldens: the owner's decision of 2026-09-27
+    on RULE-024, "Fix it in the web". Legacy casts to int16 before differencing (line 556), so a
+    sample above 32767 wraps negative and channels 32768 or more apart come out close together:
+    65535 against 0 differs by 1. The web takes the true difference, and so does this.
+    """
+    if len(image_array.shape) != 3 or image_array.shape[2] < 3:
+        return False
+    diffs = np.abs(np.diff(image_array[:, :, :3].astype(np.int32), axis=2))
+    threshold = 3 if image_array.dtype != np.uint16 else 768
+    return int(diffs.max()) <= threshold
+
+
+iam.ImageAdjustmentManager._is_grayscale_3ch = staticmethod(is_gray_without_the_wrap)
+REDERIVED = "RULE-024 without legacy's int16 wrap, the owner's decision of 2026-09-27"
 
 
 class InactiveFft:
@@ -187,9 +215,9 @@ def images():
         "rgb16": np.stack([u16(v16), u16(65535 - v16), u16((v16 * 3) % 65536)], axis=2),
         # Adjacent channels within 768 (green to blue exactly 768): one Gray channel.
         "neargray16": np.stack([u16(v16), u16(v16 + 400), u16(v16 - 368)], axis=2),
-        # Saturated primaries: legacy casts to int16 before differencing, so 65535 against 0 wraps
-        # to a difference of 1 and this vivid image counts as gray. Reproduced, not endorsed.
-        "wrapgray16": np.stack(
+        # Saturated magenta on black. Legacy's int16 wrap makes 65535 against 0 a difference of 1,
+        # so to legacy this is gray; without the wrap, as the web decides it, it is colour.
+        "vivid16": np.stack(
             [u16(np.where(v16 % 2 == 0, 65535, 0)), u16(v16 * 0), u16(np.where(v16 % 2 == 0, 65535, 0))],
             axis=2,
         ),
@@ -253,7 +281,7 @@ CASES = [
     ("rgb16", {"Red": [32768], "Green": [10000, 60000]}, None),
     ("neargray16", {"Gray": [32768]}, None),
     ("neargray16", {"Gray": [16384, 49152]}, (3, 3, 13, 13)),
-    ("wrapgray16", {"Gray": [30000]}, None),
+    ("vivid16", {"Red": [30000], "Green": [30000], "Blue": [30000]}, None),
     # Rescale in front of the threshold, as legacy orders them (image_adjustment_manager.py:619-630).
     ("gray8", {"Gray": [128]}, None, (50, 200)),
     ("rescale16", {}, None, WINDOW16),
@@ -280,20 +308,22 @@ def main():
                       for name, values in markers.items() if values]
             if crop is not None:
                 query.append(f"crop={','.join(str(v) for v in crop)}")
-            cases.append(
-                {
-                    "image": image,
-                    "markers": markers,
-                    "crop": list(crop) if crop is not None else None,
-                    "window": list(window) if window is not None else None,
-                    "query": "&".join(query),
-                    "channels": channels,
-                    "processed": bool(processed),
-                    "width": int(view.shape[1]),
-                    "height": int(view.shape[0]),
-                    "rgb": base64.b64encode(np.ascontiguousarray(view).tobytes()).decode("ascii"),
-                }
-            )
+            case = {
+                "image": image,
+                "markers": markers,
+                "crop": list(crop) if crop is not None else None,
+                "window": list(window) if window is not None else None,
+                "query": "&".join(query),
+                "channels": channels,
+                "processed": bool(processed),
+                "width": int(view.shape[1]),
+                "height": int(view.shape[0]),
+                "rgb": base64.b64encode(np.ascontiguousarray(view).tobytes()).decode("ascii"),
+            }
+            # Only where the snapshot's own test answers otherwise: every other case is legacy's.
+            if LEGACY_IS_GRAY(made[image]) != is_gray_without_the_wrap(made[image]):
+                case["rederived"] = REDERIVED
+            cases.append(case)
         pngs = {name: base64.b64encode(path.read_bytes()).decode("ascii") for name, path in paths.items()}
 
     out = HERE / "legacy-channel-threshold.json"

@@ -74,41 +74,25 @@ export interface DecodedImage {
  * scan saved as colour, and legacy gives it one Gray threshold bar, rescale and the FFT filter.
  * Asking the header answers "colour" for all of them.
  *
- * THE 16-BIT ARITHMETIC IS LEGACY'S, OVERFLOW INCLUDED. It casts the samples to int16 before
- * differencing, so anything above 32767 wraps negative, the difference wraps again, and the
- * absolute value of -32768 stays -32768. Two channels of 65535 and 0 therefore differ by 1, and an
- * image of saturated primaries counts as gray. That is reproduced rather than fixed, for the same
- * reason the fragment filter's filled holes are: the rewrite has to show the same bars and produce
- * the same pixels as the desktop app for the same file.
+ * THE 16-BIT DIFFERENCES ARE THE TRUE ONES, NOT LEGACY'S. A DELIBERATE DIFFERENCE, the owner's
+ * decision of 2026-09-27 ("Fix it in the web"). Legacy casts the samples to int16 before
+ * differencing (`image_adjustment_manager.py:556`), so a sample above 32767 wraps negative and the
+ * difference is taken modulo 65536: two channels 32768 or more apart come out 65536 minus that far
+ * apart, and exactly 32768 apart comes out -32768, which `np.abs` leaves negative. So a pixel of
+ * 65535 red and 0 green differs by 1, and an image of saturated primaries, or of bright green on
+ * black, is "gray" to legacy: one Gray bar, and its processing path keeps the red channel alone, so
+ * a green of 65535 is shown black. Here the difference is the plain one, in a JavaScript number,
+ * which no 16-bit value can overflow. The tolerances, 3 and 768, are legacy's.
  *
  * Stops at the first pixel past the tolerance, so a colour photograph is decided in its first row.
  */
 export function isEffectivelyGray(samples: Uint8Array | Uint16Array): boolean {
-  if (samples instanceof Uint8Array) {
-    for (let i = 0; i + 2 < samples.length; i += 3) {
-      const green = samples[i + 1]!;
-      if (Math.abs(green - samples[i]!) > 3 || Math.abs(samples[i + 2]! - green) > 3) return false;
-    }
-    return true;
-  }
-
+  const tolerance = samples instanceof Uint16Array ? 768 : 3;
   for (let i = 0; i + 2 < samples.length; i += 3) {
-    const red = int16(samples[i]!);
-    const green = int16(samples[i + 1]!);
-    const blue = int16(samples[i + 2]!);
-    if (int16Abs(int16(green - red)) > 768 || int16Abs(int16(blue - green)) > 768) return false;
+    const green = samples[i + 1]!;
+    if (Math.abs(green - samples[i]!) > tolerance || Math.abs(samples[i + 2]! - green) > tolerance) return false;
   }
   return true;
-}
-
-/** numpy's `astype(np.int16)` and int16 subtraction: the low sixteen bits, sign-extended. */
-function int16(value: number): number {
-  return (value << 16) >> 16;
-}
-
-/** numpy's `np.abs` on int16, where -32768 has no positive counterpart and stays as it is. */
-function int16Abs(value: number): number {
-  return value === -32768 ? value : Math.abs(value);
 }
 
 /**
