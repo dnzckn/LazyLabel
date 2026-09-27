@@ -1299,6 +1299,35 @@ fieldset input[type="text"] {
   color: var(--muted);
 }
 
+/* Legacy's Model Selection group: Refresh, "Available Models:", the list, Load and Unload, and the
+   "Current: ..." line, stacked (model_selection_widget.py:117-166). */
+.models-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.models-section p {
+  margin: 0;
+}
+
+.models__buttons {
+  display: flex;
+  gap: 6px;
+}
+
+.models__buttons > button {
+  flex: 1;
+  min-height: 28px;
+}
+
+/* Light green and italic in both themes, as legacy sets it on the label itself (163-165). */
+.models__current {
+  color: #90ee90;
+  font-style: italic;
+  overflow-wrap: anywhere;
+}
+
 /* Legacy's "Class Order:" over the class table. */
 .classes__label {
   margin: 8px 0 2px;

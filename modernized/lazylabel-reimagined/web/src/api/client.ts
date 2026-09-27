@@ -108,6 +108,14 @@ export interface WireModelStatus {
   /** Its SHA-256 matches the manifest. Present and unverified is the case worth showing. */
   readonly verified: boolean;
   readonly detail: string | null;
+  /** In memory in the inference service now: what legacy's "Current: ..." names. Absent from an older API. */
+  readonly loaded?: boolean;
+}
+
+/** What Unload freed, and what is still in memory after it. */
+export interface WireUnloadResult {
+  readonly unloaded: readonly string[];
+  readonly loaded: readonly string[];
 }
 
 export interface WireSegmentRequest {
@@ -200,6 +208,7 @@ export class ApiClient {
   private readonly baseUrl: string;
   private readonly doFetch: typeof globalThis.fetch;
   private readonly onCorrelationId: ((id: string) => void) | undefined;
+  private readonly inferenceListeners = new Set<() => void>();
 
   constructor(options: ApiClientOptions = {}) {
     this.baseUrl = (options.baseUrl ?? "/api").replace(/\/+$/, "");
@@ -356,8 +365,27 @@ export class ApiClient {
    */
   async embed(request: WireEmbedRequest): Promise<WireEmbedResponse> {
     const response = await this.send("POST", "/inference/embeddings", request);
-    if (response.status === 200) return (await response.json()) as WireEmbedResponse;
+    if (response.status === 200) return this.used((await response.json()) as WireEmbedResponse);
     throw await this.problem(response);
+  }
+
+  /**
+   * Be told each time the model has answered an embed or a prompt, which may have loaded it.
+   *
+   * The service loads a model on first use, as legacy does on its first AI click, and legacy's
+   * "Current: ..." line says so when it happens (sam_single_view_manager.py:153-171). The model
+   * section asks then what is loaded rather than asking on a timer. Returns the unsubscribe.
+   */
+  onInference(listener: () => void): () => void {
+    this.inferenceListeners.add(listener);
+    return () => {
+      this.inferenceListeners.delete(listener);
+    };
+  }
+
+  private used<T>(answer: T): T {
+    for (const listener of this.inferenceListeners) listener();
+    return answer;
   }
 
   /**
@@ -375,10 +403,43 @@ export class ApiClient {
     throw await this.problem(response);
   }
 
+  /**
+   * Legacy's Refresh (main_window.py:1204-1212): the service reads its manifest again, and the list
+   * comes back as `models` gives it. Nothing is downloaded.
+   */
+  async refreshModels(): Promise<readonly WireModelStatus[]> {
+    const response = await this.send("POST", "/inference/models/refresh", {});
+    if (response.status === 200) {
+      return ((await response.json()) as { models: readonly WireModelStatus[] }).models;
+    }
+    throw await this.problem(response);
+  }
+
+  /** Legacy's Load (main_window.py:1234-1279): the model in memory now, and only it. */
+  async loadModel(model: string): Promise<readonly string[]> {
+    const response = await this.send("POST", "/inference/models/load", { model });
+    if (response.status === 200) return ((await response.json()) as { loaded: readonly string[] }).loaded;
+    throw await this.problem(response);
+  }
+
+  /** Legacy's Unload (main_window.py:1281-1305): whatever is loaded, out of memory. */
+  async unloadModel(): Promise<WireUnloadResult> {
+    const response = await this.send("POST", "/inference/models/unload", {});
+    if (response.status === 200) return (await response.json()) as WireUnloadResult;
+    throw await this.problem(response);
+  }
+
+  /** Which models are in memory: cheap, where `models` checks every checkpoint's hash. */
+  async loadedModels(): Promise<readonly string[]> {
+    const response = await this.send("GET", "/inference/models/loaded");
+    if (response.status === 200) return ((await response.json()) as { loaded: readonly string[] }).loaded;
+    throw await this.problem(response);
+  }
+
   /** One prompt against an encoded image. The handle comes from `embed`. */
   async segment(request: WireSegmentRequest): Promise<WireSegmentResponse> {
     const response = await this.send("POST", "/inference/segment", request);
-    if (response.status === 200) return (await response.json()) as WireSegmentResponse;
+    if (response.status === 200) return this.used((await response.json()) as WireSegmentResponse);
     throw await this.problem(response);
   }
 

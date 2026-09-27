@@ -6,13 +6,14 @@
  * believe is their fine-tuned large. A picker over manifest names cannot do that.
  */
 
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { defaultSettings } from "@lazylabel/settings-schema";
 
-import type { ApiClient, WireModelStatus } from "../../src/api/client.js";
-import { ModelPicker, defaultModel, useDefaultModel } from "../../src/workspace/ModelPicker.jsx";
+import type { ApiClient, WireModelStatus, WireUnloadResult } from "../../src/api/client.js";
+import { NotificationHost, NotificationProvider } from "../../src/notifications/NotificationProvider.jsx";
+import { ModelPicker, currentLine, defaultModel, useDefaultModel } from "../../src/workspace/ModelPicker.jsx";
 import { SettingsProvider } from "../../src/settings/SettingsProvider.jsx";
 
 afterEach(cleanup);
@@ -29,8 +30,18 @@ const usable = (name: string, over: Partial<WireModelStatus> = {}): WireModelSta
   ...over,
 });
 
-function mount(models: readonly WireModelStatus[] | Error, chosen = "") {
+/** The model controls the service answers, each replaceable by a test. */
+interface Controls {
+  readonly refreshModels?: () => Promise<readonly WireModelStatus[]>;
+  readonly loadModel?: (model: string) => Promise<readonly string[]>;
+  readonly unloadModel?: () => Promise<WireUnloadResult>;
+  readonly loadedModels?: () => Promise<readonly string[]>;
+}
+
+function mount(models: readonly WireModelStatus[] | Error, chosen = "", controls: Controls = {}) {
   const saved: unknown[] = [];
+  /** What `onInference` subscribers hear: an embed or a prompt the service answered. */
+  const listeners = new Set<() => void>();
   const api = {
     getSettings: async () => {
       const base = defaultSettings();
@@ -44,15 +55,34 @@ function mount(models: readonly WireModelStatus[] | Error, chosen = "") {
       if (models instanceof Error) throw models;
       return models;
     },
-  } as unknown as ApiClient;
+    refreshModels: vi.fn(controls.refreshModels ?? (async () => (models instanceof Error ? [] : models))),
+    loadModel: vi.fn(controls.loadModel ?? (async (model: string) => [model])),
+    unloadModel: vi.fn(
+      controls.unloadModel
+        ?? (async () => ({ unloaded: models instanceof Error ? [] : models.filter((m) => m.loaded).map((m) => m.name), loaded: [] })),
+    ),
+    loadedModels: vi.fn(controls.loadedModels ?? (async () => [])),
+    onInference: (listener: () => void) => {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    },
+  };
 
   render(
-    <SettingsProvider client={api}>
-      <ModelPicker client={api} />
-    </SettingsProvider>,
+    <NotificationProvider>
+      <SettingsProvider client={api as unknown as ApiClient}>
+        <ModelPicker client={api as unknown as ApiClient} />
+      </SettingsProvider>
+      <NotificationHost />
+    </NotificationProvider>,
   );
 
-  return { saved };
+  return {
+    saved,
+    api,
+    /** An embed or a prompt answered, which may have loaded a model. */
+    answered: () => act(() => listeners.forEach((listener) => listener())),
+  };
 }
 
 describe("listing what is installed", () => {
@@ -77,13 +107,15 @@ describe("listing what is installed", () => {
     expect(await screen.findByText("Current: No model loaded")).toBeTruthy();
   });
 
-  it("marks the chosen one", async () => {
+  it("marks the chosen one, and says what is LOADED, not what is chosen", async () => {
+    // Legacy's dropdown shows "Default (vit_h)" at start and its line "Current: No model loaded"
+    // (model_selection_widget.py:142, 163).
     mount([usable("SAM 2.1 large"), usable("SAM 1 huge")], "SAM 1 huge");
 
     await waitFor(() =>
       expect((screen.getByRole("radio", { name: /SAM 1 huge/ }) as HTMLInputElement).checked).toBe(true),
     );
-    expect(screen.queryByText("Current: No model loaded")).toBeNull();
+    expect(screen.getByText("Current: No model loaded")).toBeTruthy();
   });
 });
 
@@ -224,5 +256,155 @@ describe("legacy's default model (CONTROL_PARITY.md CP-13)", () => {
 
     await waitFor(() => expect(api.models).toHaveBeenCalled());
     expect(saved).toHaveLength(0);
+  });
+});
+
+describe("legacy's model controls (CONTROL_PARITY.md CP-49)", () => {
+  // model_selection_widget.py:117-166 and main_window.py:1204-1305.
+  const button = (name: string) => screen.getByRole("button", { name }) as HTMLButtonElement;
+  const line = () => document.querySelector(".models__current")?.textContent;
+
+  it("has legacy's Refresh, Load and Unload, with its tooltips, around the list", async () => {
+    mount([usable("SAM 2.1 large")], "SAM 2.1 large");
+    await screen.findByRole("radio", { name: /SAM 2.1 large/ });
+
+    expect(button("Refresh").title).toBe("Refresh the list of available models");
+    expect(screen.getByText("Available Models:")).toBeTruthy();
+    expect(button("Load").title).toBe("Load the selected model into memory");
+    expect(button("Unload").title).toBe("Unload model from memory for faster navigation");
+    expect(line()).toBe("Current: No model loaded");
+  });
+
+  it("offers Load while nothing is loaded and Unload while something is", async () => {
+    mount([usable("SAM 2.1 large")], "SAM 2.1 large");
+    await screen.findByRole("radio", { name: /SAM 2.1 large/ });
+    await waitFor(() => expect(button("Load").disabled).toBe(false));
+    expect(button("Unload").disabled).toBe(true);
+
+    fireEvent.click(button("Load"));
+
+    await waitFor(() => expect(button("Unload").disabled).toBe(false));
+    expect(button("Load").disabled).toBe(true);
+  });
+
+  it("reports a model the service already has as current, from the list", async () => {
+    mount([usable("SAM 2.1 large", { loaded: true })], "SAM 2.1 large");
+
+    await waitFor(() => expect(line()).toBe("Current: SAM 2.1 large"));
+    expect(button("Load").disabled).toBe(true);
+    expect(button("Unload").disabled).toBe(false);
+  });
+
+  it("Load says Loading, asks for the chosen model, and then names it Current", async () => {
+    let finish: (loaded: readonly string[]) => void = () => undefined;
+    const { api } = mount([usable("SAM 2.1 large")], "SAM 2.1 large", {
+      loadModel: () => new Promise((resolve) => { finish = resolve; }),
+    });
+    await waitFor(() => expect(button("Load").disabled).toBe(false));
+
+    fireEvent.click(button("Load"));
+
+    expect(line()).toBe("Loading: SAM 2.1 large");
+    expect(screen.getByRole("status").textContent).toBe("Loading SAM 2.1 large...");
+    expect(api.loadModel).toHaveBeenCalledWith("SAM 2.1 large");
+    await act(async () => finish(["SAM 2.1 large"]));
+    expect(line()).toBe("Current: SAM 2.1 large");
+    expect(screen.getByRole("status").textContent).toBe("AI model initialized");
+  });
+
+  it("a Load that fails says so for 5 s, in legacy's words, and offers Load again", async () => {
+    mount([usable("SAM 2.1 large")], "SAM 2.1 large", {
+      loadModel: async () => {
+        throw new Error("SAM 2.1 large cannot be used: the file is not in the model directory");
+      },
+    });
+    await waitFor(() => expect(button("Load").disabled).toBe(false));
+
+    fireEvent.click(button("Load"));
+
+    expect(await screen.findByText(/^AI model failed: SAM 2.1 large cannot be used/)).toBeTruthy();
+    expect(line()).toBe("Current: No model loaded");
+    expect(button("Load").disabled).toBe(false);
+  });
+
+  it("Unload frees it, says so, and the line reads No model loaded", async () => {
+    const { api } = mount([usable("SAM 2.1 large", { loaded: true })], "SAM 2.1 large");
+    await waitFor(() => expect(button("Unload").disabled).toBe(false));
+
+    fireEvent.click(button("Unload"));
+
+    expect(await screen.findByText("Model unloaded")).toBeTruthy();
+    expect(api.unloadModel).toHaveBeenCalled();
+    expect(line()).toBe("No model loaded");
+    expect(button("Load").disabled).toBe(false);
+    expect(button("Unload").disabled).toBe(true);
+  });
+
+  it("a model picked while none is loaded reads Selected", async () => {
+    mount([usable("SAM 2.1 large"), usable("SAM 1 huge", { family: "sam1", size: "vit_h" })], "SAM 1 huge");
+    await screen.findByRole("radio", { name: /SAM 2.1 large/ });
+
+    fireEvent.click(screen.getByRole("radio", { name: /SAM 2.1 large/ }));
+
+    await waitFor(() => expect(line()).toBe("Selected: SAM 2.1 large"));
+  });
+
+  it("a model picked while one is loaded leaves the line naming that one", async () => {
+    mount([usable("SAM 2.1 large"), usable("SAM 1 huge", { family: "sam1", size: "vit_h", loaded: true })], "SAM 1 huge");
+    await waitFor(() => expect(line()).toBe("Current: SAM 1 huge"));
+
+    fireEvent.click(screen.getByRole("radio", { name: /SAM 2.1 large/ }));
+
+    expect(line()).toBe("Current: SAM 1 huge");
+  });
+
+  it("Refresh lists what the service now has and says legacy's words", async () => {
+    const { api } = mount([usable("SAM 2.1 large")], "SAM 2.1 large", {
+      refreshModels: async () => [usable("SAM 2.1 large"), usable("SAM 2.1 tiny", { size: "tiny" })],
+    });
+    await screen.findByRole("radio", { name: /SAM 2.1 large/ });
+
+    fireEvent.click(button("Refresh"));
+
+    expect(await screen.findByRole("radio", { name: /SAM 2.1 tiny/ })).toBeTruthy();
+    expect(screen.getByText("Models list refreshed.")).toBeTruthy();
+    expect(api.refreshModels).toHaveBeenCalledTimes(1);
+  });
+
+  it("a Refresh the service cannot answer keeps the list and says why", async () => {
+    mount([usable("SAM 2.1 large")], "SAM 2.1 large", {
+      refreshModels: async () => {
+        throw new Error("the manifest is not valid JSON");
+      },
+    });
+    await screen.findByRole("radio", { name: /SAM 2.1 large/ });
+
+    fireEvent.click(button("Refresh"));
+
+    expect(await screen.findByText("Warning: the manifest is not valid JSON")).toBeTruthy();
+    expect(screen.getByRole("radio", { name: /SAM 2.1 large/ })).toBeTruthy();
+  });
+
+  it("names a model the first AI use loaded, as legacy's line does", async () => {
+    // Legacy loads on the first AI click and writes "Current: ..." then (sam_single_view_manager.py:153-171).
+    const { api, answered } = mount([usable("SAM 2.1 large")], "SAM 2.1 large", {
+      loadedModels: async () => ["SAM 2.1 large"],
+    });
+    await screen.findByRole("radio", { name: /SAM 2.1 large/ });
+
+    answered();
+
+    await waitFor(() => expect(line()).toBe("Current: SAM 2.1 large"));
+    // With the chosen model the one in memory, a prompt cannot change the answer: not asked again.
+    answered();
+    expect(api.loadedModels).toHaveBeenCalledTimes(1);
+  });
+
+  it("words each state as legacy does", () => {
+    expect(currentLine("A", [], null, "A")).toBe("Loading: A");
+    expect(currentLine(null, ["A"], "unloaded", "B")).toBe("Current: A");
+    expect(currentLine(null, [], "unloaded", "A")).toBe("No model loaded");
+    expect(currentLine(null, [], "picked", "A")).toBe("Selected: A");
+    expect(currentLine(null, [], null, "A")).toBe("Current: No model loaded");
   });
 });

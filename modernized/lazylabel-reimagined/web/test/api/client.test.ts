@@ -260,3 +260,45 @@ describe("the inference calls", () => {
     await expect(client.segment({ handle: "h1" })).rejects.toThrow(/PyTorch is not installed/);
   });
 });
+
+describe("legacy's model controls (CP-49)", () => {
+  it("Refresh, Load, Unload and what is loaded go to the API's routes", async () => {
+    const { fetch, calls } = stubFetch({
+      "/api/inference/models/refresh": { status: 200, body: { models: [] } },
+      "/api/inference/models/loaded": { status: 200, body: { loaded: ["SAM 2.1 large"] } },
+      "/api/inference/models/load": { status: 200, body: { loaded: ["SAM 2.1 large"] } },
+      "/api/inference/models/unload": { status: 200, body: { unloaded: ["SAM 2.1 large"], loaded: [] } },
+    });
+    const client = new ApiClient({ baseUrl: "/api", fetch });
+
+    expect(await client.refreshModels()).toEqual([]);
+    expect(await client.loadModel("SAM 2.1 large")).toEqual(["SAM 2.1 large"]);
+    expect(await client.unloadModel()).toEqual({ unloaded: ["SAM 2.1 large"], loaded: [] });
+    expect(await client.loadedModels()).toEqual(["SAM 2.1 large"]);
+
+    expect(calls.map((call) => [call.init?.method, call.url, call.init?.body])).toEqual([
+      ["POST", "/api/inference/models/refresh", "{}"],
+      ["POST", "/api/inference/models/load", JSON.stringify({ model: "SAM 2.1 large" })],
+      ["POST", "/api/inference/models/unload", "{}"],
+      ["GET", "/api/inference/models/loaded", undefined],
+    ]);
+  });
+
+  it("tells its listeners when the model answered, which may have loaded it", async () => {
+    const { fetch } = stubFetch({
+      "/api/inference/embeddings": { status: 200, body: { handle: "h1", cached: false } },
+      "/api/inference/segment": { status: 200, body: { mask: {}, score: 1, chosen: 0, alternatives: [1] } },
+    });
+    const client = new ApiClient({ baseUrl: "/api", fetch });
+    const heard = vi.fn();
+    const stop = client.onInference(heard);
+
+    await client.embed({ image: "a.png", model: "SAM 2.1 large" });
+    await client.segment({ handle: "h1" });
+    expect(heard).toHaveBeenCalledTimes(2);
+
+    stop();
+    await client.embed({ image: "a.png", model: "SAM 2.1 large" });
+    expect(heard).toHaveBeenCalledTimes(2);
+  });
+});
