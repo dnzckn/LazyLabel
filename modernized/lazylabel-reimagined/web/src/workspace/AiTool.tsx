@@ -34,7 +34,7 @@ import { ViewKindContext, type ViewKind } from "../canvas/viewKind.js";
 import { filterFragments } from "../tools/fragments.js";
 import { SETTLE_MS, prefetchOrder } from "./prefetch.js";
 import { useNotifications } from "../notifications/NotificationProvider.jsx";
-import { NOTHING_TO_ACCEPT, type AiPrompt } from "../tools/ai.js";
+import { NOTHING_TO_ACCEPT, asked, type AiPrompt } from "../tools/ai.js";
 import type { ApiClient, WireSegmentRequest, WireSegmentResponse } from "../api/client.js";
 import type { BinaryMask } from "@lazylabel/annotation-formats";
 import { epsilonFactorFor, maskToPolygon } from "../tools/autoPolygon.js";
@@ -356,7 +356,7 @@ export function AiTool({
     (held: PairAi, side: SideIndex, sideHandle: string, prompt: AiPrompt, name: string) => {
       const ticket = held.ask(side);
       client
-        .segment(requestFor(sideHandle, prompt))
+        .segment(requestFor(sideHandle, asked(prompt, view)))
         .then((response) => {
           held.answer(side, ticket, response);
         })
@@ -366,7 +366,7 @@ export function AiTool({
           notify({ severity: "error", message: "AI prediction failed", detail: `${name}: ${reason}` });
         });
     },
-    [client, notify],
+    [client, notify, view],
   );
 
   /**
@@ -392,7 +392,8 @@ export function AiTool({
       }
 
       const other = held.other;
-      const outside = outsideOf(prompt, other);
+      // What is asked must fit: in the Multi tab a box alone, whatever points lie outside.
+      const outside = outsideOf(asked(prompt, view), other);
       queuedForOther.current = null;
       if (outside !== null) {
         held.answer(other.side, held.ask(other.side), null);
@@ -408,7 +409,7 @@ export function AiTool({
 
       for (const message of waiting) notify({ severity: "info", message });
     },
-    [askSide, encoding, handle, imageKey, notify, otherEncoding, otherHandle],
+    [askSide, encoding, handle, imageKey, notify, otherEncoding, otherHandle, view],
   );
 
   /*
@@ -461,7 +462,8 @@ export function AiTool({
       const mine = latest.current;
 
       client
-        .segment(requestFor(handle, prompt))
+        // The Multi tab's box alone, even with one image open there (`asked`).
+        .segment(requestFor(handle, asked(prompt, view)))
         .then((response) => {
           // Out of order: a later prompt has already answered, and showing this one would move the
           // preview backwards as the user refines it.
@@ -480,7 +482,7 @@ export function AiTool({
           });
         });
     },
-    [client, encoding, handle, notify, pair, promptBoth],
+    [client, encoding, handle, notify, pair, promptBoth, view],
   );
 
   /**

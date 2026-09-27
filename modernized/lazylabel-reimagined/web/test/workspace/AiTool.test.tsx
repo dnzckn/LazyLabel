@@ -221,6 +221,25 @@ describe("prompting", () => {
     expect(segment.mock.calls[0]?.[0].box).toEqual([5, 2, 35, 18]);
   });
 
+  it("asks a box WITH the points placed before it in the single view (RULE-066)", async () => {
+    // Only the Multi tab asks its box alone (`tools/ai.ts` `asked`).
+    const segment = vi.fn(async (_request: unknown) => response());
+    mount({ segment: segment as never });
+    await waitFor(() => expect(surface()).toBeTruthy());
+    click(10, 10);
+    await waitFor(() => expect(segment).toHaveBeenCalledTimes(1));
+
+    fireEvent.pointerDown(surface(), point(5, 2));
+    fireEvent.pointerUp(surface(), point(35, 18));
+
+    await waitFor(() => expect(segment).toHaveBeenCalledTimes(2));
+    expect(segment.mock.calls[1]?.[0]).toEqual({
+      handle: "h1",
+      points: [{ x: 10, y: 10, positive: true }],
+      box: [5, 2, 35, 18],
+    });
+  });
+
   it("DISCARDS an answer that arrives out of order", async () => {
     // The race. Two clicks, the first answering last: showing it would put the mask for one point
     // on screen after the mask for two, and the user would watch the preview move backwards as

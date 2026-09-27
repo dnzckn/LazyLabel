@@ -19,7 +19,8 @@
  * LEGACY'S MULTI VIEW IS ANOTHER HANDLER, AND IT DIFFERS (`main_window.py:5498-5572`). Every press
  * waits for its release. A drag with EITHER button is a box when it is big enough, and anything
  * else is a point where the pointer went DOWN -- positive for the left button, negative otherwise --
- * so a thin drag there is a point, not nothing.
+ * so a thin drag there is a point, not nothing. Its box is asked ALONE, the points placed before it
+ * left out, and a click after it asks the points alone, the box forgotten (`asked`).
  *
  * A BOX PREVIEW BEATS A POINT PREVIEW. Both can be pending at once, because placing points does
  * not clear a box. Legacy resolves it in favour of the box (RULE-066), and that is the right way
@@ -133,7 +134,12 @@ export function release(
     if (moved > DRAG_THRESHOLD && width > MINIMUM_BOX_SIDE && height > MINIMUM_BOX_SIDE) {
       return { kind: "box", prompt: { ...prompt, box: [from, to] } };
     }
-    return withPoint(prompt, from, positive);
+    // A click asks the points alone, so the box is forgotten once it does: legacy predicts from
+    // every point placed, before the box too, and never from the box again (main_window.py:
+    // 6667-6675, 6788-6797). A point with nothing positive to ask from asks nothing there, and the
+    // box's preview stays the one Space accepts, so the box stays with it.
+    const outcome = withPoint(prompt, from, positive);
+    return outcome.kind === "point" ? { kind: "point", prompt: { ...outcome.prompt, box: null } } : outcome;
   }
 
   // The single view puts a click's point where the pointer came UP
@@ -171,6 +177,19 @@ function withPoint(prompt: AiPrompt, at: Point, positive: boolean): Release {
   }
 
   return { kind: "point", prompt: next };
+}
+
+/**
+ * What the model is asked for a prompt.
+ *
+ * In the Multi tab a box is asked ALONE: legacy's `predict_from_box(target_idx, box)` takes the box
+ * and nothing else, whatever points are on the image (main_window.py:6693-6704;
+ * sam_multi_view_manager.py:289-328). The points stay placed and drawn, and the next click asks
+ * them without the box (`release`). The single view, which the Sequence tab shares, asks the box
+ * with the points (RULE-066).
+ */
+export function asked(prompt: AiPrompt, view: AiView = "single"): AiPrompt {
+  return view === "multi" && prompt.box !== null ? { points: [], box: prompt.box } : prompt;
 }
 
 export type Pending = "box" | "points" | "nothing";

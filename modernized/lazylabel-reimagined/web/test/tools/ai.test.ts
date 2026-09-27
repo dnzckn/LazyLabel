@@ -12,6 +12,7 @@ import {
   EMPTY_PROMPT,
   MINIMUM_BOX_SIDE,
   NEGATIVE_ALONE,
+  asked,
   clear,
   pending,
   press,
@@ -138,6 +139,47 @@ describe("legacy's multi view, which is another handler", () => {
     const outcome = release(EMPTY_PROMPT, at(5, 5), at(5, 5), { negative: true, view: "multi" });
 
     expect(outcome.kind).toBe("placed");
+  });
+
+  it("asks a box ALONE, the points placed before it left out", () => {
+    // `predict_from_box(target_idx, box)` (main_window.py:6693-6704): the box and nothing else.
+    const boxed = promptOf(release(ONE_POSITIVE, at(10, 10), at(70, 70), { view: "multi" }));
+
+    expect(asked(boxed, "multi")).toEqual({ points: [], box: [at(10, 10), at(70, 70)] });
+    // The points stay placed, and drawn.
+    expect(boxed.points).toEqual(ONE_POSITIVE.points);
+  });
+
+  it("asks the points alone at the next click, every one placed, the box forgotten", () => {
+    // `_update_multi_view_prediction` predicts from the viewer's points (main_window.py:6788-6797).
+    const boxed = promptOf(release(ONE_POSITIVE, at(10, 10), at(70, 70), { view: "multi" }));
+
+    const outcome = release(boxed, at(30, 30), at(30, 30), { negative: true, view: "multi" });
+
+    expect(outcome.kind).toBe("point");
+    expect(asked(promptOf(outcome), "multi")).toEqual({
+      points: [...ONE_POSITIVE.points, { x: 30, y: 30, positive: false }],
+      box: null,
+    });
+  });
+
+  it("keeps the box when the click has nothing positive to ask from, as its preview stays", () => {
+    // Legacy predicts nothing without a positive point (sam_multi_view_manager.py:278-279), so the
+    // box's preview is still the one Space accepts.
+    const boxed = promptOf(release(EMPTY_PROMPT, at(10, 10), at(70, 70), { view: "multi" }));
+
+    const outcome = release(boxed, at(30, 30), at(30, 30), { negative: true, view: "multi" });
+
+    expect(outcome.kind).toBe("placed");
+    expect(promptOf(outcome).box).toEqual([at(10, 10), at(70, 70)]);
+    expect(pending(promptOf(outcome))).toBe("box");
+  });
+
+  it("leaves the single view asking the box with the points (RULE-066)", () => {
+    const boxed = promptOf(release(ONE_POSITIVE, at(10, 10), at(70, 70)));
+
+    expect(asked(boxed)).toBe(boxed);
+    expect(asked(boxed, "single")).toEqual({ points: ONE_POSITIVE.points, box: [at(10, 10), at(70, 70)] });
   });
 });
 

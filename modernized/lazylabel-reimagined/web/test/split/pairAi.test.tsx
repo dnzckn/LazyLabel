@@ -336,6 +336,34 @@ describe("one prompt, asked of each image's own model", () => {
     await waitFor(() => expect(within(halves()[1]!).getByTestId("ai-mask")).toBeTruthy());
     expect(halves()[1]!.querySelector('[aria-label="AI prompt"] rect')).toBeNull();
   });
+
+  it("asks a box alone, and the next click the points alone, as legacy's Multi view does", async () => {
+    // The box is `predict_from_box(target_idx, box)` and nothing else (main_window.py:6693-6704);
+    // a later click predicts from the viewer's points (6788-6797). The points went with the box.
+    const { segment } = await pairUp();
+    click(50, 40);
+    await waitFor(() => expect(segment).toHaveBeenCalledTimes(2));
+
+    drag([20, 20], [80, 70]);
+    await waitFor(() => expect(segment).toHaveBeenCalledTimes(4));
+    expect(segment.mock.calls.slice(2).map(([request]) => request)).toEqual([
+      { handle: "h:frames/a.png", box: [20, 20, 80, 70] },
+      { handle: "h:frames/b.png", box: [20, 20, 80, 70] },
+    ]);
+    // The point stays placed, in both halves.
+    expect(halves().map((half) => within(half).queryByTestId("ai-positive-0") !== null)).toEqual([true, true]);
+
+    click(60, 30);
+    await waitFor(() => expect(segment).toHaveBeenCalledTimes(6));
+    const points = [
+      { x: 50, y: 40, positive: true },
+      { x: 60, y: 30, positive: true },
+    ];
+    expect(segment.mock.calls.slice(4).map(([request]) => request)).toEqual([
+      { handle: "h:frames/a.png", points },
+      { handle: "h:frames/b.png", points },
+    ]);
+  });
 });
 
 describe("a prompt placed while the other image is still being encoded", () => {
