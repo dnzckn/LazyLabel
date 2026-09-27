@@ -417,7 +417,6 @@ function OpenedImage({
                 width={metadata.width}
                 height={metadata.height}
                 segments={segments}
-                selected={selected}
                 onToggle={toggleSelected}
                 onMiss={() =>
                   notify({ severity: "info", message: "Nothing there to select" })

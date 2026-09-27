@@ -8,21 +8,23 @@
  * one here: selection toggles, so building a multi-shape selection means several clicks, and a
  * near-miss between two of them would otherwise throw the work away. Clearing is an explicit
  * button, which is also the only thing that can be undone by pressing it again.
+ *
+ * NOTHING IS DRAWN HERE. The canvas underneath shows the selection as legacy does: one yellow copy
+ * of each selected shape at alpha 180, with no outline (segment_display_manager.py:515-541). Until
+ * 2026-09-27 this layer drew a second yellow fill and a thick yellow outline over it.
  */
 
-import { useCallback, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useRef, type ReactNode } from "react";
 
 import type { WireSegment } from "@lazylabel/contracts";
 
-import { locate, scale, type DisplayBox } from "./coordinates.js";
+import { locate, type DisplayBox } from "./coordinates.js";
 import { hitTest } from "../tools/selection.js";
-import { useSizing } from "./useSizing.js";
 
 export interface SelectLayerProps {
   readonly width: number;
   readonly height: number;
   readonly segments: readonly WireSegment[];
-  readonly selected: readonly number[];
   readonly onToggle: (index: number) => void;
   /** Called when a click landed on no annotation, so a caller can say so. */
   readonly onMiss?: () => void;
@@ -32,11 +34,9 @@ export function SelectLayer({
   width,
   height,
   segments,
-  selected,
   onToggle,
   onMiss,
 }: SelectLayerProps): ReactNode {
-  const sizing = useSizing();
   const surfaceRef = useRef<SVGSVGElement>(null);
   const image = { width, height };
 
@@ -46,20 +46,6 @@ export function SelectLayer({
     const rect = element.getBoundingClientRect();
     return { left: rect.left, top: rect.top, width: rect.width, height: rect.height };
   }, []);
-
-  // Measured after mount and on resize, as the edit layer's handles are: measuring only during
-  // render read nothing on the first one, so a selection already made when this tool was chosen
-  // was outlined at image-unit width until the next click (see `EditLayer.tsx`).
-  const [measured, setMeasured] = useState<DisplayBox | null>(null);
-  useLayoutEffect(() => {
-    const update = () => setMeasured(boxOf());
-    update();
-    const surface = surfaceRef.current;
-    if (surface === null || typeof ResizeObserver === "undefined") return;
-    const observer = new ResizeObserver(update);
-    observer.observe(surface);
-    return () => observer.disconnect();
-  }, [boxOf]);
 
   const onPointerDown = useCallback(
     (event: React.PointerEvent<SVGSVGElement>) => {
@@ -77,9 +63,6 @@ export function SelectLayer({
     [boxOf, image, onMiss, onToggle, segments],
   );
 
-  const box = measured ?? boxOf();
-  const perPixel = box === null ? { x: 1, y: 1 } : scale(box, image);
-
   return (
     <svg
       ref={surfaceRef}
@@ -90,25 +73,6 @@ export function SelectLayer({
       aria-label="Selection tool"
       onPointerDown={onPointerDown}
       style={{ cursor: "pointer" }}
-    >
-      {/* Only the SELECTED shapes are marked, in legacy's yellow overlay (255, 255, 0, 180) --
-          segment_display_manager.py:515. Marking everything would repeat what the canvas underneath
-          already draws, and hide the one thing this layer exists to show. */}
-      {selected.map((index) => {
-        const segment = segments[index];
-        if (segment?.vertices === undefined || segment.vertices.length === 0) return null;
-
-        return (
-          <polygon
-            key={index}
-            data-testid={`outline-${index}`}
-            points={segment.vertices.map(([x, y]) => `${x},${y}`).join(" ")}
-            fill="rgba(255, 255, 0, 0.7)"
-            stroke="rgb(255, 255, 0)"
-            strokeWidth={Math.max(perPixel.x, perPixel.y) * 2 * sizing.line}
-          />
-        );
-      })}
-    </svg>
+    />
   );
 }

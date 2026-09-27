@@ -4,6 +4,9 @@
  * `tools/selection.test.ts` pins WHICH shape a point hits. This pins that a click reaches that
  * decision with the right coordinate, and the one behaviour that is a judgement call rather than
  * arithmetic: a click on empty space does not clear the selection.
+ *
+ * What a selection LOOKS like is the canvas's (`test/workspace/selectionHighlight.test.tsx`): this
+ * layer draws nothing.
  */
 
 import { cleanup, fireEvent, screen } from "@testing-library/react";
@@ -38,7 +41,7 @@ const other: WireSegment = {
   vertices: [[25, 2], [35, 2], [35, 12], [25, 12]],
 };
 
-function layer(selected: readonly number[] = []) {
+function layer() {
   const onToggle = vi.fn();
   const onMiss = vi.fn();
 
@@ -47,7 +50,6 @@ function layer(selected: readonly number[] = []) {
       width={IMAGE.width}
       height={IMAGE.height}
       segments={[square, other]}
-      selected={selected}
       onToggle={onToggle}
       onMiss={onMiss}
     />,
@@ -55,24 +57,6 @@ function layer(selected: readonly number[] = []) {
 
   return { onToggle, onMiss, surface: screen.getByLabelText("Selection tool") };
 }
-
-describe("an outline drawn before any click", () => {
-  it("is sized in screen pixels from the first paint", () => {
-    // The layer was measured only during render, and the first render comes before the surface
-    // exists. At the image's own size that cannot show; this harness displays it at double size,
-    // where a measured outline is half as wide in image units.
-    const OWN = { left: 0, top: 0, width: 40, height: 20, right: 40, bottom: 20, x: 0, y: 0 };
-    vi.spyOn(Element.prototype, "getBoundingClientRect").mockReturnValue({ ...OWN, toJSON: () => OWN } as DOMRect);
-    layer([0]);
-    const atOwnSize = Number(screen.getByTestId("outline-0").getAttribute("stroke-width"));
-    cleanup();
-
-    vi.spyOn(Element.prototype, "getBoundingClientRect").mockReturnValue({ ...RECT, toJSON: () => RECT } as DOMRect);
-    layer([0]);
-
-    expect(Number(screen.getByTestId("outline-0").getAttribute("stroke-width"))).toBeCloseTo(atOwnSize / 2, 5);
-  });
-});
 
 /** Click at an IMAGE coordinate, converted through the display box as the DOM would. */
 function clickAt(surface: Element, x: number, y: number, init: Record<string, unknown> = {}) {
@@ -112,11 +96,12 @@ describe("selecting by clicking", () => {
   it("does NOT clear the selection on a miss", () => {
     // Selection toggles, so building a multi-shape selection takes several clicks, and a near-miss
     // between two of them would otherwise throw the work away. Clearing is an explicit button.
-    const { surface, onToggle } = layer([0]);
+    // Toggling is the only way this layer changes the selection, so no toggle is no change.
+    const { surface, onToggle, onMiss } = layer();
     clickAt(surface, 20, 18);
 
     expect(onToggle).not.toHaveBeenCalled();
-    expect(screen.queryByTestId("outline-0")).not.toBeNull();
+    expect(onMiss).toHaveBeenCalledTimes(1);
   });
 
   it("ignores a right-click", () => {
@@ -136,35 +121,14 @@ describe("selecting by clicking", () => {
   });
 });
 
-describe("showing what is selected", () => {
-  it("outlines only the selected shapes", () => {
-    // Outlining everything would repeat what the canvas underneath already draws, and hide the one
-    // thing this layer exists to show.
-    layer([1]);
+describe("what it draws", () => {
+  it("draws nothing: no fill and no outline over the canvas's highlight", () => {
+    // Legacy's selection is one yellow overlay at alpha 180 with a transparent pen
+    // (segment_display_manager.py:515-529), and the canvas paints it. This layer drew a second fill
+    // and a yellow outline twice the line width over it until 2026-09-27.
+    const { surface } = layer();
 
-    expect(screen.queryByTestId("outline-1")).not.toBeNull();
-    expect(screen.queryByTestId("outline-0")).toBeNull();
-  });
-
-  it("outlines several at once", () => {
-    layer([0, 1]);
-
-    expect(screen.queryByTestId("outline-0")).not.toBeNull();
-    expect(screen.queryByTestId("outline-1")).not.toBeNull();
-  });
-
-  it("draws nothing for a selected mask, which has no outline to draw", () => {
-    const onToggle = vi.fn();
-    renderWithSettings(
-      <SelectLayer
-        width={IMAGE.width}
-        height={IMAGE.height}
-        segments={[{ type: "AI", classId: 0 }]}
-        selected={[0]}
-        onToggle={onToggle}
-      />,
-    );
-
-    expect(screen.queryByTestId("outline-0")).toBeNull();
+    expect(surface.children).toHaveLength(0);
+    expect(surface.querySelector("[stroke], [fill]")).toBeNull();
   });
 });
