@@ -94,7 +94,7 @@ import { PairPressContext, type HandedPress, type PressTool } from "./pairPress.
 import { EMPTY_DRAFT, type PolygonDraft } from "../tools/polygon.js";
 
 /** The tools whose press on the half not being edited is the tool's (`pairPress.ts`). */
-const PRESS_TOOLS: ReadonlySet<string> = new Set<PressTool>(["ai", "polygon", "box", "circle"]);
+const PRESS_TOOLS: ReadonlySet<string> = new Set<PressTool>(["ai", "polygon", "box", "circle", "select"]);
 
 export interface SplitViewProps {
   /** The folder's images, for choosing the second one. */

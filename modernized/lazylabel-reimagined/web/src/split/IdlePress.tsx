@@ -2,10 +2,11 @@
  * The half not being edited, taking a press the way legacy's non-active viewer does: the press is
  * the tool's, and it makes that image the one edited (main_window.py:5498-5537).
  *
- * The polygon's press is handed over at once, as legacy places the vertex on the press. The AI
- * tool, the box and the circle are drags, so this half follows the drag, with legacy's rubber band,
- * and hands it over at the release, where legacy settles each (main_window.py:5539-5583). The view
- * then drawn in this half finishes it (`pairPress.ts`).
+ * The polygon's press and Select's are handed over at once, as legacy places the vertex and selects
+ * on the press (main_window.py:5524-5535). The AI tool, the box and the circle are drags, so this
+ * half follows the drag, with legacy's rubber band, and hands it over at the release, where legacy
+ * settles each (main_window.py:5539-5583). The view then drawn in this half finishes it
+ * (`pairPress.ts`).
  */
 
 import { useCallback, useRef, useState, type ReactNode } from "react";
@@ -61,7 +62,7 @@ export function IdlePress({
     // Legacy's press off the picture does nothing, not even choosing the viewer (main_window.py:5505-5509).
     if (located.kind === "outside") return;
 
-    if (tool === "polygon") {
+    if (tool === "polygon" || tool === "select") {
       onPress({ tool, from: located.point, to: located.point, negative: false, shift: event.shiftKey });
       return;
     }

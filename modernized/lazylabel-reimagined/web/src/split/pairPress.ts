@@ -3,11 +3,12 @@
  *
  * Legacy's press in either Multi viewer makes that viewer the active one AND does what the tool
  * does there: the AI tool starts a point or a box, which the release settles; the polygon tool
- * places a vertex; the box and circle tools start their drag (main_window.py:5498-5537, 5539-5583).
- * Here the view is drawn in the half being edited only. So the other half takes the gesture itself
- * (`IdlePress.tsx`), makes its image the one edited, and hands the gesture over; the view drawn
- * there next finishes it as if it had been made on it. Until 2026-09-27 a click there only made it
- * the one edited.
+ * places a vertex; the box and circle tools start their drag; Select selects or deselects the
+ * annotation under it (main_window.py:5498-5537, 5539-5583, 2355-2429). Here the view is drawn in
+ * the half being edited only. So the other half takes the gesture itself (`IdlePress.tsx`), makes
+ * its image the one edited, and hands the gesture over; the view drawn there next finishes it as if
+ * it had been made on it. Until 2026-09-27 a click there only made it the one edited, Select's
+ * the last of them.
  *
  * HANDED AS DATA, IN THAT IMAGE'S PIXELS. The view is laid out differently from the picture it
  * replaces, so a pointer position would land somewhere else on it.
@@ -17,12 +18,12 @@ import { createContext } from "react";
 
 import type { ImagePoint } from "../canvas/coordinates.js";
 
-/** The tools whose press legacy acts on in either viewer, bar selection. */
-export type PressTool = "ai" | "polygon" | "box" | "circle";
+/** The tools whose press legacy acts on in either viewer. */
+export type PressTool = "ai" | "polygon" | "box" | "circle" | "select";
 
 export interface HandedPress {
   readonly tool: PressTool;
-  /** Where the pointer went down, and where it came up; the same point for a polygon's press. */
+  /** Where the pointer went down, and where it came up; the same point for a polygon's or Select's. */
   readonly from: ImagePoint;
   readonly to: ImagePoint;
   /** The AI tool's right button: a negative point, as the view's own layer reads it. */

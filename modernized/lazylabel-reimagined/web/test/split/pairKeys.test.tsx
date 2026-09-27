@@ -449,6 +449,57 @@ describe("a linked pair shares its selection and its class names", () => {
   });
 });
 
+describe("Select's press on the half not being edited", () => {
+  // Legacy's press in either viewer makes it the active one AND, in selection mode, selects or
+  // deselects the topmost annotation under it there, the other viewer following while linked
+  // (main_window.py:5511-5513, 5533-5535, 2355-2429). It only made that half the one edited here.
+  const pressIdle = (side: 0 | 1, name: string, x: number, y: number) =>
+    fireEvent.pointerDown(within(halves()[side]!).getByLabelText(`Draw on ${name}`), {
+      button: 0,
+      pointerId: 1,
+      clientX: x,
+      clientY: y,
+    });
+
+  it("selects the annotation under it there, and makes that image the one edited", async () => {
+    await pairUp();
+    unlink();
+    chooseTool("Select (E)");
+
+    pressIdle(1, "b.png", 40, 20);
+
+    // b.png's three triangles overlap there; the topmost is row 3.
+    await waitFor(() => expect(pair().map((side) => side.selected)).toEqual([[], [2]]));
+    expect(within(halves()[1]!).getByLabelText("Selection tool")).toBeTruthy();
+
+    // A second press there deselects it, as a press in the view does.
+    fireEvent.pointerDown(screen.getByLabelText("Selection tool"), { button: 0, pointerId: 1, clientX: 40, clientY: 20 });
+    await waitFor(() => expect(pair()[1].selected).toEqual([]));
+  });
+
+  it("selects the same row in the other image while linked", async () => {
+    await pairUp();
+    chooseTool("Select (E)");
+    editRight();
+
+    pressIdle(0, "a.png", 40, 20);
+
+    await waitFor(() => expect(pair().map((side) => side.selected)).toEqual([[1], [1]]));
+    expect(within(halves()[0]!).getByLabelText("Selection tool")).toBeTruthy();
+  });
+
+  it("selects nothing where there is nothing, and says so", async () => {
+    await pairUp();
+    unlink();
+    chooseTool("Select (E)");
+
+    pressIdle(1, "b.png", 150, 80);
+
+    expect(await screen.findByText(/Nothing there to select/)).toBeTruthy();
+    expect(pair().map((side) => side.selected)).toEqual([[], []]);
+  });
+});
+
 describe("Space finishes what is drawn in both images while linked", () => {
   it("puts a polygon closed with Space into both", async () => {
     // Legacy's linked polygon has its points in both viewers, and Space finishes both

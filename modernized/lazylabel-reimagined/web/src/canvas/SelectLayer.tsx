@@ -14,12 +14,13 @@
  * 2026-09-27 this layer drew a second yellow fill and a thick yellow outline over it.
  */
 
-import { useCallback, useRef, type ReactNode } from "react";
+import { useCallback, useContext, useEffect, useRef, type ReactNode } from "react";
 
 import type { WireSegment } from "@lazylabel/contracts";
 
 import { locate, type DisplayBox } from "./coordinates.js";
 import { hitTest } from "../tools/selection.js";
+import { claim, PairPressContext } from "../split/pairPress.js";
 
 export interface SelectLayerProps {
   readonly width: number;
@@ -62,6 +63,19 @@ export function SelectLayer({
     },
     [boxOf, image, onMiss, onToggle, segments],
   );
+
+  // A press on this half of the Multi tab while the other was being edited selects here too, as
+  // legacy's press in that viewer does, the other viewer following while linked
+  // (main_window.py:5533-5535, 2355-2429; `split/pairPress.ts`).
+  const handed = useContext(PairPressContext);
+  useEffect(() => {
+    if (handed === null || handed.tool !== "select" || !claim(handed)) return;
+    const index = hitTest(segments, handed.from, image);
+    if (index === null) onMiss?.();
+    else onToggle(index);
+    // Only when a press arrives.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [handed]);
 
   return (
     <svg
