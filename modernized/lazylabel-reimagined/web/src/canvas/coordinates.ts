@@ -10,10 +10,11 @@
  *
  *  - The AI tool's points and box are ASKED in whole pixels, in both views: `int()` of each
  *    coordinate (coordinate_transformer.py:47-50, whose scale factor is always 1.0,
- *    sam_update_worker.py:42-43; main_window.py:2236-2242, 6694, 6726-6739). The single view draws
- *    its dot where the click was (ai_segment_manager.py:457-462), the Multi tab at the whole pixel
- *    (main_window.py:6760-6762). Whether a gesture is a click or a box is decided on the exact
- *    points first (5553-5566; single_view_mouse_handler.py:340-356).
+ *    sam_update_worker.py:42-43; main_window.py:2236-2242, 6694, 6726-6739). The single view, which
+ *    the Sequence tab shares, draws its dot where the click was (ai_segment_manager.py:457-462),
+ *    the Multi tab at the whole pixel (main_window.py:6760-6762). Whether a gesture is a click or a
+ *    box is decided on the exact points first (main_window.py:5553-5566;
+ *    single_view_mouse_handler.py:340-356).
  *  - The single view's polygon keeps the QPointF (polygon_drawing_manager.py:93, 202), truncated
  *    only when rasterized (segment_manager.py:174-185). Rounding it here would break the join
  *    threshold too, which is measured in image pixels against the first vertex: with both ends
