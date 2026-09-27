@@ -57,14 +57,24 @@ describe("clicks outside the image", () => {
   });
 
   it("treats the right and bottom edges as outside", () => {
-    // An image 200 wide has pixels 0..199, so x === 200 is the first point past it. Half-open here
-    // matches how the mask is indexed, and off-by-one the other way writes out of bounds.
     expect(locate(at(130, 35), BOX, IMAGE).kind).toBe("outside"); // x === 200 exactly
     expect(locate(at(80, 60), BOX, IMAGE).kind).toBe("outside"); // y === 100 exactly
   });
 
-  it("includes the last pixel inside", () => {
-    expect(locate(at(129.9, 59.9), BOX, IMAGE).kind).toBe("inside");
+  it("is on the image where legacy's rounded press is, half a pixel left of each edge", () => {
+    // `pixmap().rect().contains(pos.toPoint())` (single_view_mouse_handler.py:106-110;
+    // main_window.py:5506-5509): Qt 6 rounds half away from zero, and the QRect ends at 199 and 99.
+    // So x 199.4 is on the 200-wide image and 199.5 off it; -0.4 is on it, as column 0, and -0.5 off.
+    const image = (x: number, y: number) => locate(at(30 + x / 2, 10 + y / 2), BOX, IMAGE).kind;
+
+    expect(image(199.4, 50)).toBe("inside");
+    expect(image(199.5, 50)).toBe("outside");
+    expect(image(100, 99.4)).toBe("inside");
+    expect(image(100, 99.5)).toBe("outside");
+    expect(image(-0.4, 50)).toBe("inside");
+    expect(image(-0.5, 50)).toBe("outside");
+    expect(image(100, -0.4)).toBe("inside");
+    expect(image(100, -0.5)).toBe("outside");
   });
 
   it("refuses to divide by an unlaid-out element", () => {

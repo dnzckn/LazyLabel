@@ -31,6 +31,13 @@
  * silently places a vertex on the edge the user did not click, which then rasterizes into the
  * mask. Saying "outside" lets the caller ignore the click instead, which is what a user who
  * overshot the canvas meant.
+ *
+ * "OUTSIDE" IS LEGACY'S: every tool's press asks `pixmap().rect().contains(pos.toPoint())`
+ * (single_view_mouse_handler.py:83, 106-110; main_window.py:5506-5509), and `toPoint()` ROUNDS. So
+ * a press is on the image from half a pixel left of its left edge to half a pixel left of its
+ * right edge: the half pixel just outside column 0 is on it, and the right half of the last column
+ * is not. Half-open at 0 and the width, as this was until 2026-09-27, moved both by half a pixel,
+ * which at a high zoom is a press that does nothing in one app and draws in the other.
  */
 
 export interface ImagePoint {
@@ -83,12 +90,20 @@ export function locate(
     y: ((client.clientY - box.top) / box.height) * image.height,
   };
 
-  // The right and bottom edges are exclusive: an image 100 wide has pixels 0..99, so x === 100 is
-  // the first point past it. Half-open here matches how the mask is indexed.
-  const inside =
-    point.x >= 0 && point.y >= 0 && point.x < image.width && point.y < image.height;
+  // Legacy's `QRect(0, 0, w, h).contains(pos.toPoint())`: the rounded point within 0..w-1.
+  const inside = onImage(point.x, image.width) && onImage(point.y, image.height);
 
   return inside ? { kind: "inside", point } : { kind: "outside", point };
+}
+
+/**
+ * Whether a coordinate lies on an image `size` pixels long, as legacy's press reads it: rounded as
+ * Qt 6's `qRound` rounds, half away from zero, then within `0..size - 1`, the extent of a QRect.
+ * So -0.5 is off and -0.49 on, and on a 100-pixel image 99.49 is on and 99.5 off.
+ */
+function onImage(value: number, size: number): boolean {
+  const pixel = value >= 0 ? Math.trunc(value + 0.5) : Math.trunc(value - 0.5);
+  return pixel >= 0 && pixel <= size - 1;
 }
 
 /**
