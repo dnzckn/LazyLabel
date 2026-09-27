@@ -97,6 +97,29 @@ describe("the drag minimum", () => {
     if (outcome.kind !== "crop") throw new Error("expected a crop");
     expect(outcome.crop).toEqual({ x1: 0, y1: 0, x2: 999, y2: 799 });
   });
+
+  it("truncates the dragged corners, as legacy's int() does, whichever way it was dragged", () => {
+    // `x1, y1 = int(rect.left()), int(rect.top())` and `int(rect.right()), int(rect.bottom())`
+    // (single_view_mouse_handler.py:553-556). Rounded, this was (11, 21, 61, 81).
+    for (const [from, to] of [
+      [{ x: 10.9, y: 20.7 }, { x: 60.6, y: 80.5 }],
+      [{ x: 60.6, y: 80.5 }, { x: 10.9, y: 20.7 }],
+    ] as const) {
+      const outcome = cropFromDrag(from, to, IMAGE);
+
+      if (outcome.kind !== "crop") throw new Error("expected a crop");
+      expect(outcome.crop).toEqual({ x1: 10, y1: 20, x2: 60, y2: 80 });
+    }
+  });
+
+  it("judges the minimum on the drag as it was, before truncating", () => {
+    // `rect.width() > 5 and rect.height() > 5` on the QRectF (single_view_mouse_handler.py:553):
+    // 5.05 wide is a crop, though its whole pixels are 5 apart.
+    const outcome = cropFromDrag({ x: 10.9, y: 10 }, { x: 15.95, y: 50 }, IMAGE);
+
+    if (outcome.kind !== "crop") throw new Error("expected a crop");
+    expect(outcome.crop).toEqual({ x1: 10, y1: 10, x2: 15, y2: 50 });
+  });
 });
 
 describe("the typed panel's ranges", () => {

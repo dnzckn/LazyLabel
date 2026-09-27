@@ -21,6 +21,11 @@
  *  - The Multi tab's polygon vertices are whole pixels (main_window.py:5654), each dot drawn where
  *    its click was (5659-5662), and its close test measures the click as it is against the whole
  *    first vertex (5609-5614).
+ *  - A box's corners, a circle's centre and radius point, and a vertex or a selection dragged in
+ *    Edit stay as they are, in both views (single_view_mouse_handler.py:183-192, 394-431, 462-524;
+ *    main_window.py:5720-5776, 5829-5905, 2590, 2614-2621; edit_mode_manager.py:176-179, 210-217).
+ *  - A dragged crop is truncated (single_view_mouse_handler.py:553-556), and Select tests the pixel
+ *    the click is in, `int()` of it (main_window.py:2308, 2364).
  *
  * A CLICK OUTSIDE THE IMAGE IS REPORTED, NOT CLAMPED. Clamping is the tempting one-liner and it
  * silently places a vertex on the edge the user did not click, which then rasterizes into the

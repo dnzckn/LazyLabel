@@ -18,6 +18,8 @@
  * export a user had already made with a full-image crop.
  */
 
+import { wholePixel } from "../canvas/coordinates.js";
+
 /** A drag smaller than this in either direction is not a crop (`single_view_mouse_handler.py:539`). */
 export const MINIMUM_CROP_DRAG = 5;
 
@@ -64,6 +66,11 @@ export function cropFrom(
  *
  * Strictly more than five image pixels in BOTH directions, so a stray click while the tool is
  * active cannot blank the whole image — which is what a zero-sized crop would do on the next save.
+ *
+ * The size is judged on the drag as it was, and the corners are then TRUNCATED, not rounded:
+ * legacy crops to `int(rect.left())`, `int(rect.top())`, `int(rect.right())` and
+ * `int(rect.bottom())` (single_view_mouse_handler.py:553-556), and its `round()` after that has
+ * whole numbers to round (crop_manager.py:127). Rounding here cropped a pixel further out.
  */
 export function cropFromDrag(
   from: { readonly x: number; readonly y: number },
@@ -82,7 +89,7 @@ export function cropFromDrag(
     };
   }
 
-  return { kind: "crop", crop: cropFrom(from, to, image) };
+  return { kind: "crop", crop: cropFrom(wholePixel(from), wholePixel(to), image) };
 }
 
 /**
