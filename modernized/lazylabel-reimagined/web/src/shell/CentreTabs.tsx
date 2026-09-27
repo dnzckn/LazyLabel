@@ -23,7 +23,11 @@ import { useCallback, useState, type ReactNode } from "react";
 
 import { useHotkeyFallback } from "../hotkeys/HotkeyProvider.jsx";
 import { useNotifications } from "../notifications/NotificationProvider.jsx";
-import { FIND_ARCHETYPES_ELSEWHERE, SequenceActiveContext } from "../sequence/sequenceActive.js";
+import {
+  BUILD_A_TIMELINE_FIRST,
+  NOTHING_TO_STEP_TO,
+  SequenceActiveContext,
+} from "../sequence/sequenceActive.js";
 import { TabList } from "./Tabs.jsx";
 
 export type CentreTab = "single" | "multi" | "sequence";
@@ -77,14 +81,20 @@ export function CentreTabs({
    * so Ctrl+H and Ctrl+P never reach anything else. Here a key nothing handles falls through to
    * the browser, and until the Sequence tab was first opened -- when nothing had registered them --
    * Ctrl+H opened the browser's history and Ctrl+P its print dialog. Fallbacks, so they answer
-   * only until the timeline registers its own: Find Archetypes says where it works, and Propagate
-   * does nothing, as legacy's does outside sequence mode (main_window.py:4708-4716, 5057-5059).
+   * only until the timeline registers its own: Find Archetypes says "Build a timeline first", and
+   * Propagate does nothing, as legacy's does outside sequence mode (main_window.py:4708-4716, 5057-5059).
    */
   const { notify } = useNotifications();
-  useHotkeyFallback("find_archetypes", () =>
-    notify({ severity: "info", message: FIND_ARCHETYPES_ELSEWHERE }),
-  );
+  const say = (message: string) => () => notify({ severity: "info", message });
+  useHotkeyFallback("find_archetypes", say(BUILD_A_TIMELINE_FIRST));
   useHotkeyFallback("propagate", () => undefined);
+  // And legacy's step keys, which answer on every tab over no timeline (SP-56).
+  useHotkeyFallback("next_flagged_frame", say(NOTHING_TO_STEP_TO.flagged));
+  useHotkeyFallback("prev_flagged_frame", say(NOTHING_TO_STEP_TO.flagged));
+  useHotkeyFallback("next_reference_frame", say(NOTHING_TO_STEP_TO.reference));
+  useHotkeyFallback("prev_reference_frame", say(NOTHING_TO_STEP_TO.reference));
+  useHotkeyFallback("next_suggested_frame", say(NOTHING_TO_STEP_TO.suggested));
+  useHotkeyFallback("prev_suggested_frame", say(NOTHING_TO_STEP_TO.suggested));
 
   return (
     <div className="centre">

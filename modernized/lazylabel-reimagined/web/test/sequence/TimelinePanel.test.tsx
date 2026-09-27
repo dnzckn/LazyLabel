@@ -1153,7 +1153,7 @@ describe("the frame keys", () => {
     expect(await screen.findByText("Build a timeline first")).toBeTruthy();
   });
 
-  it("does nothing while its tab is not the one showing", async () => {
+  it("moves nowhere while its tab is not the one showing, and says legacy's notices (SP-56)", async () => {
     // The panel stays mounted on the other tabs; its keys must not act there.
     render(
       withSettings(
@@ -1170,9 +1170,10 @@ describe("the frame keys", () => {
     press("find_archetypes");
 
     expect(current()).toBe(before);
-    // Find Archetypes says where it works instead, as the shell's fallback does.
-    expect(await screen.findByText("Find Archetypes works on the Sequence tab")).toBeTruthy();
-    expect(screen.queryByText("Build a timeline first")).toBeNull();
+    // Legacy's keys answer on every tab, over the timeline torn down on leaving (SP-56): a step key
+    // says there is nothing to step to, and Find Archetypes asks for a timeline.
+    expect(await screen.findByText("No reference frames")).toBeTruthy();
+    expect(await screen.findByText("Build a timeline first")).toBeTruthy();
   });
 });
 

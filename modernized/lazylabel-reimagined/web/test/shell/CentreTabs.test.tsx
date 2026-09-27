@@ -239,12 +239,18 @@ describe("the sequence keys", () => {
     expect(press(key("propagate")).defaultPrevented).toBe(true);
   });
 
-  it("says where Find Archetypes works when it is pressed on another tab", async () => {
+  it("answers the sequence keys as legacy's do on another tab, before the timeline exists (SP-56)", async () => {
+    // Legacy's shortcuts are the window's, over a sequence mode made at startup
+    // (main_window.py:691, 3327), so they answer on every tab (4664-4706, 5040-5059, 5150-5168).
     mountWithProbe();
 
     press(key("find_archetypes"));
+    press(key("next_flagged_frame"));
+    press(key("prev_suggested_frame"));
 
-    expect(await screen.findByText("Find Archetypes works on the Sequence tab")).toBeTruthy();
+    expect(await screen.findByText("Build a timeline first")).toBeTruthy();
+    expect(await screen.findByText("No more flagged frames")).toBeTruthy();
+    expect(await screen.findByText("No suggested frames")).toBeTruthy();
   });
 
   it("tells the sequence controls whether their tab is showing, so their keys act only there", () => {

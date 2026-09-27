@@ -39,7 +39,7 @@ import { useNotifications } from "../notifications/NotificationProvider.jsx";
 import { PropagationControl } from "./PropagationControl.jsx";
 import type { OpenAnnotations } from "./references.js";
 import { mergedByClass } from "./saveAll.js";
-import { FIND_ARCHETYPES_ELSEWHERE, useSequenceActive } from "./sequenceActive.js";
+import { BUILD_A_TIMELINE_FIRST, NOTHING_TO_STEP_TO, useSequenceActive } from "./sequenceActive.js";
 
 import {
   buildTimeline,
@@ -196,12 +196,6 @@ const MAX_ZOOM = 30;
 const PAN_STEP = 0.25;
 const WHEEL_STEP = 0.1;
 
-/** What legacy says when there is no such frame to move to (main_window.py:4673-4706, 5158-5168). */
-const NOTHING_TO_STEP_TO: Readonly<Record<Target, string>> = {
-  flagged: "No more flagged frames",
-  reference: "No reference frames",
-  suggested: "No suggested frames",
-};
 
 /** What the keys and the disabled controls say when AI is missing: legacy's hint, for a server. */
 function aiHintFor(ai: TimelinePanelProps["ai"]): string {
@@ -633,10 +627,15 @@ export function TimelinePanel({
     if (active) void markCurrent();
   });
 
-  useHotkey("next_flagged_frame", () => active && navigate("flagged", 1));
-  useHotkey("prev_flagged_frame", () => active && navigate("flagged", -1));
-  useHotkey("next_reference_frame", () => active && navigate("reference", 1));
-  useHotkey("prev_reference_frame", () => active && navigate("reference", -1));
+  // Off its tab a sequence key says what legacy's does over its torn-down timeline (SP-56).
+  const stepOrSay = (target: Target, by: 1 | -1): void => {
+    if (active) navigate(target, by);
+    else notify({ severity: "info", message: NOTHING_TO_STEP_TO[target] });
+  };
+  useHotkey("next_flagged_frame", () => stepOrSay("flagged", 1));
+  useHotkey("prev_flagged_frame", () => stepOrSay("flagged", -1));
+  useHotkey("next_reference_frame", () => stepOrSay("reference", 1));
+  useHotkey("prev_reference_frame", () => stepOrSay("reference", -1));
   /*
    * APPLY THE THRESHOLD WHEN SCORES ARRIVE, not only when the slider moves.
    *
@@ -725,15 +724,14 @@ export function TimelinePanel({
   }, [client, finding, frames, notify, onArchetypes, setOverrides]);
 
   useHotkey("find_archetypes", () => {
-    // Off its tab the key says where it works, as the shell's fallback does before this panel is
-    // first mounted; on it, legacy's answer with no timeline (main_window.py:5057-5059).
-    if (!active) notify({ severity: "info", message: FIND_ARCHETYPES_ELSEWHERE });
-    else if (!aiReady) notify({ severity: "info", message: aiHint });
-    else if (frames.length === 0) notify({ severity: "info", message: "Build a timeline first" });
+    // Legacy's order on every tab: the install hint without AI, then "Build a timeline first" --
+    // which off the tab is always, its timeline torn down on leaving (main_window.py:5040-5059).
+    if (!aiReady) notify({ severity: "info", message: aiHint });
+    else if (!active || frames.length === 0) notify({ severity: "info", message: BUILD_A_TIMELINE_FIRST });
     else void find();
   });
-  useHotkey("next_suggested_frame", () => active && navigate("suggested", 1));
-  useHotkey("prev_suggested_frame", () => active && navigate("suggested", -1));
+  useHotkey("next_suggested_frame", () => stepOrSay("suggested", 1));
+  useHotkey("prev_suggested_frame", () => stepOrSay("suggested", -1));
   // Legacy's tooltips name the keys, " (N)"; from the user's own bindings here.
   const keyOf = useKeyHint();
 
