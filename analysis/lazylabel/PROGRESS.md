@@ -507,7 +507,8 @@ The engineering the brief names is done. What is left is mostly the owner's to d
 check to repeat before the switch. In order:
 
 1. **Ask the owner** about the pending decisions under "What remains": SP-57's two web-only
-   extras, R10, R11 and RULE-024's 16-bit overflow.
+   extras, R10 and R11. RULE-024's 16-bit overflow was decided on 2026-09-27, "Fix it in the web",
+   and is fixed (`ff56922`; `CONTROL_PARITY.md` CP-72).
 2. **Run the live differential suites again with real checkpoints** (CUTOVER.md asks for it when
    the inference service changes, and it changed on 2026-09-26: SP-08, SP-25, CP-49 and R7 to R9).
    "Running the live suites" has the command. Leave `LAZYLABEL_TEST_SAM1_CHECKPOINT` unset while
@@ -642,8 +643,6 @@ needs is already in one store rather than scattered across managers.
   (`DEPLOYABILITY.md` R10). It is CUTOVER.md's one unticked box.
 - **R11: a release zip with no prerequisites.** A portable Node, a double-click launcher and "Open
   Folder" in the app, for annotators who will not install Node (`DEPLOYABILITY.md` R11).
-- **RULE-024's 16-bit overflow.** Legacy's int16 overflow in its 16-bit display conversion is
-  reproduced on purpose, and needs the owner's call (`CONTROL_PARITY.md` CP-72).
 
 **Before the switch.** The live differential suites, run again with real checkpoints ("What to do
 next", item 2). The deployment box waits on R10.
