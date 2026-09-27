@@ -178,8 +178,51 @@ describe("legacy's multi view, which is another handler", () => {
   it("leaves the single view asking the box with the points (RULE-066)", () => {
     const boxed = promptOf(release(ONE_POSITIVE, at(10, 10), at(70, 70)));
 
-    expect(asked(boxed)).toBe(boxed);
+    expect(asked(boxed)).toEqual(boxed);
     expect(asked(boxed, "single")).toEqual({ points: ONE_POSITIVE.points, box: [at(10, 10), at(70, 70)] });
+  });
+
+  it("places a click's point in the whole pixel it went down in, as legacy's int() does", () => {
+    // `_transform_multi_view_coords` returns `int(pos.x()), int(pos.y())` (main_window.py:6739),
+    // and that point is what each viewer keeps and draws (6667-6672, 6760-6762).
+    const outcome = release(EMPTY_PROMPT, at(30.9, 40.2), at(31.6, 40.9), { view: "multi" });
+
+    expect(promptOf(outcome).points).toEqual([{ x: 30, y: 40, positive: true }]);
+  });
+
+  it("places a box in whole pixels, judging its size on the drag as it was", () => {
+    // `rect.width() > 10` on the QRectF (main_window.py:5566), then `int(rect.left())` and the rest
+    // (6694): 10.7 wide is a box, though its whole pixels are 10 apart.
+    const outcome = release(EMPTY_PROMPT, at(10.2, 10.2), at(20.9, 20.9), { view: "multi" });
+
+    expect(outcome.kind).toBe("box");
+    expect(promptOf(outcome).box).toEqual([at(10, 10), at(20, 20)]);
+  });
+});
+
+describe("what the model is asked, in whole pixels", () => {
+  it("truncates the single view's points, which keep where the click was for their dots", () => {
+    // Drawn at `pos` (ai_segment_manager.py:457-462), asked as `int(pos.x() * 1.0)`
+    // (ai_segment_manager.py:445; coordinate_transformer.py:47-50; sam_update_worker.py:42-43).
+    const prompt = promptOf(release(EMPTY_PROMPT, at(12.7, 8.3), at(12.9, 8.6)));
+
+    expect(prompt.points).toEqual([{ x: 12.9, y: 8.6, positive: true }]);
+    expect(asked(prompt)).toEqual({ points: [{ x: 12, y: 8, positive: true }], box: null });
+  });
+
+  it("truncates a box's corners, whichever way it was dragged", () => {
+    // `_handle_ai_bounding_box`: `int()` of the rect's left, top, right and bottom
+    // (main_window.py:2236-2242).
+    const prompt = promptOf(release(ONE_POSITIVE, at(35.6, 18.2), at(5.9, 2.4)));
+
+    expect(asked(prompt).box).toEqual([at(35, 18), at(5, 2)]);
+  });
+
+  it("truncates toward zero, as Python's int() does, and never asks for -0", () => {
+    const asks = asked({ points: [{ x: -0.4, y: 3.5, positive: true }], box: null }).points[0]!;
+
+    expect(asks).toEqual({ x: 0, y: 3, positive: true });
+    expect(Object.is(asks.x, 0)).toBe(true);
   });
 });
 

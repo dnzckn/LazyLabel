@@ -31,8 +31,15 @@
  * negative points is refused rather than run. The point is still placed, as legacy's single view
  * places it (`ai_segment_manager.py:447-466, 492-493`). Legacy's multi view asks its model even so
  * (`main_window.py:6791-6797`); with the service refusing, the multi view here waits too.
+ *
+ * THE MODEL IS ASKED IN WHOLE PIXELS, `int()` of every coordinate, as legacy asks it in both views
+ * (`coordinate_transformer.py:47-50`; `main_window.py:2236-2242, 6694, 6739`). The Multi tab
+ * truncates as it places, so its dots are drawn at the whole pixel (`main_window.py:6760-6762`); the
+ * single view draws its dot where the click was (`ai_segment_manager.py:457-462`) and truncates only
+ * what it asks (`asked`). The distances that make a click a box are measured on the exact points.
  */
 
+import { wholePixel } from "../canvas/coordinates.js";
 import type { Point } from "./polygon.js";
 
 /**
@@ -130,15 +137,16 @@ export function release(
   if (options.view === "multi") {
     // `main_window.py:5552-5572`: a box when the drag went past the threshold AND is big enough,
     // with either button. Anything else is a point where the pointer went DOWN, so a thin drag is
-    // a point there, where the single view discards it.
+    // a point there, where the single view discards it. Either is placed in whole pixels, as legacy
+    // places them (`int(rect.left())` and the rest at 6694; `int(pos.x())` at 6739).
     if (moved > DRAG_THRESHOLD && width > MINIMUM_BOX_SIDE && height > MINIMUM_BOX_SIDE) {
-      return { kind: "box", prompt: { ...prompt, box: [from, to] } };
+      return { kind: "box", prompt: { ...prompt, box: [wholePixel(from), wholePixel(to)] } };
     }
     // A click asks the points alone, so the box is forgotten once it does: legacy predicts from
     // every point placed, before the box too, and never from the box again (main_window.py:
     // 6667-6675, 6788-6797). A point with nothing positive to ask from asks nothing there, and the
     // box's preview stays the one Space accepts, so the box stays with it.
-    const outcome = withPoint(prompt, from, positive);
+    const outcome = withPoint(prompt, wholePixel(from), positive);
     return outcome.kind === "point" ? { kind: "point", prompt: { ...outcome.prompt, box: null } } : outcome;
   }
 
@@ -187,9 +195,18 @@ function withPoint(prompt: AiPrompt, at: Point, positive: boolean): Release {
  * sam_multi_view_manager.py:289-328). The points stay placed and drawn, and the next click asks
  * them without the box (`release`). The single view, which the Sequence tab shares, asks the box
  * with the points (RULE-066).
+ *
+ * In whole pixels, whichever view: legacy's single view truncates what it asks, not what it draws
+ * (`coordinate_transformer.py:47-50`, from `ai_segment_manager.py:445` and `main_window.py:
+ * 2236-2240`), and its Multi tab has truncated as it placed (`release`).
  */
 export function asked(prompt: AiPrompt, view: AiView = "single"): AiPrompt {
-  return view === "multi" && prompt.box !== null ? { points: [], box: prompt.box } : prompt;
+  const box = prompt.box === null ? null : ([wholePixel(prompt.box[0]), wholePixel(prompt.box[1])] as const);
+  if (view === "multi" && box !== null) return { points: [], box };
+  return {
+    points: prompt.points.map((point) => ({ ...wholePixel(point), positive: point.positive })),
+    box,
+  };
 }
 
 export type Pending = "box" | "points" | "nothing";

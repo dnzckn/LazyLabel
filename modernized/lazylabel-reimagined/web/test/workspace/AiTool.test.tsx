@@ -221,6 +221,30 @@ describe("prompting", () => {
     expect(segment.mock.calls[0]?.[0].box).toEqual([5, 2, 35, 18]);
   });
 
+  it("asks in whole pixels, as legacy's int() does, while the dot stays where the click was", async () => {
+    // Legacy draws the point at `pos` and asks `int(pos.x())` (ai_segment_manager.py:445, 457-462;
+    // coordinate_transformer.py:47-50), and its box `int()` of each edge (main_window.py:2236-2242).
+    const segment = vi.fn(async (_request: unknown) => response());
+    mount({ segment: segment as never });
+    await waitFor(() => expect(surface()).toBeTruthy());
+
+    click(10.6, 7.9);
+    await waitFor(() => expect(segment).toHaveBeenCalledTimes(1));
+    fireEvent.pointerDown(surface(), point(35.7, 18.9));
+    fireEvent.pointerUp(surface(), point(5.2, 2.8));
+
+    await waitFor(() => expect(segment).toHaveBeenCalledTimes(2));
+    expect(segment.mock.calls[0]?.[0]).toEqual({ handle: "h1", points: [{ x: 10, y: 7, positive: true }] });
+    expect(segment.mock.calls[1]?.[0]).toEqual({
+      handle: "h1",
+      points: [{ x: 10, y: 7, positive: true }],
+      box: [5, 2, 35, 18],
+    });
+    const dot = screen.getByTestId("ai-positive-0");
+    expect(Number(dot.getAttribute("cx"))).toBeCloseTo(10.6, 10);
+    expect(Number(dot.getAttribute("cy"))).toBeCloseTo(7.9, 10);
+  });
+
   it("asks a box WITH the points placed before it in the single view (RULE-066)", async () => {
     // Only the Multi tab asks its box alone (`tools/ai.ts` `asked`).
     const segment = vi.fn(async (_request: unknown) => response());

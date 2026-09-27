@@ -209,6 +209,16 @@ describe("in legacy's multi view, whose handler differs", () => {
     expect(centre("ai-negative-1")).toEqual({ x: 50, y: 40 });
   });
 
+  it("draws a click's dot at the whole pixel the press was in, as legacy's marker is", () => {
+    // `int(pos.x()), int(pos.y())` is placed and drawn (main_window.py:6739, 6760-6762).
+    const { surface, onPrompt } = layer({ view: "multi" });
+
+    click(surface, 30.8, 40.6);
+
+    expect(centre("ai-positive-0")).toEqual({ x: 30, y: 40 });
+    expect(onPrompt.mock.calls[0]?.[0].points).toEqual([{ x: 30, y: 40, positive: true }]);
+  });
+
   it("puts a left click's point where the press was, and makes a thin drag a point", () => {
     const { surface, onRefused } = layer({ view: "multi" });
 

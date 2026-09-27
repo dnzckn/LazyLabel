@@ -4,11 +4,20 @@
  * Small, and the place a drawing tool goes wrong invisibly. A vertex placed one pixel off looks
  * right on screen at any reasonable zoom, and appears in the exported polygon forever.
  *
- * THE COORDINATES STAY FRACTIONAL. Legacy stores vertices as QPointF and truncates only at
- * rasterization (RULE-015: `int(round(...))` per vertex inside `segment_manager.py:174-203`), so
- * rounding here would change what gets exported. It would also break the join threshold, which is
- * measured in image pixels against the first vertex: with both ends rounded, a click 1.4 pixels
- * away and one 0.6 pixels away can land on the same integer and both close, or neither.
+ * THE POINT COMES BACK EXACT, AND EACH TOOL CONVERTS IT AS LEGACY'S DOES. Legacy's scene position
+ * is a QPointF, and what it makes of one differs by tool, so no one rounding here could be right.
+ * `wholePixel` is legacy's `int()`, and `tools/` applies it where legacy does:
+ *
+ *  - The AI tool's points and box are ASKED in whole pixels, in both views: `int()` of each
+ *    coordinate (coordinate_transformer.py:47-50, whose scale factor is always 1.0,
+ *    sam_update_worker.py:42-43; main_window.py:2236-2242, 6694, 6726-6739). The single view draws
+ *    its dot where the click was (ai_segment_manager.py:457-462), the Multi tab at the whole pixel
+ *    (main_window.py:6760-6762). Whether a gesture is a click or a box is decided on the exact
+ *    points first (5553-5566; single_view_mouse_handler.py:340-356).
+ *  - The single view's polygon keeps the QPointF (polygon_drawing_manager.py:93, 202), truncated
+ *    only when rasterized (segment_manager.py:174-185). Rounding it here would break the join
+ *    threshold too, which is measured in image pixels against the first vertex: with both ends
+ *    rounded, a click 1.4 pixels away and one 0.6 pixels away can land on the same integer.
  *
  * A CLICK OUTSIDE THE IMAGE IS REPORTED, NOT CLAMPED. Clamping is the tempting one-liner and it
  * silently places a vertex on the edge the user did not click, which then rasterizes into the
@@ -72,6 +81,16 @@ export function locate(
     point.x >= 0 && point.y >= 0 && point.x < image.width && point.y < image.height;
 
   return inside ? { kind: "inside", point } : { kind: "outside", point };
+}
+
+/**
+ * Legacy's `int()` of a point: each coordinate truncated toward zero, to the pixel it lies in.
+ *
+ * Toward zero, as Python's `int()` is, not down: `int(-0.3)` is 0. The `+ 0` makes the -0 that
+ * `Math.trunc` gives there a plain 0, which the wire prints the same and a comparison does not.
+ */
+export function wholePixel(point: ImagePoint): ImagePoint {
+  return { x: Math.trunc(point.x) + 0, y: Math.trunc(point.y) + 0 };
 }
 
 /**
