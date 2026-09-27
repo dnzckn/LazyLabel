@@ -318,6 +318,25 @@ describe("V, M, Escape and Ctrl+A act on both images", () => {
   });
 });
 
+describe("a file opened from the list in the Multi tab", () => {
+  it("opens it on the left and the next file on the right, as legacy's does", async () => {
+    // file_navigation_manager.py:390-423: viewer 0 gets the file, viewer 1 the next in the list.
+    await pairUp();
+
+    fireEvent.doubleClick(screen.getByRole("button", { name: "c.png" }));
+
+    await waitFor(() => expect(keys()).toEqual(["frames/c.png", "frames/d.png"]));
+  });
+
+  it("empties the right when the file is the list's last", async () => {
+    await pairUp();
+
+    fireEvent.doubleClick(screen.getByRole("button", { name: "d.png" }));
+
+    await waitFor(() => expect(keys()).toEqual(["frames/d.png", null]));
+  });
+});
+
 describe("R looks at both images' selections", () => {
   it("enters Edit when the image NOT being edited has a polygon selected, as legacy's does", async () => {
     // mode_manager.py:60-86: in the multi view R checks every viewer's selected rows.

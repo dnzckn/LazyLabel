@@ -99,6 +99,11 @@ export interface DatasetBrowserProps {
    */
   readonly reviewSegments?: (key: string) => readonly WireSegment[] | undefined;
   /**
+   * Opens a file chosen in the list while the Multi tab is showing: legacy loads it and the next
+   * one as the pair (file_navigation_manager.py:390-423). Without it, the file opens on one side.
+   */
+  readonly onOpenInPair?: (image: WireDatasetImage) => void;
+  /**
    * The sequence range to colour: Start light green, End red and the rows between dark green, once
    * both are set, as legacy's list colours them (`fast_file_manager.py:303-309, 501-513`).
    */
@@ -136,6 +141,7 @@ export function DatasetBrowser({
   onListed,
   onShown,
   reviewSegments,
+  onOpenInPair,
   range,
   root,
   written,
@@ -155,15 +161,19 @@ export function DatasetBrowser({
   const [here, setHere] = useState(folder);
   // Opening belongs to the workspace store: the list is one of five things that ask what is open,
   // and whichever one holds the state becomes the owner of a question that is not its own.
-  const { open: openState, openImage: openInStore, saveCounts, quietWrites } = useWorkspace();
+  const { open: openState, openImage: openInStore, saveCounts, quietWrites, multiView } = useWorkspace();
   const { notify } = useNotifications();
   // A timeline frame opens with the run's masks while the Sequence tab is in use (SP-22).
   const openImage = useCallback(
     (image: WireDatasetImage) => {
+      if (multiView && onOpenInPair !== undefined) {
+        onOpenInPair(image);
+        return;
+      }
       const segments = reviewSegments?.(image.key);
       openInStore(image, segments === undefined ? undefined : { segments });
     },
-    [openInStore, reviewSegments],
+    [multiView, onOpenInPair, openInStore, reviewSegments],
   );
   const { settings, save } = useSettings();
 

@@ -189,13 +189,13 @@ export function App({ client }: { readonly client: ApiClient }): ReactNode {
    * into the left and right, the right emptied when the list has only one more. Legacy's words at
    * the ends, where nothing moves, and when the left side is empty.
    *
-   * BOTH SIDES ARE SAVED FIRST, before anything is decided -- at the ends of the list and with the
-   * left side empty too -- changed or not, whatever Auto-Save on Navigate says, and an empty side's
-   * files deleted without a word: legacy's `_save_multi_view_annotations` opens both of its moves
-   * (main_window.py:6496-6497, 6529-6530). The owner's decision of 2026-09-26, "Match the desktop
-   * app exactly" (CONTROL_PARITY.md CP-67). A save that fails keeps the pair where it is, with the
-   * reason said. The move is then made from what the save left, so a side just saved is opened over
-   * or emptied without a question.
+   * WITH AUTO-SAVE ON NAVIGATE ON, BOTH SIDES ARE SAVED FIRST, before anything is decided -- at the
+   * ends of the list and with the left side empty too -- changed or not, and an empty side's files
+   * deleted without a word: legacy's `_save_multi_view_annotations` opens both of its moves
+   * (main_window.py:6496-6497, 6529-6530; CONTROL_PARITY.md CP-67), which legacy runs whatever the
+   * setting says and the owner wants only with it on (2026-09-26). A save that fails keeps the pair
+   * where it is, with the reason said. The move is then made from what the save left, so a side
+   * just saved is opened over or emptied without a question.
    */
   const { notify } = useNotifications();
   /** The move, from the pair as the save left it. `stepPair` calls it through a ref, after the save. */
@@ -240,6 +240,38 @@ export function App({ client }: { readonly client: ApiClient }): ReactNode {
       }
       void savePair().then((saved) => {
         if (saved) movePairNow.current(by);
+      });
+    },
+    [autoSave, savePair],
+  );
+
+  /*
+   * A FILE OPENED FROM THE LIST IN THE MULTI TAB OPENS A PAIR, as legacy's does: that file on the
+   * left and the next one in the list's order on the right, the right emptied at the end of the
+   * list; both sides saved first with Auto-Save on Navigate on (file_navigation_manager.py:390-423;
+   * CP-31). With it off, each side's open asks about its own changes.
+   */
+  const openPair = (image: WireDatasetImage): void => {
+    const at = shownRows.findIndex((row) => row.key === image.key);
+    const second = at < 0 ? undefined : shownRows[at + 1];
+    const review = (each: WireDatasetImage) => {
+      const segments = reviewFor(each.key);
+      return segments === undefined ? undefined : { segments };
+    };
+    openImageOn(0, image, { ...review(image), pairSaved: true });
+    if (second !== undefined) openImageOn(1, second, { ...review(second), pairSaved: true });
+    else if (sides[1].open !== null && closeSide(1) && activeSide === 1) setActiveSide(0);
+  };
+  const openPairNow = useRef(openPair);
+  openPairNow.current = openPair;
+  const onOpenInPair = useCallback(
+    (image: WireDatasetImage) => {
+      if (!autoSave) {
+        openPairNow.current(image);
+        return;
+      }
+      void savePair().then((saved) => {
+        if (saved) openPairNow.current(image);
       });
     },
     [autoSave, savePair],
@@ -525,6 +557,7 @@ export function App({ client }: { readonly client: ApiClient }): ReactNode {
           <>
             <DatasetBrowser
               ref={browser}
+              onOpenInPair={onOpenInPair}
               client={client}
               projectId="default"
               onListed={setListed}
