@@ -418,6 +418,24 @@ describe("Auto-Convert", () => {
     expect(segment.vertices?.length).toBeGreaterThanOrEqual(3);
     expect(segment.mask).toBeUndefined();
   });
+
+  it("still ERASES with the mask when it is on", async () => {
+    // Legacy's Shift+Space erases with the preview mask itself; the conversion is only for what is
+    // added (ai_segment_manager.py:137-142, 175-180, 241-299). A polygon here was dropped by the view,
+    // which erases with masks only, so Shift+Space erased nothing while Auto-Convert was on.
+    const { onErase } = mount({}, { autoPolygon: { enabled: true, resolution: 80 } });
+    await waitFor(() => expect(surface()).toBeTruthy());
+    click(10, 10);
+    await ready();
+
+    fireEvent.keyDown(document, { key: " ", code: "Space", shiftKey: true });
+
+    await waitFor(() => expect(onErase).toHaveBeenCalledTimes(1));
+    const eraser = onErase.mock.calls[0]![0];
+    expect(eraser.type).toBe("AI");
+    expect(eraser.mask).toBeDefined();
+    expect(eraser.vertices).toBeUndefined();
+  });
 });
 
 describe("Operate On View (RULE-089)", () => {

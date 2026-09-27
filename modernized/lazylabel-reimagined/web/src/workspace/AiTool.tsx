@@ -509,9 +509,11 @@ export function AiTool({
         return;
       }
 
-      const segment = asPolygonIfAsked(filtered.mask, classId, autoPolygon, notify);
-      if (asEraser) onErase(segment);
-      else onAccept(segment);
+      // Shift+Space erases with the MASK, Auto-Convert or not, as legacy's does: the conversion is
+      // for what is added (ai_segment_manager.py:137-142, 175-180, 241-299). The eraser went through
+      // it until 2026-09-27, and the view, which erases with masks only, dropped the polygon.
+      if (asEraser) onErase({ type: "AI", classId, mask: encodeMask(filtered.mask) });
+      else onAccept(asPolygonIfAsked(filtered.mask, classId, autoPolygon, notify));
 
       if (filtered.dropped > 0) {
         notify({

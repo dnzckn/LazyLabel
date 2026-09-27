@@ -90,7 +90,7 @@ function Harness(): React.ReactNode {
   );
 }
 
-function mount(overrides: Partial<ApiClient> = {}) {
+function mount(overrides: Partial<ApiClient> = {}, values: Record<string, unknown> = {}) {
   /*
    * ONE promise, handed out by the stub and awaited by the test.
    *
@@ -107,7 +107,10 @@ function mount(overrides: Partial<ApiClient> = {}) {
   const saveAnnotations = vi.fn(async () => ({ written: {}, stale: [], skippedEmpty: [] }));
 
   const api = {
-    getSettings: async () => defaultSettings(),
+    getSettings: async () => {
+      const settings = defaultSettings();
+      return { ...settings, values: { ...settings.values, ...values } };
+    },
     putSettings: async (s: unknown) => s,
     imageMetadata: async () => ({ ...IMAGE, sourceDepth: 8, sourceFormat: "png" }),
     loadAnnotations: async (): Promise<AnnotationsResult> => ({ kind: "none" }),
@@ -163,8 +166,8 @@ function clickImage(x: number, y: number) {
 }
 
 /** Steps 1–3: pick an image, choose the model, reach the AI surface. */
-async function readyToPrompt() {
-  const handles = mount();
+async function readyToPrompt(values: Record<string, unknown> = {}) {
+  const handles = mount({}, values);
 
   fireEvent.click(screen.getByText("open a"));
   await waitFor(() => expect(screen.getAllByText("a.png").length).toBeGreaterThan(0));
@@ -225,6 +228,23 @@ describe("flow 1, step by step", () => {
     expect(shown("class")).toBe("0");
     expect(shown("dirty")).toBe("dirty");
     expect(shown("undoable")).toBe("yes");
+  });
+
+  it("erases what the preview covers on Shift+Space, with Auto-Convert on too", async () => {
+    // Legacy erases with the preview's mask whether or not Auto-Convert is on
+    // (ai_segment_manager.py:137-142, 175-180, 241-273). Here the eraser was converted to a polygon
+    // first, which the view drops, so Shift+Space erased nothing while the setting was on.
+    await readyToPrompt({ auto_polygon_enabled: true });
+    clickImage(6, 6);
+    await previewReady();
+    fireEvent.keyDown(document, { key: " ", code: "Space" });
+    await waitFor(() => expect(shown("types")).toBe("Polygon"));
+
+    clickImage(6, 6);
+    await previewReady();
+    fireEvent.keyDown(document, { key: " ", code: "Space", shiftKey: true });
+
+    await waitFor(() => expect(shown("count")).toBe("0"));
   });
 
   it("does not turn a preview into an annotation until it is accepted", async () => {
