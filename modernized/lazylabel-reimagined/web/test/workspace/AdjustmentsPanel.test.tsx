@@ -66,7 +66,7 @@ describe("the sliders", () => {
 
   it("shows the real value beside the slider, not the slider's integer", async () => {
     mount({ gamma: 1.5 });
-    await waitFor(() => expect(screen.getByText("1.50")).toBeTruthy());
+    await waitFor(() => expect((screen.getByRole("textbox", { name: /^Gamma/ }) as HTMLInputElement).value).toBe("1.50"));
   });
 
   it("stores gamma back in its own units, not the slider's", async () => {
@@ -164,5 +164,44 @@ describe("Reset Annotation Settings, legacy's (CP-50)", () => {
 
     await waitFor(() => expect(saved).toHaveLength(1));
     expect(saved[0]).toMatchObject({ annotation_size_multiplier: 1, pan_multiplier: 1, polygon_join_threshold: 2 });
+  });
+});
+
+describe("the type-in box beside each slider, legacy's (CP-51)", () => {
+  const typeInto = (name: RegExp, text: string) => {
+    const box = screen.getByRole("textbox", { name }) as HTMLInputElement;
+    fireEvent.change(box, { target: { value: text } });
+    fireEvent.keyDown(box, { key: "Enter", code: "Enter" });
+    return box;
+  };
+
+  it("applies a typed value, clamped to the slider, as legacy's int() reads it", async () => {
+    // adjustments_widget.py:150-157: int(text), clamped to -100..100.
+    const { saved } = mount();
+    await screen.findByRole("textbox", { name: /^Brightness/ });
+
+    typeInto(/^Brightness/, "500");
+
+    await waitFor(() => expect(saved.at(-1)?.["brightness"]).toBe(100));
+  });
+
+  it("reads gamma as int(float * 100), so 0.555 is 0.55", async () => {
+    // adjustments_widget.py:179-187.
+    const { saved } = mount();
+    await screen.findByRole("textbox", { name: /^Gamma/ });
+
+    typeInto(/^Gamma/, "0.555");
+
+    await waitFor(() => expect(saved.at(-1)?.["gamma"]).toBe(0.55));
+  });
+
+  it("puts back the value when the text is not a number, and saves nothing", async () => {
+    const { saved } = mount({ saturation: 1.2 });
+    await screen.findByRole("textbox", { name: /^Saturation/ });
+
+    const box = typeInto(/^Saturation/, "lots");
+
+    await waitFor(() => expect(box.value).toBe("1.20"));
+    expect(saved).toHaveLength(0);
   });
 });

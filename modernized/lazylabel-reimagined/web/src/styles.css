@@ -1394,8 +1394,10 @@ fieldset input[type="text"] {
   display: contents;
 }
 
+/* Legacy's type-in box beside each slider, 45 px wide (adjustments_widget.py:51-52; CP-51). */
 .adjustment__value {
-  color: var(--muted);
+  width: 45px;
+  font: inherit;
   text-align: center;
   font-variant-numeric: tabular-nums;
 }

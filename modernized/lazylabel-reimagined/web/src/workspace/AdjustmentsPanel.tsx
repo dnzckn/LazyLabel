@@ -23,7 +23,7 @@
  * input would be friendlier and would not round-trip the same values.
  */
 
-import { useCallback, type ReactNode } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 
 import { DEFAULT_SETTINGS } from "@lazylabel/settings-schema";
 
@@ -113,6 +113,7 @@ export function AdjustmentsPanel(): ReactNode {
         max={GAMMA_SLIDER.max}
         value={Math.round(current.gamma * GAMMA_SLIDER.scale)}
         display={current.gamma.toFixed(2)}
+        scale={GAMMA_SLIDER.scale}
         onChange={(v) => set("gamma", v / GAMMA_SLIDER.scale)}
       />
       <Slider
@@ -123,6 +124,7 @@ export function AdjustmentsPanel(): ReactNode {
         max={SATURATION_SLIDER.max}
         value={Math.round(current.saturation * SATURATION_SLIDER.scale)}
         display={current.saturation.toFixed(2)}
+        scale={SATURATION_SLIDER.scale}
         onChange={(v) => set("saturation", v / SATURATION_SLIDER.scale)}
       />
 
@@ -137,6 +139,7 @@ export function AdjustmentsPanel(): ReactNode {
         max={ANNOTATION_SLIDER.max}
         value={Math.round(annotationSize * ANNOTATION_SLIDER.scale)}
         display={annotationSize.toFixed(1)}
+        scale={ANNOTATION_SLIDER.scale}
         onChange={(v) => setValue("annotation_size_multiplier", v / ANNOTATION_SLIDER.scale)}
       />
       <button
@@ -167,6 +170,7 @@ function Slider({
   max,
   value,
   display,
+  scale,
   onChange,
 }: {
   /** What the row shows, which is legacy's short label. */
@@ -178,12 +182,46 @@ function Slider({
   readonly max: number;
   readonly value: number;
   readonly display?: string;
+  /** Slider steps per unit shown, for a value typed in: gamma 100, size 10. None: whole numbers. */
+  readonly scale?: number;
   readonly onChange: (value: number) => void;
 }): ReactNode {
+  /*
+   * LEGACY'S TYPE-IN BOX beside each slider (adjustments_widget.py:40-60, 150-205;
+   * annotation_settings_widget.py:40-60, 125-140). On Enter or leaving it, the text is read as
+   * legacy's does -- `int(text)`, or `int(float(text) * scale)`, which truncates -- clamped to the
+   * slider's range and applied; text that is not a number goes back to the value (CP-51).
+   */
+  const shown = display ?? String(value);
+  const [text, setText] = useState(shown);
+  useEffect(() => setText(shown), [shown]);
+  const commit = () => {
+    const trimmed = text.trim();
+    const typed = scale === undefined ? (/^[+-]?\d+$/.test(trimmed) ? Number(trimmed) : NaN) : Number(trimmed);
+    if (trimmed === "" || !Number.isFinite(typed)) {
+      setText(shown);
+      return;
+    }
+    const next = Math.max(min, Math.min(max, Math.trunc(scale === undefined ? typed : typed * scale)));
+    if (next === value) setText(shown);
+    else onChange(next);
+  };
   return (
     <label className="adjustment" title={tooltip}>
       <span className="adjustment__label">
-        {label} <span className="adjustment__value">{display ?? value}</span>
+        {label}{" "}
+        <input
+          type="text"
+          className="adjustment__value"
+          size={4}
+          value={text}
+          aria-label={`${name}, typed`}
+          onChange={(event) => setText(event.target.value)}
+          onBlur={commit}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") commit();
+          }}
+        />
       </span>
       <input
         type="range"
