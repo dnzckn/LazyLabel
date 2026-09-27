@@ -128,21 +128,6 @@ export function cancel(): PolygonDraft {
   return EMPTY_DRAFT;
 }
 
-/**
- * Whether a click at this point would close the polygon.
- *
- * Exported so the canvas can show the first vertex highlighted as the cursor comes into range.
- * Legacy shows no such feedback, which is why its 2-pixel default is hard to hit deliberately: the
- * user discovers the threshold by overshooting it. Sharing the predicate rather than
- * re-implementing it is what keeps the highlight and the behaviour from disagreeing.
- */
-export function wouldClose(draft: PolygonDraft, at: Point, joinThreshold?: number): boolean {
-  // Spread rather than passing `{ joinThreshold }` directly: under exactOptionalPropertyTypes an
-  // explicit `undefined` is not the same as an absent key, and `click` reads an absent key as
-  // "use the default".
-  return click(draft, at, joinThreshold === undefined ? {} : { joinThreshold }).kind === "close";
-}
-
 function clampThreshold(value: number): number {
   if (!Number.isFinite(value)) return DEFAULT_JOIN_THRESHOLD;
   return Math.min(MAX_JOIN_THRESHOLD, Math.max(MIN_JOIN_THRESHOLD, value));

@@ -17,10 +17,14 @@
  * handle, which is not a smaller handle — it is an invisible one, and every drawing aid in the app
  * would vanish for everyone who never opened the panel.
  *
- * EXCEPT EDIT MODE'S VERTEX HANDLES, since 2026-09-26. The owner asked for legacy's Edit mode as it
- * looks and behaves, so `EditLayer` draws them as legacy's scene items are: `LEGACY_POINT_RADIUS x
- * point` IMAGE pixels, which is `point_radius x annotation_size_multiplier`, growing with the zoom.
- * The other drawing aids here still keep a constant screen size.
+ * EXCEPT WHAT LEGACY DRAWS WHILE SOMETHING IS BEING MADE OR EDITED. The owner asked for legacy's
+ * Edit mode as it looks and behaves (2026-09-26), and for its drawing overlays (2026-09-27: "check
+ * pyqt6 styling on this try to mimic"). So Edit mode's handles, the AI tool's points, a polygon in
+ * progress and the rubber bands are drawn as legacy's scene items are, in IMAGE pixels that grow
+ * with the zoom: `legacyPointRadius` is `point_radius x annotation_size_multiplier` and
+ * `legacyLineThickness` is `line_thickness x annotation_size_multiplier` (main_window.py:516-538).
+ * At the owner's multiplier of 4.7 those are 1.41 and 2.35 image pixels, where a screen size times
+ * the ratio came to 18.8 and 4.7 screen pixels.
  */
 
 /** Legacy's defaults, which are the denominators that make its numbers mean something here. */
@@ -28,13 +32,32 @@ export const LEGACY_POINT_RADIUS = 0.3;
 export const LEGACY_LINE_THICKNESS = 0.5;
 
 export interface Sizing {
-  /**
-   * Multiplier on a screen-pixel radius: drawn polygon vertices, AI point markers, the close hint.
-   * Edit mode's handles take it on legacy's image-pixel radius instead (see above).
-   */
+  /** `point_radius x annotation_size_multiplier` as a ratio against legacy's default radius. */
   readonly point: number;
-  /** Multiplier on a screen-pixel stroke width: outlines, previews, selection highlights. */
+  /**
+   * `line_thickness x annotation_size_multiplier` as a ratio against legacy's default: a multiplier
+   * on a screen-pixel stroke width for outlines, and legacy's own width in the drawing overlays.
+   */
   readonly line: number;
+}
+
+/** Legacy's `mw.point_radius`, in image pixels: its default times the ratio. */
+export function legacyPointRadius(sizing: Sizing): number {
+  return LEGACY_POINT_RADIUS * sizing.point;
+}
+
+/** Legacy's `mw.line_thickness`, in image pixels: its default times the ratio. */
+export function legacyLineThickness(sizing: Sizing): number {
+  return LEGACY_LINE_THICKNESS * sizing.line;
+}
+
+/**
+ * Qt's `DashLine` on a pen `width` wide, as SVG attributes: dashes of 4 widths and gaps of 2
+ * (qpen.cpp), and the pen's default square cap, which Qt puts on every dash, so each shows 5 widths
+ * long with a gap of 1.
+ */
+export function qtDashLine(width: number): { readonly strokeDasharray: string; readonly strokeLinecap: "square" } {
+  return { strokeDasharray: `${4 * width} ${2 * width}`, strokeLinecap: "square" };
 }
 
 export const DEFAULT_SIZING: Sizing = { point: 1, line: 1 };

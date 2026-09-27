@@ -70,8 +70,8 @@ import type { WireDatasetImage, WireSegment } from "@lazylabel/contracts";
 
 import type { WireSegmentResponse } from "../api/client.js";
 import { AiMarks } from "../canvas/AiLayer.jsx";
+import { DraftMarks } from "../canvas/PolygonLayer.jsx";
 import { AnnotationCanvas } from "../canvas/AnnotationCanvas.jsx";
-import { scale as pixelsPerScreenPixel } from "../canvas/coordinates.js";
 import { panPane } from "../canvas/panStep.js";
 import { useFittedPane } from "../canvas/useFittedPane.js";
 import { useSizing } from "../canvas/useSizing.js";
@@ -79,7 +79,6 @@ import { useWheelZoom } from "../canvas/useWheelZoom.js";
 import { ViewKindContext } from "../canvas/viewKind.js";
 import type { AiPrompt } from "../tools/ai.js";
 import { AiPreview } from "../workspace/AiTool.jsx";
-import { classForNewSegment } from "../workspace/classes.js";
 import type { ImageProcessing } from "../workspace/processing.js";
 import {
   useWorkspace,
@@ -400,7 +399,6 @@ export function SplitView({ images, pixelsUrl, tileUrl, viewer }: SplitViewProps
                       ? {
                           press: {
                             tool: activeTool as PressTool,
-                            classId: classForNewSegment(sides[side].segments, activeClassId),
                             onPress: pressOn(side),
                           },
                         }
@@ -445,10 +443,9 @@ function sizeOf(side: SideState): ImageSize | null {
   return { width: metadata.width, height: metadata.height };
 }
 
-/** What a press on the half not being edited is for: the tool, its colour, and where it goes. */
+/** What a press on the half not being edited is for: the tool, and where it goes. */
 interface PressProps {
   readonly tool: PressTool;
-  readonly classId: number;
   readonly onPress: (press: HandedPress) => void;
 }
 
@@ -610,31 +607,23 @@ function PairPrompt({
   height,
 }: PairPromptProps & { readonly width: number; readonly height: number }): ReactNode {
   const sizing = useSizing();
-  const surface = useRef<SVGSVGElement>(null);
-  // Image pixels per screen pixel, so a dot is the size the view draws it at any zoom.
-  const box = surface.current?.getBoundingClientRect();
-  const perPixel =
-    box === undefined || box.width <= 0 || box.height <= 0
-      ? { x: 1, y: 1 }
-      : pixelsPerScreenPixel(box, { width, height });
   return (
     <svg
-      ref={surface}
       className="split__prompt"
       viewBox={`0 0 ${width} ${height}`}
       preserveAspectRatio="none"
       aria-label="AI prompt"
     >
       {result !== null && <AiPreview result={result} view="multi" />}
-      <AiMarks prompt={prompt} view="multi" perPixel={perPixel} sizing={sizing} />
+      <AiMarks prompt={prompt} view="multi" sizing={sizing} />
     </svg>
   );
 }
 
 /**
  * A linked polygon in progress over the half not being edited, at the same pixels, as legacy draws
- * each vertex and edge in both linked viewers (main_window.py:5680-5706): the view's cyan line and
- * blue points (`PolygonLayer`). Clicks pass through it to the half.
+ * each vertex and edge in both linked viewers (main_window.py:5680-5706), in its Multi tab's style
+ * (`DraftMarks`). Clicks pass through it to the half.
  */
 function PairDraftMarks({
   draft,
@@ -646,40 +635,14 @@ function PairDraftMarks({
   readonly height: number;
 }): ReactNode {
   const sizing = useSizing();
-  const surface = useRef<SVGSVGElement>(null);
-  const box = surface.current?.getBoundingClientRect();
-  const perPixel =
-    box === undefined || box.width <= 0 || box.height <= 0
-      ? { x: 1, y: 1 }
-      : pixelsPerScreenPixel(box, { width, height });
-  const strokeWidth = Math.max(perPixel.x, perPixel.y) * sizing.line;
   return (
     <svg
-      ref={surface}
       className="split__prompt"
       viewBox={`0 0 ${width} ${height}`}
       preserveAspectRatio="none"
       aria-label="Polygon in progress"
     >
-      {draft.vertices.length > 1 && (
-        <polyline
-          points={draft.vertices.map((v) => `${v.x},${v.y}`).join(" ")}
-          fill="none"
-          stroke="rgb(0, 255, 255)"
-          strokeWidth={strokeWidth}
-        />
-      )}
-      {draft.vertices.map((vertex, index) => (
-        <ellipse
-          key={index}
-          data-testid={`pair-vertex-${index}`}
-          cx={vertex.x}
-          cy={vertex.y}
-          rx={4 * perPixel.x * sizing.point}
-          ry={4 * perPixel.y * sizing.point}
-          fill="rgb(0, 0, 255)"
-        />
-      ))}
+      <DraftMarks vertices={draft.vertices} view="multi" sizing={sizing} testIdPrefix="pair-" />
     </svg>
   );
 }

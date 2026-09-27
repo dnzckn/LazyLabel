@@ -484,7 +484,6 @@ function OpenedImage({
                 kind={activeTool}
                 width={metadata.width}
                 height={metadata.height}
-                classId={classForNewSegment(segments, activeClassId)}
                 onComplete={(vertices) =>
                   // A box is stored as a four-corner POLYGON -- nothing downstream knows it was
                   // drawn as a box. A circle keeps its own type, because its two vertices are a

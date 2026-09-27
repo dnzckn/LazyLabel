@@ -19,7 +19,6 @@ import {
   click,
   finish,
   undoVertex,
-  wouldClose,
   type PolygonDraft,
 } from "../../src/tools/polygon.js";
 
@@ -191,19 +190,3 @@ describe("abandoning a draft", () => {
   });
 });
 
-describe("the close-range hint", () => {
-  it("agrees with what a click would actually do", () => {
-    // Shared rather than re-implemented, so the highlight the canvas shows and the behaviour the
-    // click produces cannot disagree -- which is how a user learns to distrust the hint.
-    expect(wouldClose(TRIANGLE, { x: 11, y: 11 }, 2)).toBe(true);
-    expect(wouldClose(TRIANGLE, { x: 12, y: 10 }, 2)).toBe(false);
-    expect(wouldClose(draft([10, 10], [50, 10]), { x: 10, y: 10 }, 2)).toBe(false);
-  });
-
-  it("does not report a shift-erase as a close", () => {
-    // wouldClose answers "would this finish the shape", and an erase finishes it differently.
-    // Conflating them would highlight the start vertex identically for two opposite outcomes.
-    expect(wouldClose(TRIANGLE, { x: 11, y: 11 }, 2)).toBe(true);
-    expect(click(TRIANGLE, { x: 11, y: 11 }, { joinThreshold: 2, shift: true }).kind).toBe("erase");
-  });
-});

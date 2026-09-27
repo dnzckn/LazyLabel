@@ -7,16 +7,14 @@
  * part that genuinely needs a browser: where the pointer is, what the user sees while drawing, and
  * which key does what.
  *
- * AN SVG OVERLAY RATHER THAN A SECOND CANVAS. The preview changes on every click and on every
- * mouse move once the close hint is live; redrawing a canvas for that means clearing and repainting
- * the whole thing, while the browser is already good at moving a handful of SVG nodes. It also
+ * AN SVG OVERLAY RATHER THAN A SECOND CANVAS. The preview changes on every click; redrawing a
+ * canvas for that means clearing and repainting the whole thing, while the browser is already good
+ * at moving a handful of SVG nodes. It also
  * makes the vertices real elements, which is what lets a test assert where they are instead of
  * reading pixels back.
  *
- * MARKERS ARE SIZED IN SCREEN PIXELS. Drawn in image units they vanish when zoomed out, and the
- * default join threshold is two IMAGE pixels — at a low zoom that is a fraction of one screen
- * pixel, which is why the first vertex is highlighted as the cursor comes into range rather than
- * left for the user to find by overshooting.
+ * THE MARKS ARE LEGACY'S (`DraftMarks`): in image pixels that grow with the zoom, as legacy's scene
+ * items do, and with no hint when the pointer is in range to close the shape, as legacy gives none.
  */
 
 import { useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
@@ -24,17 +22,18 @@ import { flushSync } from "react-dom";
 
 import { PairDraftContext } from "../split/pairDraft.js";
 import { claim, PairPressContext } from "../split/pairPress.js";
-import { locate, scale, type DisplayBox, type ImagePoint } from "./coordinates.js";
+import { locate, type DisplayBox, type ImagePoint } from "./coordinates.js";
 import {
   EMPTY_DRAFT,
   cancel,
   click as clickTool,
   finish,
   undoVertex,
-  wouldClose,
   type PolygonDraft,
 } from "../tools/polygon.js";
 import { useSizing } from "./useSizing.js";
+import { legacyLineThickness, legacyPointRadius, type Sizing } from "./sizing.js";
+import { ViewKindContext, type ViewKind } from "./viewKind.js";
 import { useHotkey } from "../hotkeys/HotkeyProvider.jsx";
 import { isInModal } from "../hotkeys/keyEvent.js";
 
@@ -51,9 +50,6 @@ export interface PolygonLayerProps {
   readonly onRefused?: (reason: string) => void;
 }
 
-const VERTEX_RADIUS = 4;
-const CLOSE_HINT_RADIUS = 8;
-
 export function PolygonLayer({
   width,
   height,
@@ -63,6 +59,7 @@ export function PolygonLayer({
   onRefused,
 }: PolygonLayerProps): ReactNode {
   const sizing = useSizing();
+  const view = useContext(ViewKindContext);
   const surfaceRef = useRef<SVGSVGElement>(null);
   /*
    * A LINKED PAIR'S POLYGON IS THE PAIR'S: in the Multi tab, linked, it is drawn in both halves and
@@ -72,7 +69,6 @@ export function PolygonLayer({
   const [ownDraft, setOwnDraft] = useState<PolygonDraft>(EMPTY_DRAFT);
   const draft = pairDraft === null ? ownDraft : pairDraft.draft;
   const setDraft = pairDraft === null ? setOwnDraft : pairDraft.setDraft;
-  const [pointer, setPointer] = useState<ImagePoint | null>(null);
   /**
    * Vertices Ctrl+Z took back, newest last, for Ctrl+Y or Ctrl+Shift+Z to put back, as legacy's
    * redo re-adds a polygon point (undo_redo_manager.py:110-111). Emptied by anything that makes
@@ -93,7 +89,6 @@ export function PolygonLayer({
     (vertices: readonly ImagePoint[], erase: boolean) => {
       undone.current = [];
       setDraft(cancel());
-      setPointer(null);
       if (erase) onErase?.(vertices);
       else onComplete(vertices);
     },
@@ -137,7 +132,6 @@ export function PolygonLayer({
   useHotkey("clear_points", () => {
     undone.current = [];
     setDraft(cancel());
-    setPointer(null);
   });
 
 
@@ -189,16 +183,6 @@ export function PolygonLayer({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [handed]);
 
-  const onPointerMove = useCallback(
-    (event: React.PointerEvent<SVGSVGElement>) => {
-      if (draft.vertices.length === 0) return; // nothing to hint about
-      const box = boxOf();
-      if (box === null) return;
-      setPointer(locate(event, box, image).point);
-    },
-    [boxOf, draft.vertices.length, image],
-  );
-
   // Keys are bound on the document rather than the SVG: the surface would have to be focused to
   // receive them, and nothing about clicking on an image says "now press Space here".
   useEffect(() => {
@@ -214,7 +198,6 @@ export function PolygonLayer({
         event.preventDefault();
         undone.current = [];
         setDraft(cancel());
-        setPointer(null);
         return;
       }
 
@@ -267,21 +250,6 @@ export function PolygonLayer({
     return () => document.removeEventListener("keydown", onKeyDown, true);
   }, [complete, draft, onRefused, setDraft]);
 
-  const box = boxOf();
-  // Legacy draws a polygon in progress in cyan, with blue points and a faint cyan fill of the
-  // shape it would close into (polygon_drawing_manager.py:97-157) -- the same for every class, so
-  // the shape being drawn never looks like one already made.
-  const stroke = "rgb(0, 255, 255)";
-  const point = "rgb(0, 0, 255)";
-
-  // In image units, because the SVG's viewBox is the image: one screen pixel is this many of them.
-  // Read during render from a ref, so the first paint uses 1:1 and corrects on the next render --
-  // which the first vertex causes. Markers being a little off before anything is drawn is not
-  // worth a resize observer; clicks do not use this, they take a fresh rect at event time.
-  const perPixel = box === null ? { x: 1, y: 1 } : scale(box, image);
-  const closing =
-    pointer !== null && wouldClose(draft, pointer, joinThreshold);
-
   return (
     <svg
       ref={surfaceRef}
@@ -291,51 +259,102 @@ export function PolygonLayer({
       role="application"
       aria-label="Polygon tool"
       onPointerDown={onPointerDown}
-      onPointerMove={onPointerMove}
     >
-      {closing && draft.vertices.length > 2 && (
-        <polygon
-          points={draft.vertices.map((v) => `${v.x},${v.y}`).join(" ")}
-          fill="rgba(0, 255, 255, 0.39)"
-          stroke="none"
-        />
-      )}
-
-      {draft.vertices.length > 1 && (
-        <polyline
-          points={draft.vertices.map((v) => `${v.x},${v.y}`).join(" ")}
-          fill="none"
-          stroke={stroke}
-          strokeWidth={Math.max(perPixel.x, perPixel.y) * sizing.line}
-        />
-      )}
-
-      {/* The segment that would close the shape, shown only when it actually would. */}
-      {closing && draft.vertices.length > 2 && (
-        <line
-          x1={draft.vertices.at(-1)!.x}
-          y1={draft.vertices.at(-1)!.y}
-          x2={draft.vertices[0]!.x}
-          y2={draft.vertices[0]!.y}
-          stroke={stroke}
-          strokeWidth={Math.max(perPixel.x, perPixel.y) * sizing.line}
-          strokeDasharray={`${perPixel.x * 4} ${perPixel.x * 4}`}
-        />
-      )}
-
-      {draft.vertices.map((vertex, index) => (
-        <ellipse
-          key={index}
-          data-testid={`vertex-${index}`}
-          cx={vertex.x}
-          cy={vertex.y}
-          rx={(index === 0 && closing ? CLOSE_HINT_RADIUS : VERTEX_RADIUS) * perPixel.x * sizing.point}
-          ry={(index === 0 && closing ? CLOSE_HINT_RADIUS : VERTEX_RADIUS) * perPixel.y * sizing.point}
-          fill={index === 0 && closing ? stroke : point}
-          stroke="none"
-        />
-      ))}
+      <DraftMarks vertices={draft.vertices} view={view} sizing={sizing} />
     </svg>
+  );
+}
+
+/** Legacy's polygon colours, `Qt.GlobalColor.cyan` and `Qt.GlobalColor.blue`, as RGB. */
+const CYAN = "0, 255, 255";
+const BLUE = "0, 0, 255";
+
+/**
+ * A polygon in progress, as legacy draws it, which differs by view.
+ *
+ * IN THE SINGLE VIEW, which the Sequence tab shares (polygon_drawing_manager.py:95-159): a blue dot
+ * at alpha 150 with no outline at each vertex; from the third vertex a cyan fill at alpha 100 of the
+ * shape it would close into; and each edge its own cyan line at alpha 150, `line_thickness` image
+ * pixels wide with Qt's square cap, so two edges overlap, darker, at the vertex they share. Legacy
+ * lays the fill and the lines again over the dots at every click, so both are over them.
+ *
+ * IN THE MULTI TAB, linked or not, in both halves (main_window.py:5659-5706): an opaque cyan dot with
+ * a black pen one image pixel wide at each vertex, over opaque cyan edges two image pixels wide, and
+ * no fill.
+ *
+ * A dot's radius is legacy's `mw.point_radius` in both, `point_radius x annotation_size_multiplier`
+ * image pixels. Nothing marks the vertex that would close the shape, as nothing does in legacy.
+ * Until 2026-09-27 the edges and dots were opaque, the dots 4 screen pixels times the size ratio,
+ * the fill came only with the pointer in range to close, and then the first dot grew and a dashed
+ * closing edge appeared.
+ */
+export function DraftMarks({
+  vertices,
+  view,
+  sizing,
+  testIdPrefix = "",
+}: {
+  readonly vertices: readonly ImagePoint[];
+  /** Which of legacy's views this is drawn in. */
+  readonly view: ViewKind;
+  readonly sizing: Sizing;
+  /** Put before each mark's test id, so the two halves of the Multi tab can be told apart. */
+  readonly testIdPrefix?: string;
+}): ReactNode {
+  const radius = legacyPointRadius(sizing);
+  const multi = view === "multi";
+  const dots = vertices.map((vertex, index) => (
+    <ellipse
+      key={`dot-${index}`}
+      data-testid={`${testIdPrefix}vertex-${index}`}
+      cx={vertex.x}
+      cy={vertex.y}
+      rx={radius}
+      ry={radius}
+      {...(multi
+        ? { fill: `rgb(${CYAN})`, stroke: "rgb(0, 0, 0)", strokeWidth: 1 }
+        : { fill: `rgba(${BLUE}, ${150 / 255})`, stroke: "none" })}
+    />
+  ));
+  const edges = vertices.slice(1).map((to, index) => {
+    const from = vertices[index]!;
+    return (
+      <line
+        key={`edge-${index}`}
+        data-testid={`${testIdPrefix}edge-${index}`}
+        x1={from.x}
+        y1={from.y}
+        x2={to.x}
+        y2={to.y}
+        stroke={multi ? `rgb(${CYAN})` : `rgba(${CYAN}, ${150 / 255})`}
+        strokeWidth={multi ? 2 : legacyLineThickness(sizing)}
+        strokeLinecap="square"
+      />
+    );
+  });
+
+  if (multi) {
+    // The dots at Z 1000 over the edges at 999 (main_window.py:5666, 5676).
+    return (
+      <>
+        {edges}
+        {dots}
+      </>
+    );
+  }
+  return (
+    <>
+      {dots}
+      {vertices.length > 2 && (
+        <polygon
+          data-testid={`${testIdPrefix}draft-fill`}
+          points={vertices.map((v) => `${v.x},${v.y}`).join(" ")}
+          fill={`rgba(${CYAN}, ${100 / 255})`}
+          stroke="none"
+        />
+      )}
+      {edges}
+    </>
   );
 }
 

@@ -77,9 +77,8 @@ export function locate(
 /**
  * The inverse: where an image point sits in client coordinates.
  *
- * Needed to draw the in-progress polygon over the image at the right place, and for the
- * close-range hint. Sharing the axes with `locate` rather than re-deriving them is what keeps the
- * dot the user sees under the cursor they clicked with.
+ * Needed to draw over the image at the right place. Sharing the axes with `locate` rather than
+ * re-deriving them is what keeps the dot the user sees under the cursor they clicked with.
  */
 export function project(point: ImagePoint, box: DisplayBox, image: ImageSize): ImagePoint {
   if (image.width <= 0 || image.height <= 0) return { x: Number.NaN, y: Number.NaN };
@@ -93,10 +92,8 @@ export function project(point: ImagePoint, box: DisplayBox, image: ImageSize): I
 /**
  * How many image pixels one client pixel covers, per axis.
  *
- * The canvas needs this to draw a vertex marker and a close-range highlight at a constant SCREEN
- * size. Drawing them in image units makes them vanish when zoomed out and swallow the image when
- * zoomed in — and the close threshold is two image pixels, which at a low zoom is a fraction of one
- * screen pixel and impossible to aim at without a hint.
+ * The layers need this to draw an outline or a mark at a constant SCREEN size. The marks drawn while
+ * a shape is being made are legacy's image-pixel sizes instead (`sizing.ts`).
  */
 export function scale(box: DisplayBox, image: ImageSize): { x: number; y: number } {
   if (box.width <= 0 || box.height <= 0) return { x: Number.NaN, y: Number.NaN };

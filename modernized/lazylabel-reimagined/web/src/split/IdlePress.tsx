@@ -11,12 +11,16 @@
 import { useCallback, useRef, useState, type ReactNode } from "react";
 
 import { buttonOf } from "../canvas/AiLayer.jsx";
-import { classColor } from "../canvas/classColor.js";
-import { locate, scale, type DisplayBox, type ImagePoint } from "../canvas/coordinates.js";
+import { locate, type DisplayBox, type ImagePoint } from "../canvas/coordinates.js";
+import { legacyLineThickness, qtDashLine } from "../canvas/sizing.js";
 import { useSizing } from "../canvas/useSizing.js";
 import { DRAG_THRESHOLD } from "../tools/ai.js";
 import { radiusOf } from "../tools/shapes.js";
 import type { HandedPress, PressTool } from "./pairPress.js";
+
+/** Legacy's rubber band colours: `Qt.GlobalColor.red` for a box or circle, `cyan` for the AI tool's. */
+const RED = "rgb(255, 0, 0)";
+const CYAN = "rgb(0, 255, 255)";
 
 interface Drag {
   readonly from: ImagePoint;
@@ -29,7 +33,6 @@ export function IdlePress({
   name,
   width,
   height,
-  classId,
   onPress,
 }: {
   readonly tool: PressTool;
@@ -37,8 +40,6 @@ export function IdlePress({
   readonly name: string;
   readonly width: number;
   readonly height: number;
-  /** The class a new annotation takes, whose colour the rubber band is drawn in. */
-  readonly classId: number;
   readonly onPress: (press: HandedPress) => void;
 }): ReactNode {
   const sizing = useSizing();
@@ -84,11 +85,12 @@ export function IdlePress({
     onPress({ tool, from: drag.from, to, negative: drag.negative, shift: event.shiftKey });
   };
 
-  const box = boxOf();
-  const perPixel = box === null ? { x: 1, y: 1 } : scale(box, image);
-  const { r, g, b } = classColor(classId);
-  const stroke = `rgb(${r}, ${g}, ${b})`;
-  const strokeWidth = Math.max(perPixel.x, perPixel.y) * sizing.line;
+  // Legacy's rubber bands, whatever the class: red for a box or a circle, cyan for the AI tool's box,
+  // each Qt's DashLine on a pen `line_thickness` image pixels wide with no fill
+  // (main_window.py:5449-5456, 5724-5726, 5832-5834). They were the class colour, the box's in a
+  // dash of 3 and 3.
+  const line = legacyLineThickness(sizing);
+  const band = { fill: "none", strokeWidth: line, ...qtDashLine(line) } as const;
   const moved = drag === null ? 0 : Math.hypot(drag.to.x - drag.from.x, drag.to.y - drag.from.y);
 
   return (
@@ -109,10 +111,10 @@ export function IdlePress({
         <circle
           cx={drag.from.x}
           cy={drag.from.y}
+          data-testid="press-circle"
           r={radiusOf([drag.from, drag.to])}
-          fill="none"
-          stroke={stroke}
-          strokeWidth={strokeWidth}
+          stroke={RED}
+          {...band}
         />
       )}
       {/* The AI tool's band only once the pointer is past the drag threshold, as the view's. */}
@@ -123,10 +125,8 @@ export function IdlePress({
           y={Math.min(drag.from.y, drag.to.y)}
           width={Math.abs(drag.to.x - drag.from.x)}
           height={Math.abs(drag.to.y - drag.from.y)}
-          fill="none"
-          stroke={stroke}
-          strokeWidth={strokeWidth}
-          strokeDasharray={`${perPixel.x * 3} ${perPixel.x * 3}`}
+          stroke={tool === "ai" ? CYAN : RED}
+          {...band}
         />
       )}
     </svg>

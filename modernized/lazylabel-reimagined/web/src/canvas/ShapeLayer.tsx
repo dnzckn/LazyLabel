@@ -17,9 +17,9 @@
 import { useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 
 import { claim, PairPressContext } from "../split/pairPress.js";
-import { classColor } from "./classColor.js";
-import { locate, scale, type DisplayBox, type ImagePoint } from "./coordinates.js";
+import { locate, type DisplayBox, type ImagePoint } from "./coordinates.js";
 import { boxFrom, circleFrom, radiusOf } from "../tools/shapes.js";
+import { legacyLineThickness, qtDashLine } from "./sizing.js";
 import { useSizing } from "./useSizing.js";
 import { useHotkey } from "../hotkeys/HotkeyProvider.jsx";
 
@@ -29,7 +29,6 @@ export interface ShapeLayerProps {
   readonly kind: ShapeKind;
   readonly width: number;
   readonly height: number;
-  readonly classId: number;
   /** The finished shape's vertices, in the order the wire format stores them. */
   readonly onComplete: (vertices: readonly ImagePoint[]) => void;
   /** Released with shift held: erase what the shape overlaps instead of adding it. */
@@ -37,6 +36,9 @@ export interface ShapeLayerProps {
   /** A drag too small to be a shape. Legacy discards these without a word. */
   readonly onRefused?: (reason: string) => void;
 }
+
+/** Legacy's rubber band colour for both shapes, `Qt.GlobalColor.red`. */
+const RUBBER_BAND = "rgb(255, 0, 0)";
 
 interface Drag {
   readonly from: ImagePoint;
@@ -47,7 +49,6 @@ export function ShapeLayer({
   kind,
   width,
   height,
-  classId,
   onComplete,
   onErase,
   onRefused,
@@ -155,12 +156,11 @@ export function ShapeLayer({
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [drag]);
 
-  const box = boxOf();
-  const colour = classColor(classId);
-  const stroke = `rgb(${colour.r}, ${colour.g}, ${colour.b})`;
-  const fill = `rgba(${colour.r}, ${colour.g}, ${colour.b}, 0.25)`;
-  const perPixel = box === null ? { x: 1, y: 1 } : scale(box, image);
-  const strokeWidth = Math.max(perPixel.x, perPixel.y) * sizing.line;
+  // Legacy's rubber band, for a box and a circle alike and whatever the class: red, Qt's DashLine on
+  // a pen `line_thickness` image pixels wide, and no fill (single_view_mouse_handler.py:143-166; in
+  // the Multi tab main_window.py:5724-5726, 5832-5834). It was the class colour, solid, filled at 0.25.
+  const line = legacyLineThickness(sizing);
+  const band = { fill: "none", stroke: RUBBER_BAND, strokeWidth: line, ...qtDashLine(line) } as const;
 
   return (
     <svg
@@ -181,9 +181,7 @@ export function ShapeLayer({
           y={Math.min(drag.from.y, drag.to.y)}
           width={Math.abs(drag.to.x - drag.from.x)}
           height={Math.abs(drag.to.y - drag.from.y)}
-          fill={fill}
-          stroke={stroke}
-          strokeWidth={strokeWidth}
+          {...band}
         />
       )}
 
@@ -193,9 +191,7 @@ export function ShapeLayer({
           cx={drag.from.x}
           cy={drag.from.y}
           r={radiusOf([drag.from, drag.to])}
-          fill={fill}
-          stroke={stroke}
-          strokeWidth={strokeWidth}
+          {...band}
         />
       )}
     </svg>

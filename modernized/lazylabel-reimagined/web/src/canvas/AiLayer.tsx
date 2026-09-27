@@ -20,7 +20,7 @@
 import { useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { flushSync } from "react-dom";
 
-import { locate, scale, type DisplayBox, type ImagePoint } from "./coordinates.js";
+import { locate, type DisplayBox, type ImagePoint } from "./coordinates.js";
 import {
   DRAG_THRESHOLD,
   EMPTY_PROMPT,
@@ -35,7 +35,7 @@ import {
   type Release,
 } from "../tools/ai.js";
 import { useSizing } from "./useSizing.js";
-import type { Sizing } from "./sizing.js";
+import { legacyLineThickness, legacyPointRadius, qtDashLine, type Sizing } from "./sizing.js";
 import { ViewKindContext, type ViewKind } from "./viewKind.js";
 import { PairAiContext } from "../split/pairAi.js";
 import { claim, type HandedPress } from "../split/pairPress.js";
@@ -69,7 +69,6 @@ export interface AiLayerProps {
   readonly handed?: HandedPress;
 }
 
-const POINT_RADIUS = 4;
 /** Legacy's AI rubber band colour, `Qt.GlobalColor.cyan`. */
 const RUBBER_BAND = "rgb(0, 255, 255)";
 
@@ -293,9 +292,8 @@ export function AiLayer({
     return () => document.removeEventListener("keydown", onKeyDown, true);
   }, [accept, onAccept, onClear, onPrompt, onRefused, prompt, setPrompt]);
 
-  const box = boxOf();
-  const perPixel = box === null ? { x: 1, y: 1 } : scale(box, image);
-  const line = Math.max(perPixel.x, perPixel.y) * sizing.line;
+  // Legacy's pen, `line_thickness` image pixels wide (single_view_mouse_handler.py:243-248).
+  const line = legacyLineThickness(sizing);
   // Legacy draws its rubber band only once the pointer is past the threshold that makes a drag
   // (`single_view_mouse_handler.py:237`, `main_window.py:5444`), not as a speck under every click.
   const dragging =
@@ -318,11 +316,11 @@ export function AiLayer({
     >
       {preview}
 
-      <AiMarks prompt={prompt} view={view} perPixel={perPixel} sizing={sizing} />
+      <AiMarks prompt={prompt} view={view} sizing={sizing} />
 
-      {/* Legacy's rubber band: cyan, Qt's DashLine (dashes of 4 and gaps of 2 pen widths), for
-          every class, and gone at the release (single_view_mouse_handler.py:242-249, 352;
-          main_window.py:5449-5456, 5561). */}
+      {/* Legacy's rubber band: cyan, Qt's DashLine on a pen `line_thickness` image pixels wide,
+          with no fill, for every class, and gone at the release (single_view_mouse_handler.py:
+          242-249, 352; main_window.py:5449-5456, 5561). */}
       {dragging && (
         <rect
           data-testid="ai-drag"
@@ -332,8 +330,8 @@ export function AiLayer({
           height={Math.abs(to.y - from.y)}
           fill="none"
           stroke={RUBBER_BAND}
-          strokeDasharray={`${4 * line} ${2 * line}`}
           strokeWidth={line}
+          {...qtDashLine(line)}
         />
       )}
     </svg>
@@ -349,26 +347,27 @@ export function AiLayer({
  *
  * THE DOTS ARE LEGACY'S, which differ by view. Green includes and red excludes. In the single view,
  * which the Sequence tab shares, they are filled at alpha 150 with no outline
- * (ai_segment_manager.py:451-464). In the Multi tab they are opaque with a black pen one pixel wide
- * (main_window.py:6765-6772).
+ * (ai_segment_manager.py:451-464). In the Multi tab they are opaque with a black pen one IMAGE pixel
+ * wide (main_window.py:6765-6772). Either way the radius is legacy's `mw.point_radius`,
+ * `point_radius x annotation_size_multiplier` IMAGE pixels (main_window.py:516-523), so a dot grows
+ * with the zoom as legacy's scene item does. It was 4 screen pixels times the size ratio until
+ * 2026-09-27: 18.8 pixels at the owner's multiplier of 4.7, where legacy draws 1.41 image pixels.
  *
  * Its own component because a linked pair's prompt is drawn in BOTH halves of the Multi tab, as
  * legacy draws each point in every target viewer (main_window.py:6666-6672, 6741-6776); the half
  * not being edited draws it through this too, so the two cannot disagree about what was placed.
- * `perPixel` is image pixels per screen pixel, which keeps a dot one size on screen at any zoom.
  */
 export function AiMarks({
   prompt,
   view,
-  perPixel,
   sizing,
 }: {
   readonly prompt: AiPrompt;
   /** Which of legacy's views this is drawn in. */
   readonly view: ViewKind;
-  readonly perPixel: { readonly x: number; readonly y: number };
   readonly sizing: Sizing;
 }): ReactNode {
+  const radius = legacyPointRadius(sizing);
   return (
     <>
       {prompt.points.map((point, index) => {
@@ -379,10 +378,10 @@ export function AiMarks({
             data-testid={point.positive ? `ai-positive-${index}` : `ai-negative-${index}`}
             cx={point.x}
             cy={point.y}
-            rx={POINT_RADIUS * perPixel.x * sizing.point}
-            ry={POINT_RADIUS * perPixel.y * sizing.point}
+            rx={radius}
+            ry={radius}
             {...(view === "multi"
-              ? { fill: `rgb(${rgb})`, stroke: "rgb(0, 0, 0)", strokeWidth: Math.max(perPixel.x, perPixel.y) }
+              ? { fill: `rgb(${rgb})`, stroke: "rgb(0, 0, 0)", strokeWidth: 1 }
               : { fill: `rgba(${rgb}, ${150 / 255})`, stroke: "none" })}
           />
         );

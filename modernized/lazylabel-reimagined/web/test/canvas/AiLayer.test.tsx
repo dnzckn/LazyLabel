@@ -430,7 +430,7 @@ describe("how the prompt looks, as legacy draws it", () => {
   });
 
   it("in the Multi tab, a point is opaque with a black pen one pixel wide", () => {
-    // main_window.py:6765-6772. One screen pixel here, as the dot keeps one size on screen.
+    // main_window.py:6765-6772: a pen one image pixel wide, a width in the scene.
     const { surface } = layer({ view: "multi" });
     click(surface, 30, 40);
 
@@ -448,7 +448,8 @@ describe("how the prompt looks, as legacy draws it", () => {
 
     const band = screen.getByTestId("ai-drag");
     expect(band.getAttribute("stroke")).toBe("rgb(0, 255, 255)");
-    expect(band.getAttribute("stroke-dasharray")).toBe("4 2");
+    // Dashes of 4 and gaps of 2 pen widths, on legacy's default pen of 0.5 image pixels.
+    expect(band.getAttribute("stroke-dasharray")).toBe("2 1");
     expect(band.getAttribute("fill")).toBe("none");
   });
 });

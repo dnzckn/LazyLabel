@@ -290,38 +290,22 @@ describe("the keyboard", () => {
   });
 });
 
-describe("the close-range hint", () => {
-  it("grows the first vertex when the pointer comes into range", () => {
+describe("no close-range hint, as legacy gives none", () => {
+  it("draws nothing new when the pointer comes into range of the first vertex", () => {
+    // polygon_drawing_manager.py:95-159 draws nothing for the pointer. Until 2026-09-27 the first
+    // vertex grew here and a dashed closing edge appeared.
     const { surface } = layer({ joinThreshold: 2 });
     clickAt(surface, 10, 10);
     clickAt(surface, 50, 10);
     clickAt(surface, 50, 50);
-
-    const before = vertexAt(0)?.getAttribute("rx");
+    const before = surface.innerHTML;
 
     fireEvent.pointerMove(surface, {
       clientX: RECT.left + (11 / IMAGE.width) * RECT.width,
       clientY: RECT.top + (11 / IMAGE.height) * RECT.height,
     });
 
-    // Bigger, and filled: the two-image-pixel target is otherwise impossible to aim at.
-    expect(Number(vertexAt(0)?.getAttribute("rx"))).toBeGreaterThan(Number(before));
-    expect(vertexAt(0)?.getAttribute("fill")).not.toBe("none");
-  });
-
-  it("does not hint when the pointer is outside the threshold", () => {
-    const { surface } = layer({ joinThreshold: 2 });
-    clickAt(surface, 10, 10);
-    clickAt(surface, 50, 10);
-    clickAt(surface, 50, 50);
-
-    const before = vertexAt(0)?.getAttribute("rx");
-    fireEvent.pointerMove(surface, {
-      clientX: RECT.left + (30 / IMAGE.width) * RECT.width,
-      clientY: RECT.top + (30 / IMAGE.height) * RECT.height,
-    });
-
-    expect(vertexAt(0)?.getAttribute("rx")).toBe(before);
+    expect(surface.innerHTML).toBe(before);
   });
 });
 
@@ -360,7 +344,7 @@ describe("how big the drawing aids are", () => {
     const plain = layer();
     clickAt(plain.surface, 10, 10);
     clickAt(plain.surface, 30, 10);
-    const before = Number(document.querySelector("polyline")?.getAttribute("stroke-width"));
+    const before = Number(document.querySelector("line")?.getAttribute("stroke-width"));
 
     cleanup();
 
@@ -369,7 +353,7 @@ describe("how big the drawing aids are", () => {
     clickAt(thicker.surface, 30, 10);
 
     await waitFor(() =>
-      expect(Number(document.querySelector("polyline")?.getAttribute("stroke-width"))).toBeCloseTo(
+      expect(Number(document.querySelector("line")?.getAttribute("stroke-width"))).toBeCloseTo(
         before * 3,
         10,
       ),

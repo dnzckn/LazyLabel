@@ -34,7 +34,6 @@ function layer(kind: ShapeKind, props: Partial<Parameters<typeof ShapeLayer>[0]>
       kind={kind}
       width={IMAGE.width}
       height={IMAGE.height}
-      classId={props.classId ?? 1}
       onComplete={onComplete}
       onErase={onErase}
       onRefused={onRefused}
