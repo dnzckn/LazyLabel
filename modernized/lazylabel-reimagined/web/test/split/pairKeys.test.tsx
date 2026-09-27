@@ -500,6 +500,30 @@ describe("Select's press on the half not being edited", () => {
   });
 });
 
+describe("the two halves are alike, whichever is edited", () => {
+  it("holds each picture under its own line alone, and the view's strip under both halves", async () => {
+    // Legacy's viewers are each a "Viewer N: name" line over a viewer, nothing under it
+    // (main_window.py:3078-3098), and making the other one edited changes an index and nothing on
+    // screen (multi_view_coordinator.py:92-103). The strip under the view, in the half being edited
+    // alone, made that picture a strip shorter than the other: 27 px lower on the real stack, and
+    // both moved under the pointer when the other half was chosen.
+    await pairUp();
+    const inHalves = () => halves().filter((half) => half.querySelector(".open-image__info") !== null).length;
+    const strip = () => document.querySelector(".split__info .open-image__info");
+    const rows = () => halves().map((half) => [...half.children].map((child) => child.tagName.toLowerCase()));
+
+    expect(inHalves()).toBe(0);
+    expect(rows()).toEqual([["figcaption", "div"], ["figcaption", "div"]]);
+    expect(strip()?.querySelector(".open-image__name")?.textContent).toBe("a.png");
+
+    editRight();
+
+    await waitFor(() => expect(strip()?.querySelector(".open-image__name")?.textContent).toBe("b.png"));
+    expect(inHalves()).toBe(0);
+    expect(rows()).toEqual([["figcaption", "div"], ["figcaption", "div"]]);
+  });
+});
+
 describe("Space finishes what is drawn in both images while linked", () => {
   it("puts a polygon closed with Space into both", async () => {
     // Legacy's linked polygon has its points in both viewers, and Space finishes both

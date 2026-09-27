@@ -94,6 +94,7 @@ import {
   type SideState,
 } from "../workspace/WorkspaceProvider.jsx";
 import { IdlePress } from "./IdlePress.jsx";
+import { InfoStripContext } from "./infoStrip.js";
 import { describePair, type ImageSize } from "./linked.js";
 import { PairAiContext, usePairAi, type Pairing } from "./pairAi.js";
 import { PairPanContext, PaneScrollContext, usePaneScroll, type PairPan } from "./pairPan.js";
@@ -232,6 +233,13 @@ export function SplitView({ images, pixelsUrl, tileUrl, viewer }: SplitViewProps
     },
     [activeSide],
   );
+
+  /*
+   * THE VIEW'S STRIP GOES UNDER BOTH HALVES (`infoStrip.ts`), so each half is legacy's viewer, its
+   * "Viewer N:" line over its picture and nothing under it (main_window.py:3078-3098), and the two
+   * pictures are the same size in the same place whichever half is edited.
+   */
+  const [strip, setStrip] = useState<HTMLDivElement | null>(null);
 
   const note = useMemo(() => {
     const leftSize = sizeOf(left);
@@ -380,7 +388,9 @@ export function SplitView({ images, pixelsUrl, tileUrl, viewer }: SplitViewProps
                       <PairPanContext.Provider value={panOtherHalf}>
                         <PairAiContext.Provider value={pairAi}>
                           <PairPressContext.Provider value={handed?.side === side ? handed.press : null}>
-                            <PairDraftContext.Provider value={pairDraft}>{viewer}</PairDraftContext.Provider>
+                            <PairDraftContext.Provider value={pairDraft}>
+                              <InfoStripContext.Provider value={strip}>{viewer}</InfoStripContext.Provider>
+                            </PairDraftContext.Provider>
                           </PairPressContext.Provider>
                         </PairAiContext.Provider>
                       </PairPanContext.Provider>
@@ -438,6 +448,10 @@ export function SplitView({ images, pixelsUrl, tileUrl, viewer }: SplitViewProps
         })}
       </div>
       </PaneScrollContext.Provider>
+
+      {/* The view's strip, for the image being edited: under both halves, at one height whatever
+          it holds, so neither picture moves when the other half becomes the one edited. */}
+      {viewer !== undefined && <div className="split__info" ref={setStrip} />}
     </div>
   );
 }

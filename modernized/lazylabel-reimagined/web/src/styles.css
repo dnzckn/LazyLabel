@@ -915,7 +915,8 @@ fieldset input[type="text"] {
     grid-template-rows: none;
   }
 
-  .split__picture {
+  .split__picture,
+  .split__view .canvas-scroll {
     flex: none;
     height: 40vh;
   }
@@ -2308,6 +2309,11 @@ fieldset input[type="text"] {
   margin: 0;
   padding: 2px 4px;
   font-weight: 600;
+  /* One line, as legacy's label is, cut short rather than wrapped: the half being edited says so
+     here, and a second line on one half only would put its picture lower than the other's. */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .split__pane:first-child .split__header::before {
@@ -2330,6 +2336,28 @@ fieldset input[type="text"] {
   min-height: 0;
   display: flex;
   flex-direction: column;
+}
+
+/* The view's picture box is the other half's: no floor of its own, which in a short window made
+   the half being edited taller than the other. */
+.split__view .canvas-scroll {
+  min-height: 0;
+}
+
+/* The view's strip, under both halves (`split/infoStrip.ts`). One height whatever it holds -- a
+   line, with the Write button -- so the halves above it never move when the other image becomes
+   the one edited; more than a line scrolls inside it. No rule over it: the halves have borders. */
+.split__info {
+  flex: none;
+  height: 2.5em;
+  overflow: auto;
+}
+
+.split__info .open-image__info {
+  max-height: none;
+  overflow: visible;
+  padding: 2px 5px;
+  border-top: none;
 }
 
 .split__picture {

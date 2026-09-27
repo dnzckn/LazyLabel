@@ -19,6 +19,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { createPortal } from "react-dom";
 
 import { normalizeExportFormats } from "@lazylabel/settings-schema";
 import type {
@@ -54,6 +55,7 @@ import { panPane } from "../canvas/panStep.js";
 import { useFittedPane } from "../canvas/useFittedPane.js";
 import { useWheelZoom } from "../canvas/useWheelZoom.js";
 import { PairPanContext, PaneScrollContext } from "../split/pairPan.js";
+import { InfoStripContext } from "../split/infoStrip.js";
 
 /** Reads the store and hands the parts to the presentation below. */
 export function OpenImageView({
@@ -337,6 +339,14 @@ function OpenedImage({
     [activeClassId, addOwn, eraseOwn, sayErased, sides],
   );
 
+  /*
+   * THE STRIP, in the Multi tab, goes under both halves rather than under this one (`infoStrip.ts`):
+   * in this half's column it made this picture a strip's height shorter than the other half's, so
+   * the two were out of line and both moved when the other half became the one edited.
+   */
+  const strip = useContext(InfoStripContext);
+  const placeStrip = (info: ReactNode): ReactNode => (strip === null ? info : createPortal(info, strip));
+
   return (
     // No heading: legacy's viewer has none. The picture takes the pane; its name, its size and
     // everything else are in the strip under it.
@@ -539,6 +549,7 @@ function OpenedImage({
           `annotations` is what the file HELD, which is nothing here. The live segments and class
           names come from the store, as they have to -- anything drawn or renamed since loading
           would otherwise be dropped on save. */}
+      {placeStrip(
       <div className="open-image__info">
       {/* A caption, not a heading: it names the picture without taking space above it. */}
       <span className="open-image__name">{image.name}</span>
@@ -628,7 +639,8 @@ function OpenedImage({
               until 2026-09-26. */}
         </>
       )}
-      </div>
+      </div>,
+      )}
     </section>
   );
 }
