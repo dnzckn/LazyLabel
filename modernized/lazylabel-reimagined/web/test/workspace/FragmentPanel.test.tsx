@@ -121,3 +121,21 @@ describe("the toggle key", () => {
     await waitFor(() => expect(saved["fragment_threshold"]).toBeGreaterThan(0));
   });
 });
+
+describe("the type-in box, legacy's (CP-51)", () => {
+  it("applies a whole number, clamped to 0-100, and puts back anything else", async () => {
+    // fragment_threshold_widget.py:80-88: int(text), clamped, else the slider's value again.
+    const { saved } = mount(10);
+    const box = (await screen.findByRole("textbox", { name: "Fragment threshold, typed" })) as HTMLInputElement;
+    // The stored value first: the box is there before the settings are.
+    await waitFor(() => expect(box.value).toBe("10"));
+
+    fireEvent.change(box, { target: { value: "250" } });
+    fireEvent.keyDown(box, { key: "Enter", code: "Enter" });
+    await waitFor(() => expect(saved["fragment_threshold"]).toBe(100));
+
+    fireEvent.change(box, { target: { value: "12.5" } });
+    fireEvent.blur(box);
+    await waitFor(() => expect(box.value).toBe("100"));
+  });
+});

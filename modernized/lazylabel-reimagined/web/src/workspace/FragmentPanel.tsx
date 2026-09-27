@@ -18,7 +18,7 @@
  * hole filling is announced when it happens (`AiTool`).
  */
 
-import { useCallback, useEffect, useRef, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 
 import { useHotkey } from "../hotkeys/HotkeyProvider.jsx";
 import { useSettings } from "../settings/SettingsProvider.jsx";
@@ -48,6 +48,21 @@ export function FragmentPanel(): ReactNode {
     [save, settings],
   );
 
+  // What the box shows while it is typed in; the value again once it is left. Legacy reads
+  // `int(text)`, clamps it to 0-100 and applies it, and puts the value back otherwise.
+  const [text, setText] = useState(String(threshold));
+  useEffect(() => setText(String(threshold)), [threshold]);
+  const commit = () => {
+    const trimmed = text.trim();
+    if (!/^[+-]?\d+$/.test(trimmed)) {
+      setText(String(threshold));
+      return;
+    }
+    const next = Math.max(MIN_THRESHOLD, Math.min(MAX_THRESHOLD, Number(trimmed)));
+    if (next === threshold) setText(String(threshold));
+    else set(next);
+  };
+
   useHotkey("toggle_ai_filter", () => {
     const next = toggleThreshold(threshold, remembered.current);
     remembered.current = next.remembered;
@@ -63,12 +78,21 @@ export function FragmentPanel(): ReactNode {
       >
         <span className="adjustment__label">
           Filter:{" "}
-          {/* A span, not an <output>: that element carries an implicit `status` role, so a slider
-              value would be announced as a live region alongside the app's real status messages --
-              and would answer to the same role query they do. */}
-          <span className="adjustment__value" title="Fragment threshold value (0-100)">
-            {threshold}
-          </span>
+          {/* Legacy's type-in box, 35 px (fragment_threshold_widget.py:41-51, 80-88; CP-51): an
+              <input>, not an <output>, whose implicit `status` role would announce every value. */}
+          <input
+            type="text"
+            className="adjustment__value adjustment__value--narrow"
+            size={3}
+            value={text}
+            title="Fragment threshold value (0-100)"
+            aria-label="Fragment threshold, typed"
+            onChange={(event) => setText(event.target.value)}
+            onBlur={commit}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") commit();
+            }}
+          />
         </span>
         <input
           type="range"

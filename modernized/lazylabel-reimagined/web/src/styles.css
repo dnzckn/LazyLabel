@@ -1402,6 +1402,11 @@ fieldset input[type="text"] {
   font-variant-numeric: tabular-nums;
 }
 
+/* The fragment filter's, 35 px (fragment_threshold_widget.py:41-42). */
+.adjustment__value--narrow {
+  width: 35px;
+}
+
 .adjustment input[type="range"] {
   width: 100%;
 }

@@ -197,7 +197,9 @@ describe("the type-in box beside each slider, legacy's (CP-51)", () => {
 
   it("puts back the value when the text is not a number, and saves nothing", async () => {
     const { saved } = mount({ saturation: 1.2 });
-    await screen.findByRole("textbox", { name: /^Saturation/ });
+    await waitFor(() =>
+      expect((screen.getByRole("textbox", { name: /^Saturation/ }) as HTMLInputElement).value).toBe("1.20"),
+    );
 
     const box = typeInto(/^Saturation/, "lots");
 
