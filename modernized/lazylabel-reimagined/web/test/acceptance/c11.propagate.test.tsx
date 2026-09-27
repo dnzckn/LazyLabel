@@ -69,8 +69,10 @@ function job(overrides: Record<string, unknown> = {}) {
   };
 }
 
-function mount() {
+function mount({ remember = false }: { readonly remember?: boolean } = {}) {
   const started: unknown[] = [];
+  /** With `remember`, what a save wrote, which a load then reads back, as a disk would. */
+  const files = new Map<string, readonly unknown[]>();
   const saved: string[] = [];
   /** The images whose sidecars were deleted: a save with no segments (RULE-083). */
   const deleted: string[] = [];
@@ -112,7 +114,7 @@ function mount() {
         sourceFormat: "NPZ",
         sourceFile: key,
         revision: "r1",
-        segments: key.endsWith("f01.png") ? [SQUARE] : [],
+        segments: files.get(key) ?? (key.endsWith("f01.png") ? [SQUARE] : []),
         classAliases: {},
         failures: [],
       },
@@ -128,13 +130,15 @@ function mount() {
           { source: "frames/f03.png", objectId: 1, mask: MASK, confidence: 0.4 },
         ],
       }),
-    saveAnnotations: async (_project: string, key: string) => {
+    saveAnnotations: async (_project: string, key: string, request: { segments: readonly unknown[] }) => {
       saved.push(key);
+      if (remember) files.set(key, request.segments);
       return { written: [], stale: [], skippedEmpty: [] };
     },
     // Only f01 has a sidecar; a frame the run produced a mask for has none to delete.
     deleteAnnotations: async (_project: string, key: string) => {
       deleted.push(key);
+      if (remember) files.set(key, []);
       return { deleted: key.endsWith("f01.png") ? ["frames/f01.npz"] : [] };
     },
     models: async () => [],
@@ -330,6 +334,34 @@ describe("SP-58: a propagated frame emptied by hand", () => {
     fireEvent.click(screen.getByLabelText("Timeline").querySelectorAll("button")[1]!);
     await waitFor(() => expect(status()).toMatch(/frames\/f02\.png/));
     expect(await screen.findByLabelText("Select Loaded 1, class 3")).toBeTruthy();
+  });
+});
+
+describe("Save All over the open frame, then a move with Auto-Save on Navigate", () => {
+  /*
+   * Legacy loads the open frame again from its file after Save All (main_window.py:4834-4839), so
+   * the move's Auto-Save writes back what Save All wrote (3480-3520). The web left the frame showing
+   * what it held before the run, and the move's Auto-Save deleted the file Save All had just
+   * written (found end to end, 2026-09-26).
+   */
+  const status = () => screen.getByLabelText("Status").textContent ?? "";
+  const cell = (index: number) => screen.getByLabelText("Timeline").querySelectorAll("button")[index]!;
+
+  it("reloads an unchanged open frame from the file Save All wrote, so the move keeps the file", async () => {
+    const { saved, deleted } = mount({ remember: true });
+    await openTimeline();
+    fireEvent.click(cell(1));
+    await waitFor(() => expect(status()).toMatch(/frames\/f02\.png — 0 segments, saved/));
+
+    fireEvent.click(screen.getByRole("button", { name: /^Propagate/ }));
+    await waitFor(() => expect(cellLabels()[1]).toContain("propagated"), { timeout: 3000 });
+    fireEvent.click(screen.getByRole("button", { name: "Save All" }));
+    await waitFor(() => expect(saved).toContain("frames/f02.png"));
+    await waitFor(() => expect(status()).toMatch(/frames\/f02\.png — 1 segment, saved/));
+
+    fireEvent.click(cell(3));
+    await waitFor(() => expect(status()).toMatch(/frames\/f04\.png/));
+    expect(deleted).not.toContain("frames/f02.png");
   });
 });
 

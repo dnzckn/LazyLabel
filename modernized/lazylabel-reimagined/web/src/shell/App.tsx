@@ -181,7 +181,20 @@ export function App({ client }: { readonly client: ApiClient }): ReactNode {
   const step = useCallback((by: 1 | -1) => browser.current?.step(by), []);
   // Save All writes files the list shows ticks for; it reads them again after (CP-48).
   const [writes, setWrites] = useState(0);
-  const onWritten = useCallback(() => setWrites((count) => count + 1), []);
+  /*
+   * SAVE ALL CAN WRITE THE OPEN FRAME'S FILE, and legacy then loads the open frame from its file
+   * again (main_window.py:4834-4839). So does this, when the frame has nothing unsaved; unsaved
+   * edits are kept (SEQUENCE_PARITY.md SP-14). Left showing what it held before the run, the next
+   * move's Auto-Save wrote that over the file Save All had just written, and deleted it for a frame
+   * opened empty (found end to end, 2026-09-26). Read when Save All ends, so through a ref.
+   */
+  const openNow = useRef({ open, dirty: sides[activeSide].dirty, openImage });
+  openNow.current = { open, dirty: sides[activeSide].dirty, openImage };
+  const onWritten = useCallback((keys: readonly string[]) => {
+    setWrites((count) => count + 1);
+    const now = openNow.current;
+    if (now.open !== null && !now.dirty && keys.includes(now.open.image.key)) now.openImage(now.open.image);
+  }, []);
 
   /*
    * IN THE MULTI TAB THE PAIR MOVES, as legacy's does (main_window.py:6491-6557; CP-31): by two rows
