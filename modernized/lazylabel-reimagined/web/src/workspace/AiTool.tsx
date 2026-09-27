@@ -239,6 +239,8 @@ export function AiTool({
   const [otherHandle, setOtherHandle] = useState<string | null>(null);
   const [otherEncoding, setOtherEncoding] = useState(false);
   const [otherSettled, setOtherSettled] = useState(false);
+  /** A linked prompt waiting for the other image's encode (see where it is asked, below). */
+  const queuedForOther = useRef<AiPrompt | null>(null);
   const ready = handle !== null;
 
   useEffect(() => {
@@ -385,12 +387,15 @@ export function AiTool({
 
       const other = held.other;
       const outside = outsideOf(prompt, other);
+      queuedForOther.current = null;
       if (outside !== null) {
         held.answer(other.side, held.ask(other.side), null);
         notify({ severity: "warning", message: outside });
       } else if (otherHandle === null) {
         held.answer(other.side, held.ask(other.side), null);
-        waiting.add(otherEncoding ? UPDATING : UNAVAILABLE);
+        // Still being loaded into its model: asked once it is (below), as legacy's is.
+        if (otherEncoding && handle !== null) queuedForOther.current = prompt;
+        else waiting.add(otherEncoding ? UPDATING : UNAVAILABLE);
       } else {
         askSide(held, other.side, otherHandle, prompt, other.name);
       }
@@ -399,6 +404,22 @@ export function AiTool({
     },
     [askSide, encoding, handle, imageKey, notify, otherEncoding, otherHandle],
   );
+
+  /*
+   * A PROMPT PLACED WHILE THE OTHER IMAGE WAS STILL BEING ENCODED is asked of it once its encode
+   * lands. Legacy's linked prediction loads a viewer's image first when it must, then predicts, so
+   * both images get a mask (sam_multi_view_manager.py:272-284; main_window.py:6668-6675,
+   * 6778-6804). Here the other image answered nothing until 2026-09-27, and Space took one image's
+   * mask. Only the latest prompt, and only while it is still the pair's: a clear or an accept in
+   * the meantime drops it.
+   */
+  useEffect(() => {
+    const queued = queuedForOther.current;
+    if (queued === null || !otherSettled) return;
+    queuedForOther.current = null;
+    if (otherHandle === null || pair === null || pair.prompt !== queued) return;
+    askSide(pair, pair.other.side, otherHandle, queued, pair.other.name);
+  }, [askSide, otherHandle, otherSettled, pair]);
 
   const onPrompt = useCallback(
     (prompt: AiPrompt) => {

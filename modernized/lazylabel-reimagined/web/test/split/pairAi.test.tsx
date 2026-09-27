@@ -124,10 +124,18 @@ interface Side {
 
 const pair = (): readonly [Side, Side] => JSON.parse(screen.getByTestId("pair").textContent ?? "[]");
 
-function mount(failing: ReadonlySet<string> = new Set(), values: Record<string, unknown> = {}) {
+function mount(
+  failing: ReadonlySet<string> = new Set(),
+  values: Record<string, unknown> = {},
+  /** Images whose encode answers only when this promise settles. */
+  slow: ReadonlyMap<string, Promise<unknown>> = new Map(),
+) {
   vi.spyOn(Element.prototype, "getBoundingClientRect").mockReturnValue({ ...RECT, toJSON: () => RECT } as DOMRect);
 
-  const embed = vi.fn(async (request: { image: string }) => ({ handle: `h:${request.image}`, cached: true }));
+  const embed = vi.fn(async (request: { image: string }) => {
+    await slow.get(request.image);
+    return { handle: `h:${request.image}`, cached: true };
+  });
   const segment = vi.fn(async (request: WireSegmentRequest) => {
     const key = request.handle.slice(2);
     if (failing.has(key)) throw new Error("model fell over");
@@ -306,6 +314,47 @@ describe("one prompt, asked of each image's own model", () => {
     // the release (main_window.py:5558-5561).
     await waitFor(() => expect(within(halves()[1]!).getByTestId("ai-mask")).toBeTruthy());
     expect(halves()[1]!.querySelector('[aria-label="AI prompt"] rect')).toBeNull();
+  });
+});
+
+describe("a prompt placed while the other image is still being encoded", () => {
+  it("is asked of it once it is encoded, and this image's preview stays", async () => {
+    // Legacy's linked prediction loads a viewer's image first when it must, then predicts, so both
+    // images get a mask (sam_multi_view_manager.py:272-284, main_window.py:6668-6675, 6778-6804).
+    // Here the other image answered nothing, and its encode landing took this image's preview too:
+    // Space then accepted nothing, and Enter saved one image (found 2026-09-27, CP-31).
+    let release = () => {};
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const { segment } = mount(new Set(), {}, new Map([["frames/b.png", gate]]));
+    fireEvent.doubleClick(await screen.findByRole("button", { name: "a.png" }));
+    await waitFor(() => expect(pair()[0].aliases).toEqual(ALIASES["frames/a.png"]));
+    fireEvent.click(screen.getByRole("tab", { name: "Multi" }));
+    fireEvent.change(await screen.findByLabelText("Second image"), { target: { value: "frames/b.png" } });
+    await waitFor(() => expect(halves()[1]!.querySelector("canvas")).not.toBeNull());
+    chooseTool("AI (1)");
+    // This image is encoded; the other is still being loaded into its model.
+    await waitFor(() => expect(screen.queryByText("Image ready for AI prompts") ?? surface()).toBeTruthy());
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    click(50, 40);
+    await waitFor(() => expect(within(halves()[0]!).getByTestId("ai-mask")).toBeTruthy());
+    expect(askedOf(segment)).toEqual(["a.png"]);
+
+    await act(async () => {
+      release();
+      await gate;
+    });
+
+    await waitFor(() => expect(askedOf(segment)).toEqual(["a.png", "b.png"]));
+    await waitFor(() => expect(within(halves()[1]!).getByTestId("ai-mask")).toBeTruthy());
+    expect(within(halves()[0]!).getByTestId("ai-mask")).toBeTruthy();
+
+    press(" ", "Space");
+    await waitFor(() => expect(pair().map((side) => side.found)).toEqual([["a.png"], ["b.png"]]));
   });
 });
 
