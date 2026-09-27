@@ -815,7 +815,12 @@ export function TimelinePanel({
         : `${currentFrame.key.split("/").pop()} (${current + 1}/${shown.length})`
           // "-- Conf" only above 0, as legacy's (`main_window.py:3541-3549`, SP-54).
           + (currentScore === undefined || currentScore <= 0 ? "" : ` -- Conf: ${currentScore.toFixed(4)}`);
-  useEffect(() => onStatus?.(status), [onStatus, status]);
+  // Legacy writes its header only as a frame loads (`main_window.py:3538-3549`) and never clears
+  // it: after New Timeline, and after leaving the tab, it still names the last frame (SP-54). So no
+  // frame, nothing said; the shell starts at legacy's "No sequence loaded".
+  useEffect(() => {
+    if (currentFrame !== undefined) onStatus?.(status);
+  }, [onStatus, status, currentFrame]);
 
   if (frames.length === 0) {
     /** Set Start or Set End from the image on screen, in legacy's words (`main_window.py:4897-4923`). */

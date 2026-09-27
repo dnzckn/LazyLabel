@@ -532,7 +532,8 @@ describe("building one", () => {
   it("reports legacy's header for the frame in view: its name, its place and its score", async () => {
     const onStatus = vi.fn();
     render(withSettings(<Timeline images={FOLDER} onStatus={onStatus} />));
-    expect(onStatus).toHaveBeenLastCalledWith("No sequence loaded");
+    // The shell starts at "No sequence loaded"; with no frame there is nothing to say.
+    expect(onStatus).not.toHaveBeenCalled();
 
     build("0", "2");
     await waitFor(() => expect(cells()).toHaveLength(3));
@@ -540,6 +541,13 @@ describe("building one", () => {
 
     fireEvent.click(cells()[2]!);
     expect(onStatus).toHaveBeenLastCalledWith("f03.png (3/3)");
+
+    // Legacy never clears it: New Timeline leaves the last frame's line (main_window.py:3538-3549,
+    // the only place its header is written; SP-54).
+    fireEvent.click(screen.getByText("New Timeline"));
+    await waitFor(() => expect(screen.queryByLabelText("Timeline")).toBeNull());
+    expect(onStatus).toHaveBeenLastCalledWith("f03.png (3/3)");
+    expect(onStatus).not.toHaveBeenCalledWith("No sequence loaded");
   });
 
   it("follows the image the view shows, when it is one of the timeline's frames", async () => {
