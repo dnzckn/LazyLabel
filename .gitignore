@@ -68,5 +68,7 @@ test_images/
 !/modernized/lazylabel-reimagined/api/test/fixtures/acceptance-oracle/**/*.npz
 node_modules/
 coverage/
+# The release zips scripts/build-release.mjs writes by default (DEPLOYABILITY.md R11).
+/modernized/release/
 *.onnx
 __pycache__/

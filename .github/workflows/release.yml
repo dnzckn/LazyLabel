@@ -1,0 +1,121 @@
+name: Release zips
+
+# DEPLOYABILITY.md R11: LazyLabel web with nothing to install. Each zip holds a portable Node from
+# nodejs.org, checked against its SHASUMS256.txt, the built app and a double-click launcher. sharp's
+# image library is native, so there is one zip per OS and architecture. The building is
+# modernized/scripts/build-release.mjs and the proof is scripts/release-smoke.mjs: the same two
+# scripts a maintainer runs locally.
+#
+# How each trigger behaves from main-web, which is not the default branch:
+#   - Pushing a tag web-v<version> on a main-web commit builds and proves the zips and publishes
+#     them as a GitHub Release. A tag push runs the workflow file of the tagged commit.
+#   - A push to main-web that changes the release tooling, the launcher or the dependencies builds
+#     and proves the zips without publishing, so a broken release is found before a tag needs it.
+#   - workflow_dispatch is here for the day this file is on the default branch: GitHub offers it
+#     only for workflows there, so from main-web alone it never fires. `schedule` has the same
+#     limit and is left out.
+on:
+  push:
+    tags: ["web-v*"]
+    branches: [main-web]
+    paths:
+      - .github/workflows/release.yml
+      - modernized/scripts/build-release.mjs
+      - modernized/scripts/release-smoke.mjs
+      - modernized/package-lock.json
+      - modernized/lazylabel-reimagined/api/src/cli.ts
+      - modernized/lazylabel-reimagined/api/src/launcher.ts
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# SEC-11: every action is pinned to a commit, with its release in a comment; modernized.yml says how
+# to move one. upload-artifact and download-artifact were resolved on 2026-09-27 with
+#   git ls-remote --tags https://github.com/actions/<action>
+
+jobs:
+  zip:
+    name: zip (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest # x64
+          - os: macos-latest # arm64, Apple silicon
+          - os: ubuntu-latest # x64
+            # A runner has no desktop, so there is no folder dialog: the launcher asks in its window,
+            # and the folder is typed there, on its standard input.
+            smoke: --typed
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      # The Node that builds the app is the Node the zip ships.
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: modernized/package-lock.json
+
+      # npm ci, then npm prune --omit=dev, in a copy of modernized/; the portable Node, checked
+      # against nodejs.org's SHASUMS256.txt; the launcher; the zip and its .sha256.
+      - name: Build the zip
+        run: node modernized/scripts/build-release.mjs --out "$RUNNER_TEMP/release" --work "$RUNNER_TEMP/work"
+
+      # Unzipped into a scratch folder and started through its launcher with a folder of images:
+      # the web app, /api/health, the image list and a thumbnail (the zip's own sharp) must answer.
+      - name: Unzip it and start it, as a user would
+        run: node modernized/scripts/release-smoke.mjs "$RUNNER_TEMP/release" --dir "$RUNNER_TEMP/smoke" ${{ matrix.smoke }}
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: zip-${{ matrix.os }}
+          path: ${{ runner.temp }}/release/
+          if-no-files-found: error
+          # Already a zip.
+          compression-level: 0
+
+  publish:
+    name: publish the GitHub Release
+    if: startsWith(github.ref, 'refs/tags/web-v')
+    needs: zip
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      # Releases come from main-web: a web-v tag on any other commit publishes nothing.
+      - name: Check that the tag is on main-web
+        run: |
+          status=$(gh api "repos/$GITHUB_REPOSITORY/compare/main-web...$GITHUB_SHA" --jq .status)
+          if [ "$status" != identical ] && [ "$status" != behind ]; then
+            echo "$GITHUB_REF_NAME is not a commit on main-web (compare says $status); nothing is published."
+            exit 1
+          fi
+
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          path: release
+          merge-multiple: true
+
+      # --latest=false: the repository's Latest release stays the desktop app's (v2.0.x).
+      - name: Publish
+        run: |
+          ls -l release
+          cat > notes.md <<'NOTES'
+          LazyLabel web, with nothing to install.
+
+          1. Download the zip for your computer: `windows-x64`, `macos-arm64` (Apple silicon) or `linux-x64`.
+          2. Unzip it and double-click **Start LazyLabel** (`Start LazyLabel.cmd` on Windows, `Start LazyLabel.command` on macOS; on Linux run `./start-lazylabel.sh` in a terminal).
+          3. Choose your folder of images. LazyLabel opens in your browser.
+
+          macOS asks the first time, because the zip is not yet signed: open System Settings, Privacy & Security, and choose Open Anyway. The AI tools (SAM) are not included; the README on `main-web` says how to add them. Each zip's SHA-256 is in the `.sha256` file beside it.
+          NOTES
+          gh release create "$GITHUB_REF_NAME" release/*.zip release/*.sha256 \
+            --repo "$GITHUB_REPOSITORY" --verify-tag --latest=false \
+            --title "LazyLabel web ${GITHUB_REF_NAME#web-v}" --notes-file notes.md
