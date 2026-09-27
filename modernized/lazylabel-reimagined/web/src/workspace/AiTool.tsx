@@ -109,7 +109,11 @@ export interface AiToolProps {
     readonly processing: string;
   };
   readonly onAccept: (segment: WireSegment) => void;
-  readonly onErase: (mask: WireSegment) => void;
+  /**
+   * Shift+Space: erase with the mask. The view says what it cut in legacy's words; `note` is what
+   * the fragment filter did to the mask, which legacy never says, for that line's tooltip.
+   */
+  readonly onErase: (mask: WireSegment, note?: string) => void;
   /**
    * Space in a linked pair: each image's own annotation, from its own prediction, by side. Either
    * may be null -- no prediction there, or all of it under the fragment threshold -- as legacy
@@ -118,7 +122,7 @@ export interface AiToolProps {
    */
   readonly onAcceptEach?: (bySide: BySide) => void;
   /** Shift+Space in a linked pair: each image erased with its own prediction's mask, by side. */
-  readonly onEraseEach?: (bySide: BySide) => void;
+  readonly onEraseEach?: (bySide: BySide, note?: string) => void;
 }
 
 export function AiTool({
@@ -536,7 +540,7 @@ export function AiTool({
       let predicted = false;
       let dropped = 0;
       let holesFilled = false;
-      /** Smaller pieces each image's polygon left out, said after legacy's words. */
+      /** Smaller pieces each image's polygon left out, for the tooltip of legacy's words. */
       const pieces: number[] = [];
 
       for (const side of [held.active, held.other.side]) {
@@ -565,23 +569,18 @@ export function AiTool({
         return;
       }
 
+      const note = cleaningNote(pieces, dropped, holesFilled);
       if (asEraser) {
-        if (onEraseEach !== undefined) onEraseEach(bySide);
-        else if (bySide[held.active] !== null) onErase(bySide[held.active]!);
+        if (onEraseEach !== undefined) onEraseEach(bySide, note);
+        else if (bySide[held.active] !== null) onErase(bySide[held.active]!, note);
       } else {
         if (onAcceptEach !== undefined) onAcceptEach(bySide);
         else if (bySide[held.active] !== null) onAccept(bySide[held.active]!);
         // Legacy's success, counting the images given a segment (ai_segment_manager.py:390-398). It
         // said nothing until 2026-09-27, found on the real stack.
         const saved = bySide.filter((segment) => segment !== null).length;
-        notify({ severity: "success", message: `Saved predictions to ${saved} viewer(s)` });
-        for (const count of pieces) notify({ severity: "info", message: largestPiece(count) });
+        notify({ severity: "success", message: `Saved predictions to ${saved} viewer(s)`, ...detailOf(note) });
       }
-
-      if (dropped > 0) {
-        notify({ severity: "info", message: `Dropped ${dropped} fragment${dropped === 1 ? "" : "s"}` });
-      }
-      if (holesFilled) notify({ severity: "warning", message: "Holes inside that mask were filled" });
     },
     [autoPolygon, classId, fragmentThreshold, notify, onAccept, onAcceptEach, onErase, onEraseEach],
   );
@@ -623,7 +622,10 @@ export function AiTool({
       // for what is added (ai_segment_manager.py:137-142, 175-180, 241-299). The eraser went through
       // it until 2026-09-27, and the view, which erases with masks only, dropped the polygon.
       if (asEraser) {
-        onErase({ type: "AI", classId, mask: encodeMask(filtered.mask) });
+        onErase(
+          { type: "AI", classId, mask: encodeMask(filtered.mask) },
+          cleaningNote([], filtered.dropped, filtered.holesFilled),
+        );
       } else {
         const converted = asPolygonIfAsked(filtered.mask, classId, autoPolygon);
         onAccept(converted.segment);
@@ -632,25 +634,12 @@ export function AiTool({
         // (ai_segment_manager.py:293-299, 390-398). "polygon" when Auto-Convert made one, else
         // "AI", the mask it falls back to as legacy does (main_window.py:1808-1829).
         const kind = converted.segment.type === "Polygon" ? "polygon" : "AI";
-        if (pair !== null) notify({ severity: "success", message: "Saved predictions to 1 viewer(s)" });
-        else if (fromBox) notify({ severity: "success", message: `AI bounding box segment saved as ${kind}!` });
-        else notify({ severity: "info", message: `Segment saved as ${kind}` });
-        if (converted.dropped > 0) notify({ severity: "info", message: largestPiece(converted.dropped) });
-      }
-
-      if (filtered.dropped > 0) {
-        notify({
-          severity: "info",
-          message: `Dropped ${filtered.dropped} fragment${filtered.dropped === 1 ? "" : "s"}`,
-        });
-      }
-
-      if (filtered.holesFilled) {
-        // RULE-027's recorded defect: above zero, the kept pieces are redrawn as filled outer
-        // contours, so a ring becomes a disc and interior gaps close; a threshold of 0 keeps them.
-        // Legacy changes the shape without saying so. The notice explained all that until the
-        // owner asked for messages as short as legacy's (2026-09-26).
-        notify({ severity: "warning", message: "Holes inside that mask were filled" });
+        const note = detailOf(
+          cleaningNote(converted.dropped > 0 ? [converted.dropped] : [], filtered.dropped, filtered.holesFilled),
+        );
+        if (pair !== null) notify({ severity: "success", message: "Saved predictions to 1 viewer(s)", ...note });
+        else if (fromBox) notify({ severity: "success", message: `AI bounding box segment saved as ${kind}!`, ...note });
+        else notify({ severity: "info", message: `Segment saved as ${kind}`, ...note });
       }
 
       setResult(null);
@@ -870,4 +859,29 @@ function asPolygonIfAsked(
  */
 function largestPiece(dropped: number): string {
   return `Converted the largest piece, dropping ${dropped} smaller one${dropped === 1 ? "" : "s"}`;
+}
+
+/**
+ * What cleaning the mask did, which legacy does without a word: Auto-Convert's smaller pieces left
+ * out, the fragment filter's pieces dropped, and the holes it filled -- RULE-027's recorded defect:
+ * above zero, the kept pieces are redrawn as filled outer contours, so a ring becomes a disc; a
+ * threshold of 0 keeps them. Undefined when it did none of it.
+ *
+ * The TOOLTIP of legacy's line, not lines of their own. The status bar shows one message at a time,
+ * so said after legacy's words, as they were until 2026-09-27, they replaced them: on the real stack
+ * Space in the Multi tab showed "Holes inside that mask were filled" and never legacy's "Saved
+ * predictions to 2 viewer(s)", and an erase never showed legacy's words at all.
+ */
+function cleaningNote(pieces: readonly number[], dropped: number, holesFilled: boolean): string | undefined {
+  const notes = [
+    ...pieces.map(largestPiece),
+    ...(dropped > 0 ? [`Dropped ${dropped} fragment${dropped === 1 ? "" : "s"}`] : []),
+    ...(holesFilled ? ["Holes inside that mask were filled"] : []),
+  ];
+  return notes.length === 0 ? undefined : notes.join("; ");
+}
+
+/** A notice's tooltip, when there is one. */
+function detailOf(note: string | undefined): { readonly detail?: string } {
+  return note === undefined ? {} : { detail: note };
 }

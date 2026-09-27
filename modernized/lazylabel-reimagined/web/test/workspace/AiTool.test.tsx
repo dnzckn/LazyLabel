@@ -681,6 +681,38 @@ describe("legacy's words after Space (ai_segment_manager.py:120-128, 275-299)", 
     expect(notice.getAttribute("class")).toContain("status-bar__message--info");
   });
 
+  it("keeps legacy's line when the fragment filter fills a hole, and says so in its tooltip", async () => {
+    // The status bar holds one message, as legacy's does (CP-64). "Holes inside that mask were
+    // filled", which legacy never says, came after legacy's words and replaced them: on the real
+    // stack, Space in the Multi tab showed only it. A ring, whose hole the filter fills above 0.
+    const ring = new Uint8Array(64).fill(1);
+    for (const at of [27, 28, 35, 36]) ring[at] = 0;
+    let binary = "";
+    for (const byte of ring) binary += String.fromCharCode(byte);
+    const { onErase } = mount(
+      {
+        segment: async () =>
+          response({ mask: { height: IMAGE.height, width: IMAGE.width, box: [2, 2, 10, 10], data: btoa(binary) } }),
+      },
+      { fragmentThreshold: 50 },
+    );
+    await waitFor(() => expect(surface()).toBeTruthy());
+    click(10, 10);
+    await ready();
+
+    space();
+
+    const notice = await screen.findByText("Segment saved as AI");
+    expect(notice.getAttribute("title")).toContain("Holes inside that mask were filled");
+
+    // An erase hands the view the same note, for the tooltip of legacy's words for what it cut.
+    click(10, 10);
+    await ready();
+    space(true);
+
+    await waitFor(() => expect(onErase).toHaveBeenCalledWith(expect.anything(), "Holes inside that mask were filled"));
+  });
+
   it("says a box's preview is ready in legacy's words for a box, and a point's in its own", async () => {
     // Legacy's point preview says "Press spacebar to accept AI segment suggestion"
     // (ai_segment_manager.py:515) and its box preview "AI bounding box preview ready - press Space

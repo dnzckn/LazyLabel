@@ -279,15 +279,16 @@ function OpenedImage({
   // Which of legacy's views this is drawn in: its words for an erase differ between them.
   const view = useContext(ViewKindContext);
   const sayErased = useCallback(
-    (outcome: EraseOutcome, by: EraseSource) => {
+    (outcome: EraseOutcome, by: EraseSource, note?: string) => {
       if (outcome.kind === "empty-shape") {
         notify({ severity: "warning", message: "that shape covers no pixels, so nothing was erased" });
         return;
       }
+      // `note` is what cleaning the AI mask did, which legacy never says: the line's tooltip.
       if (outcome.kind === "nothing") {
         // Legacy's words, and saying nothing at all would leave a user wondering whether the
         // gesture registered.
-        notify({ severity: "info", message: "No segments to erase" });
+        notify({ severity: "info", message: "No segments to erase", ...(note === undefined ? {} : { detail: note }) });
         return;
       }
       /*
@@ -297,12 +298,11 @@ function OpenedImage({
        * tooltip now, so the line is legacy's and the loss is still told.
        */
       const { vanished } = outcome;
-      notify({
-        ...erasedNotice(outcome, by, view),
-        ...(vanished > 0
-          ? { detail: `${vanished} annotation${vanished === 1 ? " was" : "s were"} removed completely` }
-          : {}),
-      });
+      const details = [
+        ...(vanished > 0 ? [`${vanished} annotation${vanished === 1 ? " was" : "s were"} removed completely`] : []),
+        ...(note === undefined ? [] : [note]),
+      ];
+      notify({ ...erasedNotice(outcome, by, view), ...(details.length === 0 ? {} : { detail: details.join("; ") }) });
     },
     [notify, view],
   );
@@ -310,7 +310,7 @@ function OpenedImage({
   // The store erases -- here, and at the same pixels in the other image while a pair is linked
   // (RULE-092) -- so what is left for this view is saying what happened.
   const eraseAndSay = useCallback(
-    (eraser: WireSegment, by: EraseSource) => sayErased(eraseWith(eraser), by),
+    (eraser: WireSegment, by: EraseSource, note?: string) => sayErased(eraseWith(eraser), by, note),
     [eraseWith, sayErased],
   );
 
@@ -446,12 +446,12 @@ function OpenedImage({
                       // The MASK erases, not its bounding box: an AI mask is rarely a
                       // rectangle, and erasing its box would take out pixels the model never
                       // selected.
-                      onErase={(segment) =>
-                        segment.mask === undefined ? undefined : eraseAndSay(segment, "ai")
+                      onErase={(segment, note) =>
+                        segment.mask === undefined ? undefined : eraseAndSay(segment, "ai", note)
                       }
                       // A linked pair in the Multi tab: each image's own answer, in its own image.
                       onAcceptEach={(bySide) => addEach(bySide, "Accept AI mask")}
-                      onEraseEach={(bySide) => sayErased(eraseEach(bySide), "ai")}
+                      onEraseEach={(bySide, note) => sayErased(eraseEach(bySide), "ai", note)}
                     />
                   ))}
 
