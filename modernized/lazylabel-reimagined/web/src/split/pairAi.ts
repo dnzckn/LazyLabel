@@ -7,9 +7,9 @@
  *
  * SO WHAT CROSSES BETWEEN THE IMAGES IS THE PROMPT, NOT THE ANSWER. Legacy's linked AI click puts
  * the same point, at the same image pixel, into every target viewer, draws it in each, and asks
- * each viewer's own model about its own image (main_window.py:6645-6675, 6778-6799); a box goes to
+ * each viewer's own model about its own image (main_window.py:6645-6675, 6778-6804); a box goes to
  * each the same way (6677-6720). Each viewer shows its own preview, and Space makes each preview
- * that viewer's own segment (ai_segment_manager.py:301-392). Until 2026-09-27 this app copied the
+ * that viewer's own segment (ai_segment_manager.py:301-403). Until 2026-09-27 this app copied the
  * accepted MASK into the other image instead, so the two contours were identical by construction
  * and the other image's own pixels never reached a model.
  *
@@ -19,7 +19,7 @@
  * HELD BY THE SPLIT VIEW, NOT BY THE VIEW'S TOOL. The interactive view is drawn in whichever half is
  * being edited and remounts when the other is chosen. The prompt and both previews survive that, as
  * legacy's per-viewer points survive a change of active viewer, which changes an index and nothing
- * else (multi_view_coordinator.py:87-100). A different pair, unlinking, or another tool starts
+ * else (multi_view_coordinator.py:92-103). A different pair, unlinking, or another tool starts
  * again.
  */
 

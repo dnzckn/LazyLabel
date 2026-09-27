@@ -19,7 +19,7 @@
  * IN A LINKED PAIR EVERY PROMPT IS ASKED OF BOTH IMAGES, each of its own model, and each image
  * shows its own answer: the Multi tab's reason to exist (`split/pairAi.ts`). Legacy asks each
  * target viewer's model about its own image (main_window.py:6645-6720, 6778-6804), and Space makes
- * each viewer's preview that viewer's own segment (ai_segment_manager.py:301-392). The other image
+ * each viewer's preview that viewer's own segment (ai_segment_manager.py:301-403). The other image
  * is encoded once, after this one, and asked through the same route with its own handle.
  */
 
@@ -434,7 +434,7 @@ export function AiTool({
 
   /**
    * SPACE IN A LINKED PAIR: each image's own prediction becomes that image's own annotation, as
-   * legacy's `_accept_multi_view` does for each target viewer (ai_segment_manager.py:301-392): the
+   * legacy's `_accept_multi_view` does for each target viewer (ai_segment_manager.py:301-403): the
    * fragment filter and Auto-Convert apply to each, and an image with nothing left is skipped
    * while the other is kept. Shift+Space erases each image with its own mask (:341-360).
    */

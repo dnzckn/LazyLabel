@@ -350,7 +350,7 @@ export interface WorkspaceContextValue {
    * Add EACH image's own annotation, by side, as ONE recorded step: a linked pair's AI accept.
    *
    * Nothing is mirrored. Each image's model answered the same prompt about its own pixels, and
-   * each keeps its own answer, as legacy's viewers do (ai_segment_manager.py:321-379). Only the
+   * each keeps its own answer, as legacy's viewers do (ai_segment_manager.py:321-381). Only the
    * class crosses: both arrive with the class chosen in the image being edited, and the other
    * image files its own under the class of the same NAME there (`linkedClass`). Either may be null.
    */

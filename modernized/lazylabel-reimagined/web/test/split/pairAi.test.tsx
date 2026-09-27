@@ -6,7 +6,7 @@
  * contours of the segments can vary slightly". Legacy's linked AI click and box go to every target
  * viewer at the same image pixel, each viewer's own model predicts on its own image, and each shows
  * its own preview (main_window.py:6645-6720, 6778-6804); Space makes each preview that viewer's
- * own segment and Escape clears both (ai_segment_manager.py:301-392; keyboard_event_manager.py:
+ * own segment and Escape clears both (ai_segment_manager.py:301-403; keyboard_event_manager.py:
  * 44-57, 315-319). Until 2026-09-27 the accepted MASK was copied into the other image instead.
  *
  * The whole app is mounted with only the HTTP client stubbed. Each image's "model" finds the object
@@ -392,7 +392,7 @@ describe("Escape clears both", () => {
 
 describe("the other half, made the one edited", () => {
   it("keeps the prompt and both previews, and Space still accepts both", async () => {
-    // Legacy's active viewer changes an index and nothing else (multi_view_coordinator.py:87-100).
+    // Legacy's active viewer changes an index and nothing else (multi_view_coordinator.py:92-103).
     await pairUp();
     click(50, 40);
     await waitFor(() => expect(within(halves()[1]!).getByTestId("ai-mask")).toBeTruthy());

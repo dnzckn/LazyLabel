@@ -38,7 +38,7 @@
  * slightly". Every point and box placed on either image is placed on both, drawn in both halves,
  * and asked of each image's own model; each half shows its own preview, Space makes each image's
  * preview its own annotation in one undo step, and Escape clears both, as legacy's linked viewers
- * do (main_window.py:6645-6720; ai_segment_manager.py:301-392; `pairAi.ts`). The accepted mask was
+ * do (main_window.py:6645-6720; ai_segment_manager.py:301-403; `pairAi.ts`). The accepted mask was
  * copied pixel for pixel into the other image until then, so the two contours could not differ.
  *
  * It is ON from the start, as legacy's pair is (multi_view_coordinator.py:46), since 2026-09-27;

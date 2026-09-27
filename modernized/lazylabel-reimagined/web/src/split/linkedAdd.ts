@@ -76,7 +76,7 @@ const UNCLASSIFIED: LinkedAdd = { kind: "refused", reason: "an annotation with n
  * of `linkedAdd`, with no geometry to mirror.
  *
  * What a linked AI accept needs. Legacy asks each image's own model and keeps each image's own
- * answer (ai_segment_manager.py:321-379), so the only thing that crosses is the class: `segment`
+ * answer (ai_segment_manager.py:321-381), so the only thing that crosses is the class: `segment`
  * carries it as `sourceAliases`, the image being edited, knows it, and it comes back renumbered
  * for the target by `resolveClass`.
  */
