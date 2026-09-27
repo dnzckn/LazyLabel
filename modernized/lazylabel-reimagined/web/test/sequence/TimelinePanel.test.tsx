@@ -17,6 +17,7 @@ import { HotkeyProvider } from "../../src/hotkeys/HotkeyProvider.jsx";
 import { NotificationHost, NotificationProvider } from "../../src/notifications/NotificationProvider.jsx";
 import { SettingsProvider } from "../../src/settings/SettingsProvider.jsx";
 import { SequenceActiveContext } from "../../src/sequence/sequenceActive.js";
+import { LIMIT } from "../terse.js";
 import { Timeline, buildRange, openInView } from "./harness.jsx";
 
 /**
@@ -221,6 +222,24 @@ describe("with no AI (SP-31)", () => {
 
     fireEvent.keyDown(document, { key: "p", ctrlKey: true });
     expect(await screen.findByText(/AI features require the inference service/)).toBeTruthy();
+  });
+
+  it("says so in one short line, with the service's reason in the tooltip", async () => {
+    // The status bar is read by the terse guard, and the service's reason is a sentence. Ctrl+P
+    // printed "AI features require the inference service (PyTorch is not installed. Run npm run
+    // ai:setup)." there, 91 characters.
+    const reason = "PyTorch is not installed. Run npm run ai:setup";
+    render(withSettings(<Timeline images={FOLDER} client={client} ai={{ ...NO_AI, reason }} />));
+    build("0", "4", { references: false });
+    await waitFor(() => expect(cells()).toHaveLength(5));
+
+    for (const key of ["p", "h"]) {
+      fireEvent.keyDown(document, { key, ctrlKey: true });
+
+      const said = await screen.findByText("AI features require the inference service");
+      expect(said.textContent!.length).toBeLessThanOrEqual(LIMIT);
+      expect(said.getAttribute("title")).toContain(reason);
+    }
   });
 
   it("keeps Find Archetypes when the service is up but no model can propagate", async () => {

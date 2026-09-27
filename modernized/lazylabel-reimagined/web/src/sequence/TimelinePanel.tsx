@@ -199,19 +199,32 @@ const PAN_STEP = 0.25;
 const WHEEL_STEP = 0.1;
 
 
-/** What the keys and the disabled controls say when AI is missing: legacy's hint, for a server. */
-function aiHintFor(ai: TimelinePanelProps["ai"]): string {
+/** What the keys say when AI is missing: legacy's hint, for a server (`main_window.py:4710-4712`). */
+const AI_HINT = "AI features require the inference service";
+
+/** The hint, and why, when it is known. */
+interface AiHint {
+  readonly message: string;
+  readonly detail?: string;
+}
+
+/**
+ * The hint as a notice: one short line, with the reason in the status bar's tooltip, as the model
+ * picker puts the service's words in its tooltip. The reason runs to a sentence ("PyTorch is not
+ * installed. Run npm run ai:setup"), and in the line it made one past the terse guard's 60.
+ */
+function aiHintFor(ai: TimelinePanelProps["ai"]): AiHint {
   const why = ai?.reason ?? (ai !== undefined && ai.available && !ai.videoCapable
     ? "no model that can propagate is installed"
     : null);
-  return `AI features require the inference service${why === null ? "" : ` (${why})`}.`;
+  return why === null ? { message: AI_HINT } : { message: AI_HINT, detail: why };
 }
 
 /** Ctrl+P while propagation is unavailable: says why, as legacy's does (`main_window.py:4710-4712`). */
-function PropagateHint({ active, hint }: { readonly active: boolean; readonly hint: string }): ReactNode {
+function PropagateHint({ active, hint }: { readonly active: boolean; readonly hint: AiHint }): ReactNode {
   const { notify } = useNotifications();
   useHotkey("propagate", () => {
-    if (active) notify({ severity: "info", message: hint });
+    if (active) notify({ severity: "info", ...hint });
   });
   return null;
 }
@@ -731,7 +744,7 @@ export function TimelinePanel({
   useHotkey("find_archetypes", () => {
     // Legacy's order on every tab: the install hint without AI, then "Build a timeline first" --
     // which off the tab is always, its timeline torn down on leaving (main_window.py:5040-5059).
-    if (!aiReady) notify({ severity: "info", message: aiHint });
+    if (!aiReady) notify({ severity: "info", ...aiHint });
     else if (!active || frames.length === 0) notify({ severity: "info", message: BUILD_A_TIMELINE_FIRST });
     else void find();
   });
