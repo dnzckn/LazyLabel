@@ -560,6 +560,8 @@ How to read a card: **Source** paths are relative to the repository root. **Prio
 **Suspected defect:** The cached spectrum is keyed only by image dimensions and is not invalidated when upstream rescale or channel-threshold settings change, so FFT output can come from a stale input.  
 **Confidence:** High — citation confirmed by an independent referee
 
+**Decision (2026-09-27):** "Fix it in the web." The owner was asked: "on a 16-bit image, the FFT threshold with a crop set divides the already-8-bit result by 256 again, so the cropped region shows black. The web copies it for parity. Fix it in the web, as you chose for the 16-bit overflow?" Legacy writes the filter's 0-255 output into the 16-bit image where the crop was (`legacy/lazylabel/src/lazylabel/ui/managers/image_adjustment_manager.py:655-663`) and then converts the whole image by dividing it by 256 (lines 402-407, 563-566), so every pixel of the crop comes out 0. The web writes each value as value x 257, which the conversion turns back into the value, so the crop shows the filter's result. Without a crop, on an 8-bit image, and outside the crop nothing changes. This is a deliberate difference from legacy on 16-bit images with a crop only (`c8a6250`; CONTROL_PARITY.md CP-46).
+
 ### RULE-031: Histogram presets: contrast stretch, equalization, CLAHE
 **Category:** Calculation  
 **Priority:** P1  

@@ -589,6 +589,8 @@ When `inference/.venv` exists, it also runs `python -m lazylabel_inference.docto
 
 ### R10. Docker that has been run (M)
 
+**Deferred.** The owner's decision, 2026-09-27: "Keep deferring."
+
 1. **`deploy/compose.yaml`, `inference` service:** add `LAZYLABEL_DATASET_ROOT: /data` and `- ${DATASET_ROOT}:/data:ro`. Staging goes to a temp directory (`runner.py:185`), so read-only is enough. Bake `manifest.verified.json` into the image, with `LAZYLABEL_MODEL_MANIFEST` set, so users only drop the files into `MODEL_DIR`.
 2. **Profiles:** `ai-cpu`, from `python:3.12-slim` with the `cpu` extra (small wheels, and it works on Macs), and `ai-gpu`, the current CUDA image.
 3. **After R3:** one `app` image, the API serving the web app, published on `127.0.0.1:8787`. Drop the nginx image.

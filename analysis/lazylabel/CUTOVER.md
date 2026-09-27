@@ -76,7 +76,7 @@ Each of these is checkable, and none of them is an opinion.
       model Load and Unload, the AI setup), so they are due again (`PROGRESS.md`, "What to do
       next").
 - [ ] **The deployment has been built and run.** Skipped for now, the owner's choice
-      (2026-09-23, confirmed 2026-09-25). `DEPLOYABILITY.md` R10 is that work, and it waits on
+      (2026-09-23, confirmed 2026-09-25 and 2026-09-27). `DEPLOYABILITY.md` R10 is that work, and it waits on
       the owner. Everything under `modernized/lazylabel-reimagined/
       deploy/` is currently reasoned rather than observed; its README says so and names what to
       check first. That has to stop being true before anyone depends on it.

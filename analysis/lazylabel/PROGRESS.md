@@ -23,7 +23,7 @@ behaves the same way across the two versions", the Sequence tab first.
 - `CONTROL_PARITY.md`: every item, CP-01 to CP-75, is done. What a row still does differently is
   written in that row, under "Not matched" or "Still different", with its reason.
 - `SEQUENCE_PARITY.md`: the 58 differences found on 2026-09-25 are each fixed or kept as a
-  recorded decision, except SP-57's two web-only extras, which wait for the owner.
+  recorded decision. The owner kept SP-57's two web-only extras on 2026-09-27.
 - A last pass on 2026-09-27 checked five small gaps in the mouse handling, four of them in the
   Multi view. Three match legacy now; two are recorded with their reasons ("What remains").
 
@@ -32,7 +32,9 @@ Sequence tab, New Timeline, an emptied frame's files deleted); crop and FFT rese
 R toggle back; Ctrl+Plus/Minus keep zooming; the Multi view acts on both images; SP-09 and SP-36
 keep the web's answers; closing the tab still asks; Min Conf is a setting; saving on a move only
 with Auto-Save on Navigate on. 2026-09-27: the Multi view is for AI prompts at the same pixel in
-both images, each image its own contour, and starts linked (CP-31). Earlier answers: tiles built,
+both images, each image its own contour, and starts linked (CP-31); SP-57's extras kept; R10
+still deferred; R11's release zip built; RULE-024's 16-bit overflow and RULE-030's black crop on a
+16-bit image fixed in the web (CP-72, CP-46). Earlier answers: tiles built,
 Python 3.12, synthetic goldens, a simulated acceptance corpus, class names crossing both ways in
 `.npz` files, and two mains, the PyQt6 app on `main` and this one on `main-web`.
 
@@ -506,10 +508,9 @@ configured, so a green CI run says nothing about them — see `Running the live 
 The engineering the brief names is done. What is left is mostly the owner's to decide, and one
 check to repeat before the switch. In order:
 
-1. **Ask the owner** about the pending decisions under "What remains": SP-57's two web-only
-   extras and R10. RULE-024's 16-bit overflow was decided on 2026-09-27, "Fix it in the web", and
-   is fixed (`ff56922`; `CONTROL_PARITY.md` CP-72). R11 was decided and built the same day; its
-   first Release is a `web-v*` tag away.
+1. **Ask the owner before the first Release.** Every pending decision was answered on 2026-09-27
+   ("What remains"). Publishing is still theirs to say yes to: pushing a `web-v*` tag makes
+   `release.yml` publish the zips, and macOS signing and notarisation are not done.
 2. **Run the live differential suites again with real checkpoints** (CUTOVER.md asks for it when
    the inference service changes, and it changed on 2026-09-26: SP-08, SP-25, CP-49 and R7 to R9).
    "Running the live suites" has the command. Leave `LAZYLABEL_TEST_SAM1_CHECKPOINT` unset while
@@ -635,13 +636,18 @@ needs is already in one store rather than scattered across managers.
 
 ## What remains
 
-**The owner's pending decisions.**
-- **SP-57: two web-only extras in the Sequence tab.** A Clear button for a finished run, and the
-  "could not seed" notice. Legacy has neither (`SEQUENCE_PARITY.md` SP-57). Keep them, or remove
-  them to match.
-- **R10: the Docker deployment, run for real.** CI builds its images and nothing has run them: the
-  `ai` profile is broken, there is no CPU profile, and the inference image has never been built
-  (`DEPLOYABILITY.md` R10). It is CUTOVER.md's one unticked box.
+**The owner's decisions of 2026-09-27.** Nothing waits on the owner but the first Release.
+- **SP-57: two web-only extras in the Sequence tab** stay, "Keep both": a Clear button for a
+  finished run, and the "could not seed" notice (`SEQUENCE_PARITY.md` SP-57).
+- **R10: the Docker deployment, run for real,** stays deferred, "Keep deferring". CI builds its
+  images and nothing has run them: the `ai` profile is broken, there is no CPU profile, and the
+  inference image has never been built (`DEPLOYABILITY.md` R10). It is CUTOVER.md's one unticked
+  box.
+- **R11: the release zip** is built (below).
+- **Two 16-bit bugs legacy has are fixed in the web,** "Fix it in the web" both times: RULE-024's
+  int16 overflow, which made bright colour images gray (`ff56922`; `CONTROL_PARITY.md` CP-72),
+  and RULE-030's black crop, where the FFT filter's result on a crop was divided by 256 a second
+  time (`c8a6250`; CP-46).
 
 **Before the switch.** The live differential suites, run again with real checkpoints ("What to do
 next", item 2). The deployment box waits on R10.
