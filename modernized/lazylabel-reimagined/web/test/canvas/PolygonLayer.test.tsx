@@ -12,6 +12,7 @@ import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { PolygonLayer } from "../../src/canvas/PolygonLayer.jsx";
+import { ViewKindContext, type ViewKind } from "../../src/canvas/viewKind.js";
 import { renderWithSettings } from "./settingsHarness.jsx";
 
 afterEach(cleanup);
@@ -32,7 +33,7 @@ beforeEach(() => {
 });
 
 function layer(
-  props: Partial<Parameters<typeof PolygonLayer>[0]> = {},
+  props: Partial<Parameters<typeof PolygonLayer>[0]> & { readonly view?: ViewKind } = {},
   settings: Readonly<Record<string, unknown>> = {},
 ) {
   // Typed as mocks rather than as the prop signatures, so `.mock.calls` is available: the argument
@@ -41,7 +42,7 @@ function layer(
   const onErase = vi.fn(props.onErase);
   const onRefused = vi.fn(props.onRefused);
 
-  renderWithSettings(
+  const drawn = (
     <PolygonLayer
       width={IMAGE.width}
       height={IMAGE.height}
@@ -49,7 +50,11 @@ function layer(
       onComplete={onComplete}
       onErase={onErase}
       onRefused={onRefused}
-    />,
+    />
+  );
+  renderWithSettings(
+    // The split view says "multi" around the view it draws; nothing else says anything.
+    props.view === undefined ? drawn : <ViewKindContext.Provider value={props.view}>{drawn}</ViewKindContext.Provider>,
     settings,
   );
 
@@ -101,6 +106,30 @@ describe("placing vertices", () => {
     clickAt(surface, 20, 20, { button: 2 });
 
     expect(vertexAt(0)).toBeNull();
+  });
+});
+
+describe("in legacy's Multi tab, in whole pixels", () => {
+  it("puts each vertex at int() of its click, the edges between those, and the dot at the click", () => {
+    // main_window.py:5654-5677: `point = [int(pos.x()), int(pos.y())]`, the line to that point,
+    // and the dot at `pos`.
+    const { surface, onComplete } = layer({ view: "multi", joinThreshold: 2 });
+    clickAt(surface, 30.8, 40.6);
+    clickAt(surface, 90.3, 40.2);
+    clickAt(surface, 90.7, 80.9);
+
+    expect(Number(vertexAt(0)?.getAttribute("cx"))).toBeCloseTo(30.8, 10);
+    expect(Number(vertexAt(0)?.getAttribute("cy"))).toBeCloseTo(40.6, 10);
+    const edge = screen.getByTestId("edge-0");
+    expect(["x1", "y1", "x2", "y2"].map((name) => edge.getAttribute(name))).toEqual(["30", "40", "90", "40"]);
+
+    clickAt(surface, 31.2, 41.2);
+
+    expect(onComplete.mock.calls[0]?.[0]).toEqual([
+      { x: 30, y: 40 },
+      { x: 90, y: 40 },
+      { x: 90, y: 80 },
+    ]);
   });
 });
 

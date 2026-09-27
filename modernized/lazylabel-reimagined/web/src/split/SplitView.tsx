@@ -657,7 +657,7 @@ function PairDraftMarks({
       preserveAspectRatio="none"
       aria-label="Polygon in progress"
     >
-      <DraftMarks vertices={draft.vertices} view="multi" sizing={sizing} testIdPrefix="pair-" />
+      <DraftMarks vertices={draft.vertices} marks={draft.marks} view="multi" sizing={sizing} testIdPrefix="pair-" />
     </svg>
   );
 }

@@ -18,6 +18,8 @@ import {
   cancel,
   click,
   finish,
+  lastVertex,
+  redoVertex,
   undoVertex,
   type PolygonDraft,
 } from "../../src/tools/polygon.js";
@@ -187,6 +189,53 @@ describe("undo during drawing", () => {
 describe("abandoning a draft", () => {
   it("returns the idle state", () => {
     expect(cancel()).toEqual(EMPTY_DRAFT);
+  });
+});
+
+describe("in legacy's Multi tab, whose vertices are whole pixels", () => {
+  /** A click's new draft, or a failure naming what came instead. */
+  function placed(outcome: ReturnType<typeof click>): PolygonDraft {
+    if (outcome.kind !== "vertex") throw new Error(`expected a vertex, got ${outcome.kind}`);
+    return outcome.draft;
+  }
+
+  it("places the vertex at int() of the click, and its dot where the click was", () => {
+    // `point = [int(pos.x()), int(pos.y())]` (main_window.py:5654); the dot at `pos` (5659-5662).
+    const next = placed(click(EMPTY_DRAFT, { x: 30.8, y: 40.6 }, { whole: true }));
+
+    expect(next.vertices).toEqual([{ x: 30, y: 40 }]);
+    expect(next.marks).toEqual([{ x: 30.8, y: 40.6 }]);
+  });
+
+  it("measures the close test from the click as it is to the WHOLE first vertex", () => {
+    // `(pos.x() - first_point[0]) ** 2 + ...` against the stored int point (main_window.py:
+    // 5609-5614). Clicked at (10.9, 10.9), the first vertex is (10, 10): a click at (12.2, 10.9)
+    // is sqrt(5.65) from it and adds a vertex, though it is 1.3 from where the first click was.
+    let current = EMPTY_DRAFT;
+    for (const at of [{ x: 10.9, y: 10.9 }, { x: 50.5, y: 10.5 }, { x: 50.5, y: 50.5 }]) {
+      current = placed(click(current, at, { whole: true }));
+    }
+
+    expect(click(current, { x: 12.2, y: 10.9 }, { whole: true }).kind).toBe("vertex");
+    expect(click(current, { x: 11.2, y: 10.9 }, { whole: true })).toEqual({
+      kind: "close",
+      vertices: [{ x: 10, y: 10 }, { x: 50, y: 10 }, { x: 50, y: 50 }],
+    });
+  });
+
+  it("takes the dot back with its vertex, and puts both back on redo", () => {
+    const one = placed(click(EMPTY_DRAFT, { x: 1.5, y: 2.5 }, { whole: true }));
+    const two = placed(click(one, { x: 9.9, y: 9.1 }, { whole: true }));
+    const taken = lastVertex(two)!;
+    const back = undoVertex(two);
+
+    expect(back).toEqual({ vertices: [{ x: 1, y: 2 }], marks: [{ x: 1.5, y: 2.5 }] });
+    expect(redoVertex(back, taken)).toEqual(two);
+  });
+
+  it("leaves the single view's vertices where the click was, with no separate dots", () => {
+    // polygon_drawing_manager.py:93, 202 keep the QPointF.
+    expect(placed(click(EMPTY_DRAFT, { x: 30.8, y: 40.6 }))).toEqual({ vertices: [{ x: 30.8, y: 40.6 }] });
   });
 });
 

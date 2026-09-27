@@ -17,7 +17,15 @@
  * squared form deliberately: with integer coordinates it is exact, so the boundary case — a click
  * at distance exactly equal to the threshold, which must NOT close — cannot be decided differently
  * by a square root's last bit.
+ *
+ * THE MULTI TAB'S VERTICES ARE WHOLE PIXELS. Legacy's single view keeps the click as it is
+ * (`polygon_drawing_manager.py:93, 202`), but its Multi tab stores `[int(pos.x()), int(pos.y())]`
+ * (`main_window.py:5654`), joins its edges there (5670-5677, 5698-5706), and draws each dot where
+ * the click was (5659-5662, 5688-5690). Its close test measures the click as it is against that
+ * whole first vertex (5609-5614).
  */
+
+import { wholePixel } from "../canvas/coordinates.js";
 
 export interface Point {
   readonly x: number;
@@ -27,6 +35,11 @@ export interface Point {
 /** A polygon being drawn. Empty means the tool is idle. */
 export interface PolygonDraft {
   readonly vertices: readonly Point[];
+  /**
+   * Where each vertex's dot is drawn, one per vertex, when that is not the vertex: in legacy's Multi
+   * tab, where the click was (`main_window.py:5659-5662`). Absent where the dots are the vertices.
+   */
+  readonly marks?: readonly Point[];
 }
 
 export const EMPTY_DRAFT: PolygonDraft = { vertices: [] };
@@ -61,6 +74,11 @@ export interface ClickOptions {
   readonly joinThreshold?: number;
   /** Shift held: closing the polygon erases instead of creating. */
   readonly shift?: boolean;
+  /**
+   * Legacy's Multi tab: the vertex goes down in whole pixels and its dot where the click was
+   * (`main_window.py:5654-5662`).
+   */
+  readonly whole?: boolean;
 }
 
 /**
@@ -86,7 +104,16 @@ export function click(draft: PolygonDraft, at: Point, options: ClickOptions = {}
     }
   }
 
-  return { kind: "vertex", draft: { vertices: [...draft.vertices, at] } };
+  if (options.whole !== true && draft.marks === undefined) {
+    return { kind: "vertex", draft: { vertices: [...draft.vertices, at] } };
+  }
+  return {
+    kind: "vertex",
+    draft: {
+      vertices: [...draft.vertices, options.whole === true ? wholePixel(at) : at],
+      marks: [...(draft.marks ?? draft.vertices), at],
+    },
+  };
 }
 
 /**
@@ -120,7 +147,24 @@ export function finish(draft: PolygonDraft, options: { readonly shift?: boolean 
  */
 export function undoVertex(draft: PolygonDraft): PolygonDraft {
   if (draft.vertices.length === 0) return draft;
-  return { vertices: draft.vertices.slice(0, -1) };
+  const vertices = draft.vertices.slice(0, -1);
+  return draft.marks === undefined ? { vertices } : { vertices, marks: draft.marks.slice(0, -1) };
+}
+
+/** Put back a vertex undo took, with the dot it was drawn at. */
+export function redoVertex(draft: PolygonDraft, taken: { readonly vertex: Point; readonly mark: Point }): PolygonDraft {
+  const vertices = [...draft.vertices, taken.vertex];
+  return draft.marks === undefined && taken.mark === taken.vertex
+    ? { vertices }
+    : { vertices, marks: [...(draft.marks ?? draft.vertices), taken.mark] };
+}
+
+/** The last vertex, with where its dot is drawn, for undo to keep and redo to put back. */
+export function lastVertex(draft: PolygonDraft): { readonly vertex: Point; readonly mark: Point } | null {
+  const index = draft.vertices.length - 1;
+  if (index < 0) return null;
+  const vertex = draft.vertices[index]!;
+  return { vertex, mark: draft.marks?.[index] ?? vertex };
 }
 
 /** Abandon the whole draft, as switching tools or loading another image does. */

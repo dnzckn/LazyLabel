@@ -28,6 +28,8 @@ import {
   cancel,
   click as clickTool,
   finish,
+  lastVertex,
+  redoVertex,
   undoVertex,
   type PolygonDraft,
 } from "../tools/polygon.js";
@@ -89,11 +91,11 @@ export function PolygonLayer({
     pairDraft === null || pairDraft.linked ? EMPTY_DRAFT : pairDraft.drafts[pairDraft.active === 0 ? 1 : 0];
   const anyDrawing = draft.vertices.length > 0 || otherDraft.vertices.length > 0;
   /**
-   * Vertices Ctrl+Z took back, newest last, for Ctrl+Y or Ctrl+Shift+Z to put back, as legacy's
-   * redo re-adds a polygon point (undo_redo_manager.py:110-111). Emptied by anything that makes
-   * them stale: a new vertex, or the draft ending.
+   * Vertices Ctrl+Z took back, newest last, each with where its dot was drawn, for Ctrl+Y or
+   * Ctrl+Shift+Z to put back, as legacy's redo re-adds a polygon point (undo_redo_manager.py:
+   * 110-111). Emptied by anything that makes them stale: a new vertex, or the draft ending.
    */
-  const undone = useRef<ImagePoint[]>([]);
+  const undone = useRef<{ readonly vertex: ImagePoint; readonly mark: ImagePoint }[]>([]);
 
   const image = { width, height };
 
@@ -191,9 +193,11 @@ export function PolygonLayer({
       // Outside the image is ignored rather than clamped onto an edge the user did not click.
       if (located.kind === "outside") return;
 
+      // In the Multi tab the vertex goes down in whole pixels, as legacy's does (`tools/polygon.ts`).
       const outcome = clickTool(draft, located.point, {
         ...(joinThreshold === undefined ? {} : { joinThreshold }),
         shift: event.shiftKey,
+        whole: view === "multi",
       });
 
       if (outcome.kind === "vertex") {
@@ -203,7 +207,7 @@ export function PolygonLayer({
       else if (outcome.kind === "close") complete(outcome.vertices, false);
       else if (outcome.kind === "erase") complete(outcome.vertices, true);
     },
-    [boxOf, complete, draft, image, joinThreshold, setDraft],
+    [boxOf, complete, draft, image, joinThreshold, setDraft, view],
   );
 
   // A press on this half of the Multi tab while the other was being edited places the vertex here,
@@ -216,6 +220,7 @@ export function PolygonLayer({
     const outcome = clickTool(draft, handed.from, {
       ...(joinThreshold === undefined ? {} : { joinThreshold }),
       shift: handed.shift,
+      whole: view === "multi",
     });
     if (outcome.kind === "vertex") {
       undone.current = [];
@@ -276,14 +281,14 @@ export function PolygonLayer({
       if (modifier && key === "z" && !event.shiftKey && drawing) {
         event.preventDefault();
         event.stopPropagation();
-        undone.current = [...undone.current, draft.vertices[draft.vertices.length - 1]!];
+        undone.current = [...undone.current, lastVertex(draft)!];
         setDraft(undoVertex(draft));
       } else if (modifier && ((key === "z" && event.shiftKey) || key === "y") && undone.current.length > 0) {
         event.preventDefault();
         event.stopPropagation();
         const back = undone.current[undone.current.length - 1]!;
         undone.current = undone.current.slice(0, -1);
-        setDraft({ vertices: [...draft.vertices, back] });
+        setDraft(redoVertex(draft, back));
       }
     };
 
@@ -302,7 +307,7 @@ export function PolygonLayer({
       aria-label="Polygon tool"
       onPointerDown={onPointerDown}
     >
-      <DraftMarks vertices={draft.vertices} view={view} sizing={sizing} />
+      <DraftMarks vertices={draft.vertices} marks={draft.marks} view={view} sizing={sizing} />
     </svg>
   );
 }
@@ -322,7 +327,8 @@ const BLUE = "0, 0, 255";
  *
  * IN THE MULTI TAB, linked or not, in both halves (main_window.py:5659-5706): an opaque cyan dot with
  * a black pen one image pixel wide at each vertex, over opaque cyan edges two image pixels wide, and
- * no fill.
+ * no fill. The edges join the vertices, which are whole pixels there, and each dot is where its click
+ * was (`marks`; main_window.py:5654-5662, 5670-5677, 5688-5690, 5698-5706).
  *
  * A dot's radius is legacy's `mw.point_radius` in both, `point_radius x annotation_size_multiplier`
  * image pixels. Nothing marks the vertex that would close the shape, as nothing does in legacy.
@@ -332,11 +338,14 @@ const BLUE = "0, 0, 255";
  */
 export function DraftMarks({
   vertices,
+  marks,
   view,
   sizing,
   testIdPrefix = "",
 }: {
   readonly vertices: readonly ImagePoint[];
+  /** Where each vertex's dot is drawn, when not on the vertex (`PolygonDraft.marks`). */
+  readonly marks?: readonly ImagePoint[] | undefined;
   /** Which of legacy's views this is drawn in. */
   readonly view: ViewKind;
   readonly sizing: Sizing;
@@ -349,8 +358,8 @@ export function DraftMarks({
     <ellipse
       key={`dot-${index}`}
       data-testid={`${testIdPrefix}vertex-${index}`}
-      cx={vertex.x}
-      cy={vertex.y}
+      cx={(marks?.[index] ?? vertex).x}
+      cy={(marks?.[index] ?? vertex).y}
       rx={radius}
       ry={radius}
       {...(multi

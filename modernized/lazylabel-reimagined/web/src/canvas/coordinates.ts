@@ -18,6 +18,9 @@
  *    only when rasterized (segment_manager.py:174-185). Rounding it here would break the join
  *    threshold too, which is measured in image pixels against the first vertex: with both ends
  *    rounded, a click 1.4 pixels away and one 0.6 pixels away can land on the same integer.
+ *  - The Multi tab's polygon vertices are whole pixels (main_window.py:5654), each dot drawn where
+ *    its click was (5659-5662), and its close test measures the click as it is against the whole
+ *    first vertex (5609-5614).
  *
  * A CLICK OUTSIDE THE IMAGE IS REPORTED, NOT CLAMPED. Clamping is the tempting one-liner and it
  * silently places a vertex on the edge the user did not click, which then rasterizes into the
