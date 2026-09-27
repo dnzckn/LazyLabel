@@ -100,6 +100,27 @@ describe("finding the shape under a click", () => {
   });
 });
 
+describe("a polygon reaching past the edge", () => {
+  it("is selected where legacy's clipped copy of it lies, not where it is drawn", () => {
+    // main_window.py:2319-2324: the vertices as int32, `np.clip`ped to (w - 1, h - 1), then
+    // `cv2.fillPoly`. Clipped, (-100, 50) is (0, 50) and (50, 100) is (50, 99): legacy's mask has
+    // 2575 pixels, where the triangle drawn has 4282 inside the image.
+    const image = { width: 100, height: 100 };
+    const triangle: WireSegment = { type: "Polygon", classId: 0, vertices: [[-100, 50], [50, 0], [50, 100]] };
+
+    let hits = 0;
+    for (let y = 0; y < image.height; y += 1) {
+      for (let x = 0; x < image.width; x += 1) {
+        if (hitTest([triangle], { x: x + 0.5, y: y + 0.5 }, image) === 0) hits += 1;
+      }
+    }
+
+    expect(hits).toBe(2575);
+    expect(hitTest([triangle], { x: 5.5, y: 20.5 }, image)).toBeNull();
+    expect(hitTest([triangle], { x: 10.5, y: 50.5 }, image)).toBe(0);
+  });
+});
+
 describe("the local rasterization agrees with the full-image one", () => {
   it("at every pixel, for every shape", () => {
     // The optimisation's whole correctness argument. It holds because the bounding-box origin is
@@ -111,9 +132,12 @@ describe("the local rasterization agrees with the full-image one", () => {
       circle,
       // Fractional vertices, which is where truncation could diverge.
       { type: "Polygon", classId: 3, vertices: [[3.7, 4.2], [18.9, 4.2], [11.5, 19.8]] },
-      // A shape partly outside the image.
+      // Shapes partly outside the image, the second one changed by the clip.
       { type: "Polygon", classId: 4, vertices: [[-5, -5], [12, -5], [12, 8], [-5, 8]] },
+      { type: "Polygon", classId: 6, vertices: [[-40.5, 20.5], [30.2, -3.7], [30.2, 45.1]] },
       { type: "Circle", classId: 5, vertices: [[8.5, 30.25], [12.75, 33.5]] },
+      // A circle reaching past a corner, which legacy does not clip (main_window.py:2331).
+      { type: "Circle", classId: 7, vertices: [[2.5, 3.5], [9.25, 3.5]] },
     ];
 
     const disagreements: string[] = [];
@@ -124,8 +148,15 @@ describe("the local rasterization agrees with the full-image one", () => {
       const vertices = shape.vertices;
       if (vertices === undefined) throw new Error(`shape ${which} has no vertices`);
 
+      // A polygon as legacy's hit test takes it: truncated, then clipped into the image
+      // (main_window.py:2320-2322).
+      const clip = (value: number, top: number) => Math.min(Math.max(Math.trunc(value), 0), top);
+      const tested =
+        shape.type === "Polygon"
+          ? vertices.map(([x, y]) => [clip(x, IMAGE.width - 1), clip(y, IMAGE.height - 1)] as const)
+          : vertices;
       const full = rasterizeSegment(
-        { type: shape.type, classId: shape.classId, vertices },
+        { type: shape.type, classId: shape.classId, vertices: tested },
         IMAGE.height,
         IMAGE.width,
       );

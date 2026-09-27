@@ -22,6 +22,12 @@
  * THE TOPMOST SHAPE WINS. Legacy walks the list backwards, so the most recently added shape takes
  * a click where several overlap. That is what a user expects from the thing they just drew, and it
  * is the opposite of what a forward loop gives.
+ *
+ * A POLYGON IS CLIPPED TO THE IMAGE FIRST, where the save does not clip it. Legacy's hit test
+ * truncates the vertices and then `np.clip`s each into the image before `cv2.fillPoly`
+ * (main_window.py:2320-2324, and 2380-2383 in the Multi tab), so a polygon reaching past an edge
+ * is selected where its clipped copy lies, which is less than what is drawn and saved. A circle is
+ * rasterized as it is saved (2331, 2390).
  */
 
 import { rasterizeSegment, type Segment } from "@lazylabel/annotation-formats";
@@ -50,12 +56,12 @@ export function hitTest(
   if (x < 0 || y < 0 || x >= image.width || y >= image.height) return null;
 
   for (let index = segments.length - 1; index >= 0; index -= 1) {
-    if (covers(segments[index]!, x, y)) return index;
+    if (covers(segments[index]!, x, y, image)) return index;
   }
   return null;
 }
 
-function covers(segment: WireSegment, x: number, y: number): boolean {
+function covers(segment: WireSegment, x: number, y: number, image: ImageSize): boolean {
   // A mask arrives BOUNDED -- a box plus the bytes inside it -- so the point is tested against
   // the box first and only then against the region. Decoding the whole image's worth of pixels to
   // answer "is this one pixel set" is the cost the bounded format exists to avoid.
@@ -83,8 +89,14 @@ function covers(segment: WireSegment, x: number, y: number): boolean {
     return region[(y - y0) * regionWidth + (x - x0)] !== 0;
   }
 
-  const vertices = segment.vertices;
-  if (vertices === undefined || vertices.length === 0) return false;
+  if (segment.vertices === undefined || segment.vertices.length === 0) return false;
+  // A polygon's vertices truncated and clipped into the image, as legacy's hit test takes them.
+  const vertices =
+    segment.type === "Polygon"
+      ? segment.vertices.map(
+          ([vx, vy]) => [clip(Math.trunc(vx), image.width - 1), clip(Math.trunc(vy), image.height - 1)] as const,
+        )
+      : segment.vertices;
 
   // The box is in whole pixels, which is what makes the local rasterization exact.
   let minX = Infinity;
@@ -152,5 +164,10 @@ export function toggle(selected: readonly number[], index: number): readonly num
  */
 function even(value: number): number {
   return 2 * Math.floor(value / 2);
+}
+
+/** `np.clip(value, 0, top)`, for a whole number. */
+function clip(value: number, top: number): number {
+  return Math.min(Math.max(value, 0), top);
 }
 
