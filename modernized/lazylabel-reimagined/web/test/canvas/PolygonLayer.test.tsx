@@ -7,6 +7,7 @@
  * Space finishing a polygon while the user is typing a class name.
  */
 
+import { StrictMode } from "react";
 import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -373,5 +374,41 @@ describe("how big the drawing aids are", () => {
         10,
       ),
     );
+  });
+});
+
+describe("under StrictMode, as main.tsx renders the app", () => {
+  // StrictMode runs a state updater twice. Space and Shift+Space finished the polygon INSIDE
+  // `setDraft`'s updater, so in the running app every Space-finished polygon was added twice, each
+  // with a new class, and took two Ctrl+Z to undo; React also warned "Cannot update a component
+  // while rendering a different component". Found in a real browser on 2026-09-27: these tests
+  // rendered without StrictMode, where the updater runs once.
+  function strictLayer() {
+    const onComplete = vi.fn();
+    const onErase = vi.fn();
+    renderWithSettings(
+      <StrictMode>
+        <PolygonLayer width={IMAGE.width} height={IMAGE.height} onComplete={onComplete} onErase={onErase} />
+      </StrictMode>,
+    );
+    const surface = screen.getByLabelText("Polygon tool");
+    clickAt(surface, 10, 10);
+    clickAt(surface, 50, 10);
+    clickAt(surface, 50, 50);
+    return { onComplete, onErase };
+  }
+
+  it("finishes a polygon on Space once", () => {
+    const { onComplete } = strictLayer();
+    fireEvent.keyDown(document, { key: " ", code: "Space" });
+
+    expect(onComplete).toHaveBeenCalledTimes(1);
+  });
+
+  it("erases on Shift+Space once", () => {
+    const { onErase } = strictLayer();
+    fireEvent.keyDown(document, { key: " ", code: "Space", shiftKey: true });
+
+    expect(onErase).toHaveBeenCalledTimes(1);
   });
 });

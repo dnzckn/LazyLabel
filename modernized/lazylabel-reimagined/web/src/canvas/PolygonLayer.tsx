@@ -111,21 +111,23 @@ export function PolygonLayer({
    * The BINDING decides which of the two this is, not `event.shiftKey`: `save_segment` is Space
    * and `erase_segment` is Shift+Space, and a user who remaps either gets what they asked for.
    * Reading the modifier here would quietly ignore half of any remapping.
+   *
+   * The draft is READ here, never finished inside `setDraft`'s updater, as it was until 2026-09-27:
+   * React runs an updater during render, and twice under StrictMode, which the app renders in
+   * (main.tsx), so every Space-finished polygon was added twice, each with a new class. `useHotkey`
+   * calls the handler of the latest render, so the draft read is the current one.
    */
   const finishWith = useCallback(
     (erase: boolean) => {
       // Guarded on there being a draft, because these keys are registered whenever this layer is
       // mounted and the layer outlives any one shape.
-      setDraft((current) => {
-        if (current.vertices.length === 0) return current;
-        const outcome = finish(current, { shift: erase });
-        if (outcome.kind === "close") complete(outcome.vertices, false);
-        else if (outcome.kind === "erase") complete(outcome.vertices, true);
-        else if (outcome.kind === "ignored") onRefused?.(outcome.reason);
-        return current;
-      });
+      if (draft.vertices.length === 0) return;
+      const outcome = finish(draft, { shift: erase });
+      if (outcome.kind === "close") complete(outcome.vertices, false);
+      else if (outcome.kind === "erase") complete(outcome.vertices, true);
+      else if (outcome.kind === "ignored") onRefused?.(outcome.reason);
     },
-    [complete, onRefused, setDraft],
+    [complete, draft, onRefused],
   );
 
   useHotkey("save_segment", () => finishWith(false));
