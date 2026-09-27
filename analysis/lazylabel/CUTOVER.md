@@ -72,9 +72,12 @@ Each of these is checkable, and none of them is an opinion.
       themselves when no checkpoint is configured, so a green CI run says nothing about them —
       `PROGRESS.md` has the command and the expected counts. Met 2026-09-25 with all three
       checkpoints on CPython 3.12: 650 passed, 0 skipped. Run them again if the inference service
-      changes before the switch.
+      changes before the switch. It changed on 2026-09-26 (JPEG frames, frames of another size,
+      model Load and Unload, the AI setup), so they are due again (`PROGRESS.md`, "What to do
+      next").
 - [ ] **The deployment has been built and run.** Skipped for now, the owner's choice
-      (2026-09-23, confirmed 2026-09-25). Everything under `modernized/lazylabel-reimagined/
+      (2026-09-23, confirmed 2026-09-25). `DEPLOYABILITY.md` R10 is that work, and it waits on
+      the owner. Everything under `modernized/lazylabel-reimagined/
       deploy/` is currently reasoned rather than observed; its README says so and names what to
       check first. That has to stop being true before anyone depends on it.
 - [x] **A backup of the dataset folder exists.** The owner's answer, 2026-09-25: not needed, the

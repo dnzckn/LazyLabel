@@ -3,135 +3,80 @@
 Where the conversion stands, on branch `main-web`. `MODERNIZATION_BRIEF.md` is the plan and does
 not change as work lands; this file is the log against it, and is the one to read first.
 
-Last updated: 2026-09-26.
+Last updated: 2026-09-27.
 
 ## Short answer
 
-**Every capability is built, and the conversion is not finished — because finishing means PROVING
-it, and that needs data only the owner has.**
+**Every capability is built, and the web app does what the PyQt6 app does, except where the owner
+chose otherwise or a difference is written down with its reason.** What is left is mostly the
+owner's to decide ("What to do next").
 
-All fourteen capabilities are built and reachable from the app -- C13's hotkey AND settings editors
-since 2026-09-23, when asking what a user can reach, rather than what the code reads, found neither
-had been built; every setting now has a control or a written reason. C11 is included: propagation runs end
-to end, from the browser's reference masks through the API to a SAM 2 video predictor, with a job
-API that cancels without losing committed frames. Run that way for the first time on 2026-09-23, in the browser pane
-against the real stack with SAM 2.1 large, on eight synthetic frames of a moving disc. The reference
-came from a polygon file on frame 0. All seven other frames propagated, and Save All wrote NPZ and
-YOLO files whose boxes follow the disc to within about a pixel in every frame. The reference was not
-rewritten. Find Archetypes ran the same way with the real MobileNetV3 embedder. Eight near-identical frames
-came back as "too uniform to suggest frames", which is a result, and the page showed it as one.
-Thirty frames in three distinct scenes gave "5 frames suggested from 3 scenes": two, two and one,
-at RULE-022's minimum of five. **Propagation now matches legacy's frame for frame** on a golden
-captured from legacy's own sequence mode (2026-09-23; "What to do next" has the detail). That
-covers the masks, the scores and the flags, and what Keep Flagged Masks, Skip Labeled and Save All
-do with them. It holds for sequences that fit in one streaming window; nothing covers a longer one
-yet. **Find Archetypes matches legacy's too**: on a 90-frame, three-scene sequence the port and
-legacy's own `ReferenceFinderWorker` suggest the same 10 frames
-(`inference/tests/test_differential_archetypes.py`), on 3.12 with PyTorch 2.10 and on 3.10 with
-2.7.1. Legacy is handed a temporary copy of the checkpoint, because it downloads into its worktree
-when the file is missing and deletes the file when a load fails.
+**All fourteen capabilities are built** and reachable from the app, C8's tiles and C13's hotkey and
+settings editors included. Every setting has a control or a written reason. All five of Phase 6's
+exit criteria are met (2026-09-25), criteria 2 and 4 on synthetic data the owner chose in place of
+real data: a clip of moving shapes, and a generated acceptance corpus.
 
-**Running the whole stack with the real models found what 3,000 component tests had not.** That
-means the browser, the API, and the inference service on the GPU, as a user would run them. From
-2026-09-23, the AI tool, propagation and Find Archetypes have each been run that way, and the runs
-found seven defects, with the code reading they prompted, all of them now fixed. All but one were
-silent; the load race showed as a 500:
-- a click answered from another image's encoding;
-- a cancel dropping frames, or keeping half of one;
-- re-propagated frames counted as saved;
-- an object leaving the frame ending the timeline;
-- progress counted in objects;
-- two first requests racing to load one model.
+**The parity audits are done.** The owner's direction, 2026-09-25: "ensure that every feature
+behaves the same way across the two versions", the Sequence tab first.
+- `VISUAL_PARITY.md`: all fourteen items, 2026-09-24 and 25, each compared against the legacy
+  window rendered by `grab_legacy.py`.
+- `CONTROL_PARITY.md`: every item, CP-01 to CP-75, is done. What a row still does differently is
+  written in that row, under "Not matched" or "Still different", with its reason.
+- `SEQUENCE_PARITY.md`: the 58 differences found on 2026-09-25 are each fixed or kept as a
+  recorded decision, except SP-57's two web-only extras, which wait for the owner.
+- A last pass on 2026-09-27 checked five small gaps in the mouse handling, four of them in the
+  Multi view. Three match legacy now; two are recorded with their reasons ("What remains").
 
-Two more came from comparing against legacy's code and measuring payloads: Operate On View
-segmenting an unprocessed picture, and large colour images refused. Each is below with its test. The latency budget holds from the browser too: 82-128 ms per click on
-12 megapixels, warm. Anything touching the inference path is worth one more such run; the note on
-running the stack says how.
+**The owner's decisions are built.** 2026-09-26: match the desktop app's silent loss (leaving the
+Sequence tab, New Timeline, an emptied frame's files deleted); crop and FFT reset per image; E and
+R toggle back; Ctrl+Plus/Minus keep zooming; the Multi view acts on both images; SP-09 and SP-36
+keep the web's answers; closing the tab still asks; Min Conf is a setting; saving on a move only
+with Auto-Save on Navigate on. 2026-09-27: the Multi view is for AI prompts at the same pixel in
+both images, each image its own contour, and starts linked (CP-31). Earlier answers: tiles built,
+Python 3.12, synthetic goldens, a simulated acceptance corpus, class names crossing both ways in
+`.npz` files, and two mains, the PyQt6 app on `main` and this one on `main-web`.
 
-**All five of Phase 6's exit criteria are met.** Two are met on synthetic data the owner chose in
-place of real data: criterion 2 on a clip of moving shapes, and criterion 4 on a generated
-acceptance corpus (2026-09-25; "What to do next", item 2, has the detail).
+**Checked on the real stack, with the models on the GPU**, not only in jsdom:
+- **Sequence, end to end** (2026-09-23 and 25): a reference from a polygon file, propagation with
+  SAM 2.1 large, Save All writing NPZ and YOLO files that follow the moving disc within about a
+  pixel, and Find Archetypes with the MobileNetV3 embedder. Propagation matches legacy's frame for
+  frame on the golden captured from legacy's own sequence mode. On the longer streaming golden the
+  two differences measured, SP-09 and SP-36, are where the owner kept the web's answers. Find
+  Archetypes suggests the
+  same 10 frames as legacy's `ReferenceFinderWorker` on a 90-frame clip.
+- **Linked Multi AI** (2026-09-27): one click at (40, 120) gave one image a 1,810-pixel mask and
+  the other a 1,811-pixel one following its own disc; the two overlap at IoU 0.57, where a copy
+  would be 1 (CP-31, `6886af9`).
+- **Model controls** (CP-49): Load took the GPU from 804 to 2,107 MiB and read "Current: SAM 2.1
+  large"; Unload brought it back to 1,055 MiB.
+- **Headless sweeps** (2026-09-27) found what the jsdom suites had not, all fixed with tests: a
+  polygon added twice under StrictMode (`887f3a0`), a frame deleted by the Auto-Save after Save All
+  had written it (`77c642b`), a second Propagate starting during the first (`ef64eca`), a linked AI
+  click on a pair still being encoded asked of neither image (`8d75904`), and clicks landing 27 px
+  off after switching halves (`cb54bc3`).
 
-Every guard this project uses is closed or its remainder recorded: no unread settings, five
-unreached functions across the TypeScript and Python reach guards, each with a written reason
-(one is a library export the formats tests need), 40 of 43 hotkeys live (the other three are mouse
-bindings), and all 94 business rules traceable to a test or recorded as a decision.
+The latency budget holds from the browser: 82-128 ms per click on 12 megapixels, warm.
 
-**The web app now looks like the PyQt6 app** (the owner's direction of 2026-09-23). All fourteen
-items in `VISUAL_PARITY.md` §4 were done on 2026-09-24 and 25, each compared against the legacy
-window rendered at 1600x900 by `analysis/lazylabel/grab_legacy.py`:
-- **Layout:** the full-window frame, the image fitted to its pane, and the Single, Multi and
-  Sequence tabs.
-- **Look:** legacy's palette in both themes, 9pt type and its controls; the Mode Controls card with
-  Global and Image tabs; tinted section strips; the status bar; class-coloured segment and class
-  tables; the file list; the timeline bar; and the canvas colours.
+**One command starts it.** `npm install` in `modernized/`, then `npm start "<folder>"`, serves the
+app and the API from one port. For the AI tools, `npm run ai:setup` installs PyTorch 2.10.0 and SAM
+1 and 2 from `inference/uv.lock`, `npm run ai:models sam2.1-large` fetches a checkpoint and checks
+its hash, and `npm run doctor` checks all of it (`DEPLOYABILITY.md` R6 to R9). Settings live per
+user, in `~/.config/lazylabel/lazylabel-web.db` (R5, `c8fee09`).
 
-It found two real defects on the way, both fixed with tests:
-- A save after the view remounted was refused as a conflict with the app's own previous write,
-  because the file revision lived in the save button.
-- Nothing on screen could set the active class.
+## The suites, as of 2026-09-27
 
-Where the web app departs from legacy's look, the reason is written next to the item.
-
-**Class names in `.npz` files cross both ways** (the owner's approval of 2026-09-25). The web app
-reads the desktop app's pickled class-name table as data, without unpickling it, and writes the same
-table, so there is no converter step. "What to do next", item 3, has the detail and the checks.
-
-**Using the app side by side with the PyQt6 one, 2026-09-26.** The owner worked in the web app and
-asked for what the desktop app does. Each ask was built against legacy's code and checked in a
-browser:
-- shapes drawn at all: polygons, boxes and circles went into the tables but never onto the image
-  (CP-68);
-- legacy's hover and yellow selection highlight (CP-69);
-- vertices selected and dragged;
-- the class table reordered by dragging and renamed by double-click;
-- settings that last between sessions, with Reset to Default (CP-71);
-- the channel threshold bar, with markers added, dragged and removed on the bar (CP-47);
-- the hotkey editor's category tabs (CP-62);
-- no explanatory paragraphs in any panel (CP-75). `web/test/shell/terse.test.tsx` fails any run
-  of text over 60 characters.
-
-The parity audits moved too. `CONTROL_PARITY.md` closed more than twenty items that day and
-`SEQUENCE_PARITY.md` 32, including the Sequence tab's whole layout, legacy's labels, tooltips and
-notices, the one-button Propagate and Abort, and a rerun defect found on the real GPU. Launching
-is one command since the same day: `npm install` in `modernized/`, then `npm start "<folder>"`,
-which serves the app and the API from one port (`DEPLOYABILITY.md` is the evaluation behind it).
-The AI tools followed on 2026-09-27 (`DEPLOYABILITY.md` R6 to R9): `npm run ai:setup` installs
-PyTorch 2.10.0 and SAM 1 and 2 from `inference/uv.lock`, `npm run ai:models sam2.1-large` fetches
-a verified checkpoint, `npm start` then starts the inference service with the app, and `npm run
-doctor` checks all of it.
-
-**The Multi view does what it is for** (the owner, 2026-09-27: "the point of multi mode is to be
-able to use AI tool in it and be able to create segments using the same coordinates across both
-images for prompting the models, yet the contours of the segments can vary slightly"). The pair
-starts linked; each AI click and box goes to both images at the same pixel and is predicted on
-each image's own model, and Space makes each preview its own image's annotation (CP-31,
-`6886af9`). Checked on the GPU with a headless Chromium against the running stack: one click at
-(40, 120) gave frame_000 a 1,810-pixel mask centred at (40, 120) and frame_001 a 1,811-pixel one
-centred at (50, 123), following its disc; the two overlap at IoU 0.57, where a copy would be 1.
-
-**A headless sweep of the real stack found what the jsdom suites had not** (2026-09-27), all fixed
-with tests: a polygon finished with Space was added TWICE, each with a new class, because React
-runs a state updater twice under StrictMode (`887f3a0`); a frame open during a propagation, once
-Save All had written it, was deleted by the next Auto-Save (`77c642b`); a second Propagate could
-start while the first was starting (`ef64eca`); a linked AI click on a pair still being encoded
-was never asked of either image (`8d75904`); and legacy's "Saved: ...", its error notice for R and
-its Auto-Polygon reset notice were missing.
-
-## The suites, as of 2026-09-23
-
-All **seven** green, every one run on 2026-09-23. The `contracts` package was
-missing from this table entirely, which is how a table stops being a census.
+Six of the seven were run on 2026-09-27, after the day's last code change (`6fb821a`), and all six
+are green. The converter was not rerun: nothing in it has changed since 2026-09-25.
 
 | Package | Passing | Note |
 |---|---|---|
-| exporters | 2024 | the seven formats, byte-for-byte against goldens legacy wrote; rerun 2026-09-25 after the class-name work (30 files) |
-| web | 1264 | rerun 2026-09-25 after the class-name work (104 files); includes the four propagation-golden scenarios (16 tests against legacy's own sequence mode), the tile planning and legacy's reference buttons |
-| inference | 605 | plus 45 skipped: the differentials and the golden comparison, which need real checkpoints. With them: 650 passed, 0 skipped. Both on CPython 3.12.11 with PyTorch 2.10, which the package has required since 2026-09-23 |
-| api | 482 | rerun 2026-09-25 after the class-name work, on the corpus as legacy wrote it (36 files); plus 4 skipped (SEC-09's symlink tests, where the OS will not make a link, as on this machine); no todo left, since C8 is built |
-| settings-schema | 55 | includes the rule-fixed defaults |
-| converter | 30 | the pickled-alias rewrite; no longer needed since 2026-09-25, kept for its record |
-| contracts | 36 | the wire shapes both sides agree on, and the tile pyramid's geometry |
+| exporters | 2024 | `npx vitest run --testTimeout=60000`, 30 files: the seven formats byte for byte against goldens legacy wrote, and the differential emitters |
+| web | 1974 | `timeout 1200 npx vitest run --maxWorkers=3`, 129 files; `npm run typecheck` passes |
+| inference | 641 | plus 179 skipped: no checkpoint was set, and the suites that need one skip themselves. CPython 3.12 with PyTorch 2.10 (`E:/venv/lazylabel-312`), `pytest tests -q` |
+| api | 763 | plus 4 skipped, SEC-09's symlink tests, where the OS will not make a link; 48 files. Two earlier full runs timed out C12's tiny-box-huge-image at 5 s; that file passes alone, 17 of 17: load |
+| settings-schema | 55 | 5 files, including the rule-fixed defaults |
+| converter | 30 | not rerun; unchanged since 2026-09-25 and no longer needed, kept for its record |
+| contracts | 36 | 3 files: the wire shapes both sides agree on, and the tile pyramid's geometry |
 
 Each figure is read from that package's own run. Four commit messages this week quoted a count
 that had been typed before the run printed it and needed amending, which is why the rule is now
@@ -235,8 +180,9 @@ Each was examined rather than flipped.
   rendered pixels exist. **Tiles do not**: the spec's API sketch has a tile route
   (`/images/{imagePath}/tiles/{z}/{x}/{y}`), and its NFR table makes 50 megapixels the supported
   working size. Measured the same day, whole-image PNGs meet that size on a local install (the
-  figures are in "What to do next", item 4). Whether a hosted install needs tiles is the owner's
-  call, so C8 stays pending with that as its whole entry.
+  figures were in "What to do next", item 4, until 2026-09-27; git history keeps them). Whether a
+  hosted install needs tiles was the owner's call. The owner answered the same day, "build them
+  now", and they are built.
 
 **Collapsing a panel threw away what it held -- found and fixed 2026-09-23.** A panel UNMOUNTED
 its contents when collapsed, and collapsing is what people do for room. Collapsing Sequence after a
@@ -557,444 +503,21 @@ configured, so a green CI run says nothing about them — see `Running the live 
 
 ## What to do next
 
-**The owner's answers, 2026-09-23.** Asked as questions, answered as follows:
-- **Ctrl+Plus/Minus keep zooming** (RULE-033). The divergence from legacy's annotation-size
-  shortcut is now a decision, recorded as such in `web/test/rules/p0Coverage.test.ts`.
-- **Image tiles: build them now** (C8). **Built**, below.
-- **The sequence timeline keeps legacy's behaviour** (C10): rebuilt from the files, nothing new
-  stored.
-- **Python 3.12 goes in a separate venv**, leaving the shared `E:\venv\lazylabel` alone. The suites
-  run there with PyTorch, and only then are `requires-python` and the torch floor raised. **Done**:
-  every suite passed on 3.12.11 with PyTorch 2.10.0, and both floors are raised (SEC-08, below).
-- **Propagation goldens come from a synthetic clip** of moving shapes, since no real recording is
-  available.
-- **The acceptance corpus is simulated** (2026-09-25): "simulate the round trip, have multiple
-  shapes/segments/classes and play with the priority setting to ensure expected behaviors across
-  the variety of save formats". **Done**, item 2 below.
-- **Two mains for now** (2026-09-25): "i want to maintain support to both, pyqt6 and react/node
-  architectures so we have effectively two mains for now". `main` stays the PyQt6 app and
-  `main-web` the React/Node app. Nothing is merged. `main-web` is pushed to `origin/main-web` since
-  2026-09-26, at the owner's request ("pushed to that main-web branch tho not to main"); `main` is
-  never pushed from this work.
-- **Backups and pickled datasets: not needed**, the owner's answer of 2026-09-25. That answer
-  predates a finding, though: every NPZ the desktop app writes pickles its class names (item 2).
-  That is now moot: the owner approved reading and writing that table as data (item 3), so no
-  dataset needs the converter.
-- **Docker is skipped for now**; the deployment stays unverified, and says so.
-- **The backup refs from stripping co-author trailers are deleted**
-  (`backup/main-web-with-trailers`, `refs/original/refs/heads/main-web`).
-- **Every feature behaves the same, sequence mode first** (2026-09-25): "ensure that every
-  feature behaves the same way across the two versions, particularly the serial/time series more
-  is the premiere feature that needs to work flawlessly". Item 5 below.
-- **Moving saves when Auto-Save on Navigate is on** (2026-09-25): "moving should save if save on
-  move setting is turned on". This reverses decision 7 for navigation only. **Built** (2c1d1f1):
-  leaving an image or timeline frame with unsaved changes saves it first, as legacy's does. With
-  the setting off the web still asks, where legacy discards; closing still asks.
+The engineering the brief names is done. What is left is mostly the owner's to decide, and one
+check to repeat before the switch. In order:
 
-**The owner's answers, 2026-09-26.** Asked about the differences that were still recorded
-decisions; each answer is an option they chose:
-- **"Match the desktop app exactly"** on silent loss. Leaving the Sequence tab and New Timeline
-  drop unsaved propagated frames without asking (SP-15, SP-16). Leaving a frame emptied by hand
-  deletes its seven sidecar files (SP-58), which reverses RULE-083's never-delete answer and the
-  delete-on-empty line in `CUTOVER.md`. Multi saves both sides on every move, whatever Auto-Save
-  on Navigate says (CP-67). **Built** (`1046f58`, `38be6be`, `64198d1`): the API gained
-  `DELETE .../annotations`, which removes exactly legacy's seven paths. An image whose annotations
-  could not be read is still never written over or deleted (SEC-04). Closing still asks (SP-17).
-- **"Reset per image (current web)"**: the crop and the FFT threshold do not carry over to the
-  next image (SP-10).
-- **"E/R toggle back; Ctrl+Plus/Minus zoom"**: pressing Select or Edit again returns to the
-  previous mode, as legacy's does (RULE-070); Ctrl+Plus and Ctrl+Minus keep zooming, since
-  legacy's own bindings for them never fire (CP-66). **Built** (`68079b6`): E, Q and R toggle as
-  legacy's do, since legacy's "previous" includes Pan.
-- **"Act on both, like the desktop app"**: in Multi, navigation, pan, fit, Ctrl+A, V, M, Esc and
-  Space act on both viewers, with linked selection and alias mirroring (CP-31). This reverses
-  decision 8 for those actions. **Built** (`0e96d6a`): next/previous move the pair, and a linked
-  pair shares its selection and class names. CP-31 lists what still differs.
-- **A second round, the same day:** SP-09 and SP-36 "Keep the web" (the streaming golden's two
-  measured differences); closing the tab "Keep asking" (SP-17); and Min Conf a setting "like any
-  other setting in the app", reset by Reset to Default (SP-34). Then, typed: "The save on every move
-  is not like a default thing. It's only if the user has the save on navigation setting turned on",
-  and Save All "should save all the frames if they ... are passing the threshold". **Built**: leaving
-  an image saves it, changed or not, only with Auto-Save on Navigate on (`eeefbe0`), the Multi view's
-  pair save too (`e0f49a6`, where legacy saves the pair whatever the setting says); Enter in Multi
-  saves both sides (`42473a0`); Save All ignores the setting and writes the frames that pass Min Conf.
+1. **Ask the owner** about the pending decisions under "What remains": SP-57's two web-only
+   extras, R10, R11 and RULE-024's 16-bit overflow.
+2. **Run the live differential suites again with real checkpoints** (CUTOVER.md asks for it when
+   the inference service changes, and it changed on 2026-09-26: SP-08, SP-25, CP-49 and R7 to R9).
+   "Running the live suites" has the command. Leave `LAZYLABEL_TEST_SAM1_CHECKPOINT` unset while
+   the owner's inference service runs on port 8788: loading SAM 1 beside it exhausted the machine's
+   memory on 2026-09-26. Run the SAM 1 differential only with the service stopped.
+3. **If R10 is chosen,** build and run the Docker deployment once, so CUTOVER.md's last unticked
+   box can be ticked (DEPLOYABILITY.md R10 lists what to fix first).
 
-
-1. **Propagation goldens: captured, and the model's half of Phase 6 exit criterion 2 is met.**
-   Legacy's own sequence mode ran headless on a clip of moving shapes, the owner's choice. That
-   means MainWindow's methods, `SequenceViewMode`, `PropagationManager` and `Sam2Model`, with only
-   the widgets replaced by recorders. It ran four scenarios: legacy's defaults, Keep Flagged Masks
-   on, and Skip Labeled on and off over four labelled frames. The clip
-   (`inference/tests/fixtures/synthetic_clip.py`) is drawn from integers alone, so it regenerates
-   byte-identical anywhere and the golden pins every frame's digest. It has two tracked objects,
-   the reference on frame 8, and a same-coloured decoy for each object. The decoys make SAM 2
-   unsure in both passes: frame 2's square scores 0.975 on the backward pass and frame 11's disc
-   0.905 on the forward pass, each beside an object that passes. The square also leaves the
-   picture, so it comes back empty on frames 20-23. Output:
-   `inference/tests/goldens/propagation/synthetic-shapes.{json,npz}`, 60 kB and 14 kB.
-
-   **Its first run found a defect nothing else could.** The port walked the backward pass
-   forwards: it started at frame 0 and moved towards the reference, in a fresh SAM 2 state.
-   Legacy walks back from the reference, in reverse, in the state the forward pass has just
-   filled. On the golden, the square's mask on frame 0 shared no pixel with legacy's (IoU 0.00),
-   and frames 2, 3, 4 and 6 were flagged differently. No test could see it. The runner's fake
-   predictor ignored `reverse`, and the live differential seeds on frame 0, so it has no backward
-   pass.
-
-   Fixed. A sequence no longer than the window now runs in one state, forward and then back, as
-   legacy's full-context mode does, and backward windows walk in reverse. On the golden the runner
-   now matches legacy on every object on every frame: IoU 1.0000, scores different by exactly 0.0,
-   and the same flags. The fake follows SAM 2's own walk order, and 9 of the 11 new runner tests
-   fail against the old runner. The job's progress total also stopped counting the reference frame
-   twice, so a mid-sequence reference no longer leaves the bar one short.
-   `inference/tests/test_propagation_goldens.py` needs only a checkpoint, not legacy.
-
-   **The behaviour half is met too, and it belonged to the web app.** That half covers which frames
-   the timeline flags, what Keep Flagged Masks keeps, what Skip Labeled leaves alone, and what Save
-   All writes. `web/test/acceptance/c11.goldens.test.tsx` runs each of the golden's four scenarios
-   through the real timeline and propagation control. The fake service answers with legacy's own
-   model output, in the port runner's order. It then compares four things frame by frame: the
-   timeline after the run and after Save All, the confidence each frame shows, the masks it offers
-   for review, and the frames, objects and classes Save All writes. All 16 tests pass; on the web
-   code before this change, 15 of 16 failed. Three gaps were found and closed:
-   - **No Keep Flagged Masks.** Every flagged frame kept its masks for review. Legacy's default
-     discards all of them, the passing objects' too. `web/src/sequence/commit.ts` now decides that
-     when a frame's objects are all in, and keeps the decision, because RULE-060 says lowering Min
-     Conf afterwards "cannot recover them".
-   - **No Skip Labeled.** Legacy's default is on (RULE-081, P0). The web's Save All writes with no
-     revision check, so a re-run and a save overwrote every frame labelled since the timeline was
-     built. That included flagged frames fixed by hand, which is the workflow the option exists
-     for. The labelled set is now snapshotted from a fresh listing when Propagate is pressed, as
-     legacy probes the disk then. If the listing cannot be read, the run is refused rather than
-     run unprotected.
-   - **Written frames were never shown as saved.** Legacy paints them cyan. Frames now also show
-     their confidence to four decimals, as legacy's tooltip does, and the reference frame's own
-     result from the run is ignored. Legacy's engine never reports that result.
-
-   **Then end to end, in the browser pane against the real stack**, with the API, the inference
-   service and SAM 2.1 large on the GPU. The clip was set up as a dataset, and frame 8's reference
-   was saved through the API with the clip's exact masks. The timeline matched legacy's defaults
-   scenario frame by frame: frames 2 and 11 flagged, the other 21 propagated. All 23 confidences
-   matched legacy's to four decimals. "Save 21 frames" wrote 21 NPZ files, legacy's count, and
-   all 38 masks in them are identical to legacy's (IoU 1.0000). Each file held exactly the objects
-   legacy wrote, the disc alone on frames 20-23. The timeline then showed them saved.
-
-   Propagating again with Skip labeled on painted the 21 saved frames brown ("21 kept their
-   existing labels"), re-flagged 2 and 11 with the same scores, and offered nothing to save. All 43
-   sidecars kept their modification times. Before this change, that second run and a Save All
-   would have rewritten all 21.
-
-   **Timelines no longer mark references by themselves: the owner chose legacy's behaviour
-   (2026-09-23).** Building a timeline used to make every annotated frame a reference. That was the
-   brief's pilot wording, and it made a rebuilt timeline seed from every frame an earlier Save All
-   wrote, each annotation tracked as an object of its own. References now come only from the four
-   buttons legacy has: "Mark as reference", "+ All before", "+ All labeled" and "Clear references".
-   The golden's web test now sets up exactly what legacy's capture did: the labelled frames have
-   their sidecars from the start, and frame 8 is marked by hand.
-
-2. **The acceptance corpus: Phase 6 exit criterion 4, met on a synthetic corpus (2026-09-25).**
-   The owner chose this in place of real datasets.
-   `api/tools/generate_acceptance_corpus.py` writes ten randomized images:
-   - polygons, circles, AI masks and loaded masks over two to five classes;
-   - shapes overlapping on purpose, with 8 of the 10 images having overlapping classes;
-   - names for some classes, non-ASCII among them.
-
-   Legacy's own save path writes them once per pixel-priority setting (off, ascending,
-   descending), in all seven formats. The same script records what legacy writes when it opens
-   each image and saves it again: the oracle. Since item 3, every file is kept exactly as legacy
-   wrote it, pickled class names included. Before that, every archive was run through the
-   converter first.
-   `api/test/acceptance/corpus.test.ts` holds the port to two claims, over every image, format and
-   setting:
-   - **The same annotations saved give what legacy wrote.** 30 of 30. With priority forced off,
-     exactly the 16 cases where priority changes the answer fail, so the test can see it.
-   - **Opening an image and saving it again gives what legacy writes.** 30 of 30, all seven
-     formats. So does the command: `npm run acceptance -- <corpus> --oracle <legacy re-saves>`
-     exits 0.
-
-   **Three findings on the way.**
-   - **Legacy's own files do not survive legacy's own round trip.** Its NPZ holds one mask per
-     class, so opening an image merges a class's instances. On the corpus, all 150 instance-format
-     files (YOLO, YOLO segmentation, COCO, Pascal VOC, CreateML) change, and one NPZ loses a class
-     that priority had covered completely. So "re-exports identically" was never true of the
-     desktop app, and the claim that matters is the one above: the web app does exactly what the
-     desktop app does. The harness compared against the original files and could never have passed
-     on a dataset with more than one shape per image; `--oracle` fixes that.
-   - **Every NPZ the desktop app writes pickles its class names**, not only old ones:
-     `np.savez_compressed(..., class_aliases=dict)` stores a dict as an object array. Every dataset
-     the PyQt6 app saves therefore needed `lazylabel-convert-aliases` before the web app could read
-     its names. The masks loaded either way. Item 3 removed the need.
-   - **The harness compared NPZ bytes**, which cannot match by design: the two apps pickle the names
-     differently. It now compares every member's dtype, shape and values, and the names by value,
-     which is how Phase 1's goldens were always compared.
-
-   For a real corpus, if one ever comes: run the same command on it as it is. Without `--oracle`,
-   differences in the instance formats on images with several shapes are legacy's behaviour, not
-   the port's.
-
-3. **Done: class names in `.npz` files cross both ways (asked and approved 2026-09-25).** Every
-   `.npz` the desktop app writes holds its class-name table as a pickle, which numpy does
-   automatically for a dict, even an empty one. The web app used to refuse that member, so
-   desktop-saved names were missing in the web app and web-saved JSON names
-   (`class_aliases_json`) were missing in the desktop app. The owner asked "so you're saying you
-   can't make npz work for web?" and answered "ok" to the proposal below.
-
-   - **Reading.** `exporters/src/format/legacyAliases.ts` reads the table as DATA. It walks the
-     pickle's opcodes and accepts only what legacy writes: `_reconstruct` of an `ndarray` with dtype
-     `O8`, holding one dict of integer ids to strings. The only globals it accepts are NumPy's
-     `_reconstruct` (under `numpy.core` or `numpy._core`), `ndarray` and `dtype`. Any other opcode,
-     global or shape is refused and reported as unreadable, as before. Nothing is ever called, and
-     the payload is capped at 1 MiB and 200,000 operations. The security rule is now "nothing ever
-     executes a pickle", and SEC-01 holds.
-   - **Writing.** Both NPZ writers emit legacy's `class_aliases` member, a protocol-2 pickle naming
-     `numpy.core.multiarray`, which NumPy 1.x and 2.x both load. `class_aliases_json` is still read,
-     for files written before. The converter is no longer needed and is kept only for its record.
-   - **Checked with the desktop app's own code.** Legacy's `_load_npz` and `load_npz_class_map`,
-     run with warnings as errors, read `{0: 'cell', 5: '細胞', 300: 'three hundred', 40000: 'big
-     id'}` back from web-written archives. `exporters/tools/compare_npz.py` now also checks that
-     legacy's loader reads each golden's names back from our archives. Before anything unpickles
-     one, it checks with `pickletools` that our pickle names only those three globals: 24 of 24.
-     `compare_readers.py` now holds the NPZ names to legacy too: 12 cases and 7 formats match.
-   - **The acceptance corpus was regenerated with no converter step**, so every file is legacy's
-     bytes. `npm run acceptance -- <corpus> --oracle <re-saves>` exits 0: 30 of 30 identical. The
-     harness compares names by value, since NumPy pickles as protocol 4 and the port as protocol 2.
-     Its "needs the converter" outcome became "unreadable class names", for a table in any other
-     shape. In Windows PowerShell, run it as `npm.cmd run acceptance -- ...`: `npm` resolves to
-     `npm.ps1`, which swallows the `--`, so `--oracle` never arrives and every instance format
-     "differs". `api/README.md` says so.
-   - **The web app's warning** now reads "The class-name table in this file is not in the form
-     LazyLabel saves", and shows only for such a table.
-
-4. **Controls and hotkeys against the PyQt6 app: `CONTROL_PARITY.md` (started 2026-09-25).** The
-   owner asked whether the app matches the PyQt6 one "in looks and hot keys ... across all tabs".
-   The look was done (`VISUAL_PARITY.md`). Three read-only audits then compared what every control
-   and key DOES, and found about forty unrecorded differences, ranked P0-P3 in that file. By the end
-   of 2026-09-25 all five P0 items and sixteen of the P1 items were fixed. Among them:
-   - Enter saved over an unreadable file;
-   - Ctrl+A then V deleted classes hidden by the filter;
-   - class names could not contain a typed space;
-   - P did something other than legacy's P;
-   - AI mode did nothing until a model was chosen;
-   - the mouse wheel scrolled where legacy's zooms.
-
-   `CONTROL_PARITY.md` has every item's status and commit. Work down that file in order. Verify each
-   "reported" item against both apps' code before fixing it.
-
-5. **Sequence mode against the PyQt6 app: `SEQUENCE_PARITY.md` (started 2026-09-25).** The owner
-   named sequence mode the premier feature. A read-only audit walked a real session through both
-   apps (build, references, propagate, review, Save All, trim, archetypes) and found 58
-   differences in what the user sees or what is written, ranked S0-S3. SP-01 to SP-07 are fixed:
-   moving saves, a corrected frame stays corrected, Clear Flags no longer changes what Save All
-   writes, the open reference seeds propagation with what is on screen, Save All writes legacy's
-   class names and honours pixel priority, and a visited frame opens merged one mask per class.
-   Work down its "Recommended fix order". Rows whose fix is "Keep", and SP-58, wait on the
-   owner; SP-08 needs a JPEG clip.
-
-The three decisions this list used to end with are answered, above: Ctrl+Plus keeps zooming, the
-timeline keeps legacy's behaviour, and image tiles get built. The measurement that framed the tiles
-question stays here, because the tile work is judged against it. On 2026-09-23 a noisy
-50-megapixel 16-bit TIFF, the spec's supported working size, sent whole as one 8-bit PNG, came to:
-- a 41 MB PNG;
-- 2.4 s from click to pixels cold (1.7 s of it the server's decode, conversion and encode);
-- 0.8 s from click to a painted canvas warm;
-- one 0.5 s main-thread stall while the browser decodes.
-
-Over a 100 Mbit/s link the transfer alone is about 3.3 s. Tiles mean a tiled canvas as well as a
-route, since a route nothing calls is the defect this project keeps finding.
-
-**Tiles are built, route and canvas, and C8 is complete (2026-09-23).** The API serves
-`/images/{key}/tiles/{z}/{x}/{y}`: 512-pixel PNG tiles of the same processed view `/pixels` serves.
-Level 0 is the image's own pixels. Each level above is the one below averaged in 2x2 blocks with
-integer rounding, so a tile is the same bytes on every machine. One decode serves every tile of a
-view. The geometry lives in `@lazylabel/contracts`, so the browser asks for exactly the tiles
-that exist. `c8.tiles.test.ts` holds every level-0 tile of an 1100 x 700 image to that region of
-`/pixels`, and the levels above to a longhand 2x2 reference.
-
-The canvas draws the coarsest level first, then the level matching how large the image is drawn,
-and only the tiles in view. Its backing store is still the image's size, so no drawing layer
-measures anything differently. Run in the browser pane on a regenerated noisy 50-megapixel 16-bit
-TIFF (336 MB on disk):
-- **fitted**: three tiles, **322 KB** against the 41 MB PNG before. The first paint still waits
-  about 2 s cold, because the server decodes the TIFF, which tiles do not change;
-- **at 1:1**: only the four tiles in view, 2 MB, in 182 ms;
-- **scrolled to the centre**: the 12 tiles around the view, the centre tile first, in 118 ms. The
-  pixels are exact: the disc reads (19, 19, 253), its 16-bit colour truncated by 256 per RULE-024;
-- **fitted again** after zooming, the whole picture is right;
-- **brightness +50**: the same on both sides of a tile seam, and in the coarse region too.
-
-A tile that fails to load falls back to the whole image, as it loaded before. The split view's
-panes use tiles too.
-
-**The five security findings the brief said must be designed out have been audited against the
-new code. Three of the five had not been.** Checked 2026-09-23:
-
-| finding | state | what was wrong |
-| --- | --- | --- |
-| SEC-01 pickle | **held** | nothing in the web stack unpickles. Since 2026-09-25 the NPZ reader parses the desktop app's `\|O` class-name table as data and refuses any other. The converter, no longer needed, unpickles only through a restricted `find_class` |
-| SEC-02 decoder by content | **fixed** | the inference service read the dataset with `cv2.imread`, bypassing the API's allow-list, so EXR or JPEG 2000 bytes in a `.png` reached OpenCV's unaudited codecs |
-| SEC-03 checkpoint pickle | **fixed** | the runtime guard only ever ran in CI; with `TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD` set, a SAM 1 checkpoint executed code -- reproduced |
-| SEC-04 failed load deleting sidecars | **held** | `canSave` refuses writing back an image whose load failed, so Auto-Save on Navigate (back since 2026-09-25) asks instead of saving it, and nothing deletes |
-| SEC-06 unbounded allocation | **fixed** | `assertObjects` had no caller and the text readers built one full-image mask per line; 20,000 polygons on a 12 MP image asked for ~224 GiB |
-
-Two of the three were the same defect as everything else found here -- a guard that existed and
-that nothing called -- in the two packages NEITHER reach guard scanned: the Python service (which
-now has one) and the formats package (which the TypeScript guard now scans too -- and making it
-catch SEC-06's pattern exposed two more holes in the guard itself, both fixed on 2026-09-23). The remaining twelve findings are rated
-Medium or below for the web, and are the natural next thing to walk. Two are checked and HOLD
-(2026-09-23): SEC-07, because the XML reader has no entity lookup at all, so an unknown entity
-stays literal text and there is nothing to expand or fetch; and SEC-09, because the directory
-store `lstat`s every key and refuses a symbolic link. SEC-05 holds too: the service contains no
-network call at all -- every mention of downloading is prose saying it does not -- and each
-checkpoint's SHA-256 is verified against the manifest before it loads. That last clause was
-true of one load path in three when it was written; SEC-17 below is where that was found.
-
-**SEC-08 is addressed (2026-09-23).** Both Python packages now declare `requires-python =
-">=3.12"`, and the inference service's `ai` extra requires `torch>=2.10.0`. They had declared 3.10,
-and their suites ran on CPython 3.10.11 with expat 2.5.0 and OpenSSL 1.1.1t, the versions SEC-08
-names. **CPython 3.10 reaches end of life in October 2026.**
-
-The owner chose the order: a venv of its own, suites run there with PyTorch, THEN the floors.
-- The venv is `E:\venv\lazylabel-312`: CPython 3.12.11, PyTorch 2.10.0 (CUDA 12.8), SAM 2 at the
-  pinned commit. The shared `E:\venv\lazylabel` was not touched.
-- Every suite passes there. The full live suite ran in one process with all three checkpoints and
-  legacy on the path. The CI-matched inference run ran on 3.12 without PyTorch. The converter ran
-  too. The figures are in the table below.
-- The inference CI job and the converter CI job now run 3.12. The legacy characterization,
-  analysis and exporter-differential jobs run legacy's or the pipeline's own code, and stay on 3.10.
-- The inference image now builds from `nvidia/cuda:12.8.1-runtime-ubuntu24.04`, whose Python is
-  3.12. It is still unbuilt, as the owner deferred Docker.
-
-**Three things surfaced doing it, and none was a defect in the port:**
-1. **PyQt6 6.9.2 loaded before PyTorch 2.10 breaks torch's `c10.dll` on Windows** (WinError 1114).
-   The order is harmless with 6.9.1 and 2.7.1. Legacy imports Qt, so the differential suites could
-   not import torch when run on their own. `tests/conftest.py` imports torch first, and so does the
-   golden capture script. **It matters beyond the tests: legacy's desktop app imports Qt before
-   torch, so it would not start on this combination.** Its venv should stay on 2.7.1 until that is
-   handled.
-2. **On 2.10 the whole live suite filled the 10 GB GPU**: 260 s and 8 SAM 1 errors, or worse. Each
-   module passed on its own; the SAM 1 differential alone peaks at 8.3 GB. `tests/conftest.py` now
-   empties PyTorch's cache between modules, and with the import-order fix the full run takes 73 s.
-3. **SAM 2's masks move with the PyTorch version where the model is unsure.** On the synthetic
-   golden, 2.10 against 2.7.1 moved 8 of 46 masks slightly. One moved to IoU 0.93: frame 1's square,
-   where it touches its same-coloured decoy. No flag changed, no object went empty, and no score
-   moved by more than 0.0009. The live differential still matches port to legacy on 2.10, because
-   it runs both on the same PyTorch. So the golden now records what it was captured on, and was
-   recaptured on the 3.12 venv. Its mask check runs only on the same PyTorch minor version and says
-   why when it skips. Flags, empty objects and scores are checked everywhere.
-
-SEC-10 holds: there is no `atexit` registration anywhere, and the backend cache is keyed by
-model name, so re-selecting a model reuses it -- memory is bounded by the manifest, where
-legacy's grew on every switch.
-
-SEC-11 is done for the new app's CI. `.github/workflows/modernized.yml` has a `permissions:` block
-and, since 2026-09-23, every action pinned to a commit with its release in a comment -- 18 uses of
-five actions (checkout v4.4.0, setup-node v4.4.0, setup-python v5.6.0, setup-buildx v4.4.1,
-build-push v7.4.0). The SHAs were looked up, not guessed: `git ls-remote --tags` against each
-action's repository, taking the commit its major tag pointed to and the release tag at that same
-commit. The workflow's header says how to move one forward. What remains is the owner's: the legacy
-`tests.yml` still carries all three of SEC-11's problems, including codecov-action v3, and
-Dependabot would keep the pins fresh but opens pull requests on its own.
-
-**SEC-12 is done.** On 2026-09-23 the `ai` extra pinned
-`segment-anything==1.0` (its only release) and declared SAM 2 -- which it had NOT declared at all,
-so the inference image could never have loaded a SAM 2 model -- by the exact commit this
-environment's install record names, `2b90b9f5`, the one every differential suite ran against. The
-image gains `git` to fetch it and `SAM2_BUILD_CUDA=0`, because that optional extension fills holes in
-masks and the tested environment never had it: building it would change masks relative to every
-equivalence result. The last third was the torch floor: `>=2.7.1` still admitted the torch whose
-weights-only unpickler has CVE-2026-24747 (fixed in 2.10.0), and the SEC-03 guard catches the
-environment variable, not that CVE. It is `>=2.10.0` since the same day, after every suite passed
-on 2.10.0 in the 3.12 venv; SEC-08 above has what that turned up.
-
-SEC-13 holds, checked against both loggers with a filename carrying an ANSI escape and a newline:
-the JSON encoding escapes both, so a crafted name cannot colour the console or FORGE a second log
-line. Both write to stdout, leaving rotation to the host rather than to an unrotated file.
-
-SEC-14 holds for the new code. Propagation stages its frames in `tempfile.mkdtemp` -- private and
-uniquely named, never a fixed shared directory -- and removes it in a `finally`, which runs on a
-CANCELLED job too, because breaking out of the loop over the generator closes it. Only a hard
-kill leaves frames behind, and then in a directory nothing trusts. The theme-icon half was
-PyQt's and has no browser counterpart.
-
-SEC-15 does not apply: it is the NSIS uninstaller's `RMDir /r`, and the web app ships no
-installer -- nothing under `modernized/` builds one.
-
-**SEC-17 is fixed, and walking it found two defects in code written for this app.** Its own advice
--- pinned weights, a full SHA-256, `weights_only=True`, nothing downloaded -- was followed on paper:
-the embedder is a manifest entry with a 64-character hash, built with `weights=None` and loaded with
-`weights_only=True`. But nothing CHECKED that hash. `InferenceService.backend` verified its
-checkpoint before loading; the video predictor a propagation builds and the embedder Find
-Archetypes builds went straight to their loaders. Explicit `weights_only=True` on both meant no
-code could execute, so the exposure was integrity rather than execution: results attributed to a
-model that did not make them, and a truncated download failing inside torch instead of with the
-one-line reason the check already gives. All three paths now go through one
-`InferenceService.verified`, and `inference/tests/test_checkpoint_paths.py` asks the whole source
-whether any function loads a checkpoint without calling it first -- mutation-checked on both new
-calls.
-
-The second defect was worse for a user. Find Archetypes chose its model by POSITION: with none
-named -- and the browser never names one -- it took the manifest's first entry whatever its
-family, and the embedder loader refuses anything that is not an embedder. Every manifest listing
-SAM first failed Find Archetypes on every call, and `manifest.example.json` did not list the
-embedder at all. It is now found by family, refuses to guess between several, and says what to add
-when there is none; the example lists it. Run end to end on 2026-09-23 against the real
-MobileNetV3 weights with SAM listed first: the embedder verified, loaded, and returned 5 suggested
-frames in 2 clusters. The inference README, which still called both job routes 501, was brought
-up to date in the same change.
-
-**SEC-16 is fixed, and the finding under it was bigger than the finding.** Legacy validates
-neither `settings.json` nor `hotkeys.json`, and a file from releases 1.3.8 to 1.5.0 resets every
-preference: those releases wrote `yolo_use_alias`, legacy's migration never learned it, and
-`cls(**data)` refuses the whole file for one key -- reproduced 2026-09-23 with a file the 1.5.0
-code itself wrote (width 1234 and gamma 1.4 load as 1600 and 1.0). The import here already kept
-unknown keys, so preferences survived; `yolo_use_alias` is now dropped as the retired key it is,
-rather than kept as one "a newer version might want".
-
-But **nothing called the import.** `importLegacySettings` was written, tested against
-legacy-written files, and reached by no production code, so a user moving from the desktop app
-started from defaults -- while Phase 4 exit criterion 3 below read MET, because a test of the
-function passed. The reach guard never saw it: it did not scan the settings package. It runs now,
-once, at API startup, while the database holds no settings (`api/src/settings/legacyImport.ts`),
-from legacy's own `~/.config/lazylabel` by default; a file that is not JSON is reported and not
-replaced by defaults, so the one-time window stays open for the fixed file. Widening the reach
-guard to the settings and contracts packages found it -- and one more, below.
-
-The server half of SEC-16 was real too: `PUT /users/me/settings` stored a known key with the
-wrong type (`gamma: "abc"` answered 200) and a `null` binding reached `findConflicts` and answered
-500. Both are 422 now with the reason, through one `shapeProblems` shared with the import, and
-unknown keys are still stored -- that is RULE-088's fix, not a shape problem. Every new behaviour
-was mutation-checked.
-
-**The audit of all seventeen findings is complete.** Held: SEC-01, 04, 05, 07, 09, 10, 13, 14.
-Fixed: SEC-02, 03, 06, 08, 12, 16, 17, and SEC-11 for the new app's CI. Not applicable: SEC-15.
-Not taken up: SEC-11's legacy half (`tests.yml`). The owner was asked on 2026-09-23 and chose only
-the backup-ref cleanup, so the legacy workflow keeps its mutable action tags.
-
-**What widening the reach guard found last: the hotkey EDITOR is not built.** `checkAssignment`
-is RULE-049's per-keystroke check for a rebinding dialog, and nothing calls it because there is no
-dialog -- the web app shows a read-only reference. The brief maps legacy's hotkey dialog to "web
-settings and hotkey editor" (C13's interface), so this is unbuilt planned work, not a decision.
-
-**Built the same day** (`web/src/hotkeys/HotkeyEditor.tsx`), in a modal because the editor needs
-the width legacy's 800-pixel dialog gave it and the settings column is 254 pixels -- measured, after
-the first version ran across the canvas. Legacy's behaviour is kept: click a key and press the new
-one, Escape cancels, a modifier alone is not a binding, mouse actions cannot be rebound, and a key
-another action holds is refused naming that action while the field reverts (RULE-049). Three
-things differ on purpose: each accepted change saves at once, as the export formats do; an
-alternate key can be cleared, which legacy's model allows and its dialog gave no way to do; and
-the capture field is a text input, so pressing M to bind it does not also merge. Checked in the
-browser against the real API: F9 saved and took effect, Ctrl+Z on Delete was refused naming Undo,
-and closing returned focus to the button -- which it first did not, because making the page inert
-blurred the opener before the dialog could record it. 22 tests; every behaviour mutation-checked.
-
-**If more building is wanted before the data arrives,** the honest answer is that there is no named
-work left: the rule lists, the settings table, the reach sweep and the hotkey reference are all
-empty or recorded. The way more work has been FOUND, every time, is to take a list nobody has
-audited and ask one question of all of it at once. The lists already asked: settings ("does
-anything read this?"), exports ("does anything call this?"), hotkeys ("will this do something?"),
-business rules by priority ("does any test name this?"), and the spec's failure modes ("does this
-row do what it promises?"). Each found real defects. Unasked lists remain — the spec's
-non-functional requirements and the assessment's security findings among them.
+Anything else is a recorded difference, not scheduled work: each "Not matched" or "Still different"
+note in `CONTROL_PARITY.md` and each "Keep" in `SEQUENCE_PARITY.md` says what differs and why.
 
 ## What is done, and what proves it
 
@@ -1110,445 +633,55 @@ needs is already in one store rather than scattered across managers.
 
 ## What remains
 
-1. **Phase 5 — tools** (27.4%). The largest single block of user-facing behaviour. Its three entry
-   criteria are met: Phases 3 and 4 exited, decision 9 is ticked, and all 37 P5 rules are answered
-   (29 needed no decision, 5 were settled earlier, 3 were answered in an earlier session).
-
-   Three of its four exit criteria are met; the fourth has one open question for the owner and one
-   gap that belongs on the server. Both are set out below the build list.
-
-   Built, each with the tests that hold it:
-   - **The polygon tool** (`tools/polygon.ts`), Phase 5's pilot slice. RULE-047's close rule,
-     including a differential against legacy's own expression over 5,290 click offsets — the part
-     a rule card cannot pin, since `<=` instead of `<` is right at the card's example and wrong on
-     a ring around it.
-   - **Click-to-image coordinates** (`canvas/coordinates.ts`). Fractional, because rounding at
-     click time changes the exported polygon and breaks the join threshold; a click outside the
-     image is reported rather than clamped onto an edge the user did not click.
-   - **Editable annotations in the store**, which is what makes `dirty` real. Every piece of the
-     save semantics built in Phase 4 depended on a flag that until now nothing could set.
-
-   - **The drawing layer** (`canvas/PolygonLayer.tsx`) and the tool picker, so the pilot works as a
-     user performs it: choose the tool, click, close by the threshold or Space, undo, and the
-     polygon lands in the store with the right class and marks the image unsaved.
-
-   - **Boxes and circles** (`tools/shapes.ts`, `canvas/ShapeLayer.tsx`), RULE-043. A box is stored
-     as a four-corner polygon; a circle as its centre and a 3 o'clock radius point, *not* the point
-     the drag was released on — the difference is invisible to any test whose drag is horizontal.
-
-   - **Vertex editing** (`tools/edit.ts`, `canvas/EditLayer.tsx`), RULE-046/069. A circle's two
-     vertices are a centre and a radius point, so dragging them means different things. Reachable
-     on the state that already means it: no drawing tool active and exactly one annotation
-     selected, rather than a mode to enter and forget to leave.
-   - **Selection** (`tools/selection.ts`, `canvas/SelectLayer.tsx`). Hit-testing goes through the
-     rasterizer, so the shape you can click is the shape that gets saved.
-   - **Merge** (`tools/merge.ts`), RULE-019, implementing the answer recorded this session.
-   - **Erase** (`tools/erase.ts`), RULE-009 — the only P0 rule among the drawing tools.
-   - **The segment list**, where selection, merge and delete are reachable.
-
-   Everything a user does by hand now works: draw a polygon, box or circle, select shapes, edit
-   their vertices, merge, delete, and erase with any shape by holding shift.
-
-   - **The AI tools** (C3), end to end: the interaction state machine, the canvas layer, the
-     `embed`/`segment` round trip, the fragment filter on accept, and a model picker over the
-     manifest — so a checkpoint is chosen by NAME rather than by legacy's file-name substring
-     matching, which loads `sam2_hiera_large_tuned.pt` as *tiny*.
-   - **The class table** (C7), where the order decides the exported channel order.
-   - **Display adjustments** (C8), including legacy's negative-brightness fold, reproduced because
-     in legacy those pixels are what SAM segments with Operate On View on.
-
-     **Operate On View is built** -- this paragraph said otherwise until 2026-09-23, long after
-     it was. The embed request carries the view and the API renders it for the model. Until
-     that day the view meant the display adjustments ALONE, which is where the paragraph's own
-     warning came true: legacy's processing (rescale, thresholds, FFT) replaces the image its
-     adjustments apply to, so it segments the processed picture, and a rescaled 16-bit image was
-     segmented here unrescaled. See "Operate On View segmented a picture nobody could see".
-
-   - **Image processing** (`tools/imageProcessing.ts`, `tools/adjustments.ts`, `tools/crop.ts`):
-     rescale, channel thresholding, the contrast-stretch and equalization presets, the display
-     adjustments, and crop — RULE-018, a P0 rule whose off-by-one means the last row and column of
-     an image can never be inside a crop.
-
-   - **The adjustment controls** (`workspace/AdjustmentsPanel.tsx`), in legacy's slider units, and
-     the canvas that renders them. The sliders were built first and wrote to settings that nothing
-     read back, which made the panel the dead control the rest of this codebase refuses to ship;
-     the canvas applies them between the image and the overlay, so the image is adjusted and the
-     class colours are not.
-   - **The crop panel** (`workspace/CropPanel.tsx`), RULE-018 wired end to end: the store holds it,
-     the save request carries it, the server applies it to the same mask tensor the exports are
-     built from. It counts the pixels a save will blank before anyone presses it, and clears the
-     crop when another image opens (decision 9). Legacy does neither.
-
-   **The four exit criteria.**
-
-   1. **Persona flows 1 and 3 pass end-to-end browser tests — met.**
-      `test/acceptance/flow1.aiLabel.test.tsx` and `flow3.traceByHand.test.tsx` walk the steps
-      `topology.json` records, through the real components with only the HTTP client stubbed.
-
-      Flow 3 found that **vertex editing was unreachable**: `EditLayer` had been built and
-      unit-tested for some time and `OpenImageView` never rendered it, so every test it had drove
-      the component directly and nothing noticed that a user had no way in. The rule was
-      implemented, the component was correct, its tests passed, and the feature did not exist.
-      That is what these tests are for, and it is worth expecting more of the same in Phase 6.
-
-   2. **Editing rules pass tests ported from legacy characterization — met.** The join threshold
-      has a differential over 5,290 click offsets; vertex limits, erase, merge and class assignment
-      have rule tests; RULE-053's undo-of-erase is in `c6.undoRedo`.
-
-   3. **Accepted AI masks match legacy after fragment filtering — met.** Phase 3 proves the mask
-      against the real checkpoints; `test/tools/fragments.differential.test.ts` proves what the
-      accept path does to it, against the bytes OpenCV produces.
-
-      The fixture found a mistake **in itself**, which is worth recording. Written from the rule
-      card, it concluded that a single-pixel mask survives (minimum area 0, `area >= 0` holds).
-      The port disagreed. `save_export_manager.py` settled it: there is an explicit
-      `if max_area == 0: return None` above the comparison, so the whole mask is dropped. The port
-      was right and the transcription had paraphrased the card's own edge-case line away. Golden
-      generators are transcribed line for line for exactly this reason.
-
-   4. **Display adjustments and thresholds match legacy, and crop changes exports exactly as in
-      legacy — the crop half is met; the thresholds half has one open question and one gap.**
-
-      The crop half: `api/test/acceptance/cropExports.test.ts` saves through the real handler onto
-      a real folder and reads the bytes. Uncropped, a 2x2 object at the corner of a 40x40 image
-      writes 0.975; cropped to (0, 0, 39, 39), only 0.95 remains — the off-by-one, measured.
-
-   **Criterion 4's other half: CLAHE now matches OpenCV byte for byte, on all six goldens.**
-
-   This was the one open question and it is no longer a question. It used to differ on 3 of 660
-   pixels on the uneven-tile case, each by exactly 1, and the note on the test said the residue had
-   to be in how OpenCV's interpolation body formulates its arithmetic rather than in the algorithm.
-   That was right. Reading `CLAHE_Interpolation_Body` named three things, all of which have to be
-   true at once — which is why the previous session's four attempts each moved the count and none
-   could finish:
-
-   1. **It is `float`, not double.** Every operation rounds to single precision; the port now
-      rounds each step back with `Math.fround`.
-   2. **It multiplies by a reciprocal**, `1.0f / tileWidth` computed once. `x * (1/w)` is not
-      `x / w` in floating point.
-   3. **The weight comes from the unclamped tile index**, which is clamped only afterwards, so the
-      half-tile border uses a real fractional weight rather than 0 or 1.
-
-   The differential allows nothing now, and prints the coordinate of the first differing pixel
-   rather than only a count.
-
-   **Rescale and channel thresholding now run on the server, and have controls — closed.**
-
-   This was recorded as a UI gap and was not one. RULE-032 fixes the order as rescale → channel
-   threshold → FFT → 16-bit to 8-bit → display adjustments, and the browser only ever receives the
-   output of the fourth step: the API decodes every image to 8-bit RGB before sending it. A
-   rescale applied client-side would quantise a 16-bit image to 256 levels and then stretch those,
-   which is worst on exactly the images a rescale exists for — a scan whose data sits between
-   3,000 and 5,000 gets 65,536 levels on the server and 8 in the browser.
-
-   The symptom was visible the whole time and looked like nothing: four modules of correct,
-   well-tested code that nothing imported, because there was no correct place to call them from.
-
-   What changed:
-
-   - `imageProcessing`, `fft`, `dft` and `clahe` moved to `api/src/images/` with their tests and
-     golden fixtures. `decodeImage` takes an optional processing argument and applies it to the
-     wide samples **before** `to8Bit`; `/pixels` takes the parameters.
-   - The image metadata carries `sourceChannels`. RULE-032 disables rescale for colour and
-     RULE-029 offers one Gray channel or three separate ones, and the decoder turns everything
-     into RGB — so without this the question is unanswerable and the panel would offer controls
-     the server ignores. It names the refusal rather than greying a slider.
-   - The marker-spacing limit went the other way, into the browser: it is a widget rule, not
-     arithmetic. It is refused with its reason rather than snapped to the minimum as legacy does,
-     which silently moves a band boundary the user did not move.
-   - The display adjustments stay in the browser, where they belong — last step, on the rendered
-     canvas.
-
-   **The frequency filter runs, and its cache is designed against legacy's defect.** RULE-030 is
-   the third step of the chain and it now reaches the image. Four things about it:
-
-   - **Its output is always 8-bit**, whatever the source was, because the rule stretches the
-     filtered plane to 0..255. So when it runs on a 16-bit image, `to8Bit` must NOT run after it —
-     shifting those bytes right by another eight leaves a black image.
-   - **Grayscale is decided by the PIXELS, not the header.** The card says "2-D or exactly
-     equal-channel images", so a grayscale scan saved as colour qualifies — and that is common.
-     The panel warns a colour image that the filter may be skipped, rather than letting a user
-     discover it from a slider that does nothing.
-   - **The cache is keyed on the whole query**, plus the image's revision. Legacy keys its cached
-     spectrum on image DIMENSIONS alone, so moving a rescale handle leaves the FFT answering from
-     the input it had before. Keying on the query as sent makes that structurally impossible rather
-     than a thing to remember when the next parameter is added. It is bounded by bytes, not
-     entries, and least-recently-used.
-   - **An image too large is refused, not waited on.** Measured: 1 MP about 0.7 seconds, 2 MP about
-     2, 6 MP about 5. Above eight megapixels it is a 413 naming the size and the limit, because a
-     minute-long request is indistinguishable from a dead server. Legacy has no limit and freezes
-     its window.
-2. **Phase 6 — sequence and cutover** (25.9%). **[CUTOVER.md](CUTOVER.md)** is the checklist for
-   the day the switch is made — what a user actually does, what is lost and gained, and the six
-   things that must be checkable first. It assumes the exit criteria rather than restating them.
- Propagation review, the split view, the hosted
-   deployment and the actual switch-over. **The pilot slice is done, and the split view's core
-   logic with it.**
-
-   **Linked operations** (`split/linked.ts`) answer the first of the four gaps decision 8's
-   reassessment named, and make RULE-092's recorded class answer executable:
-
-   - **The class invariant is the NAME, not the number.** Decision 6 keeps ids per image, so
-     copying the number across a pair produces matching numbers that mean different things — worse
-     than a visible mismatch, because every export then looks consistent. A linked operation
-     resolves the alias and lets each image keep or allocate its own id. Where a class has no
-     alias the id IS the name, so the two must share it.
-   - **"The same coordinates" means the same PIXEL.** RULE-092 is silent on size because in legacy
-     each viewer kept its own point list and the question never arose. A split view pairs two
-     images of one subject, and a relative mapping would stretch a shape exactly when the sizes
-     differ.
-   - A point outside the other image is reported, not clamped; a shape is refused as a unit.
-     Different sizes do not prevent pairing — the smaller image refuses what falls outside it.
-
-   **The viewer is built** (`split/SplitView.tsx`). It compares two images **with their
-   annotations drawn**, links them, and describes what a linked operation would do. It did NOT
-   draw into a pair when it landed, for want of a store that could hold two open images — the
-   slice below built that and rewired the view onto it, so both panes are now editable and each
-   pane's size, processing and live segments come from the store rather than from a second loading
-   path of its own. C14 stayed pending in the capability table until one action applied to both:
-   linked adds and linked erase have since done so, and the API's table reads `not-this-service`
-   (2026-09-23), since each side saves through the ordinary per-image route.
-
-   Three smaller decisions taken with it: two viewers rather than legacy's dead four-view setting;
-   the same image on both sides allowed and announced; an unmeasured image says "measuring" rather
-   than being drawn from a guess.
-
-   **The store now holds two open images, and the split view is those two sides.** Everything
-   per-image -- `open`, `segments`, `classAliases`, `dirty`, `selected`, `crop`, `processing` --
-   moved into a `SideState`; the store holds two of them and a pointer to the ACTIVE side; and the
-   eight components that call `useWorkspace()` read exactly what they read before, because the
-   context still exposes those as flat values resolved from the active side. Threading a side
-   through every signature to serve one view would have made every caller state something only one
-   of them has an opinion about.
-
-   Two things stopped being rules someone had to remember. The crop lives in both the side's
-   `crop` and its `processing` -- the save path reads one, RULE-029 and RULE-032 restrict the
-   other to the same region -- and as two `useState` calls that agreement had no enforcement; it
-   is one assignment now. Decision 9's "a crop does not carry over" is likewise one assignment,
-   because opening replaces the whole side.
-
-   **History is the part that could not stay as it was.** RULE-052 clears history when an image
-   loads, which with one open image an unscoped clear says exactly; with two it says far too much,
-   since opening into the right pane would throw away everything drawn in the left. Entries now
-   declare an opaque scope and `History.clear` takes one. Dropping from the middle of the stack is
-   safe because each entry touches only its own side -- there is a test asserting it rather than a
-   comment, because a linked operation touching both sides is what would end it. An entry that
-   declares NO scope is dropped by every clear: it has not said what it touches, so it cannot be
-   shown safe to keep. And an undo captures the side it was recorded on; reading it back when the
-   undo runs would take the user's shape off whichever image they happened to be looking at.
-
-   **The split view is now those two sides**, verified against a running API: switching the
-   editing side moved the canvas, the save button, the segment table, the class table and the
-   status bar to the other image, and switching back found the first image's two objects and its
-   class name where they were left. Two loading paths went away with it -- the view used to
-   measure and load annotations itself, a second copy of the ordering that a size must land before
-   annotations or every normalized coordinate rescales.
-
-   One capability was deliberately narrowed: comparing two images neither of which is open is no
-   longer possible from that panel, because RULE-092 is about a PAIR being labelled together and a
-   second image picker would put two controls on one question. It costs one extra click.
-
-   **C14 IS BUILT.** One shape drawn in either image lands in BOTH at the same pixel, under the
-   same class NAME with each image keeping its own id, as ONE undo entry that takes back both. The
-   decision lives in the store's `addSegment`, which is why it cost so little: every tool, the AI
-   prompt and the hotkeys already reach the store through that one function, so none of them had
-   to learn that a pair exists. `split/linkedAdd.ts` is pure and separate because the interesting
-   part is the refusals -- a shape outside the smaller image is refused THERE rather than moved, a
-   mask is refused between images of different sizes since "the same pixel" has no answer when the
-   grids differ, and an unclassified annotation has nothing to agree about.
-
-   It is **OFF by default**, reversing this view's first "starts linked, as legacy does". Legacy's
-   default does not bind: decision 8 rebuilt multi-view from the rules rather than porting a
-   half-migrated feature, and an annotation appearing in an image the user was not looking at is
-   precisely what decision 7 says must follow an explicit act.
-
-   Both settled decisions held. One undo entry per linked operation, not two -- a user performed
-   one action. And linked classes agree on the NAME: the acceptance test pins the case that
-   matters, where the second image already calls class 0 something else, so the arriving class
-   becomes id 1 there while staying 0 in the first. Copying the number across would produce two
-   files that both say "class 0" and mean different things, which is worse than a visible mismatch
-   because every export then looks consistent. Whether a pair should have its IDS reconciled as
-   well **stays the owner's**; name agreement is well defined either way.
-
-   **Not linked, and named rather than implied:** the two sides SAVE separately, and deleting and
-   merging act on one image. Adding links, and since 2026-09-23 so does erasing.
-
-   **Linked erase, 2026-09-23.** This line used to say "a linked EDIT or DELETE is not built", and
-   the READMEs repeated it as a gap against RULE-092. Reading legacy's source settled what the gap
-   was: legacy mirrors ERASING -- Shift+Space finishes the polygon in both linked viewers in erase
-   mode, and an AI mask accepted in erase mode is applied to both -- and does NOT mirror deleting
-   or merging, which are buttons on each viewer acting on its own selection. So delete and merge
-   were never a gap, and erase was. It links now, through the store's `eraseWith`, for the reason
-   adding was cheap: every eraser, drawn or AI, reaches it as one segment. One undo entry across
-   both images; refused beside the panes exactly where an added shape would be. Seven tests, the
-   linking mutation-checked; web 1130 passed.
-
-   **Thirteen of fourteen capabilities are built.** C11, propagation, is the one that is not, and
-   it needs the inference service and a recorded sequence.
-
-   **One serious defect was found on the way, by measuring the running app.** Every drawing layer
-   is `inset: 0` inside `.canvas-stack` and turns a click into an image pixel by scaling its own
-   rect against the image size -- so that box has to BE the picture, and it was not. The canvas's
-   margin grew the shrink-wrapping stack without growing the picture, and its 1px border sat
-   inside the scaled box. Measured on a real 32x24 image: canvas at y=215 height 26, layer at
-   y=207 height 50. **Every vertex drawn by every tool was misplaced**, vertically squashed by
-   about half and shifted up by 8px.
-
-   **No unit test could have caught it**, which is the part worth carrying forward. jsdom does no
-   layout, so the acceptance harness mocks `getBoundingClientRect` on `Element.prototype` and
-   returns ONE rect for every element -- making the layer and the canvas identical by
-   construction, which is exactly the thing that was wrong. A harness that mocks a measurement
-   cannot fail on a measurement. The guard is therefore a CSS test asserting the invariant where
-   it lives. Verified afterwards live: a triangle clicked at pixels (4,4) (20,4) (20,18) saved as
-   a box spanning edges 4.0..21.0 by 4.0..19.0, the correct inclusive-pixel extent.
-
-   **The self-hosted deployment** (`modernized/lazylabel-reimagined/deploy/`) is written: three
-   services, one published port on loopback, the dataset as a bind mount, the models read-only,
-   neither service as root.
-
-   It was written on a machine with no Docker, so every line of it was reasoned rather than
-   observed — and rather than leave that as a caveat nobody could retire, **CI now builds the API
-   and web images on every push and validates the compose file against `example.env`**. They either
-   build or the run goes red with the reason. The inference image builds weekly and on demand
-   instead: it installs PyTorch against a CUDA base and a two-line web change should not pull a
-   CUDA runtime. **It builds and does not RUN** — running needs a dataset to mount and, for the AI
-   profile, a GPU and a checkpoint SEC-03 forbids downloading.
-
-   **Phase 6 exit criterion 3 is MET.** "Multi-view is delivered, redesigned or removed per
-   decision 8" -- delivered, rebuilt from RULE-092's rules rather than ported, with linked adds.
-
-   **Exit criterion 1 is partly built, and the unblocked part is done.** Persona flow 2 is "carry
-   labels through an image sequence", six steps. Steps 1 and 2 (build the timeline, mark
-   references) were the pilot. Steps 3, 4 and 6 are propagation and wait on the inference service.
-   **Step 5, tuning the confidence threshold from the histogram, needed no model** -- RULE-035's
-   binning and RULE-060's flagging are arithmetic over `{frame: score}` -- and is built:
-   `sequence/confidence.ts` with the panel in the timeline.
-
-   RULE-035 to its worked example (50 bins, `max(0, min(threshold, lowest) - 0.02)` to 1.0,
-   strictly-below counted as Below) and RULE-060's edges each pinned: the minimum over non-empty
-   objects, an empty object dropped rather than counted as zero, a frame of all-empty objects
-   reporting nothing rather than zero, strict `<` so exactly 0.99 is not flagged at the default,
-   and the threshold held to four decimals so a float step cannot land just above it.
-
-   **Another legacy defect designed out**, from its own card: changing Min Conf after propagation
-   recomputes the flagged set Save All uses but NOT the timeline's statuses, so the user reviews
-   the frames the colours point at and ships the ones the save skipped. One threshold, one
-   derivation. A reference frame is never flagged however low its score.
-
-   The panel is **reachable today** rather than waiting on the data: it renders with the timeline
-   and says propagation has not run, which is what a user sees now, and the chart branch is
-   exercised with real scores in tests rather than sitting on a shelf.
-
-   **The harness has now been RUN**, on 2026-09-20, against a four-image folder:
-
-```
-frames: 1 identical, 0 differ, 0 need the converter, 0 unreadable, 3 without annotations
-Every annotation file round-tripped identically.
-```
-
-That is not the acceptance corpus — criterion 4 needs the owner's real datasets and stays open —
-but it moves the TOOL from written to working. It found the folder, classified every image,
-round-tripped the one with annotations byte for byte, and wrote nothing into the dataset: the
-files are the same sizes afterwards, which is the property it promises and the one that would be
-expensive to be wrong about.
-
-**Exit criterion 4's harness is written too.** "Every dataset in the acceptance corpus imports
-   and re-exports identically" needs the owner's corpus; what did not need it is the command:
-
-   ```bash
-   cd modernized/lazylabel-reimagined/api && npm run acceptance -- /path/to/corpus
-   ```
-
-   It reads each annotation file as the app does, rebuilds the export context, writes back the
-   formats that image actually had, and compares the bytes — text after decision 10's EOL
-   normalisation, binary exactly. Nothing is written into the corpus; every write goes to a scratch
-   directory, and a test asserts the given folder is unchanged. An unreadable file is a FAILURE
-   rather than a skip, because a run that passed over what it could not open would report success
-   loudest for the datasets most likely to be broken.
-
-   A dataset whose class names are **pickled** is reported as needing the converter, with the
-   command, rather than as a byte difference — the criterion names that case explicitly. Such a
-   file loads its masks perfectly and its names not at all (SEC-01 refuses to unpickle), so the
-   round trip writes ids where names belong; saying only "NPZ differs" sends someone hunting a
-   rounding bug in the exporters. It counts as a FAILURE, because a corpus that passed only by
-   filing its pickled datasets under something else has not been checked.
-
-   Putting `tools/` into the typecheck found three wrong assumptions in that script, which had
-   compiled cleanly while reading fields off types that do not have them. **A script outside the
-   typecheck is one whose mistakes are found by running it against somebody's real data.**
-
-   Writing the deployment found that **the API never constructed its inference adapter**, which is the eighth
-   defect below and the only one at the process level. Checking the configuration also settled the
-   design: the web app already defaults to `/api` and the dev server already proxies that to the
-   API with the prefix stripped, so production does the same through nginx rather than compiling an
-   absolute URL into a static bundle.
-
-   **The sequence timeline** (`sequence/timeline.ts`, `sequence/TimelinePanel.tsx`) is the brief's
-   own pilot: build a timeline from a file range, mark references from existing annotations, no
-   propagation. It builds from the folder listing the browser already has — the listing carries
-   each image's key and whether it is annotated, which is exactly the two things the pilot needs —
-   so there is no new endpoint and no second fetch of the same folder.
-
-   The rules and the panel landed together, deliberately. The vertex editor in Phase 5 was built,
-   unit-tested and never rendered by anything, so every test passed while the feature did not
-   exist; a pilot that cannot be looked at has not piloted anything.
-
-   Three things it reproduces that look like defects, and one it does not:
-
-   - **The Sort puts flagged almost last**, below pending (RULE-072). The list is "what is
-     finished", not "what needs attention" — flagged frames have their own navigation.
-   - **Clear Flags resets skipped frames and a new propagation run does not** (RULE-076). A frame
-     skipped for a size mismatch becomes pending again, which is what a user who fixed the
-     offending image expects.
-   - **Navigation wraps**, including the single-flagged-frame case where N returns you to where
-     you are. Non-wrapping looks identical until someone reaches the end of a long sequence.
-   - **What it does not reproduce**: legacy's single status enum. RULE-055's answer is carried into
-     code here — a frame has a ROLE and a STATE, so saving a reference cannot stop it being one.
-     In legacy that is a route to propagation overwriting hand-made ground truth.
-
-   Verified in a browser against a real API: four frames build as pending, annotating one made it a
-   gold reference on the next build, and Sort lifted it to the front.
-
-   **Three of its four entry criteria are met. One is open.**
-
-   1. *Phase 3 and Phase 5 exit criteria are met.* **Both done.**
-   2. *Decisions 1 and 8 are ticked.* **Both are**, and have been since 2026-09-17 — an earlier
-      version of this file wrongly listed them as open. Decision 1: the PyPI package is frozen at
-      2.0.8 and the desktop app stays installable until Phase 6 exit. Decision 8: multi-view is
-      rebuilt as a synchronized split view from the linked-operation rules, deleting the
-      half-migrated legacy path rather than porting it — with a standing instruction to
-      **reassess at Phase 6 entry if the restored rules prove too thin to specify it**. **Done
-      on 2026-09-20**: they are not too thin and the rebuild stands. Four gaps are named in the
-      brief, three of which are decisions rather than missing archaeology — what "the same
-      coordinates" means when the two images differ in size (the biggest), how a pair is chosen,
-      whether a linked operation is one undo entry or two (it should be one; the user performed
-      one action), and the class-id reconciliation RULE-092 already scheduled here. **The last is
-      the owner's.**
-   3. *At least one recorded image sequence has legacy propagation outputs saved as golden data.*
-      **Met on 2026-09-23, on a synthetic clip, which is the owner's answer** in place of a
-      recording: "just make some random shapes move around then use that clip series".
-      `inference/tests/goldens/propagation/synthetic-shapes` holds legacy's sequence mode run
-      headless under four scenarios. What it found, and the capture command, are under "What to
-      do next". The capture script used to seed from clicked points, which neither app does; it
-      drives legacy's own MainWindow methods now, seeded from masks the way both apps seed.
-   4. *Every P6 rule is answered.* **The two that blocked it are answered** (2026-09-20). RULE-060
-      needed a fidelity correction and RULE-055 two behaviour questions; both were re-derived from
-      the source rather than taken from the judges, and both answers are on their cards. What is
-      left on each is the owner's P0-or-P1 call, which decides which suite the rule is tested in
-      rather than whether it is tested. **Owner, but not blocking the work.**
-
-      The two corrections are worth knowing before any Phase 6 code is written, because each would
-      otherwise produce a confidently wrong port:
-
-      - A propagated frame's confidence is the minimum over objects with a **non-empty** mask. An
-        object that leaves the scene comes back with confidence 0.0, and a port that includes it
-        flags and — by default — wipes every frame where that happens.
-      - **Keep Flagged Masks does not keep them on disk.** Save All excludes every flagged frame,
-        so it is a review control. "Keep" reads as "keep in the dataset" to anyone porting it.
-
-   The pilot slice the brief names is "build a timeline from a file range and mark references from
-   existing annotations, without propagation". That part needs no checkpoints, so it is what to
-   start on the moment criteria 1 and 2 are ticked.
+**The owner's pending decisions.**
+- **SP-57: two web-only extras in the Sequence tab.** A Clear button for a finished run, and the
+  "could not seed" notice. Legacy has neither (`SEQUENCE_PARITY.md` SP-57). Keep them, or remove
+  them to match.
+- **R10: the Docker deployment, run for real.** CI builds its images and nothing has run them: the
+  `ai` profile is broken, there is no CPU profile, and the inference image has never been built
+  (`DEPLOYABILITY.md` R10). It is CUTOVER.md's one unticked box.
+- **R11: a release zip with no prerequisites.** A portable Node, a double-click launcher and "Open
+  Folder" in the app, for annotators who will not install Node (`DEPLOYABILITY.md` R11).
+- **RULE-024's 16-bit overflow.** Legacy's int16 overflow in its 16-bit display conversion is
+  reproduced on purpose, and needs the owner's call (`CONTROL_PARITY.md` CP-72).
+
+**Before the switch.** The live differential suites, run again with real checkpoints ("What to do
+next", item 2). The deployment box waits on R10.
+
+**The last pass, 2026-09-27.** Five gaps in the mouse handling were checked against legacy's
+code, four of them in the Multi view (L = `legacy/lazylabel/src/lazylabel/`):
+- A drawn eraser that meets nothing says nothing now, and the line beside the panes names the
+  other image only when something was erased there. Legacy names a viewer only then (L
+  ui/main_window.py:5799-5805, 5892-5899, 6985-6988; L ui/managers/ai_segment_manager.py:351-360;
+  `225d42c`).
+- No crop drag, and no whole-selection drag in Edit. Legacy's Multi press handles neither; the Edit
+  handles still drag (L ui/main_window.py:5515-5537, 2560-2621; `225d42c`).
+- The middle button is a negative AI point there, as any button but the left is (L
+  ui/main_window.py:5517-5521; `67c2b89`).
+- **Not matched, and not observable:** legacy takes a dragged box, AI box or crop from the last
+  mouse move's rectangle (L ui/handlers/single_view_mouse_handler.py:351, 380, 548; L
+  ui/main_window.py:5562), the web from the release. A mouse's release comes where its last move
+  was, in Qt and in the browser, so both get the same rectangle. Only a synthetic event, a release
+  with no move before it, tells them apart.
+- **Not matched:** a single-view AI click released a whole pixel or more outside the image. The
+  press must be on the image (L ui/handlers/single_view_mouse_handler.py:106-110), but the point
+  goes where the button comes up, up to 5 px away (340-365), and legacy asks SAM the `int()` of it
+  (L ui/managers/coordinate_transformer.py:47-54, 91-98), outside the image or not. The web asks the same
+  whole pixel, and the inference service refuses a point outside the image. Accepting one would
+  weaken its input validation. Released less than a pixel above or left of the image, `int()` makes
+  it 0, inside, and both ask it (`web/test/tools/ai.test.ts`, "truncates toward zero").
+
+**A flaky test, fixed 2026-09-27.** `web/test/workspace/autoSave.test.tsx` missed a leaving save
+now and then: 2 of 5 runs here before the fix. The save button lent its save to the store in a
+passive effect, which runs in a task after the commit that shows the image. A move made in
+between found no save, and left the image unsaved. The save is lent in a layout effect now, in the
+same commit (`6fb821a`); 16 runs after, all passed. A held arrow key could reach the same window in
+a browser, so the race was the app's, not only the test's.
+
+**Recorded differences.** Everything else is written where it belongs, each with its reason: the
+"Not matched" and "Still different" notes in `CONTROL_PARITY.md`, the "Keep" rows in
+`SEQUENCE_PARITY.md`, the recorded decisions at the end of `CONTROL_PARITY.md`, and CUTOVER.md's
+"What is lost".
 
 ## What running the app found that the tests did not
 
