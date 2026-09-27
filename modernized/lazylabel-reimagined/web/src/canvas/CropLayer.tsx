@@ -125,7 +125,9 @@ export function CropLayer({ width, height, crop, onCrop, onRefused }: CropLayerP
   return (
     <svg
       ref={surfaceRef}
-      className="polygon-layer"
+      // Over the annotations, at the depth of legacy's dimmed crop at Z 25 (crop_manager.py:196-222;
+      // `styles.css`, "THE STACK'S DEPTHS").
+      className="polygon-layer crop-layer"
       viewBox={`0 0 ${width} ${height}`}
       preserveAspectRatio="none"
       role="application"

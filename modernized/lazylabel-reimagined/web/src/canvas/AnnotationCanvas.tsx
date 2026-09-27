@@ -55,13 +55,17 @@ export interface AnnotationCanvasProps {
   readonly pane?: RefObject<HTMLElement | null>;
   /** The segment under the pointer, drawn at legacy's hover alpha. */
   readonly hovered?: WireSegment | null;
-  /** The selected segments' indices, highlighted over everything else as legacy's are. */
+  /**
+   * The selected segments' indices, highlighted over everything else as legacy's are: on a canvas
+   * of their own, over whatever a tool draws.
+   */
   readonly selected?: readonly number[];
   /** Edit mode: a selected shape is highlighted in its own colour rather than yellow. */
   readonly editing?: boolean;
   /**
    * Drawn over the picture, in the box that is exactly the picture: the Multi tab's other half
-   * draws a linked AI prompt and that image's own preview here.
+   * draws a linked AI prompt and that image's own preview here, each at legacy's depth
+   * (`styles.css`, "THE STACK'S DEPTHS").
    */
   readonly children?: ReactNode;
 }
@@ -79,7 +83,7 @@ export const HOVER_OPACITY = 170 / 255;
 /**
  * A selected segment: legacy lays a yellow copy over everything, alpha 180, whatever its class
  * (segment_display_manager.py:510-511, 537-541). In Edit mode a selected shape gets its own colour
- * at 170 instead (505-508).
+ * at 170 instead (505-508). Over everything includes a tool's marks: it has a canvas of its own.
  */
 export const SELECTION_OPACITY = 180 / 255;
 const SELECTION_YELLOW: Rgb = { r: 255, g: 255, b: 0 };
@@ -137,6 +141,13 @@ export function AnnotationCanvas({
    * redraw every tile and re-run the adjustments over every pixel each time.
    */
   const overlayRef = useRef<HTMLCanvasElement>(null);
+  /*
+   * THE SELECTION HAS A CANVAS OF ITS OWN, because legacy lays its highlights at Z 999 and 1000
+   * (segment_display_manager.py:522-542; main_window.py:6259-6281), over the AI preview at 50 or
+   * 500 and the vertex handles at 200, which in turn are over the annotations. A tool's marks are
+   * drawn between the two canvases (`styles.css`, "THE STACK'S DEPTHS").
+   */
+  const selectionRef = useRef<HTMLCanvasElement>(null);
 
   /*
    * THE TILE STATE. Refs rather than state because tiles arrive between renders and are drawn
@@ -286,7 +297,7 @@ export function AnnotationCanvas({
     };
   }, [tiled, identity, imageUrl, width, height, adjustments, onError]);
 
-  // THE ANNOTATIONS: repainted whole whenever they, the hover or the selection change.
+  // THE ANNOTATIONS: repainted whole whenever they or the hover change.
   useEffect(() => {
     const overlay = overlayRef.current;
     if (overlay === null) return;
@@ -294,8 +305,18 @@ export function AnnotationCanvas({
     // picture's canvas.
     const context = contextOf(overlay);
     if (context === null) return;
-    paintOverlay(context, { width, height, segments, opacity, hovered, selected, editing });
-  }, [width, height, segments, opacity, hovered, selected, editing]);
+    paintOverlay(context, { width, height, segments, opacity, hovered });
+  }, [width, height, segments, opacity, hovered]);
+
+  // THE SELECTION: repainted whole whenever it or the shapes it covers change. After the
+  // annotations, so a render that changes both paints them in legacy's order.
+  useEffect(() => {
+    const canvas = selectionRef.current;
+    if (canvas === null) return;
+    const context = contextOf(canvas);
+    if (context === null) return;
+    paintSelection(context, { width, height, segments, selected, editing });
+  }, [width, height, segments, selected, editing]);
 
   // WHAT IS IN VIEW CHANGES as the pane scrolls, the window resizes or the zoom redraws the canvas
   // at another size; each asks for the tiles the new view needs, once per animation frame at most.
@@ -360,6 +381,17 @@ export function AnnotationCanvas({
       height={height}
       aria-hidden="true"
     />
+    {/* Only while something is selected: a canvas the size of the picture is 200 MB on a
+        50-megapixel image, and it would hold nothing. */}
+    {selected.length > 0 && (
+      <canvas
+        ref={selectionRef}
+        className="annotation-canvas__selection"
+        width={width}
+        height={height}
+        aria-hidden="true"
+      />
+    )}
     {children}
     </div>
   );
@@ -367,33 +399,51 @@ export function AnnotationCanvas({
 
 const NONE_SELECTED: readonly number[] = [];
 
-/** What the overlay canvas shows. */
+/** What the annotations' canvas shows. */
 export interface OverlayState {
   readonly width: number;
   readonly height: number;
   readonly segments: readonly WireSegment[];
   readonly opacity: number;
   readonly hovered: WireSegment | null;
-  readonly selected: readonly number[];
-  readonly editing: boolean;
 }
 
 /**
- * Paint every annotation, then the selection over them, as legacy stacks its items: each segment
- * in index order at 70 (170 while hovered), and the highlights above everything
- * (segment_display_manager.py:326-383, 513-541).
+ * Paint every annotation as legacy stacks its items: each segment in index order at 70, the one
+ * under the pointer at 170 where it lies (segment_display_manager.py:326-383). Legacy's hover
+ * changes an item's brush and never its Z value (hoverable_polygon_item.py:27-28), so a hovered
+ * segment stays under the AI preview and the vertex handles, as it does here.
  */
 export function paintOverlay(context: CanvasRenderingContext2D, state: OverlayState): void {
   context.clearRect(0, 0, state.width, state.height);
   for (const segment of state.segments) {
     drawSegment(context, segment, segment === state.hovered ? HOVER_OPACITY : state.opacity);
   }
+}
+
+/** What the selection's canvas shows. */
+export interface SelectionState {
+  readonly width: number;
+  readonly height: number;
+  readonly segments: readonly WireSegment[];
+  readonly selected: readonly number[];
+  readonly editing: boolean;
+}
+
+/**
+ * Paint the selection, which legacy lays over everything else: a polygon's or circle's highlight
+ * at Z 999 and a mask's at 1000 (segment_display_manager.py:513-542).
+ */
+export function paintSelection(context: CanvasRenderingContext2D, state: SelectionState): void {
+  context.clearRect(0, 0, state.width, state.height);
   for (const index of state.selected) {
     const segment = state.segments[index];
     if (segment === undefined) continue;
     const shape = segmentShape(segment);
     if (state.editing && shape !== null) {
-      // Edit mode: the shape brightened in its own colour, under its vertex handles.
+      // Edit mode: the shape brightened in its own colour, over its vertex handles as legacy's
+      // highlight at Z 999 is over theirs at 200 (segment_display_manager.py:505-508, 522;
+      // editable_vertex.py:14).
       drawSegment(context, segment, HOVER_OPACITY);
     } else {
       // Legacy skips a selected MASK in Edit mode, which has no handles. Here Edit is also the

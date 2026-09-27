@@ -60,7 +60,11 @@ export interface AiLayerProps {
    * Escape removes the preview mask with the points (keyboard_event_manager.py:306-313, 315-319).
    */
   readonly onClear?: () => void;
-  /** Drawn under the prompt marks, when the parent has a prediction to show. */
+  /**
+   * The prediction waiting to be accepted, when the parent has one. Drawn on a surface of its own,
+   * at legacy's depth for the view: over the annotations and the points in the single view, over
+   * the annotations and under the points in the Multi tab.
+   */
   readonly preview?: ReactNode;
   /**
    * A press made on this half of the Multi tab while the other was being edited, settled here as
@@ -300,41 +304,58 @@ export function AiLayer({
     from !== null && to !== null && Math.hypot(to.x - from.x, to.y - from.y) > DRAG_THRESHOLD;
 
   return (
-    <svg
-      ref={surfaceRef}
-      className="polygon-layer"
-      viewBox={`0 0 ${width} ${height}`}
-      preserveAspectRatio="none"
-      role="application"
-      aria-label="AI tool"
-      onPointerDown={onPointerDown}
-      onPointerMove={onPointerMove}
-      onPointerUp={onPointerUp}
-      // A right click is a negative point, so the browser's menu must not open over the preview
-      // the user is correcting.
-      onContextMenu={(event) => event.preventDefault()}
-    >
-      {preview}
-
-      <AiMarks prompt={prompt} view={view} sizing={sizing} />
-
-      {/* Legacy's rubber band: cyan, Qt's DashLine on a pen `line_thickness` image pixels wide,
-          with no fill, for every class, and gone at the release (single_view_mouse_handler.py:
-          242-249, 352; main_window.py:5449-5456, 5561). */}
-      {dragging && (
-        <rect
-          data-testid="ai-drag"
-          x={Math.min(from.x, to.x)}
-          y={Math.min(from.y, to.y)}
-          width={Math.abs(to.x - from.x)}
-          height={Math.abs(to.y - from.y)}
-          fill="none"
-          stroke={RUBBER_BAND}
-          strokeWidth={line}
-          {...qtDashLine(line)}
-        />
+    <>
+      {/* THE PREVIEW HAS A SURFACE OF ITS OWN, because legacy draws it at another depth from the
+          prompt: at Z 50 in the single view, over the annotations and over the points and the
+          rubber band at Z 0 (ai_segment_manager.py:447-465, 512-513), and at Z 500 in the Multi
+          tab, over the annotations and under its points at 1000 (main_window.py:6773, 6846). The
+          stylesheet stacks the two ("THE STACK'S DEPTHS"). It takes no pointer events, so every
+          press still lands on the tool's surface below. */}
+      {preview !== undefined && (
+        <svg
+          className="ai-preview"
+          viewBox={`0 0 ${width} ${height}`}
+          preserveAspectRatio="none"
+          aria-hidden="true"
+        >
+          {preview}
+        </svg>
       )}
-    </svg>
+
+      <svg
+        ref={surfaceRef}
+        className="polygon-layer"
+        viewBox={`0 0 ${width} ${height}`}
+        preserveAspectRatio="none"
+        role="application"
+        aria-label="AI tool"
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+        // A right click is a negative point, so the browser's menu must not open over the preview
+        // the user is correcting.
+        onContextMenu={(event) => event.preventDefault()}
+      >
+        <AiMarks prompt={prompt} view={view} sizing={sizing} />
+
+        {/* Legacy's rubber band: cyan, Qt's DashLine on a pen `line_thickness` image pixels wide,
+            with no fill, for every class, and gone at the release (single_view_mouse_handler.py:
+            242-249, 352; main_window.py:5449-5456, 5561). */}
+        {dragging && (
+          <rect
+            data-testid="ai-drag"
+            x={Math.min(from.x, to.x)}
+            y={Math.min(from.y, to.y)}
+            width={Math.abs(to.x - from.x)}
+            height={Math.abs(to.y - from.y)}
+            fill="none"
+            stroke={RUBBER_BAND}
+            strokeWidth={line}
+            {...qtDashLine(line)}
+          />
+        )}
+      </svg>
+    </>
   );
 }
 

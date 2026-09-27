@@ -341,7 +341,9 @@ export function EditLayer({
   return (
     <svg
       ref={surfaceRef}
-      className="polygon-layer"
+      // At legacy's Z 200: over the annotations and the AI preview, under the selection's highlight
+      // (editable_vertex.py:14, 82; `styles.css`, "THE STACK'S DEPTHS").
+      className="polygon-layer edit-layer"
       viewBox={`0 0 ${width} ${height}`}
       preserveAspectRatio="none"
       role="application"

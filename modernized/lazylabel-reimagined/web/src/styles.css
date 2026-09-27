@@ -1075,6 +1075,71 @@ fieldset input[type="text"] {
   touch-action: none; /* a drag on a touch screen draws, it does not scroll the page */
 }
 
+/* THE STACK'S DEPTHS ARE LEGACY'S Z VALUES. The owner, 2026-09-27: "shapes you're still drawing
+   appear above existing segments; the desktop app draws them underneath." Each tool drew its marks
+   on the surface that takes its pointer events, laid over the annotations; legacy's scene stacks
+   every item by its Z value, and the layers here now sit at those depths. Whatever is laid over a
+   tool's surface takes no pointer events, so every press, cursor and key reaches the tool as before.
+
+     auto  the picture; in the single view, which the Sequence tab shares, the tools' surfaces and
+           what is being drawn on them: a polygon's dots, fill and edges, the box, circle and AI
+           rubber bands and the AI points, all at Z 0 (polygon_drawing_manager.py:99-158;
+           single_view_mouse_handler.py:146-166, 242-250; ai_segment_manager.py:447-465)
+     1     the annotations, the hovered one brightened where it lies: Z index + 1
+           (segment_display_manager.py:326-388)
+     2     the crop's dimmed surround: Z 25 (crop_manager.py:196-222)
+     3     the AI preview: Z 50, over the points (ai_segment_manager.py:512-513; main_window.py:2267),
+           or in the Multi tab Z 500, under them (main_window.py:6846)
+     4     the vertex handles: Z 200 (editable_vertex.py:14, 82; edit_mode_manager.py:131)
+     5     the selection: Z 999 and 1000 (segment_display_manager.py:522-542; main_window.py:6259-6281)
+     6     in the Multi tab, the tools' surfaces and what is being drawn: Z 999 for a polygon's edges,
+           1000 for its dots, the rubber bands and the AI points (main_window.py:5457, 5666-5704,
+           5727, 5835, 6773)
+
+   The stack and the Multi tab's other half are stacking contexts of their own, so these numbers
+   order their layers and nothing outside them. The rules for the crop's and the handles' surfaces
+   come after the Multi tab's, which they override. */
+.canvas-stack,
+.split__picture {
+  isolation: isolate;
+}
+
+.annotation-canvas__overlay {
+  z-index: 1;
+}
+
+.split__view .polygon-layer,
+.split__picture .polygon-layer,
+.split__prompt {
+  z-index: 6;
+}
+
+.polygon-layer.crop-layer {
+  z-index: 2;
+}
+
+.ai-preview {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 3;
+}
+
+.polygon-layer.edit-layer {
+  z-index: 4;
+}
+
+.annotation-canvas__selection {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 5;
+}
+
 /* Legacy's Mode Controls card (control_panel.py:242-338; theme.py:233-236): a faint raised card,
    radius 6, holding a 3x2 grid of 28px mode buttons and the Hotkeys row. */
 .mode-card {

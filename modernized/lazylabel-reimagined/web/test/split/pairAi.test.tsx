@@ -300,6 +300,27 @@ describe("one prompt, asked of each image's own model", () => {
     expect(within(other).getByTestId("ai-negative-1").getAttribute("fill")).toBe("rgb(255, 0, 0)");
   });
 
+  it("draws each half's preview on a surface apart from the points, which legacy puts at other depths", async () => {
+    // The preview at Z 500, under the selection; the points at 1000, over it (main_window.py:6846,
+    // 6773). One surface held both until 2026-09-27; the stylesheet stacks the two
+    // (`test/canvas/stacking.test.tsx`).
+    await pairUp();
+
+    click(50, 40);
+
+    await waitFor(() => expect(halves().every((half) => within(half).queryByTestId("ai-mask") !== null)).toBe(true));
+    for (const half of halves()) {
+      const preview = within(half).getByTestId("ai-mask").closest("svg")!;
+      const points = within(half).getByTestId("ai-positive-0").closest("svg")!;
+      expect(preview.getAttribute("class")).toBe("ai-preview");
+      expect(preview.getAttribute("aria-hidden")).toBe("true");
+      expect(points).not.toBe(preview);
+      expect(preview.contains(points)).toBe(false);
+    }
+    // The half not being edited draws its points on the prompt's own surface.
+    expect(within(halves()[1]!).getByTestId("ai-positive-0").closest("svg")!.getAttribute("class")).toBe("split__prompt");
+  });
+
   it("sends a box to both images", async () => {
     const { segment } = await pairUp();
 

@@ -599,6 +599,9 @@ interface PairPromptProps {
  * image's own answer to them, as legacy draws each point and each viewer's own preview in every
  * target viewer (main_window.py:6666-6672, 6741-6776, 6806-6851), in its Multi tab's style.
  * Clicks pass through it, so a click on the half still makes it the one edited.
+ *
+ * Two surfaces, at legacy's two depths: the preview at Z 500, under the selection, and the points
+ * at 1000, over it (main_window.py:6846, 6773; `styles.css`, "THE STACK'S DEPTHS").
  */
 function PairPrompt({
   prompt,
@@ -608,15 +611,21 @@ function PairPrompt({
 }: PairPromptProps & { readonly width: number; readonly height: number }): ReactNode {
   const sizing = useSizing();
   return (
-    <svg
-      className="split__prompt"
-      viewBox={`0 0 ${width} ${height}`}
-      preserveAspectRatio="none"
-      aria-label="AI prompt"
-    >
-      {result !== null && <AiPreview result={result} view="multi" />}
-      <AiMarks prompt={prompt} view="multi" sizing={sizing} />
-    </svg>
+    <>
+      {result !== null && (
+        <svg className="ai-preview" viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" aria-hidden="true">
+          <AiPreview result={result} view="multi" />
+        </svg>
+      )}
+      <svg
+        className="split__prompt"
+        viewBox={`0 0 ${width} ${height}`}
+        preserveAspectRatio="none"
+        aria-label="AI prompt"
+      >
+        <AiMarks prompt={prompt} view="multi" sizing={sizing} />
+      </svg>
+    </>
   );
 }
 
