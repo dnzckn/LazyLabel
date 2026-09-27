@@ -23,7 +23,12 @@ import { readFile, readdir } from "node:fs/promises";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { expect, it } from "vitest";
+import { expect, it, vi } from "vitest";
+
+// A whole-tree guard: it reads and analyses every source file, so on a machine busy with other work
+// it can pass the suite's 20 s before any assertion could fail (seen 2026-09-27 under heavy load,
+// while it takes a second or two alone). The claim is unchanged; only the allowance is longer.
+vi.setConfig({ testTimeout: 60_000 });
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOTS = [
