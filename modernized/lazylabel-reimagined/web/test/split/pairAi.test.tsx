@@ -284,6 +284,12 @@ describe("one prompt, asked of each image's own model", () => {
     expect(within(other).getByTestId("ai-negative-1").getAttribute("cx")).toBe("70");
     // And the half being edited shows its own.
     expect(within(halves()[0]!).getByTestId("ai-mask")).toBeTruthy();
+    // Both halves in legacy's Multi style: opaque, with a black pen (main_window.py:6765-6772).
+    for (const half of halves()) {
+      const mark = within(half).getByTestId("ai-positive-0");
+      expect([mark.getAttribute("fill"), mark.getAttribute("stroke")]).toEqual(["rgb(0, 255, 0)", "rgb(0, 0, 0)"]);
+    }
+    expect(within(other).getByTestId("ai-negative-1").getAttribute("fill")).toBe("rgb(255, 0, 0)");
   });
 
   it("sends a box to both images", async () => {
@@ -296,7 +302,10 @@ describe("one prompt, asked of each image's own model", () => {
       [20, 20, 80, 70],
       [20, 20, 80, 70],
     ]);
-    expect(within(halves()[1]!).getByTestId("ai-box")).toBeTruthy();
+    // The other half shows its own answer to the box, and no box: legacy removes its rubber band at
+    // the release (main_window.py:5558-5561).
+    await waitFor(() => expect(within(halves()[1]!).getByTestId("ai-mask")).toBeTruthy());
+    expect(halves()[1]!.querySelector('[aria-label="AI prompt"] rect')).toBeNull();
   });
 });
 

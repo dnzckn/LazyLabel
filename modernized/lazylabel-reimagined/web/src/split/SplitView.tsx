@@ -173,8 +173,6 @@ export function SplitView({ images, pixelsUrl, tileUrl, viewer }: SplitViewProps
     ],
   );
   const pairAi = usePairAi(pairing);
-  // The class the view's tool gives a new annotation, whose colour the other half's preview takes.
-  const aiClassId = classForNewSegment(sides[activeSide].segments, activeClassId);
   // Where each half was scrolled to, put back when the view moves between them (CP-31).
   const paneScroll = usePaneScroll();
 
@@ -394,7 +392,7 @@ export function SplitView({ images, pixelsUrl, tileUrl, viewer }: SplitViewProps
                     // The linked prompt, drawn here too, with this image's own answer to it.
                     {...(pairAi === null
                       ? {}
-                      : { ai: { prompt: pairAi.prompt, result: pairAi.results[side], classId: aiClassId } })}
+                      : { ai: { prompt: pairAi.prompt, result: pairAi.results[side] } })}
                     // The linked polygon in progress, drawn here too.
                     {...(pairDraft === null ? {} : { draft: pairDraft.draft })}
                     // A press here is the tool's, as in legacy's non-active viewer.
@@ -597,19 +595,17 @@ interface PairPromptProps {
   readonly prompt: AiPrompt;
   /** This image's own model's answer to the prompt, or null: none yet, failed, or not asked. */
   readonly result: WireSegmentResponse | null;
-  readonly classId: number;
 }
 
 /**
- * A linked AI prompt over the half not being edited: the same points and box at the same pixels,
- * and THIS image's own answer to them, as legacy draws each point and each viewer's own preview in
- * every target viewer (main_window.py:6666-6672, 6741-6776, 6806-6851). Clicks pass through it, so
- * a click on the half still makes it the one edited.
+ * A linked AI prompt over the half not being edited: the same points at the same pixels, and THIS
+ * image's own answer to them, as legacy draws each point and each viewer's own preview in every
+ * target viewer (main_window.py:6666-6672, 6741-6776, 6806-6851), in its Multi tab's style.
+ * Clicks pass through it, so a click on the half still makes it the one edited.
  */
 function PairPrompt({
   prompt,
   result,
-  classId,
   width,
   height,
 }: PairPromptProps & { readonly width: number; readonly height: number }): ReactNode {
@@ -629,8 +625,8 @@ function PairPrompt({
       preserveAspectRatio="none"
       aria-label="AI prompt"
     >
-      {result !== null && <AiPreview result={result} classId={classId} />}
-      <AiMarks prompt={prompt} classId={classId} perPixel={perPixel} sizing={sizing} />
+      {result !== null && <AiPreview result={result} view="multi" />}
+      <AiMarks prompt={prompt} view="multi" perPixel={perPixel} sizing={sizing} />
     </svg>
   );
 }

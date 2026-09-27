@@ -37,7 +37,6 @@ function layer(props: Partial<Parameters<typeof AiLayer>[0]> & { readonly view?:
     <AiLayer
       width={IMAGE.width}
       height={IMAGE.height}
-      classId={props.classId ?? 1}
       onPrompt={onPrompt}
       onAccept={onAccept}
       onRefused={onRefused}
@@ -155,7 +154,6 @@ describe("the right button, as legacy's single view takes it", () => {
     expect(screen.queryByTestId("ai-drag")).toBeNull();
     fireEvent.pointerUp(surface, point(80, 70, 2));
 
-    expect(screen.queryByTestId("ai-box")).toBeNull();
     expect(centre("ai-negative-1")).toEqual({ x: 10, y: 10 });
     expect(screen.queryByTestId("ai-negative-2")).toBeNull();
     expect(onPrompt).toHaveBeenCalledTimes(1);
@@ -195,7 +193,7 @@ describe("in legacy's multi view, whose handler differs", () => {
     expect(screen.queryByTestId("ai-drag")).not.toBeNull();
     fireEvent.pointerUp(surface, point(80, 70, 2));
 
-    expect(screen.queryByTestId("ai-box")).not.toBeNull();
+    expect(screen.queryByTestId("ai-drag")).toBeNull();
     expect(screen.queryByTestId("ai-negative-0")).toBeNull();
     expect(onPrompt.mock.calls[0]?.[0].box).toEqual([{ x: 10, y: 10 }, { x: 80, y: 70 }]);
   });
@@ -239,7 +237,9 @@ describe("drawing a box", () => {
     expect(screen.queryByTestId("ai-drag")).not.toBeNull();
   });
 
-  it("previews the drag, then keeps the box", () => {
+  it("previews the drag, then asks with the box and draws none of it", () => {
+    // Legacy takes its rubber band away at the release and shows only the preview
+    // (single_view_mouse_handler.py:351-353). The box stayed drawn here until 2026-09-27.
     const { surface, onPrompt } = layer();
 
     fireEvent.pointerDown(surface, point(10, 10));
@@ -248,8 +248,7 @@ describe("drawing a box", () => {
 
     fireEvent.pointerUp(surface, point(80, 70));
 
-    expect(screen.queryByTestId("ai-drag")).toBeNull();
-    expect(screen.queryByTestId("ai-box")).not.toBeNull();
+    expect(surface.querySelector("rect")).toBeNull();
     expect(onPrompt.mock.calls[0]?.[0].box).toEqual([{ x: 10, y: 10 }, { x: 80, y: 70 }]);
   });
 
@@ -386,15 +385,17 @@ describe("taking things back", () => {
   });
 
   it("removes the BOX first on undo, because that is what Space would take", () => {
-    const { surface } = layer();
+    const { surface, onPrompt } = layer();
     click(surface, 30, 40);
     fireEvent.pointerDown(surface, point(60, 10));
     fireEvent.pointerUp(surface, point(140, 80));
-    expect(screen.queryByTestId("ai-box")).not.toBeNull();
+    expect(onPrompt.mock.lastCall?.[0].box).toEqual([{ x: 60, y: 10 }, { x: 140, y: 80 }]);
 
     fireEvent.keyDown(document, { key: "z", ctrlKey: true });
 
-    expect(screen.queryByTestId("ai-box")).toBeNull();
+    // Asked again without the box, and the point kept.
+    expect(onPrompt.mock.lastCall?.[0].box).toBeNull();
+    expect(onPrompt.mock.lastCall?.[0].points).toEqual([{ x: 30, y: 40, positive: true }]);
     expect(screen.queryByTestId("ai-positive-0")).not.toBeNull();
   });
 
@@ -408,6 +409,47 @@ describe("taking things back", () => {
 
     expect(onPrompt).toHaveBeenCalledTimes(1);
     expect(onPrompt.mock.calls[0]?.[0].points).toHaveLength(1);
+  });
+});
+
+describe("how the prompt looks, as legacy draws it", () => {
+  it("in the single view, a point is green or red at alpha 150 with no outline", () => {
+    // ai_segment_manager.py:451-464. The dots had a dark outline here until 2026-09-27.
+    const { surface } = layer();
+    click(surface, 30, 40);
+    click(surface, 50, 40, 2);
+
+    const positive = screen.getByTestId("ai-positive-0");
+    const negative = screen.getByTestId("ai-negative-1");
+    expect(positive.getAttribute("fill")).toBe(`rgba(0, 255, 0, ${150 / 255})`);
+    expect(negative.getAttribute("fill")).toBe(`rgba(255, 0, 0, ${150 / 255})`);
+    for (const mark of [positive, negative]) {
+      expect(mark.getAttribute("stroke")).toBe("none");
+      expect(mark.getAttribute("stroke-width")).toBeNull();
+    }
+  });
+
+  it("in the Multi tab, a point is opaque with a black pen one pixel wide", () => {
+    // main_window.py:6765-6772. One screen pixel here, as the dot keeps one size on screen.
+    const { surface } = layer({ view: "multi" });
+    click(surface, 30, 40);
+
+    const positive = screen.getByTestId("ai-positive-0");
+    expect(positive.getAttribute("fill")).toBe("rgb(0, 255, 0)");
+    expect(positive.getAttribute("stroke")).toBe("rgb(0, 0, 0)");
+    expect(positive.getAttribute("stroke-width")).toBe("1");
+  });
+
+  it("draws the rubber band in cyan with Qt's dash, whatever the class", () => {
+    // single_view_mouse_handler.py:242-249; main_window.py:5449-5456 in the Multi tab.
+    const { surface } = layer();
+    fireEvent.pointerDown(surface, point(10, 10));
+    fireEvent.pointerMove(surface, point(80, 70));
+
+    const band = screen.getByTestId("ai-drag");
+    expect(band.getAttribute("stroke")).toBe("rgb(0, 255, 255)");
+    expect(band.getAttribute("stroke-dasharray")).toBe("4 2");
+    expect(band.getAttribute("fill")).toBe("none");
   });
 });
 

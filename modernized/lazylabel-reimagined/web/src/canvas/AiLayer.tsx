@@ -20,7 +20,6 @@
 import { useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { flushSync } from "react-dom";
 
-import { classColor } from "./classColor.js";
 import { locate, scale, type DisplayBox, type ImagePoint } from "./coordinates.js";
 import {
   DRAG_THRESHOLD,
@@ -37,7 +36,7 @@ import {
 } from "../tools/ai.js";
 import { useSizing } from "./useSizing.js";
 import type { Sizing } from "./sizing.js";
-import { ViewKindContext } from "./viewKind.js";
+import { ViewKindContext, type ViewKind } from "./viewKind.js";
 import { PairAiContext } from "../split/pairAi.js";
 import { claim, type HandedPress } from "../split/pairPress.js";
 import { useHotkey } from "../hotkeys/HotkeyProvider.jsx";
@@ -47,7 +46,6 @@ import { isApplePlatform } from "../platform.js";
 export interface AiLayerProps {
   readonly width: number;
   readonly height: number;
-  readonly classId: number;
   /** The prompt changed and is worth predicting. The parent calls the service. */
   readonly onPrompt: (prompt: AiPrompt) => void;
   /** Space: take the pending prediction. `erase` is true when shift was held. */
@@ -72,11 +70,12 @@ export interface AiLayerProps {
 }
 
 const POINT_RADIUS = 4;
+/** Legacy's AI rubber band colour, `Qt.GlobalColor.cyan`. */
+const RUBBER_BAND = "rgb(0, 255, 255)";
 
 export function AiLayer({
   width,
   height,
-  classId,
   onPrompt,
   onAccept,
   onRefused,
@@ -296,7 +295,7 @@ export function AiLayer({
 
   const box = boxOf();
   const perPixel = box === null ? { x: 1, y: 1 } : scale(box, image);
-  const { r, g, b } = classColor(classId);
+  const line = Math.max(perPixel.x, perPixel.y) * sizing.line;
   // Legacy draws its rubber band only once the pointer is past the threshold that makes a drag
   // (`single_view_mouse_handler.py:237`, `main_window.py:5444`), not as a speck under every click.
   const dragging =
@@ -319,8 +318,11 @@ export function AiLayer({
     >
       {preview}
 
-      <AiMarks prompt={prompt} classId={classId} perPixel={perPixel} sizing={sizing} />
+      <AiMarks prompt={prompt} view={view} perPixel={perPixel} sizing={sizing} />
 
+      {/* Legacy's rubber band: cyan, Qt's DashLine (dashes of 4 and gaps of 2 pen widths), for
+          every class, and gone at the release (single_view_mouse_handler.py:242-249, 352;
+          main_window.py:5449-5456, 5561). */}
       {dragging && (
         <rect
           data-testid="ai-drag"
@@ -329,9 +331,9 @@ export function AiLayer({
           width={Math.abs(to.x - from.x)}
           height={Math.abs(to.y - from.y)}
           fill="none"
-          stroke={`rgb(${r}, ${g}, ${b})`}
-          strokeDasharray={`${perPixel.x * 3} ${perPixel.x * 3}`}
-          strokeWidth={Math.max(perPixel.x, perPixel.y) * sizing.line}
+          stroke={RUBBER_BAND}
+          strokeDasharray={`${4 * line} ${2 * line}`}
+          strokeWidth={line}
         />
       )}
     </svg>
@@ -339,7 +341,16 @@ export function AiLayer({
 }
 
 /**
- * The prompt as placed: the box, and a dot for each point.
+ * The prompt as placed: a dot for each point.
+ *
+ * NO BOX. Legacy takes its rubber band away at the release and shows only the preview it asked for
+ * (single_view_mouse_handler.py:351-353, main_window.py:5558-5561). Until 2026-09-27 this kept the
+ * box drawn round the preview, in the class colour.
+ *
+ * THE DOTS ARE LEGACY'S, which differ by view. Green includes and red excludes. In the single view,
+ * which the Sequence tab shares, they are filled at alpha 150 with no outline
+ * (ai_segment_manager.py:451-464). In the Multi tab they are opaque with a black pen one pixel wide
+ * (main_window.py:6765-6772).
  *
  * Its own component because a linked pair's prompt is drawn in BOTH halves of the Multi tab, as
  * legacy draws each point in every target viewer (main_window.py:6666-6672, 6741-6776); the half
@@ -348,47 +359,34 @@ export function AiLayer({
  */
 export function AiMarks({
   prompt,
-  classId,
+  view,
   perPixel,
   sizing,
 }: {
   readonly prompt: AiPrompt;
-  readonly classId: number;
+  /** Which of legacy's views this is drawn in. */
+  readonly view: ViewKind;
   readonly perPixel: { readonly x: number; readonly y: number };
   readonly sizing: Sizing;
 }): ReactNode {
-  const { r, g, b } = classColor(classId);
   return (
     <>
-      {prompt.box !== null && (
-        <rect
-          data-testid="ai-box"
-          x={Math.min(prompt.box[0].x, prompt.box[1].x)}
-          y={Math.min(prompt.box[0].y, prompt.box[1].y)}
-          width={Math.abs(prompt.box[1].x - prompt.box[0].x)}
-          height={Math.abs(prompt.box[1].y - prompt.box[0].y)}
-          fill="none"
-          stroke={`rgb(${r}, ${g}, ${b})`}
-          strokeWidth={Math.max(perPixel.x, perPixel.y) * sizing.line}
-        />
-      )}
-
-      {prompt.points.map((point, index) => (
-        <ellipse
-          key={index}
-          data-testid={point.positive ? `ai-positive-${index}` : `ai-negative-${index}`}
-          cx={point.x}
-          cy={point.y}
-          rx={POINT_RADIUS * perPixel.x * sizing.point}
-          ry={POINT_RADIUS * perPixel.y * sizing.point}
-          // Green for include, red for exclude: the two mean opposite things, and a shape or size
-          // difference alone is a distinction nobody reads at a glance. Legacy's pure green and red
-          // at alpha 150 (ai_segment_manager.py:452).
-          fill={point.positive ? "rgba(0, 255, 0, 0.59)" : "rgba(255, 0, 0, 0.59)"}
-          stroke="rgba(0, 0, 0, 0.6)"
-          strokeWidth={Math.max(perPixel.x, perPixel.y) * sizing.line}
-        />
-      ))}
+      {prompt.points.map((point, index) => {
+        const rgb = point.positive ? "0, 255, 0" : "255, 0, 0";
+        return (
+          <ellipse
+            key={index}
+            data-testid={point.positive ? `ai-positive-${index}` : `ai-negative-${index}`}
+            cx={point.x}
+            cy={point.y}
+            rx={POINT_RADIUS * perPixel.x * sizing.point}
+            ry={POINT_RADIUS * perPixel.y * sizing.point}
+            {...(view === "multi"
+              ? { fill: `rgb(${rgb})`, stroke: "rgb(0, 0, 0)", strokeWidth: Math.max(perPixel.x, perPixel.y) }
+              : { fill: `rgba(${rgb}, ${150 / 255})`, stroke: "none" })}
+          />
+        );
+      })}
     </>
   );
 }

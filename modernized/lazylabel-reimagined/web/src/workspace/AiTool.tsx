@@ -29,6 +29,8 @@ import { decodeMask, encodeMask, type WireSegment } from "@lazylabel/contracts";
 
 import { AiLayer } from "../canvas/AiLayer.jsx";
 import { segmentPixels } from "../canvas/AnnotationCanvas.jsx";
+import type { Rgb } from "../canvas/classColor.js";
+import { ViewKindContext, type ViewKind } from "../canvas/viewKind.js";
 import { filterFragments } from "../tools/fragments.js";
 import { SETTLE_MS, prefetchOrder } from "./prefetch.js";
 import { useNotifications } from "../notifications/NotificationProvider.jsx";
@@ -134,6 +136,8 @@ export function AiTool({
   const [encoding, setEncoding] = useState(false);
   /** The Multi tab's linked pair, whose prompt and answers are held for both images; else null. */
   const pair = useContext(PairAiContext);
+  /** The Multi tab draws the preview fainter than the single view does. */
+  const view = useContext(ViewKindContext);
   const [own, setResult] = useState<WireSegmentResponse | null>(null);
   /** What this image shows: its own answer, or in a linked pair the pair's answer for it. */
   const result = pair === null ? own : pair.results[pair.active];
@@ -584,12 +588,11 @@ export function AiTool({
       <AiLayer
         width={width}
         height={height}
-        classId={classId}
         onPrompt={onPrompt}
         onAccept={accept}
         onRefused={(reason) => notify({ severity: "warning", message: reason })}
         onClear={onClear}
-        preview={result === null ? undefined : <AiPreview result={result} classId={classId} />}
+        preview={result === null ? undefined : <AiPreview result={result} view={view} />}
         {...(handed !== null && canAsk ? { handed } : {})}
       />
       {/* Legacy's status line while the image is encoded (sam_single_view_manager.py:278). */}
@@ -631,6 +634,19 @@ function requestFor(handle: string, prompt: AiPrompt): WireSegmentRequest {
 }
 
 /**
+ * An AI suggestion not yet accepted is legacy's yellow, whatever the class, with no outline: a
+ * point prompt's (ai_segment_manager.py:511), a box's (main_window.py:2265) and the Multi tab's
+ * (main_window.py:6824).
+ */
+export const PREVIEW_YELLOW: Rgb = { r: 255, g: 255, b: 0 };
+
+/**
+ * Its alpha: `mask_to_pixmap`'s default of 150 in the single view, which the Sequence tab shares
+ * (utils.py:5, ai_segment_manager.py:511), and 128 in the Multi tab (main_window.py:6825).
+ */
+export const PREVIEW_OPACITY: Readonly<Record<ViewKind, number>> = { single: 150 / 255, multi: 128 / 255 };
+
+/**
  * The pending mask, drawn as an image over the canvas.
  *
  * Reuses `segmentPixels`, the canvas's own decoder, so a preview and the committed annotation
@@ -644,13 +660,15 @@ function requestFor(handle: string, prompt: AiPrompt): WireSegmentRequest {
  */
 export function AiPreview({
   result,
-  classId,
+  view,
 }: {
   readonly result: WireSegmentResponse;
-  readonly classId: number;
+  /** Which of legacy's views this is drawn in: the Multi tab's preview is fainter. */
+  readonly view: ViewKind;
 }): ReactNode {
   const drawn = useMemo(() => {
-    const painted = segmentPixels({ type: "AI", classId, mask: result.mask }, 0.6);
+    // The class plays no part: the colour is given.
+    const painted = segmentPixels({ type: "AI", classId: 0, mask: result.mask }, PREVIEW_OPACITY[view], PREVIEW_YELLOW);
     if (painted === null) return null;
 
     const canvas = document.createElement("canvas");
@@ -670,7 +688,7 @@ export function AiPreview({
       // that is not shown, not an exception thrown at the user mid-gesture.
       return null;
     }
-  }, [classId, result.mask]);
+  }, [result.mask, view]);
 
   return (
     <g data-testid="ai-mask">

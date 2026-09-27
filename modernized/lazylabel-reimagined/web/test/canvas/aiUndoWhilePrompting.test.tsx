@@ -35,7 +35,7 @@ function mount() {
   renderWithSettings(
     <>
       <HistoryUndo onUndo={undo} />
-      <AiLayer width={200} height={100} classId={1} onPrompt={onPrompt} onAccept={vi.fn()} onRefused={vi.fn()} />
+      <AiLayer width={200} height={100} onPrompt={onPrompt} onAccept={vi.fn()} onRefused={vi.fn()} />
     </>,
   );
   return { undo, surface: screen.getByLabelText("AI tool") };
