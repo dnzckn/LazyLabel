@@ -459,7 +459,8 @@ export type AiPlan =
  * It does when there is a Python for it -- LAZYLABEL_PYTHON, else the `.venv` that
  * `npm run ai:setup` makes -- and a manifest -- LAZYLABEL_MODEL_MANIFEST, else `manifest.json` in
  * LAZYLABEL_MODEL_DIR or the per-user folder `npm run ai:models` fills. Without them the app runs
- * as it always has, with no AI, and says which command adds it.
+ * as it always has, with no AI, and says which command adds it -- or, in the release zip, which has
+ * no inference package and no npm to run a command with, that the AI tools are not in it.
  */
 export function aiPlan(context: {
   readonly env: NodeJS.ProcessEnv;
@@ -483,10 +484,11 @@ export function aiPlan(context: {
         ? join(inference, ".venv", "Scripts", "python.exe")
         : join(inference, ".venv", "bin", "python");
   if (!exists(python)) {
-    return {
-      kind: "off",
-      reason: named !== "" ? `LAZYLABEL_PYTHON names ${python}, which is not there` : "run npm run ai:setup",
-    };
+    if (named !== "") return { kind: "off", reason: `LAZYLABEL_PYTHON names ${python}, which is not there` };
+    if (!exists(join(inference, "pyproject.toml"))) {
+      return { kind: "off", reason: "not in this download (README.txt says how to add them)" };
+    }
+    return { kind: "off", reason: "run npm run ai:setup" };
   }
 
   const namedDir = (env["LAZYLABEL_MODEL_DIR"] ?? "").trim();

@@ -28,7 +28,12 @@ describe("whether npm start starts the AI tools", () => {
   it("does not before npm run ai:setup, and says to run it", () => {
     // Until 2026-09-26 the banner said "off: no inference service is set", and the fix was a
     // README section of Python commands.
-    expect(plan({}, [])).toEqual({ kind: "off", reason: "run npm run ai:setup" });
+    expect(plan({}, [`${INFERENCE}/pyproject.toml`])).toEqual({ kind: "off", reason: "run npm run ai:setup" });
+  });
+
+  it("does not in the release zip, and names no command there is no npm to run", () => {
+    // The zip carries the API and the web app, not the inference package (DEPLOYABILITY.md R11).
+    expect(plan({}, [])).toEqual({ kind: "off", reason: "not in this download (README.txt says how to add them)" });
   });
 
   it("does not before a model is fetched, and says which command fetches one", () => {
