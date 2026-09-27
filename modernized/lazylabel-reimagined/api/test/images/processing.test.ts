@@ -13,6 +13,8 @@
 
 import { describe, expect, it } from "vitest";
 
+import { filterFrequencies } from "../../src/images/fft.js";
+import { to8Bit } from "../../src/images/pipeline.js";
 import {
   MAX_FFT_PIXELS,
   applyFrequencyFilter,
@@ -356,15 +358,26 @@ describe("the filter on a crop", () => {
     expect(insideChanged).toBe(true);
   });
 
-  it("writes 8-bit results into a 16-bit image as they are, as legacy's does", () => {
-    // Legacy assigns the filter's 0..255 into the 16-bit image and divides by 256 afterwards, so
-    // the crop comes out black; `legacy-fft-pipeline.json` holds the whole picture.
-    const wide = Uint16Array.from(structured(), (value) => value * 257);
+  it("widens the result in a 16-bit image, so the conversion shows it and not black", () => {
+    // A deliberate difference, the owner's decision of 2026-09-27 ("Fix it in the web"). Legacy
+    // assigns the filter's 0..255 into the 16-bit image as it is and divides by 256 afterwards, so
+    // its crop comes out black; `legacy-fft-pipeline.json` holds that picture.
+    const narrow = structured();
+    const wide = Uint16Array.from(narrow, (value) => value * 257);
+    const inCrop = (i: number) => ((2 + Math.floor(i / 4)) * 8 + 2 + (i % 4)) * 3;
+    const region = Uint16Array.from({ length: 16 }, (_, i) => wide[inCrop(i)]!);
+    const filtered = filterFrequencies(region, 4, 4, []);
 
     applyFrequencyFilter(wide, grayFrame(8, 8), { fft: true, crop: [2, 2, 6, 6] });
+    const shown = to8Bit(wide);
 
-    for (let y = 2; y < 6; y += 1) {
-      for (let x = 2; x < 6; x += 1) expect(wide[(y * 8 + x) * 3]).toBeLessThanOrEqual(255);
+    expect(Array.from({ length: 16 }, (_, i) => shown[inCrop(i)])).toEqual(Array.from(filtered));
+    expect(Math.max(...filtered)).toBe(255);
+    for (let y = 0; y < 8; y += 1) {
+      for (let x = 0; x < 8; x += 1) {
+        const at = (y * 8 + x) * 3;
+        if (x < 2 || x >= 6 || y < 2 || y >= 6) expect(shown[at]).toBe(narrow[at]);
+      }
     }
   });
 });

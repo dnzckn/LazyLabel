@@ -16,6 +16,9 @@
  *     threshold's marker puts it in the band above.
  *   - CUTOFFS ARE FRACTIONAL, as the frequency bar leaves them.
  *   - THE FILTER RUNS ON THE CROP, and on a 16-bit image legacy's crop region comes out black.
+ *     The web's does not: A DELIBERATE DIFFERENCE, the owner's decision of 2026-09-27 ("Fix it in
+ *     the web"). Those cases match legacy byte for byte outside the crop, and inside it they are
+ *     the filter's result on the region (`widened` below).
  *
  * EXACT, WITH ONE CHARACTERIZED EXCEPTION. With the box alone on an even-sized image the filter is
  * the image transformed and transformed back, so each value comes out a whole number give or take
@@ -31,10 +34,12 @@ import { readFile } from "node:fs/promises";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import sharp from "sharp";
 import { describe, expect, it } from "vitest";
 
+import { filterFrequencies } from "../../src/images/fft.js";
 import { decodeImage } from "../../src/images/pipeline.js";
-import { processingFromQuery } from "../../src/images/processing.js";
+import { clampRegion, processingFromQuery } from "../../src/images/processing.js";
 
 const FIXTURE = path.join(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -75,6 +80,55 @@ function boxAlone(testCase: Case): boolean {
   return testCase.frequencies.length === 0 && testCase.window === null && Object.keys(testCase.markers).length === 0;
 }
 
+/**
+ * A crop on a 16-bit image: the one case the web answers differently, by the owner's decision.
+ * The PNG's own header says the depth (IHDR's bit depth, byte 24).
+ */
+function widened(testCase: Case): boolean {
+  return testCase.crop !== null && png(testCase.image)[24] === 16;
+}
+
+/**
+ * Outside the crop, legacy's pixels byte for byte. Inside it legacy's are all 0, its black region,
+ * and the web's are the filter's result on the region at the region's own 16 bits: the function
+ * `legacy-fft.json` proves against legacy, and this file's uncropped 16-bit cases in the pipeline.
+ */
+async function expectWidened(testCase: Case, actual: Uint8Array): Promise<void> {
+  const processing = processingFromQuery(new URLSearchParams(testCase.query));
+  const { width, height } = testCase;
+  const [x1, y1, x2, y2] = clampRegion({ width, height }, processing.crop ?? null);
+  const { data } = await sharp(png(testCase.image))
+    .removeAlpha()
+    .toColourspace("rgb16")
+    .raw({ depth: "ushort" })
+    .toBuffer({ resolveWithObject: true });
+  const wide = new Uint16Array(data.buffer, data.byteOffset, data.byteLength / 2);
+  const across = x2 - x1;
+  const plane = Uint16Array.from(
+    { length: across * (y2 - y1) },
+    (_, i) => wide[((y1 + Math.floor(i / across)) * width + x1 + (i % across)) * 3]!,
+  );
+  const filtered = filterFrequencies(plane, y2 - y1, across, processing.frequencies ?? [], processing.intensities ?? []);
+
+  const expected = bytesOf(testCase);
+  const wrong = { outside: 0, inside: 0, legacyNotBlack: 0 };
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      for (let c = 0; c < 3; c += 1) {
+        const at = (y * width + x) * 3 + c;
+        if (x < x1 || x >= x2 || y < y1 || y >= y2) {
+          if (actual[at] !== expected[at]) wrong.outside += 1;
+          continue;
+        }
+        if (expected[at] !== 0) wrong.legacyNotBlack += 1;
+        if (actual[at] !== filtered[(y - y1) * across + (x - x1)]) wrong.inside += 1;
+      }
+    }
+  }
+  expect(wrong).toEqual({ outside: 0, inside: 0, legacyNotBlack: 0 });
+  expect(Math.max(...filtered)).toBeGreaterThan(0);
+}
+
 function differing(actual: Uint8Array, expected: Uint8Array): number[] {
   const at: number[] = [];
   for (let i = 0; i < actual.length; i += 1) if (actual[i] !== expected[i]) at.push(i);
@@ -96,6 +150,10 @@ describe("the pixels, against legacy's own pipeline", () => {
     it(`${testCase.image} with ${testCase.query}`, async () => {
       const decoded = await decodeImage(png(testCase.image), processingFromQuery(new URLSearchParams(testCase.query)));
       expect([decoded.width, decoded.height]).toEqual([testCase.width, testCase.height]);
+      if (widened(testCase)) {
+        await expectWidened(testCase, decoded.data);
+        return;
+      }
 
       const expected = bytesOf(testCase);
       const off = differing(decoded.data, expected);
@@ -127,10 +185,12 @@ describe("the pixels, against legacy's own pipeline", () => {
     // The characterized exception above, counted, so it cannot quietly spread to other cases.
     const inexact: string[] = [];
     for (const testCase of golden.cases) {
+      if (widened(testCase)) continue; // the owner's difference, checked case by case above
       const actual = await ours(testCase.image, testCase.query);
       if (differing(actual, bytesOf(testCase)).length > 0) inexact.push(testCase.query);
     }
     expect(inexact.every((query) => !query.includes("frequencies"))).toBe(true);
+    expect(golden.cases.filter(widened).map((c) => c.query)).toEqual(["fft=1&frequencies=800&crop=5,4,30,25"]);
     expect(golden.cases.filter((c) => c.frequencies.length > 0).length).toBeGreaterThan(10);
   });
 });

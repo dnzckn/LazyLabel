@@ -151,9 +151,14 @@ function frequencyFiltering(processing: Processing): boolean {
  * - WITHOUT A CROP the whole image is the filter's output, so this returns a new 8-bit interleaved
  *   buffer, and the 16-bit conversion must not run after it.
  * - WITH ONE the region is written back into `samples` in place and this returns null, so the
- *   conversion runs over the whole image as legacy's does. On a 16-bit image that divides the
- *   region's 0..255 by 256 as well, and the region comes out black. That is legacy's arithmetic,
- *   reproduced; it is recorded as a difference for the owner.
+ *   conversion runs over the whole image as legacy's does.
+ *
+ * ON A 16-BIT IMAGE THE REGION IS WIDENED FIRST, NOT WRITTEN AS IT IS. A DELIBERATE DIFFERENCE, the
+ * owner's decision of 2026-09-27 ("Fix it in the web"). Legacy writes the filter's 0..255 into the
+ * 16-bit image, and the conversion's division by 256 turns every one of them into 0: the crop comes
+ * out black whatever the filter did. Here each value is written as `value * 257`, its 16-bit twin,
+ * which RULE-024's conversion turns back into `value` exactly, so the crop shows the filter's result
+ * as it does on an 8-bit image. Outside the crop nothing changes.
  *
  * GRAYSCALE ONLY, AND THE TEST IS ON THE DATA: an image whose three channels agree, which is what a
  * grayscale source is once RULE-024 has made it its first channel. Legacy's box can be ticked on a
@@ -203,9 +208,10 @@ export function applyFrequencyFilter(
     return out;
   }
 
+  const widen = samples instanceof Uint16Array ? 257 : 1;
   for (let y = 0; y < height; y += 1) {
     for (let x = 0; x < width; x += 1) {
-      const value = filtered[y * width + x]!;
+      const value = filtered[y * width + x]! * widen;
       const at = ((y + y1) * frame.width + (x + x1)) * 3;
       samples[at] = value;
       samples[at + 1] = value;
