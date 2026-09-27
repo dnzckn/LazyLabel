@@ -20,6 +20,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import type { WireDatasetImage, WireSegment } from "@lazylabel/contracts";
 
 import type { AnnotationsResult, ApiClient } from "../../src/api/client.js";
+import { NotificationProvider } from "../../src/notifications/NotificationProvider.jsx";
 import { SplitView } from "../../src/split/SplitView.jsx";
 import { processingQuery } from "../../src/workspace/processing.js";
 import { WorkspaceProvider, useWorkspace } from "../../src/workspace/WorkspaceProvider.jsx";
@@ -106,14 +107,17 @@ function mount() {
     tileUrl: () => "/tile",
   } as unknown as ApiClient;
 
+  // Notifications, because the Linked box says what it did, as legacy's does.
   render(
-    <WorkspaceProvider client={client} projectId="default">
-      <Tools />
-      <SplitView
-        images={FOLDER}
-        pixelsUrl={(key, processing) => `/pixels/${key}?${processingQuery(processing)}`}
-      />
-    </WorkspaceProvider>,
+    <NotificationProvider>
+      <WorkspaceProvider client={client} projectId="default">
+        <Tools />
+        <SplitView
+          images={FOLDER}
+          pixelsUrl={(key, processing) => `/pixels/${key}?${processingQuery(processing)}`}
+        />
+      </WorkspaceProvider>
+    </NotificationProvider>,
   );
 }
 

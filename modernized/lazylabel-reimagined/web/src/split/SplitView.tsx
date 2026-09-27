@@ -85,6 +85,7 @@ import { useFittedPane } from "../canvas/useFittedPane.js";
 import { useSizing } from "../canvas/useSizing.js";
 import { useWheelZoom } from "../canvas/useWheelZoom.js";
 import { ViewKindContext } from "../canvas/viewKind.js";
+import { useNotifications } from "../notifications/NotificationProvider.jsx";
 import type { AiPrompt } from "../tools/ai.js";
 import { AiPreview } from "../workspace/AiTool.jsx";
 import type { ImageProcessing } from "../workspace/processing.js";
@@ -134,6 +135,7 @@ export function SplitView({ images, pixelsUrl, tileUrl, viewer }: SplitViewProps
   const { sides, activeSide, setActiveSide, openImageOn, closeSide, linked, setLinked, linkReport, setMultiView } =
     useWorkspace();
   const { activeTool, activeClassId } = useWorkspace();
+  const { notify } = useNotifications();
   const [left, right] = sides;
 
   /*
@@ -435,7 +437,12 @@ export function SplitView({ images, pixelsUrl, tileUrl, viewer }: SplitViewProps
                       type="checkbox"
                       checked={linked}
                       aria-label="Link the two images"
-                      onChange={(event) => setLinked(event.target.checked)}
+                      onChange={(event) => {
+                        const on = event.target.checked;
+                        setLinked(on);
+                        // Legacy's plain notice for its toggle (main_window.py:5917-5928).
+                        notify({ severity: "info", message: `Viewers are now ${on ? "linked" : "unlinked"}` });
+                      }}
                     />{" "}
                     Linked
                   </label>

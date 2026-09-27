@@ -20,6 +20,7 @@ import { defaultSettings } from "@lazylabel/settings-schema";
 
 import type { AnnotationsResult, ApiClient } from "../../src/api/client.js";
 import { ViewKindContext } from "../../src/canvas/viewKind.js";
+import { NotificationHost, NotificationProvider } from "../../src/notifications/NotificationProvider.jsx";
 import { SettingsProvider } from "../../src/settings/SettingsProvider.jsx";
 import { SplitView } from "../../src/split/SplitView.jsx";
 import { processingQuery } from "../../src/workspace/processing.js";
@@ -131,14 +132,18 @@ function mount({
   } as unknown as ApiClient;
 
   // Settings, because the half not being edited draws the drawing tool's press at the user's sizes,
-  // and the app starts on the polygon tool.
+  // and the app starts on the polygon tool. Notifications, because the Linked box says what it did,
+  // as legacy's does, in the status bar's line.
   render(
-    <SettingsProvider client={client}>
-      <WorkspaceProvider client={client} projectId="default" {...(confirm ? { confirmNavigation: confirm } : {})}>
-        <Opener />
-        <SplitView images={images} pixelsUrl={pixelsUrl} {...(viewer === undefined ? {} : { viewer })} />
-      </WorkspaceProvider>
-    </SettingsProvider>,
+    <NotificationProvider>
+      <SettingsProvider client={client}>
+        <WorkspaceProvider client={client} projectId="default" {...(confirm ? { confirmNavigation: confirm } : {})}>
+          <Opener />
+          <SplitView images={images} pixelsUrl={pixelsUrl} {...(viewer === undefined ? {} : { viewer })} />
+        </WorkspaceProvider>
+      </SettingsProvider>
+      <NotificationHost />
+    </NotificationProvider>,
   );
 
   return { pixelsUrl };
@@ -360,6 +365,23 @@ describe("saying which of the two you are getting", () => {
     fireEvent.click(screen.getByLabelText("Link the two images"));
 
     expect(screen.queryByText(/^Linked:/)).toBeNull();
+  });
+
+  it("says the viewers are now unlinked, and linked again, in legacy's words, when the box is ticked", async () => {
+    // _toggle_multi_view_link: "Viewers are now linked" or "unlinked", a plain notice
+    // (main_window.py:5917-5928). The web said nothing.
+    mount();
+    await openLeft();
+    await pairWith("right.png");
+
+    fireEvent.click(screen.getByLabelText("Link the two images"));
+
+    const unlinked = await screen.findByText("Viewers are now unlinked");
+    expect(unlinked.getAttribute("class")).toContain("status-bar__message--info");
+
+    fireEvent.click(screen.getByLabelText("Link the two images"));
+
+    expect(await screen.findByText("Viewers are now linked")).toBeTruthy();
   });
 
   it(`holds no run of text over ${LIMIT} characters, paired, linked or not, same size or not`, async () => {
