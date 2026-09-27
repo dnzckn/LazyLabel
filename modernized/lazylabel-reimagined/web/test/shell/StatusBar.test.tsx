@@ -126,16 +126,17 @@ describe("what the AI line says", () => {
   // Legacy's three labels (status_bar.py:234-254), with what they leave out in the tooltip.
   it("says No AI when the tools are off, with the reason in its tooltip", () => {
     // "No AI" tells a user to give up; "PyTorch is not installed" tells them what to do.
+    // The service's words since DEPLOYABILITY.md R6 (availability.py INSTALL_HINT, app.py:658).
     expect(
       describeAi({
         available: false,
-        reason: "PyTorch is not installed. Install the AI extra: pip install lazylabel-inference[ai]",
+        reason: "PyTorch is not installed. Run npm run ai:setup",
         videoCapable: false,
         accelerator: "unknown",
       }),
     ).toEqual({
       label: "No AI",
-      title: "PyTorch is not installed. Install the AI extra: pip install lazylabel-inference[ai]",
+      title: "PyTorch is not installed. Run npm run ai:setup",
     });
   });
 

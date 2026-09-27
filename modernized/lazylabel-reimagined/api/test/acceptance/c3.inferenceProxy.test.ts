@@ -244,7 +244,8 @@ describe("C3: the API's inference proxy", () => {
       jsonResponse(503, {
         status: "unavailable",
         ai: { available: false, videoCapable: false },
-        reason: "PyTorch is not installed. Install the AI extra: pip install lazylabel-inference[ai]",
+        // The service's words since DEPLOYABILITY.md R6 (availability.py INSTALL_HINT, app.py:658).
+        reason: "PyTorch is not installed. Run npm run ai:setup",
       }),
     );
 
@@ -252,7 +253,7 @@ describe("C3: the API's inference proxy", () => {
 
     // RULE-084's behaviour: a user who cannot use the AI tools is told why and what to install.
     expect(body.ai.available).toBe(false);
-    expect(body.ai.reason).toMatch(/pip install/);
+    expect(body.ai.reason).toMatch(/npm run ai:setup/);
   });
 
   describe("request validation happens before anything is forwarded", () => {
