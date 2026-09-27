@@ -589,6 +589,14 @@ decisions; each answer is an option they chose:
   Space act on both viewers, with linked selection and alias mirroring (CP-31). This reverses
   decision 8 for those actions. **Built** (`0e96d6a`): next/previous move the pair, and a linked
   pair shares its selection and class names. CP-31 lists what still differs.
+- **A second round, the same day:** SP-09 and SP-36 "Keep the web" (the streaming golden's two
+  measured differences); closing the tab "Keep asking" (SP-17); and Min Conf a setting "like any
+  other setting in the app", reset by Reset to Default (SP-34). Then, typed: "The save on every move
+  is not like a default thing. It's only if the user has the save on navigation setting turned on",
+  and Save All "should save all the frames if they ... are passing the threshold". **Built**: leaving
+  an image saves it, changed or not, only with Auto-Save on Navigate on (`eeefbe0`), the Multi view's
+  pair save too (`e0f49a6`, where legacy saves the pair whatever the setting says); Enter in Multi
+  saves both sides (`42473a0`); Save All ignores the setting and writes the frames that pass Min Conf.
 
 
 1. **Propagation goldens: captured, and the model's half of Phase 6 exit criterion 2 is met.**

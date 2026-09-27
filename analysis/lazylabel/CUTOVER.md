@@ -123,7 +123,7 @@ Being straight about both, because a cutover document that only lists gains is a
 **Matched on the owner's decision of 2026-09-26** ("Match the desktop app exactly"): saving an image
 with no segments deletes its seven annotation files, with the desktop app's "Deleted: ..." notice;
 leaving the Sequence tab or pressing New Timeline drops unsaved propagated frames without asking;
-the Multi view saves both images on every move. One guard stays: an image whose annotations could
+the Multi view saves both images on every move while Auto-Save on Navigate is on. One guard stays: an image whose annotations could
 not be read is never written over or deleted (SEC-04), where the desktop app deletes its files.
 
 **Gained, beyond the obvious:**
