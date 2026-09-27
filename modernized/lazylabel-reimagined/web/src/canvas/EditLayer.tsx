@@ -9,7 +9,8 @@
  *   - ON A HANDLE, that vertex follows the pointer (editable_vertex.py:30-66). A circle's centre
  *     carries the whole circle, its radius point resizes it.
  *   - ANYWHERE ELSE ON THE IMAGE, every selected polygon and circle moves together, including a
- *     polygon too big to have handles (single_view_mouse_handler.py:81-97, 183-197).
+ *     polygon too big to have handles (single_view_mouse_handler.py:81-97, 183-197). Not in the
+ *     Multi tab, whose press has no such drag (`dragsSelection`).
  *
  * THE SHAPE MOVES AS IT IS DRAGGED, and the drag is recorded ONCE, at release. Legacy writes each
  * pointer position straight into the segment and redraws it (`update_vertex_pos(...,
@@ -60,6 +61,12 @@ export interface EditLayerProps {
   ) => void;
   /** Legacy's warning for a selected polygon with more vertices than the handle limit. */
   readonly onNotice?: (message: string) => void;
+  /**
+   * False in the Multi tab: only the single view's handler starts the whole-selection drag
+   * (single_view_mouse_handler.py:81-97), and legacy's Multi press returns before Edit
+   * (main_window.py:5515-5537). The handles, Qt items of their own, still drag there (2560-2621).
+   */
+  readonly dragsSelection?: boolean;
 }
 
 /** Legacy's handle fill: `QColor(Qt.GlobalColor.cyan)` with alpha 180 (editable_vertex.py:16-18). */
@@ -100,6 +107,7 @@ export function EditLayer({
   onPreview,
   onCommit,
   onNotice,
+  dragsSelection = true,
 }: EditLayerProps): ReactNode {
   const sizing = useSizing();
   const surfaceRef = useRef<SVGSVGElement>(null);
@@ -238,7 +246,7 @@ export function EditLayer({
 
   /** A press anywhere else on the image: the whole selection is dragged. */
   const onPointerDown = (event: React.PointerEvent<SVGSVGElement>) => {
-    if (event.button !== 0) return;
+    if (!dragsSelection || event.button !== 0) return;
     const at = pointOf(event);
     // Legacy starts this drag only on the picture (single_view_mouse_handler.py:83).
     if (at === null || at.kind !== "inside") return;

@@ -31,6 +31,11 @@ export interface CropLayerProps {
   readonly onCrop: (crop: Crop) => void;
   /** A drag too small to be a crop. */
   readonly onRefused?: (reason: string) => void;
+  /**
+   * False in the Multi tab: legacy's Multi press has no crop mode (main_window.py:5515-5537), so
+   * no drag starts there. The crop in force is still drawn.
+   */
+  readonly drags?: boolean;
 }
 
 interface Drag {
@@ -38,7 +43,7 @@ interface Drag {
   readonly to: ImagePoint;
 }
 
-export function CropLayer({ width, height, crop, onCrop, onRefused }: CropLayerProps): ReactNode {
+export function CropLayer({ width, height, crop, onCrop, onRefused, drags = true }: CropLayerProps): ReactNode {
   const surfaceRef = useRef<SVGSVGElement>(null);
   const [drag, setDrag] = useState<Drag | null>(null);
 
@@ -53,7 +58,7 @@ export function CropLayer({ width, height, crop, onCrop, onRefused }: CropLayerP
 
   const onPointerDown = useCallback(
     (event: React.PointerEvent<SVGSVGElement>) => {
-      if (event.button !== 0) return;
+      if (!drags || event.button !== 0) return;
       const box = boxOf();
       if (box === null) return;
 
@@ -65,7 +70,7 @@ export function CropLayer({ width, height, crop, onCrop, onRefused }: CropLayerP
       event.currentTarget.setPointerCapture?.(event.pointerId);
       setDrag({ from: located.point, to: located.point });
     },
-    [boxOf, image],
+    [boxOf, drags, image],
   );
 
   const onPointerMove = useCallback(

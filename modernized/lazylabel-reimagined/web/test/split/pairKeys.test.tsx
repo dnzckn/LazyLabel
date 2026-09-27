@@ -80,6 +80,8 @@ function Probe(): ReactNode {
           selected: side.selected,
           aliases: side.classAliases,
           zoom: side.zoom,
+          crop: side.crop,
+          vertices: side.segments.map((segment) => segment.vertices ?? null),
         })),
       )}
     </pre>
@@ -92,6 +94,8 @@ interface Side {
   readonly selected: readonly number[];
   readonly aliases: Readonly<Record<string, string>>;
   readonly zoom: number | null;
+  readonly crop: unknown;
+  readonly vertices: readonly (readonly (readonly number[])[] | null)[];
 }
 
 const pair = (): readonly [Side, Side] => JSON.parse(screen.getByTestId("pair").textContent ?? "[]");
@@ -574,6 +578,58 @@ describe("Shift+Space erases each image with its own polygon while unlinked", ()
     press("z", "KeyZ", { ctrlKey: true });
 
     await waitFor(() => expect(pair().map((side) => side.classes)).toEqual([[0, 1], [0, 1, 2]]));
+  });
+});
+
+describe("a drawn eraser that meets nothing says nothing in the Multi tab, as legacy's does", () => {
+  it("leaves both images alone, with no notice and no line beside the panes", async () => {
+    // The Multi view's erasers name a viewer only when they removed something there: the polygon
+    // (main_window.py:6977-6988), the box (5792-5805) and the circle (5887-5899). The single view's
+    // polygon says "No segments to erase" (polygon_drawing_manager.py:198), and still does.
+    await pairUp();
+    chooseTool("Poly (2)");
+
+    drawTriangle(120, 50, true);
+
+    await waitFor(() => expect(screen.queryByLabelText("Polygon in progress")).toBeNull());
+    expect(pair().map((side) => side.classes)).toEqual([[0, 1], [0, 1, 2]]);
+    expect(screen.queryAllByText(/No segments to erase/)).toEqual([]);
+  });
+});
+
+describe("the Multi tab has no crop drag and no whole-selection drag, as legacy's has neither", () => {
+  // Legacy's Multi view handles a press in the AI, polygon, box, circle and selection modes and
+  // returns for any other (main_window.py:5515-5537), so the single view's crop drag
+  // (single_view_mouse_handler.py:541-558) and its whole-selection drag in Edit (81-97, 183-197)
+  // never start there. The Edit handles are Qt items of their own and still drag (2560-2621).
+  it("sets no crop when the crop tool is dragged across the image being edited", async () => {
+    await pairUp();
+    fireEvent.click(screen.getByLabelText("Draw crop rectangle"));
+    const surface = screen.getByLabelText("Crop tool");
+
+    fireEvent.pointerDown(surface, { button: 0, pointerId: 1, clientX: 20, clientY: 20 });
+    fireEvent.pointerMove(surface, { button: 0, pointerId: 1, clientX: 150, clientY: 80 });
+    fireEvent.pointerUp(surface, { button: 0, pointerId: 1, clientX: 150, clientY: 80 });
+
+    expect(pair().map((side) => side.crop)).toEqual([null, null]);
+  });
+
+  it("moves nothing on a drag away from the handles in Edit, and still moves a handle", async () => {
+    await pairUp();
+    tick(1);
+    chooseTool("Edit (R)");
+    const surface = screen.getByLabelText("Edit tool");
+    const before = pair()[0].vertices[0];
+
+    fireEvent.pointerDown(surface, { button: 0, pointerId: 1, clientX: 100, clientY: 60 });
+    fireEvent.pointerMove(surface, { button: 0, pointerId: 1, clientX: 120, clientY: 70 });
+    fireEvent.pointerUp(surface, { button: 0, pointerId: 1, clientX: 120, clientY: 70 });
+    expect(pair()[0].vertices[0]).toEqual(before);
+
+    fireEvent.pointerDown(screen.getByTestId("handle-0-0"), { button: 0, pointerId: 1, clientX: 10, clientY: 10 });
+    fireEvent.pointerMove(surface, { button: 0, pointerId: 1, clientX: 15, clientY: 12 });
+    fireEvent.pointerUp(surface, { button: 0, pointerId: 1, clientX: 15, clientY: 12 });
+    await waitFor(() => expect(pair()[0].vertices[0]![0]).toEqual([15, 12]));
   });
 });
 

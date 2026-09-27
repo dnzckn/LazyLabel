@@ -280,6 +280,9 @@ function OpenedImage({
   const view = useContext(ViewKindContext);
   const sayErased = useCallback(
     (outcome: EraseOutcome, by: EraseSource, note?: string) => {
+      // The Multi tab's drawn erasers name a viewer only when they cut something there, and say
+      // nothing otherwise (main_window.py:5799-5805, 5892-5899, 6985-6988).
+      if (outcome.kind !== "erased" && view === "multi" && by === "shape") return;
       if (outcome.kind === "empty-shape") {
         notify({ severity: "warning", message: "that shape covers no pixels, so nothing was erased" });
         return;
@@ -489,6 +492,8 @@ function OpenedImage({
                 // RULE-046's warning for a polygon over the 200-vertex limit goes to the
                 // notifications rather than being drawn over the image.
                 onNotice={(message) => notify({ severity: "info", message })}
+                // Legacy's Multi view drags the handles alone (`EditLayer`).
+                dragsSelection={view !== "multi"}
               />
             )}
 
@@ -508,6 +513,8 @@ function OpenedImage({
                 crop={crop}
                 onCrop={setCrop}
                 onRefused={refuse}
+                // Legacy's Multi view has no crop drag (`CropLayer`).
+                drags={view !== "multi"}
               />
             )}
 

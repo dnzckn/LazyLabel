@@ -338,14 +338,13 @@ export function SplitView({ images, pixelsUrl, tileUrl, viewer }: SplitViewProps
           {linkReport.reason}
         </p>
       )}
-      {linkReport !== null && linkReport.kind === "erased" && (
-        // Legacy's words for the mirrored erase (main_window.py:5803-5805) and for an erase that met
-        // nothing (polygon_drawing_manager.py:198), the viewer named by its image, as the panes'
-        // headers name it.
+      {linkReport !== null && linkReport.kind === "erased" && linkReport.count > 0 && (
+        // Legacy's words for the mirrored erase (main_window.py:5803-5805), the viewer named by its
+        // image, as the panes' headers name it. An erase that met nothing there is not said: legacy
+        // names a viewer only when something was removed in it, for a drawn eraser (5799-5805,
+        // 5892-5899, 6985-6988) and for the AI's (ai_segment_manager.py:351-360, 390-394).
         <p role="status" className="panel__missing">
-          {linkReport.count === 0
-            ? `No segments to erase in ${linkReport.image}`
-            : `Erased ${linkReport.count} segment(s) from ${linkReport.image}`}
+          Erased {linkReport.count} segment(s) from {linkReport.image}
         </p>
       )}
       {linkReport !== null && linkReport.kind === "linked" && (
