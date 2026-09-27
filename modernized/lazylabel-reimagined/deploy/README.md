@@ -44,7 +44,11 @@ The files were also written on a machine with no Docker at all, so before the fi
 line of this was reasoned rather than observed. Reading `compose.yaml` against the services has
 since found one certain gap: the `ai` profile gives the inference service neither the dataset
 mount nor `LAZYLABEL_DATASET_ROOT`, so every route that reads an image would answer 503; and
-`MODEL_DIR` must hold a `manifest.json` beside the checkpoints (see the inference README).
+`MODEL_DIR` must hold a `manifest.json` beside the checkpoints. The model fetch writes both,
+verified: `python -m lazylabel_inference.fetch fetch sam2.1-large --dir <MODEL_DIR>`, run from
+`inference/src` with any Python 3.12, since it needs nothing installed (or
+`npm run ai:models -- sam2.1-large --dir <MODEL_DIR>` in `modernized/` once `npm run ai:setup`
+has been run).
 
 **For running LazyLabel on your own machine, use the quick start in the repository's README**,
 which is the tested path.

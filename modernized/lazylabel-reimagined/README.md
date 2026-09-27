@@ -97,42 +97,36 @@ To work on the web app with hot reload, run the Vite dev server beside it, `npm 
 second terminal, and open <http://localhost:5173> instead: it proxies `/api` to the API.
 
 That is the whole app except the AI tools, and running without them is a supported deployment
-rather than a broken one: everything but SAM prompts and propagation works. To add them:
+rather than a broken one: everything but SAM prompts and propagation works. To add them, with
+[uv](https://docs.astral.sh/uv/) installed, from `modernized/` (DEPLOYABILITY.md R6 to R8):
 
-1. **Install the inference service** into a Python 3.12 environment, as
-   [its README](inference/README.md#setting-it-up-with-cuda) shows. The package must be installed
-   (`pip install -e ".[ai]"`), OpenCV added (`opencv-python-headless`, which the package does not
-   declare), and PyTorch taken from the index that matches your GPU driver, or it quietly runs on
-   the CPU.
-2. **Put the checkpoints in one folder, with a `manifest.json` beside them.** Copy
-   [`inference/models/manifest.example.json`](inference/models/manifest.example.json) there as
-   `manifest.json` and fill in the SHA-256 of each file you have, from
-   [`MODEL_MANIFEST.md`](../../analysis/lazylabel/MODEL_MANIFEST.md) or computed as its
-   `$comment` shows. Nothing downloads a checkpoint for you.
-3. **Start it on the SAME dataset folder as the API.** It reads the images itself; without
-   `LAZYLABEL_DATASET_ROOT` every route that reads one answers 503.
+```
+npm run ai:setup                  # PyTorch 2.10.0, SAM 1 and SAM 2 from inference/uv.lock, into inference/.venv
+npm run ai:models sam2.1-large    # asks, downloads 898 MB, checks the SHA-256, writes manifest.json
+npm start "<folder>"              # now starts the inference service too, and stops it on exit
+```
 
-   ```bash
-   # terminal 3 — the inference service, from this folder, with its environment's Python
-   cd inference && LAZYLABEL_MODEL_DIR=/path/to/checkpoints LAZYLABEL_DATASET_ROOT=/path/to/your/images python -m lazylabel_inference.server
-   ```
+`npm run ai:setup` picks PyTorch's CUDA 12.8 build when `nvidia-smi` reports a driver for CUDA
+12.8 or later and the CPU build otherwise (`npm run ai:setup cpu` chooses). The models go in a
+per-user folder, or `LAZYLABEL_MODEL_DIR`; `npm start` looks there, starts
+`python -m lazylabel_inference.server` on the same folder of images and a free port from 8788, and
+shows its lines marked `[ai]`. Without the environment or a model it says which of the two commands
+is missing, and the model section of the app says `AI tools off: run npm run ai:setup`.
+`npm run doctor "<folder>"` checks all of it, down to each checkpoint's size (`--full`: its hash).
 
-   ```powershell
-   cd inference; $env:LAZYLABEL_MODEL_DIR = "C:\path\to\checkpoints"; $env:LAZYLABEL_DATASET_ROOT = "C:\path\to\your\images"; python -m lazylabel_inference.server
-   ```
-4. **Restart LazyLabel and tell it where the service is**, from `modernized/`. Without it the API
-   does not look for one, and `/health` says so:
+A service run some other way, such as the Docker image or another machine's, is named instead, and
+then none is started:
 
-   ```bash
-   ./lazylabel.sh "/path/to/your/images" --inference http://127.0.0.1:8788
-   ```
+```bash
+./lazylabel.sh "/path/to/your/images" --inference http://127.0.0.1:8788
+```
 
-   ```powershell
-   .\lazylabel.cmd "C:\path\to\your\images" --inference http://127.0.0.1:8788
-   ```
+```powershell
+.\lazylabel.cmd "C:\path\to\your\images" --inference http://127.0.0.1:8788
+```
 
-The address is logged at startup either way, so `"inference":"none"` in the first line tells you
-the AI tools will be unavailable before a user clicks an object and finds out.
+The address is logged at startup either way, so `"inference":"none"` in the API's first line tells
+you the AI tools will be unavailable before a user clicks an object and finds out.
 
 ## Storage
 

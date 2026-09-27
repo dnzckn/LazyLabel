@@ -14,7 +14,10 @@ legacy and stopped there on purpose: a propagation needs a job API with real can
 and streaming limits, which is not a wrapper around a function call. That job API is now the
 `/inference/propagations` routes below.
 
-Installed as [Setting it up with CUDA](#setting-it-up-with-cuda) shows, then from this folder:
+**A user does not start this service by hand.** From `modernized/`, `npm run ai:setup` installs it
+([Setting it up](#setting-it-up)), `npm run ai:models sam2.1-large` fetches a checkpoint, and
+`npm start "<folder>"` then runs it beside the app, on the same folder, and stops it with the app
+(DEPLOYABILITY.md R6 to R8). By hand, installed as that section shows, from this folder:
 
 ```bash
 python -m pytest                                        # the live tests skip without checkpoints
@@ -25,10 +28,10 @@ LAZYLABEL_MODEL_DIR=/path/to/checkpoints LAZYLABEL_DATASET_ROOT=/path/to/images 
 $env:LAZYLABEL_MODEL_DIR = "C:\path\to\checkpoints"; $env:LAZYLABEL_DATASET_ROOT = "C:\path\to\images"; python -m lazylabel_inference.server
 ```
 
-`LAZYLABEL_MODEL_DIR` must hold a `manifest.json`: copy `models/manifest.example.json` there and fill
-in each checkpoint's SHA-256, from
-[`MODEL_MANIFEST.md`](../../../analysis/lazylabel/MODEL_MANIFEST.md#sha-256-values) or computed as
-the example's `$comment` shows. `LAZYLABEL_DATASET_ROOT` must be the same folder the API serves.
+`LAZYLABEL_MODEL_DIR` must hold a `manifest.json`. `lazylabel-models` writes it, with each
+checkpoint it fetches ([Checkpoints](#checkpoints)); by hand, copy `models/manifest.example.json`
+there and fill in each checkpoint's SHA-256 from `models/manifest.verified.json`.
+`LAZYLABEL_DATASET_ROOT` must be the same folder the API serves.
 
 To run the differential comparison against the legacy model, which needs a real checkpoint:
 
@@ -42,8 +45,8 @@ $env:LAZYLABEL_TEST_CHECKPOINT = "C:\path\to\sam2.1_hiera_large.pt"; $env:PYTHON
 
 | Variable | Default | What it is |
 |---|---|---|
-| `LAZYLABEL_MODEL_DIR` | *required* | Where the checkpoints are. The service will not guess, and it never downloads one. |
-| `LAZYLABEL_MODEL_MANIFEST` | `<model dir>/manifest.json` | Copy `models/manifest.example.json` and fill in the real hashes. It lists the MobileNetV3 embedder too, which Find Archetypes needs. |
+| `LAZYLABEL_MODEL_DIR` | *required* | Where the checkpoints are. The service will not guess, and it never downloads one. `npm start` passes the folder `npm run ai:models` fills: `%LOCALAPPDATA%\LazyLabel\models`, `~/Library/Application Support/LazyLabel/models`, or `${XDG_DATA_HOME:-~/.local/share}/lazylabel/models`, unless this is set. |
+| `LAZYLABEL_MODEL_MANIFEST` | `<model dir>/manifest.json` | `lazylabel-models` writes the default one; by hand, copy `models/manifest.example.json` and fill in the real hashes. It lists the MobileNetV3 embedder too, which Find Archetypes needs. |
 | `LAZYLABEL_DATASET_ROOT` | *none* | The folder the images are read from. Without it the service still starts, so `/health` and `/models` can help an operator installing checkpoints, and every route that reads an image answers 503 and says why. A path that is not a directory is refused at startup. |
 | `LAZYLABEL_INFERENCE_PORT` | `8788` | |
 | `LAZYLABEL_INFERENCE_HOST` | `127.0.0.1` | Only the API talks to this service. A model endpoint on every interface is not a default to fall into. |
@@ -58,49 +61,69 @@ That is not austerity for its own sake. The two things this service must get rig
 is ever loaded — is this checkpoint the one it claims to be, and can the AI stack run here at all —
 are exactly the two that need no model to test. Both are legacy defects, and both are fixed here.
 
-## Setting it up with CUDA
+## Setting it up
 
-The PyTorch wheels from PyTorch's own index carry the CUDA runtime inside them. The machine needs an
-NVIDIA driver recent enough for that CUDA version and nothing else — no CUDA toolkit, no cuDNN
-install. These are the commands that built the environment every suite passed in on 2026-09-23
-(Windows, RTX 3080, driver 591.86, which supports CUDA up to 13.1), with the environment in a
-`.venv` beside this README rather than where that machine keeps it. They need
-[uv](https://docs.astral.sh/uv/) and `git` (SAM 2 is installed from its repository), and run from
-this folder, `modernized/lazylabel-reimagined/inference`:
+`npm run ai:setup`, from `modernized/`, is the whole of it. It needs [uv](https://docs.astral.sh/uv/),
+which brings its own Python, and runs, in this folder:
 
-```powershell
-uv venv --python 3.12
-uv pip install "torch==2.10.0" "torchvision==0.25.0" --index-url https://download.pytorch.org/whl/cu128
-$env:SAM2_BUILD_CUDA = "0"; uv pip install -e ".[ai,dev]" opencv-python-headless
-.venv\Scripts\python -c "import torch; print(torch.__version__, torch.cuda.is_available(), torch.cuda.get_device_name(0))"
+```
+uv sync --locked --python 3.12 --extra ai --extra server --extra cu128     # or --extra cpu
 ```
 
-```bash
-uv venv --python 3.12
-uv pip install "torch==2.10.0" "torchvision==0.25.0" --index-url https://download.pytorch.org/whl/cu128
-SAM2_BUILD_CUDA=0 uv pip install -e ".[ai,dev]" opencv-python-headless
-.venv/bin/python -c "import torch; print(torch.__version__, torch.cuda.is_available(), torch.cuda.get_device_name(0))"
-```
+`uv.lock` records one resolution for every platform, so this installs exactly what the suites ran
+on: PyTorch 2.10.0 and torchvision 0.25.0 from PyTorch's own index, SAM 1, SAM 2 at commit
+`2b90b9f5`, and OpenCV's headless build, into `.venv` beside this README, which `npm start` finds by
+itself. Four things decide whether the GPU is used, and the setup handles each:
 
-`uv pip install` finds the `.venv` in this folder by itself. Start the service with that
-environment's Python: `.venv\Scripts\python -m lazylabel_inference.server` on Windows,
-`.venv/bin/python -m lazylabel_inference.server` elsewhere.
-
-The last line should print `True` and the card's name. Four things decide it:
-- **Install torch from PyTorch's index, first.** From PyPI on Windows, pip picks a CPU-only build.
-  Nothing fails: the service starts, reports no accelerator, and runs at a tenth of the speed.
-- **Pick the index for the driver.** `cu128` needs a driver for CUDA 12.8 or later. `nvidia-smi`
-  prints the highest CUDA version the driver supports, top right.
-- **`SAM2_BUILD_CUDA=0`.** SAM 2's optional extension needs a compiler and only fills holes in
-  masks. Every equivalence result was measured without it, so building it would change masks.
+- **PyTorch comes from PyTorch's index, never PyPI.** From PyPI on Windows, pip picks a CPU-only
+  build, and on Linux a CUDA 13 one. Nothing fails: the service starts, reports no accelerator, and
+  runs at a tenth of the speed. `pyproject.toml` has uv's PyTorch pattern: two extras, `cpu` and
+  `cu128`, that exclude each other, each pinned to its index.
+- **The build matches the driver.** `cu128` needs a driver for CUDA 12.8 or later; `nvidia-smi`
+  prints the highest CUDA version the driver supports, top right. The setup reads it and picks
+  `cu128` or `cpu` (macOS is always `cpu`); `npm run ai:setup cpu` overrides it. The wheels carry
+  the CUDA runtime inside them, so the machine needs the driver and nothing else: no CUDA toolkit,
+  no cuDNN.
+- **SAM 2 is prebuilt, without its CUDA extension.** It is not on PyPI. uv installs
+  `vendor/sam_2-1.0-py3-none-any.whl`, built once from the pinned commit with `SAM2_BUILD_CUDA=0`:
+  pure Python, 178 KB, Apache-2.0 (NOTICE, at the repository root, records its SHA-256 and how it
+  was built). The extension needs a compiler and only fills holes in masks; every equivalence
+  result was measured without it. `pip install ".[ai]"` still works, from the git URL, and then
+  needs git and `SAM2_BUILD_CUDA=0`.
 - **Import torch before anything that loads Qt.** On Windows, PyTorch 2.10 cannot load its DLLs
   once PyQt6 6.9 is loaded. The service never loads Qt. The test suite imports legacy, which does,
   so `tests/conftest.py` imports torch first.
+
+`python -m lazylabel_inference.doctor` (run by `npm run doctor`) says what the environment has:
+PyTorch and the CUDA it was built for, the device, the driver, whether cv2, sam2 and
+segment_anything import, the manifest, and each checkpoint (`--full` hashes them).
+
+After changing the dependencies in `pyproject.toml`, run `uv lock` here and commit `uv.lock`:
+`uv sync --locked` refuses a lockfile that no longer matches, and CI checks it with `uv lock --locked`.
 
 In a container the same holds. The image needs the driver passed through: Docker Desktop's WSL 2
 backend on Windows, or the NVIDIA Container Toolkit on Linux, then `--gpus all`. It does not need
 CUDA installed inside it beyond what the wheels bring. `deploy/inference.Dockerfile` has not been
 built yet.
+
+## Checkpoints
+
+The service never downloads one. `lazylabel-models`, a separate command with nothing but the
+standard library, fetches one when asked (`npm run ai:models` in `modernized/` runs it):
+
+```
+lazylabel-models list
+lazylabel-models fetch sam2.1-large [--dir DIR] [--yes]
+```
+
+It shows the size and asks first, downloads to `<file>.part` (a second run resumes an interrupted
+download), checks the size and then the SHA-256 against `models/manifest.verified.json`, renames
+the file into place only then, and adds its entry to `DIR/manifest.json`, keeping every other
+entry. A file of that name that is not the verified one is reported and left alone. `DIR` is
+`LAZYLABEL_MODEL_DIR`, else the per-user folder `npm start` looks in. `manifest.verified.json`
+holds the three checkpoints whose SHA-256 was computed from a downloaded copy (MODEL_MANIFEST.md);
+MobileNetV3, which Find Archetypes needs, has no download of its own and is put there by hand.
+`tests/test_fetch.py` holds every server module to never importing it.
 
 ## What it fixes
 
@@ -111,8 +134,9 @@ network error leaves the partial file in place, so the next start *skips the dow
 load a truncated checkpoint with no message saying why.
 
 Here every checkpoint is pinned by SHA-256 in a manifest, the size is checked first because it is
-free, and **nothing is downloaded at runtime** (SEC-03, SEC-05, SEC-17). The build pipeline puts the
-files there.
+free, and **nothing is downloaded at runtime** (SEC-03, SEC-05, SEC-17). A person puts the files
+there, with `lazylabel-models` or by hand, and the fetch checks the size and the SHA-256 before the
+file takes its name, so a partial download is never where the service looks.
 
 **Every** path that loads a checkpoint checks it first: the prompt backend, the video predictor a
 propagation builds, and the embedder Find Archetypes builds. Until 2026-09-23 only the first did;

@@ -57,17 +57,39 @@ shell. `--help` lists them all.
 and drops the `--`, so the options reach npm instead. Type `npm.cmd` there for any npm script that
 takes options after `--`.)
 
-- **The AI tools (SAM) are optional.** Without them everything else works and the status bar says
-  "No AI". Adding them is a separate Python service
-  ([how](modernized/lazylabel-reimagined/README.md#running-it)); then start LazyLabel with
-  `--inference http://127.0.0.1:8788`.
 - **When something is wrong, the launcher says what to do:** a Node.js that is too old, a folder
   that is not there, a port already in use (it names a free one, or opens the LazyLabel already
-  running for that folder).
+  running for that folder). `npm run doctor "<folder>"` checks everything, the AI tools included,
+  and gives the command that fixes each problem it finds.
 - **Your settings and hotkeys are kept per user**, in `~/.config/lazylabel/lazylabel-web.db`, the
   desktop app's config folder, so they follow you from folder to folder; the desktop app's own
   settings are brought across once, the first time. Nothing is written into your image folder
   except the annotation files you save.
+
+### Adding the AI tools (SAM)
+
+They are optional: without them everything else works, and the status bar says "No AI". They need
+[uv](https://docs.astral.sh/uv/getting-started/installation/), which brings its own Python, and
+for speed an NVIDIA driver whose `nvidia-smi` shows CUDA 12.8 or later; without one they run on
+the CPU. From the same `modernized` folder, in any shell:
+
+```
+npm run ai:setup
+npm run ai:models sam2.1-large
+npm start "<the folder of your images>"
+```
+
+- `npm run ai:setup` installs PyTorch 2.10.0, SAM 1 and SAM 2 exactly as
+  [`inference/uv.lock`](modernized/lazylabel-reimagined/inference/uv.lock) records them, the CUDA
+  build when the driver supports it and the CPU build otherwise, into
+  `lazylabel-reimagined/inference/.venv` (about 5 GB with CUDA on Windows). Without uv it prints
+  uv's one-line installer. Run it again after a `git pull` that changes the lockfile.
+- `npm run ai:models sam2.1-large` asks before it downloads SAM 2.1 large (898 MB, from Meta),
+  checks its SHA-256, and lists it where the app looks: `%LOCALAPPDATA%\LazyLabel\models` on
+  Windows, `~/Library/Application Support/LazyLabel/models` on macOS, `~/.local/share/lazylabel/models`
+  on Linux. An interrupted download carries on where it stopped. `npm run ai:models` lists the
+  others. Nothing else ever downloads a model: the app does not.
+- `npm start` then starts the AI tools with the app, and stops them with it.
 
 ---
 
@@ -191,8 +213,8 @@ dogs = mask[:, :, 3]
 
 ## Model Setup (desktop app)
 
-The web app never downloads a model; its inference service's
-[README](modernized/lazylabel-reimagined/inference/README.md) covers its checkpoints.
+The web app never downloads a model by itself: `npm run ai:models` fetches one when asked
+([Adding the AI tools](#adding-the-ai-tools-sam)).
 
 SAM 1.0 models are downloaded automatically on first use.
 
