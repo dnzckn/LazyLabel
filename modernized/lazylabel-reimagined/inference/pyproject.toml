@@ -65,6 +65,12 @@ cu128 = ["torch==2.10.0", "torchvision==0.25.0"]
 # Pillow builds the PNGs the decoder allow-list tests feed the service (SEC-02).
 dev = ["pytest>=8", "pillow"]
 
+[project.scripts]
+# DEPLOYABILITY.md R7: the one thing that downloads a checkpoint, and only when asked, with the size
+# shown first and the SHA-256 checked before the file is used. The service never imports it
+# (tests/test_fetch.py holds every server module to that): nothing is downloaded at runtime.
+lazylabel-models = "lazylabel_inference.fetch:main"
+
 # uv's documented PyTorch pattern (docs.astral.sh/uv/guides/integration/pytorch), and `uv.lock`
 # beside this file records the resolution: `uv sync --locked --extra ai --extra server --extra
 # cu128` (or `cpu`) installs exactly what was locked, on any machine. `npm run ai:setup` runs that.

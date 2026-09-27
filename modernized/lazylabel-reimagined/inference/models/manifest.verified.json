@@ -1,0 +1,35 @@
+{
+  "$comment": "The checkpoints whose SHA-256 was computed from a downloaded copy (analysis/lazylabel/MODEL_MANIFEST.md, 'SHA-256 values'). 'npm run ai:models <id>' (lazylabel-models fetch <id>) downloads one after asking, checks its size and SHA-256, and only then writes its entry into the model folder's manifest.json. The service never reads this file and never downloads anything. A digest may only be added here after the file has been downloaded from its url and hashed locally.",
+  "models": [
+    {
+      "id": "sam2.1-large",
+      "name": "SAM 2.1 large",
+      "family": "sam2",
+      "size": "large",
+      "filename": "sam2.1_hiera_large.pt",
+      "sha256": "2647878d5dfa5098f2f8649825738a9345572bae2d4350a2468587ece47dd318",
+      "bytes": 898083611,
+      "url": "https://dl.fbaipublicfiles.com/segment_anything_2/092824/sam2.1_hiera_large.pt"
+    },
+    {
+      "id": "sam1-huge",
+      "name": "SAM 1 huge",
+      "family": "sam1",
+      "size": "vit_h",
+      "filename": "sam_vit_h_4b8939.pth",
+      "sha256": "a7bf3b02f3ebf1267aba913ff637d9a2d5c33d3173bb679e46d9f338c26f262e",
+      "bytes": 2564550879,
+      "url": "https://dl.fbaipublicfiles.com/segment_anything/sam_vit_h_4b8939.pth"
+    },
+    {
+      "id": "mobilenet-v3-small",
+      "name": "MobileNetV3 small",
+      "family": "embedder",
+      "size": "mobilenet_v3_small",
+      "filename": "mobilenetv3_small_tv.pth",
+      "sha256": "23581817e8e9f35d7c155d24a68d62dadd8bc96e5649304638e1193412baa0e2",
+      "bytes": 10305097,
+      "source": "no download of its own: torchvision's MobileNet_V3_Small_Weights.IMAGENET1K_V1 saved as a state dict, which Find Archetypes needs (MODEL_MANIFEST.md)"
+    }
+  ]
+}

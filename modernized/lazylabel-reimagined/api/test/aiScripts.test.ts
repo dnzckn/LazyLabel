@@ -24,7 +24,26 @@ interface AiScripts {
   torchFlavour(cuda: Cuda): "cpu" | "cu128";
   uvInstaller(platform: NodeJS.Platform): string;
   venvPython(inference: string, platform: NodeJS.Platform): string;
+  defaultModelDir(env: Record<string, string>, platform: NodeJS.Platform, home: string): string;
 }
+
+/**
+ * Where checkpoints go by default, per platform: the table `inference/tests/test_fetch.py` holds
+ * `lazylabel-models` to, so a model fetched there is where `npm start` looks.
+ */
+const MODEL_FOLDERS: readonly (readonly [Record<string, string>, NodeJS.Platform, string, string])[] = [
+  [
+    { LOCALAPPDATA: "C:\\Users\\me\\AppData\\Local" },
+    "win32",
+    "C:\\Users\\me",
+    "C:\\Users\\me\\AppData\\Local\\LazyLabel\\models",
+  ],
+  [{}, "win32", "C:\\Users\\me", "C:\\Users\\me\\AppData\\Local\\LazyLabel\\models"],
+  [{}, "darwin", "/Users/me", "/Users/me/Library/Application Support/LazyLabel/models"],
+  [{ XDG_DATA_HOME: "/data/me" }, "linux", "/home/me", "/data/me/lazylabel/models"],
+  [{ XDG_DATA_HOME: "relative/is/ignored" }, "linux", "/home/me", "/home/me/.local/share/lazylabel/models"],
+  [{}, "linux", "/home/me", "/home/me/.local/share/lazylabel/models"],
+];
 
 let ai: AiScripts;
 let scripts: Readonly<Record<string, string>>;
@@ -83,5 +102,16 @@ describe("npm run ai:setup", () => {
     expect(ai.venvPython("C:\\LazyLabel\\inference", "win32")).toBe("C:\\LazyLabel\\inference\\.venv\\Scripts\\python.exe");
     expect(ai.venvPython("/src/LazyLabel/inference", "linux")).toBe("/src/LazyLabel/inference/.venv/bin/python");
     expect(ai.venvPython("/src/LazyLabel/inference", "darwin")).toBe("/src/LazyLabel/inference/.venv/bin/python");
+  });
+});
+
+describe("npm run ai:models", () => {
+  it("is a script of the workspace, and the file it runs is there", () => {
+    expect(scripts["ai:models"]).toBe("node scripts/ai-models.mjs");
+    expect(existsSync(path.join(MODERNIZED, "scripts", "ai-models.mjs"))).toBe(true);
+  });
+
+  it.each(MODEL_FOLDERS)("puts models, by default, per user: %j on %s", (env, platform, home, expected) => {
+    expect(ai.defaultModelDir(env, platform, home)).toBe(expected);
   });
 });
