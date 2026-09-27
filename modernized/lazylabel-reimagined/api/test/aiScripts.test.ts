@@ -9,13 +9,16 @@
  */
 
 import { existsSync } from "node:fs";
-import { readFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { createServer as createHttpServer, type Server as HttpServer } from "node:http";
+import { createServer, type AddressInfo, type Server } from "node:net";
+import { tmpdir } from "node:os";
 import * as path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-import { beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import { defaultModelDir } from "../src/launcher.js";
+import { defaultModelDir, nodeVersionProblem } from "../src/launcher.js";
 
 const MODERNIZED = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
 
@@ -119,5 +122,140 @@ describe("npm run ai:models", () => {
 
   it.each(MODEL_FOLDERS)("puts them where npm start looks: %j on %s", (env, platform, home, expected) => {
     expect(defaultModelDir(env, platform, home)).toBe(expected);
+  });
+});
+
+type Finding = { readonly ok: boolean | null; readonly what: string; readonly fix?: string };
+
+interface Doctor {
+  checkNode(version: string): Finding;
+  checkSqlite(): Promise<Finding>;
+  checkBuilds(modernized: string): Finding;
+  checkPort(port: number, host?: string, platform?: NodeJS.Platform): Promise<Finding>;
+  checkFolder(folder: string | undefined): Finding;
+  checkSettings(env: Record<string, string>, home: string): Finding;
+  render(findings: readonly Finding[]): string;
+}
+
+describe("npm run doctor", () => {
+  let doctor: Doctor;
+  let scratch: string;
+  const servers: (Server | HttpServer)[] = [];
+
+  beforeAll(async () => {
+    doctor = (await import(pathToFileURL(path.join(MODERNIZED, "scripts", "lib", "doctor.mjs")).href)) as Doctor;
+    scratch = await mkdtemp(path.join(tmpdir(), "lazylabel-doctor-"));
+  });
+  afterAll(async () => {
+    for (const server of servers) if ("closeAllConnections" in server) server.closeAllConnections();
+    await Promise.all(servers.map((server) => new Promise((resolve) => server.close(resolve))));
+    await rm(scratch, { recursive: true, force: true });
+  });
+
+  async function listen(server: Server | HttpServer): Promise<number> {
+    servers.push(server);
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    return (server.address() as AddressInfo).port;
+  }
+
+  it("is a script of the workspace, and the file it runs is there", () => {
+    expect(scripts["doctor"]).toBe("node scripts/doctor.mjs");
+    expect(existsSync(path.join(MODERNIZED, "scripts", "doctor.mjs"))).toBe(true);
+  });
+
+  it.each(["22.13.0", "22.17.0", "23.4.0", "24.1.0", "22.12.0", "20.18.1", "23.3.0"])(
+    "judges Node %s as npm start does",
+    (version) => {
+      expect(doctor.checkNode(version).ok).toBe(nodeVersionProblem(version) === null);
+    },
+  );
+
+  it("says where to get a Node that is new enough", () => {
+    expect(doctor.checkNode("20.18.1")).toEqual({
+      ok: false,
+      what: "Node.js 20.18.1 is too old: LazyLabel needs 22.13 or later",
+      fix: "install the current LTS from https://nodejs.org/",
+    });
+  });
+
+  it("finds node:sqlite, where settings are kept, on this Node", async () => {
+    expect((await doctor.checkSqlite()).ok).toBe(true);
+  });
+
+  it("says npm install when nothing is built, and npm run build when only the builds are missing", async () => {
+    const empty = path.join(scratch, "fresh-clone");
+    await mkdir(empty);
+    const fresh = doctor.checkBuilds(empty);
+    expect(fresh.ok).toBe(false);
+    expect(fresh.what).toContain("the annotation format library");
+    expect(fresh.fix).toBe(`npm install, in ${empty} (it builds everything)`);
+
+    await mkdir(path.join(empty, "node_modules"));
+    expect(doctor.checkBuilds(empty).fix).toBe(`npm run build, in ${empty}`);
+  });
+
+  it("finds a free port free, and names another for a port another program holds", async () => {
+    // Another program: it takes the connection and says nothing a browser would understand.
+    const taken = await listen(createServer((socket) => socket.destroy()));
+    const busy = await doctor.checkPort(taken, "127.0.0.1", "linux");
+    expect(busy.ok).toBe(false);
+    expect(busy.what).toBe(`port ${taken} is in use by another program`);
+    expect(busy.fix).toMatch(/^start LazyLabel on another port, from the modernized folder: \.\/lazylabel\.sh "<folder>" --port \d+$/);
+
+    const free = Number(/--port (\d+)$/.exec(busy.fix!)![1]);
+    expect(await doctor.checkPort(free)).toEqual({ ok: true, what: `port ${free} is free` });
+  });
+
+  it("is content when the port is LazyLabel's own, already running", async () => {
+    const port = await listen(
+      createHttpServer((_request, response) => {
+        response.setHeader("content-type", "application/json");
+        response.end(JSON.stringify({ status: "ok", dataset: "ok", datasetRoot: "/images" }));
+      }),
+    );
+    expect(await doctor.checkPort(port)).toEqual({
+      ok: true,
+      what: `LazyLabel is already running at http://127.0.0.1:${port}/, for /images`,
+    });
+  });
+
+  it("checks the folder of images when one is named", async () => {
+    const file = path.join(scratch, "a-file.png");
+    await writeFile(file, "");
+    expect(doctor.checkFolder(undefined).ok).toBeNull();
+    expect(doctor.checkFolder(path.join(scratch, "nowhere")).ok).toBe(false);
+    expect(doctor.checkFolder(file)).toEqual({ ok: false, what: `${file} is a file`, fix: "name the folder that holds your images" });
+    expect(doctor.checkFolder(scratch).ok).toBe(true);
+  });
+
+  it("checks settings can be written where npm start keeps them, leaving nothing behind", async () => {
+    const home = path.join(scratch, "home");
+    await mkdir(home);
+    expect(doctor.checkSettings({}, home)).toEqual({
+      ok: true,
+      what: `settings can be written to ${path.join(home, ".config", "lazylabel", "lazylabel-web.db")}`,
+    });
+    expect(await readdir(home)).toEqual([]);
+    expect(doctor.checkSettings({ LAZYLABEL_DB: ":memory:" }, home).ok).toBe(true);
+
+    const file = path.join(scratch, "not-a-folder");
+    await writeFile(file, "");
+    const blocked = doctor.checkSettings({ LAZYLABEL_DB: path.join(file, "settings", "lazylabel.db") }, home);
+    expect(blocked.ok).toBe(false);
+    expect(blocked.fix).toBe("set LAZYLABEL_DB, or --db, to a file this user can write");
+  });
+
+  it("marks each line, and puts the fix under a failure", () => {
+    expect(
+      doctor.render([
+        { ok: true, what: "port 8787 is free" },
+        { ok: false, what: "not built: the API", fix: "npm run build" },
+        { ok: null, what: "the AI tools are not installed" },
+      ]),
+    ).toBe(
+      ["  OK    port 8787 is free", "  FAIL  not built: the API", "        fix: npm run build", "  --    the AI tools are not installed"].join(
+        "\n",
+      ),
+    );
   });
 });

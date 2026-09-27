@@ -105,6 +105,15 @@ jobs:
       - name: npm install
         run: npm install --no-audit --no-fund
 
+      # DEPLOYABILITY.md R9: what a user runs when something is wrong, on each OS, where nothing is.
+      # A runner has no AI environment, which is a note rather than a failure: the AI tools are
+      # optional, so this exits 0 only when everything manual annotation needs is in place.
+      - name: npm run doctor "<folder>"
+        run: |
+          images="$RUNNER_TEMP/my images"
+          mkdir -p "$images"
+          npm run doctor "$images"
+
       - name: npm start "<folder>", and the app answers
         env:
           BROWSER: none

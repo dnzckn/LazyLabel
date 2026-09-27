@@ -22,6 +22,7 @@
     "start": "node lazylabel-reimagined/api/dist/src/cli.js",
     "dev": "npm run dev -w lazylabel-reimagined/web",
     "ai:setup": "node scripts/ai-setup.mjs",
-    "ai:models": "node scripts/ai-models.mjs"
+    "ai:models": "node scripts/ai-models.mjs",
+    "doctor": "node scripts/doctor.mjs"
   }
 }
