@@ -106,8 +106,11 @@ describe("the section, in legacy's words", () => {
     );
   });
 
-  it("shows the resolution between legacy's Simple and Detailed once it is on, and no paragraph", async () => {
+  it("shows the resolution between legacy's Simple and Detailed, on or off, and no paragraph", async () => {
     mount();
+    // Shown while it is off too, as legacy's is (control_panel.py:421-448, CP-50).
+    await toggleButton();
+    expect(await screen.findByRole("slider", { name: "Polygon resolution" })).toBeTruthy();
     fireEvent.click(await toggleButton());
 
     const slider = await screen.findByRole("slider", { name: "Polygon resolution" });
@@ -120,6 +123,24 @@ describe("the section, in legacy's words", () => {
     expect([...document.querySelectorAll("p")].map((p) => p.textContent)).not.toContainEqual(
       expect.stringMatching(/accepted AI mask/),
     );
+  });
+});
+
+describe("Reset to Default, legacy's section reset (CP-50)", () => {
+  it("turns Auto-Convert off and puts the resolution back to 80", async () => {
+    // control_panel.py:929-939: OFF, slider at 80, whatever they were.
+    const { saved } = mount();
+    fireEvent.click(await toggleButton());
+    fireEvent.change(await screen.findByRole("slider", { name: "Polygon resolution" }), { target: { value: "30" } });
+    await waitFor(() => expect(saved.at(-1)?.values["polygon_resolution"]).toBe(30));
+
+    fireEvent.click(screen.getByRole("button", { name: "Reset to Default" }));
+
+    await waitFor(() =>
+      expect(saved.at(-1)?.values).toMatchObject({ auto_polygon_enabled: false, polygon_resolution: 80 }),
+    );
+    expect((await toggleButton()).textContent).toBe("Auto-Convert: OFF");
+    expect(screen.getByRole("button", { name: "Reset to Default" }).title).toBe("Reset auto-polygon settings to defaults");
   });
 });
 

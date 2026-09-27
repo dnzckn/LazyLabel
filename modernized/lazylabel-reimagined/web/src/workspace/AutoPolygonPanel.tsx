@@ -18,6 +18,7 @@
 import { useCallback, type ReactNode } from "react";
 
 import { decodeMask } from "@lazylabel/contracts";
+import { DEFAULT_SETTINGS } from "@lazylabel/settings-schema";
 
 import { useHotkey, useHotkeyContext } from "../hotkeys/HotkeyProvider.jsx";
 import { useNotifications } from "../notifications/NotificationProvider.jsx";
@@ -123,32 +124,46 @@ export function AutoPolygonPanel(): ReactNode {
         Auto-Convert: {enabled ? "ON" : "OFF"}
       </button>
 
-      {/* Shown only when it does something. A resolution slider above a switched-off toggle is a
-          control that looks live and changes nothing, which is the whole class of defect this
-          setting was part of. */}
-      {enabled && (
-        <>
-          <p className="auto-polygon__label">Polygon Resolution:</p>
-          <label
-            className="auto-polygon__resolution"
-            title={
-              "Adjust how closely the polygon follows the AI mask.\n"
-              + "Simple = fewer points, Detailed = more points."
-            }
-          >
-            <span>Simple</span>
-            <input
-              type="range"
-              min={RESOLUTION_MIN}
-              max={RESOLUTION_MAX}
-              value={resolution}
-              aria-label="Polygon resolution"
-              onChange={(event) => set("polygon_resolution", Number(event.target.value))}
-            />
-            <span>Detailed</span>
-          </label>
-        </>
-      )}
+      {/* Always shown, as legacy's is (control_panel.py:421-448): the resolution is set before the
+          toggle is switched on as often as after. */}
+      <p className="auto-polygon__label">Polygon Resolution:</p>
+      <label
+        className="auto-polygon__resolution"
+        title={
+          "Adjust how closely the polygon follows the AI mask.\n"
+          + "Simple = fewer points, Detailed = more points."
+        }
+      >
+        <span>Simple</span>
+        <input
+          type="range"
+          min={RESOLUTION_MIN}
+          max={RESOLUTION_MAX}
+          value={resolution}
+          aria-label="Polygon resolution"
+          onChange={(event) => set("polygon_resolution", Number(event.target.value))}
+        />
+        <span>Detailed</span>
+      </label>
+
+      {/* Legacy's section reset: Auto-Convert off, the resolution back to 80 (control_panel.py:
+          450-456, 929-939). */}
+      <button
+        type="button"
+        title="Reset auto-polygon settings to defaults"
+        onClick={() =>
+          void save({
+            ...settings,
+            values: {
+              ...settings.values,
+              auto_polygon_enabled: DEFAULT_SETTINGS.auto_polygon_enabled,
+              polygon_resolution: DEFAULT_SETTINGS.polygon_resolution,
+            },
+          })
+        }
+      >
+        Reset to Default
+      </button>
 
       {/* Not legacy's: see `convertMasks` above. */}
       <button

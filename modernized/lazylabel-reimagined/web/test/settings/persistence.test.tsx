@@ -130,6 +130,8 @@ async function reload(api: Api, view: ReturnType<typeof render>): Promise<void> 
 }
 
 const autoSave = () => screen.getByLabelText("Auto-Save on Navigate") as HTMLInputElement;
+/** Application Settings' Reset to Default, by its tooltip: AI → Polygon has one of its own (CP-50). */
+const resetAll = () => screen.getByTitle("Reset all settings to their default values");
 /** An export format's box in Application Settings, by legacy's name for the format. */
 const format = (name: RegExp) => screen.getByRole("checkbox", { name }) as HTMLInputElement;
 
@@ -230,7 +232,7 @@ describe("Reset to Default", () => {
     mountApp(api);
     await loaded();
 
-    fireEvent.click(screen.getByRole("button", { name: "Reset to Default" }));
+    fireEvent.click(resetAll());
 
     expect(confirm).toHaveBeenCalledWith("Reset all settings, except hotkeys, to their defaults?");
     await new Promise((resolve) => setTimeout(resolve, 30));
@@ -245,7 +247,7 @@ describe("Reset to Default", () => {
     await loaded();
     expect(autoSave().checked).toBe(false);
 
-    fireEvent.click(screen.getByRole("button", { name: "Reset to Default" }));
+    fireEvent.click(resetAll());
     await waitFor(() => expect(api.puts).toHaveLength(1));
 
     const stored = api.stored();
