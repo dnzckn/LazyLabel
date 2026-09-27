@@ -13,7 +13,7 @@
  * sides of the store.
  */
 
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -165,6 +165,7 @@ const keys = () => pair().map((side) => side.key);
 const press = (key: string, code: string, modifiers: { ctrlKey?: boolean } = {}) =>
   fireEvent.keyDown(document, { key, code, ...modifiers });
 const editRight = () => fireEvent.click(screen.getByLabelText("Edit the right image"));
+const halves = () => screen.getAllByRole("figure");
 const editLeft = () => fireEvent.click(screen.getByLabelText("Edit the left image"));
 /** The pair starts linked, as legacy's does (multi_view_coordinator.py:46); this unticks it. */
 const unlink = () => fireEvent.click(screen.getByLabelText("Link the two images"));
@@ -249,6 +250,41 @@ describe("the pan keys and Fit act on both halves", () => {
 
     await waitFor(() => expect(pair().map((side) => side.zoom)).toEqual([null, null]));
     expect(document.querySelector(".split__picture")?.classList.contains("split__picture--zoomed")).toBe(false);
+  });
+});
+
+describe("each half keeps its own view", () => {
+  it("zooms the half not being edited under the wheel, and it alone", async () => {
+    // Each of legacy's viewers scales itself under the wheel, about the pointer; the signal that
+    // would sync them is connected to nothing (photo_viewer.py:28, 180-190).
+    await pairUp();
+    const other = document.querySelector(".split__picture") as HTMLElement;
+
+    fireEvent.wheel(other, { deltaY: -100, clientX: 20, clientY: 20 });
+
+    await waitFor(() => expect(pair()[1].zoom).toBe(1.25));
+    expect(pair()[0].zoom).toBeNull();
+  });
+
+  it("keeps each half's scroll when the other is made the one edited", async () => {
+    // Legacy's two viewers are widgets of their own, and choosing one scrolls neither. Here the
+    // view moves between the halves, and each was drawn from the top-left corner again.
+    await pairUp();
+    const scrolled = (element: HTMLElement, left: number, top: number) => {
+      element.scrollLeft = left;
+      element.scrollTop = top;
+      fireEvent.scroll(element);
+    };
+    scrolled(document.querySelector(".split__view .canvas-scroll") as HTMLElement, 55, 7);
+    scrolled(document.querySelector(".split__picture") as HTMLElement, 30, 12);
+
+    editRight();
+
+    await waitFor(() => expect(within(halves()[1]!).queryByText(/editing/)).not.toBeNull());
+    const left = halves()[0]!.querySelector(".split__picture") as HTMLElement;
+    const right = halves()[1]!.querySelector(".canvas-scroll") as HTMLElement;
+    expect([left.scrollLeft, left.scrollTop]).toEqual([55, 7]);
+    expect([right.scrollLeft, right.scrollTop]).toEqual([30, 12]);
   });
 });
 

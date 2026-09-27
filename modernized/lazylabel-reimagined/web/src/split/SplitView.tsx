@@ -64,7 +64,7 @@
  * follow the side chosen. Legacy's Linked button says it in a tooltip, and so does this one.
  */
 
-import { useCallback, useEffect, useMemo, useRef, type ReactNode, type RefObject } from "react";
+import { useCallback, useContext, useEffect, useMemo, useRef, type ReactNode, type RefObject } from "react";
 
 import type { WireDatasetImage, WireSegment } from "@lazylabel/contracts";
 
@@ -75,6 +75,7 @@ import { scale as pixelsPerScreenPixel } from "../canvas/coordinates.js";
 import { panPane } from "../canvas/panStep.js";
 import { useFittedPane } from "../canvas/useFittedPane.js";
 import { useSizing } from "../canvas/useSizing.js";
+import { useWheelZoom } from "../canvas/useWheelZoom.js";
 import { ViewKindContext } from "../canvas/viewKind.js";
 import type { AiPrompt } from "../tools/ai.js";
 import { AiPreview } from "../workspace/AiTool.jsx";
@@ -87,7 +88,7 @@ import {
 } from "../workspace/WorkspaceProvider.jsx";
 import { describePair, type ImageSize } from "./linked.js";
 import { PairAiContext, usePairAi, type Pairing } from "./pairAi.js";
-import { PairPanContext, type PairPan } from "./pairPan.js";
+import { PairPanContext, PaneScrollContext, usePaneScroll, type PairPan } from "./pairPan.js";
 
 export interface SplitViewProps {
   /** The folder's images, for choosing the second one. */
@@ -167,6 +168,8 @@ export function SplitView({ images, pixelsUrl, tileUrl, viewer }: SplitViewProps
   const pairAi = usePairAi(pairing);
   // The class the view's tool gives a new annotation, whose colour the other half's preview takes.
   const aiClassId = classForNewSegment(sides[activeSide].segments, activeClassId);
+  // Where each half was scrolled to, put back when the view moves between them (CP-31).
+  const paneScroll = usePaneScroll();
 
   // The store's word for legacy's `view_mode == "multi"`: while this is on screen, the keys legacy
   // applies to both viewers act on both sides (CP-31).
@@ -305,6 +308,7 @@ export function SplitView({ images, pixelsUrl, tileUrl, viewer }: SplitViewProps
       {/* Legacy's Multi tab: two viewers, each under a bold "Viewer N:" header, with the Linked
           toggle in a narrow column between them (main_window.py:3069-3119). The header's
           "Viewer N:" is drawn by the stylesheet, so the caption's text stays the image's name. */}
+      <PaneScrollContext.Provider value={paneScroll}>
       <div className="split__panes">
         {([0, 1] as const).map((side) => {
           const open = sides[side].open;
@@ -341,6 +345,7 @@ export function SplitView({ images, pixelsUrl, tileUrl, viewer }: SplitViewProps
                 ) : (
                   <Pane
                     side={sides[side]}
+                    index={side}
                     picture={side === 0 ? leftPicture : rightPicture}
                     pixelsUrl={pixelsUrl}
                     {...(tileUrl === undefined ? {} : { tileUrl })}
@@ -376,6 +381,7 @@ export function SplitView({ images, pixelsUrl, tileUrl, viewer }: SplitViewProps
           );
         })}
       </div>
+      </PaneScrollContext.Provider>
     </div>
   );
 }
@@ -389,12 +395,14 @@ function sizeOf(side: SideState): ImageSize | null {
 
 function Pane({
   side,
+  index,
   picture,
   pixelsUrl,
   tileUrl,
   ai,
 }: {
   readonly side: SideState;
+  readonly index: SideIndex;
   /** Kept pointing at the picture's scrolling box, which the pan keys move. */
   readonly picture: RefObject<HTMLDivElement | null>;
   readonly pixelsUrl: (key: string, processing: ImageProcessing) => string;
@@ -422,6 +430,7 @@ function Pane({
   return (
     <SidePicture
       side={side}
+      index={index}
       size={size}
       picture={picture}
       pixelsUrl={pixelsUrl}
@@ -435,9 +444,14 @@ function Pane({
  * One half's picture, at its own zoom: fitted to its half as the view is fitted to the pane, or
  * drawn at the zoom it was left at and scrolled by the pan keys, as legacy's second viewer keeps
  * its own zoom and moves with the first (viewport_manager.py:45-50). Fitting the pair fits it too.
+ *
+ * The wheel zooms it, about the pointer, and it alone: each of legacy's viewers scales itself under
+ * the wheel and the signal that would sync them is connected to nothing (photo_viewer.py:180-190).
+ * It is put back where it was scrolled to when the view leaves it (`pairPan.ts`).
  */
 function SidePicture({
   side,
+  index,
   size,
   picture,
   pixelsUrl,
@@ -445,6 +459,7 @@ function SidePicture({
   ai,
 }: {
   readonly side: SideState;
+  readonly index: SideIndex;
   readonly size: ImageSize;
   readonly picture: RefObject<HTMLDivElement | null>;
   readonly pixelsUrl: (key: string, processing: ImageProcessing) => string;
@@ -452,9 +467,29 @@ function SidePicture({
   readonly ai?: PairPromptProps;
 }): ReactNode {
   const { attach, scale } = useFittedPane(size, picture);
+  const { setZoomOn } = useWorkspace();
+  const zoomHere = useCallback((zoom: number) => setZoomOn(index, zoom), [index, setZoomOn]);
+  const attachWheel = useWheelZoom(side.zoom, scale, zoomHere, picture);
+  const paneScroll = useContext(PaneScrollContext);
+  const attachPicture = useCallback(
+    (element: HTMLDivElement | null) => {
+      const unmeasure = attach(element);
+      const unlisten = attachWheel(element);
+      const unkeep = element === null ? undefined : paneScroll?.keep(index, element);
+      return () => {
+        unmeasure?.();
+        unlisten?.();
+        unkeep?.();
+      };
+    },
+    [attach, attachWheel, index, paneScroll],
+  );
   const key = side.open?.image.key ?? "";
   return (
-    <div className={side.zoom === null ? "split__picture" : "split__picture split__picture--zoomed"} ref={attach}>
+    <div
+      className={side.zoom === null ? "split__picture" : "split__picture split__picture--zoomed"}
+      ref={attachPicture}
+    >
       <AnnotationCanvas
         imageUrl={pixelsUrl(key, side.processing)}
         {...(tileUrl === undefined
