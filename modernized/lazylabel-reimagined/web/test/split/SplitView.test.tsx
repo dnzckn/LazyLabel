@@ -16,8 +16,11 @@ import { useContext } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { WireDatasetImage } from "@lazylabel/contracts";
 
+import { defaultSettings } from "@lazylabel/settings-schema";
+
 import type { AnnotationsResult, ApiClient } from "../../src/api/client.js";
 import { ViewKindContext } from "../../src/canvas/viewKind.js";
+import { SettingsProvider } from "../../src/settings/SettingsProvider.jsx";
 import { SplitView } from "../../src/split/SplitView.jsx";
 import { processingQuery } from "../../src/workspace/processing.js";
 import { WorkspaceProvider, useWorkspace } from "../../src/workspace/WorkspaceProvider.jsx";
@@ -112,6 +115,8 @@ function mount({
   });
 
   const client = {
+    getSettings: async () => defaultSettings(),
+    putSettings: async (settings: unknown) => settings,
     imageMetadata:
       metadata ??
       (async (_project: string, key: string) => ({
@@ -125,11 +130,15 @@ function mount({
     tileUrl: () => "/tile",
   } as unknown as ApiClient;
 
+  // Settings, because the half not being edited draws the drawing tool's press at the user's sizes,
+  // and the app starts on the polygon tool.
   render(
-    <WorkspaceProvider client={client} projectId="default" {...(confirm ? { confirmNavigation: confirm } : {})}>
-      <Opener />
-      <SplitView images={images} pixelsUrl={pixelsUrl} {...(viewer === undefined ? {} : { viewer })} />
-    </WorkspaceProvider>,
+    <SettingsProvider client={client}>
+      <WorkspaceProvider client={client} projectId="default" {...(confirm ? { confirmNavigation: confirm } : {})}>
+        <Opener />
+        <SplitView images={images} pixelsUrl={pixelsUrl} {...(viewer === undefined ? {} : { viewer })} />
+      </WorkspaceProvider>
+    </SettingsProvider>,
   );
 
   return { pixelsUrl };

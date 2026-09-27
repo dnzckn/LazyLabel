@@ -147,15 +147,16 @@ describe("C5: erasing with a shape", () => {
 });
 
 describe("C4: drawing a polygon by hand", () => {
-  it("offers no drawing surface until a tool is chosen", async () => {
-    // A canvas that starts in a drawing mode turns the first click of a session -- often a click
-    // to look at something -- into an annotation.
+  it("starts on the polygon tool, as legacy does with no model loaded", async () => {
+    // main_window.py:1098-1102 and RULE-070: Polygon when no model is loaded, which is how a
+    // session starts, since models load lazily. The web started on Edit until 2026-09-27, a
+    // choice no owner decision recorded.
     mount();
     fireEvent.click(screen.getByText("open"));
     await waitFor(() => expect(screen.getByText("a.png")).toBeTruthy());
 
-    expect(shown("tool")).toBe("none");
-    expect(screen.queryByLabelText("Polygon tool")).toBeNull();
+    expect(shown("tool")).toBe("polygon");
+    expect(await screen.findByLabelText("Polygon tool")).toBeTruthy();
   });
 
   it("draws a polygon on an image that has no annotation file at all", async () => {

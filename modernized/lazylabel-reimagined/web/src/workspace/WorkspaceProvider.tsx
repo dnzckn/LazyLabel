@@ -569,8 +569,11 @@ export function WorkspaceProvider({
    * The tool and the one before it, legacy's `mode` and `previous_mode`, which Select, Pan and Edit
    * go back to (RULE-070; `tools/modes.ts` has legacy's rules). One record, so the two cannot be a
    * render apart. Nothing precedes the first tool, so going back from it stays put.
+   *
+   * THE FIRST TOOL IS POLYGON, as legacy's: AI when a model is loaded, else Polygon, and models load
+   * lazily, so a session starts on Polygon (main_window.py:1098-1102). It was Edit until 2026-09-27.
    */
-  const [mode, setMode] = useState<ModeState>({ tool: "none", previous: "none" });
+  const [mode, setMode] = useState<ModeState>({ tool: "polygon", previous: "polygon" });
   const activeTool = mode.tool;
   const setActiveTool = useCallback((tool: Tool) => setMode((current) => chooseMode(current, tool)), []);
   const toggleTool = useCallback((tool: Tool) => setMode((current) => toggleMode(current, tool)), []);

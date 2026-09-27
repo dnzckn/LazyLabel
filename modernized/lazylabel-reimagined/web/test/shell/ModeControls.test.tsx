@@ -104,11 +104,13 @@ describe("the Mode Controls card", () => {
     expect(document.querySelector(".mode-card p")).toBeNull();
   });
 
-  it("starts on Edit, which is no drawing tool, so a first click never draws", () => {
+  it("starts on Polygon, as legacy does with no model loaded", () => {
+    // main_window.py:1098-1102: AI when a model is loaded, else Polygon; models load lazily, so a
+    // session starts on Polygon (RULE-070). The web started on Edit until 2026-09-27.
     mount();
 
-    expect((screen.getByRole("radio", { name: "Edit (R)" }) as HTMLInputElement).checked).toBe(true);
-    expect(screen.getByTestId("tool").textContent).toBe("none");
+    expect((screen.getByRole("radio", { name: "Poly (2)" }) as HTMLInputElement).checked).toBe(true);
+    expect(screen.getByTestId("tool").textContent).toBe("polygon");
   });
 
   it("chooses a mode when its button is clicked, and marks it on", () => {
