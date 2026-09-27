@@ -1021,3 +1021,46 @@ describe("outsideOf", () => {
     );
   });
 });
+
+describe("legacy's words after Space in the Multi tab (ai_segment_manager.py:387-403)", () => {
+  // Found on the real stack, 2026-09-27: the Multi tab's accept was silent.
+  it("says \"Saved predictions to 2 viewer(s)\" when a linked pair accepts both", async () => {
+    await pairUp();
+    click(50, 40);
+    await waitFor(() => expect(within(halves()[1]!).getByTestId("ai-mask")).toBeTruthy());
+
+    press(" ", "Space");
+
+    const notice = await screen.findByText("Saved predictions to 2 viewer(s)");
+    expect(notice.getAttribute("class")).toContain("status-bar__message--success");
+  });
+
+  it("says \"Saved predictions to 1 viewer(s)\" when unlinked", async () => {
+    await pairUp();
+    unlink();
+    click(50, 40);
+    await waitFor(() => expect(within(halves()[0]!).getByTestId("ai-mask")).toBeTruthy());
+
+    press(" ", "Space");
+
+    await waitFor(() => expect(pair().map((side) => side.found)).toEqual([["a.png"], []]));
+    expect(await screen.findByText("Saved predictions to 1 viewer(s)")).toBeTruthy();
+  });
+
+  it("says legacy's plain \"No AI segment preview to accept\" with nothing placed", async () => {
+    await pairUp();
+
+    press(" ", "Space");
+
+    const notice = await screen.findByText("No AI segment preview to accept");
+    expect(notice.getAttribute("class")).toContain("status-bar__message--info");
+  });
+
+  it("says \"No segments to erase\" on Shift+Space with nothing placed", async () => {
+    await pairUp();
+
+    press(" ", "Space", { shiftKey: true });
+
+    expect(await screen.findByText("No segments to erase")).toBeTruthy();
+  });
+});

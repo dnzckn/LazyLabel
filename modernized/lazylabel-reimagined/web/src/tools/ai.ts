@@ -209,6 +209,18 @@ export function pending(prompt: AiPrompt): Pending {
 /** Legacy's message when Space is pressed with no prediction waiting. */
 export const NOTHING_TO_ACCEPT = "No AI segment preview to accept";
 
+/** Shift+Space's, in the single view and the Sequence tab (ai_segment_manager.py:123-125, 234-236). */
+export const NOTHING_TO_ERASE = "No AI segment preview to erase";
+
+/** Shift+Space's in the Multi tab, which says it for an erase that removed nothing too (:399-401). */
+export const NO_SEGMENTS_TO_ERASE = "No segments to erase";
+
+/**
+ * What Space says it refused with nothing placed. Legacy's plain `_show_notification`, not a
+ * warning (ai_segment_manager.py:123-128, 399-403).
+ */
+export const NOTHING_PLACED: ReadonlySet<string> = new Set([NOTHING_TO_ACCEPT, NOTHING_TO_ERASE, NO_SEGMENTS_TO_ERASE]);
+
 /** Start again: accepted, discarded, or the image changed. */
 export function clear(): AiPrompt {
   return EMPTY_PROMPT;

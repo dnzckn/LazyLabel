@@ -34,7 +34,14 @@ import { ViewKindContext, type ViewKind } from "../canvas/viewKind.js";
 import { filterFragments } from "../tools/fragments.js";
 import { SETTLE_MS, prefetchOrder } from "./prefetch.js";
 import { useNotifications } from "../notifications/NotificationProvider.jsx";
-import { NOTHING_TO_ACCEPT, asked, type AiPrompt } from "../tools/ai.js";
+import {
+  NOTHING_PLACED,
+  NOTHING_TO_ACCEPT,
+  NOTHING_TO_ERASE,
+  NO_SEGMENTS_TO_ERASE,
+  asked,
+  type AiPrompt,
+} from "../tools/ai.js";
 import type { ApiClient, WireSegmentRequest, WireSegmentResponse } from "../api/client.js";
 import type { BinaryMask } from "@lazylabel/annotation-formats";
 import { epsilonFactorFor, maskToPolygon } from "../tools/autoPolygon.js";
@@ -168,6 +175,8 @@ export function AiTool({
    */
   const current = useRef<WireSegmentResponse | null>(null);
   current.current = own;
+  /** The prompt that prediction answered: a box's accept says so (ai_segment_manager.py:293-299). */
+  const answered = useRef<AiPrompt | null>(null);
 
   // One encode per image. Cleared when the image changes so a handle cannot outlive its pixels.
   const viewKey = operateOnView === undefined ? "" : JSON.stringify(operateOnView);
@@ -485,6 +494,7 @@ export function AiTool({
           // Out of order: a later prompt has already answered, and showing this one would move the
           // preview backwards as the user refines it.
           if (mine !== latest.current) return;
+          answered.current = prompt;
           setResult(response);
         })
         .catch((cause: unknown) => {
@@ -515,6 +525,8 @@ export function AiTool({
       let predicted = false;
       let dropped = 0;
       let holesFilled = false;
+      /** Smaller pieces each image's polygon left out, said after legacy's words. */
+      const pieces: number[] = [];
 
       for (const side of [held.active, held.other.side]) {
         const answer = results[side];
@@ -524,28 +536,35 @@ export function AiTool({
         if (filtered.kept === 0) continue;
         dropped += filtered.dropped;
         holesFilled ||= filtered.holesFilled;
-        bySide[side] = asEraser
-          ? { type: "AI", classId, mask: encodeMask(filtered.mask) }
-          : asPolygonIfAsked(filtered.mask, classId, autoPolygon, notify);
+        if (asEraser) {
+          bySide[side] = { type: "AI", classId, mask: encodeMask(filtered.mask) };
+        } else {
+          const converted = asPolygonIfAsked(filtered.mask, classId, autoPolygon);
+          bySide[side] = converted.segment;
+          if (converted.dropped > 0) pieces.push(converted.dropped);
+        }
       }
       held.clear();
 
       if (bySide[0] === null && bySide[1] === null) {
-        notify({
-          severity: "warning",
-          // Legacy's words for each case (ai_segment_manager.py:163-165, 403).
-          message: predicted ? "All segments filtered out by fragment threshold" : NOTHING_TO_ACCEPT,
-        });
+        // Legacy's words for each case: a warning when the fragment filter took everything, else its
+        // plain message (ai_segment_manager.py:163-165, 399-403).
+        if (predicted) notify({ severity: "warning", message: "All segments filtered out by fragment threshold" });
+        else notify({ severity: "info", message: asEraser ? NO_SEGMENTS_TO_ERASE : NOTHING_TO_ACCEPT });
         return;
       }
 
       if (asEraser) {
         if (onEraseEach !== undefined) onEraseEach(bySide);
         else if (bySide[held.active] !== null) onErase(bySide[held.active]!);
-      } else if (onAcceptEach !== undefined) {
-        onAcceptEach(bySide);
-      } else if (bySide[held.active] !== null) {
-        onAccept(bySide[held.active]!);
+      } else {
+        if (onAcceptEach !== undefined) onAcceptEach(bySide);
+        else if (bySide[held.active] !== null) onAccept(bySide[held.active]!);
+        // Legacy's success, counting the images given a segment (ai_segment_manager.py:390-398). It
+        // said nothing until 2026-09-27, found on the real stack.
+        const saved = bySide.filter((segment) => segment !== null).length;
+        notify({ severity: "success", message: `Saved predictions to ${saved} viewer(s)` });
+        for (const count of pieces) notify({ severity: "info", message: largestPiece(count) });
       }
 
       if (dropped > 0) {
@@ -570,10 +589,13 @@ export function AiTool({
        * main_window.py:6901-6920). Otherwise, as the single view accepts.
        */
       const result = pair === null ? current.current : pair.resultsNow()[pair.active];
+      /** Whether that prediction answered a box, whose accept legacy words as a success. */
+      const fromBox = pair === null && answered.current?.box != null;
       pair?.clear();
       if (result === null) {
-        // Legacy's plain message (ai_segment_manager.py:128).
-        notify({ severity: "info", message: "No AI segment preview to accept" });
+        // Legacy's plain message for each (ai_segment_manager.py:123-128, 399-403).
+        const nothing = asEraser ? (pair !== null ? NO_SEGMENTS_TO_ERASE : NOTHING_TO_ERASE) : NOTHING_TO_ACCEPT;
+        notify({ severity: "info", message: nothing });
         return;
       }
 
@@ -589,8 +611,21 @@ export function AiTool({
       // Shift+Space erases with the MASK, Auto-Convert or not, as legacy's does: the conversion is
       // for what is added (ai_segment_manager.py:137-142, 175-180, 241-299). The eraser went through
       // it until 2026-09-27, and the view, which erases with masks only, dropped the polygon.
-      if (asEraser) onErase({ type: "AI", classId, mask: encodeMask(filtered.mask) });
-      else onAccept(asPolygonIfAsked(filtered.mask, classId, autoPolygon, notify));
+      if (asEraser) {
+        onErase({ type: "AI", classId, mask: encodeMask(filtered.mask) });
+      } else {
+        const converted = asPolygonIfAsked(filtered.mask, classId, autoPolygon);
+        onAccept(converted.segment);
+        // Legacy's words, which it said after every accept and the web did not until 2026-09-27,
+        // found on the real stack: the Multi tab's success, a box's, or a point prompt's plain one
+        // (ai_segment_manager.py:293-299, 390-398). "polygon" when Auto-Convert made one, else
+        // "AI", the mask it falls back to as legacy does (main_window.py:1808-1829).
+        const kind = converted.segment.type === "Polygon" ? "polygon" : "AI";
+        if (pair !== null) notify({ severity: "success", message: "Saved predictions to 1 viewer(s)" });
+        else if (fromBox) notify({ severity: "success", message: `AI bounding box segment saved as ${kind}!` });
+        else notify({ severity: "info", message: `Segment saved as ${kind}` });
+        if (converted.dropped > 0) notify({ severity: "info", message: largestPiece(converted.dropped) });
+      }
 
       if (filtered.dropped > 0) {
         notify({
@@ -660,7 +695,9 @@ export function AiTool({
         height={height}
         onPrompt={onPrompt}
         onAccept={accept}
-        onRefused={(reason) => notify({ severity: "warning", message: reason })}
+        // Space with nothing placed is legacy's plain message, not a warning (ai_segment_manager.py:
+        // 123-128, 399-403); the other refusals are the web's own warnings.
+        onRefused={(reason) => notify({ severity: NOTHING_PLACED.has(reason) ? "info" : "warning", message: reason })}
         onClear={onClear}
         preview={result === null ? undefined : <AiPreview result={result} view={view} />}
         {...(handed !== null && canAsk ? { handed } : {})}
@@ -781,38 +818,38 @@ export function AiPreview({
  *
  * Falls back to the MASK rather than refusing when the conversion cannot produce a polygon. A
  * setting is a preference about form, not a condition on the work: a user who turned Auto-Convert
- * on and drew a sliver that approximates to a line wants their annotation, not an error. It says
- * so, because silently getting a mask when you asked for a polygon is the kind of difference
- * nobody notices until they try to drag a corner.
+ * on and drew a sliver that approximates to a line wants their annotation, not an error. The
+ * caller says which it became, in legacy's words ("Segment saved as AI"), because silently getting
+ * a mask when you asked for a polygon is the kind of difference nobody notices until they try to
+ * drag a corner. `dropped` is how many smaller pieces the polygon left out, for the caller to say
+ * after that.
  */
 function asPolygonIfAsked(
   mask: BinaryMask,
   classId: number,
   autoPolygon: { readonly enabled: boolean; readonly resolution: number } | undefined,
-  notify: (notification: { severity: "info" | "warning"; message: string; detail?: string }) => void,
-): WireSegment {
+): { readonly segment: WireSegment; readonly dropped: number } {
   const asMask: WireSegment = { type: "AI", classId, mask: encodeMask(mask) };
-  if (autoPolygon?.enabled !== true) return asMask;
+  if (autoPolygon?.enabled !== true) return { segment: asMask, dropped: 0 };
 
   const converted = maskToPolygon(mask, epsilonFactorFor(autoPolygon.resolution));
   if (converted === null) {
     // At this resolution the shape comes out with fewer than three corners; a higher polygon
-    // resolution keeps more. Legacy falls back to the mask the same way (main_window.py:1808-1829)
-    // and says "Segment saved as AI" (ai_segment_manager.py:297-299).
-    notify({ severity: "warning", message: "Segment saved as AI" });
-    return asMask;
+    // resolution keeps more. Legacy falls back to the mask the same way (main_window.py:1808-1829),
+    // and its accept then says "Segment saved as AI" (ai_segment_manager.py:293-299). This said
+    // that as a warning of its own until 2026-09-27; the accept says it now, as legacy does.
+    return { segment: asMask, dropped: 0 };
   }
 
-  if (converted.dropped > 0) {
-    // Legacy's behaviour, kept and reported rather than silently improved: it converts the largest
-    // contour only. A user whose mask had two islands gets one polygon, and should know which.
-    notify({
-      severity: "info",
-      message: `Converted the largest piece, dropping ${converted.dropped} smaller one${
-        converted.dropped === 1 ? "" : "s"
-      }`,
-    });
-  }
+  return { segment: { type: "Polygon", classId, vertices: converted.vertices }, dropped: converted.dropped };
+}
 
-  return { type: "Polygon", classId, vertices: converted.vertices };
+/**
+ * The web's word on a polygon made from the largest piece of a mask with several. Legacy's
+ * behaviour, kept and reported rather than silently improved: it converts the largest contour only.
+ * A user whose mask had two islands gets one polygon, and should know which. Said after legacy's
+ * accept notice, so it is the one left showing.
+ */
+function largestPiece(dropped: number): string {
+  return `Converted the largest piece, dropping ${dropped} smaller one${dropped === 1 ? "" : "s"}`;
 }

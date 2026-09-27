@@ -25,6 +25,8 @@ import {
   DRAG_THRESHOLD,
   EMPTY_PROMPT,
   NOTHING_TO_ACCEPT,
+  NOTHING_TO_ERASE,
+  NO_SEGMENTS_TO_ERASE,
   clear,
   pending,
   press,
@@ -220,7 +222,9 @@ export function AiLayer({
   const accept = useCallback(
     (erase: boolean) => {
       if (pending(prompt) === "nothing") {
-        onRefused?.(NOTHING_TO_ACCEPT);
+        // Legacy's words for each: Space's, and Shift+Space's in the single view or the Multi tab
+        // (ai_segment_manager.py:123-128, 399-403).
+        onRefused?.(erase ? (pair !== null ? NO_SEGMENTS_TO_ERASE : NOTHING_TO_ERASE) : NOTHING_TO_ACCEPT);
         // Legacy's Multi view clears every viewer's points and preview whatever it accepted, the
         // other image's unlinked ones included (ai_segment_manager.py:387-388; main_window.py:
         // 6901-6920).

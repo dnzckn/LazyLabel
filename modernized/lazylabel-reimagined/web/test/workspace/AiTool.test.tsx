@@ -622,3 +622,66 @@ describe("RULE-091: encoding the neighbours before anyone asks", () => {
     expect(asked.filter((key) => key === "frames/b.png")).toHaveLength(1);
   });
 });
+
+describe("legacy's words after Space (ai_segment_manager.py:120-128, 275-299)", () => {
+  // Found on the real stack, 2026-09-27: every accept was silent, and Space with nothing placed said
+  // a warning where legacy says a plain message.
+  const space = (shiftKey = false) => fireEvent.keyDown(document, { key: " ", code: "Space", shiftKey });
+
+  it("says \"Segment saved as polygon\" after a point prompt accepted as a polygon", async () => {
+    mount({}, { autoPolygon: { enabled: true, resolution: 80 } });
+    await waitFor(() => expect(surface()).toBeTruthy());
+    click(10, 10);
+    await ready();
+
+    space();
+
+    const notice = await screen.findByText("Segment saved as polygon");
+    expect(notice.getAttribute("class")).toContain("status-bar__message--info");
+  });
+
+  it("says \"Segment saved as AI\" with Auto-Convert off", async () => {
+    mount({});
+    await waitFor(() => expect(surface()).toBeTruthy());
+    click(10, 10);
+    await ready();
+
+    space();
+
+    const notice = await screen.findByText("Segment saved as AI");
+    expect(notice.getAttribute("class")).toContain("status-bar__message--info");
+  });
+
+  it("says \"AI bounding box segment saved as polygon!\", a success, after a box", async () => {
+    mount({}, { autoPolygon: { enabled: true, resolution: 80 } });
+    await waitFor(() => expect(surface()).toBeTruthy());
+    fireEvent.pointerDown(surface(), point(5, 2));
+    fireEvent.pointerUp(surface(), point(35, 18));
+    await ready();
+
+    space();
+
+    const notice = await screen.findByText("AI bounding box segment saved as polygon!");
+    expect(notice.getAttribute("class")).toContain("status-bar__message--success");
+  });
+
+  it("says legacy's plain \"No AI segment preview to accept\" on Space with nothing placed", async () => {
+    mount({});
+    await waitFor(() => expect(surface()).toBeTruthy());
+
+    space();
+
+    const notice = await screen.findByText("No AI segment preview to accept");
+    expect(notice.getAttribute("class")).toContain("status-bar__message--info");
+  });
+
+  it("says \"No AI segment preview to erase\" on Shift+Space with nothing placed", async () => {
+    mount({});
+    await waitFor(() => expect(surface()).toBeTruthy());
+
+    space(true);
+
+    const notice = await screen.findByText("No AI segment preview to erase");
+    expect(notice.getAttribute("class")).toContain("status-bar__message--info");
+  });
+});
