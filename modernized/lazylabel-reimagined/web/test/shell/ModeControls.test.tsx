@@ -143,7 +143,11 @@ describe("Edit with nothing it can edit (CP-16, RULE-046)", () => {
 
     fireEvent.click(screen.getByRole("radio", { name: "Edit (R)" }));
 
-    expect(await screen.findByText("No editable shapes selected!")).toBeTruthy();
+    // Legacy's error notice, prefixed, red and 8 s (mode_manager.py:85, 96, 108 call
+    // `_show_error_notification`; status_bar.py:173-184). It was an ordinary 3 s message until
+    // 2026-09-27, found in a real browser.
+    const said = await screen.findByText("Error: No editable shapes selected!");
+    expect(said.getAttribute("role")).toBe("alert");
     expect(screen.getByTestId("tool").textContent).toBe("polygon");
     expect((screen.getByRole("radio", { name: "Poly (2)" }) as HTMLInputElement).checked).toBe(true);
   });
@@ -156,7 +160,7 @@ describe("Edit with nothing it can edit (CP-16, RULE-046)", () => {
 
     fireEvent.keyDown(document, { key: "R" });
 
-    expect(await screen.findByText("No editable shapes selected!")).toBeTruthy();
+    expect(await screen.findByText("Error: No editable shapes selected!")).toBeTruthy();
     expect(screen.getByTestId("tool").textContent).toBe("box");
   });
 });
@@ -197,7 +201,7 @@ describe("Select, Edit and Pan pressed again go back, as legacy's toggles do (RU
     press("E");
 
     expect(tool()).toBe("none");
-    expect(screen.queryByText("No editable shapes selected!")).toBeNull();
+    expect(screen.queryByText(/No editable shapes selected/)).toBeNull();
     press("1");
     expect(tool()).toBe("ai");
   });
@@ -225,7 +229,7 @@ describe("Select, Edit and Pan pressed again go back, as legacy's toggles do (RU
 
     press("R");
 
-    expect(await screen.findByText("No editable shapes selected!")).toBeTruthy();
+    expect(await screen.findByText("Error: No editable shapes selected!")).toBeTruthy();
     expect(tool()).toBe("none");
   });
 

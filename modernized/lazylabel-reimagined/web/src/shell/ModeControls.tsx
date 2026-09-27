@@ -71,7 +71,9 @@ export function ModeControls({ onHotkeys }: { readonly onHotkeys: () => void }):
       : [enterEditMode(segments, selected)];
     const refused = outcomes.find((outcome) => outcome.kind === "refused");
     if (refused !== undefined && outcomes.every((outcome) => outcome.kind === "refused")) {
-      notify({ severity: "info", message: refused.reason });
+      // An error, as legacy's is: "Error: No editable shapes selected!", red, 8 s (mode_manager.py:
+      // 85, 96, 108). It was an ordinary 3 s message until 2026-09-27.
+      notify({ severity: "error", message: refused.reason });
       return;
     }
     toggleTool("none");

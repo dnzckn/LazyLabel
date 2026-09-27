@@ -161,7 +161,7 @@ describe("C4: Edit mode, as legacy's", () => {
 
     chooseTool("Edit (R)");
 
-    expect(await screen.findByText("No editable shapes selected!")).toBeTruthy();
+    expect(await screen.findByText("Error: No editable shapes selected!")).toBeTruthy();
     expect((screen.getByRole("radio", { name: "Poly (2)" }) as HTMLInputElement).checked).toBe(true);
     expect(screen.getByLabelText("Polygon tool")).toBeTruthy();
   });
