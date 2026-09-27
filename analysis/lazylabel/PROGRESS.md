@@ -96,6 +96,19 @@ The parity audits moved too. `CONTROL_PARITY.md` closed more than twenty items t
 notices, the one-button Propagate and Abort, and a rerun defect found on the real GPU. Launching
 is one command since the same day: `npm install` in `modernized/`, then `npm start "<folder>"`,
 which serves the app and the API from one port (`DEPLOYABILITY.md` is the evaluation behind it).
+The AI tools followed on 2026-09-27 (`DEPLOYABILITY.md` R6 to R9): `npm run ai:setup` installs
+PyTorch 2.10.0 and SAM 1 and 2 from `inference/uv.lock`, `npm run ai:models sam2.1-large` fetches
+a verified checkpoint, `npm start` then starts the inference service with the app, and `npm run
+doctor` checks all of it.
+
+**The Multi view does what it is for** (the owner, 2026-09-27: "the point of multi mode is to be
+able to use AI tool in it and be able to create segments using the same coordinates across both
+images for prompting the models, yet the contours of the segments can vary slightly"). The pair
+starts linked; each AI click and box goes to both images at the same pixel and is predicted on
+each image's own model, and Space makes each preview its own image's annotation (CP-31,
+`6886af9`). Checked on the GPU with a headless Chromium against the running stack: one click at
+(40, 120) gave frame_000 a 1,810-pixel mask centred at (40, 120) and frame_001 a 1,811-pixel one
+centred at (50, 123), following its disc; the two overlap at IoU 0.57, where a copy would be 1.
 
 ## The suites, as of 2026-09-23
 
@@ -1048,6 +1061,12 @@ Three of those are worth naming because they are where legacy loses work:
 - **The status bar** shows continuous state only. Legacy's is *also* its notification system, which
   is exactly why the destructive message expires; splitting them is what makes that impossible.
   It also reports the inference server's accelerator, which the browser cannot discover for itself.
+
+All three were reversed on 2026-09-26 and 27, the owner asking that every feature behave as the
+desktop app's: an empty save deletes the seven sidecars (SP-58, RULE-083), leaving an image saves
+it with Auto-Save on, and legacy's messages sit in the status bar one at a time on its timers
+(CP-64, `d164ea1`). What stays of it: annotations that could not be read are never written over
+or deleted (SEC-04), and closing asks (SP-17, the owner's "Keep asking").
 
 All four exit criteria are met:
 

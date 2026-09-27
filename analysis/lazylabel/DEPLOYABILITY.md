@@ -525,6 +525,8 @@ Other steps:
 
 **Check:** on a machine with only uv, `npm run ai:setup`, then `.venv` Python can `import torch, sam2, segment_anything, cv2`, `torch.__version__` starts with `2.10.0`, and `torch.cuda.is_available()` is True on NVIDIA.
 
+**Done 2026-09-27** (`86d5b5a`): torch and torchvision pinned in `ai`, `cpu` and `cu128`, a `server` extra for OpenCV, uv's PyTorch pattern, and SAM 2 vendored as a 177,863-byte pure-Python wheel (SHA-256 86ee2715..., NOTICE entry). `inference/uv.lock` (uv 0.7.13) locks 60 packages: torch 2.10.0+cu128, +cpu, and the macOS CPU wheel. `npm run ai:setup` measured: exit 0, PyTorch 2.10.0+cu128 on the RTX 3080, a 4.61 GB environment and a 2.7 GiB torch download. CI checks `uv lock --locked`.
+
 ### R7. Models: an opt-in, verified fetch (M; runtime stays download-free)
 
 **`inference/models/manifest.verified.json`:** the three verified entries from `MODEL_MANIFEST.md`, with correct `bytes`, plus a `url` for the two SAM files.
@@ -548,6 +550,8 @@ Other steps:
 
 **Check:** a fresh machine goes from nothing to `/health` 200, with SAM 2.1 large usable, with no hand-written JSON.
 
+**Done 2026-09-27** (`fdcc489`): `models/manifest.verified.json`, `lazylabel-models list|fetch` (asks, `.part` with Range resume, size and SHA-256 before rename, merges `manifest.json`), a per-user default folder, and `npm run ai:models`, tested against a loopback server, with an AST test that no server module imports it. Still open: MobileNetV3 has no URL.
+
 ### R8. One command starts what is installed (S to M)
 
 In `cli.ts`:
@@ -564,6 +568,8 @@ In `inference/server.py`, catch `ConnectionAbortedError` and `BrokenPipeError` i
 
 **Check:** `npm start "<folder>"` alone gives working SAM clicks once R6 and R7 have been run once.
 
+**Done 2026-09-27** (`95dfc24`): `npm start` runs the inference service as its child on a free port from 8788, with `[ai]` lines, and stops it on exit; otherwise it names the missing command. The web shows "AI tools off: run npm run ai:setup". A client disconnect is one log line.
+
 ### R9. `npm run doctor` (S to M)
 
 `modernized/scripts/doctor.mjs` reports OK or FAIL, with the exact fix command for each failure:
@@ -578,6 +584,8 @@ When `inference/.venv` exists, it also runs `python -m lazylabel_inference.docto
 - whether `cv2`, `sam2` and `segment_anything` import;
 - whether the manifest parses;
 - each checkpoint's presence and size, with `--full` hashing too.
+
+**Done 2026-09-27** (`2d8d833`): `npm run doctor` plus `python -m lazylabel_inference.doctor [--full]`; CI's quick start runs it on three OSes.
 
 ### R10. Docker that has been run (M)
 

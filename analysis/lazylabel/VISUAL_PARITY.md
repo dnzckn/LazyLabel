@@ -331,8 +331,8 @@ Solid colours with black bold text (sequence_widget.py:173-202, 268-305, 517-550
 - **`secondaryButton` and `negativeButton`**: these style names have no stylesheet rule anywhere,
   so Unload renders as a plain button.
 - **Desktop-only controls:** Open Image Folder, Browse Models, and the theme icon files.
-- **Status messages that expire on a timer.** React sends events to notifications instead, so take
-  only the colours.
+- **Status messages that expire on a timer.** Taken on 2026-09-27 (CONTROL_PARITY CP-64,
+  `d164ea1`): legacy's messages sit in the status bar one at a time, on its timers and colours.
 - **Fixed pixel sizes.** Treat 90px, 320px and 350px as defaults, and keep React's single-column
   layout for narrow screens.
 
