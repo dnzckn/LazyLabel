@@ -261,6 +261,34 @@ describe("C10: build a timeline and mark reference frames", () => {
     await waitFor(() => expect(screen.getByLabelText("Status").textContent).toMatch(/f03\.png/));
   });
 
+  it("shows its own viewer blank until an image is opened on the tab, as legacy's (SP-55)", async () => {
+    // Legacy's tab has a viewer of its own, empty until an image is loaded into it there
+    // (main_window.py:3278-3281, 3521-3534), while the image worked on stays the one open: Set
+    // Start takes it (4897-4910). Leaving shows that image on Single (7242-7272).
+    mount();
+    const viewer = () => document.querySelector(".centre__viewer")!;
+    const opened = (name: string) =>
+      waitFor(() => expect(screen.getByLabelText("Status").textContent).toContain(`${name} — `));
+    fireEvent.doubleClick(await screen.findByRole("button", { name: "f03.png" }));
+    await opened("f03.png");
+    expect(viewer().getAttribute("aria-hidden")).toBeNull();
+
+    fireEvent.click(screen.getByRole("tab", { name: "Sequence" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Set Start" })).toBeTruthy());
+    expect(viewer().getAttribute("aria-hidden")).toBe("true");
+    fireEvent.click(screen.getByRole("button", { name: "Set Start" }));
+    expect(await screen.findByText("Start frame set: f03.png")).toBeTruthy();
+    expect(viewer().getAttribute("aria-hidden")).toBe("true");
+
+    fireEvent.doubleClick(screen.getByRole("button", { name: "f04.png" }));
+    await opened("f04.png");
+    expect(viewer().getAttribute("aria-hidden")).toBeNull();
+
+    fireEvent.click(screen.getByRole("tab", { name: "Single" }));
+    expect(viewer().getAttribute("aria-hidden")).toBeNull();
+    await opened("f04.png");
+  });
+
   it("offers Propagate now that there is a job API behind it", async () => {
     // This test used to assert the OPPOSITE -- that no button was offered, because nothing was
     // behind one. That was the right assertion while it was true, and changing it is what closing

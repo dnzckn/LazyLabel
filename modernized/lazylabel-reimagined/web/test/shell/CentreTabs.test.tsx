@@ -200,6 +200,76 @@ describe("the centre tabs", () => {
   });
 });
 
+describe("the Sequence tab's own viewer (SP-55)", () => {
+  // Legacy's tab has a viewer of its own (main_window.py:3278-3281), empty until an image is
+  // loaded into it there (3521-3534, 618-631) and never emptied again (4998-5035, 5346-5382).
+  const blank = () => screen.getByText("the view").closest('[aria-hidden="true"][inert]') !== null;
+
+  function mountOpen(openKey: string) {
+    mounts = 0;
+    let serial = 1;
+    const props = (key: string): CentreTabsProps => ({
+      viewer: <View />,
+      multi: (viewer) => <div>{viewer}</div>,
+      sequence: <Counter />,
+      openKey: key,
+      openSerial: serial,
+    });
+    const { rerender } = render(<CentreTabs {...props(openKey)} />);
+    // A new serial each time an image begins to open, as the store gives one.
+    return (key: string) => {
+      serial += 1;
+      rerender(<CentreTabs {...props(key)} />);
+    };
+  }
+
+  it("is blank on entry, and shows the first image opened on it, without building the view again", () => {
+    const openImage = mountOpen("a.png");
+    expect(blank()).toBe(false);
+
+    fireEvent.click(tab("Sequence"));
+    expect(blank()).toBe(true);
+
+    openImage("b.png");
+    expect(blank()).toBe(false);
+    expect(mounts).toBe(1);
+  });
+
+  it("shows the image already open once it is opened on the tab, as Build's first frame can be", () => {
+    const openImage = mountOpen("a.png");
+    fireEvent.click(tab("Sequence"));
+
+    openImage("a.png");
+
+    expect(blank()).toBe(false);
+  });
+
+  it("stays blank for an image opened on another tab", () => {
+    const openImage = mountOpen("a.png");
+    openImage("b.png");
+
+    fireEvent.click(tab("Sequence"));
+
+    expect(blank()).toBe(true);
+  });
+
+  it("shows its last image on coming back while that is still open, and not once Single opens another", () => {
+    const openImage = mountOpen("a.png");
+    fireEvent.click(tab("Sequence"));
+    openImage("b.png");
+
+    fireEvent.click(tab("Single"));
+    expect(blank()).toBe(false);
+    fireEvent.click(tab("Sequence"));
+    expect(blank()).toBe(false);
+
+    fireEvent.click(tab("Single"));
+    openImage("c.png");
+    fireEvent.click(tab("Sequence"));
+    expect(blank()).toBe(true);
+  });
+});
+
 describe("the tab list's own keys", () => {
   it("does not also change the image when an arrow moves between tabs", () => {
     // Left and Right are previous and next image too, and the dispatcher heard them as well, so

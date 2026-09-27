@@ -96,6 +96,11 @@ export const SIDES: readonly SideIndex[] = [0, 1];
 
 export interface OpenImage {
   readonly image: WireDatasetImage;
+  /**
+   * Which open this is: a number no earlier open had, kept while the image loads. Opening the same
+   * image again gets a new one, so the Sequence tab can tell an open from a load (SP-55).
+   */
+  readonly serial: number;
   /** Null until the metadata arrives. */
   readonly metadata: WireImageMetadata | null;
   /** Null until the annotations arrive, or when opening failed before they could. */
@@ -558,6 +563,8 @@ export function WorkspaceProvider({
 }): ReactNode {
   const [sides, setSides] = useState<readonly [SideState, SideState]>([EMPTY_SIDE, EMPTY_SIDE]);
   const [activeSide, setActiveSide] = useState<SideIndex>(0);
+  // The last open's `serial`.
+  const serials = useRef(0);
   /*
    * The tool and the one before it, legacy's `mode` and `previous_mode`, which Select, Pan and Edit
    * go back to (RULE-070; `tools/modes.ts` has legacy's rules). One record, so the two cannot be a
@@ -824,7 +831,8 @@ export function WorkspaceProvider({
       // Decision 9 is in this one assignment: the crop and the processing chain do NOT carry over.
       // Legacy keeps them, so a crop set on a wide image and forgotten blanks most of the next,
       // narrow one, and a rescale window that suits one scan makes the next one black.
-      updateSide(side, () => ({ ...EMPTY_SIDE, open: { image, metadata: null, result: null, error: null } }));
+      const serial = (serials.current += 1);
+      updateSide(side, () => ({ ...EMPTY_SIDE, open: { image, serial, metadata: null, result: null, error: null } }));
       // RULE-052: history is cleared when an image loads. An undo that reached into the previous
       // image's edits would apply them to annotations that are not on screen. Scoped, so opening
       // into one side does not throw away what the user drew on the other.

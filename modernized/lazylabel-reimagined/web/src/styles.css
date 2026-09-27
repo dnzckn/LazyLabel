@@ -2154,6 +2154,12 @@ fieldset input[type="text"] {
   flex-direction: column;
 }
 
+/* The Sequence tab's viewer before an image is opened on it, blank as legacy's own viewer is
+   (SP-55). Hidden, not removed, so the view keeps its size and is not rebuilt. */
+.centre__viewer--blank {
+  visibility: hidden;
+}
+
 /* Legacy's bold "Sequence Mode: ..." line over the sequence view (main_window.py:3274-3276). */
 .centre__header {
   flex: none;

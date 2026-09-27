@@ -17,6 +17,17 @@
  * its tab no longer shows; it stays mounted, hidden, so that what legacy keeps -- the timeline's
  * zoom -- is kept too. The shell is told as well (`onLeaveSequence`), to reload the open image from
  * its file, as legacy's Single and Multi each load it from disk on entry.
+ *
+ * THE SEQUENCE TAB HAS A VIEWER OF ITS OWN in legacy (`main_window.py:3278-3281`), empty until an
+ * image is loaded into it there: a timeline frame (3521-3534), or a file from the list or the
+ * arrow keys, which load into the active viewer (618-631; `file_navigation_manager.py:59-60`).
+ * Nothing empties it again -- not leaving the tab (4998-5035), not coming back (5346-5382) -- so it
+ * shows the last image loaded into it. The image worked on is still the one open, as legacy's
+ * `current_image_path` is shared: Set Start and Set End take it (4897-4923), and the segment list
+ * and a save are its. So the tab shows the one view only while the open image is the one last
+ * opened on this tab, and a blank viewer otherwise (SEQUENCE_PARITY.md SP-55). Legacy's viewer
+ * keeps a picture of an image no longer open once Single opens another; that picture is not drawn
+ * here, as it would be a second view.
  */
 
 import { useCallback, useState, type ReactNode } from "react";
@@ -54,6 +65,13 @@ export interface CentreTabsProps {
    * without a word (SP-15). The shell does that; this only says when.
    */
   readonly onLeaveSequence?: () => void;
+  /** The open image's key, if an image is open. */
+  readonly openKey?: string;
+  /**
+   * Which open the open image came from, a new number whenever an image begins to open, the same
+   * image again included: an image opened on the Sequence tab is the one its viewer shows (SP-55).
+   */
+  readonly openSerial?: number;
 }
 
 export function CentreTabs({
@@ -62,10 +80,22 @@ export function CentreTabs({
   sequence,
   sequenceStatus = "No sequence loaded",
   onLeaveSequence,
+  openKey,
+  openSerial,
 }: CentreTabsProps): ReactNode {
   const [tab, setTab] = useState<CentreTab>("single");
   // Built the first time it is opened, then kept: see the module comment.
   const [sequenceOpened, setSequenceOpened] = useState(false);
+
+  // The image the Sequence tab's viewer last showed: the last one opened while the tab showed.
+  // Set as the render sees the open begin, so the view never shows a frame of the image before.
+  const [sequenceKey, setSequenceKey] = useState<string | null>(null);
+  const [seenSerial, setSeenSerial] = useState(openSerial);
+  if (openSerial !== seenSerial) {
+    setSeenSerial(openSerial);
+    if (openSerial !== undefined && tab === "sequence" && openKey !== undefined) setSequenceKey(openKey);
+  }
+  const blank = tab === "sequence" && (openKey === undefined || openKey !== sequenceKey);
 
   const { notify } = useNotifications();
   const choose = useCallback(
@@ -122,7 +152,18 @@ export function CentreTabs({
         {/* Always in the same place in the list, rendered or not, so the view after it keeps its
             place -- and is not rebuilt -- when the tab changes. */}
         {tab === "sequence" && <p className="centre__header">Sequence Mode: {sequenceStatus}</p>}
-        {tab === "multi" ? multi(viewer) : <div className="centre__viewer">{viewer}</div>}
+        {/* Blank, the view is kept but not drawn: hidden, it keeps its size and is not rebuilt. */}
+        {tab === "multi" ? (
+          multi(viewer)
+        ) : (
+          <div
+            className={blank ? "centre__viewer centre__viewer--blank" : "centre__viewer"}
+            inert={blank}
+            aria-hidden={blank || undefined}
+          >
+            {viewer}
+          </div>
+        )}
 
         {sequenceOpened && (
           <div className="centre__sequence" hidden={tab !== "sequence"}>

@@ -514,6 +514,8 @@ export function App({ client }: { readonly client: ApiClient }): ReactNode {
             onLeaveSequence={() => {
               if (open !== null) openImage(open.image, { discard: true });
             }}
+            // Which image the Sequence tab's own viewer shows (SP-55).
+            {...(open === null ? {} : { openKey: open.image.key, openSerial: open.serial })}
             sequence={
               <TimelinePanel
                 client={client}
