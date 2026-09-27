@@ -110,6 +110,14 @@ each image's own model, and Space makes each preview its own image's annotation 
 (40, 120) gave frame_000 a 1,810-pixel mask centred at (40, 120) and frame_001 a 1,811-pixel one
 centred at (50, 123), following its disc; the two overlap at IoU 0.57, where a copy would be 1.
 
+**A headless sweep of the real stack found what the jsdom suites had not** (2026-09-27), all fixed
+with tests: a polygon finished with Space was added TWICE, each with a new class, because React
+runs a state updater twice under StrictMode (`887f3a0`); a frame open during a propagation, once
+Save All had written it, was deleted by the next Auto-Save (`77c642b`); a second Propagate could
+start while the first was starting (`ef64eca`); a linked AI click on a pair still being encoded
+was never asked of either image (`8d75904`); and legacy's "Saved: ...", its error notice for R and
+its Auto-Polygon reset notice were missing.
+
 ## The suites, as of 2026-09-23
 
 All **seven** green, every one run on 2026-09-23. The `contracts` package was
