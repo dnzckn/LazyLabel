@@ -67,13 +67,19 @@ export function CentreTabs({
   // Built the first time it is opened, then kept: see the module comment.
   const [sequenceOpened, setSequenceOpened] = useState(false);
 
+  const { notify } = useNotifications();
   const choose = useCallback(
     (next: string) => {
       if (tab === "sequence" && next !== "sequence") onLeaveSequence?.();
       setTab(next as CentreTab);
       if (next === "sequence") setSequenceOpened(true);
+      // Legacy's entry with no timeline built -- always, as leaving tears it down (SP-15) -- says
+      // how to start (main_window.py:5346-5382, SP-55).
+      if (next === "sequence" && tab !== "sequence") {
+        notify({ severity: "info", message: "Sequence Mode: Set start/end frames, then Build Timeline" });
+      }
     },
-    [onLeaveSequence, tab],
+    [notify, onLeaveSequence, tab],
   );
 
   /*
@@ -84,7 +90,6 @@ export function CentreTabs({
    * only until the timeline registers its own: Find Archetypes says "Build a timeline first", and
    * Propagate does nothing, as legacy's does outside sequence mode (main_window.py:4708-4716, 5057-5059).
    */
-  const { notify } = useNotifications();
   const say = (message: string) => () => notify({ severity: "info", message });
   useHotkeyFallback("find_archetypes", say(BUILD_A_TIMELINE_FIRST));
   useHotkeyFallback("propagate", () => undefined);

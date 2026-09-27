@@ -239,6 +239,15 @@ describe("the sequence keys", () => {
     expect(press(key("propagate")).defaultPrevented).toBe(true);
   });
 
+  it("says how to start on entering the Sequence tab, as legacy's does (SP-55)", async () => {
+    // main_window.py:5346-5382: with no timeline built, which leaving always makes so (SP-15).
+    mountWithProbe();
+
+    fireEvent.click(tab("Sequence"));
+
+    expect(await screen.findByText("Sequence Mode: Set start/end frames, then Build Timeline")).toBeTruthy();
+  });
+
   it("answers the sequence keys as legacy's do on another tab, before the timeline exists (SP-56)", async () => {
     // Legacy's shortcuts are the window's, over a sequence mode made at startup
     // (main_window.py:691, 3327), so they answer on every tab (4664-4706, 5040-5059, 5150-5168).
