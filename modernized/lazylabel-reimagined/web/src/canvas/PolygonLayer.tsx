@@ -22,6 +22,7 @@
 import { useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { flushSync } from "react-dom";
 
+import { PairDraftContext } from "../split/pairDraft.js";
 import { claim, PairPressContext } from "../split/pairPress.js";
 import { locate, scale, type DisplayBox, type ImagePoint } from "./coordinates.js";
 import {
@@ -63,7 +64,14 @@ export function PolygonLayer({
 }: PolygonLayerProps): ReactNode {
   const sizing = useSizing();
   const surfaceRef = useRef<SVGSVGElement>(null);
-  const [draft, setDraft] = useState<PolygonDraft>(EMPTY_DRAFT);
+  /*
+   * A LINKED PAIR'S POLYGON IS THE PAIR'S: in the Multi tab, linked, it is drawn in both halves and
+   * outlives this layer when the other half is made the one edited (`split/pairDraft.ts`).
+   */
+  const pairDraft = useContext(PairDraftContext);
+  const [ownDraft, setOwnDraft] = useState<PolygonDraft>(EMPTY_DRAFT);
+  const draft = pairDraft === null ? ownDraft : pairDraft.draft;
+  const setDraft = pairDraft === null ? setOwnDraft : pairDraft.setDraft;
   const [pointer, setPointer] = useState<ImagePoint | null>(null);
   /**
    * Vertices Ctrl+Z took back, newest last, for Ctrl+Y or Ctrl+Shift+Z to put back, as legacy's
@@ -89,7 +97,7 @@ export function PolygonLayer({
       if (erase) onErase?.(vertices);
       else onComplete(vertices);
     },
-    [onComplete, onErase],
+    [onComplete, onErase, setDraft],
   );
 
   /*
@@ -117,7 +125,7 @@ export function PolygonLayer({
         return current;
       });
     },
-    [complete, onRefused],
+    [complete, onRefused, setDraft],
   );
 
   useHotkey("save_segment", () => finishWith(false));
@@ -156,12 +164,13 @@ export function PolygonLayer({
       else if (outcome.kind === "close") complete(outcome.vertices, false);
       else if (outcome.kind === "erase") complete(outcome.vertices, true);
     },
-    [boxOf, complete, draft, image, joinThreshold],
+    [boxOf, complete, draft, image, joinThreshold, setDraft],
   );
 
   // A press on this half of the Multi tab while the other was being edited places the vertex here,
   // as legacy's press in that viewer does (main_window.py:5524-5526, 5654-5657; `split/pairPress.ts`).
-  // The draft is this view's, so it is the first vertex of a new polygon.
+  // Linked, it joins the pair's polygon, or closes it on the first vertex; unlinked, the view's own
+  // draft went with the move, so it starts a new one.
   const handed = useContext(PairPressContext);
   useEffect(() => {
     if (handed === null || handed.tool !== "polygon" || !claim(handed)) return;
@@ -254,7 +263,7 @@ export function PolygonLayer({
     // CAPTURE, so these run before the dispatcher's listener, which bubbles (see Enter above).
     document.addEventListener("keydown", onKeyDown, true);
     return () => document.removeEventListener("keydown", onKeyDown, true);
-  }, [complete, draft, onRefused]);
+  }, [complete, draft, onRefused, setDraft]);
 
   const box = boxOf();
   // Legacy draws a polygon in progress in cyan, with blue points and a faint cyan fill of the

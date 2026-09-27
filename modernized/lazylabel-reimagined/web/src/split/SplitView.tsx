@@ -90,7 +90,9 @@ import { IdlePress } from "./IdlePress.jsx";
 import { describePair, type ImageSize } from "./linked.js";
 import { PairAiContext, usePairAi, type Pairing } from "./pairAi.js";
 import { PairPanContext, PaneScrollContext, usePaneScroll, type PairPan } from "./pairPan.js";
+import { PairDraftContext, type PairDraft } from "./pairDraft.js";
 import { PairPressContext, type HandedPress, type PressTool } from "./pairPress.js";
+import { EMPTY_DRAFT, type PolygonDraft } from "../tools/polygon.js";
 
 /** The tools whose press on the half not being edited is the tool's (`pairPress.ts`). */
 const PRESS_TOOLS: ReadonlySet<string> = new Set<PressTool>(["ai", "polygon", "box", "circle"]);
@@ -192,6 +194,19 @@ export function SplitView({ images, pixelsUrl, tileUrl, viewer }: SplitViewProps
       setActiveSide(side);
     },
     [setActiveSide],
+  );
+
+  /*
+   * A LINKED PAIR'S POLYGON IN PROGRESS, held here so both halves draw it and the view moving to the
+   * other half keeps it, as legacy's linked viewers each hold the same one (`pairDraft.ts`). Another
+   * pair, unlinking or another tool starts again.
+   */
+  const drafting = linked && activeTool === "polygon" && viewer !== undefined && right.open !== null;
+  const [linkedDraft, setLinkedDraft] = useState<PolygonDraft>(EMPTY_DRAFT);
+  useEffect(() => setLinkedDraft(EMPTY_DRAFT), [pairKey, drafting]);
+  const pairDraft = useMemo<PairDraft | null>(
+    () => (drafting ? { draft: linkedDraft, setDraft: setLinkedDraft } : null),
+    [drafting, linkedDraft],
   );
 
   // The store's word for legacy's `view_mode == "multi"`: while this is on screen, the keys legacy
@@ -363,7 +378,7 @@ export function SplitView({ images, pixelsUrl, tileUrl, viewer }: SplitViewProps
                       <PairPanContext.Provider value={panOtherHalf}>
                         <PairAiContext.Provider value={pairAi}>
                           <PairPressContext.Provider value={handed?.side === side ? handed.press : null}>
-                            {viewer}
+                            <PairDraftContext.Provider value={pairDraft}>{viewer}</PairDraftContext.Provider>
                           </PairPressContext.Provider>
                         </PairAiContext.Provider>
                       </PairPanContext.Provider>
@@ -380,6 +395,8 @@ export function SplitView({ images, pixelsUrl, tileUrl, viewer }: SplitViewProps
                     {...(pairAi === null
                       ? {}
                       : { ai: { prompt: pairAi.prompt, result: pairAi.results[side], classId: aiClassId } })}
+                    // The linked polygon in progress, drawn here too.
+                    {...(pairDraft === null ? {} : { draft: pairDraft.draft })}
                     // A press here is the tool's, as in legacy's non-active viewer.
                     {...(viewer !== undefined && PRESS_TOOLS.has(activeTool)
                       ? {
@@ -444,6 +461,7 @@ function Pane({
   pixelsUrl,
   tileUrl,
   ai,
+  draft,
   press,
 }: {
   readonly side: SideState;
@@ -453,6 +471,7 @@ function Pane({
   readonly pixelsUrl: (key: string, processing: ImageProcessing) => string;
   readonly tileUrl?: (key: string, processing: ImageProcessing, z: number, x: number, y: number) => string;
   readonly ai?: PairPromptProps;
+  readonly draft?: PolygonDraft;
   readonly press?: PressProps;
 }): ReactNode {
   const open = side.open;
@@ -482,6 +501,7 @@ function Pane({
       pixelsUrl={pixelsUrl}
       {...(tileUrl === undefined ? {} : { tileUrl })}
       {...(ai === undefined ? {} : { ai })}
+      {...(draft === undefined ? {} : { draft })}
       {...(press === undefined ? {} : { press })}
     />
   );
@@ -504,6 +524,7 @@ function SidePicture({
   pixelsUrl,
   tileUrl,
   ai,
+  draft,
   press,
 }: {
   readonly side: SideState;
@@ -513,6 +534,7 @@ function SidePicture({
   readonly pixelsUrl: (key: string, processing: ImageProcessing) => string;
   readonly tileUrl?: (key: string, processing: ImageProcessing, z: number, x: number, y: number) => string;
   readonly ai?: PairPromptProps;
+  readonly draft?: PolygonDraft;
   readonly press?: PressProps;
 }): ReactNode {
   const { attach, scale } = useFittedPane(size, picture);
@@ -555,6 +577,9 @@ function SidePicture({
         selected={side.selected}
       >
         {ai !== undefined && <PairPrompt {...ai} width={size.width} height={size.height} />}
+        {draft !== undefined && draft.vertices.length > 0 && (
+          <PairDraftMarks draft={draft} width={size.width} height={size.height} />
+        )}
         {press !== undefined && (
           <IdlePress
             {...press}
@@ -606,6 +631,59 @@ function PairPrompt({
     >
       {result !== null && <AiPreview result={result} classId={classId} />}
       <AiMarks prompt={prompt} classId={classId} perPixel={perPixel} sizing={sizing} />
+    </svg>
+  );
+}
+
+/**
+ * A linked polygon in progress over the half not being edited, at the same pixels, as legacy draws
+ * each vertex and edge in both linked viewers (main_window.py:5680-5706): the view's cyan line and
+ * blue points (`PolygonLayer`). Clicks pass through it to the half.
+ */
+function PairDraftMarks({
+  draft,
+  width,
+  height,
+}: {
+  readonly draft: PolygonDraft;
+  readonly width: number;
+  readonly height: number;
+}): ReactNode {
+  const sizing = useSizing();
+  const surface = useRef<SVGSVGElement>(null);
+  const box = surface.current?.getBoundingClientRect();
+  const perPixel =
+    box === undefined || box.width <= 0 || box.height <= 0
+      ? { x: 1, y: 1 }
+      : pixelsPerScreenPixel(box, { width, height });
+  const strokeWidth = Math.max(perPixel.x, perPixel.y) * sizing.line;
+  return (
+    <svg
+      ref={surface}
+      className="split__prompt"
+      viewBox={`0 0 ${width} ${height}`}
+      preserveAspectRatio="none"
+      aria-label="Polygon in progress"
+    >
+      {draft.vertices.length > 1 && (
+        <polyline
+          points={draft.vertices.map((v) => `${v.x},${v.y}`).join(" ")}
+          fill="none"
+          stroke="rgb(0, 255, 255)"
+          strokeWidth={strokeWidth}
+        />
+      )}
+      {draft.vertices.map((vertex, index) => (
+        <ellipse
+          key={index}
+          data-testid={`pair-vertex-${index}`}
+          cx={vertex.x}
+          cy={vertex.y}
+          rx={4 * perPixel.x * sizing.point}
+          ry={4 * perPixel.y * sizing.point}
+          fill="rgb(0, 0, 255)"
+        />
+      ))}
     </svg>
   );
 }

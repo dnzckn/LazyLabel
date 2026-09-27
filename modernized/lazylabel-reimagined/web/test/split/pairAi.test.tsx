@@ -500,6 +500,54 @@ describe("a press on the half not being edited", () => {
   });
 });
 
+describe("a linked polygon in progress", () => {
+  // Legacy puts each vertex into both linked viewers and draws it in both (main_window.py:5680-5706).
+  // It was drawn in the half being edited only, and lost when the other half was chosen.
+  const vertexAt = (x: number, y: number) =>
+    fireEvent.pointerDown(screen.getByLabelText("Polygon tool"), { button: 0, pointerId: 1, clientX: x, clientY: y });
+
+  it("is drawn in both halves", async () => {
+    await pairUp();
+    chooseTool("Poly (2)");
+
+    vertexAt(10, 10);
+    vertexAt(60, 10);
+    vertexAt(60, 50);
+
+    const other = halves()[1]!;
+    await waitFor(() => expect(within(other).getByTestId("pair-vertex-2")).toBeTruthy());
+    expect(within(other).getByTestId("pair-vertex-1").getAttribute("cx")).toBe("60");
+  });
+
+  it("is continued from the other half, and finished there into both images", async () => {
+    await pairUp();
+    chooseTool("Poly (2)");
+    vertexAt(10, 10);
+    vertexAt(60, 10);
+    vertexAt(60, 50);
+
+    const idle = within(halves()[1]!).getByLabelText("Draw on b.png");
+    fireEvent.pointerDown(idle, { button: 0, pointerId: 1, clientX: 10, clientY: 50 });
+
+    await waitFor(() => expect(within(halves()[1]!).getByTestId("vertex-3")).toBeTruthy());
+    expect(within(halves()[0]!).getByTestId("pair-vertex-3")).toBeTruthy();
+    press(" ", "Space");
+    await waitFor(() => expect(pair().map((side) => side.found.length)).toEqual([1, 1]));
+    expect(document.querySelector('[data-testid^="pair-vertex-"]')).toBeNull();
+  });
+
+  it("stays the view's own while unlinked", async () => {
+    await pairUp();
+    fireEvent.click(screen.getByLabelText("Link the two images"));
+    chooseTool("Poly (2)");
+
+    vertexAt(10, 10);
+
+    await waitFor(() => expect(within(halves()[0]!).getByTestId("vertex-0")).toBeTruthy());
+    expect(within(halves()[1]!).queryByTestId("pair-vertex-0")).toBeNull();
+  });
+});
+
 describe("when one image cannot answer", () => {
   it("shows nothing there when its prediction fails, and keeps the other's", async () => {
     await pairUp("b.png", new Set(["frames/b.png"]));
