@@ -74,7 +74,8 @@ export interface OpenOptions {
   /**
    * Open without saving or asking about what the side holds, which is lost: legacy's reload of the
    * image from disk when the Sequence tab is left (`main_window.py:3043-3056, 7242-7272`), by the
-   * owner's decision of 2026-09-26 (SEQUENCE_PARITY.md SP-15). Nothing else passes it.
+   * owner's decision of 2026-09-26 (SEQUENCE_PARITY.md SP-15). The only other caller is Save All's
+   * reload of a frame that shows nothing but a finished run's masks, which it has just written.
    */
   readonly discard?: boolean;
   /**

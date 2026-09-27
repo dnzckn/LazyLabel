@@ -166,6 +166,8 @@ export interface TimelinePanelProps {
    * does after Save All (`fast_file_manager.py:1385-1393`).
    */
   readonly onWritten?: (keys: readonly string[]) => void;
+  /** A propagation completed: the open frame is loaded again with its new masks, as legacy's is. */
+  readonly onPropagated?: () => void;
 }
 
 /** The Start and End a timeline is built between, and the rows between them when both are set. */
@@ -269,6 +271,7 @@ export function TimelinePanel({
   rows,
   onRange,
   onWritten,
+  onPropagated,
 }: TimelinePanelProps): ReactNode {
   const aiReady = ai === undefined || ai.available;
   // Propagation needs a video-capable model as well as a reachable service.
@@ -1337,6 +1340,7 @@ export function TimelinePanel({
           {...(openAnnotations === undefined ? {} : { openAnnotations })}
           onRunStart={dropRun}
           onCleared={dropRun}
+          {...(onPropagated === undefined ? {} : { onFinished: onPropagated })}
           options={confidence}
         />
       )}

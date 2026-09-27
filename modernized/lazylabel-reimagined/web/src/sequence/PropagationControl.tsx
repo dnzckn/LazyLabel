@@ -98,6 +98,11 @@ export interface PropagationControlProps {
    */
   readonly onCleared?: () => void;
   /**
+   * The run completed. Legacy then loads the frame on screen again, so the masks the run made for
+   * it show (`main_window.py:4638-4645`).
+   */
+  readonly onFinished?: () => void;
+  /**
    * The propagated segments, by frame position — RULE-090.
    *
    * Handed up because opening a frame belongs to the shell, not to this control. Built here
@@ -167,6 +172,7 @@ export function PropagationControl({
   unsavedRef,
   onRunStart,
   onCleared,
+  onFinished,
   onSegments,
   confirmDiscard = (message) => window.confirm(message),
   onSkipped,
@@ -683,6 +689,7 @@ export function PropagationControl({
           : `Propagation complete: ${propagated.size} frames, ${flagged.size} flagged. `
             + "Scrub timeline or click 'Save All' to save.",
     });
+    onFinished?.();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [finished]);
   const failure = progress.error;

@@ -188,13 +188,38 @@ export function App({ client }: { readonly client: ApiClient }): ReactNode {
    * move's Auto-Save wrote that over the file Save All had just written, and deleted it for a frame
    * opened empty (found end to end, 2026-09-26). Read when Save All ends, so through a ref.
    */
-  const openNow = useRef({ open, dirty: sides[activeSide].dirty, openImage });
-  openNow.current = { open, dirty: sides[activeSide].dirty, openImage };
+  const openNow = useRef({ open, dirty: sides[activeSide].dirty, openImage, segments });
+  openNow.current = { open, dirty: sides[activeSide].dirty, openImage, segments };
+  /** The run's masks the open frame was loaded with at the end of a propagation (below). */
+  const runShown = useRef<{ readonly key: string; readonly segments: readonly WireSegment[] } | null>(null);
   const onWritten = useCallback((keys: readonly string[]) => {
     setWrites((count) => count + 1);
     const now = openNow.current;
-    if (now.open !== null && !now.dirty && keys.includes(now.open.image.key)) now.openImage(now.open.image);
+    if (now.open === null || !keys.includes(now.open.image.key)) return;
+    // Unsaved only because it shows the run's masks, untouched, which Save All has just written:
+    // loaded from the file without saving or asking, since nothing it holds is lost.
+    const onlyTheRun = runShown.current?.key === now.open.image.key && runShown.current.segments === now.segments;
+    if (onlyTheRun) now.openImage(now.open.image, { discard: true });
+    else if (!now.dirty) now.openImage(now.open.image);
   }, []);
+  /*
+   * A FINISHED PROPAGATION LOADS THE OPEN FRAME AGAIN, so the masks the run made for it show, as
+   * legacy's does (main_window.py:4638-4645). Through the review lookup, which is where the run's
+   * masks are, and only for a frame with nothing unsaved (SP-14). The frame shows the run's masks
+   * as unsaved, as one opened from the timeline does, and nothing is saved on the way. In an effect,
+   * so the lookup the Sequence panel hands up after the run's last masks has been handed up.
+   */
+  const [propagations, setPropagations] = useState(0);
+  const onPropagated = useCallback(() => setPropagations((count) => count + 1), []);
+  useEffect(() => {
+    if (propagations === 0) return;
+    const now = openNow.current;
+    if (now.open === null || now.dirty) return;
+    const segments = reviewFor(now.open.image.key);
+    if (segments === undefined) return;
+    runShown.current = { key: now.open.image.key, segments };
+    now.openImage(now.open.image, { segments, keepUnchanged: true });
+  }, [propagations, reviewFor]);
 
   /*
    * IN THE MULTI TAB THE PAIR MOVES, as legacy's does (main_window.py:6491-6557; CP-31): by two rows
@@ -551,6 +576,7 @@ export function App({ client }: { readonly client: ApiClient }): ReactNode {
                   : { ai: { available: health.ai.available, videoCapable: health.ai.videoCapable, reason: health.ai.reason } })}
                 onStatus={setSequenceStatus}
                 onWritten={onWritten}
+                onPropagated={onPropagated}
                 {...(open === null ? {} : { openKey: open.image.key })}
                 onOpen={(key, segments, built) => {
                   const image = listed.find((entry) => entry.key === key) ?? seenImages.current.get(key);

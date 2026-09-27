@@ -365,6 +365,29 @@ describe("Save All over the open frame, then a move with Auto-Save on Navigate",
   });
 });
 
+describe("SP-14: a finished propagation over the open frame", () => {
+  /*
+   * Legacy loads the frame on screen again when a propagation finishes, so the masks the run made
+   * for it show (main_window.py:4638-4645). The web went on showing what the frame held before the
+   * run until 2026-09-27, and a user on that frame saw nothing happen.
+   */
+  const status = () => screen.getByLabelText("Status").textContent ?? "";
+  const cell = (index: number) => screen.getByLabelText("Timeline").querySelectorAll("button")[index]!;
+
+  it("shows the run's masks on an unchanged open frame, unsaved, and saves nothing", async () => {
+    const { saved } = mount();
+    await openTimeline();
+    fireEvent.click(cell(1));
+    await waitFor(() => expect(status()).toMatch(/frames\/f02\.png — 0 segments, saved/));
+
+    fireEvent.click(screen.getByRole("button", { name: /^Propagate/ }));
+    await waitFor(() => expect(cellLabels()[1]).toContain("propagated"), { timeout: 3000 });
+
+    await waitFor(() => expect(status()).toMatch(/frames\/f02\.png — 1 segment, unsaved/));
+    expect(saved).not.toContain("frames/f02.png");
+  });
+});
+
 describe("RULE-058: the open frame keeps its unsaved work through finish, Save All and Trim", () => {
   /*
    * Legacy clears and reloads the current frame after a propagation finishes, after Save All and
