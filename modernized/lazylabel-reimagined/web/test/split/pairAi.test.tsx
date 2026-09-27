@@ -81,7 +81,14 @@ function loaded(key: string): AnnotationsResult {
 
 /** Which image's object a segment covers: the image whose model found that square. */
 function whose(segment: WireSegment, key: string): string {
-  if (segment.mask === undefined) return segment.type;
+  if (segment.mask === undefined) {
+    // A polygon, from Auto-Convert: whose square its first corner is on.
+    const [cx, cy] = segment.vertices?.[0] ?? [Number.NaN, Number.NaN];
+    const found = Object.entries(FOUND).find(
+      ([image, [x, y]]) => image === key && cx >= x - 1 && cx <= x + 9 && cy >= y - 1 && cy <= y + 9,
+    );
+    return `${segment.type} of ${found === undefined ? "neither" : found[0].slice("frames/".length)}`;
+  }
   const mask = decodeMask(segment.mask);
   for (const [image, [x, y]] of Object.entries(FOUND)) {
     if (mask.data[(y + 4) * mask.width + (x + 4)] === 1 && SIZES[image]!.width === SIZES[key]!.width) {
@@ -117,7 +124,7 @@ interface Side {
 
 const pair = (): readonly [Side, Side] => JSON.parse(screen.getByTestId("pair").textContent ?? "[]");
 
-function mount(failing: ReadonlySet<string> = new Set()) {
+function mount(failing: ReadonlySet<string> = new Set(), values: Record<string, unknown> = {}) {
   vi.spyOn(Element.prototype, "getBoundingClientRect").mockReturnValue({ ...RECT, toJSON: () => RECT } as DOMRect);
 
   const embed = vi.fn(async (request: { image: string }) => ({ handle: `h:${request.image}`, cached: true }));
@@ -128,7 +135,10 @@ function mount(failing: ReadonlySet<string> = new Set()) {
   });
 
   const client = {
-    getSettings: async () => defaultSettings(),
+    getSettings: async () => {
+      const settings = defaultSettings();
+      return { ...settings, values: { ...settings.values, ...values } };
+    },
     putSettings: async (settings: unknown) => settings,
     health: async () => ({
       status: "ok",
@@ -196,8 +206,8 @@ function mount(failing: ReadonlySet<string> = new Set()) {
 }
 
 /** a.png opened, the Multi tab chosen, `second` paired with it, and the AI tool ready on both. */
-async function pairUp(second = "b.png", failing?: ReadonlySet<string>) {
-  const handles = mount(failing);
+async function pairUp(second = "b.png", failing?: ReadonlySet<string>, values?: Record<string, unknown>) {
+  const handles = mount(failing, values);
   fireEvent.doubleClick(await screen.findByRole("button", { name: "a.png" }));
   await waitFor(() => expect(pair()[0].aliases).toEqual(ALIASES["frames/a.png"]));
   fireEvent.click(screen.getByRole("tab", { name: "Multi" }));
@@ -312,6 +322,19 @@ describe("Space: each image's own answer becomes its own annotation", () => {
 
     await waitFor(() => expect(pair().map((side) => side.classes)).toEqual([[0], [1]]));
     expect(pair()[1].aliases).toEqual(ALIASES["frames/b.png"]);
+  });
+
+  it("converts each image's own mask to a polygon when Auto-Convert is on", async () => {
+    // _create_segment_from_mask for each target viewer (ai_segment_manager.py:362-364).
+    await pairUp("b.png", undefined, { auto_polygon_enabled: true });
+    click(50, 40);
+    await waitFor(() => expect(within(halves()[1]!).getByTestId("ai-mask")).toBeTruthy());
+
+    press(" ", "Space");
+
+    await waitFor(() =>
+      expect(pair().map((side) => side.found)).toEqual([["Polygon of a.png"], ["Polygon of b.png"]]),
+    );
   });
 
   it("takes both back with one undo", async () => {
