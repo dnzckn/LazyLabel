@@ -135,7 +135,7 @@ describe("preparing the image", () => {
 
     // Legacy's words for a click while the image is loaded into the model
     // (ai_segment_manager.py:425-427), under legacy's status line (sam_single_view_manager.py:278).
-    expect(await screen.findByText("AI model is updating, please wait...")).toBeTruthy();
+    expect(await screen.findByText("Warning: AI model is updating, please wait...")).toBeTruthy();
     expect(screen.getByText("Loading image into AI model...")).toBeTruthy();
 
     // Released and WAITED FOR before the test ends. Leaving the encode in flight lets it resolve
@@ -285,7 +285,8 @@ describe("prompting", () => {
     await ready();
     click(12, 12);
 
-    expect(await screen.findByText(/the model raised/)).toBeTruthy();
+    // Legacy's line; the service's reason is its tooltip (CP-64).
+    expect((await screen.findByText("Error: AI prediction failed")).title).toMatch(/the model raised/);
 
     fireEvent.keyDown(document, { key: " ", code: "Space" });
     await waitFor(() => expect(screen.getByText(/No AI segment preview to accept/)).toBeTruthy());

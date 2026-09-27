@@ -201,7 +201,7 @@ describe("a save the API refuses", () => {
     // ...and put back, with the reason, when the server says no. It used to change nothing and say
     // nothing, since this switch, like most, does not wait for its save.
     await waitFor(() =>
-      expect(screen.getByText("Settings could not be saved: the settings database is read-only")).toBeTruthy(),
+      expect(screen.getByText("Error: Settings could not be saved: the settings database is read-only")).toBeTruthy(),
     );
     expect(autoSave().checked).toBe(true);
     expect(api.stored().values["auto_save"]).toBe(true);

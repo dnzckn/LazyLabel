@@ -168,9 +168,10 @@ export function AiTool({
         if (cancelled) return;
         setEncoding(false);
         notify({
-          severity: "error",
-          // Legacy's words (sam_single_view_manager.py:346-348), with the service's own reason,
-          // unflattened: "AI unavailable" tells a user to give up.
+          severity: "info",
+          // Legacy's words and plain 5 s message (sam_single_view_manager.py:346-348), with the
+          // service's own reason, unflattened: "AI unavailable" tells a user to give up.
+          durationMs: 5_000,
           message: `Error loading AI model: ${cause instanceof Error ? cause.message : String(cause)}`,
         });
       });
@@ -255,8 +256,9 @@ export function AiTool({
         // moved on from is worse than one that never appears. Legacy's words for both
         // (ai_segment_manager.py:425-427; main_window.py:2222).
         notify({
-          severity: "info",
+          severity: "warning",
           message: encoding ? "AI model is updating, please wait..." : "AI model not available",
+          durationMs: 2_000,
         });
         return;
       }
@@ -304,7 +306,8 @@ export function AiTool({
     (asEraser: boolean) => {
       const result = current.current;
       if (result === null) {
-        notify({ severity: "warning", message: "No AI segment preview to accept" });
+        // Legacy's plain message (ai_segment_manager.py:128).
+        notify({ severity: "info", message: "No AI segment preview to accept" });
         return;
       }
 

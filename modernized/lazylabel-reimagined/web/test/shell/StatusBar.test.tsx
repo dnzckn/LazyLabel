@@ -1,9 +1,9 @@
 /**
- * The status bar, and the line it draws against the notification system.
+ * The status bar's state: the open image and the server.
  *
- * Legacy's status bar is both the state display and the place transient messages go, on 3-, 5- and
- * 8-second timers. The split is the design here, so the tests check both halves of it: that state
- * is shown and never expires, and that the things which used to be status-bar messages are not.
+ * Legacy's status bar is both the state display and the place its messages go, on 3-, 5- and
+ * 8-second timers; the web's is too since CP-64, and `test/notifications/NotificationProvider.test
+ * .tsx` checks the messages. These check that the state is shown and never expires.
  */
 
 import { cleanup, render, screen } from "@testing-library/react";

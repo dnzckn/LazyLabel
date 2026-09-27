@@ -184,7 +184,7 @@ describe("RULE-083: a save with no segments deletes, as legacy's does", () => {
 
     enter();
 
-    expect(await screen.findByText("No segments to save.")).toBeTruthy();
+    expect(await screen.findByText("Warning: No segments to save.")).toBeTruthy();
     expect(deleteAnnotations).toHaveBeenCalledTimes(1);
   });
 

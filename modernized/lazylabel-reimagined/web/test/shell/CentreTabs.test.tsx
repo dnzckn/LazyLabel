@@ -253,12 +253,12 @@ describe("the sequence keys", () => {
     // (main_window.py:691, 3327), so they answer on every tab (4664-4706, 5040-5059, 5150-5168).
     mountWithProbe();
 
+    // One at a time: each replaces the last in the status bar, as legacy's do (CP-64).
     press(key("find_archetypes"));
-    press(key("next_flagged_frame"));
-    press(key("prev_suggested_frame"));
-
     expect(await screen.findByText("Build a timeline first")).toBeTruthy();
+    press(key("next_flagged_frame"));
     expect(await screen.findByText("No more flagged frames")).toBeTruthy();
+    press(key("prev_suggested_frame"));
     expect(await screen.findByText("No suggested frames")).toBeTruthy();
   });
 

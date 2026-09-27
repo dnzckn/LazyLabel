@@ -606,7 +606,7 @@ describe("Reassign Class IDs", () => {
 
     fireEvent.click(reassign());
 
-    expect(await screen.findByText("Dropped unused class name: bike")).toBeTruthy();
+    expect(await screen.findByText("Warning: Dropped unused class name: bike")).toBeTruthy();
     expect(document.querySelector(".notifications__detail")).toBeNull();
   });
 });

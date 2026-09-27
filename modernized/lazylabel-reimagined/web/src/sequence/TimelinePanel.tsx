@@ -613,8 +613,9 @@ export function TimelinePanel({
     if (first !== undefined && client !== undefined) {
       const [size, required] = await Promise.all([sizeOf(frame.key), sizeOf(first.key)]);
       if (size !== null && required !== null && (size.width !== required.width || size.height !== required.height)) {
+        // Legacy's plain message (main_window.py:3905-3908).
         notify({
-          severity: "warning",
+          severity: "info",
           message: `Cannot add reference: image is ${size.width}x${size.height} but reference requires ${required.width}x${required.height}`,
         });
         return;
@@ -713,8 +714,9 @@ export function TimelinePanel({
       });
     } catch (cause) {
       if (run === findRun.current) {
+        // Legacy's plain message (main_window.py:5148).
         notify({
-          severity: "error",
+          severity: "info",
           message: `Reference analysis failed: ${cause instanceof Error ? cause.message : String(cause)}`,
         });
       }

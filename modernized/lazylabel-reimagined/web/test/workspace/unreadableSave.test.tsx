@@ -159,7 +159,7 @@ describe("an image with no annotation file at all", () => {
 
     fireEvent.click(writeButton());
     await waitFor(() => expect(deleteAnnotations).toHaveBeenCalled());
-    expect(await screen.findByText("No segments to save.")).toBeTruthy();
+    expect(await screen.findByText("Warning: No segments to save.")).toBeTruthy();
     expect(saveAnnotations).not.toHaveBeenCalled();
   });
 });

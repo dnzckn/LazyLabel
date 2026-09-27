@@ -420,41 +420,6 @@ thead th {
   border: 1px solid var(--rule);
 }
 
-/* Over the panes, just above the status bar, where legacy shows its messages (status_bar.py:87-95).
-   In the flow they pushed the whole workspace down each time one arrived, moving the image under
-   the pointer mid-stroke. */
-.notifications {
-  position: fixed;
-  bottom: calc(25px + 0.5rem);
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 50;
-  width: min(40rem, calc(100vw - 2rem));
-  max-height: 50vh;
-  overflow: auto;
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-
-.notifications .banner {
-  margin: 0.5rem 0 0;
-  box-shadow: 0 2px 8px rgb(0 0 0 / 0.3);
-}
-
-.notifications p {
-  margin: 0;
-}
-
-/* Two class selectors, so it beats `.notifications p` above without reaching for !important. */
-.notifications .notifications__detail {
-  margin-top: 0.35rem;
-}
-
-.notifications__count {
-  color: var(--muted);
-}
-
 .health {
   display: grid;
   grid-template-columns: max-content auto;
@@ -700,8 +665,7 @@ fieldset input[type="text"] {
   gap: 0.25rem 1rem;
 }
 
-/* Continuous state, pinned below the content. Events belong in .notifications, which is the split
-   legacy's status bar does not make -- and why its "Deleted: ..." notice expires. */
+/* Pinned below the content, with legacy's messages in its middle (CP-64). */
 .status-bar {
   flex: none;
   display: flex;
@@ -718,14 +682,45 @@ fieldset input[type="text"] {
   overflow: hidden;
 }
 
-/* The middle, stretched and centred, as legacy's message label is. */
-.status-bar__image {
+/* The middle, stretched and centred, as legacy's message label is (status_bar.py:119-128). */
+.status-bar__messages {
   flex: 1;
+  min-width: 0;
+  display: flex;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.status-bar__message {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
-  text-align: center;
+}
+
+/* Legacy's permanent label, right of the messages (130-136). */
+.status-bar__image {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
   color: var(--muted);
+}
+
+/* Legacy's message colours by kind, dark and light (status_bar.py:86-95, 159-213). */
+.status-bar__message--info {
+  color: var(--message);
+}
+
+.status-bar__message--success {
+  color: var(--good);
+}
+
+.status-bar__message--warning {
+  color: var(--caution);
+}
+
+.status-bar__message--error {
+  color: var(--bad);
 }
 
 .status-bar__image--saved {

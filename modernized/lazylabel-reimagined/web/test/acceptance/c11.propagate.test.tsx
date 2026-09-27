@@ -307,7 +307,7 @@ describe("SP-58: a propagated frame emptied by hand", () => {
     fireEvent.keyDown(document, { key: "Enter", code: "Enter" });
 
     // It had no file, so legacy's words for nothing deleted.
-    expect(await screen.findByText("No segments to save.")).toBeTruthy();
+    expect(await screen.findByText("Warning: No segments to save.")).toBeTruthy();
     expect(deleted).toEqual(["frames/f02.png"]);
     expect(saved).not.toContain("frames/f02.png");
     await waitFor(() => expect(status()).toMatch(/frames\/f02\.png — 0 segments, saved/));

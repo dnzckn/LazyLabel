@@ -311,7 +311,7 @@ describe("with Auto-Save on, leaving an image saves it CHANGED OR NOT, as legacy
 
     await waitFor(() => expect(status()).toMatch(/frames\/c\.png/));
     expect(events).toEqual(["load frames/b.png", "delete frames/b.png", "load frames/c.png"]);
-    expect(await screen.findByText("No segments to save.")).toBeTruthy();
+    expect(await screen.findByText("Warning: No segments to save.")).toBeTruthy();
   });
 
   it("skips the write, says so, and moves on when someone else changed the untouched image's file", async () => {
@@ -329,7 +329,7 @@ describe("with Auto-Save on, leaving an image saves it CHANGED OR NOT, as legacy
     next();
 
     await waitFor(() => expect(status()).toMatch(/frames\/b\.png/));
-    expect(await screen.findByText("Not saved: a.npz changed since you loaded it")).toBeTruthy();
+    expect(await screen.findByText("Warning: Not saved: a.npz changed since you loaded it")).toBeTruthy();
     // One conditional attempt, never the unconditional "Save anyway".
     expect(saveAnnotations).toHaveBeenCalledTimes(1);
     expect(saveAnnotations.mock.calls[0]![2]["expectedRevisions"]).toEqual({ NPZ: "rev-A" });
@@ -466,7 +466,7 @@ describe("in the Multi view, every move saves BOTH sides first (CP-67)", () => {
     expect(events.slice(0, 2)).toEqual(["delete frames/a.png", "save frames/b.png"]);
     expect(deleteAnnotations.mock.calls.at(-1)!.slice(0, 2)).toEqual(["default", "frames/a.png"]);
     expect(screen.queryByText(/^Deleted:/)).toBeNull();
-    expect(screen.queryByText("No segments to save.")).toBeNull();
+    expect(screen.queryByText("Warning: No segments to save.")).toBeNull();
   });
 
   it("saves both at either end of the list too, before legacy's words, and moves nothing", async () => {
@@ -539,10 +539,9 @@ describe("in the Multi view, every move saves BOTH sides first (CP-67)", () => {
 
     next();
 
-    // One notice for each side it could not save, each naming its image.
-    expect(await screen.findAllByText("Error saving: the disk is full")).toHaveLength(2);
-    const named = [...document.querySelectorAll(".notifications__detail")].map((each) => each.textContent);
-    expect(named).toEqual(expect.arrayContaining(["a.png", "b.png"]));
+    // One notice for each side it could not save, the second replacing the first in the status
+    // bar as legacy's loop does (CP-64), each naming its image in its tooltip.
+    expect((await screen.findByText("Error: Error saving: the disk is full")).title).toMatch(/b\.png/);
     // Both were tried, as legacy's loop tries each viewer, and nothing moved.
     expect(saveAnnotations.mock.calls.map((call) => call[1])).toEqual(["frames/a.png", "frames/b.png"]);
     expect(events).toEqual([]);

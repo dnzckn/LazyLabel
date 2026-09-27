@@ -16,7 +16,7 @@ import type { WireDatasetImage, WireSegment } from "@lazylabel/contracts";
 import { CAPABILITIES } from "../capabilities.js";
 import { DatasetBrowser, type DatasetBrowserHandle } from "../dataset/DatasetBrowser.jsx";
 import { ExportFormats } from "../dataset/ExportFormats.jsx";
-import { NotificationHost, useNotifications } from "../notifications/NotificationProvider.jsx";
+import { useNotifications } from "../notifications/NotificationProvider.jsx";
 import { OpenImageView } from "../workspace/OpenImageView.jsx";
 import { AdjustmentsPanel } from "../workspace/AdjustmentsPanel.jsx";
 import { ClassTable } from "../workspace/ClassTable.jsx";
@@ -291,7 +291,6 @@ export function App({ client }: { readonly client: ApiClient }): ReactNode {
     // A <div>, not a second <main>: the image pane is the page's main landmark, and a <main>
     // inside a <main> is invalid and gives a screen reader two regions called main.
     <div className="app" inert={showHotkeys || showSettings || showAbout}>
-      <NotificationHost />
       {/* Renders nothing. It asks `onClose` whether closing this tab would lose work, and arms the
           browser's own dialog when it would -- decision 7's last silent path. */}
       <CloseGuard />
@@ -579,8 +578,7 @@ export function App({ client }: { readonly client: ApiClient }): ReactNode {
         }
       />
 
-      {/* Last, and outside the scrolling content: continuous state, never events. What used to be a
-          status-bar message is a notification now, which is what stops a destructive one expiring. */}
+      {/* Last, and outside the scrolling content, as legacy's: its messages show here too (CP-64). */}
       <StatusBar
         image={imageState}
         cropped={crop !== null}

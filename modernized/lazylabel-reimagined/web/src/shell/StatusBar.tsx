@@ -1,15 +1,11 @@
 /**
- * Continuous state: what is open, whether it is saved, and what the server can do.
+ * Legacy's messages, and continuous state: what is open, whether it is saved, what the server can do.
  *
- * THE SPLIT FROM NOTIFICATIONS IS THE POINT. Legacy's status bar is both things at once — it shows
- * the device and the ready message, and it is also where `show_message`, `show_error_message` and
- * `show_success_message` put transient notices on 5-, 8- and 3-second timers. That is why the most
- * destructive act in the application announces itself in a widget designed to forget: the
- * announcement and the state share a label, so the announcement inherits the label's habits.
- *
- * Here they are two things. Events go to the notification system and the consequential ones stay
- * until dismissed. State lives here and never expires, because state is not an event — an image is
- * either saved or it is not, and a timer has no opinion about that.
+ * MESSAGES SHOW HERE, as in legacy: its NotificationManager puts every message in the status bar's
+ * centre label on a 3, 5 or 8 second timer, blank at rest (L ui/managers/notification_manager.py:
+ * 11-74; L ui/widgets/status_bar.py:119-128, 159-232). The web showed them in a stack of banners of
+ * its own until CP-64. The summary of the open image sits right of it, in legacy's permanent label
+ * (130-136), which legacy never writes to.
  *
  * THE DEVICE IS THE SERVER'S. Legacy asks `torch.cuda.is_available()` in the same process as the
  * window, so its answer is about the machine the user is sitting at. Here the model runs somewhere
@@ -19,6 +15,7 @@
 
 import type { ReactNode } from "react";
 
+import { NotificationHost, useOptionalNotifications } from "../notifications/NotificationProvider.jsx";
 import { summarize, type ImageState } from "../workspace/saveState.js";
 
 export interface Health {
@@ -71,6 +68,7 @@ export function StatusBar({
   theme,
 }: StatusBarProps): ReactNode {
   const ai = health === null ? null : describeAi(health.ai);
+  const message = useOptionalNotifications()?.current ?? null;
   return (
     <footer className="status-bar" aria-label="Status">
       {/* Far left, where legacy puts it, and drawn as legacy's pill: the knob shows the theme IN
@@ -90,8 +88,11 @@ export function StatusBar({
         </button>
       )}
 
-      {/* Centred and coloured, where legacy shows "Loaded: ..." -- green once saved, orange while
-          there is unsaved work (status_bar.py:87-95). */}
+      {/* Legacy's message label: stretched, centred, blank at rest (status_bar.py:119-128). */}
+      <span className="status-bar__messages">{message !== null && <NotificationHost />}</span>
+
+      {/* The open image in legacy's permanent label (130-136): green once saved, orange while there
+          is unsaved work. */}
       <span className={`status-bar__image${imageTone(image)}`}>{summarize(image, cropped)}</span>
 
       {healthError != null ? (

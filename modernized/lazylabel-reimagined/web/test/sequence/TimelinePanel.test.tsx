@@ -595,10 +595,12 @@ describe("building one", () => {
     // "N frames, M references" line (SP-57).
     show();
 
-    build("0", "4");
-
+    build("0", "4", { references: false });
     expect(await screen.findByText("Timeline built: 5 frames")).toBeTruthy();
-    expect(screen.getByText(/^References:/).textContent).toBe("References: Frames: 2, 5 ★");
+
+    // Marking them says so next, in the status bar's one line (CP-64).
+    fireEvent.click(screen.getByRole("button", { name: "+ All Labeled" }));
+    await waitFor(() => expect(screen.getByText(/^References:/).textContent).toBe("References: Frames: 2, 5 ★"));
     expect(screen.queryByText(/5 frames, 2 references/)).toBeNull();
   });
 });
@@ -1166,14 +1168,14 @@ describe("the frame keys", () => {
     await waitFor(() => expect(cells().length).toBeGreaterThan(0));
     const before = current();
 
-    press("next_reference_frame");
-    press("find_archetypes");
-
-    expect(current()).toBe(before);
     // Legacy's keys answer on every tab, over the timeline torn down on leaving (SP-56): a step key
-    // says there is nothing to step to, and Find Archetypes asks for a timeline.
+    // says there is nothing to step to, and Find Archetypes asks for a timeline. One message at a
+    // time, as the status bar shows them (CP-64).
+    press("next_reference_frame");
     expect(await screen.findByText("No reference frames")).toBeTruthy();
+    press("find_archetypes");
     expect(await screen.findByText("Build a timeline first")).toBeTruthy();
+    expect(current()).toBe(before);
   });
 });
 

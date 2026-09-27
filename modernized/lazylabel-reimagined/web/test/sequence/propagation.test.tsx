@@ -11,6 +11,7 @@
  */
 
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { useEffect } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { createFinalMaskTensor, type MaskTensor } from "@lazylabel/annotation-formats";
@@ -31,7 +32,11 @@ import type {
   WirePropagationStart,
 } from "../../src/api/client.js";
 import { HotkeyProvider } from "../../src/hotkeys/HotkeyProvider.jsx";
-import { NotificationHost, NotificationProvider } from "../../src/notifications/NotificationProvider.jsx";
+import {
+  NotificationHost,
+  NotificationProvider,
+  useNotifications,
+} from "../../src/notifications/NotificationProvider.jsx";
 import { Panel } from "../../src/shell/Panel.jsx";
 import { Timeline, buildRange } from "./harness.jsx";
 import { SequenceActiveContext } from "../../src/sequence/sequenceActive.js";
@@ -41,6 +46,21 @@ import { SettingsProvider } from "../../src/settings/SettingsProvider.jsx";
 import type { Frame } from "../../src/sequence/timeline.js";
 
 afterEach(cleanup);
+
+/**
+ * Every message the status bar showed, in order, with its tooltip's detail on a second line. It
+ * shows one line at a time, and the next replaces it, as legacy's does (CP-64), so what a run said
+ * along the way is read from here.
+ */
+const said: string[] = [];
+
+function MessageLog(): null {
+  const { current } = useNotifications();
+  useEffect(() => {
+    if (current !== null) said.push(current.detail === undefined ? current.message : `${current.message}\n${current.detail}`);
+  }, [current]);
+  return null;
+}
 
 const MASK: WireMask = { height: 2, width: 2, box: [0, 0, 1, 1], data: "AQE=" };
 /** One annotation on a reference frame: a square the user drew. */
@@ -179,9 +199,11 @@ function fakeClient(script: {
 
 function show(fake: Fake, frames: readonly Frame[] = FRAMES) {
   const onScores = vi.fn();
+  said.length = 0;
   render(
     <NotificationProvider>
       <NotificationHost />
+      <MessageLog />
       <SettingsProvider client={fake.client}>
         <HotkeyProvider bindings={defaultSettings().hotkeys}>
           <PropagationControl client={fake.client} frames={frames} onScores={onScores} />
@@ -238,9 +260,10 @@ describe("Keep Flagged Masks and Skip Labeled (RULE-060, RULE-081)", () => {
 
     fireEvent.click(propagate());
 
-    expect((await screen.findByRole("alert")).textContent).toMatch(
-      /Skip Labeled could not read which frames have labels.*the dataset is unreachable/,
-    );
+    // The line, and the reason in its tooltip: the status bar holds one line (CP-64).
+    const said = await screen.findByRole("alert");
+    expect(said.textContent).toBe("Error: Skip Labeled could not read which frames have labels");
+    expect(said.title).toMatch(/the dataset is unreachable/);
     expect(fake.started).toHaveLength(0);
   });
 
@@ -280,7 +303,8 @@ describe("Keep Flagged Masks and Skip Labeled (RULE-060, RULE-081)", () => {
 
     fireEvent.click(propagate());
 
-    expect((await screen.findByRole("alert")).textContent).toMatch(/SAM 2 video predictor not available/);
+    // Legacy's plain message (main_window.py:4059), no "Error: " before it (CP-64).
+    expect((await screen.findByRole("status")).textContent).toBe("SAM 2 video predictor not available");
     expect(fake.started).toHaveLength(0);
   });
 
@@ -590,8 +614,9 @@ describe("starting one", () => {
 
     fireEvent.click(propagate());
 
-    expect(await screen.findByText(/no annotations to carry/)).toBeTruthy();
+    // Said in the status bar, which frame and why in its tooltip; the run replaces it there (CP-64).
     await waitFor(() => expect(fake.started).toHaveLength(1));
+    expect(said.find((each) => each.startsWith("1 reference frames could not seed\n"))).toMatch(/no annotations to carry/);
     expect(fake.started[0]!.objects).toHaveLength(1);
   });
 
@@ -603,9 +628,9 @@ describe("starting one", () => {
 
     fireEvent.click(propagate());
 
-    // Legacy's words for it (main_window.py:4294-4298), with which frames and why beneath.
-    expect(await screen.findByText("No valid segments in reference frames")).toBeTruthy();
-    expect(screen.getByText(/no annotations to carry/)).toBeTruthy();
+    // Legacy's words and plain message for it (main_window.py:4294-4298), with which frames and
+    // why in its tooltip.
+    expect((await screen.findByText("No valid segments in reference frames")).title).toMatch(/no annotations to carry/);
     expect(fake.started).toHaveLength(0);
   });
 
@@ -809,8 +834,8 @@ describe("watching it", () => {
 
     fireEvent.click(propagate());
 
+    // Legacy's plain message, as its status bar shows it (CP-64).
     expect(await screen.findByText("Propagation error: CUDA out of memory")).toBeTruthy();
-    expect(screen.getByRole("alert").textContent).toContain("CUDA out of memory");
   });
 
   it("surfaces a 410 rather than quietly resuming from a later cursor", async () => {
@@ -824,9 +849,8 @@ describe("watching it", () => {
 
     fireEvent.click(propagate());
 
-    await waitFor(() =>
-      expect(screen.getByRole("alert").textContent).toMatch(/no longer buffered/),
-    );
+    // Legacy's plain "Propagation error: ..." message (main_window.py:4654; CP-64).
+    await waitFor(() => expect(screen.getByRole("status").textContent).toMatch(/^Propagation error: .*no longer buffered/));
   });
 });
 
@@ -1018,6 +1042,13 @@ describe("RULE-056: a propagation's unsaved frames, and what throws them away", 
     const started: WirePropagationStart[] = [];
     /** Every request Save All sent, with the image it was for. */
     const saved: { key: string; request: WireSaveRequest }[] = [];
+    const leftOut =
+      run.leftOut === undefined
+        ? {}
+        : {
+            skipped: run.leftOut.map((source) => ({ source, reason: "its size 9x9 is not the reference's 8x8" })),
+            referenceSize: { width: 8, height: 8 },
+          };
     const client = {
       getSettings: async () => {
         const defaults = defaultSettings();
@@ -1051,10 +1082,12 @@ describe("RULE-056: a propagation's unsaved frames, and what throws them away", 
         columns: [],
         images: FOLDER,
       }),
+      // What the run left out is known while it runs, before it completes, as legacy says so
+      // before it propagates (main_window.py:4149-4162).
       startPropagation: async (request: WirePropagationStart) => {
         started.push(request);
         if (run.slowStart === true) await new Promise((resolve) => setTimeout(resolve, 20));
-        return job({ state: "running" });
+        return job({ state: "running", ...leftOut });
       },
       propagationState: async () =>
         job({
@@ -1064,15 +1097,7 @@ describe("RULE-056: a propagation's unsaved frames, and what throws them away", 
           results: run.results ?? [
             { source: "frames/f02.png", objectId: 1, mask: MASK, confidence: 0.999 },
           ],
-          ...(run.leftOut === undefined
-            ? {}
-            : {
-                skipped: run.leftOut.map((source) => ({
-                  source,
-                  reason: "its size 9x9 is not the reference's 8x8",
-                })),
-                referenceSize: { width: 8, height: 8 },
-              }),
+          ...leftOut,
         }),
       saveAnnotations: async (_p: string, key: string, request: WireSaveRequest) => {
         saved.push({ key, request });
@@ -1099,6 +1124,7 @@ describe("RULE-056: a propagation's unsaved frames, and what throws them away", 
       return (
         <NotificationProvider>
           <NotificationHost />
+          <MessageLog />
           <SettingsProvider client={client}>
             <HotkeyProvider bindings={defaultSettings().hotkeys}>
               {inPanel ? <Panel title="Sequence">{placed}</Panel> : placed}
@@ -1107,6 +1133,7 @@ describe("RULE-056: a propagation's unsaved frames, and what throws them away", 
         </NotificationProvider>
       );
     };
+    said.length = 0;
     const result = render(tree());
     // The ordinary save's counts, as the shell hands them down from the store.
     return {
@@ -1685,11 +1712,10 @@ describe("RULE-056: a propagation's unsaved frames, and what throws them away", 
 
     await waitFor(() => expect(f03().getAttribute("aria-label")).toMatch(/skipped$/));
     expect(f03().style.backgroundColor).toBe("rgb(139, 69, 19)");
-    expect(
-      screen.getByText(
-        "1 frames have different dimensions (reference is 8x8) and will be skipped during propagation",
-      ),
-    ).toBeTruthy();
+    // Said in the status bar, and replaced there by what the run said next, as legacy's is.
+    expect(said).toContain(
+      "1 frames have different dimensions (reference is 8x8) and will be skipped during propagation",
+    );
   });
 
   it("keeps a left-out frame Skipped through the next run, and says so once per timeline (SP-25)", async () => {
@@ -1707,8 +1733,7 @@ describe("RULE-056: a propagation's unsaved frames, and what throws them away", 
     await waitFor(() => expect(f02().getAttribute("aria-label")).toMatch(/propagated$/), { timeout: 3000 });
 
     expect(f03().getAttribute("aria-label")).toMatch(/skipped$/);
-    expect(screen.getAllByText(/have different dimensions/)).toHaveLength(1);
-    expect(screen.queryByText(/×2/)).toBeNull();
+    expect(said.filter((each) => /have different dimensions/.test(each))).toHaveLength(1);
   });
 
   it("asks before the TAB closes on propagated frames", async () => {

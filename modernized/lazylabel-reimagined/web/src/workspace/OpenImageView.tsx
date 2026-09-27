@@ -347,7 +347,6 @@ function OpenedImage({
           severity: "warning",
           message:
             `${outcome.vanished} annotation${outcome.vanished === 1 ? " was" : "s were"} removed completely`,
-          irreversible: false,
         });
       }
     },

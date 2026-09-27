@@ -322,7 +322,8 @@ export function PropagationControl({
       }
       if (aborted()) return;
       if (picked !== undefined && !picked.videoCapable) {
-        notify({ severity: "error", message: "SAM 2 video predictor not available" });
+        // Legacy's plain message (main_window.py:4059), as the status bar shows it (CP-64).
+        notify({ severity: "info", message: "SAM 2 video predictor not available" });
         setLoading(false);
         return;
       }
@@ -377,7 +378,8 @@ export function PropagationControl({
     // (`main_window.py:4294-4298`); with some, how many, the frames and why in the detail.
     const unusable = seeds.skipped.map((each) => `${each.key.split("/").pop()}: ${each.reason}`).join("; ");
     if (seeds.objects.length === 0) {
-      notify({ severity: "error", message: "No valid segments in reference frames", detail: unusable });
+      // Legacy's plain message (main_window.py:4295, 4334).
+      notify({ severity: "info", message: "No valid segments in reference frames", detail: unusable });
     } else if (seeds.skipped.length > 0) {
       notify({ severity: "warning", message: `${seeds.skipped.length} reference frames could not seed`, detail: unusable });
     }
@@ -678,7 +680,8 @@ export function PropagationControl({
   }, [finished]);
   const failure = progress.error;
   useEffect(() => {
-    if (failure !== null) notify({ severity: "error", message: `Propagation error: ${failure}` });
+    // Legacy's plain message (main_window.py:4654).
+    if (failure !== null) notify({ severity: "info", message: `Propagation error: ${failure}` });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [failure]);
   const abort = (): void => {

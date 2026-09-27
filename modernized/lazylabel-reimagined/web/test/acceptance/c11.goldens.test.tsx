@@ -44,17 +44,33 @@ import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { useEffect } from "react";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { defaultSettings } from "@lazylabel/settings-schema";
 
 import type { ApiClient, WirePropagationFrame, WirePropagationJob } from "../../src/api/client.js";
 import { HotkeyProvider } from "../../src/hotkeys/HotkeyProvider.jsx";
-import { NotificationHost, NotificationProvider } from "../../src/notifications/NotificationProvider.jsx";
+import {
+  NotificationHost,
+  NotificationProvider,
+  useNotifications,
+} from "../../src/notifications/NotificationProvider.jsx";
 import { Timeline, buildRange } from "../sequence/harness.jsx";
 import { SettingsProvider } from "../../src/settings/SettingsProvider.jsx";
 
 afterEach(cleanup);
+
+/** Every message the status bar showed, in order: it shows one at a time, as legacy's does. */
+const said: string[] = [];
+
+function MessageLog(): null {
+  const { current } = useNotifications();
+  useEffect(() => {
+    if (current !== null) said.push(current.message);
+  }, [current]);
+  return null;
+}
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const GOLDENS = path.join(HERE, "..", "..", "..", "inference", "tests", "goldens", "propagation");
@@ -308,9 +324,11 @@ function replay(golden: Golden) {
       },
     } as unknown as ApiClient;
 
+    said.length = 0;
     render(
       <NotificationProvider>
         <NotificationHost />
+        <MessageLog />
         <SettingsProvider client={client}>
           <HotkeyProvider bindings={defaultSettings().hotkeys}>
             <Timeline
@@ -436,7 +454,11 @@ for (const name of ["synthetic-shapes", "synthetic-shapes-streaming"]) {
       );
       await waitFor(() => expect(roles()).toEqual(scenario.saveAll.timeline));
       // And says what legacy said, word for word: its engine's count first, the frames written after.
-      for (const notice of scenario.saveAll.notices) expect(await screen.findByText(notice)).toBeTruthy();
+      // One line at a time in the status bar, each replacing the last, as legacy's does (CP-64).
+      expect(await screen.findByText(scenario.saveAll.notices.at(-1)!)).toBeTruthy();
+      const at = scenario.saveAll.notices.map((notice) => said.lastIndexOf(notice));
+      expect(at.every((index) => index >= 0), `said: ${said.join(" | ")}`).toBe(true);
+      expect(at).toEqual([...at].sort((a, b) => a - b));
     }, PER_TEST);
   });
 }

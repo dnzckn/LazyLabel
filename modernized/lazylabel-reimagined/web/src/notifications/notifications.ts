@@ -1,25 +1,13 @@
 /**
- * What the app tells the user after it does something, and for how long.
+ * What the app tells the user after it does something, and for how long: legacy's status bar
+ * messages (CONTROL_PARITY.md CP-64).
  *
- * Legacy has one notification style and uses it for everything, which is how the single most
- * destructive act in the application — deleting every annotation file for an image, with no prompt
- * and no undo (RULE-083) — is announced as a NEUTRAL, TRANSIENT notice reading
- * `Deleted: cat_coco.json, cat.npz, cat.txt`. It looks exactly like `Saved: cat.npz, cat.txt` and
- * it disappears on a timer. A user who steps away has no way to learn it happened.
- *
- * Two rules follow, and they are the whole module:
- *
- *   1. SEVERITY TRACKS CONSEQUENCE, not tone. Deleting files is not neutral because its message is
- *      calmly worded.
- *   2. ANYTHING THE USER MIGHT NEED TO ACT ON STAYS until dismissed. A timer is for confirmations
- *      the user can afford to miss. Nothing irreversible is in that category, and neither is any
- *      failure.
- *
- * A third comes from the same family of defects. Legacy reports `Multi-view annotations saved!`
- * from a path that may have only DELETED files — the message describes the intent rather than the
- * outcome. So notifications here are constructed from results, and `summarizeSave` is the one
- * place that turns a save response into words, rather than each caller writing its own optimistic
- * sentence.
+ * Legacy has no notification surface of its own. Its NotificationManager puts every message in the
+ * status bar's centre label (L ui/managers/notification_manager.py:11-74), one at a time: a new one
+ * replaces the one showing and restarts the timer, and when the timer runs out the label goes blank
+ * (L ui/widgets/status_bar.py:159-232). The web stacked boxed banners above the status bar instead,
+ * kept failures, warnings and deletions until dismissed, and counted repeats. The owner asked on
+ * 2026-09-25 for every feature to behave as in the desktop app, so this is legacy's again.
  */
 
 export type Severity = "info" | "success" | "warning" | "error";
@@ -28,86 +16,53 @@ export interface Notification {
   readonly id: string;
   readonly severity: Severity;
   readonly message: string;
-  /** What the user can do about it. Shown with the message, never instead of it. */
+  /** More than the line says: the message's tooltip, never its text. */
   readonly detail?: string;
-  /**
-   * How long before it clears itself, or null to stay until dismissed.
-   *
-   * Never set directly by callers — `create` derives it, so "this one should linger" cannot be
-   * decided case by case and then forgotten on the one path that matters.
-   */
+  /** How long it shows, or null to show until the next message replaces it. */
   readonly autoDismissMs: number | null;
-  /** Repeats of the same message, coalesced rather than stacked. */
-  readonly count: number;
 }
 
-/** Long enough to read a short confirmation without watching for it. */
-export const TRANSIENT_MS = 5_000;
+/**
+ * Legacy's timers, by kind: `_show_notification` 3 s, success 3 s, warning 5 s, error 8 s
+ * (L ui/main_window.py:2014-2028; L ui/managers/notification_manager.py:18-22).
+ */
+export const DURATION_MS: Readonly<Record<Severity, number>> = {
+  info: 3_000,
+  success: 3_000,
+  warning: 5_000,
+  error: 8_000,
+};
 
 export interface CreateOptions {
   readonly severity: Severity;
   readonly message: string;
   readonly detail?: string;
   /**
-   * True when this describes a change that cannot be undone from inside the app.
-   *
-   * Set it on the act, not on the wording. A cheerful sentence about a permanent deletion is still
-   * about a permanent deletion.
+   * The duration a legacy call passes itself, where it passes one, such as the 2 s of "AI model is
+   * updating, please wait...". 0 shows it until the next message, as legacy's 0 does
+   * (L ui/widgets/status_bar.py:169-171).
    */
-  readonly irreversible?: boolean;
+  readonly durationMs?: number;
 }
 
 export function create(id: string, options: CreateOptions): Notification {
-  const sticky =
-    options.severity === "error" || options.severity === "warning" || options.irreversible === true;
+  const duration = options.durationMs ?? DURATION_MS[options.severity];
 
   return {
     id,
     severity: options.severity,
     message: options.message,
     ...(options.detail === undefined ? {} : { detail: options.detail }),
-    autoDismissMs: sticky ? null : TRANSIENT_MS,
-    count: 1,
+    autoDismissMs: duration > 0 ? duration : null,
   };
 }
 
 /**
- * Add a notification, coalescing an immediate repeat instead of stacking it.
- *
- * The annotator's loop is click, accept, next, so the same confirmation can arrive dozens of times
- * a minute. Stacking them buries everything else — including the one warning that mattered — under
- * identical lines. Coalescing only applies to the MOST RECENT entry: an older identical message
- * that something else has since been said after is a separate event, and collapsing them would
- * claim two things happened at one moment.
+ * The line the status bar shows: legacy's "Error: " and "Warning: " before those two kinds, and the
+ * message as it is before the others (L ui/widgets/status_bar.py:173-213).
  */
-export function push(
-  existing: readonly Notification[],
-  notification: Notification,
-): readonly Notification[] {
-  const last = existing[existing.length - 1];
-
-  if (
-    last !== undefined
-    && last.severity === notification.severity
-    && last.message === notification.message
-    && last.detail === notification.detail
-  ) {
-    const merged: Notification = { ...last, count: last.count + 1 };
-    return [...existing.slice(0, -1), merged];
-  }
-
-  return [...existing, notification];
+export function statusText(notification: Notification): string {
+  if (notification.severity === "error") return `Error: ${notification.message}`;
+  if (notification.severity === "warning") return `Warning: ${notification.message}`;
+  return notification.message;
 }
-
-export function dismiss(
-  existing: readonly Notification[],
-  id: string,
-): readonly Notification[] {
-  return existing.filter((entry) => entry.id !== id);
-}
-
-/** Everything that will not clear itself, which is what a "dismiss all" should act on. */
-export function sticky(existing: readonly Notification[]): readonly Notification[] {
-  return existing.filter((entry) => entry.autoDismissMs === null);
-}
-

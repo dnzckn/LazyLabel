@@ -236,18 +236,16 @@ export function summarize(image: ImageState | null, cropped = false): string {
  * "Deleted: a_coco.json, a.npz, a.txt" -- or the warning "No segments to save." when none of the
  * seven existed.
  *
- * Kept on screen until dismissed, where legacy's fades after three seconds: this app's rule for
- * anything irreversible (`notifications.ts`), and deleting a file is the case that rule was written
- * for. The words are legacy's.
+ * The words and the timer are legacy's: an ordinary 3 s message (CP-64). It was kept until
+ * dismissed until then.
  */
 export function deletionNotice(deleted: readonly string[]): {
   readonly severity: "info" | "warning";
   readonly message: string;
-  readonly irreversible?: boolean;
 } {
   if (deleted.length === 0) return { severity: "warning", message: "No segments to save." };
   const names = deleted.map((key) => key.split("/").pop() ?? key);
-  return { severity: "info", message: `Deleted: ${names.join(", ")}`, irreversible: true };
+  return { severity: "info", message: `Deleted: ${names.join(", ")}` };
 }
 
 /**

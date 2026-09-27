@@ -239,7 +239,6 @@ group("what a save that deleted says (RULE-083)", () => {
     expect(deletionNotice(["frames/a_coco.json", "frames/a.npz", "frames/a.txt"])).toEqual({
       severity: "info",
       message: "Deleted: a_coco.json, a.npz, a.txt",
-      irreversible: true,
     });
   });
 
