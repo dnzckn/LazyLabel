@@ -366,11 +366,13 @@ export function PropagationControl({
             message: "Skip Labeled could not read which frames have labels",
             detail: cause instanceof Error ? cause.message : String(cause),
           });
+          setLoading(false);
           return;
         }
       }
-    } finally {
+    } catch (cause) {
       if (!aborted()) setLoading(false);
+      throw cause;
     }
     if (aborted()) return;
 
@@ -412,6 +414,7 @@ export function PropagationControl({
     if (seeds.objects.length === 0) {
       // Every reference failed. Starting anyway is what legacy does, and it writes an empty mask
       // over every frame in the sequence -- work that looks like work and undoes the user's.
+      setLoading(false);
       return;
     }
 
@@ -432,7 +435,11 @@ export function PropagationControl({
       ...(Number.isFinite(window) && window > 0 ? { window } : {}),
       ...(model === "" ? {} : { model }),
       streaming,
-    });
+    }, () => !aborted());
+    // "Starting..." until the job has answered, as legacy's button reads Abort from the press on
+    // (SP-53). It read Propagate while the job was being started, and a press then started a
+    // second run beside the first (found end to end, 2026-09-26). A press now aborts it (SP-40).
+    if (!aborted()) setLoading(false);
   }, [
     client,
     frames,

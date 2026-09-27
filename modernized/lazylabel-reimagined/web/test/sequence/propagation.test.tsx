@@ -344,6 +344,36 @@ describe("Keep Flagged Masks and Skip Labeled (RULE-060, RULE-081)", () => {
     expect(propagate().textContent).toBe("Propagate");
   });
 
+  it("reads Starting... until the job answers, and a press then stops that job (SP-40, SP-53)", async () => {
+    // Legacy's button is never Propagate again before it reads Abort (sequence_widget.py:629-647).
+    // The web's read Propagate while the job was being started, and a press there started a second
+    // run beside the first (found end to end, 2026-09-26).
+    let answer: (started: WirePropagationJob) => void = () => undefined;
+    const fake = fakeClient({});
+    const client = {
+      ...fake.client,
+      startPropagation: (request: WirePropagationStart) => {
+        fake.started.push(request);
+        return new Promise((resolve) => {
+          answer = resolve;
+        });
+      },
+    } as unknown as ApiClient;
+    show({ ...fake, client });
+
+    fireEvent.click(propagate());
+    await waitFor(() => expect(fake.started).toHaveLength(1));
+    fireEvent.click(screen.getByRole("button", { name: "Starting..." }));
+
+    expect(await screen.findByText("Propagation cancelled")).toBeTruthy();
+    await act(async () => {
+      answer(job({ id: "job-1", state: "running" }));
+    });
+    await waitFor(() => expect(fake.cancels).toEqual(["job-1"]));
+    expect(fake.started).toHaveLength(1);
+    expect(propagate().textContent).toBe("Propagate");
+  });
+
   it("does not need the listing at all once Skip Labeled is off", async () => {
     const fake = fakeClient({
       listing: () => {

@@ -93,7 +93,11 @@ function combine(
 
 export interface UsePropagation {
   readonly progress: PropagationProgress;
-  readonly start: (request: WirePropagationStart) => Promise<void>;
+  /**
+   * Start a job. One that `wanted` no longer answers true for once the service has started it is
+   * stopped rather than watched: its start was aborted while the request was in flight (SP-40).
+   */
+  readonly start: (request: WirePropagationStart, wanted?: () => boolean) => Promise<void>;
   readonly cancel: () => Promise<void>;
   /** Forget a finished job, so the panel returns to its idle state. */
   readonly reset: () => void;
@@ -149,14 +153,19 @@ export function usePropagation(client: ApiClient): UsePropagation {
   }, []);
 
   const start = useCallback(
-    async (request: WirePropagationStart) => {
+    async (request: WirePropagationStart, wanted?: () => boolean) => {
       cursor.current = 0;
       byFrame.current = new Map();
       maskFrames.current = new Map();
       position.current = new Map(request.sequence.map((key, index) => [key, index]));
 
       try {
-        absorb(await client.startPropagation(request));
+        const job = await client.startPropagation(request);
+        if (wanted !== undefined && !wanted()) {
+          await client.cancelPropagation(job.id).catch(() => undefined);
+          return;
+        }
+        absorb(job);
       } catch (cause) {
         setProgress({ ...IDLE, error: messageOf(cause) });
       }
