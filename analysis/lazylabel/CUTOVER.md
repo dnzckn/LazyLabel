@@ -71,10 +71,11 @@ Each of these is checkable, and none of them is an opinion.
 - [x] **The live differential suites have been run with real checkpoints**, not just CI. They skip
       themselves when no checkpoint is configured, so a green CI run says nothing about them —
       `PROGRESS.md` has the command and the expected counts. Met 2026-09-25 with all three
-      checkpoints on CPython 3.12: 650 passed, 0 skipped. Run them again if the inference service
-      changes before the switch. It changed on 2026-09-26 (JPEG frames, frames of another size,
-      model Load and Unload, the AI setup), so they are due again (`PROGRESS.md`, "What to do
-      next").
+      checkpoints on CPython 3.12: 650 passed, 0 skipped. The inference service changed on
+      2026-09-26 (JPEG frames, frames of another size, model Load and Unload, the AI setup), and
+      they were run again on 2026-09-27, all three checkpoints set and the owner's service
+      stopped for it: 820 passed, 0 skipped. Run them again if the inference service changes
+      before the switch.
 - [ ] **The deployment has been built and run.** Skipped for now, the owner's choice
       (2026-09-23, confirmed 2026-09-25 and 2026-09-27). `DEPLOYABILITY.md` R10 is that work, and it waits on
       the owner. Everything under `modernized/lazylabel-reimagined/

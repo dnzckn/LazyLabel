@@ -505,18 +505,12 @@ configured, so a green CI run says nothing about them — see `Running the live 
 
 ## What to do next
 
-The engineering the brief names is done. What is left is mostly the owner's to decide, and one
-check to repeat before the switch. In order:
+The engineering the brief names is done. What is left is the owner's to decide. In order:
 
 1. **Ask the owner before the first Release.** Every pending decision was answered on 2026-09-27
    ("What remains"). Publishing is still theirs to say yes to: pushing a `web-v*` tag makes
    `release.yml` publish the zips, and macOS signing and notarisation are not done.
-2. **Run the live differential suites again with real checkpoints** (CUTOVER.md asks for it when
-   the inference service changes, and it changed on 2026-09-26: SP-08, SP-25, CP-49 and R7 to R9).
-   "Running the live suites" has the command. Leave `LAZYLABEL_TEST_SAM1_CHECKPOINT` unset while
-   the owner's inference service runs on port 8788: loading SAM 1 beside it exhausted the machine's
-   memory on 2026-09-26. Run the SAM 1 differential only with the service stopped.
-3. **If R10 is chosen,** build and run the Docker deployment once, so CUTOVER.md's last unticked
+2. **If R10 is chosen,** build and run the Docker deployment once, so CUTOVER.md's last unticked
    box can be ticked (DEPLOYABILITY.md R10 lists what to fix first).
 
 Anything else is a recorded difference, not scheduled work: each "Not matched" or "Still different"
@@ -649,8 +643,12 @@ needs is already in one store rather than scattered across managers.
   and RULE-030's black crop, where the FFT filter's result on a crop was divided by 256 a second
   time (`c8a6250`; CP-46).
 
-**Before the switch.** The live differential suites, run again with real checkpoints ("What to do
-next", item 2). The deployment box waits on R10.
+**Before the switch.** Nothing but R10's deployment box, which the owner defers. The live
+differential suites were run again on 2026-09-27 after the inference service's changes of
+2026-09-26 (SP-08, SP-25, CP-49 and R7 to R9): 820 passed, 0 skipped ("Running the live
+suites"). Run them again if the inference service changes before the switch, with the owner's
+service on port 8788 stopped: loading SAM 1 beside it exhausted the machine's memory on
+2026-09-26.
 
 **The last pass, 2026-09-27.** Five gaps in the mouse handling were checked against legacy's
 code, four of them in the Multi view (L = `legacy/lazylabel/src/lazylabel/`):
@@ -1115,20 +1113,22 @@ cd modernized/lazylabel-reimagined/inference && LAZYLABEL_TEST_SAM1_CHECKPOINT=/
 ```
 
 In the 3.12 venv, which the packages have required since 2026-09-23, the last run with all
-three set was **650 passed, 0 skipped**, with 37 warnings, in 48 s on this machine (rerun
-2026-09-25 for CUTOVER.md's checklist; 76 s the time before). That count includes the archetype
+three set was **820 passed, 0 skipped**, with 39 warnings, in 186 s on a busy machine
+(2026-09-27, for CUTOVER.md's checklist, with the owner's inference service stopped; 650 in 48 s
+on 2026-09-25). That count includes the archetype
 differential added after the golden was recaptured. The old 3.10 venv still runs the suite, but it skips the golden's mask check,
-because that golden is PyTorch 2.10's: the golden module there reads 10 passed, 1 skipped. Earlier
-that day the count was 611, and 600 before that day's fixes and their tests. Any `skipped` count above zero means a
+because that golden is PyTorch 2.10's: the golden module there reads 10 passed, 1 skipped. Earlier on
+2026-09-25 the count was 611, and 600 before that day's fixes and their tests. Any `skipped` count above zero means a
 checkpoint was not found and that suite did not actually run. This section said "255 passed, 1
 xfailed" until then. The xfail was C11's placeholder, removed on 2026-09-21 when the job API
 landed, and the suite has grown since. The count here is the one the last run printed, not a target.
 
-Thirty-seven warnings are expected on 3.12, and none is a failure being hidden:
+Thirty-nine warnings are expected on 3.12, and none is a failure being hidden:
 - two come from the weights-only guard's tests, which set `TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD` on
   purpose, to prove the refusal;
-- three come from SAM 2's optional `_C` extension, one for each module that runs the video
-  predictor (the differential, the golden and the live propagation test). Its absence skips only a
+- five come from SAM 2's optional `_C` extension, one for each module or golden case that runs
+  the video predictor (the differential, the two synthetic goldens, the streaming golden and the
+  live propagation test). Its absence skips only a
   hole-filling post-process, and legacy runs without it too: the golden was captured that way;
 - thirty-two come from SAM 2's own `utils/transforms.py`, which calls `torch.jit.script`.
   PyTorch 2.10 deprecates it, and the call runs once per image predictor built. It is harmless at
