@@ -182,6 +182,27 @@ export function createApp(deps: AppDeps): App {
       pattern: "/inference/models",
       handler: () => proxyModels(deps),
     },
+    // Legacy's Refresh, Load and Unload, and what its "Current: ..." names (CP-49).
+    {
+      method: "POST",
+      pattern: "/inference/models/refresh",
+      handler: (request) => refreshModels(deps, request),
+    },
+    {
+      method: "POST",
+      pattern: "/inference/models/load",
+      handler: (request) => loadModel(deps, request),
+    },
+    {
+      method: "POST",
+      pattern: "/inference/models/unload",
+      handler: (request) => unloadModel(deps, request),
+    },
+    {
+      method: "GET",
+      pattern: "/inference/models/loaded",
+      handler: (request) => loadedModels(deps, request),
+    },
     {
       method: "POST",
       pattern: "/inference/embeddings",
@@ -308,6 +329,46 @@ async function health(deps: AppDeps): Promise<ApiResponse> {
 async function proxyModels(deps: AppDeps): Promise<ApiResponse> {
   const models = await inferenceOf(deps).models();
   return json(200, { models });
+}
+
+/**
+ * Legacy's Refresh (L ui/main_window.py:1204-1212): the service reads its manifest again and
+ * answers with the list, as `/inference/models` does. Nothing is fetched.
+ */
+async function refreshModels(deps: AppDeps, request: ApiRequest): Promise<ApiResponse> {
+  const models = await inferenceOf(deps).refreshModels(request.headers["x-correlation-id"] ?? "");
+  return json(200, { models });
+}
+
+/** Legacy's Load (L ui/main_window.py:1234-1279): the named model in memory now, and only it. */
+async function loadModel(deps: AppDeps, request: ApiRequest): Promise<ApiResponse> {
+  const model = parseJsonObject(request.body)["model"];
+  if (typeof model !== "string" || model === "") throw badRequest("'model' must be a model name");
+
+  const loaded = await inferenceOf(deps).loadModel(model, request.headers["x-correlation-id"] ?? "");
+  return json(200, { loaded });
+}
+
+/**
+ * Legacy's Unload (L ui/main_window.py:1281-1305): the model out of memory. No body, or no
+ * `model`, unloads whatever is loaded.
+ */
+async function unloadModel(deps: AppDeps, request: ApiRequest): Promise<ApiResponse> {
+  const model = request.body.length === 0 ? undefined : parseJsonObject(request.body)["model"];
+  if (model !== undefined && (typeof model !== "string" || model === "")) {
+    throw badRequest("'model' must be a model name");
+  }
+
+  return json(
+    200,
+    await inferenceOf(deps).unloadModel(model, request.headers["x-correlation-id"] ?? ""),
+  );
+}
+
+/** Which models are in memory: cheap, unlike `/inference/models`, which hashes every checkpoint. */
+async function loadedModels(deps: AppDeps, request: ApiRequest): Promise<ApiResponse> {
+  const loaded = await inferenceOf(deps).loadedModels(request.headers["x-correlation-id"] ?? "");
+  return json(200, { loaded });
 }
 
 async function inferenceHealth(deps: AppDeps): Promise<{

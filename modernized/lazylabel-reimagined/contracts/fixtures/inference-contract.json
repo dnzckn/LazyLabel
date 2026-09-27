@@ -170,6 +170,24 @@
         ],
         "model": "SAM 2.1 large"
       }
+    },
+    {
+      "name": "load a model now",
+      "path": "/inference/models/load",
+      "method": "POST",
+      "$comment": "Legacy's Load (CP-49): the model in memory now rather than on first use, freeing any other. The same manifest and SHA-256 check as first use; nothing is fetched.",
+      "body": {
+        "model": "SAM 2.1 large"
+      }
+    },
+    {
+      "name": "unload a model",
+      "path": "/inference/models/unload",
+      "method": "POST",
+      "$comment": "Legacy's Unload (CP-49): the model out of memory and the CUDA cache emptied. With no body, whatever is loaded.",
+      "body": {
+        "model": "SAM 2.1 large"
+      }
     }
   ],
   "responses": {

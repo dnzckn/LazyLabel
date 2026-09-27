@@ -121,6 +121,16 @@ export interface ModelStatus {
   readonly verified: boolean;
   /** Why it is not usable, when it is not. */
   readonly detail: string | null;
+  /** It answers prompts. False for the embedder Find Archetypes uses, which shares the manifest. */
+  readonly segmenter?: boolean;
+  /** In memory now: what legacy's "Current: ..." names (CP-49). Absent from an older service. */
+  readonly loaded?: boolean;
+}
+
+/** What Unload freed, and what is still in memory after it. */
+export interface UnloadResult {
+  readonly unloaded: readonly string[];
+  readonly loaded: readonly string[];
 }
 
 /**
@@ -216,6 +226,14 @@ export interface InferenceClient {
   health(): Promise<InferenceHealth>;
   /** What the service could load. A checkpoint that is not listed is not loadable. */
   models(): Promise<readonly ModelStatus[]>;
+  /**
+   * Legacy's model controls (CP-49): the manifest read again, a model put in memory now rather
+   * than on first use, a model dropped and its GPU memory given back, and which are in memory.
+   */
+  refreshModels(correlationId: string): Promise<readonly ModelStatus[]>;
+  loadModel(model: string, correlationId: string): Promise<readonly string[]>;
+  unloadModel(model: string | undefined, correlationId: string): Promise<UnloadResult>;
+  loadedModels(correlationId: string): Promise<readonly string[]>;
   embed(request: EmbedRequest, correlationId: string): Promise<EmbedResult>;
   segment(request: SegmentRequest, correlationId: string): Promise<SegmentResult>;
 

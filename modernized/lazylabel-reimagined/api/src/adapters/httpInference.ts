@@ -27,6 +27,7 @@ import {
   type PropagationStart,
   type SegmentRequest,
   type SegmentResult,
+  type UnloadResult,
 } from "../ports/inference.js";
 
 export interface HttpInferenceOptions {
@@ -82,6 +83,48 @@ export class HttpInferenceClient implements InferenceClient {
 
     const body = (await this.json(response)) as { models?: readonly ModelStatus[] };
     return body.models ?? [];
+  }
+
+  async refreshModels(correlationId: string): Promise<readonly ModelStatus[]> {
+    // 503 is the manifest the service could not read again; it keeps the list it had.
+    const response = await this.send("POST", "/inference/models/refresh", undefined, correlationId);
+    if (response.status !== 200) throw await this.failure(response);
+
+    const body = (await this.json(response)) as { models?: readonly ModelStatus[] };
+    return body.models ?? [];
+  }
+
+  async loadModel(model: string, correlationId: string): Promise<readonly string[]> {
+    const response = await this.send("POST", "/inference/models/load", { model }, correlationId);
+    if (response.status !== 200) throw await this.failure(response);
+    return this.names((await this.json(response)) as { loaded?: unknown }, "loaded");
+  }
+
+  async unloadModel(model: string | undefined, correlationId: string): Promise<UnloadResult> {
+    const response = await this.send(
+      "POST",
+      "/inference/models/unload",
+      model === undefined ? {} : { model },
+      correlationId,
+    );
+    if (response.status !== 200) throw await this.failure(response);
+    const body = (await this.json(response)) as { unloaded?: unknown; loaded?: unknown };
+    return { unloaded: this.names(body, "unloaded"), loaded: this.names(body, "loaded") };
+  }
+
+  async loadedModels(correlationId: string): Promise<readonly string[]> {
+    const response = await this.send("GET", "/inference/models/loaded", undefined, correlationId);
+    if (response.status !== 200) throw await this.failure(response);
+    return this.names((await this.json(response)) as { loaded?: unknown }, "loaded");
+  }
+
+  /** A list of model names off the wire. A missing one is malformed, not "none loaded". */
+  private names(body: Record<string, unknown>, field: string): readonly string[] {
+    const value = body[field];
+    if (!Array.isArray(value) || !value.every((each) => typeof each === "string")) {
+      throw new InferenceError(502, "malformed_response", `the inference service sent no '${field}' list`);
+    }
+    return value as string[];
   }
 
   async embed(request: EmbedRequest, correlationId: string): Promise<EmbedResult> {

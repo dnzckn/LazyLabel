@@ -414,6 +414,8 @@ describe("C3: the API's inference proxy", () => {
           unreadable: [],
         },
       },
+      "/inference/models/load": { status: 200, body: { loaded: ["SAM 2.1 large"] } },
+      "/inference/models/unload": { status: 200, body: { unloaded: ["SAM 2.1 large"], loaded: [] } },
       "/inference/propagations": {
         status: 202,
         body: {
