@@ -129,6 +129,10 @@ describe("C5: erasing with a shape", () => {
 
     // The original is replaced by what is left of it, as a mask.
     await waitFor(() => expect(shown("types")).toBe("AI"));
+    // Legacy's plain words for a drawn eraser (polygon_drawing_manager.py:194-196). The web said
+    // nothing unless an annotation went entirely.
+    const said = await screen.findByText("Applied eraser to 1 segment(s)");
+    expect(said.getAttribute("class")).toContain("status-bar__message--info");
   });
 
   it("says when there was nothing to erase, in legacy's words, rather than looking inert", async () => {

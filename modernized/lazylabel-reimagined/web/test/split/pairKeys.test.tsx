@@ -566,6 +566,10 @@ describe("Shift+Space erases each image with its own polygon while unlinked", ()
     press(" ", "Space", { shiftKey: true });
 
     await waitFor(() => expect(pair().map((side) => side.classes)).toEqual([[], []]));
+    // Legacy names each viewer in turn, "Erased N segment(s) from viewer K", so viewer 2's is the
+    // one left showing (main_window.py:6985-6988).
+    const said = await screen.findByText("Erased 3 segment(s) from viewer 2");
+    expect(said.getAttribute("class")).toContain("status-bar__message--info");
 
     press("z", "KeyZ", { ctrlKey: true });
 

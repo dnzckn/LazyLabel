@@ -31,6 +31,7 @@ import type {
 } from "@lazylabel/contracts";
 
 import { AnnotationCanvas, segmentAt } from "../canvas/AnnotationCanvas.jsx";
+import { ViewKindContext, type ViewKind } from "../canvas/viewKind.js";
 import { useSettings } from "../settings/SettingsProvider.jsx";
 import { useWorkspace, type EraseOutcome, type LeaveSave, type SideIndex } from "./WorkspaceProvider.jsx";
 import type { Crop } from "../tools/crop.js";
@@ -275,8 +276,10 @@ function OpenedImage({
    * eraser removes is exactly what would have been written -- the alternative is an eraser that
    * agrees with the outline on screen and disagrees with the file.
    */
+  // Which of legacy's views this is drawn in: its words for an erase differ between them.
+  const view = useContext(ViewKindContext);
   const sayErased = useCallback(
-    (outcome: EraseOutcome) => {
+    (outcome: EraseOutcome, by: EraseSource) => {
       if (outcome.kind === "empty-shape") {
         notify({ severity: "warning", message: "that shape covers no pixels, so nothing was erased" });
         return;
@@ -287,33 +290,41 @@ function OpenedImage({
         notify({ severity: "info", message: "No segments to erase" });
         return;
       }
-      if (outcome.vanished > 0) {
-        // RULE-009 discards every remaining piece of ten pixels or fewer, so an annotation can
-        // disappear entirely -- what remained of it was under the 10-pixel minimum. Legacy does
-        // this silently; a deletion nobody is told about is the shape of defect decision 7 exists
-        // to remove.
-        notify({
-          severity: "warning",
-          message:
-            `${outcome.vanished} annotation${outcome.vanished === 1 ? " was" : "s were"} removed completely`,
-        });
-      }
+      /*
+       * Legacy's words for what was cut (`erasedNotice`). RULE-009 discards every remaining piece
+       * of ten pixels or fewer, so an annotation can go entirely, which legacy does silently; the
+       * web said so as a warning of its own, and only then, until 2026-09-27. It is the notice's
+       * tooltip now, so the line is legacy's and the loss is still told.
+       */
+      const { vanished } = outcome;
+      notify({
+        ...erasedNotice(outcome, by, view),
+        ...(vanished > 0
+          ? { detail: `${vanished} annotation${vanished === 1 ? " was" : "s were"} removed completely` }
+          : {}),
+      });
     },
-    [notify],
+    [notify, view],
   );
 
   // The store erases -- here, and at the same pixels in the other image while a pair is linked
   // (RULE-092) -- so what is left for this view is saying what happened.
-  const eraseAndSay = useCallback((eraser: WireSegment) => sayErased(eraseWith(eraser)), [eraseWith, sayErased]);
+  const eraseAndSay = useCallback(
+    (eraser: WireSegment, by: EraseSource) => sayErased(eraseWith(eraser), by),
+    [eraseWith, sayErased],
+  );
 
   /** A drawn shape erases by being rasterized first -- the same path a saved annotation takes. */
   const applyErase = useCallback(
     (type: "Polygon" | "Circle", vertices: readonly ImagePoint[]) =>
-      eraseAndSay({
-        type,
-        classId: null,
-        vertices: vertices.map((v) => [v.x, v.y] as const),
-      } as unknown as WireSegment),
+      eraseAndSay(
+        {
+          type,
+          classId: null,
+          vertices: vertices.map((v) => [v.x, v.y] as const),
+        } as unknown as WireSegment,
+        "shape",
+      ),
     [eraseAndSay],
   );
 
@@ -333,7 +344,7 @@ function OpenedImage({
               vertices: toWireVertices(vertices),
             } as WireSegment;
       const each = [shape(bySide[0], 0), shape(bySide[1], 1)] as const;
-      if (erase) sayErased(eraseOwn(each));
+      if (erase) sayErased(eraseOwn(each), "shape");
       else addOwn(each, "Add polygon");
     },
     [activeClassId, addOwn, eraseOwn, sayErased, sides],
@@ -436,11 +447,11 @@ function OpenedImage({
                       // rectangle, and erasing its box would take out pixels the model never
                       // selected.
                       onErase={(segment) =>
-                        segment.mask === undefined ? undefined : eraseAndSay(segment)
+                        segment.mask === undefined ? undefined : eraseAndSay(segment, "ai")
                       }
                       // A linked pair in the Multi tab: each image's own answer, in its own image.
                       onAcceptEach={(bySide) => addEach(bySide, "Accept AI mask")}
-                      onEraseEach={(bySide) => sayErased(eraseEach(bySide))}
+                      onEraseEach={(bySide) => sayErased(eraseEach(bySide), "ai")}
                     />
                   ))}
 
@@ -643,6 +654,38 @@ function OpenedImage({
       )}
     </section>
   );
+}
+
+/** Whose erase is being said: a drawn shape's, or the AI preview's (Shift+Space). */
+type EraseSource = "shape" | "ai";
+
+/**
+ * Legacy's words and kind for an erase that cut something, which differ by tool and by view.
+ *
+ * The single view, which the Sequence tab shares: a drawn shape's is "Applied eraser to N
+ * segment(s)" (polygon_drawing_manager.py:194-196; single_view_mouse_handler.py:420-422, 509-511),
+ * the AI preview's the success "Erased N segment(s)!" (ai_segment_manager.py:260-271). The Multi
+ * tab: a drawn shape's names each viewer it cut in, "Erased N segment(s) from viewer K", one after
+ * the other, so the last is the one left showing (main_window.py:5799-5805, 5892-5899, 6985-6988);
+ * the AI preview's counts the viewers, the success "Erased segments in N viewer(s)"
+ * (ai_segment_manager.py:390-394).
+ */
+function erasedNotice(
+  outcome: Extract<EraseOutcome, { kind: "erased" }>,
+  by: EraseSource,
+  view: ViewKind,
+): { readonly severity: "info" | "success"; readonly message: string } {
+  if (view === "multi") {
+    if (by === "ai") {
+      const viewers = outcome.bySide.filter((count) => count > 0).length;
+      return { severity: "success", message: `Erased segments in ${viewers} viewer(s)` };
+    }
+    const last = outcome.bySide[1] > 0 ? 1 : 0;
+    return { severity: "info", message: `Erased ${outcome.bySide[last]} segment(s) from viewer ${last + 1}` };
+  }
+  return by === "ai"
+    ? { severity: "success", message: `Erased ${outcome.erased} segment(s)!` }
+    : { severity: "info", message: `Applied eraser to ${outcome.erased} segment(s)` };
 }
 
 /**

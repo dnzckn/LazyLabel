@@ -519,6 +519,9 @@ describe("Space: each image's own answer becomes its own annotation", () => {
     press(" ", "Space", { shiftKey: true });
 
     await waitFor(() => expect(pair().map((side) => side.found)).toEqual([[], []]));
+    // Legacy's success, counting the viewers it cut in (ai_segment_manager.py:390-394).
+    const said = await screen.findByText("Erased segments in 2 viewer(s)");
+    expect(said.getAttribute("class")).toContain("status-bar__message--success");
   });
 });
 

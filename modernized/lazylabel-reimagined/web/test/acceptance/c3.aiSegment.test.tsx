@@ -245,6 +245,11 @@ describe("flow 1, step by step", () => {
     fireEvent.keyDown(document, { key: " ", code: "Space", shiftKey: true });
 
     await waitFor(() => expect(shown("count")).toBe("0"));
+    // Legacy's success for it (ai_segment_manager.py:260-271). The web said only that the annotation
+    // was removed completely, a warning of its own; that is the notice's tooltip now.
+    const said = await screen.findByText("Erased 1 segment(s)!");
+    expect(said.getAttribute("class")).toContain("status-bar__message--success");
+    expect(said.getAttribute("title")).toContain("1 annotation was removed completely");
   });
 
   it("does not turn a preview into an annotation until it is accepted", async () => {

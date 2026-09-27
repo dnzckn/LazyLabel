@@ -272,6 +272,8 @@ export type EraseOutcome =
       /** Of those, how many vanished entirely under RULE-009's ten-pixel floor. */
       readonly vanished: number;
       readonly bothImages: boolean;
+      /** Annotations cut in each image, by side: legacy names each viewer an erase reached. */
+      readonly bySide: readonly [number, number];
     };
 
 /** One side's new annotation list, for `applySegmentsOn`. */
@@ -1816,11 +1818,15 @@ function recordErase(
     redo: apply,
   });
 
+  const bySide: [number, number] = [0, 0];
+  bySide[at] = here?.erased.length ?? 0;
+  bySide[other] = there?.erased.length ?? 0;
   return {
     kind: "erased",
     erased: count,
     vanished: (here?.vanished.length ?? 0) + (there?.vanished.length ?? 0),
     bothImages: hereChanged && thereChanged,
+    bySide,
   };
 }
 
