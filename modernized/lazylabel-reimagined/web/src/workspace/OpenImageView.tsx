@@ -1000,9 +1000,10 @@ function ConvertButton({
 
   /*
    * LEGACY'S MULTI-VIEW SAVE OF ONE SIDE (`main_window.py:6559-6636`), which the store runs for both
-   * sides before every move in the Multi view, changed or not and whatever Auto-Save on Navigate
-   * says: the owner's decision of 2026-09-26, "Match the desktop app exactly" (CONTROL_PARITY.md
-   * CP-67). Enter's request for that side's image, so the two cannot write differently; with no
+   * sides before every move in the Multi view with Auto-Save on Navigate on, changed or not, and for
+   * Enter and the Write button (CONTROL_PARITY.md CP-67). Legacy's move runs it whatever the setting
+   * says; the owner, 2026-09-26, wants a move to save only with it on. Enter's request for that
+   * side's image, so the two cannot write differently; with no
    * segments, the side's seven sidecars are deleted instead. Silent when it works, as legacy's is:
    * no "Deleted: ..." and no "No segments to save." (6589-6593). A failure is said, and the store
    * keeps the pair where it is.
@@ -1058,7 +1059,8 @@ function ConvertButton({
     <div>
       <button
         type="button"
-        onClick={() => convert(revisions)}
+        // Enter's save, which the tooltip names: in the Multi view both sides, as Enter's is.
+        onClick={() => void saveKey()}
         disabled={state.status === "saving" || !writable}
         // Disabled with the reason in its tooltip, as legacy explains a control it disables; the
         // reason was a paragraph beside it until 2026-09-26. Otherwise legacy's name for the save

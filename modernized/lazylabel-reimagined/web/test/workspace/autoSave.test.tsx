@@ -565,6 +565,19 @@ describe("in the Multi view, every move saves BOTH sides first (CP-67)", () => {
     expect(status()).toMatch(/frames\/b\.png — 1 segment, saved/);
   });
 
+  it("saves both from the Write button too, which names Enter's save", async () => {
+    // The button's tooltip is legacy's name for the save key, so it does what the key does.
+    const { events } = mount({ a: TRIANGLE_AT_REV_A, names: FOUR });
+    await pairUp();
+    await drawOnRight();
+    events.length = 0;
+
+    fireEvent.click(screen.getByRole("button", { name: /^Write \d+ format/ }));
+
+    expect(await screen.findByText("Multi-view annotations saved!")).toBeTruthy();
+    expect(events).toEqual(["save frames/a.png", "save frames/b.png"]);
+  });
+
   it("saves only the image moved on the Single tab, though a second side is still open", async () => {
     // Legacy's Single view has one image, and saves that one, with Auto-Save on (RULE-059).
     const { events } = mount({ a: TRIANGLE_AT_REV_A, names: FOUR });
