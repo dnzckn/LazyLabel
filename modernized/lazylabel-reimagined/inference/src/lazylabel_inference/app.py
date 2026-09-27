@@ -24,7 +24,7 @@ from typing import Any, Callable
 from .availability import Accelerator, Availability, check_availability, describe_accelerator
 from .capabilities import CAPABILITIES
 from .log import Logger, silent_logger
-from .manifest import CheckpointStatus, ManifestError, ModelEntry, check_checkpoint
+from .manifest import CheckpointStatus, ManifestError, ModelEntry, check_checkpoint, load_manifest
 from .prompts import (
     Box,
     ImageNotSetError,
@@ -93,6 +93,8 @@ class Deps:
 
     models: list[ModelEntry] = field(default_factory=list)
     model_dir: Path = Path(".")
+    """Where the manifest is read from again when the model list is refreshed. None: it cannot be."""
+    manifest_path: Path | None = None
     logger: Logger = field(default_factory=lambda: silent_logger)
     availability: Callable[[], Availability] = check_availability
     """Which device inference runs on. Separate from availability: a machine can have a GPU and no
@@ -158,6 +160,16 @@ def _route(deps: Deps, request: Request) -> Response:
     if path == "/models" and method == "GET":
         return _models(deps)
 
+    # Legacy's model controls (CP-49): Refresh, Load, Unload, and what "Current: …" reports.
+    if path == "/inference/models/loaded" and method == "GET":
+        return _json(200, {"loaded": _loaded(deps)})
+    if path == "/inference/models/load" and method == "POST":
+        return _load_model(deps, request)
+    if path == "/inference/models/unload" and method == "POST":
+        return _unload_model(deps, request)
+    if path == "/inference/models/refresh" and method == "POST":
+        return _refresh_models(deps)
+
     if path == "/inference/embeddings" and method == "POST":
         return _embeddings(deps, request)
     if path == "/inference/segment" and method == "POST":
@@ -201,8 +213,10 @@ def _route(deps: Deps, request: Request) -> Response:
 
 
 def _fixed_methods(path: str) -> set[str]:
-    if path in ("/health", "/models"):
+    if path in ("/health", "/models", "/inference/models/loaded"):
         return {"GET"}
+    if path in ("/inference/models/load", "/inference/models/unload", "/inference/models/refresh"):
+        return {"POST"}
     if path in ("/inference/embeddings", "/inference/segment"):
         return {"POST"}
     if path == "/inference/propagations":
@@ -657,6 +671,7 @@ def _models(deps: Deps) -> Response:
     # Verified in full here. This route is what an operator calls to find out whether the install is
     # sound, so it does the expensive check rather than the cheap one.
     statuses = _statuses(deps, verify=True)
+    loaded = set(_loaded(deps))
     return _json(
         200,
         {
@@ -672,11 +687,76 @@ def _models(deps: Deps) -> Response:
                     "present": s.present,
                     "verified": s.verified,
                     "detail": s.detail,
+                    # In memory now: legacy's "Current: …" (CP-49).
+                    "loaded": s.entry.name in loaded,
                 }
                 for s in statuses
             ]
         },
     )
+
+
+def _loaded(deps: Deps) -> list[str]:
+    """The models in memory. None without a service, which is the only thing that loads them."""
+    return [] if deps.service is None else deps.service.loaded()
+
+
+def _model_name(body: dict[str, Any]) -> str:
+    model = body.get("model")
+    if not isinstance(model, str) or not model:
+        raise HttpError(400, "bad_request", "'model' must be a model name")
+    return model
+
+
+def _load_model(deps: Deps, request: Request) -> Response:
+    """Legacy's Load (L ui/main_window.py:1234-1279): the model in memory now, and only it.
+
+    Nothing is fetched: a model the manifest does not list, or whose file fails its hash, is
+    refused the way its first use would refuse it.
+    """
+    model = _model_name(_body(request))
+    service = _service(deps)
+    try:
+        loaded = service.load(model)
+    except InferenceError as cause:
+        raise _inference_error(cause) from cause
+    return _json(200, {"loaded": loaded})
+
+
+def _unload_model(deps: Deps, request: Request) -> Response:
+    """Legacy's Unload (L ui/main_window.py:1281-1305): the model out of memory, and the GPU's too.
+
+    The named model, or all of them with no body. Nothing loaded is an answer, not an error:
+    `unloaded` is empty and the browser says legacy's "No model loaded".
+    """
+    body = _body(request) if request.body else {}
+    model = None if body.get("model") is None else _model_name(body)
+    service = _service(deps)
+    unloaded = service.unload(model)
+    return _json(200, {"unloaded": unloaded, "loaded": service.loaded()})
+
+
+def _refresh_models(deps: Deps) -> Response:
+    """Legacy's Refresh (L ui/main_window.py:1204-1212): the list read again, then answered as
+    `/models` answers.
+
+    Legacy scans its models folder for files; here the manifest is read again, because a checkpoint
+    the manifest does not list is not loadable. When it cannot be read, the list in force stays, as
+    legacy keeps its list when the folder has gone, and the reason is the answer.
+    """
+    if deps.manifest_path is None:
+        raise HttpError(503, "manifest_unreadable", "no model manifest is configured")
+    try:
+        entries = load_manifest(deps.manifest_path)
+    except ManifestError as cause:
+        raise HttpError(503, "manifest_unreadable", str(cause)) from cause
+
+    deps.manifest_error = None
+    if deps.service is not None:
+        deps.service.replace_models(entries)
+    if deps.service is None or deps.models is not deps.service.models:
+        deps.models[:] = entries
+    return _models(deps)
 
 
 def _statuses(deps: Deps, *, verify: bool) -> list[CheckpointStatus]:

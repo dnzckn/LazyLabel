@@ -107,6 +107,7 @@ def build_deps(config, models, logger, manifest_error=None):
     return Deps(
         models=models,
         model_dir=config.model_dir,
+        manifest_path=config.manifest_path,
         logger=logger,
         manifest_error=manifest_error,
         service=service,
@@ -193,7 +194,8 @@ def _propagator_for(service, models, logger):
     from .prompts import ModelNotLoadedError
     from .runner import run_propagation
 
-    loaded: dict[str, object] = {}
+    # The service's, so its Unload frees these too (CP-49).
+    loaded = service.video_predictors
 
     def propagate_job(request, cancel):
         entry = _video_entry(models, request.model)

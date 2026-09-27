@@ -22,10 +22,11 @@ decodes (`contracts/test/pythonFixture.test.ts`).
 from __future__ import annotations
 
 import base64
+import gc
 import threading
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from .backends import Backend, load_backend
 from .embeddings import (
@@ -68,6 +69,49 @@ class _Session:
     shape: tuple[int, int]
 
 
+def release_memory() -> None:
+    """Hand freed model memory back: Python's first, then the CUDA cache.
+
+    Legacy's Unload empties the CUDA cache once the model is dropped (L ui/main_window.py:1289-1300).
+    Without it PyTorch keeps the freed blocks for itself, and the GPU still reads as full.
+    """
+    gc.collect()
+    try:
+        import torch
+    except ImportError:
+        return
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+
+
+@dataclass
+class _Reloads:
+    """Where an unloaded model's sessions point: it loads again when one is next used.
+
+    Legacy's next AI click after Unload loads the model again (L ui/managers/
+    sam_single_view_manager.py:218-229). The encoding is still in the cache, so only the model comes
+    back, through `backend`, which checks the checkpoint first.
+    """
+
+    service: "InferenceService"
+    entry: ModelEntry
+
+    def _loaded(self) -> Backend:
+        return self.service.backend(self.entry.name)
+
+    def set_image(self, image: Any) -> None:
+        self._loaded().set_image(image)
+
+    def predict(self, prompt: Prompt) -> Prediction:
+        return self._loaded().predict(prompt)
+
+    def export_state(self) -> Any:
+        return self._loaded().export_state()
+
+    def restore_state(self, state: Any) -> None:
+        self._loaded().restore_state(state)
+
+
 @dataclass
 class InferenceService:
     models: list[ModelEntry]
@@ -75,6 +119,11 @@ class InferenceService:
     dataset_root: Path
     cache: EmbeddingCache = field(default_factory=EmbeddingCache)
     device: str | None = None
+    # Run after a model is dropped. Injectable so a test can see it run without importing torch.
+    release: Callable[[], None] = release_memory
+    # The video predictors propagation jobs built, by model name. Kept here, not in the job
+    # builder, so Unload frees them as legacy's frees the whole model (main_window.py:1289-1293).
+    video_predictors: dict[str, Any] = field(default_factory=dict)
     _backends: dict[str, Backend] = field(default_factory=dict)
     _sessions: dict[str, _Session] = field(default_factory=dict)
     # Which encoding each backend's predictor holds right now, by model name.
@@ -103,9 +152,83 @@ class InferenceService:
                 return self._backends[name]
 
             entry = self.verified(self.model(name))
+            # One model in memory at a time, as legacy holds one: loading another frees the one
+            # there first (L core/model_manager.py:121-131), so switching models cannot fill the GPU.
+            self._drop([other for other in self._backends if other != name], videos=False)
             backend = load_backend(entry, self.model_dir, device=self.device)
             self._backends[name] = backend
             return backend
+
+    def loaded(self) -> list[str]:
+        """The models in memory now, by name: what legacy's "Current: …" reports.
+
+        A model a propagation loaded counts. Legacy propagates with the model it has loaded, so its
+        label names that model then too.
+        """
+        with self._lock:
+            return sorted(set(self._backends) | set(self.video_predictors))
+
+    def load(self, name: str) -> list[str]:
+        """Legacy's Load: the model into memory now rather than on first use, and only it.
+
+        Whatever else is loaded is freed first (L ui/main_window.py:1259-1261). The checkpoint goes
+        through `backend`, so it is checked against the manifest before it is read, as on first use.
+        """
+        entry = self.model(name)
+        if not entry.is_segmenter:
+            raise InvalidPromptError(
+                f"{entry.name} cannot segment -- it is the embedder Find Archetypes uses; choose a SAM model"
+            )
+        with self._lock:
+            self._drop([other for other in self.loaded() if other != name], videos=True)
+            self.backend(name)
+            return self.loaded()
+
+    def unload(self, name: str | None = None) -> list[str]:
+        """Legacy's Unload: drop the model and give its memory back (L ui/main_window.py:1281-1305).
+
+        The named model, or every one. Returns the names freed, empty when none was loaded. Its
+        encodings stay cached: the model loads again on its next use, as legacy's does.
+        """
+        with self._lock:
+            return self._drop([each for each in self.loaded() if name is None or each == name], videos=True)
+
+    def replace_models(self, entries: list[ModelEntry]) -> None:
+        """Take a manifest read again. A loaded model whose entry changed or went is unloaded.
+
+        Its checkpoint was checked against the entry it was loaded under, and that check says
+        nothing about an entry that now names another file or another hash.
+        """
+        with self._lock:
+            now = {entry.name: entry for entry in entries}
+            stale = [name for name in self.loaded() if now.get(name) != self._entry_loaded(name)]
+            self._drop(stale, videos=True)
+            self.models[:] = entries
+
+    def _entry_loaded(self, name: str) -> ModelEntry | None:
+        backend = self._backends.get(name)
+        if backend is not None:
+            return backend.entry
+        return next((entry for entry in self.models if entry.name == name), None)
+
+    def _drop(self, names: list[str], *, videos: bool) -> list[str]:
+        """Free these models. Their sessions keep their handles and load the model again when used."""
+        freed: list[str] = []
+        for name in names:
+            backend = self._backends.pop(name, None)
+            video = self.video_predictors.pop(name, None) if videos else None
+            if backend is None and video is None:
+                continue
+            freed.append(name)
+            self._holding.pop(name, None)
+            if backend is not None:
+                for session in self._sessions.values():
+                    if session.backend is backend:
+                        session.backend = _Reloads(self, backend.entry)
+            del backend, video
+        if freed:
+            self.release()
+        return freed
 
     def verified(self, entry: ModelEntry) -> ModelEntry:
         """The entry back, once its checkpoint is proven to be the file the manifest vouches for.
