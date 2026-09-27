@@ -14,8 +14,9 @@
  * one pixel, which reads as the tool being broken rather than as a size limit.
  */
 
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 
+import { claim, PairPressContext } from "../split/pairPress.js";
 import { classColor } from "./classColor.js";
 import { locate, scale, type DisplayBox, type ImagePoint } from "./coordinates.js";
 import { boxFrom, circleFrom, radiusOf } from "../tools/shapes.js";
@@ -120,6 +121,19 @@ export function ShapeLayer({
     },
     [boxOf, drag, image, kind, onComplete, onErase, onRefused],
   );
+
+  // A drag made on this half of the Multi tab while the other was being edited, finished here as
+  // legacy's release in that viewer finishes it (main_window.py:5731-5916; `split/pairPress.ts`).
+  const handed = useContext(PairPressContext);
+  useEffect(() => {
+    if (handed === null || handed.tool !== kind || !claim(handed)) return;
+    const outcome = kind === "box" ? boxFrom(handed.from, handed.to) : circleFrom(handed.from, handed.to);
+    if (outcome.kind === "ignored") onRefused?.(outcome.reason);
+    else if (handed.shift) onErase?.(outcome.vertices);
+    else onComplete(outcome.vertices);
+    // Only when a press arrives.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [handed]);
 
   // Legacy's C clears whatever is being drawn in any tool, a box or circle drag included
   // (keyboard_event_manager.py:241-313); here it was the AI tool's alone (`CONTROL_PARITY.md` CP-20).

@@ -39,6 +39,7 @@ import { useSizing } from "./useSizing.js";
 import type { Sizing } from "./sizing.js";
 import { ViewKindContext } from "./viewKind.js";
 import { PairAiContext } from "../split/pairAi.js";
+import { claim, type HandedPress } from "../split/pairPress.js";
 import { useHotkey } from "../hotkeys/HotkeyProvider.jsx";
 import { isInModal } from "../hotkeys/keyEvent.js";
 import { isApplePlatform } from "../platform.js";
@@ -63,6 +64,11 @@ export interface AiLayerProps {
   readonly onClear?: () => void;
   /** Drawn under the prompt marks, when the parent has a prediction to show. */
   readonly preview?: ReactNode;
+  /**
+   * A press made on this half of the Multi tab while the other was being edited, settled here as
+   * if made here once it is given (`split/pairPress.ts`). The parent gives it when it can be asked.
+   */
+  readonly handed?: HandedPress;
 }
 
 const POINT_RADIUS = 4;
@@ -76,6 +82,7 @@ export function AiLayer({
   onRefused,
   onClear,
   preview,
+  handed,
 }: AiLayerProps): ReactNode {
   const sizing = useSizing();
   const view = useContext(ViewKindContext);
@@ -176,6 +183,14 @@ export function AiLayer({
     },
     [boxOf, from, held, image, prompt, settle, to, view],
   );
+
+  // The press handed over from the other half: settled once, as this layer's own release would be.
+  useEffect(() => {
+    if (handed === undefined || !claim(handed)) return;
+    settle(release(prompt, handed.from, handed.to, { negative: handed.negative, view }));
+    // Only when a press arrives: the prompt and the rest are read as they are then.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [handed]);
 
   /*
    * The REMAPPABLE clear, through the dispatcher so the hotkey reference reports it -- it listed
@@ -385,7 +400,7 @@ export function AiMarks({
  * (`qnsview_mouse.mm`), so there it is a negative point. A browser reports it as the left button
  * with Control down. Elsewhere Ctrl changes nothing, as legacy reads no modifier in AI mode.
  */
-function buttonOf(event: { readonly button: number; readonly ctrlKey: boolean }): AiButton | null {
+export function buttonOf(event: { readonly button: number; readonly ctrlKey: boolean }): AiButton | null {
   if (event.button === 2) return "right";
   if (event.button !== 0) return null;
   return event.ctrlKey && isApplePlatform() ? "right" : "left";

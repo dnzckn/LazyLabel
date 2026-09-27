@@ -409,6 +409,97 @@ describe("the other half, made the one edited", () => {
   });
 });
 
+describe("a press on the half not being edited", () => {
+  // Legacy's press in either viewer makes it the active one AND is the tool's: the AI tool's point
+  // or box, a polygon's vertex, a box or a circle (main_window.py:5498-5537, 5539-5583). Until
+  // 2026-09-27 a click there only made it the one edited.
+  const idle = (name: string) => within(halves()[1]!).getByLabelText(`Draw on ${name}`);
+  const pressIdle = (name: string, from: readonly [number, number], to = from, button = 0) => {
+    const surface = idle(name);
+    fireEvent.pointerDown(surface, { button, pointerId: 1, clientX: from[0], clientY: from[1] });
+    if (to !== from) fireEvent.pointerMove(surface, { button, pointerId: 1, clientX: to[0], clientY: to[1] });
+    fireEvent.pointerUp(surface, { button, pointerId: 1, clientX: to[0], clientY: to[1] });
+  };
+
+  it("places the AI point there, asks both images, and makes that half the one edited", async () => {
+    const { segment } = await pairUp();
+
+    pressIdle("b.png", [50, 40]);
+
+    await waitFor(() => expect(within(halves()[1]!).getByLabelText("AI tool")).toBeTruthy());
+    await waitFor(() => expect(segment).toHaveBeenCalledTimes(2));
+    expect(segment.mock.calls.map(([request]) => request)).toEqual(
+      expect.arrayContaining([
+        { handle: "h:frames/a.png", points: [{ x: 50, y: 40, positive: true }] },
+        { handle: "h:frames/b.png", points: [{ x: 50, y: 40, positive: true }] },
+      ]),
+    );
+    // Drawn in the half left too, with that image's own preview.
+    await waitFor(() => expect(within(halves()[0]!).getByTestId("ai-mask")).toBeTruthy());
+    expect(within(halves()[0]!).getByTestId("ai-positive-0").getAttribute("cx")).toBe("50");
+  });
+
+  it("adds to the prompt already placed, as legacy's linked viewers share it", async () => {
+    const { segment } = await pairUp();
+    click(50, 40);
+    await waitFor(() => expect(segment).toHaveBeenCalledTimes(2));
+
+    pressIdle("b.png", [70, 30], [70, 30], 2);
+
+    await waitFor(() => expect(segment).toHaveBeenCalledTimes(4));
+    expect(segment.mock.calls.at(-1)![0].points).toEqual([
+      { x: 50, y: 40, positive: true },
+      { x: 70, y: 30, positive: false },
+    ]);
+  });
+
+  it("sends a drag there to both images as a box", async () => {
+    const { segment } = await pairUp();
+
+    pressIdle("b.png", [20, 20], [80, 70]);
+
+    await waitFor(() => expect(segment).toHaveBeenCalledTimes(2));
+    expect(segment.mock.calls.map(([request]) => request.box)).toEqual([
+      [20, 20, 80, 70],
+      [20, 20, 80, 70],
+    ]);
+  });
+
+  it("asks only the image pressed while unlinked", async () => {
+    const { segment } = await pairUp();
+    fireEvent.click(screen.getByLabelText("Link the two images"));
+
+    pressIdle("b.png", [50, 40]);
+
+    await waitFor(() => expect(segment).toHaveBeenCalledTimes(1));
+    expect(askedOf(segment)).toEqual(["b.png"]);
+    press(" ", "Space");
+    await waitFor(() => expect(pair().map((side) => side.found)).toEqual([[], ["b.png"]]));
+  });
+
+  it("draws a box there with the box tool, in both images while linked", async () => {
+    // _handle_multi_view_bbox_press and its release (main_window.py:5708-5822).
+    await pairUp();
+    chooseTool("Box (3)");
+
+    pressIdle("b.png", [20, 20], [60, 50]);
+
+    await waitFor(() => expect(within(halves()[1]!).getByLabelText("Box tool")).toBeTruthy());
+    await waitFor(() => expect(pair().map((side) => side.found.length)).toEqual([1, 1]));
+  });
+
+  it("places a polygon's first vertex there with the polygon tool", async () => {
+    // _handle_multi_view_polygon_click (main_window.py:5585-5657).
+    await pairUp();
+    chooseTool("Poly (2)");
+
+    pressIdle("b.png", [30, 25]);
+
+    const vertex = await waitFor(() => within(halves()[1]!).getByTestId("vertex-0"));
+    expect([vertex.getAttribute("cx"), vertex.getAttribute("cy")]).toEqual(["30", "25"]);
+  });
+});
+
 describe("when one image cannot answer", () => {
   it("shows nothing there when its prediction fails, and keeps the other's", async () => {
     await pairUp("b.png", new Set(["frames/b.png"]));

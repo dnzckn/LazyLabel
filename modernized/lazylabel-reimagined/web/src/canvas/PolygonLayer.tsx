@@ -19,9 +19,10 @@
  * left for the user to find by overshooting.
  */
 
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { flushSync } from "react-dom";
 
+import { claim, PairPressContext } from "../split/pairPress.js";
 import { locate, scale, type DisplayBox, type ImagePoint } from "./coordinates.js";
 import {
   EMPTY_DRAFT,
@@ -157,6 +158,25 @@ export function PolygonLayer({
     },
     [boxOf, complete, draft, image, joinThreshold],
   );
+
+  // A press on this half of the Multi tab while the other was being edited places the vertex here,
+  // as legacy's press in that viewer does (main_window.py:5524-5526, 5654-5657; `split/pairPress.ts`).
+  // The draft is this view's, so it is the first vertex of a new polygon.
+  const handed = useContext(PairPressContext);
+  useEffect(() => {
+    if (handed === null || handed.tool !== "polygon" || !claim(handed)) return;
+    const outcome = clickTool(draft, handed.from, {
+      ...(joinThreshold === undefined ? {} : { joinThreshold }),
+      shift: handed.shift,
+    });
+    if (outcome.kind === "vertex") {
+      undone.current = [];
+      setDraft(outcome.draft);
+    } else if (outcome.kind === "close") complete(outcome.vertices, false);
+    else if (outcome.kind === "erase") complete(outcome.vertices, true);
+    // Only when a press arrives.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [handed]);
 
   const onPointerMove = useCallback(
     (event: React.PointerEvent<SVGSVGElement>) => {

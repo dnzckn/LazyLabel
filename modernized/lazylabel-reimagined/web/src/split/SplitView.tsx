@@ -64,7 +64,7 @@
  * follow the side chosen. Legacy's Linked button says it in a tooltip, and so does this one.
  */
 
-import { useCallback, useContext, useEffect, useMemo, useRef, type ReactNode, type RefObject } from "react";
+import { useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
 
 import type { WireDatasetImage, WireSegment } from "@lazylabel/contracts";
 
@@ -86,9 +86,14 @@ import {
   type SideIndex,
   type SideState,
 } from "../workspace/WorkspaceProvider.jsx";
+import { IdlePress } from "./IdlePress.jsx";
 import { describePair, type ImageSize } from "./linked.js";
 import { PairAiContext, usePairAi, type Pairing } from "./pairAi.js";
 import { PairPanContext, PaneScrollContext, usePaneScroll, type PairPan } from "./pairPan.js";
+import { PairPressContext, type HandedPress, type PressTool } from "./pairPress.js";
+
+/** The tools whose press on the half not being edited is the tool's (`pairPress.ts`). */
+const PRESS_TOOLS: ReadonlySet<string> = new Set<PressTool>(["ai", "polygon", "box", "circle"]);
 
 export interface SplitViewProps {
   /** The folder's images, for choosing the second one. */
@@ -170,6 +175,24 @@ export function SplitView({ images, pixelsUrl, tileUrl, viewer }: SplitViewProps
   const aiClassId = classForNewSegment(sides[activeSide].segments, activeClassId);
   // Where each half was scrolled to, put back when the view moves between them (CP-31).
   const paneScroll = usePaneScroll();
+
+  /*
+   * A PRESS ON THE HALF NOT BEING EDITED is the tool's, and makes that half the one edited, as a
+   * press in either of legacy's viewers is (main_window.py:5498-5537; `pairPress.ts`). The view
+   * drawn there next is handed the gesture for the render that draws it, and whatever wants it
+   * keeps it; it is dropped after that render, so nothing drawn later is handed an old press.
+   */
+  const [handed, setHanded] = useState<{ readonly side: SideIndex; readonly press: HandedPress } | null>(null);
+  useEffect(() => {
+    if (handed !== null) setHanded(null);
+  }, [handed]);
+  const pressOn = useCallback(
+    (side: SideIndex) => (press: HandedPress) => {
+      setHanded({ side, press });
+      setActiveSide(side);
+    },
+    [setActiveSide],
+  );
 
   // The store's word for legacy's `view_mode == "multi"`: while this is on screen, the keys legacy
   // applies to both viewers act on both sides (CP-31).
@@ -338,7 +361,11 @@ export function SplitView({ images, pixelsUrl, tileUrl, viewer }: SplitViewProps
                         follow it here (`canvas/viewKind.ts`). */}
                     <ViewKindContext.Provider value="multi">
                       <PairPanContext.Provider value={panOtherHalf}>
-                        <PairAiContext.Provider value={pairAi}>{viewer}</PairAiContext.Provider>
+                        <PairAiContext.Provider value={pairAi}>
+                          <PairPressContext.Provider value={handed?.side === side ? handed.press : null}>
+                            {viewer}
+                          </PairPressContext.Provider>
+                        </PairAiContext.Provider>
                       </PairPanContext.Provider>
                     </ViewKindContext.Provider>
                   </div>
@@ -353,6 +380,16 @@ export function SplitView({ images, pixelsUrl, tileUrl, viewer }: SplitViewProps
                     {...(pairAi === null
                       ? {}
                       : { ai: { prompt: pairAi.prompt, result: pairAi.results[side], classId: aiClassId } })}
+                    // A press here is the tool's, as in legacy's non-active viewer.
+                    {...(viewer !== undefined && PRESS_TOOLS.has(activeTool)
+                      ? {
+                          press: {
+                            tool: activeTool as PressTool,
+                            classId: classForNewSegment(sides[side].segments, activeClassId),
+                            onPress: pressOn(side),
+                          },
+                        }
+                      : {})}
                   />
                 )}
               </figure>
@@ -393,6 +430,13 @@ function sizeOf(side: SideState): ImageSize | null {
   return { width: metadata.width, height: metadata.height };
 }
 
+/** What a press on the half not being edited is for: the tool, its colour, and where it goes. */
+interface PressProps {
+  readonly tool: PressTool;
+  readonly classId: number;
+  readonly onPress: (press: HandedPress) => void;
+}
+
 function Pane({
   side,
   index,
@@ -400,6 +444,7 @@ function Pane({
   pixelsUrl,
   tileUrl,
   ai,
+  press,
 }: {
   readonly side: SideState;
   readonly index: SideIndex;
@@ -408,6 +453,7 @@ function Pane({
   readonly pixelsUrl: (key: string, processing: ImageProcessing) => string;
   readonly tileUrl?: (key: string, processing: ImageProcessing, z: number, x: number, y: number) => string;
   readonly ai?: PairPromptProps;
+  readonly press?: PressProps;
 }): ReactNode {
   const open = side.open;
   if (open === null) return null;
@@ -436,6 +482,7 @@ function Pane({
       pixelsUrl={pixelsUrl}
       {...(tileUrl === undefined ? {} : { tileUrl })}
       {...(ai === undefined ? {} : { ai })}
+      {...(press === undefined ? {} : { press })}
     />
   );
 }
@@ -457,6 +504,7 @@ function SidePicture({
   pixelsUrl,
   tileUrl,
   ai,
+  press,
 }: {
   readonly side: SideState;
   readonly index: SideIndex;
@@ -465,6 +513,7 @@ function SidePicture({
   readonly pixelsUrl: (key: string, processing: ImageProcessing) => string;
   readonly tileUrl?: (key: string, processing: ImageProcessing, z: number, x: number, y: number) => string;
   readonly ai?: PairPromptProps;
+  readonly press?: PressProps;
 }): ReactNode {
   const { attach, scale } = useFittedPane(size, picture);
   const { setZoomOn } = useWorkspace();
@@ -506,6 +555,14 @@ function SidePicture({
         selected={side.selected}
       >
         {ai !== undefined && <PairPrompt {...ai} width={size.width} height={size.height} />}
+        {press !== undefined && (
+          <IdlePress
+            {...press}
+            name={side.open?.image.name ?? ""}
+            width={size.width}
+            height={size.height}
+          />
+        )}
       </AnnotationCanvas>
     </div>
   );

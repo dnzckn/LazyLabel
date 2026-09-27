@@ -37,6 +37,7 @@ import type { ApiClient, WireSegmentRequest, WireSegmentResponse } from "../api/
 import type { BinaryMask } from "@lazylabel/annotation-formats";
 import { epsilonFactorFor, maskToPolygon } from "../tools/autoPolygon.js";
 import { PairAiContext, outsideOf, type PairAi } from "../split/pairAi.js";
+import { PairPressContext, type HandedPress } from "../split/pairPress.js";
 import { processingParams } from "./processing.js";
 import type { SideIndex } from "./WorkspaceProvider.jsx";
 
@@ -166,12 +167,15 @@ export function AiTool({
 
   // One encode per image. Cleared when the image changes so a handle cannot outlive its pixels.
   const viewKey = operateOnView === undefined ? "" : JSON.stringify(operateOnView);
+  /** Whether this image's encode has answered, either way, since it was asked for. */
+  const [settled, setSettled] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
     setHandle(null);
     setResult(null);
     setEncoding(true);
+    setSettled(false);
 
     client
       .embed({
@@ -190,6 +194,7 @@ export function AiTool({
         if (cancelled) return;
         setHandle(response.handle);
         setEncoding(false);
+        setSettled(true);
         encoded.current.add(imageKey);
         // Only a COLD encode is worth a message: one on every image would be noise, and the whole
         // point of the cache is that the user does not wait.
@@ -198,6 +203,7 @@ export function AiTool({
       .catch((cause: unknown) => {
         if (cancelled) return;
         setEncoding(false);
+        setSettled(true);
         notify({
           severity: "info",
           // Legacy's words and plain 5 s message (sam_single_view_manager.py:346-348), with the
@@ -228,10 +234,12 @@ export function AiTool({
   const adjustmentsKey = operateOnView === undefined ? "" : JSON.stringify(operateOnView.adjustments);
   const [otherHandle, setOtherHandle] = useState<string | null>(null);
   const [otherEncoding, setOtherEncoding] = useState(false);
+  const [otherSettled, setOtherSettled] = useState(false);
   const ready = handle !== null;
 
   useEffect(() => {
     setOtherHandle(null);
+    setOtherSettled(false);
     if (otherKey === null || !ready) {
       setOtherEncoding(false);
       return undefined;
@@ -253,11 +261,13 @@ export function AiTool({
         if (cancelled) return;
         setOtherHandle(response.handle);
         setOtherEncoding(false);
+        setOtherSettled(true);
         encoded.current.add(otherKey);
       })
       .catch((cause: unknown) => {
         if (cancelled) return;
         setOtherEncoding(false);
+        setOtherSettled(true);
         notify({
           severity: "error",
           message: `Error loading AI model: ${cause instanceof Error ? cause.message : String(cause)}`,
@@ -554,6 +564,21 @@ export function AiTool({
   // A linked pair's prediction is waiting when either image has one.
   const waiting = pair === null ? own !== null : pair.results.some((answer) => answer !== null);
 
+  /*
+   * A PRESS MADE ON THIS HALF OF THE MULTI TAB WHILE THE OTHER WAS EDITED (`split/pairPress.ts`),
+   * kept until this image -- and, linked, the other -- has been loaded into its model, then settled
+   * as if made here. The view has just moved here, so neither encode has answered yet. Legacy's
+   * press waits the same way: its prediction loads the viewer's image first when it must
+   * (main_window.py:6794-6797). Kept, not refused as a click on an image being prepared is,
+   * because it was made before this half could have said it was loading.
+   */
+  const handedNow = useContext(PairPressContext);
+  const [handed, setHanded] = useState<HandedPress | null>(null);
+  useEffect(() => {
+    if (handedNow !== null && handedNow.tool === "ai") setHanded(handedNow);
+  }, [handedNow]);
+  const canAsk = settled && (pair === null || handle === null || otherSettled);
+
   return (
     <>
       <AiLayer
@@ -565,6 +590,7 @@ export function AiTool({
         onRefused={(reason) => notify({ severity: "warning", message: reason })}
         onClear={onClear}
         preview={result === null ? undefined : <AiPreview result={result} classId={classId} />}
+        {...(handed !== null && canAsk ? { handed } : {})}
       />
       {/* Legacy's status line while the image is encoded (sam_single_view_manager.py:278). */}
       {(encoding || otherEncoding) && (
