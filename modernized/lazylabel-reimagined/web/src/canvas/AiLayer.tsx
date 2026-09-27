@@ -12,7 +12,7 @@
  * THE RIGHT BUTTON IS A NEGATIVE POINT, so the context menu is suppressed here — otherwise the
  * browser's menu opens over the preview the user is trying to correct. In legacy's single view (and
  * its Sequence tab) the point goes down on the PRESS, and a right drag is nothing more; in its Multi
- * tab a right press waits for its release like a left one, and a right drag is a box
+ * tab a right press, or a middle one, waits for its release like a left one, and a drag is a box
  * (`tools/ai.ts`). Which of the two this is, the split view says (`viewKind.ts`). On a Mac a
  * Control-click is the right button, because Qt makes it one there (`platform.ts`).
  */
@@ -139,9 +139,11 @@ export function AiLayer({
 
   const onPointerDown = useCallback(
     (event: React.PointerEvent<SVGSVGElement>) => {
-      // Left for positive, right for negative. Anything else is not a prompt.
-      const button = buttonOf(event);
+      // Left for positive, right for negative, and in the Multi tab any other button too.
+      const button = buttonOf(event, view);
       if (button === null) return;
+      // Not the browser's middle-button autoscroll as well.
+      if (event.button === 1) event.preventDefault();
       const box = boxOf();
       if (box === null) return;
 
@@ -430,9 +432,15 @@ export function AiMarks({
  * (`qnsview_mouse.mm`), so there it is a negative point. A browser reports it as the left button
  * with Control down. Elsewhere Ctrl changes nothing, as legacy reads no modifier in AI mode.
  */
-export function buttonOf(event: { readonly button: number; readonly ctrlKey: boolean }): AiButton | null {
+export function buttonOf(
+  event: { readonly button: number; readonly ctrlKey: boolean },
+  view: ViewKind = "single",
+): AiButton | null {
   if (event.button === 2) return "right";
-  if (event.button !== 0) return null;
+  // Legacy's Multi press keeps only whether the button was the left one, so the middle button, or
+  // any other, is a negative point there (main_window.py:5517-5521). The single view reads the
+  // left and right alone (single_view_mouse_handler.py:131-139).
+  if (event.button !== 0) return view === "multi" ? "right" : null;
   return event.ctrlKey && isApplePlatform() ? "right" : "left";
 }
 

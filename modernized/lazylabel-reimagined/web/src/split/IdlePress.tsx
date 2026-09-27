@@ -54,10 +54,12 @@ export function IdlePress({
   }, []);
 
   const onPointerDown = (event: React.PointerEvent<SVGSVGElement>) => {
-    // The AI tool's right button is a negative point, as in the view; the others draw with the left.
-    const button = tool === "ai" ? buttonOf(event) : event.button === 0 ? "left" : null;
+    // The AI tool's right button is a negative point, as in the view, and here in the Multi tab any
+    // button but the left (`buttonOf`); the others draw with the left.
+    const button = tool === "ai" ? buttonOf(event, "multi") : event.button === 0 ? "left" : null;
     const box = boxOf();
     if (button === null || box === null) return;
+    if (event.button === 1) event.preventDefault(); // not the browser's autoscroll as well
     const located = locate(event, box, image);
     // Legacy's press off the picture does nothing, not even choosing the viewer (main_window.py:5505-5509).
     if (located.kind === "outside") return;

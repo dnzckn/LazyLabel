@@ -1067,3 +1067,38 @@ describe("legacy's words after Space in the Multi tab (ai_segment_manager.py:387
     expect(await screen.findByText("No segments to erase")).toBeTruthy();
   });
 });
+
+describe("the middle button in the Multi tab", () => {
+  // Legacy's Multi press keeps only whether the button was the left one (main_window.py:5517-5521),
+  // so any other, the middle one too, is a negative point where it went down. The single view
+  // reads the left and right buttons alone (single_view_mouse_handler.py:131-139).
+  it("places a negative point in the image being edited, asked of both", async () => {
+    const { segment } = await pairUp();
+    click(50, 40);
+    await waitFor(() => expect(segment).toHaveBeenCalledTimes(2));
+
+    click(70, 30, 1);
+
+    await waitFor(() => expect(segment).toHaveBeenCalledTimes(4));
+    for (const [request] of segment.mock.calls.slice(2)) {
+      expect(request.points).toEqual([
+        { x: 50, y: 40, positive: true },
+        { x: 70, y: 30, positive: false },
+      ]);
+    }
+  });
+
+  it("places a negative point from the half not being edited too", async () => {
+    const { segment } = await pairUp();
+    click(50, 40);
+    await waitFor(() => expect(segment).toHaveBeenCalledTimes(2));
+
+    pressHalf(1, "b.png", [70, 30], 1);
+
+    await waitFor(() => expect(segment).toHaveBeenCalledTimes(4));
+    expect(segment.mock.calls.at(-1)![0].points).toEqual([
+      { x: 50, y: 40, positive: true },
+      { x: 70, y: 30, positive: false },
+    ]);
+  });
+});
