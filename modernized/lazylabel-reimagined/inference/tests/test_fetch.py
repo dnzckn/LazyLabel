@@ -254,7 +254,9 @@ class TestTheCatalog:
     VERIFIED = {
         "sam2.1_hiera_large.pt": ("2647878d5dfa5098f2f8649825738a9345572bae2d4350a2468587ece47dd318", 898083611),
         "sam_vit_h_4b8939.pth": ("a7bf3b02f3ebf1267aba913ff637d9a2d5c33d3173bb679e46d9f338c26f262e", 2564550879),
-        "mobilenetv3_small_tv.pth": ("23581817e8e9f35d7c155d24a68d62dadd8bc96e5649304638e1193412baa0e2", 10305097),
+        # torchvision's published file, the one the desktop app downloads (reference_finder_worker.py:99-118);
+        # its 244 tensors equal the desktop app's re-saved mobilenetv3_small_tv.pth (checked 2026-09-27).
+        "mobilenet_v3_small-047dcff4.pth": ("047dcff4addef86ea5bc2eff13c9614dc11f47ab1160d0a71a25e7db994f4e1f", 10306551),
     }
 
     def test_holds_the_three_verified_checkpoints_and_nothing_else(self):
@@ -264,14 +266,17 @@ class TestTheCatalog:
         # The service's own rules: a catalog it could not read would be a catalog of nothing.
         parse_manifest(CATALOG.read_text(encoding="utf-8"))
 
-    def test_fetches_the_sam_files_from_meta_over_https_and_says_why_the_embedder_has_no_url(self):
+    def test_fetches_each_from_its_publisher_over_https(self):
         by_id = {c.id: c for c in load_catalog()}
         assert by_id["sam2.1-large"].url == (
             "https://dl.fbaipublicfiles.com/segment_anything_2/092824/sam2.1_hiera_large.pt"
         )
         assert by_id["sam1-huge"].url == "https://dl.fbaipublicfiles.com/segment_anything/sam_vit_h_4b8939.pth"
-        assert by_id["mobilenet-v3-small"].url is None
-        assert "torchvision" in (by_id["mobilenet-v3-small"].source or "")
+        # Find Archetypes' embedder: torchvision's IMAGENET1K_V1 weights, from where the desktop app
+        # gets them, so `npm run ai:models mobilenet-v3-small` can fetch it too.
+        assert by_id["mobilenet-v3-small"].url == (
+            "https://download.pytorch.org/models/mobilenet_v3_small-047dcff4.pth"
+        )
 
     def test_uses_the_example_manifests_names_so_a_saved_model_choice_still_matches(self):
         example = json.loads((CATALOG.parent / "manifest.example.json").read_text(encoding="utf-8"))

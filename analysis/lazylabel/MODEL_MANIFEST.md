@@ -104,6 +104,7 @@ honest to say which is which rather than fill the table with plausible-looking d
 | `sam2.1_hiera_large.pt` | `2647878d5dfa5098f2f8649825738a9345572bae2d4350a2468587ece47dd318` | **verified**, computed from the copy on the maintainer's machine (898,083,611 bytes) |
 | `sam_vit_h_4b8939.pth` | `a7bf3b02f3ebf1267aba913ff637d9a2d5c33d3173bb679e46d9f338c26f262e` | **verified**, computed from the copy on the maintainer's machine (2,564,550,879 bytes) |
 | `mobilenetv3_small_tv.pth` | `23581817e8e9f35d7c155d24a68d62dadd8bc96e5649304638e1193412baa0e2` | **verified**, computed from the copy on the maintainer's machine (10,305,097 bytes) |
+| `mobilenet_v3_small-047dcff4.pth` | `047dcff4addef86ea5bc2eff13c9614dc11f47ab1160d0a71a25e7db994f4e1f` | **verified** 2026-09-27, computed from a copy downloaded from `https://download.pytorch.org/models/` (10,306,551 bytes): torchvision's `IMAGENET1K_V1` file, which the desktop app downloads and re-saves as `mobilenetv3_small_tv.pth` (L ui/workers/reference_finder_worker.py:99-118). Its 244 tensors equal that file's, so Find Archetypes answers the same. `npm run ai:models mobilenet-v3-small` fetches it |
 | every other row above | — | **not yet mirrored** |
 
 A digest may only be entered here after the file has been downloaded from the source URL above and

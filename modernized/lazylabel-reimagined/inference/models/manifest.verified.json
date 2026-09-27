@@ -26,10 +26,10 @@
       "name": "MobileNetV3 small",
       "family": "embedder",
       "size": "mobilenet_v3_small",
-      "filename": "mobilenetv3_small_tv.pth",
-      "sha256": "23581817e8e9f35d7c155d24a68d62dadd8bc96e5649304638e1193412baa0e2",
-      "bytes": 10305097,
-      "source": "no download of its own: torchvision's MobileNet_V3_Small_Weights.IMAGENET1K_V1 saved as a state dict, which Find Archetypes needs (MODEL_MANIFEST.md)"
+      "filename": "mobilenet_v3_small-047dcff4.pth",
+      "sha256": "047dcff4addef86ea5bc2eff13c9614dc11f47ab1160d0a71a25e7db994f4e1f",
+      "bytes": 10306551,
+      "url": "https://download.pytorch.org/models/mobilenet_v3_small-047dcff4.pth"
     }
   ]
 }
