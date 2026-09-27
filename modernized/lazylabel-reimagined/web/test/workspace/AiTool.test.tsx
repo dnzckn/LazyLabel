@@ -108,8 +108,13 @@ async function ready(): Promise<void> {
   // these files run in parallel with CPU-bound ones, and a starved worker can take longer than a
   // second to deliver a resolved promise. Raising it does not weaken the assertion -- what is
   // being asserted is that the preview arrives, not how fast.
-  // Legacy's words (ai_segment_manager.py:515).
+  // Legacy's words for a point prompt's preview (ai_segment_manager.py:515).
   await screen.findByText("Press spacebar to accept AI segment suggestion");
+}
+
+/** The same for a box's preview, in legacy's words for a box (main_window.py:2269-2271). */
+async function boxReady(): Promise<HTMLElement> {
+  return screen.findByText("AI bounding box preview ready - press Space to confirm!");
 }
 
 /** Let a rejected prediction settle, which produces no message of its own. */
@@ -676,12 +681,32 @@ describe("legacy's words after Space (ai_segment_manager.py:120-128, 275-299)", 
     expect(notice.getAttribute("class")).toContain("status-bar__message--info");
   });
 
+  it("says a box's preview is ready in legacy's words for a box, and a point's in its own", async () => {
+    // Legacy's point preview says "Press spacebar to accept AI segment suggestion"
+    // (ai_segment_manager.py:515) and its box preview "AI bounding box preview ready - press Space
+    // to confirm!" (main_window.py:2269-2271). The web gave a box the point's words.
+    mount({});
+    await waitFor(() => expect(surface()).toBeTruthy());
+    fireEvent.pointerDown(surface(), point(5, 2));
+    fireEvent.pointerUp(surface(), point(35, 18));
+
+    await boxReady();
+    expect(screen.queryByText("Press spacebar to accept AI segment suggestion")).toBeNull();
+
+    // A click after it is asked with the box still in the prompt (RULE-066), and legacy's words for
+    // a click's prediction are a point's whatever else is pending.
+    click(10, 10);
+
+    await ready();
+    expect(screen.queryByText("AI bounding box preview ready - press Space to confirm!")).toBeNull();
+  });
+
   it("says \"AI bounding box segment saved as polygon!\", a success, after a box", async () => {
     mount({}, { autoPolygon: { enabled: true, resolution: 80 } });
     await waitFor(() => expect(surface()).toBeTruthy());
     fireEvent.pointerDown(surface(), point(5, 2));
     fireEvent.pointerUp(surface(), point(35, 18));
-    await ready();
+    await boxReady();
 
     space();
 

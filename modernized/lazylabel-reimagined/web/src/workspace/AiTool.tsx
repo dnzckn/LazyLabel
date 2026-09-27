@@ -177,6 +177,13 @@ export function AiTool({
   current.current = own;
   /** The prompt that prediction answered: a box's accept says so (ai_segment_manager.py:293-299). */
   const answered = useRef<AiPrompt | null>(null);
+  /**
+   * Whether that prediction was asked by DRAWING a box, which legacy words as its own when it is
+   * ready (main_window.py:2269-2271); a click after a box asks with the box still in the prompt,
+   * and legacy's words for it are a point's (ai_segment_manager.py:515). A drawn box is a new one.
+   */
+  const [drewBox, setDrewBox] = useState(false);
+  const lastBox = useRef<AiPrompt["box"]>(null);
 
   // One encode per image. Cleared when the image changes so a handle cannot outlive its pixels.
   const viewKey = operateOnView === undefined ? "" : JSON.stringify(operateOnView);
@@ -471,6 +478,9 @@ export function AiTool({
         return;
       }
 
+      const boxDrawn = prompt.box !== null && prompt.box !== lastBox.current;
+      lastBox.current = prompt.box;
+
       if (handle === null) {
         // A click that lands while the image is still encoding used to be dropped in silence. The
         // banner says the image is being prepared, but a user who clicks anyway -- which is what
@@ -495,6 +505,7 @@ export function AiTool({
           // preview backwards as the user refines it.
           if (mine !== latest.current) return;
           answered.current = prompt;
+          setDrewBox(boxDrawn);
           setResult(response);
         })
         .catch((cause: unknown) => {
@@ -709,13 +720,20 @@ export function AiTool({
         </p>
       )}
 
-      {/* RULE-062's message, which legacy shows for a box preview and not for a point one. Shown
-          for both here, in legacy's words for both (ai_segment_manager.py:515): the user needs to
-          know a prediction is waiting whichever way they asked for it, and the canvas cannot say
-          so on a machine where the preview fails to paint. */}
+      {/* RULE-062's message that a prediction is waiting, in legacy's words for each: "Press
+          spacebar to accept AI segment suggestion" for a point prompt's (ai_segment_manager.py:
+          515), and "AI bounding box preview ready - press Space to confirm!" for a drawn box's
+          (main_window.py:2269-2271). The Multi tab says the first for a box and nothing for points
+          (main_window.py:6721-6722, 6778-6804); here it says the first for both. Legacy's is a
+          three-second status-bar notice; this stays while the prediction waits, because the user
+          needs to know one is waiting whichever way they asked for it, and the canvas cannot say
+          so where the preview fails to paint. Until 2026-09-27 this comment had legacy's two the
+          wrong way round, and a box's preview was given the point's words. */}
       {waiting && (
         <p role="status" className="banner">
-          Press spacebar to accept AI segment suggestion
+          {pair === null && drewBox
+            ? "AI bounding box preview ready - press Space to confirm!"
+            : "Press spacebar to accept AI segment suggestion"}
         </p>
       )}
     </>
