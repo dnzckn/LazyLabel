@@ -550,7 +550,7 @@ Other steps:
 
 **Check:** a fresh machine goes from nothing to `/health` 200, with SAM 2.1 large usable, with no hand-written JSON.
 
-**Done 2026-09-27** (`fdcc489`): `models/manifest.verified.json`, `lazylabel-models list|fetch` (asks, `.part` with Range resume, size and SHA-256 before rename, merges `manifest.json`), a per-user default folder, and `npm run ai:models`, tested against a loopback server, with an AST test that no server module imports it. MobileNetV3 got its URL on 2026-09-27 (`HASH`): torchvision's published file, hashed from a downloaded copy, whose tensors equal the desktop app's re-saved copy.
+**Done 2026-09-27** (`fdcc489`): `models/manifest.verified.json`, `lazylabel-models list|fetch` (asks, `.part` with Range resume, size and SHA-256 before rename, merges `manifest.json`), a per-user default folder, and `npm run ai:models`, tested against a loopback server, with an AST test that no server module imports it. MobileNetV3 got its URL on 2026-09-27 (`066d4d3`): torchvision's published file, hashed from a downloaded copy, whose tensors equal the desktop app's re-saved copy.
 
 ### R8. One command starts what is installed (S to M)
 
