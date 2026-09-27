@@ -162,7 +162,7 @@ async function pairUp(names: readonly string[] = ["a.png", "b.png", "c.png", "d.
 }
 
 const keys = () => pair().map((side) => side.key);
-const press = (key: string, code: string, modifiers: { ctrlKey?: boolean } = {}) =>
+const press = (key: string, code: string, modifiers: { ctrlKey?: boolean; shiftKey?: boolean } = {}) =>
   fireEvent.keyDown(document, { key, code, ...modifiers });
 const editRight = () => fireEvent.click(screen.getByLabelText("Edit the right image"));
 const halves = () => screen.getAllByRole("figure");
@@ -511,6 +511,41 @@ describe("Space finishes what is drawn in both images while linked", () => {
     drawTriangle(60, 20);
 
     await waitFor(() => expect(pair().map((side) => side.classes.length)).toEqual([3, 4]));
+  });
+});
+
+describe("Shift+Space erases each image with its own polygon while unlinked", () => {
+  it("erases the image being edited and the other, each where its own polygon was drawn, in one step", async () => {
+    // keyboard_event_manager.py:157-163: every viewer's polygon of three vertices or more erases in
+    // that viewer (main_window.py:6977-6988). Each image's triangles lie under a rectangle drawn
+    // over them there: a.png's before b.png is made the one edited, b.png's after.
+    await pairUp();
+    unlink();
+    chooseTool("Poly (2)");
+    const vertex = (x: number, y: number) =>
+      fireEvent.pointerDown(screen.getByLabelText("Polygon tool"), { button: 0, pointerId: 1, clientX: x, clientY: y });
+    vertex(5, 5);
+    vertex(60, 5);
+    vertex(60, 45);
+    vertex(5, 45);
+    fireEvent.pointerDown(within(halves()[1]!).getByLabelText("Draw on b.png"), {
+      button: 0,
+      pointerId: 1,
+      clientX: 5,
+      clientY: 5,
+    });
+    await waitFor(() => expect(within(halves()[1]!).getByLabelText("Polygon tool")).toBeTruthy());
+    vertex(60, 5);
+    vertex(60, 45);
+    vertex(5, 45);
+
+    press(" ", "Space", { shiftKey: true });
+
+    await waitFor(() => expect(pair().map((side) => side.classes)).toEqual([[], []]));
+
+    press("z", "KeyZ", { ctrlKey: true });
+
+    await waitFor(() => expect(pair().map((side) => side.classes)).toEqual([[0, 1], [0, 1, 2]]));
   });
 });
 

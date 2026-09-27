@@ -109,6 +109,7 @@ function Probe(): ReactNode {
           found: side.segments.map((segment) => whose(segment, side.open?.image.key ?? "")),
           classes: side.segments.map((segment) => segment.classId),
           aliases: side.classAliases,
+          vertices: side.segments.map((segment) => segment.vertices ?? null),
         })),
       )}
     </pre>
@@ -120,6 +121,7 @@ interface Side {
   readonly found: readonly string[];
   readonly classes: readonly (number | null)[];
   readonly aliases: Readonly<Record<string, string>>;
+  readonly vertices: readonly (readonly (readonly [number, number])[] | null)[];
 }
 
 const pair = (): readonly [Side, Side] => JSON.parse(screen.getByTestId("pair").textContent ?? "[]");
@@ -744,6 +746,261 @@ describe("unlinked", () => {
 
     press(" ", "Space");
     await waitFor(() => expect(pair().map((side) => side.found)).toEqual([["a.png"], []]));
+  });
+});
+
+/** A press, released where it went down, on the half not being edited. */
+function pressHalf(side: 0 | 1, name: string, at: readonly [number, number], button = 0) {
+  const surface = within(halves()[side]!).getByLabelText(`Draw on ${name}`);
+  fireEvent.pointerDown(surface, { button, pointerId: 1, clientX: at[0], clientY: at[1] });
+  fireEvent.pointerUp(surface, { button, pointerId: 1, clientX: at[0], clientY: at[1] });
+}
+
+const unlink = () => fireEvent.click(screen.getByLabelText("Link the two images"));
+
+describe("unlinked, each image keeps its own AI prompt", () => {
+  // Legacy keeps AI points and a preview per viewer (multi_view_coordinator.py:48-54); unlinked, a
+  // click or a box goes to the viewer it is made on alone (197-206; main_window.py:6664-6675), and
+  // making the other viewer the active one changes an index and nothing else (92-103). The view
+  // here held one prompt, lost when the other half was made the one edited.
+  it("keeps each image's own prompt and preview when the other is made the one edited", async () => {
+    const { segment } = await pairUp();
+    unlink();
+    click(50, 40);
+    await waitFor(() => expect(within(halves()[0]!).getByTestId("ai-mask")).toBeTruthy());
+
+    pressHalf(1, "b.png", [70, 30]);
+
+    await waitFor(() => expect(within(halves()[1]!).getByLabelText("AI tool")).toBeTruthy());
+    await waitFor(() => expect(segment).toHaveBeenCalledTimes(2));
+    // b.png is asked its own point alone.
+    expect(segment.mock.calls[1]![0]).toEqual({ handle: "h:frames/b.png", points: [{ x: 70, y: 30, positive: true }] });
+    await waitFor(() => expect(within(halves()[1]!).getByTestId("ai-mask")).toBeTruthy());
+    expect(within(halves()[1]!).queryByTestId("ai-positive-1")).toBeNull();
+    // a.png's point and preview stay in its half.
+    expect(within(halves()[0]!).getByTestId("ai-positive-0").getAttribute("cx")).toBe("50");
+    expect(within(halves()[0]!).getByTestId("ai-mask")).toBeTruthy();
+  });
+
+  it("adds a press back on the first image to that image's own prompt", async () => {
+    const { segment } = await pairUp();
+    unlink();
+    click(50, 40);
+    await waitFor(() => expect(segment).toHaveBeenCalledTimes(1));
+    pressHalf(1, "b.png", [70, 30]);
+    await waitFor(() => expect(segment).toHaveBeenCalledTimes(2));
+
+    pressHalf(0, "a.png", [60, 45], 2);
+
+    await waitFor(() => expect(segment).toHaveBeenCalledTimes(3));
+    expect(segment.mock.calls[2]![0]).toEqual({
+      handle: "h:frames/a.png",
+      points: [
+        { x: 50, y: 40, positive: true },
+        { x: 60, y: 45, positive: false },
+      ],
+    });
+  });
+
+  it("accepts the image being edited alone on Space, and then clears both", async () => {
+    // ai_segment_manager.py:314-336, 387-388; main_window.py:6901-6920.
+    await pairUp();
+    unlink();
+    click(50, 40);
+    await waitFor(() => expect(within(halves()[0]!).getByTestId("ai-mask")).toBeTruthy());
+    pressHalf(1, "b.png", [70, 30]);
+    await waitFor(() => expect(within(halves()[1]!).getByTestId("ai-mask")).toBeTruthy());
+    expect(within(halves()[0]!).getByTestId("ai-mask")).toBeTruthy();
+
+    press(" ", "Space");
+
+    await waitFor(() => expect(pair().map((side) => side.found)).toEqual([[], ["b.png"]]));
+    await waitFor(() => expect(document.querySelector('[data-testid="ai-mask"]')).toBeNull());
+    expect(document.querySelector('[data-testid="ai-positive-0"]')).toBeNull();
+  });
+
+  it("clears the other image's prompt on Space with nothing to accept in the one being edited", async () => {
+    // _accept_multi_view clears every viewer whether it accepted anything or not
+    // (ai_segment_manager.py:387-388, 403).
+    await pairUp();
+    unlink();
+    click(50, 40);
+    await waitFor(() => expect(within(halves()[0]!).getByTestId("ai-mask")).toBeTruthy());
+    fireEvent.click(screen.getByLabelText("Edit the right image"));
+    await waitFor(() => expect(within(halves()[1]!).getByLabelText("AI tool")).toBeTruthy());
+    expect(within(halves()[0]!).getByTestId("ai-positive-0")).toBeTruthy();
+
+    press(" ", "Space");
+
+    expect(await screen.findByText(/No AI segment preview to accept/)).toBeTruthy();
+    await waitFor(() => expect(document.querySelector('[data-testid="ai-positive-0"]')).toBeNull());
+    expect(document.querySelector('[data-testid="ai-mask"]')).toBeNull();
+    expect(pair().map((side) => side.found)).toEqual([[], []]);
+  });
+
+  it("clears both images' prompts on Escape", async () => {
+    await pairUp();
+    unlink();
+    click(50, 40);
+    await waitFor(() => expect(within(halves()[0]!).getByTestId("ai-mask")).toBeTruthy());
+    pressHalf(1, "b.png", [70, 30]);
+    await waitFor(() => expect(within(halves()[1]!).getByTestId("ai-mask")).toBeTruthy());
+    expect(within(halves()[0]!).getByTestId("ai-positive-0")).toBeTruthy();
+
+    press("Escape", "Escape");
+
+    await waitFor(() => expect(document.querySelector('[data-testid="ai-mask"]')).toBeNull());
+    expect(document.querySelector('[data-testid="ai-positive-0"]')).toBeNull();
+  });
+
+  it("keeps each image's prompt and preview on unlinking, and accepts the one being edited", async () => {
+    // Legacy's viewers keep their points when the link is released (multi_view_coordinator.py:70-78).
+    await pairUp();
+    click(50, 40);
+    await waitFor(() => expect(within(halves()[1]!).getByTestId("ai-mask")).toBeTruthy());
+
+    unlink();
+
+    expect(halves().map((half) => within(half).queryByTestId("ai-positive-0") !== null)).toEqual([true, true]);
+    expect(within(halves()[1]!).getByTestId("ai-mask")).toBeTruthy();
+    press(" ", "Space");
+    await waitFor(() => expect(pair().map((side) => side.found)).toEqual([["a.png"], []]));
+  });
+
+  it("asks a prompt placed while its image was being encoded once it is, the other being edited then", async () => {
+    // Legacy's prediction loads a viewer's image first and then predicts (main_window.py:6778-6804).
+    let release = () => {};
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const { embed, segment } = mount(new Set(), {}, new Map([["frames/a.png", gate]]));
+    fireEvent.doubleClick(await screen.findByRole("button", { name: "a.png" }));
+    await waitFor(() => expect(pair()[0].aliases).toEqual(ALIASES["frames/a.png"]));
+    fireEvent.click(screen.getByRole("tab", { name: "Multi" }));
+    fireEvent.change(await screen.findByLabelText("Second image"), { target: { value: "frames/b.png" } });
+    await waitFor(() => expect(halves()[1]!.querySelector("canvas")).not.toBeNull());
+    unlink();
+    chooseTool("AI (1)");
+    await waitFor(() => expect(embed.mock.calls.map(([request]) => request.image)).toContain("frames/a.png"));
+
+    click(50, 40);
+    pressHalf(1, "b.png", [70, 30]);
+
+    await waitFor(() => expect(askedOf(segment)).toEqual(["b.png"]));
+    await act(async () => {
+      release();
+      await gate;
+    });
+    await waitFor(() => expect(askedOf(segment)).toEqual(["b.png", "a.png"]));
+    expect(segment.mock.calls[1]![0].points).toEqual([{ x: 50, y: 40, positive: true }]);
+    await waitFor(() => expect(within(halves()[0]!).getByTestId("ai-mask")).toBeTruthy());
+  });
+});
+
+describe("unlinked, each image keeps its own polygon in progress", () => {
+  // Legacy keeps a polygon in progress per viewer and, unlinked, puts a vertex into the viewer
+  // clicked alone (main_window.py:5599-5706). Space and Shift+Space finish every viewer's of three
+  // vertices or more, each into its own image (keyboard_event_manager.py:118-123, 157-163), and
+  // Escape clears them all (315-334). The view here kept one, lost when the other half was chosen.
+  const vertexAt = (x: number, y: number) =>
+    fireEvent.pointerDown(screen.getByLabelText("Polygon tool"), { button: 0, pointerId: 1, clientX: x, clientY: y });
+  const vertexIdle = (side: 0 | 1, name: string, x: number, y: number) =>
+    fireEvent.pointerDown(within(halves()[side]!).getByLabelText(`Draw on ${name}`), {
+      button: 0,
+      pointerId: 1,
+      clientX: x,
+      clientY: y,
+    });
+
+  async function twoPolygons(onLeft: readonly (readonly [number, number])[]) {
+    await pairUp();
+    unlink();
+    chooseTool("Poly (2)");
+    for (const [x, y] of onLeft) vertexAt(x, y);
+    vertexIdle(1, "b.png", 100, 10);
+    await waitFor(() => expect(within(halves()[1]!).getByLabelText("Polygon tool")).toBeTruthy());
+    vertexAt(150, 10);
+    vertexAt(150, 50);
+  }
+
+  it("keeps each image's own when the other is made the one edited, drawn in its half", async () => {
+    await pairUp();
+    unlink();
+    chooseTool("Poly (2)");
+    vertexAt(10, 10);
+    vertexAt(60, 10);
+
+    vertexIdle(1, "b.png", 30, 25);
+
+    const vertex = await waitFor(() => within(halves()[1]!).getByTestId("vertex-0"));
+    expect(vertex.getAttribute("cx")).toBe("30");
+    expect(within(halves()[1]!).queryByTestId("vertex-1")).toBeNull();
+    expect(within(halves()[0]!).getByTestId("pair-vertex-1").getAttribute("cx")).toBe("60");
+  });
+
+  it("finishes both on Space, each into its own image, in one undo step", async () => {
+    await twoPolygons([
+      [10, 10],
+      [60, 10],
+      [60, 50],
+    ]);
+
+    press(" ", "Space");
+
+    await waitFor(() =>
+      expect(pair().map((side) => side.vertices)).toEqual([
+        [
+          [
+            [10, 10],
+            [60, 10],
+            [60, 50],
+          ],
+        ],
+        [
+          [
+            [100, 10],
+            [150, 10],
+            [150, 50],
+          ],
+        ],
+      ]),
+    );
+    // Each with its own image's class: the next free id there.
+    expect(pair().map((side) => side.classes)).toEqual([[0], [0]]);
+    expect(document.querySelector('[data-testid^="pair-vertex-"], [data-testid^="vertex-"]')).toBeNull();
+
+    press("z", "KeyZ", { ctrlKey: true });
+
+    await waitFor(() => expect(pair().map((side) => side.vertices.length)).toEqual([0, 0]));
+  });
+
+  it("leaves one of fewer than three vertices as it is, as legacy's Space does", async () => {
+    await twoPolygons([
+      [10, 10],
+      [60, 10],
+    ]);
+
+    press(" ", "Space");
+
+    await waitFor(() => expect(pair().map((side) => side.vertices.length)).toEqual([0, 1]));
+    expect(within(halves()[0]!).getByTestId("pair-vertex-1")).toBeTruthy();
+  });
+
+  it("clears both on Escape", async () => {
+    await twoPolygons([
+      [10, 10],
+      [60, 10],
+      [60, 50],
+    ]);
+    expect(within(halves()[0]!).getByTestId("pair-vertex-2")).toBeTruthy();
+
+    press("Escape", "Escape");
+
+    await waitFor(() =>
+      expect(document.querySelector('[data-testid^="pair-vertex-"], [data-testid^="vertex-"]')).toBeNull(),
+    );
+    press(" ", "Space");
+    expect(pair().map((side) => side.vertices.length)).toEqual([0, 0]);
   });
 });
 

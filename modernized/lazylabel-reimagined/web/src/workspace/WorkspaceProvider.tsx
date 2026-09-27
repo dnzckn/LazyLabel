@@ -364,6 +364,15 @@ export interface WorkspaceContextValue {
   /** Erase each image with its OWN eraser, by side, as one recorded step: the linked AI erase. */
   readonly eraseEach: (bySide: readonly [WireSegment | null, WireSegment | null]) => EraseOutcome;
   /**
+   * Add each image's OWN annotation, by side, as ONE recorded step, with nothing mirrored and no
+   * class crossing: an unlinked pair's polygons finished together by Space, each with its own image's
+   * class, as legacy finishes every viewer's polygon (keyboard_event_manager.py:118-123;
+   * main_window.py:6938-7020). Either may be null; the other side is the one NOT being edited.
+   */
+  readonly addOwn: (bySide: readonly [WireSegment | null, WireSegment | null], label?: string) => void;
+  /** Erase each image with its own shape, by side, as one step: an unlinked pair's Shift+Space. */
+  readonly eraseOwn: (bySide: readonly [WireSegment | null, WireSegment | null]) => EraseOutcome;
+  /**
    * Replace one annotation in place, recording it.
    *
    * Separate from `addSegment` because an edit has to restore the PREVIOUS value on undo, not
@@ -1074,46 +1083,7 @@ export function WorkspaceProvider({
       const used = here?.classId ?? null;
       if (used !== null) lastToggledClassId.current = used;
 
-      const index = source.segments.length;
-      const targetIndex = target.segments.length;
-      const targetAliasesBefore = target.classAliases;
-      const insert = () => {
-        if (here !== null) {
-          updateSide(at, (current) => ({
-            ...current,
-            segments: [...current.segments.slice(0, index), here, ...current.segments.slice(index)],
-            dirty: true,
-          }));
-        }
-        if (there === null) return;
-        updateSide(other, (current) => ({
-          ...current,
-          segments: [
-            ...current.segments.slice(0, targetIndex),
-            there.segment,
-            ...current.segments.slice(targetIndex),
-          ],
-          classAliases: there.aliases,
-          dirty: true,
-        }));
-      };
-      const remove = () => {
-        if (here !== null) {
-          updateSide(at, (current) => ({
-            ...current,
-            segments: current.segments.filter((_, i) => i !== index),
-            dirty: true,
-          }));
-        }
-        if (there === null) return;
-        updateSide(other, (current) => ({
-          ...current,
-          segments: current.segments.filter((_, i) => i !== targetIndex),
-          classAliases: targetAliasesBefore,
-          dirty: true,
-        }));
-      };
-      insert();
+      recordEach(updateSide, history, { at, sides }, here, there, label);
 
       const targetName = target.open?.image.name ?? "";
       setLinkReport(
@@ -1123,15 +1093,28 @@ export function WorkspaceProvider({
             ? { kind: "refused", reason: plan?.kind === "refused" ? plan.reason : `no prediction in ${targetName}` }
             : { kind: "refused", reason: "no prediction in this image", where: targetName },
       );
+    },
+    [activeSide, history, sides, updateSide],
+  );
 
-      const both = here !== null && there !== null;
-      history.record({
-        label: both ? `${label} (both images)` : label,
-        bytes: (here === null ? 0 : estimateBytes(here)) + (there === null ? 0 : estimateBytes(there.segment)),
-        scope: [...(here === null ? [] : [sideScope(at)]), ...(there === null ? [] : [sideScope(other)])],
-        undo: remove,
-        redo: insert,
-      });
+  /*
+   * AN UNLINKED PAIR'S POLYGONS, finished by one Space: each image's own shape, in its own image,
+   * under the class it chose there, as ONE recorded step. Legacy finishes each viewer's polygon on
+   * its own (keyboard_event_manager.py:118-123) and records none of them; one step here, as the
+   * user pressed one key. Nothing crosses between the images, so no report beside the panes.
+   */
+  const addOwn = useCallback(
+    (bySide: readonly [WireSegment | null, WireSegment | null], label = "Add annotation") => {
+      const at = activeSide;
+      const other = otherSide(at);
+      const here = bySide[at];
+      const target = sides[other];
+      const there = bySide[other] === null || target.open === null ? null : { segment: bySide[other]!, aliases: target.classAliases };
+      if (here === null && there === null) return;
+      const used = here?.classId ?? there?.segment.classId ?? null;
+      if (used !== null) lastToggledClassId.current = used;
+      recordEach(updateSide, history, { at, sides }, here, there, label);
+      setLinkReport(null);
     },
     [activeSide, history, sides, updateSide],
   );
@@ -1293,8 +1276,8 @@ export function WorkspaceProvider({
    * erases each target viewer with its own preview (ai_segment_manager.py:341-360). Nothing is
    * mirrored, so two images of different sizes erase too. One recorded step, as eraseWith's.
    */
-  const eraseEach = useCallback(
-    (bySide: readonly [WireSegment | null, WireSegment | null]): EraseOutcome => {
+  const eraseBySide = useCallback(
+    (bySide: readonly [WireSegment | null, WireSegment | null], linkedAi: boolean): EraseOutcome => {
       const at = activeSide;
       const other = otherSide(at);
       const source = sides[at];
@@ -1309,16 +1292,29 @@ export function WorkspaceProvider({
       const there = cut(target, bySide[other]);
       if (here === null && there === null) return { kind: "empty-shape" };
 
+      // What the other image took, beside the panes, as legacy names each viewer an erase reached
+      // (main_window.py:6985-6988). The linked AI erase says so when that image had no prediction.
       const targetName = target.open?.image.name ?? "";
       setLinkReport(
-        there === null
-          ? { kind: "refused", reason: `no prediction in ${targetName}`, erase: true }
-          : { kind: "erased", image: targetName, count: there.erased.length },
+        there !== null
+          ? { kind: "erased", image: targetName, count: there.erased.length }
+          : linkedAi
+            ? { kind: "refused", reason: `no prediction in ${targetName}`, erase: true }
+            : null,
       );
 
       return recordErase(updateSide, history, { at, before: [source.segments, target.segments] }, here, there);
     },
     [activeSide, history, sides, updateSide],
+  );
+  const eraseEach = useCallback(
+    (bySide: readonly [WireSegment | null, WireSegment | null]) => eraseBySide(bySide, true),
+    [eraseBySide],
+  );
+  // An unlinked pair's Shift+Space: each image's own polygon erases in it (keyboard_event_manager.py:157-163).
+  const eraseOwn = useCallback(
+    (bySide: readonly [WireSegment | null, WireSegment | null]) => eraseBySide(bySide, false),
+    [eraseBySide],
   );
 
   const applySegments = useCallback(
@@ -1579,6 +1575,8 @@ export function WorkspaceProvider({
       eraseWith,
       addEach,
       eraseEach,
+      addOwn,
+      eraseOwn,
       updateSegment,
       replaceSegments,
       history,
@@ -1618,10 +1616,12 @@ export function WorkspaceProvider({
       activeTool,
       addSegment,
       addEach,
+      addOwn,
       applyClasses,
       applySegments,
       eraseWith,
       eraseEach,
+      eraseOwn,
       classAliases,
       fitted,
       clearSelection,
@@ -1699,7 +1699,71 @@ function classNamed(side: SideState, name: string): number | null {
   return side.segments.some((segment) => segment.classId === id) ? id : null;
 }
 
-/** The pixels an eraser covers in an image of this size, or null when it covers none. */
+/**
+ * Each image's own new annotation, put at the end of its list as ONE recorded step whose undo takes
+ * back both: `here` in the side being edited, `at`, and `there` in the other, with the other image's
+ * class names as they are to be after it -- a linked accept may name a class there, and its undo
+ * puts back the names that image had. Either may be null.
+ */
+function recordEach(
+  updateSide: (side: SideIndex, change: (current: SideState) => SideState) => void,
+  history: History,
+  pair: { readonly at: SideIndex; readonly sides: readonly [SideState, SideState] },
+  here: WireSegment | null,
+  there: { readonly segment: WireSegment; readonly aliases: Readonly<Record<string, string>> } | null,
+  label: string,
+): void {
+  const { at, sides } = pair;
+  const other = otherSide(at);
+  const index = sides[at].segments.length;
+  const targetIndex = sides[other].segments.length;
+  const targetAliasesBefore = sides[other].classAliases;
+  const insert = () => {
+    if (here !== null) {
+      updateSide(at, (current) => ({
+        ...current,
+        segments: [...current.segments.slice(0, index), here, ...current.segments.slice(index)],
+        dirty: true,
+      }));
+    }
+    if (there === null) return;
+    updateSide(other, (current) => ({
+      ...current,
+      segments: [...current.segments.slice(0, targetIndex), there.segment, ...current.segments.slice(targetIndex)],
+      classAliases: there.aliases,
+      dirty: true,
+    }));
+  };
+  const remove = () => {
+    if (here !== null) {
+      updateSide(at, (current) => ({
+        ...current,
+        segments: current.segments.filter((_, i) => i !== index),
+        dirty: true,
+      }));
+    }
+    if (there === null) return;
+    updateSide(other, (current) => ({
+      ...current,
+      segments: current.segments.filter((_, i) => i !== targetIndex),
+      classAliases: targetAliasesBefore,
+      dirty: true,
+    }));
+  };
+  insert();
+
+  const both = here !== null && there !== null;
+  history.record({
+    label: both ? `${label} (both images)` : label,
+    bytes: (here === null ? 0 : estimateBytes(here)) + (there === null ? 0 : estimateBytes(there.segment)),
+    // Every side it changed, so closing either drops it: half an inverse would take an annotation
+    // out of an image that is no longer open.
+    scope: [...(here === null ? [] : [sideScope(at)]), ...(there === null ? [] : [sideScope(other)])],
+    undo: remove,
+    redo: insert,
+  });
+}
+
 /**
  * What an erase cut from this side and, when linked, the other, applied as ONE recorded step: one
  * undo puts back both. `before` is each side's annotations as they stood, by side from `at`.
@@ -1760,6 +1824,7 @@ function recordErase(
   };
 }
 
+/** The pixels an eraser covers in an image of this size, or null when it covers none. */
 function maskOf(eraser: WireSegment, size: ImageSize): BinaryMask | null {
   if (eraser.mask !== undefined) return decodeMask(eraser.mask);
   if (eraser.vertices === undefined) return null;

@@ -36,6 +36,7 @@ import { legacyLineThickness, legacyPointRadius, type Sizing } from "./sizing.js
 import { ViewKindContext, type ViewKind } from "./viewKind.js";
 import { useHotkey } from "../hotkeys/HotkeyProvider.jsx";
 import { isInModal } from "../hotkeys/keyEvent.js";
+import type { SideIndex } from "../workspace/WorkspaceProvider.jsx";
 
 export interface PolygonLayerProps {
   readonly width: number;
@@ -48,7 +49,18 @@ export interface PolygonLayerProps {
   readonly onErase?: (vertices: readonly ImagePoint[]) => void;
   /** Called when a finish was refused, with the reason. Legacy says nothing at all here. */
   readonly onRefused?: (reason: string) => void;
+  /**
+   * Unlinked in the Multi tab, Space and Enter finish every image's polygon of three vertices or
+   * more, each into its own image (keyboard_event_manager.py:118-123, 224-228): both, by side, when
+   * the image not being edited has one to finish. Either may be null.
+   */
+  readonly onCompleteEach?: (bySide: BySideVertices) => void;
+  /** Shift+Space's, each image erased with its own polygon (keyboard_event_manager.py:157-163). */
+  readonly onEraseEach?: (bySide: BySideVertices) => void;
 }
+
+/** A polygon's vertices for each image of the Multi tab's pair, by side, or null for none. */
+export type BySideVertices = readonly [readonly ImagePoint[] | null, readonly ImagePoint[] | null];
 
 export function PolygonLayer({
   width,
@@ -57,18 +69,25 @@ export function PolygonLayer({
   onComplete,
   onErase,
   onRefused,
+  onCompleteEach,
+  onEraseEach,
 }: PolygonLayerProps): ReactNode {
   const sizing = useSizing();
   const view = useContext(ViewKindContext);
   const surfaceRef = useRef<SVGSVGElement>(null);
   /*
-   * A LINKED PAIR'S POLYGON IS THE PAIR'S: in the Multi tab, linked, it is drawn in both halves and
-   * outlives this layer when the other half is made the one edited (`split/pairDraft.ts`).
+   * A PAIR'S POLYGONS ARE HELD BY THE SPLIT VIEW: in the Multi tab each image's is drawn in its half
+   * and outlives this layer when the other half is made the one edited -- linked, the pair's one
+   * polygon, in both (`split/pairDraft.ts`).
    */
   const pairDraft = useContext(PairDraftContext);
   const [ownDraft, setOwnDraft] = useState<PolygonDraft>(EMPTY_DRAFT);
   const draft = pairDraft === null ? ownDraft : pairDraft.draft;
   const setDraft = pairDraft === null ? setOwnDraft : pairDraft.setDraft;
+  /** Unlinked in the Multi tab, the other image's own polygon, which Space finishes too. */
+  const otherDraft =
+    pairDraft === null || pairDraft.linked ? EMPTY_DRAFT : pairDraft.drafts[pairDraft.active === 0 ? 1 : 0];
+  const anyDrawing = draft.vertices.length > 0 || otherDraft.vertices.length > 0;
   /**
    * Vertices Ctrl+Z took back, newest last, for Ctrl+Y or Ctrl+Shift+Z to put back, as legacy's
    * redo re-adds a polygon point (undo_redo_manager.py:110-111). Emptied by anything that makes
@@ -116,23 +135,47 @@ export function PolygonLayer({
     (erase: boolean) => {
       // Guarded on there being a draft, because these keys are registered whenever this layer is
       // mounted and the layer outlives any one shape.
-      if (draft.vertices.length === 0) return;
+      if (!anyDrawing) return;
       const outcome = finish(draft, { shift: erase });
+
+      /*
+       * UNLINKED, THE OTHER IMAGE'S POLYGON IS FINISHED TOO, into that image, as legacy's Space and
+       * Shift+Space finish every viewer's polygon of three vertices or more
+       * (keyboard_event_manager.py:118-123, 157-163). One of fewer is left as it is, as legacy's is.
+       */
+      const theirs = finish(otherDraft, { shift: erase });
+      const there = theirs.kind === "close" || theirs.kind === "erase" ? theirs.vertices : null;
+      const each = erase ? onEraseEach : onCompleteEach;
+      if (there !== null && pairDraft !== null && each !== undefined) {
+        const here = outcome.kind === "close" || outcome.kind === "erase" ? outcome.vertices : null;
+        const other: SideIndex = pairDraft.active === 0 ? 1 : 0;
+        if (here !== null) undone.current = [];
+        pairDraft.clear(here === null ? [other] : [pairDraft.active, other]);
+        each(pairDraft.active === 0 ? [here, there] : [there, here]);
+        if (outcome.kind === "ignored" && draft.vertices.length > 0) onRefused?.(outcome.reason);
+        return;
+      }
+
+      if (draft.vertices.length === 0) return;
       if (outcome.kind === "close") complete(outcome.vertices, false);
       else if (outcome.kind === "erase") complete(outcome.vertices, true);
       else if (outcome.kind === "ignored") onRefused?.(outcome.reason);
     },
-    [complete, draft, onRefused],
+    [anyDrawing, complete, draft, onCompleteEach, onEraseEach, onRefused, otherDraft, pairDraft],
   );
+
+  /** Escape and C: the polygon in progress, and in the Multi tab every image's, as legacy's do. */
+  const clearAll = useCallback(() => {
+    undone.current = [];
+    if (pairDraft === null) setOwnDraft(cancel());
+    else pairDraft.clear();
+  }, [pairDraft]);
 
   useHotkey("save_segment", () => finishWith(false));
   useHotkey("erase_segment", () => finishWith(true));
-  // Legacy's C clears the polygon's points too, not only the AI tool's
-  // (keyboard_event_manager.py:300-304; `CONTROL_PARITY.md` CP-20).
-  useHotkey("clear_points", () => {
-    undone.current = [];
-    setDraft(cancel());
-  });
+  // Legacy's C clears the polygon's points too, not only the AI tool's, every viewer's in its Multi
+  // view (keyboard_event_manager.py:241-246, 300-304, 321-334; `CONTROL_PARITY.md` CP-20).
+  useHotkey("clear_points", clearAll);
 
 
   const onPointerDown = useCallback(
@@ -165,8 +208,8 @@ export function PolygonLayer({
 
   // A press on this half of the Multi tab while the other was being edited places the vertex here,
   // as legacy's press in that viewer does (main_window.py:5524-5526, 5654-5657; `split/pairPress.ts`).
-  // Linked, it joins the pair's polygon, or closes it on the first vertex; unlinked, the view's own
-  // draft went with the move, so it starts a new one.
+  // Linked, it joins the pair's polygon, or closes it on the first vertex; unlinked, this image's
+  // own, kept while the other was edited.
   const handed = useContext(PairPressContext);
   useEffect(() => {
     if (handed === null || handed.tool !== "polygon" || !claim(handed)) return;
@@ -187,17 +230,17 @@ export function PolygonLayer({
   // receive them, and nothing about clicking on an image says "now press Space here".
   useEffect(() => {
     // Listening while a vertex can still be put back, too: undoing the last one empties the draft.
-    if (draft.vertices.length === 0 && undone.current.length === 0) return;
+    // In the Multi tab, while the other image has a polygon of its own, for Escape and Enter.
+    if (!anyDrawing && undone.current.length === 0) return;
     const drawing = draft.vertices.length > 0;
 
     const onKeyDown = (event: KeyboardEvent) => {
       if (isTypingTarget(event.target)) return; // a Space in a class-name field is a space
       if (isInModal(event.target)) return; // a key in a dialog is the dialog's, not the drawing's
 
-      if (event.key === "Escape" && drawing) {
+      if (event.key === "Escape" && anyDrawing) {
         event.preventDefault();
-        undone.current = [];
-        setDraft(cancel());
+        clearAll();
         return;
       }
 
@@ -212,12 +255,11 @@ export function PolygonLayer({
        * listens in the CAPTURE phase, so it runs before the dispatcher's bubbling one, and
        * `flushSync` commits the shape to the store before the save reads it.
        */
-      if (event.key === "Enter" && drawing) {
+      // Unlinked in the Multi tab, every image's polygon, as legacy's Enter finishes each viewer's
+      // before saving (keyboard_event_manager.py:206-230).
+      if (event.key === "Enter" && anyDrawing) {
         event.preventDefault();
-        const outcome = finish(draft, { shift: event.shiftKey });
-        if (outcome.kind === "close") flushSync(() => complete(outcome.vertices, false));
-        else if (outcome.kind === "erase") flushSync(() => complete(outcome.vertices, true));
-        else if (outcome.kind === "ignored") onRefused?.(outcome.reason);
+        flushSync(() => finishWith(event.shiftKey));
         return;
       }
 
@@ -248,7 +290,7 @@ export function PolygonLayer({
     // CAPTURE, so these run before the dispatcher's listener, which bubbles (see Enter above).
     document.addEventListener("keydown", onKeyDown, true);
     return () => document.removeEventListener("keydown", onKeyDown, true);
-  }, [complete, draft, onRefused, setDraft]);
+  }, [anyDrawing, clearAll, draft, finishWith, setDraft]);
 
   return (
     <svg

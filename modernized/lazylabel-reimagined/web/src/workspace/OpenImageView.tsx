@@ -33,7 +33,7 @@ import { AnnotationCanvas, segmentAt } from "../canvas/AnnotationCanvas.jsx";
 import { useSettings } from "../settings/SettingsProvider.jsx";
 import { useWorkspace, type EraseOutcome, type LeaveSave, type SideIndex } from "./WorkspaceProvider.jsx";
 import type { Crop } from "../tools/crop.js";
-import { PolygonLayer, toWireVertices } from "../canvas/PolygonLayer.jsx";
+import { PolygonLayer, toWireVertices, type BySideVertices } from "../canvas/PolygonLayer.jsx";
 import { AiTool } from "./AiTool.jsx";
 import { SelectLayer } from "../canvas/SelectLayer.jsx";
 import { ShapeLayer } from "../canvas/ShapeLayer.jsx";
@@ -129,7 +129,7 @@ function OpenedImage({
   const { classAliases } = useWorkspace();
   const { segments, addSegment, replaceSegments, activeTool, activeClassId, selected, toggleSelected } =
     useWorkspace();
-  const { eraseWith, addEach, eraseEach } = useWorkspace();
+  const { eraseWith, addEach, eraseEach, addOwn, eraseOwn, sides } = useWorkspace();
   // The crop is the store's, not this view's: the SAVE path reads it, so a crop dragged here and
   // held locally would be one the panel showed and the file never saw.
   const { crop, setCrop, zoom, processing, setFitted } = useWorkspace();
@@ -315,6 +315,28 @@ function OpenedImage({
     [eraseAndSay],
   );
 
+  /*
+   * AN UNLINKED PAIR'S POLYGONS, finished together by Space (`PolygonLayer`): each into its own
+   * image, with the class that image would give a shape drawn in it -- the active class, or its own
+   * next free id -- as legacy's viewers each take their own (main_window.py:6990-6997).
+   */
+  const polygonsEach = useCallback(
+    (bySide: BySideVertices, erase: boolean) => {
+      const shape = (vertices: readonly ImagePoint[] | null, side: SideIndex): WireSegment | null =>
+        vertices === null
+          ? null
+          : {
+              type: "Polygon",
+              classId: erase ? null : classForNewSegment(sides[side].segments, activeClassId),
+              vertices: toWireVertices(vertices),
+            } as WireSegment;
+      const each = [shape(bySide[0], 0), shape(bySide[1], 1)] as const;
+      if (erase) sayErased(eraseOwn(each));
+      else addOwn(each, "Add polygon");
+    },
+    [activeClassId, addOwn, eraseOwn, sayErased, sides],
+  );
+
   return (
     // No heading: legacy's viewer has none. The picture takes the pane; its name, its size and
     // everything else are in the strip under it.
@@ -476,6 +498,8 @@ function OpenedImage({
                 onComplete={(vertices) => commit("Polygon", vertices, "Add polygon")}
                 onErase={(vertices) => applyErase("Polygon", vertices)}
                 onRefused={refuse}
+                onCompleteEach={(bySide) => polygonsEach(bySide, false)}
+                onEraseEach={(bySide) => polygonsEach(bySide, true)}
               />
             )}
 

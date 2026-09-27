@@ -227,10 +227,12 @@ export function AiTool({
   }, [client, imageKey, model, notify, viewKey]);
 
   /*
-   * THE OTHER IMAGE OF A LINKED PAIR, encoded once, AFTER this one: the click the user is waiting
-   * on is answered here first, and on one GPU the two encodes are one queue. Legacy loads each
-   * viewer's image into that viewer's own model (sam_multi_view_manager.py:192-252). Its view is
-   * its own -- the same adjustments, the other half's processing -- as that half is drawn.
+   * THE OTHER IMAGE OF THE PAIR, encoded once, AFTER this one: the click the user is waiting on is
+   * answered here first, and on one GPU the two encodes are one queue. Legacy loads each viewer's
+   * image into that viewer's own model (sam_multi_view_manager.py:192-252). Its view is its own --
+   * the same adjustments, the other half's processing -- as that half is drawn. Unlinked too, since
+   * 2026-09-27: a prompt the other image still waits on is asked of it here (below), and a press
+   * there finds it ready.
    */
   const otherKey = pair?.other.key ?? null;
   const otherName = pair?.other.name ?? "";
@@ -239,9 +241,6 @@ export function AiTool({
   const [otherHandle, setOtherHandle] = useState<string | null>(null);
   const [otherEncoding, setOtherEncoding] = useState(false);
   const [otherSettled, setOtherSettled] = useState(false);
-  /** Linked prompts waiting for an image's encode, this one's or the other's (asked below). */
-  const queuedForThis = useRef<AiPrompt | null>(null);
-  const queuedForOther = useRef<AiPrompt | null>(null);
   const ready = handle !== null;
 
   useEffect(() => {
@@ -382,10 +381,10 @@ export function AiTool({
       // An image still being loaded into its model is asked once it is (below), as legacy's Multi
       // view loads a viewer's image first and then predicts (main_window.py:6794-6797). The single
       // view refuses instead, as legacy's does (ai_segment_manager.py:425-427).
-      queuedForThis.current = null;
+      held.queue(held.active, null);
       if (handle === null) {
         held.answer(held.active, held.ask(held.active), null);
-        if (encoding) queuedForThis.current = prompt;
+        if (encoding) held.queue(held.active, prompt);
         else waiting.add(UNAVAILABLE);
       } else {
         askSide(held, held.active, handle, prompt, imageKey);
@@ -394,14 +393,14 @@ export function AiTool({
       const other = held.other;
       // What is asked must fit: in the Multi tab a box alone, whatever points lie outside.
       const outside = outsideOf(asked(prompt, view), other);
-      queuedForOther.current = null;
+      held.queue(other.side, null);
       if (outside !== null) {
         held.answer(other.side, held.ask(other.side), null);
         notify({ severity: "warning", message: outside });
       } else if (otherHandle === null) {
         held.answer(other.side, held.ask(other.side), null);
         // Its encode starts once this image's has landed, so it waits for this one's too.
-        if (otherEncoding || (encoding && handle === null)) queuedForOther.current = prompt;
+        if (otherEncoding || (encoding && handle === null)) held.queue(other.side, prompt);
         else waiting.add(UNAVAILABLE);
       } else {
         askSide(held, other.side, otherHandle, prompt, other.name);
@@ -412,36 +411,54 @@ export function AiTool({
     [askSide, encoding, handle, imageKey, notify, otherEncoding, otherHandle, view],
   );
 
+  /**
+   * AN UNLINKED PAIR'S PROMPT IS ASKED OF THE IMAGE IT WAS PLACED ON, and of its model alone, as
+   * legacy's unlinked click and box go to the active viewer only (main_window.py:6664-6675,
+   * 6696-6704; multi_view_coordinator.py:197-206). Placed while that image is still being loaded
+   * into its model, it is asked once it is, as a linked prompt is.
+   */
+  const promptOne = useCallback(
+    (held: PairAi, prompt: AiPrompt) => {
+      held.queue(held.active, null);
+      if (handle !== null) {
+        askSide(held, held.active, handle, prompt, imageKey);
+        return;
+      }
+      held.answer(held.active, held.ask(held.active), null);
+      if (encoding) held.queue(held.active, prompt);
+      else notify({ severity: "info", message: UNAVAILABLE });
+    },
+    [askSide, encoding, handle, imageKey, notify],
+  );
+
   /*
    * A PROMPT PLACED WHILE THE OTHER IMAGE WAS STILL BEING ENCODED is asked of it once its encode
    * lands. Legacy's linked prediction loads a viewer's image first when it must, then predicts, so
    * both images get a mask (sam_multi_view_manager.py:272-284; main_window.py:6668-6675,
    * 6778-6804). Here the other image answered nothing until 2026-09-27, and Space took one image's
-   * mask. Only the latest prompt, and only while it is still the pair's: a clear or an accept in
-   * the meantime drops it.
+   * mask. Only the latest prompt, and only while it is still that image's: a clear or an accept in
+   * the meantime drops it. The pair holds it, so a prompt placed on this half before the view moved
+   * here is asked too: unlinked, the image it was placed on is the other one now.
    */
   useEffect(() => {
-    const queued = queuedForOther.current;
-    if (queued === null || !otherSettled) return;
-    queuedForOther.current = null;
-    if (otherHandle === null || pair === null || pair.prompt !== queued) return;
-    askSide(pair, pair.other.side, otherHandle, queued, pair.other.name);
+    if (pair === null || !otherSettled) return;
+    const queued = pair.dequeue(pair.other.side);
+    if (queued !== null && otherHandle !== null) askSide(pair, pair.other.side, otherHandle, queued, pair.other.name);
   }, [askSide, otherHandle, otherSettled, pair]);
 
   // The same for THIS image, when the prompt came while it was still being encoded (2026-09-27: a
   // click at once on a fresh pair was drawn in both halves and asked of neither).
   useEffect(() => {
-    const queued = queuedForThis.current;
-    if (queued === null || !settled) return;
-    queuedForThis.current = null;
-    if (handle === null || pair === null || pair.prompt !== queued) return;
-    askSide(pair, pair.active, handle, queued, imageKey);
+    if (pair === null || !settled) return;
+    const queued = pair.dequeue(pair.active);
+    if (queued !== null && handle !== null) askSide(pair, pair.active, handle, queued, imageKey);
   }, [askSide, handle, imageKey, pair, settled]);
 
   const onPrompt = useCallback(
     (prompt: AiPrompt) => {
       if (pair !== null) {
-        promptBoth(pair, prompt);
+        if (pair.linked) promptBoth(pair, prompt);
+        else promptOne(pair, prompt);
         return;
       }
 
@@ -482,7 +499,7 @@ export function AiTool({
           });
         });
     },
-    [client, encoding, handle, notify, pair, promptBoth, view],
+    [client, encoding, handle, notify, pair, promptBoth, promptOne, view],
   );
 
   /**
@@ -541,12 +558,19 @@ export function AiTool({
 
   const accept = useCallback(
     (asEraser: boolean) => {
-      if (pair !== null) {
+      if (pair !== null && pair.linked) {
         acceptEach(pair, asEraser);
         return;
       }
 
-      const result = current.current;
+      /*
+       * UNLINKED IN THE MULTI TAB, the image being edited is accepted alone, into itself, and then
+       * BOTH images' prompts and previews go: legacy's `_accept_multi_view` takes the active viewer's
+       * preview only and clears every viewer after (ai_segment_manager.py:314-336, 387-388;
+       * main_window.py:6901-6920). Otherwise, as the single view accepts.
+       */
+      const result = pair === null ? current.current : pair.resultsNow()[pair.active];
+      pair?.clear();
       if (result === null) {
         // Legacy's plain message (ai_segment_manager.py:128).
         notify({ severity: "info", message: "No AI segment preview to accept" });
@@ -604,8 +628,14 @@ export function AiTool({
     setResult(null);
   }, [pair]);
 
-  // A linked pair's prediction is waiting when either image has one.
-  const waiting = pair === null ? own !== null : pair.results.some((answer) => answer !== null);
+  // A linked pair's prediction is waiting when either image has one; an unlinked pair's, when the
+  // image being edited has one, as Space accepts that one alone.
+  const waiting =
+    pair === null
+      ? own !== null
+      : pair.linked
+        ? pair.results.some((answer) => answer !== null)
+        : pair.results[pair.active] !== null;
 
   /*
    * A PRESS MADE ON THIS HALF OF THE MULTI TAB WHILE THE OTHER WAS EDITED (`split/pairPress.ts`),
@@ -620,7 +650,8 @@ export function AiTool({
   useEffect(() => {
     if (handedNow !== null && handedNow.tool === "ai") setHanded(handedNow);
   }, [handedNow]);
-  const canAsk = settled && (pair === null || handle === null || otherSettled);
+  // Unlinked, the press is this image's alone, so only its encode is waited for.
+  const canAsk = settled && (pair === null || !pair.linked || handle === null || otherSettled);
 
   return (
     <>

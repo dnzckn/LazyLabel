@@ -90,10 +90,11 @@ export function AiLayer({
   const view = useContext(ViewKindContext);
   const surfaceRef = useRef<SVGSVGElement>(null);
   /*
-   * A LINKED PAIR'S PROMPT IS THE PAIR'S. In the Multi tab, linked, every point and box placed here
-   * is placed in the other image too, at the same pixel (main_window.py:6645-6720), so the prompt
-   * is held by the split view: the other half draws it, and it outlives this layer when the other
-   * half is made the one edited (`split/pairAi.ts`). Anywhere else it is this layer's own.
+   * A PAIR'S PROMPT IS HELD BY THE SPLIT VIEW. In the Multi tab, linked, every point and box placed
+   * here is placed in the other image too, at the same pixel (main_window.py:6645-6720); unlinked,
+   * this image keeps its own (multi_view_coordinator.py:48-54). Either way the other half draws its
+   * image's prompt, and this one outlives this layer when the other half is made the one edited
+   * (`split/pairAi.ts`). Anywhere else it is this layer's own.
    */
   const pair = useContext(PairAiContext);
   const [own, setOwn] = useState<AiPrompt>(EMPTY_PROMPT);
@@ -131,7 +132,7 @@ export function AiLayer({
       if (outcome.kind === "placed") onRefused?.(outcome.reason);
       else onPrompt(outcome.prompt);
     },
-    [onPrompt, onRefused],
+    [onPrompt, onRefused, setPrompt],
   );
 
   const onPointerDown = useCallback(
@@ -220,13 +221,20 @@ export function AiLayer({
     (erase: boolean) => {
       if (pending(prompt) === "nothing") {
         onRefused?.(NOTHING_TO_ACCEPT);
+        // Legacy's Multi view clears every viewer's points and preview whatever it accepted, the
+        // other image's unlinked ones included (ai_segment_manager.py:387-388; main_window.py:
+        // 6901-6920).
+        if (pair !== null) {
+          undone.current = [];
+          onClear?.();
+        }
         return;
       }
       onAccept(erase);
       undone.current = [];
       setPrompt(clear());
     },
-    [onAccept, onRefused, prompt],
+    [onAccept, onClear, onRefused, pair, prompt, setPrompt],
   );
 
   useHotkey("save_segment", () => accept(false));

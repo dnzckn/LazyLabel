@@ -45,6 +45,14 @@
  * it was off before, when an annotation appearing in an image the user was not looking at was
  * judged to need an explicit act. The box stays beside the panes, in plain sight.
  *
+ * UNLINKED, EACH IMAGE KEEPS ITS OWN WORK, as each of legacy's viewers keeps its own points,
+ * preview and polygon (multi_view_coordinator.py:48-54; main_window.py:5599-5706), since
+ * 2026-09-27: making the other image the one edited leaves this one's AI prompt, preview and
+ * polygon in progress in its half, a press there goes on with them, Space finishes every polygon
+ * into its own image and accepts the AI preview of the image being edited alone, and then clears
+ * both prompts, as legacy's does (keyboard_event_manager.py:118-123, 157-163;
+ * ai_segment_manager.py:314-336, 387-388). They went with the move before.
+ *
  * ERASING LINKS TOO, since 2026-09-23 -- the store's `eraseWith`, for the same reason adding is
  * cheap: every eraser reaches it as one segment. Legacy mirrors both. So, since 2026-09-26, do the
  * SELECTION -- choosing rows in one image chooses the same rows in the other -- and a class's NAME,
@@ -89,9 +97,9 @@ import { IdlePress } from "./IdlePress.jsx";
 import { describePair, type ImageSize } from "./linked.js";
 import { PairAiContext, usePairAi, type Pairing } from "./pairAi.js";
 import { PairPanContext, PaneScrollContext, usePaneScroll, type PairPan } from "./pairPan.js";
-import { PairDraftContext, type PairDraft } from "./pairDraft.js";
+import { PairDraftContext, usePairDrafts } from "./pairDraft.js";
 import { PairPressContext, type HandedPress, type PressTool } from "./pairPress.js";
-import { EMPTY_DRAFT, type PolygonDraft } from "../tools/polygon.js";
+import type { PolygonDraft } from "../tools/polygon.js";
 
 /** The tools whose press on the half not being edited is the tool's (`pairPress.ts`). */
 const PRESS_TOOLS: ReadonlySet<string> = new Set<PressTool>(["ai", "polygon", "box", "circle", "select"]);
@@ -128,9 +136,10 @@ export function SplitView({ images, pixelsUrl, tileUrl, viewer }: SplitViewProps
   const [left, right] = sides;
 
   /*
-   * A LINKED PAIR'S AI PROMPT, held here so both halves draw it and it outlives the view moving to
-   * the other half (`pairAi.ts`). Only while both images are measured, linked, and the AI tool is
-   * chosen; anything else, a different pair included, starts it again.
+   * THE PAIR'S AI PROMPTS, held here so both halves draw them and they outlive the view moving to
+   * the other half (`pairAi.ts`): linked, one prompt asked of both images; unlinked, each image's
+   * own. Only while both images are measured and the AI tool is chosen; anything else, a different
+   * pair included, starts them again.
    */
   const otherIndex: SideIndex = activeSide === 0 ? 1 : 0;
   const otherSide = sides[otherIndex];
@@ -140,11 +149,12 @@ export function SplitView({ images, pixelsUrl, tileUrl, viewer }: SplitViewProps
   const pairKey = left.open === null || right.open === null ? "" : `${left.open.image.key}\u0000${right.open.image.key}`;
   const pairing = useMemo<Pairing | null>(
     () =>
-      !linked || activeTool !== "ai" || viewer === undefined || pairKey === "" || otherOpen === null
+      activeTool !== "ai" || viewer === undefined || pairKey === "" || otherOpen === null
       || otherSize === null || activeSize === null
         ? null
         : {
             key: pairKey,
+            linked,
             active: activeSide,
             other: {
               side: otherIndex,
@@ -194,17 +204,12 @@ export function SplitView({ images, pixelsUrl, tileUrl, viewer }: SplitViewProps
   );
 
   /*
-   * A LINKED PAIR'S POLYGON IN PROGRESS, held here so both halves draw it and the view moving to the
-   * other half keeps it, as legacy's linked viewers each hold the same one (`pairDraft.ts`). Another
-   * pair, unlinking or another tool starts again.
+   * THE PAIR'S POLYGONS IN PROGRESS, held here so both halves draw them and the view moving to the
+   * other half keeps them, as legacy's viewers each hold their own (`pairDraft.ts`): linked, one
+   * polygon in both; unlinked, each image's own. Another pair or another tool starts again.
    */
-  const drafting = linked && activeTool === "polygon" && viewer !== undefined && right.open !== null;
-  const [linkedDraft, setLinkedDraft] = useState<PolygonDraft>(EMPTY_DRAFT);
-  useEffect(() => setLinkedDraft(EMPTY_DRAFT), [pairKey, drafting]);
-  const pairDraft = useMemo<PairDraft | null>(
-    () => (drafting ? { draft: linkedDraft, setDraft: setLinkedDraft } : null),
-    [drafting, linkedDraft],
-  );
+  const drafting = activeTool === "polygon" && viewer !== undefined && pairKey !== "";
+  const pairDraft = usePairDrafts(drafting ? pairKey : null, linked, activeSide);
 
   // The store's word for legacy's `view_mode == "multi"`: while this is on screen, the keys legacy
   // applies to both viewers act on both sides (CP-31).
@@ -388,12 +393,13 @@ export function SplitView({ images, pixelsUrl, tileUrl, viewer }: SplitViewProps
                     picture={side === 0 ? leftPicture : rightPicture}
                     pixelsUrl={pixelsUrl}
                     {...(tileUrl === undefined ? {} : { tileUrl })}
-                    // The linked prompt, drawn here too, with this image's own answer to it.
+                    // This image's prompt, drawn here too -- linked, the pair's -- with this image's
+                    // own answer to it.
                     {...(pairAi === null
                       ? {}
-                      : { ai: { prompt: pairAi.prompt, result: pairAi.results[side] } })}
-                    // The linked polygon in progress, drawn here too.
-                    {...(pairDraft === null ? {} : { draft: pairDraft.draft })}
+                      : { ai: { prompt: pairAi.prompts[side], result: pairAi.results[side] } })}
+                    // This image's polygon in progress, drawn here too; linked, the pair's.
+                    {...(pairDraft === null ? {} : { draft: pairDraft.drafts[side] })}
                     // A press here is the tool's, as in legacy's non-active viewer.
                     {...(viewer !== undefined && PRESS_TOOLS.has(activeTool)
                       ? {
