@@ -123,7 +123,7 @@ describe("legacy's words", () => {
 describe("resetting", () => {
   it("is legacy's button, offered only when something is applied", async () => {
     mount();
-    await waitFor(() => expect(screen.getByRole("button")).toBeTruthy());
+    await waitFor(() => expect(screen.getByRole("button", { name: "Reset Image Adjustments" })).toBeTruthy());
 
     const button = screen.getByRole("button", { name: "Reset Image Adjustments" }) as HTMLButtonElement;
     expect(button.disabled).toBe(true);
@@ -133,10 +133,10 @@ describe("resetting", () => {
   it("puts every adjustment back at once", async () => {
     const { saved } = mount({ brightness: 40, gamma: 1.5 });
     await waitFor(() =>
-      expect((screen.getByRole("button") as HTMLButtonElement).disabled).toBe(false),
+      expect((screen.getByRole("button", { name: "Reset Image Adjustments" }) as HTMLButtonElement).disabled).toBe(false),
     );
 
-    fireEvent.click(screen.getByRole("button"));
+    fireEvent.click(screen.getByRole("button", { name: "Reset Image Adjustments" }));
 
     await waitFor(() => expect(saved).toHaveLength(1));
     expect(saved[0]).toMatchObject({ brightness: 0, contrast: 0, gamma: 1, saturation: 1 });
@@ -150,5 +150,19 @@ describe("a settings file that holds nonsense", () => {
     await waitFor(() => expect(slider("Gamma")).toBeTruthy());
 
     expect((slider("Gamma") as HTMLInputElement).value).toBe("100");
+  });
+});
+
+describe("Reset Annotation Settings, legacy's (CP-50)", () => {
+  it("puts the annotation size, pan speed and join threshold back to their defaults", async () => {
+    // annotation_settings_widget.py:100-106, 196-200: size 1.0, pan 1.0, join 2.
+    const { saved } = mount({ annotation_size_multiplier: 2.5, pan_multiplier: 3, polygon_join_threshold: 9 });
+    const button = await screen.findByRole("button", { name: "Reset Annotation Settings" });
+    expect(button.title).toBe("Reset annotation size, pan speed, and join threshold to defaults.");
+
+    fireEvent.click(button);
+
+    await waitFor(() => expect(saved).toHaveLength(1));
+    expect(saved[0]).toMatchObject({ annotation_size_multiplier: 1, pan_multiplier: 1, polygon_join_threshold: 2 });
   });
 });

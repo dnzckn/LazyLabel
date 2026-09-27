@@ -25,6 +25,8 @@
 
 import { useCallback, type ReactNode } from "react";
 
+import { DEFAULT_SETTINGS } from "@lazylabel/settings-schema";
+
 import { NEUTRAL, adjustmentsFrom, isNeutral, type Adjustments } from "../tools/adjustments.js";
 import { useSettings } from "../settings/SettingsProvider.jsx";
 
@@ -67,6 +69,19 @@ export function AdjustmentsPanel(): ReactNode {
 
   const reset = useCallback(() => {
     void save({ ...settings, values: { ...settings.values, ...NEUTRAL } });
+  }, [save, settings]);
+  // Legacy's Annotation Settings reset: size, pan speed and join threshold (annotation_settings_widget
+  // .py:100-106, 196-200). The size lives here; the other two are in the settings dialog.
+  const resetAnnotation = useCallback(() => {
+    void save({
+      ...settings,
+      values: {
+        ...settings.values,
+        annotation_size_multiplier: DEFAULT_SETTINGS.annotation_size_multiplier,
+        pan_multiplier: DEFAULT_SETTINGS.pan_multiplier,
+        polygon_join_threshold: DEFAULT_SETTINGS.polygon_join_threshold,
+      },
+    });
   }, [save, settings]);
 
   return (
@@ -124,6 +139,13 @@ export function AdjustmentsPanel(): ReactNode {
         display={annotationSize.toFixed(1)}
         onChange={(v) => setValue("annotation_size_multiplier", v / ANNOTATION_SLIDER.scale)}
       />
+      <button
+        type="button"
+        onClick={resetAnnotation}
+        title="Reset annotation size, pan speed, and join threshold to defaults."
+      >
+        Reset Annotation Settings
+      </button>
 
       <button
         type="button"
