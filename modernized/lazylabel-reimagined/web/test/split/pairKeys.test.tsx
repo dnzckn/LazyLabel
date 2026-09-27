@@ -318,6 +318,22 @@ describe("V, M, Escape and Ctrl+A act on both images", () => {
   });
 });
 
+describe("R looks at both images' selections", () => {
+  it("enters Edit when the image NOT being edited has a polygon selected, as legacy's does", async () => {
+    // mode_manager.py:60-86: in the multi view R checks every viewer's selected rows.
+    await pairUp();
+    tick(1);
+    editRight();
+
+    press("r", "KeyR");
+
+    await waitFor(() =>
+      expect((screen.getByRole("radio", { name: "Edit (R)" }) as HTMLInputElement).checked).toBe(true),
+    );
+    expect(screen.queryByText("No editable shapes selected!")).toBeNull();
+  });
+});
+
 describe("a linked pair shares its selection and its class names", () => {
   it("selects the same rows in the other image, those it has", async () => {
     // _sync_multi_view_selection replaces the other table's selection with this one's rows,

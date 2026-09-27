@@ -48,7 +48,8 @@ const MODES: readonly {
 const TOGGLED: ReadonlySet<Tool> = new Set<Tool>(["select", "none", "pan"]);
 
 export function ModeControls({ onHotkeys }: { readonly onHotkeys: () => void }): ReactNode {
-  const { activeTool, setActiveTool, toggleTool, segments, selected, toggleRecentClass } = useWorkspace();
+  const { activeTool, setActiveTool, toggleTool, segments, selected, toggleRecentClass, multiView, sides } =
+    useWorkspace();
   const keyOf = useKeyHint();
   const { notify } = useNotifications();
 
@@ -63,9 +64,14 @@ export function ModeControls({ onHotkeys }: { readonly onHotkeys: () => void }):
    * the mode they were drawing in. Legacy keeps it (CONTROL_PARITY.md CP-16).
    */
   const edit = () => {
-    const outcome = enterEditMode(segments, selected);
-    if (outcome.kind === "refused") {
-      notify({ severity: "info", message: outcome.reason });
+    // In the Multi view legacy looks at both viewers' selections: an editable shape selected in
+    // either lets R in (mode_manager.py:60-86, CP-31).
+    const outcomes = multiView
+      ? sides.map((side) => enterEditMode(side.segments, side.selected))
+      : [enterEditMode(segments, selected)];
+    const refused = outcomes.find((outcome) => outcome.kind === "refused");
+    if (refused !== undefined && outcomes.every((outcome) => outcome.kind === "refused")) {
+      notify({ severity: "info", message: refused.reason });
       return;
     }
     toggleTool("none");
