@@ -20,7 +20,7 @@
  */
 
 import { spawn, spawnSync } from "node:child_process";
-import { copyFileSync, cpSync, existsSync, linkSync, mkdirSync, mkdtempSync, readdirSync, statSync, writeFileSync } from "node:fs";
+import { copyFileSync, cpSync, existsSync, linkSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { crc32, deflateSync } from "node:zlib";
@@ -294,6 +294,26 @@ function run(command, args) {
   if (result.error || result.status !== 0) fail(`${command} ${args.join(" ")} failed.`);
 }
 
+/** What an unzipped AI bundle holds and where its Python looks: for a failure's annotation. */
+function diagnoseBundle(folder) {
+  const lines = [`bundle.json: ${existsSync(path.join(folder, "bundle.json")) ? readFileSync(path.join(folder, "bundle.json"), "utf8").replace(/\s+/g, " ") : "none"}`];
+  const python = path.join(folder, "python");
+  lines.push(`python/: ${readdirSync(python).join(" ")}`);
+  const executable = IS_WINDOWS ? path.join(python, "python.exe") : path.join(python, "bin", "python3");
+  const probe = spawnSync(
+    executable,
+    ["-I", "-c", "import sys, sysconfig; print(sys.prefix, sys.base_prefix); print(sysconfig.get_paths()['purelib']); print(sys.path)"],
+    { encoding: "utf8" },
+  );
+  lines.push(`python says: ${(probe.stdout ?? "").trim()} ${(probe.stderr ?? "").trim().slice(-400)}`);
+  const purelib = (probe.stdout ?? "").split(/\r?\n/)[1]?.trim();
+  if (purelib && existsSync(purelib)) {
+    const packages = readdirSync(purelib);
+    lines.push(`${purelib}: ${packages.length} entries; torch ${packages.includes("torch") ? "there" : "MISSING"}`);
+  }
+  return lines.join("\n");
+}
+
 function fail(message) {
   console.error(message);
   // On a GitHub runner, also as an annotation, with the launcher's last lines: a job's log needs a
@@ -308,6 +328,11 @@ function fail(message) {
         .join("\n");
     } catch {
       // Failed before the launcher started.
+    }
+    try {
+      if (options.ai) tail += `\n${diagnoseBundle(unzipped)}`;
+    } catch {
+      // Nothing unzipped to look at.
     }
     const text = `${message}\n${tail}`.replace(/%/g, "%25").replace(/\r/g, "%0D").replace(/\n/g, "%0A");
     console.log(`::error title=release smoke::${text}`);

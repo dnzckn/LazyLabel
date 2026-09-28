@@ -77,7 +77,9 @@ async function main() {
     const python = stageAi(source, stage, ai, options["models-from"]);
     const unpacked = folderSize(stage);
     console.log(`\nStaged ${megabytes(unpacked.bytes)} MB in ${unpacked.files} files. Packing, measured compressed:`);
-    run(python, ["-I", path.join(WORKSPACE, "scripts", "pack_parts.py"), "--stage", stage, "--out", path.resolve(options.out)]);
+    const packed = run(python, ["-I", path.join(WORKSPACE, "scripts", "pack_parts.py"), "--stage", stage, "--out", path.resolve(options.out)], { capture: true });
+    console.log(packed);
+    notice(`${name}, ${megabytes(unpacked.bytes)} MB in ${unpacked.files} files staged:\n${packed}`);
     return;
   }
   const zip = zipRelease(stage, path.resolve(options.out));
@@ -212,12 +214,15 @@ function stageAi(source, stage, flavour, modelsFrom) {
     ],
     { env: { UV_PROJECT_ENVIRONMENT: path.join(stage, "python") } },
   );
-  run(
+  const imported = run(
     python,
-    ["-I", "-c", "import cv2, sam2, segment_anything, sklearn, torch, torchvision; "
-      + "print(f'PyTorch {torch.__version__}, CUDA {torch.version.cuda}, SAM 2 and segment-anything import')"],
-    { cwd: stage },
+    ["-I", "-c", "import sys, cv2, sam2, segment_anything, sklearn, torch, torchvision; "
+      + "print(f'PyTorch {torch.__version__}, CUDA {torch.version.cuda}, SAM 2 and segment-anything import, "
+      + "from {torch.__file__}; the prefix is {sys.prefix}')"],
+    { cwd: stage, capture: true },
   );
+  console.log(imported);
+  notice(imported);
 
   // Fetched and verified by the service's own tool, which writes the manifest.json the service reads.
   // A copy already in --models-from is checked instead of downloaded again.
@@ -496,8 +501,17 @@ function megabytes(bytes) {
   return (bytes / 1024 / 1024).toFixed(1);
 }
 
+/** On a GitHub runner, a line of the build as an annotation, which anyone can read; a job's log needs signing in. */
+function notice(text) {
+  if (process.env["GITHUB_ACTIONS"] !== "true") return;
+  console.log(`::notice title=release build::${text.trim().replace(/%/g, "%25").replace(/\r/g, "%0D").replace(/\n/g, "%0A")}`);
+}
+
 function fail(message) {
   console.error(message);
+  if (process.env["GITHUB_ACTIONS"] === "true") {
+    console.log(`::error title=release build::${message.replace(/%/g, "%25").replace(/\r/g, "%0D").replace(/\n/g, "%0A")}`);
+  }
   process.exit(1);
 }
 
