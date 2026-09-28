@@ -214,11 +214,14 @@ function stageAi(source, stage, flavour, modelsFrom) {
     ],
     { env: { UV_PROJECT_ENVIRONMENT: path.join(stage, "python") } },
   );
+  // From the bundle's own site-packages, and from nowhere else.
   const imported = run(
     python,
-    ["-I", "-c", "import sys, cv2, sam2, segment_anything, sklearn, torch, torchvision; "
+    ["-I", "-c", `${SAME_PREFIX}; import cv2, sam2, segment_anything, sklearn, torch, torchvision; `
+      + "inside = os.path.commonpath([os.path.realpath(torch.__file__), os.path.realpath(sys.argv[1])]) == os.path.realpath(sys.argv[1]); "
+      + "assert inside, f'PyTorch imported from {torch.__file__}, outside {sys.argv[1]}'; "
       + "print(f'PyTorch {torch.__version__}, CUDA {torch.version.cuda}, SAM 2 and segment-anything import, "
-      + "from {torch.__file__}; the prefix is {sys.prefix}')"],
+      + "from {torch.__file__}')", path.join(stage, "python")],
     { cwd: stage, capture: true },
   );
   console.log(imported);
@@ -253,14 +256,28 @@ function stagePython(stage) {
   const found = run("uv", ["python", "find", "--python-preference", "only-managed", PYTHON_VERSION], { capture: true }).trim();
   const root = IS_WINDOWS ? path.dirname(found) : path.dirname(path.dirname(found));
   const target = path.join(stage, "python");
-  // Links become files: a zip unpacked by Explorer or the Finder cannot hold one.
-  cpSync(root, target, { recursive: true, dereference: true });
+  if (IS_WINDOWS) {
+    cpSync(root, target, { recursive: true });
+  } else {
+    // Every link becomes the file it names, and NOT by cpSync: it keeps a link inside the tree as a
+    // link to the ORIGINAL file, so bin/python3 stayed uv's own Python, and uv installed PyTorch into
+    // uv's store while the bundle got none (2026-09-28, macOS and Linux). A zip unpacked by the
+    // Finder cannot hold a link anyway.
+    mkdirSync(target, { recursive: true });
+    run("cp", ["-RL", `${root}/.`, target]);
+  }
   const library = IS_WINDOWS ? path.join(target, "Lib") : path.join(target, "lib", `python${PYTHON_VERSION.split(".").slice(0, 2).join(".")}`);
   rmSync(path.join(library, "EXTERNALLY-MANAGED"), { force: true });
   const python = IS_WINDOWS ? path.join(target, "python.exe") : path.join(target, "bin", "python3");
   if (!existsSync(python)) fail(`uv's CPython ${PYTHON_VERSION} has no ${path.relative(target, python)} in ${root}.`);
+  // The copy must be a Python of its own before anything is installed into it.
+  run(python, ["-I", "-c", `${SAME_PREFIX}; print(f"The bundle's Python is its own, at {sys.prefix}")`, target]);
   return python;
 }
+
+/** Python that stops unless the running interpreter's prefix is the folder named first on its command line. */
+const SAME_PREFIX = "import os, sys; "
+  + "assert os.path.samefile(sys.prefix, sys.argv[1]), f'this Python is {sys.prefix}, not the copy in {sys.argv[1]}'";
 
 /**
  * The packages the API loads at run time, found the way Node finds them: from each package's real
