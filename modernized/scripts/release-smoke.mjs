@@ -296,5 +296,21 @@ function run(command, args) {
 
 function fail(message) {
   console.error(message);
+  // On a GitHub runner, also as an annotation, with the launcher's last lines: a job's log needs a
+  // signed-in account to read, and its annotations do not.
+  if (process.env["GITHUB_ACTIONS"] === "true") {
+    let tail = "";
+    try {
+      tail = log
+        .split(/\r?\n/)
+        .filter((line) => line.trim() !== "" && !/"level": ?"info"/.test(line))
+        .slice(-30)
+        .join("\n");
+    } catch {
+      // Failed before the launcher started.
+    }
+    const text = `${message}\n${tail}`.replace(/%/g, "%25").replace(/\r/g, "%0D").replace(/\n/g, "%0A");
+    console.log(`::error title=release smoke::${text}`);
+  }
   process.exit(1);
 }

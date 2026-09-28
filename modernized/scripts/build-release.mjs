@@ -380,7 +380,8 @@ Settings and hotkeys are kept per user. LazyLabel listens on this computer only.
 
 Options go after the folder: --port <number>, --no-open, --help.
 
-The AI tools (SAM) are not in this download. To add them, install LazyLabel from the source:
+The AI tools (SAM) are not in this download. The LazyLabel-web-ai download beside it has them,
+still with nothing to install; or install LazyLabel from the source:
 ${REPOSITORY}/tree/main-web#adding-the-ai-tools-sam
 `;
 
