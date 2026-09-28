@@ -12,10 +12,15 @@
  * gives the folder on the launcher's standard input instead of its command line: the question the
  * launcher asks where there is no folder dialog, as on a Linux runner with no desktop. The launcher
  * is stopped afterwards; the scratch folder is left for a look.
+ *
+ * --ai TAKES THE AI BUNDLE (DEPLOYABILITY.md R12) the way a person gets it: part 1 unzipped, the other
+ * parts left beside it, for the launcher to find and unpack on its first start. Then the AI tools
+ * must answer through the app: SAM 2.1 segments a shape from one click, and Find Archetypes, which
+ * runs the embedder, answers for the images. On a runner that is the processor, which is slow.
  */
 
 import { spawn, spawnSync } from "node:child_process";
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, statSync, writeFileSync } from "node:fs";
+import { copyFileSync, cpSync, existsSync, linkSync, mkdirSync, mkdtempSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { crc32, deflateSync } from "node:zlib";
@@ -24,15 +29,27 @@ const IS_WINDOWS = process.platform === "win32";
 const LAUNCHER = { win32: "Start LazyLabel.cmd", darwin: "Start LazyLabel.command" }[process.platform] ?? "start-lazylabel.sh";
 
 const options = parseOptions(process.argv.slice(2));
-const zip = findZip(path.resolve(options.zip));
+const zip = findZip(path.resolve(options.zip), options.ai);
 const scratch = path.resolve(options.dir ?? mkdtempSync(path.join(os.tmpdir(), "lazylabel-smoke-")));
 mkdirSync(scratch, { recursive: true });
-const unzipped = path.join(scratch, path.basename(zip, ".zip"));
+// A part's folder is the bundle's, without the part number.
+const unzipped = path.join(scratch, path.basename(zip, ".zip").replace(/-\d+of\d+$/, ""));
 console.log(`Unzipping ${zip} into ${scratch}`);
 if (IS_WINDOWS) {
   run(path.join(process.env["SystemRoot"] ?? "C:\\Windows", "System32", "tar.exe"), ["-xf", zip, "-C", scratch]);
 } else {
   run("unzip", ["-q", "-o", zip, "-d", scratch]);
+}
+// The other parts where a download leaves them: beside the folder part 1 made.
+const others = options.ai ? otherParts(zip) : [];
+for (const part of others) {
+  const beside = path.join(scratch, path.basename(part));
+  try {
+    linkSync(part, beside);
+  } catch {
+    copyFileSync(part, beside);
+  }
+  console.log(`Left ${path.basename(part)} beside it, unopened`);
 }
 
 const images = path.join(scratch, "my images");
@@ -41,6 +58,15 @@ if (options.images !== undefined) {
 } else {
   mkdirSync(images, { recursive: true });
   writeFileSync(path.join(images, "gradient.png"), gradientPng(64, 48));
+  if (options.ai) {
+    // A bright square on a dark ground, for SAM to find from a click in its middle, and the square
+    // moving, so Find Archetypes has the five frames it needs and frames that differ.
+    writeFileSync(path.join(images, "square.png"), squarePng(96, 72, [28, 20, 68, 52]));
+    for (let frame = 1; frame <= 5; frame += 1) {
+      const x = 4 + frame * 10;
+      writeFileSync(path.join(images, `moving-${frame}.png`), squarePng(96, 72, [x, 12, x + 30, 42]));
+    }
+  }
 }
 const imageNames = readdirSync(images).filter((file) => /\.(png|jpe?g|tiff?|bmp)$/i.test(file));
 console.log(`Images (a copy): ${images}, ${imageNames.length} of them`);
@@ -77,7 +103,8 @@ child.stdin.end();
 let failure = null;
 try {
   const url = `http://127.0.0.1:${port}/`;
-  await until(() => log.includes(`LazyLabel is running at ${url}`) || exited !== null, 90_000);
+  // With --ai the first start unpacks gigabytes and starts the inference service before the app.
+  await until(() => log.includes(`LazyLabel is running at ${url}`) || exited !== null, options.ai ? 1_200_000 : 90_000);
   if (!log.includes(`LazyLabel is running at ${url}`)) throw new Error(`the launcher did not start LazyLabel (exit code ${exited})`);
 
   const page = await get(url);
@@ -98,6 +125,7 @@ try {
     const thumbnail = await get(`${url}api/projects/default/images/${encodeURIComponent(first)}/thumbnail`);
     console.log(`GET .../${first}/thumbnail   ${thumbnail.status}, ${thumbnail.type}, ${thumbnail.bytes} bytes (sharp works)`);
   }
+  if (options.ai) await checkAi(url);
 } catch (error) {
   failure = error instanceof Error ? error.message : String(error);
 } finally {
@@ -106,28 +134,92 @@ try {
 }
 
 if (failure !== null) fail(`FAILED: ${failure}`);
-console.log(`\nPASSED: ${LAUNCHER} from ${path.basename(zip)} (${(statSync(zip).size / 1024 / 1024).toFixed(1)} MB) served the app, and stopped.`);
+const what = options.ai ? "served the app and its AI tools" : "served the app";
+console.log(`\nPASSED: ${LAUNCHER} from ${path.basename(zip)} (${(statSync(zip).size / 1024 / 1024).toFixed(1)} MB) ${what}, and stopped.`);
+
+/** The AI tools, through the app as the web app calls them: a click segmented, archetypes found. */
+async function checkAi(url) {
+  if (!log.includes("AI tools: on")) throw new Error("the launcher did not start the AI tools");
+  const health = JSON.parse((await get(`${url}api/health`)).text);
+  if (health.ai?.available !== true) throw new Error(`/api/health says the AI tools are not available: ${JSON.stringify(health.ai)}`);
+  console.log(`GET /api/health   ai: ${JSON.stringify(health.ai)}`);
+
+  const models = JSON.parse((await get(`${url}api/inference/models`)).text);
+  const list = Array.isArray(models) ? models : models.models ?? [];
+  const segmenter = list.find((model) => model.segmenter && model.present && model.verified);
+  const embedder = list.find((model) => !model.segmenter && model.present && model.verified);
+  if (segmenter === undefined || embedder === undefined) throw new Error(`the bundle's models are not both there: ${JSON.stringify(list)}`);
+  console.log(`GET /api/inference/models   ${segmenter.name} and ${embedder.name}, present and verified`);
+
+  const started = Date.now();
+  const embedded = await post(`${url}api/inference/embeddings`, { image: "square.png", model: segmenter.name });
+  const segmented = await post(`${url}api/inference/segment`, { handle: embedded.handle, points: [{ x: 48, y: 36, positive: true }] });
+  const box = segmented.mask?.box;
+  if (!Array.isArray(box)) throw new Error(`SAM found nothing at the square's middle: ${JSON.stringify(segmented).slice(0, 300)}`);
+  const seconds = ((Date.now() - started) / 1000).toFixed(1);
+  console.log(`POST /api/inference/segment   one click on square.png: box ${JSON.stringify(box)}, score ${segmented.score.toFixed(3)}, in ${seconds} s`);
+
+  // The embedder runs on every frame; with seven small generated ones the answer may be none.
+  const archetypes = await post(`${url}api/inference/archetypes`, { sequence: imageNames });
+  if (!Array.isArray(archetypes.suggested) || typeof archetypes.clusters !== "number") {
+    throw new Error(`Find Archetypes answered ${JSON.stringify(archetypes).slice(0, 300)}`);
+  }
+  console.log(
+    `POST /api/inference/archetypes   ${imageNames.length} images embedded: ${archetypes.clusters} clusters, `
+      + `${archetypes.noise} noise, suggested ${JSON.stringify(archetypes.suggested)}`,
+  );
+}
+
+async function post(url, body) {
+  const response = await fetch(url, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(900_000),
+  });
+  const text = await response.text();
+  if (!response.ok) throw new Error(`${url} answered ${response.status}: ${text.slice(0, 300)}`);
+  return JSON.parse(text);
+}
 
 function parseOptions(argv) {
-  const parsed = { port: "18800", typed: false };
+  const parsed = { port: "18800", typed: false, ai: false };
   for (let index = 0; index < argv.length; index += 1) {
     const word = argv[index];
     if (word === "--typed") parsed.typed = true;
+    else if (word === "--ai") parsed.ai = true;
     else if (["--dir", "--images", "--port"].includes(word) && argv[index + 1] !== undefined) {
       parsed[word.slice(2)] = argv[index + 1];
       index += 1;
     } else if (!word.startsWith("--") && parsed.zip === undefined) parsed.zip = word;
-    else fail(`Usage: node scripts/release-smoke.mjs <zip or folder> [--dir <folder>] [--images <folder>] [--port <n>] [--typed]`);
+    else fail(`Usage: node scripts/release-smoke.mjs <zip or folder> [--dir <folder>] [--images <folder>] [--port <n>] [--typed] [--ai]`);
   }
   if (parsed.zip === undefined) fail("Name the release zip, or the folder build-release.mjs wrote it to.");
   return parsed;
 }
 
-function findZip(given) {
+/** The zip to unzip: the release zip, or with --ai the AI bundle's part 1. */
+function findZip(given, ai) {
   if (!statSync(given).isDirectory()) return given;
-  const zips = readdirSync(given).filter((file) => /^LazyLabel-web-.*\.zip$/.test(file));
-  if (zips.length !== 1) fail(`${given} holds ${zips.length} release zips; name one.`);
+  const zips = readdirSync(given).filter((file) =>
+    ai
+      ? /^LazyLabel-web-ai-.*\.zip$/.test(file) && !/-\d+of\d+\.zip$/.test(file.replace(/-1of\d+\.zip$/, ".zip"))
+      : /^LazyLabel-web-(?!ai-).*\.zip$/.test(file),
+  );
+  if (zips.length !== 1) fail(`${given} holds ${zips.length} ${ai ? "AI bundles" : "release zips"}; name one.`);
   return path.join(given, zips[0]);
+}
+
+/** The AI bundle's parts after the first, beside part 1: none when it is one zip. */
+function otherParts(first) {
+  const numbered = /^(.*)-1of(\d+)\.zip$/.exec(path.basename(first));
+  if (numbered === null) return [];
+  const [, stem, count] = numbered;
+  return Array.from({ length: Number(count) - 1 }, (_, index) => {
+    const part = path.join(path.dirname(first), `${stem}-${index + 2}of${count}.zip`);
+    if (!existsSync(part)) fail(`${path.basename(first)} says there are ${count} parts, and ${path.basename(part)} is not beside it.`);
+    return part;
+  });
 }
 
 async function get(url) {
@@ -161,10 +253,20 @@ function quote(word) {
 
 /** A small RGB gradient as a PNG, so a runner needs no image of its own. */
 function gradientPng(width, height) {
+  return png(width, height, (x, y) => [(x * 255) / width, (y * 255) / height, 128]);
+}
+
+/** A dark PNG with one bright filled rectangle, [x1, y1, x2, y2] end-exclusive. */
+function squarePng(width, height, [x1, y1, x2, y2]) {
+  return png(width, height, (x, y) => (x >= x1 && x < x2 && y >= y1 && y < y2 ? [235, 225, 210] : [20, 30, 40]));
+}
+
+/** An 8-bit RGB PNG whose pixel at (x, y) is `colour(x, y)`. */
+function png(width, height, colour) {
   const rows = [];
   for (let y = 0; y < height; y += 1) {
     const row = Buffer.alloc(1 + width * 3);
-    for (let x = 0; x < width; x += 1) row.set([(x * 255) / width, (y * 255) / height, 128], 1 + x * 3);
+    for (let x = 0; x < width; x += 1) row.set(colour(x, y), 1 + x * 3);
     rows.push(row);
   }
   const chunk = (type, data) => {

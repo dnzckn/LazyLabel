@@ -31,6 +31,55 @@ describe("whether npm start starts the AI tools", () => {
     expect(plan({}, [`${INFERENCE}/pyproject.toml`])).toEqual({ kind: "off", reason: "run npm run ai:setup" });
   });
 
+  describe("from the AI bundle (DEPLOYABILITY.md R12)", () => {
+    const root = path.resolve("/downloads/LazyLabel-web-ai-linux-x64");
+    const bundle = {
+      root,
+      parts: ["LazyLabel-web-ai-linux-x64-1of2.zip", "LazyLabel-web-ai-linux-x64-2of2.zip"],
+      python: path.join(root, "python", "bin", "python3"),
+      models: path.join(root, "models"),
+    };
+    const marks = [path.join(root, ".lazylabel", "part-1-of-2"), path.join(root, ".lazylabel", "part-2-of-2")];
+    const decide = (env: Record<string, string>, present: readonly string[]) =>
+      aiPlan({
+        env,
+        platform: process.platform,
+        home: "/home/me",
+        inference: INFERENCE,
+        exists: (file) => present.includes(file),
+        bundle,
+      });
+
+    it("starts its own Python with its own models once every part is in", () => {
+      expect(decide({}, [...marks, bundle.python, path.join(bundle.models, "manifest.json")])).toEqual({
+        kind: "start",
+        python: bundle.python,
+        modelDir: bundle.models,
+        cwd: path.join(INFERENCE, "src"),
+        bundled: true,
+      });
+    });
+
+    it("does not while a part is missing, and says which file goes where", () => {
+      expect(decide({}, [marks[0]!, bundle.python, path.join(bundle.models, "manifest.json")])).toEqual({
+        kind: "off",
+        reason: `part 2 of 2 is not unpacked yet: put LazyLabel-web-ai-linux-x64-2of2.zip in ${path.dirname(root)} `
+          + "and start LazyLabel again",
+      });
+    });
+
+    it("gives way to a Python the environment names, as the .venv does", () => {
+      const python = path.resolve("/opt/ai/bin/python");
+      const models = path.resolve("/srv/models");
+      expect(decide({ LAZYLABEL_PYTHON: python, LAZYLABEL_MODEL_DIR: models }, [python, path.join(models, "manifest.json")])).toEqual({
+        kind: "start",
+        python,
+        modelDir: models,
+        cwd: path.join(INFERENCE, "src"),
+      });
+    });
+  });
+
   it("does not in the release zip, and names no command there is no npm to run", () => {
     // The zip carries the API and the web app, not the inference package (DEPLOYABILITY.md R11).
     expect(plan({}, [])).toEqual({ kind: "off", reason: "not in this download (README.txt says how to add them)" });

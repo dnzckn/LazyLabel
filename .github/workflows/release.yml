@@ -6,6 +6,12 @@ name: Release zips
 # modernized/scripts/build-release.mjs and the proof is scripts/release-smoke.mjs: the same two
 # scripts a maintainer runs locally.
 #
+# DEPLOYABILITY.md R12, the AI bundle: the same zip with the AI tools in it -- a portable CPython with
+# inference/uv.lock's packages, and SAM 2.1 large and MobileNetV3 fetched and verified by
+# lazylabel-models -- split by scripts/pack_parts.py into parts under GitHub's 2 GiB per file, which
+# the launcher joins on its first start. PyTorch's CUDA build on Windows and Linux, which runs on the
+# processor where there is no NVIDIA card, and its CPU build on macOS, which has no CUDA.
+#
 # How each trigger behaves from main-web, which is not the default branch:
 #   - Pushing a tag web-v<version> on a main-web commit builds and proves the zips and publishes
 #     them as a GitHub Release. A tag push runs the workflow file of the tagged commit.
@@ -25,6 +31,11 @@ on:
       - modernized/package-lock.json
       - modernized/lazylabel-reimagined/api/src/cli.ts
       - modernized/lazylabel-reimagined/api/src/launcher.ts
+      - modernized/lazylabel-reimagined/api/src/bundle.ts
+      - modernized/scripts/pack_parts.py
+      - modernized/lazylabel-reimagined/inference/pyproject.toml
+      - modernized/lazylabel-reimagined/inference/uv.lock
+      - modernized/lazylabel-reimagined/inference/models/manifest.verified.json
   workflow_dispatch:
 
 permissions:
@@ -79,10 +90,77 @@ jobs:
           # Already a zip.
           compression-level: 0
 
+  ai-zip:
+    name: AI bundle (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest # x64
+            torch: cu128
+          - os: macos-latest # arm64: no CUDA
+            torch: cpu
+          - os: ubuntu-latest # x64
+            torch: cu128
+            smoke: --typed
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      # PyTorch's CUDA build is gigabytes, installed once and unpacked again by the smoke test's
+      # launcher; Ubuntu's runner has that room only without the SDKs it comes with.
+      - name: Make room
+        if: runner.os == 'Linux'
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          df -h "$RUNNER_TEMP"
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: modernized/package-lock.json
+
+      # uv brings the bundle's CPython and installs uv.lock's packages into it: the uv that wrote
+      # uv.lock, pinned as modernized.yml pins it. Its cache goes on the runner's working disk.
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.12"
+      - name: Install uv
+        run: |
+          python -m pip install --quiet uv==0.7.13
+          echo "UV_CACHE_DIR=$RUNNER_TEMP/uv-cache" >> "$GITHUB_ENV"
+
+      - name: Build the AI bundle
+        run: node modernized/scripts/build-release.mjs --ai ${{ matrix.torch }} --out "$RUNNER_TEMP/release" --work "$RUNNER_TEMP/work"
+
+      - name: Free the build's space
+        run: |
+          rm -rf "$RUNNER_TEMP/work" "$UV_CACHE_DIR"
+          df -h "$RUNNER_TEMP"
+
+      # Part 1 unzipped as a user unzips it, the other parts left beside it for the launcher to
+      # find and unpack. Then SAM 2.1 must segment a shape from one click and Find Archetypes must
+      # answer, through the app. A runner has no GPU: this is the processor path.
+      - name: Unzip part 1 and start it, as a user would
+        run: node modernized/scripts/release-smoke.mjs "$RUNNER_TEMP/release" --dir "$RUNNER_TEMP/smoke" --ai ${{ matrix.smoke }}
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: ai-${{ matrix.os }}
+          path: ${{ runner.temp }}/release/
+          if-no-files-found: error
+          compression-level: 0
+          # Gigabytes each: kept long enough to look at or publish, not longer.
+          retention-days: 7
+
   publish:
     name: publish the GitHub Release
     if: startsWith(github.ref, 'refs/tags/web-v')
-    needs: zip
+    needs: [zip, ai-zip]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -97,6 +175,10 @@ jobs:
             echo "$GITHUB_REF_NAME is not a commit on main-web (compare says $status); nothing is published."
             exit 1
           fi
+
+      # Every zip and every AI part together come to over ten gigabytes.
+      - name: Make room
+        run: sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
 
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
@@ -114,7 +196,9 @@ jobs:
           2. Unzip it and double-click **Start LazyLabel** (`Start LazyLabel.cmd` on Windows, `Start LazyLabel.command` on macOS; on Linux run `./start-lazylabel.sh` in a terminal).
           3. Choose your folder of images. LazyLabel opens in your browser.
 
-          macOS asks the first time, because the zip is not yet signed: open System Settings, Privacy & Security, and choose Open Anyway. The AI tools (SAM) are not included; the README on `main-web` says how to add them. Each zip's SHA-256 is in the `.sha256` file beside it.
+          macOS asks the first time, because the zip is not yet signed: open System Settings, Privacy & Security, and choose Open Anyway. Each zip's SHA-256 is in the `.sha256` file beside it.
+
+          **With the AI tools** (SAM 2.1 for clicks, boxes and Sequence propagation, and Find Archetypes), and still nothing to install: `LazyLabel-web-ai-<your computer>`. It carries its own Python and the models, so it is large, and for Windows and Linux it comes in parts, since GitHub takes no file of 2 GB. Download every part into one folder, unzip part 1 only, and start LazyLabel from it: the first start finds the other parts and unpacks them. On Windows and Linux it runs on an NVIDIA graphics card when there is one, and on the processor otherwise.
           NOTES
           gh release create "$GITHUB_REF_NAME" release/*.zip release/*.sha256 \
             --repo "$GITHUB_REPOSITORY" --verify-tag --latest=false \

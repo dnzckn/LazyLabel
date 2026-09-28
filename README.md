@@ -31,8 +31,16 @@ To annotate by hand you need nothing installed, not even Node.js:
 
 Each zip carries its own Node.js and serves this computer only. The first time, Windows may ask
 whether to run the launcher (More info, then Run anyway). macOS says it cannot check it, because the
-zip is not yet signed: open System Settings, Privacy & Security, and choose Open Anyway. The AI tools
-are not in the zip; they need the install from source below.
+zip is not yet signed: open System Settings, Privacy & Security, and choose Open Anyway.
+
+**With the AI tools, still with nothing to install:** download `LazyLabel-web-ai-<your computer>`
+from the same releases instead. It carries its own Python, SAM 2.1 (large) for clicks, boxes and
+Sequence propagation, and MobileNetV3 for Find Archetypes, so it is large, and for Windows and
+Linux it comes in parts, because GitHub takes no file of 2 GB. Download every part into one folder,
+unzip part 1 only, and start LazyLabel from it as above: the first start finds the other parts and
+unpacks them itself. It runs on an NVIDIA graphics card when there is one with a current driver,
+and on the processor otherwise; on a Mac, the processor. SAM 1 is not in it; the install from
+source below adds it.
 
 ### From source
 

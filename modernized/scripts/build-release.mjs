@@ -17,6 +17,15 @@
  *
  * `scripts/release-smoke.mjs` then unzips it and starts it the way a user does. Standard library
  * only, plus the system's tar (Windows 10 and later) or zip.
+ *
+ * WITH --ai <cu128|cpu>, THE AI TOOLS COME TOO (DEPLOYABILITY.md R12): LazyLabel-web-ai-<os>-<arch>,
+ * which also holds CPython 3.12.11 (the portable build uv installs, the one every suite passed on)
+ * with inference/uv.lock's PyTorch, SAM 1 and SAM 2 packages installed into it, the inference
+ * service's code, and SAM 2.1 large and MobileNetV3 small fetched and verified by its own
+ * `lazylabel-models`. Nobody installs Python. It is gigabytes, and GitHub takes no file of 2 GiB, so
+ * `pack_parts.py` splits it into parts that the app's launcher joins on its first start. Needs uv,
+ * which brings the Python; `--models-from <folder>` takes the checkpoints from a folder instead of
+ * downloading them, checked the same way.
  */
 
 import { spawnSync } from "node:child_process";
@@ -42,22 +51,35 @@ const IS_WINDOWS = process.platform === "win32";
 const OS_NAME = { win32: "windows", darwin: "macos", linux: "linux" }[process.platform];
 const CLI = ["app", "lazylabel-reimagined", "api", "dist", "src", "cli.js"];
 const REPOSITORY = "https://github.com/dnzckn/LazyLabel";
+/** uv's portable CPython: the version every suite passed on (PROGRESS.md, "Running the live suites"). */
+const PYTHON_VERSION = "3.12.11";
+/** The AI bundle's checkpoints, by manifest id: SAM 2.1 for prompts and propagation, the embedder for Find Archetypes. */
+const BUNDLED_MODELS = ["sam2.1-large", "mobilenet-v3-small"];
 
 async function main() {
   if (OS_NAME === undefined) fail(`There is no release zip for ${process.platform}.`);
   const options = parseOptions(process.argv.slice(2));
   const nodeVersion = options.node.replace(/^v/, "");
-  const name = `LazyLabel-web-${OS_NAME}-${process.arch}`;
+  const ai = options.ai;
+  if (ai !== null && ai !== "cu128" && ai !== "cpu") fail(`--ai takes cu128 or cpu, not ${ai}.`);
+  const name = `LazyLabel-web-${ai === null ? "" : "ai-"}${OS_NAME}-${process.arch}`;
 
   mkdirSync(options.work, { recursive: true });
   const work = realpathSync(options.work);
 
-  console.log(`Building ${name}.zip with Node.js ${nodeVersion}, in ${work}`);
+  console.log(`Building ${name} with Node.js ${nodeVersion}${ai === null ? "" : ` and PyTorch's ${ai} build`}, in ${work}`);
   const source = buildApp(path.join(work, "source"));
   const node = await portableNode(nodeVersion, path.join(work, "cache"));
   const stage = path.join(work, "stage", name);
   rmSync(path.dirname(stage), { recursive: true, force: true });
-  stageRelease(source, node, stage);
+  stageRelease(source, node, stage, ai !== null);
+  if (ai !== null) {
+    const python = stageAi(source, stage, ai, options["models-from"]);
+    const unpacked = folderSize(stage);
+    console.log(`\nStaged ${megabytes(unpacked.bytes)} MB in ${unpacked.files} files. Packing, measured compressed:`);
+    run(python, ["-I", path.join(WORKSPACE, "scripts", "pack_parts.py"), "--stage", stage, "--out", path.resolve(options.out)]);
+    return;
+  }
   const zip = zipRelease(stage, path.resolve(options.out));
 
   const digest = sha256(readFileSync(zip));
@@ -71,12 +93,21 @@ async function main() {
 }
 
 function parseOptions(args) {
-  const parsed = { out: path.join(WORKSPACE, "release"), work: path.join(os.tmpdir(), "lazylabel-release"), node: process.versions.node };
+  const parsed = {
+    out: path.join(WORKSPACE, "release"),
+    work: path.join(os.tmpdir(), "lazylabel-release"),
+    node: process.versions.node,
+    ai: null,
+    "models-from": null,
+  };
   for (let index = 0; index < args.length; index += 1) {
     const option = args[index].replace(/^--/, "");
     const value = args[index + 1];
     if (!(option in parsed) || value === undefined) {
-      fail("Usage: node scripts/build-release.mjs [--out <folder>] [--work <folder>] [--node <version>]");
+      fail(
+        "Usage: node scripts/build-release.mjs [--out <folder>] [--work <folder>] [--node <version>]\n"
+          + "         [--ai cu128|cpu [--models-from <folder>]]",
+      );
     }
     parsed[option] = value;
     index += 1;
@@ -133,7 +164,7 @@ async function portableNode(version, cache) {
 }
 
 /** node/, app/, the launcher and a README, in `stage`. */
-function stageRelease(source, node, stage) {
+function stageRelease(source, node, stage, withAi) {
   const nodeBinary = IS_WINDOWS ? ["node.exe"] : ["bin", "node"];
   copyFile(path.join(node, ...nodeBinary), path.join(stage, "node", ...nodeBinary));
   copyFile(path.join(node, "LICENSE"), path.join(stage, "node", "LICENSE"));
@@ -148,13 +179,82 @@ function stageRelease(source, node, stage) {
 
   const licence = path.join(WORKSPACE, "..", "LICENSE");
   if (existsSync(licence)) copyFile(licence, path.join(stage, "LICENSE.txt"));
-  writeFileSync(path.join(stage, "README.txt"), README.replace(/\n/g, IS_WINDOWS ? "\r\n" : "\n"));
+  writeFileSync(path.join(stage, "README.txt"), (withAi ? AI_README : README).replace(/\n/g, IS_WINDOWS ? "\r\n" : "\n"));
   if (IS_WINDOWS) {
     writeFileSync(path.join(stage, "Start LazyLabel.cmd"), WINDOWS_LAUNCHER.replace(/\n/g, "\r\n"));
   } else {
     const launcher = path.join(stage, process.platform === "darwin" ? "Start LazyLabel.command" : "start-lazylabel.sh");
     writeFileSync(launcher, posixLauncher(process.platform === "darwin"), { mode: 0o755 });
   }
+}
+
+/**
+ * The AI tools, into a staged release: the inference service's code where `aiPlan` runs it from,
+ * a portable Python with uv.lock's packages, the two checkpoints and the licences that come with
+ * them. Returns the staged Python, which then packs the parts.
+ */
+function stageAi(source, stage, flavour, modelsFrom) {
+  const inference = path.join(source, "lazylabel-reimagined", "inference");
+  const code = path.join(stage, "app", "lazylabel-reimagined", "inference");
+  const notCompiled = (file) => !file.split(/[\\/]/).includes("__pycache__");
+  copyTree(path.join(inference, "src", "lazylabel_inference"), path.join(code, "src", "lazylabel_inference"), notCompiled);
+  const catalog = path.join(inference, "models", "manifest.verified.json");
+  copyFile(catalog, path.join(code, "models", "manifest.verified.json"));
+
+  const python = stagePython(stage);
+  // Straight into the portable Python, which uv takes as the project environment: exactly the
+  // packages `npm run ai:setup` puts in its .venv, from the same lockfile, and nothing for tests.
+  run(
+    "uv",
+    [
+      "sync", "--project", inference, "--locked", "--no-dev", "--no-install-project", "--python", python,
+      "--extra", "ai", "--extra", "server", "--extra", flavour,
+    ],
+    { env: { UV_PROJECT_ENVIRONMENT: path.join(stage, "python") } },
+  );
+  run(
+    python,
+    ["-I", "-c", "import cv2, sam2, segment_anything, sklearn, torch, torchvision; "
+      + "print(f'PyTorch {torch.__version__}, CUDA {torch.version.cuda}, SAM 2 and segment-anything import')"],
+    { cwd: stage },
+  );
+
+  // Fetched and verified by the service's own tool, which writes the manifest.json the service reads.
+  // A copy already in --models-from is checked instead of downloaded again.
+  const models = path.join(stage, "models");
+  mkdirSync(models, { recursive: true });
+  const listed = JSON.parse(readFileSync(catalog, "utf8")).models;
+  for (const id of BUNDLED_MODELS) {
+    const checkpoint = listed.find((entry) => entry.id === id);
+    if (checkpoint === undefined) fail(`${path.basename(catalog)} lists no ${id}.`);
+    const local = modelsFrom === null ? null : path.join(path.resolve(modelsFrom), checkpoint.filename);
+    if (local !== null && existsSync(local)) copyFile(local, path.join(models, checkpoint.filename));
+    run(python, ["-E", "-s", "-m", "lazylabel_inference.fetch", "fetch", id, "--dir", models, "--yes"], { cwd: path.join(code, "src") });
+  }
+
+  copyFile(path.join(inference, "vendor", "sam2.LICENSE"), path.join(stage, "licenses", "SAM-2.txt"));
+  copyFile(path.join(inference, "vendor", "sam2.LICENSE_cctorch"), path.join(stage, "licenses", "SAM-2-cc_torch.txt"));
+  writeFileSync(path.join(stage, "THIRD-PARTY-NOTICES.txt"), NOTICES.replace(/\n/g, IS_WINDOWS ? "\r\n" : "\n"));
+  return python;
+}
+
+/**
+ * CPython from uv's own store, copied into python/: python-build-standalone's build, which runs
+ * from any folder. uv marks the store's copy externally managed, so pip leaves it alone; this copy
+ * is the bundle's own, and the mark comes off so uv can install into it.
+ */
+function stagePython(stage) {
+  run("uv", ["python", "install", PYTHON_VERSION]);
+  const found = run("uv", ["python", "find", "--python-preference", "only-managed", PYTHON_VERSION], { capture: true }).trim();
+  const root = IS_WINDOWS ? path.dirname(found) : path.dirname(path.dirname(found));
+  const target = path.join(stage, "python");
+  // Links become files: a zip unpacked by Explorer or the Finder cannot hold one.
+  cpSync(root, target, { recursive: true, dereference: true });
+  const library = IS_WINDOWS ? path.join(target, "Lib") : path.join(target, "lib", `python${PYTHON_VERSION.split(".").slice(0, 2).join(".")}`);
+  rmSync(path.join(library, "EXTERNALLY-MANAGED"), { force: true });
+  const python = IS_WINDOWS ? path.join(target, "python.exe") : path.join(target, "bin", "python3");
+  if (!existsSync(python)) fail(`uv's CPython ${PYTHON_VERSION} has no ${path.relative(target, python)} in ${root}.`);
+  return python;
 }
 
 /**
@@ -284,6 +384,58 @@ The AI tools (SAM) are not in this download. To add them, install LazyLabel from
 ${REPOSITORY}/tree/main-web#adding-the-ai-tools-sam
 `;
 
+const AI_README = `LazyLabel web with the AI tools: nothing to install.
+
+If the download came in parts (-1of3.zip, -2of3.zip and so on), put them all in one folder and unzip
+part 1 only. The first time LazyLabel starts, it finds the other parts beside it and unpacks them
+itself, which takes a minute or two. Keep the parts until it has.
+
+Start it
+  Windows  Double-click "Start LazyLabel.cmd". If Windows asks whether to run it, choose Run
+           (More info, then Run anyway).
+  macOS    Double-click "Start LazyLabel.command". The first time, macOS says it cannot check
+           it: open System Settings, Privacy & Security, and choose Open Anyway, then open it
+           again. (Or right-click it and choose Open.)
+  Linux    Run ./start-lazylabel.sh in a terminal.
+
+Choose your folder of images when LazyLabel asks. It opens in your browser at
+http://127.0.0.1:8787/ and runs until you close its window (or press Ctrl+C in it). You can
+also drop a folder onto the launcher, or name it after the command.
+
+The AI tools are in this download: SAM 2.1 (large) for clicks, boxes and Sequence propagation,
+and MobileNetV3 for Find Archetypes, with their own Python. They run on an NVIDIA graphics card
+when there is one with a current driver, and on the processor otherwise, more slowly. Nothing is
+downloaded when LazyLabel runs.
+
+Your annotations are saved beside your images, in the files the desktop app reads and writes.
+Settings and hotkeys are kept per user. LazyLabel listens on this computer only.
+
+Options go after the folder: --port <number>, --no-open, --help.
+
+What is included, and under which licences: THIRD-PARTY-NOTICES.txt.
+`;
+
+const NOTICES = `LazyLabel web with the AI tools includes other people's work, each under its own licence.
+
+  Node.js                     node/LICENSE
+  CPython 3.12                python/ (LICENSE.txt, or lib/python3.12/LICENSE.txt), the PSF licence;
+                              python-build-standalone's build
+  PyTorch and torchvision     BSD-3-Clause; in python's site-packages, torch-*.dist-info and
+                              torchvision-*.dist-info
+  NVIDIA CUDA libraries       in the Windows and Linux downloads, as PyTorch's CUDA build ships them
+                              (torch/lib, and the nvidia-* packages on Linux), under NVIDIA's licence
+                              in their dist-info folders
+  SAM 2                       Apache-2.0, licenses/SAM-2.txt; its cc_torch code BSD-3-Clause,
+                              licenses/SAM-2-cc_torch.txt
+  Segment Anything            Apache-2.0, segment_anything-*.dist-info
+  SAM 2.1 large checkpoint    models/sam2.1_hiera_large.pt, Meta, Apache-2.0 (as SAM 2)
+  MobileNetV3 small weights   models/mobilenet_v3_small-047dcff4.pth, torchvision's, BSD-3-Clause
+  Every other Python package  its own *.dist-info folder in python's site-packages
+  Every Node package          its own folder under app/node_modules
+
+LazyLabel itself: LICENSE.txt.
+`;
+
 function copyFile(from, to) {
   mkdirSync(path.dirname(to), { recursive: true });
   cpSync(from, to);
@@ -297,11 +449,12 @@ function copyTree(from, to, keep) {
   cpSync(from, to, { recursive: true, dereference: true, filter: (file) => keep(path.relative(from, file)) });
 }
 
-function run(command, args, { cwd = WORKSPACE, capture = false } = {}) {
+function run(command, args, { cwd = WORKSPACE, capture = false, env = {} } = {}) {
   // npm is npm.cmd on Windows, which Node starts only through a shell; these arguments need no quoting.
   const npm = command === "npm" && IS_WINDOWS;
   const result = spawnSync(npm ? "npm.cmd" : command, args, {
     cwd,
+    env: { ...process.env, ...env },
     encoding: "utf8",
     shell: npm,
     stdio: capture ? ["ignore", "pipe", "inherit"] : "inherit",

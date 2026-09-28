@@ -22,14 +22,15 @@
  * Node version is known to have it.
  */
 
-import { spawn } from "node:child_process";
-import { existsSync } from "node:fs";
+import { spawn, spawnSync } from "node:child_process";
+import { existsSync, readFileSync } from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { createInterface } from "node:readline";
 import { fileURLToPath } from "node:url";
 
 import { startAiService, type AiService } from "./aiService.js";
+import { findParts, missingParts, readBundle, unpackCommand, type Bundle } from "./bundle.js";
 import { ConfigError, loadConfig, type Config } from "./config.js";
 import { createLogger } from "./http/log.js";
 import { builtWebRoot } from "./http/staticWeb.js";
@@ -60,6 +61,9 @@ const WORKSPACE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..
 
 /** The inference service's package, where `npm run ai:setup` puts its `.venv`. */
 const INFERENCE = path.join(WORKSPACE, "lazylabel-reimagined", "inference");
+
+/** Where the AI bundle's `bundle.json` is: the folder holding `app/`, which is the workspace there. */
+const BUNDLE_ROOT = path.dirname(WORKSPACE);
 
 /** The inference service's default port: never offered as a free one, since AI would want it. */
 const INFERENCE_PORT = 8788;
@@ -135,12 +139,15 @@ async function run(): Promise<number | null> {
   }
 
   // The AI tools first, so the API starts knowing where they are, or that there are none.
+  const bundle = openBundle();
+  if (bundle !== null) unpackParts(bundle);
   const plan = aiPlan({
     env: { ...process.env, ...env },
     platform: process.platform,
     home: os.homedir(),
     inference: INFERENCE,
     exists: existsSync,
+    bundle,
   });
   let ai: AiService | null = null;
   let aiState: string;
@@ -194,6 +201,37 @@ async function run(): Promise<number | null> {
   return null;
 }
 
+/** The AI bundle this runs from (`bundle.ts`), or null; a damaged `bundle.json` is said and ignored. */
+function openBundle(): Bundle | null {
+  try {
+    return readBundle(BUNDLE_ROOT, (file) => (existsSync(file) ? readFileSync(file, "utf8") : null));
+  } catch (cause) {
+    console.error(`${cause instanceof Error ? cause.message : String(cause)}: unzip part 1 again. The AI tools are off.`);
+    return null;
+  }
+}
+
+/**
+ * The AI bundle's other parts, unpacked by its own Python from where they are found. The first start
+ * only, since an unpacked part leaves its mark; one not found is named by `aiPlan` instead.
+ */
+function unpackParts(bundle: Bundle): void {
+  const found = findParts(bundle, missingParts(bundle, existsSync), os.homedir(), existsSync);
+  if (found.size === 0 || !existsSync(bundle.python)) return;
+  console.log(
+    `Unpacking the AI tools from ${found.size === 1 ? "one more part" : `${found.size} more parts`} of the download. `
+      + "The first start only; it takes a minute or two.",
+  );
+  const { command, args } = unpackCommand(bundle, [...found.values()]);
+  const result = spawnSync(command, args, { stdio: "inherit", windowsHide: true });
+  if (result.error !== undefined || result.status !== 0) {
+    console.error(
+      `Unpacking stopped${result.status === null ? "" : ` (exit code ${result.status})`}; `
+        + "LazyLabel starts without the AI tools and tries again next time.",
+    );
+  }
+}
+
 /**
  * The inference service `npm run ai:setup` installed, started with the app on a free port and the
  * API's own folder of images, once it says it is listening; or why it is not, in a few words.
@@ -206,12 +244,23 @@ async function startAi(
   const port = await freePort(INFERENCE_PORT, "127.0.0.1", [config.port]);
   if (port === null) return `no port near ${INFERENCE_PORT} was free for the inference service`;
   console.log(`Starting the AI tools with ${plan.python}`);
+  // The bundle's Python is whole in itself: a PYTHONHOME or PYTHONPATH set for another Python, or
+  // packages in the user's own site folder, would put someone else's files in front of its own.
+  const own = { ...process.env };
+  if (plan.bundled) {
+    delete own["PYTHONHOME"];
+    delete own["PYTHONPATH"];
+    own["PYTHONNOUSERSITE"] = "1";
+  }
   try {
     return await startAiService({
       command: plan.python,
       args: ["-m", "lazylabel_inference.server"],
       cwd: plan.cwd,
-      env: { ...process.env, LAZYLABEL_DATASET_ROOT: config.datasetRoot, LAZYLABEL_MODEL_DIR: plan.modelDir },
+      env: { ...own, LAZYLABEL_DATASET_ROOT: config.datasetRoot, LAZYLABEL_MODEL_DIR: plan.modelDir },
+      // A bundle's first start reads every library of its Python for the first time, and a virus
+      // scanner reads them before that.
+      ...(plan.bundled ? { readyTimeoutMs: 180_000 } : {}),
       host: "127.0.0.1",
       port,
       onLine: (line) => {

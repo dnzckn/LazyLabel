@@ -17,6 +17,8 @@ import { createServer } from "node:net";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { missingParts, missingPartsReason, type Bundle } from "./bundle.js";
+
 export const USAGE = `Usage: npm start "<folder of images>"
    or: lazylabel.cmd "<folder>" [options]      (Windows: PowerShell or cmd, in modernized/)
    or: ./lazylabel.sh "<folder>" [options]     (macOS, Linux, Git Bash, in modernized/)
@@ -449,6 +451,8 @@ export type AiPlan =
       readonly modelDir: string;
       /** Its source folder, so an environment without the package installed still runs this copy. */
       readonly cwd: string;
+      /** The AI bundle's own Python (`bundle.ts`), which no one else's Python settings may reach. */
+      readonly bundled?: true;
     }
   /** Not installed, or no models yet: the app runs without AI, and `reason` says what to run. */
   | { readonly kind: "off"; readonly reason: string };
@@ -461,6 +465,10 @@ export type AiPlan =
  * LAZYLABEL_MODEL_DIR or the per-user folder `npm run ai:models` fills. Without them the app runs
  * as it always has, with no AI, and says which command adds it -- or, in the release zip, which has
  * no inference package and no npm to run a command with, that the AI tools are not in it.
+ *
+ * THE AI BUNDLE (DEPLOYABILITY.md R12) brings both: its own Python and its model folder, used once
+ * every part is unpacked (`bundle.ts`). LAZYLABEL_PYTHON, LAZYLABEL_MODEL_DIR and
+ * LAZYLABEL_MODEL_MANIFEST still win over it, as they win over the `.venv`.
  */
 export function aiPlan(context: {
   readonly env: NodeJS.ProcessEnv;
@@ -469,36 +477,51 @@ export function aiPlan(context: {
   /** `lazylabel-reimagined/inference`, where `npm run ai:setup` puts `.venv`. */
   readonly inference: string;
   readonly exists: (file: string) => boolean;
+  /** The AI bundle this runs from, or null (`readBundle`). */
+  readonly bundle?: Bundle | null;
 }): AiPlan {
   const { env, platform, home, inference, exists } = context;
+  const bundle = context.bundle ?? null;
   const join = platform === "win32" ? path.win32.join : path.posix.join;
 
   const url = (env["LAZYLABEL_INFERENCE_URL"] ?? "").trim();
   if (url !== "") return { kind: "external", url };
 
   const named = (env["LAZYLABEL_PYTHON"] ?? "").trim();
-  const python =
-    named !== ""
-      ? path.resolve(named)
-      : platform === "win32"
-        ? join(inference, ".venv", "Scripts", "python.exe")
-        : join(inference, ".venv", "bin", "python");
-  if (!exists(python)) {
-    if (named !== "") return { kind: "off", reason: `LAZYLABEL_PYTHON names ${python}, which is not there` };
-    if (!exists(join(inference, "pyproject.toml"))) {
-      return { kind: "off", reason: "not in this download (README.txt says how to add them)" };
+  const bundled = named === "" && bundle !== null;
+  let python: string;
+  if (named !== "") {
+    python = path.resolve(named);
+    if (!exists(python)) return { kind: "off", reason: `LAZYLABEL_PYTHON names ${python}, which is not there` };
+  } else if (bundle !== null) {
+    const missing = missingParts(bundle, exists);
+    if (missing.length > 0) return { kind: "off", reason: missingPartsReason(bundle, missing) };
+    python = bundle.python;
+    if (!exists(python)) return { kind: "off", reason: `${python} is missing: unzip part 1 again` };
+  } else {
+    python = platform === "win32" ? join(inference, ".venv", "Scripts", "python.exe") : join(inference, ".venv", "bin", "python");
+    if (!exists(python)) {
+      if (!exists(join(inference, "pyproject.toml"))) {
+        return { kind: "off", reason: "not in this download (README.txt says how to add them)" };
+      }
+      return { kind: "off", reason: "run npm run ai:setup" };
     }
-    return { kind: "off", reason: "run npm run ai:setup" };
   }
 
   const namedDir = (env["LAZYLABEL_MODEL_DIR"] ?? "").trim();
-  const modelDir = namedDir !== "" ? path.resolve(namedDir) : defaultModelDir(env, platform, home);
+  const modelDir =
+    namedDir !== "" ? path.resolve(namedDir) : bundled ? bundle.models : defaultModelDir(env, platform, home);
   const namedManifest = (env["LAZYLABEL_MODEL_MANIFEST"] ?? "").trim();
   const manifest = namedManifest !== "" ? path.resolve(namedManifest) : join(modelDir, "manifest.json");
   if (!exists(manifest)) {
-    return { kind: "off", reason: `no models in ${modelDir} yet: run npm run ai:models sam2.1-large` };
+    return {
+      kind: "off",
+      reason: bundled
+        ? `${manifest} is missing: unzip the parts again`
+        : `no models in ${modelDir} yet: run npm run ai:models sam2.1-large`,
+    };
   }
-  return { kind: "start", python, modelDir, cwd: join(inference, "src") };
+  return { kind: "start", python, modelDir, cwd: join(inference, "src"), ...(bundled ? { bundled: true as const } : {}) };
 }
 
 /**
