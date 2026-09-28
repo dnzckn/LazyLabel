@@ -699,7 +699,10 @@ CUDA build is two parts, 1,998,858,991 and 1,933,696,837 bytes. Unzipped as a us
 left beside it, it unpacked part 2, started the AI tools on the RTX 3080, segmented a square from one
 click (box [28,20,68,52], score 0.990, 15 s with the model's load) and ran Find Archetypes, through
 the app (`scripts/release-smoke.mjs --ai`; `DEPLOYABILITY.md` R13). CI's `ai-zip` job does the same
-on Windows, macOS and Linux, on the processor.
+on Windows, macOS and Linux, on the processor, and all three passed (`3afda90`): Windows 3.9 GB in two
+parts, macOS 1.1 GB in one zip, Linux 5.3 GB in three parts. Its first run found the macOS and Linux
+bundles without PyTorch, a copied link that kept pointing at uv's own Python; fixed, and the build now
+checks where PyTorch imports from.
 
 **Recorded differences.** Everything else is written where it belongs, each with its reason: the
 "Not matched" and "Still different" notes in `CONTROL_PARITY.md`, the "Keep" rows in

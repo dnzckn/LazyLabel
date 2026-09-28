@@ -659,9 +659,16 @@ a part stopped half-way is unpacked again next time. Until every part is in, the
 AI and names the files and the folder they go in. The bundle's Python runs with PYTHONHOME,
 PYTHONPATH and the user's site folder kept out.
 
-**Measured on Windows, CUDA 12.8 (2026-09-28):** 6.0 GB in 25,467 files staged; two parts,
-1,998,858,991 and 1,933,696,837 bytes (3.9 GB), the first 7% under GitHub's limit. The largest single
-file is `torch_cuda.dll`, 908 MB.
+**Measured 2026-09-28,** Windows here and all three on CI's runners (`3afda90`):
+
+| Bundle | PyTorch | Unpacked | Download |
+|---|---|---|---|
+| `windows-x64` | CUDA 12.8 | 6.0 GB, 25,462 files | 2 parts: 2.00 and 1.93 GB |
+| `macos-arm64` | CPU | 1.8 GB, 24,614 files | 1 zip: 1.12 GB |
+| `linux-x64` | CUDA 12.8 | 8.9 GB, 28,041 files | 3 parts: 2.00, 2.00 and 1.28 GB |
+
+Every part is at least 7% under GitHub's limit. The largest single file is Windows' `torch_cuda.dll`,
+908 MB. Linux is the largest because its CUDA libraries come as separate packages, NCCL among them.
 
 **Proof.** `scripts/release-smoke.mjs --ai` takes the bundle the way a person gets it: part 1
 unzipped into a scratch folder, the other parts left beside it, the launcher started with a folder
@@ -669,7 +676,17 @@ of generated images. The launcher must unpack the parts and start the AI tools; 
 app, SAM 2.1 must segment a bright square from one click in its middle, and Find Archetypes, which
 runs the embedder, must answer. `.github/workflows/release.yml`'s `ai-zip` job runs it on Windows,
 macOS and Linux, on the processor, since a runner has no GPU, and a `web-v*` tag publishes the parts
-beside R11's zips.
+beside R11's zips. All three passed on 2026-09-28 (`3afda90`); on Windows here the same test ran on the
+RTX 3080, where one click segmented the square (box [28,20,68,52], score 0.990) in 15 s with the
+model's load.
+
+**What the first CI run found.** The macOS and Linux bundles went out without PyTorch, at 0.9 GB:
+uv's CPython has `bin/python3` as a link, and Node's `cpSync` keeps a link inside a tree as a link to
+the original file, `dereference` or not. The bundle's "Python" was uv's own, so `uv sync` installed
+into uv's store and the build's import check passed from there. The copy is `cp -RL` now, and the
+build stops unless the copy reports its own folder as its prefix and PyTorch imports from inside
+it. A failed smoke test also reports, as a public annotation, what the unzipped bundle holds: a job's
+log needs a signed-in account to read.
 
 **Open:** macOS signing and notarisation, as for R11; the macOS bundle runs on the processor.
 
