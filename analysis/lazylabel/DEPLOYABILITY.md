@@ -363,6 +363,7 @@ relative to the repository root.
 | **R10** | Docker: fix the `ai` profile, add a CPU profile, run it once, publish images | M | F6 | Servers, Linux, teams |
 | **R11** | Release zips with a portable Node and a double-click launcher, plus "Open Folder" in the app. A desktop wrapper later, if ever. | M to L | Every prerequisite | Non-technical annotators |
 | **R12** | Robustness and trust: `engines`, the entry guard, EADDRINUSE, CI green, inference disconnect noise | S | F8 to F10 | Everyone |
+| **R13** | The AI tools in the zip too: a portable Python, PyTorch, SAM 2.1 and the embedder, in parts under GitHub's 2 GiB, joined by the launcher | M | F3 for AI users | Non-technical annotators who want AI |
 
 ### R1. The entry point, and the docs as written (S)
 
@@ -622,16 +623,68 @@ When `inference/.venv` exists, it also runs `python -m lazylabel_inference.docto
 - **A friendly EADDRINUSE message.**
 - **Get CI green.** The differential job fails on every push, and a red badge is the first thing an evaluator sees. **Done 2026-09-26** (`c2dd71a`): the job lacked libEGL and libGL, so importing legacy's loaders failed on QtGui; every job has passed since. Still open: bump the actions warned about Node 20.
 
+### R13. The AI tools with nothing to install (M)
+
+The owner, 2026-09-28, choosing it over an "Add AI tools" download step: "fine build without sam1,
+getting sam2.1 + the embeddings model and to have it all working without a python environment
+would be a huge unlock". R11's zip covers manual annotation only; AI needed Git, Node, uv and three
+commands (R6 to R8).
+
+**Built 2026-09-28.** `node scripts/build-release.mjs --ai <cu128|cpu>` builds
+`LazyLabel-web-ai-<os>-<arch>`: R11's zip plus
+- **CPython 3.12.11**, the python-build-standalone build uv installs, which runs from any folder,
+  copied into `python/`, with `inference/uv.lock`'s packages installed straight into it by
+  `uv sync` (the portable Python as uv's project environment): PyTorch 2.10.0, SAM 1 and SAM 2, the
+  same set `npm run ai:setup` installs, and nothing for tests;
+- **the inference service's code** where `aiPlan` runs it from, `app/lazylabel-reimagined/inference/src`;
+- **SAM 2.1 large and MobileNetV3 small**, fetched and verified by the service's own
+  `lazylabel-models`, which writes the `manifest.json` the service reads. SAM 1 is left out, by the
+  owner's choice (2.6 GB on its own);
+- **THIRD-PARTY-NOTICES.txt** and SAM 2's licences.
+
+PyTorch's CUDA build on Windows and Linux, which falls back to the processor where there is no NVIDIA
+card, and its CPU build on macOS, which has no CUDA.
+
+**Parts.** GitHub takes no release file of 2 GiB, and PyTorch's CUDA build alone is 2.9 GB, so
+`scripts/pack_parts.py` splits the bundle. Part 1 holds everything the app and the unpacking need:
+Node, the app, Python and its standard library, every small file. PyTorch's large libraries and the
+checkpoints go first-fit, largest first, into the room left, measured compressed. Every part is a
+whole zip under the same top folder, its last entry a mark, `.lazylabel/part-<i>-of-<n>`; part 1
+also carries `bundle.json`, which names the parts. A person downloads every part into one folder,
+unzips part 1 and starts it. `api/src/bundle.ts` finds the other parts in the bundle's folder, the
+three above it or Downloads (Explorer's "Extract All" puts the bundle two folders below the zip),
+and has the bundle's own Python unpack them into place: every file's CRC checked, written beside
+its place and moved in, an entry that would land outside the folder refused, and the mark last, so
+a part stopped half-way is unpacked again next time. Until every part is in, the app runs without
+AI and names the files and the folder they go in. The bundle's Python runs with PYTHONHOME,
+PYTHONPATH and the user's site folder kept out.
+
+**Measured on Windows, CUDA 12.8 (2026-09-28):** 6.0 GB in 25,467 files staged; two parts,
+1,998,858,991 and 1,933,696,837 bytes (3.9 GB), the first 7% under GitHub's limit. The largest single
+file is `torch_cuda.dll`, 908 MB.
+
+**Proof.** `scripts/release-smoke.mjs --ai` takes the bundle the way a person gets it: part 1
+unzipped into a scratch folder, the other parts left beside it, the launcher started with a folder
+of generated images. The launcher must unpack the parts and start the AI tools; then, through the
+app, SAM 2.1 must segment a bright square from one click in its middle, and Find Archetypes, which
+runs the embedder, must answer. `.github/workflows/release.yml`'s `ai-zip` job runs it on Windows,
+macOS and Linux, on the processor, since a runner has no GPU, and a `web-v*` tag publishes the parts
+beside R11's zips.
+
+**Open:** macOS signing and notarisation, as for R11; the macOS bundle runs on the processor.
+
 ### Which of these gets a non-technical annotator labelling fastest?
 
 - **R1 to R5** make it two commands after installing Node and Git: `npm install`, then `npm start "<folder>"`. The browser opens by itself.
 - **R11** removes even those: download, unzip, double-click, Open Folder.
+- **R13** does the same with the AI tools: download the parts, unzip part 1, double-click.
 - For AI, **R6, R7 and R8** make it three commands with one confirmation prompt.
 
 ### Which make the fewest assumptions about the machine?
 
 From fewest assumptions to most:
-1. **R11's zip:** a browser only, per OS and architecture.
+1. **R11's zip, and R13's with the AI tools:** a browser only, per OS and architecture; for the AI
+   at speed, an NVIDIA driver.
 2. **npx:** Node only.
 3. **Clone and npm:** Git and Node.
 4. **The uv AI add-on:** uv, plus an NVIDIA driver for speed.
@@ -686,6 +739,10 @@ npm start "C:\Users\me\Pictures\my-dataset"
 Download `LazyLabel-web-<os>-<arch>.zip` from the newest `web-v*` GitHub Release, unzip it,
 double-click **Start LazyLabel**, and choose the folder of images in the dialog that opens. The
 browser opens by itself.
+
+With the AI tools (R13): download every part of `LazyLabel-web-ai-<os>-<arch>` into one folder,
+unzip part 1 only, and do the same. The first start unpacks the other parts, then starts the AI
+tools with the app.
 
 ### 7.4 A shared server (after R10)
 

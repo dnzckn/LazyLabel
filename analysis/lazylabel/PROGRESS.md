@@ -509,7 +509,8 @@ The engineering the brief names is done. What is left is the owner's to decide. 
 
 1. **Ask the owner before the first Release.** Every pending decision was answered on 2026-09-27
    ("What remains"). Publishing is still theirs to say yes to: pushing a `web-v*` tag makes
-   `release.yml` publish the zips, and macOS signing and notarisation are not done.
+   `release.yml` publish the zips and the AI bundle's parts (R13), and macOS signing and
+   notarisation are not done.
 2. **If R10 is chosen,** build and run the Docker deployment once, so CUTOVER.md's last unticked
    box can be ticked (DEPLOYABILITY.md R10 lists what to fix first).
 
@@ -638,6 +639,9 @@ needs is already in one store rather than scattered across managers.
   inference image has never been built (`DEPLOYABILITY.md` R10). It is CUTOVER.md's one unticked
   box.
 - **R11: the release zip** is built (below).
+- **R13, 2026-09-28: the AI bundle** is built (below): "fine build without sam1, getting sam2.1 +
+  the embeddings model and to have it all working without a python environment would be a huge
+  unlock".
 - **Two 16-bit bugs legacy has are fixed in the web,** "Fix it in the web" both times: RULE-024's
   int16 overflow, which made bright colour images gray (`ff56922`; `CONTROL_PARITY.md` CP-72),
   and RULE-030's black crop, where the FFT filter's result on a crop was divided by 256 a second
@@ -685,6 +689,17 @@ built app and a double-click launcher per OS, from `.github/workflows/release.ym
 shows the system's folder dialog, so nobody types a path. The Windows zip is 39.7 MB, and it started
 from a scratch folder and served the app and `/api/health` (`DEPLOYABILITY.md` R11). The first
 Release waits on a `web-v*` tag; macOS signing and notarisation are not done.
+
+**R13, the AI bundle, built 2026-09-28.** R11's zip with the AI tools in it and nothing to install:
+CPython 3.12.11 (the portable build uv installs) with `inference/uv.lock`'s packages, the inference
+service's code, SAM 2.1 large and MobileNetV3, fetched and verified by `lazylabel-models`; no SAM 1,
+by the owner's choice. GitHub takes no file of 2 GiB, so `scripts/pack_parts.py` splits it and the
+launcher unpacks the other parts beside part 1 on its first start (`api/src/bundle.ts`). The Windows
+CUDA build is two parts, 1,998,858,991 and 1,933,696,837 bytes. Unzipped as a user would, with part 2
+left beside it, it unpacked part 2, started the AI tools on the RTX 3080, segmented a square from one
+click (box [28,20,68,52], score 0.990, 15 s with the model's load) and ran Find Archetypes, through
+the app (`scripts/release-smoke.mjs --ai`; `DEPLOYABILITY.md` R13). CI's `ai-zip` job does the same
+on Windows, macOS and Linux, on the processor.
 
 **Recorded differences.** Everything else is written where it belongs, each with its reason: the
 "Not matched" and "Still different" notes in `CONTROL_PARITY.md`, the "Keep" rows in
