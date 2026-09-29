@@ -676,13 +676,78 @@ fieldset input[type="text"] {
   image-rendering: pixelated;
 }
 
+/* Legacy's "Export Formats:" row (settings_widget.py:46-57): the 11px label, then the dropdown at
+   the right, 80 to 140px (export_format_widget.py:43-44), its checklist dropping over what is under
+   it as a menu does. */
 .formats {
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.formats__label {
+  font-size: 11px;
+}
+
+.formats__dropdown {
+  position: relative;
+  min-width: 80px;
+  max-width: 140px;
+  flex: 1;
+}
+
+/* Drawn as the combo boxes are, with a menu arrow where Qt's tool button has its indicator. */
+.formats__dropdown > summary {
   list-style: none;
-  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+  min-height: 22px;
+  padding: 2px 4px;
+  box-sizing: border-box;
+  color: var(--ink);
+  background: var(--input);
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.formats__dropdown > summary::-webkit-details-marker {
+  display: none;
+}
+
+.formats__dropdown > summary::after {
+  content: "▾";
+  color: var(--muted);
+}
+
+.formats__dropdown[open] > summary {
+  border-color: var(--accent);
+}
+
+.formats__menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 2px);
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 11rem;
+  padding: 6px;
+  background: var(--popup);
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.3);
+}
+
+.formats__menu label {
   margin: 0;
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
-  gap: 0.25rem 1rem;
+  white-space: nowrap;
 }
 
 /* Pinned below the content, with legacy's messages in its middle (CP-64). */
@@ -1270,14 +1335,28 @@ fieldset input[type="text"] {
   text-align: center;
 }
 
-/* The settings dialog: one control a line, as legacy's group boxes stack them, and the pixel
-   priority direction 20px in under its switch (settings_widget.py:75-102). */
-.settings-editor fieldset > label {
-  display: block;
+/* Legacy's Application Settings group (settings_widget.py:33-110): one control a line, the pixel
+   priority direction 20px in under its switch (75-102), and Reset to Default the group's width. */
+.app-settings {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
 }
 
-.settings-editor__indent {
+.app-settings__indent {
+  display: flex;
+  gap: 10px;
   padding-left: 20px;
+}
+
+.app-settings > button {
+  align-self: stretch;
+}
+
+/* The web's own button, under the group. */
+.app-settings__about {
+  margin-top: 6px;
 }
 
 /* Legacy's "Filter Class:" row above the segment table. */

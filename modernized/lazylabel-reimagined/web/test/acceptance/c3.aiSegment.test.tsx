@@ -32,6 +32,7 @@ import { defaultSettings } from "@lazylabel/settings-schema";
 
 import type { AnnotationsResult, ApiClient, WireSegmentResponse } from "../../src/api/client.js";
 import { NotificationHost, NotificationProvider } from "../../src/notifications/NotificationProvider.jsx";
+import { ApplicationSettings } from "../../src/settings/ApplicationSettings.jsx";
 import { SettingsProvider } from "../../src/settings/SettingsProvider.jsx";
 import { ModelPicker } from "../../src/workspace/ModelPicker.jsx";
 import { OpenImageView } from "../../src/workspace/OpenImageView.jsx";
@@ -147,6 +148,8 @@ function mount(overrides: Partial<ApiClient> = {}, values: Record<string, unknow
           <WorkspaceProvider client={api} projectId="p1" confirmNavigation={() => true}>
           <Harness />
           <ModelPicker client={api} />
+          {/* Where Operate On View is set, as in the app's Global tab. */}
+          <ApplicationSettings />
           <NotificationHost />
           <OpenImageView client={api} projectId="p1" />
         </WorkspaceProvider>
@@ -357,5 +360,25 @@ describe("RULE-089 through the view: Operate On View segments what is on screen"
 
     await waitFor(() => expect(embed).toHaveBeenCalled());
     expect((embed.mock.calls.at(-1) as unknown as [object])[0]).toEqual({ image: "a.png", model: MODEL });
+  });
+
+  it("sends the view once the box is ticked in Application Settings, where legacy has it", async () => {
+    // The owner could not find the switch on 2026-09-29: it was in a dialog. Legacy's is in the
+    // Application Settings group (settings_widget.py:59-66), and from there it reaches the encode.
+    const { embed } = mount();
+    fireEvent.click(screen.getByText("open a"));
+    await waitFor(() => expect(screen.getAllByText("a.png").length).toBeGreaterThan(0));
+    const operateOnView = screen.getByLabelText("Operate On View") as HTMLInputElement;
+    expect(operateOnView.checked).toBe(false);
+
+    fireEvent.click(operateOnView);
+    await waitFor(() => expect(operateOnView.checked).toBe(true));
+    await chooseModel();
+    fireEvent.click(screen.getByText("ai tool"));
+
+    await waitFor(() => expect(embed).toHaveBeenCalled());
+    const sent = (embed.mock.calls.at(-1) as unknown as [{ image: string; adjustments?: unknown }])[0];
+    expect(sent.image).toBe("a.png");
+    expect(sent.adjustments).toBeDefined();
   });
 });

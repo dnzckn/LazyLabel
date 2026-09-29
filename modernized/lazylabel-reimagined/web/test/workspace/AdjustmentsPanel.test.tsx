@@ -4,9 +4,9 @@
  * What is worth pinning beyond "a slider changes a setting": that the units are LEGACY's, so a
  * stored settings file round-trips; and that the panel reads as legacy's does -- its labels, its
  * tooltips, and no explanations printed under them (the owner, 2026-09-26).
-
  *
- * Names RULE-050, so the rule is traceable to the test that proves it: the setting inputs are clamped -- annotation size 0.1-5.0, pan speed 0.1-10.0 -- so a typed value out of range cannot reach the canvas.
+ * The annotation size and its reset moved to legacy's Annotation Settings group on 2026-09-29;
+ * RULE-050's clamps on the size and pan speed are proven in `AnnotationSettingsPanel.test.tsx`.
  */
 
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
@@ -52,6 +52,9 @@ describe("the sliders", () => {
     for (const name of ["Brightness", "Contrast", "Gamma", "Saturation"]) {
       expect(slider(name)).toBeTruthy();
     }
+    // The picture's four and no more: the annotation size is legacy's Annotation Settings group's.
+    expect(screen.getAllByRole("slider")).toHaveLength(4);
+    expect(screen.queryByRole("button", { name: "Reset Annotation Settings" })).toBeNull();
   });
 
   it("uses LEGACY's slider units, so a stored file round-trips", async () => {
@@ -150,20 +153,6 @@ describe("a settings file that holds nonsense", () => {
     await waitFor(() => expect(slider("Gamma")).toBeTruthy());
 
     expect((slider("Gamma") as HTMLInputElement).value).toBe("100");
-  });
-});
-
-describe("Reset Annotation Settings, legacy's (CP-50)", () => {
-  it("puts the annotation size, pan speed and join threshold back to their defaults", async () => {
-    // annotation_settings_widget.py:100-106, 196-200: size 1.0, pan 1.0, join 2.
-    const { saved } = mount({ annotation_size_multiplier: 2.5, pan_multiplier: 3, polygon_join_threshold: 9 });
-    const button = await screen.findByRole("button", { name: "Reset Annotation Settings" });
-    expect(button.title).toBe("Reset annotation size, pan speed, and join threshold to defaults.");
-
-    fireEvent.click(button);
-
-    await waitFor(() => expect(saved).toHaveLength(1));
-    expect(saved[0]).toMatchObject({ annotation_size_multiplier: 1, pan_multiplier: 1, polygon_join_threshold: 2 });
   });
 });
 

@@ -195,6 +195,8 @@ describe("the application shell", () => {
     // Legacy's left column: the Mode Controls card, then its sections under Global and Image.
     expect(tools.textContent).toMatch(/Mode Controls/);
     expect(tools.textContent).toMatch(/AI Model Selection/);
+    expect(tools.textContent).toMatch(/Application Settings/);
+    expect(tools.textContent).toMatch(/Annotation Settings/);
     expect(tools.textContent).toMatch(/Image Adjustments/);
     expect(tools.textContent).toMatch(/Border Crop/);
     expect(tools.textContent).not.toMatch(/still to come/);

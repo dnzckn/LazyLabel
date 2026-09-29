@@ -15,10 +15,10 @@ import type { WireDatasetImage, WireSegment } from "@lazylabel/contracts";
 
 import { CAPABILITIES } from "../capabilities.js";
 import { DatasetBrowser, type DatasetBrowserHandle, type FolderOutcome } from "../dataset/DatasetBrowser.jsx";
-import { ExportFormats } from "../dataset/ExportFormats.jsx";
 import { useNotifications } from "../notifications/NotificationProvider.jsx";
 import { OpenImageView } from "../workspace/OpenImageView.jsx";
 import { AdjustmentsPanel } from "../workspace/AdjustmentsPanel.jsx";
+import { AnnotationSettingsPanel } from "../workspace/AnnotationSettingsPanel.jsx";
 import { ClassTable } from "../workspace/ClassTable.jsx";
 import { ChannelThresholdPanel } from "../workspace/ChannelThresholdPanel.jsx";
 import { FrequencyPanel } from "../workspace/FrequencyPanel.jsx";
@@ -43,8 +43,7 @@ import { applyTheme, nextTheme, themeFor } from "./theme.js";
 import { useSettings } from "../settings/SettingsProvider.jsx";
 import { HotkeyEditor } from "../hotkeys/HotkeyEditor.jsx";
 import { Dialog } from "./Dialog.jsx";
-import { SettingsEditor } from "../settings/SettingsEditor.jsx";
-import { ResetSettings } from "../settings/ResetSettings.jsx";
+import { ApplicationSettings } from "../settings/ApplicationSettings.jsx";
 import { useHotkey, useKeyHint } from "../hotkeys/HotkeyProvider.jsx";
 import { ApiError, type ApiClient, type ApiHealth, type FolderRequest } from "../api/client.js";
 
@@ -56,7 +55,6 @@ export function App({ client }: { readonly client: ApiClient }): ReactNode {
   const [health, setHealth] = useState<Health | null>(null);
   const [healthError, setHealthError] = useState<string | null>(null);
   const [showHotkeys, setShowHotkeys] = useState(false);
-  const [showSettings, setShowSettings] = useState(false);
   // The capability table: for whoever is checking this build, not for labelling, so it lives in a
   // dialog rather than a panel beside the work (legacy has none).
   const [showAbout, setShowAbout] = useState(false);
@@ -395,7 +393,7 @@ export function App({ client }: { readonly client: ApiClient }): ReactNode {
     // take the keystrokes the dialog exists to capture.
     // A <div>, not a second <main>: the image pane is the page's main landmark, and a <main>
     // inside a <main> is invalid and gives a screen reader two regions called main.
-    <div className="app" inert={showHotkeys || showSettings || showAbout || openingFolder}>
+    <div className="app" inert={showHotkeys || showAbout || openingFolder}>
       {/* Renders nothing. It asks `onClose` whether closing this tab would lose work, and arms the
           browser's own dialog when it would -- decision 7's last silent path. */}
       <CloseGuard />
@@ -470,32 +468,12 @@ export function App({ client }: { readonly client: ApiClient }): ReactNode {
                         <AutoPolygonPanel />
                       </Panel>
                       <Panel title="Application Settings">
-                        {/* Controls only, as legacy's group has (settings_widget.py:33-110). It
-                            opened with a line counting the schema's settings and hotkeys. */}
-                        {/* Legacy's first control here, on by default (settings_widget.py:39-44).
-                            Moving to another image saves the one being left, by the owner's
-                            decision of 2026-09-25; off, the move asks instead. */}
-                        <label title="Automatically save work when switching to any new image (navigation keys, the file list, the timeline)">
-                          <input
-                            type="checkbox"
-                            checked={settings.values["auto_save"] !== false}
-                            onChange={(event) =>
-                              void save({
-                                ...settings,
-                                values: { ...settings.values, auto_save: event.currentTarget.checked },
-                              })
-                            }
-                          />{" "}
-                          Auto-Save on Navigate
-                        </label>
-                        <ExportFormats />
-                        <button type="button" onClick={() => setShowSettings(true)}>
-                          Edit settings
-                        </button>{" "}
-                        {/* Legacy's last control in this group (settings_widget.py:104-110), for
-                            every setting rather than the group's five; hotkeys keep theirs. */}
-                        <ResetSettings />{" "}
-                        <button type="button" onClick={() => setShowAbout(true)}>
+                        {/* Legacy's group, its controls in its order (settings_widget.py:33-110).
+                            Operate On View and pixel priority were in a Settings dialog behind an
+                            "Edit settings" button here until 2026-09-29; the dialog is gone. */}
+                        <ApplicationSettings />
+                        {/* Not legacy's: the capability table, for whoever is checking the build. */}
+                        <button type="button" className="app-settings__about" onClick={() => setShowAbout(true)}>
                           What is built
                         </button>
                       </Panel>
@@ -533,6 +511,11 @@ export function App({ client }: { readonly client: ApiClient }): ReactNode {
                       >
                         <FrequencyPanel />
                       </Panel>
+                      {/* Legacy's Size, Pan and Join, a section of their own (control_panel.py:
+                          521-525). Pan and Join were in a Settings dialog until 2026-09-29. */}
+                      <Panel title="Annotation Settings">
+                        <AnnotationSettingsPanel />
+                      </Panel>
                       <Panel title="Image Adjustments">
                         <ZoomControl />
                         <AdjustmentsPanel />
@@ -542,11 +525,6 @@ export function App({ client }: { readonly client: ApiClient }): ReactNode {
                 },
               ]}
             />
-            {showSettings && (
-              <Dialog title="Settings" onClose={() => setShowSettings(false)}>
-                <SettingsEditor />
-              </Dialog>
-            )}
             {showAbout && (
               <Dialog title="What is built" onClose={() => setShowAbout(false)}>
                 <table className="capabilities">

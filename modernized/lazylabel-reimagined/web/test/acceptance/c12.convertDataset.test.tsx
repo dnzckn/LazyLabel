@@ -101,7 +101,7 @@ async function openImage(): Promise<void> {
 describe("C12: converting a dataset in the browser", () => {
   it("offers all seven formats, with the defaults already chosen", async () => {
     show();
-    await waitFor(() => expect(screen.getByText("Export Formats")).toBeTruthy());
+    await waitFor(() => expect(screen.getByText("Export Formats:")).toBeTruthy());
 
     // Scoped to the format chooser: the browser's column switches are checkboxes too, and an
     // unscoped query counts both. They are told apart by their labels -- a column switch says
@@ -118,11 +118,14 @@ describe("C12: converting a dataset in the browser", () => {
 
   it("names the formats as legacy's Export Formats menu does, each with its tooltip (CP-61)", async () => {
     // core/exporters/__init__.py:26-58, in the menu's order (export_format_widget.py:31-36). They
-    // read "YOLO_DETECTION .txt" and the like until 2026-09-26.
+    // read "YOLO_DETECTION .txt" and the like until 2026-09-26. Since 2026-09-29 they are legacy's
+    // dropdown's checklist, whose closed text sums them up.
     show();
-    await waitFor(() => expect(screen.getByText("Export Formats")).toBeTruthy());
+    await waitFor(() => expect(screen.getByText("Export Formats:")).toBeTruthy());
 
-    const labels = [...screen.getByText("Export Formats").closest("fieldset")!.querySelectorAll("label")];
+    const row = screen.getByText("Export Formats:").closest(".formats")!;
+    expect(row.querySelector("details > summary")?.textContent).toBe("NPZ, YOLO Det");
+    const labels = [...row.querySelectorAll("details label")] as HTMLLabelElement[];
     expect(labels.map((label) => label.textContent?.trim())).toEqual([
       "NPZ",
       "NPZ Class Map",
@@ -142,7 +145,7 @@ describe("C12: converting a dataset in the browser", () => {
     const putSettings = vi.fn(async (settings: unknown) => settings);
     show({ putSettings });
 
-    await waitFor(() => expect(screen.getByText("Export Formats")).toBeTruthy());
+    await waitFor(() => expect(screen.getByText("Export Formats:")).toBeTruthy());
     screen.getByRole("checkbox", { name: "Pascal VOC" }).click();
 
     // Persona flow 4 says the choice is saved to settings. Decision 7 saves it when it changes
@@ -163,7 +166,7 @@ describe("C12: converting a dataset in the browser", () => {
       },
     });
 
-    await waitFor(() => expect(screen.getByText("Export Formats")).toBeTruthy());
+    await waitFor(() => expect(screen.getByText("Export Formats:")).toBeTruthy());
     await waitFor(() => expect((screen.getByRole("checkbox", { name: "NPZ" }) as HTMLInputElement).checked).toBe(true));
     screen.getByRole("checkbox", { name: "NPZ" }).click();
 
@@ -171,7 +174,8 @@ describe("C12: converting a dataset in the browser", () => {
     // box and says nothing (export_format_widget.py:94-101); its tooltip carries the rule.
     expect((screen.getByRole("checkbox", { name: "NPZ" }) as HTMLInputElement).checked).toBe(true);
     expect(screen.queryByText("At least one format must be selected.")).toBeNull();
-    expect(screen.getByText("Export Formats").closest("fieldset")!.title).toMatch(/At least one format must be selected\./);
+    const dropdown = screen.getByText("Export Formats:").closest(".formats")!.querySelector("details")!;
+    expect(dropdown.title).toMatch(/At least one format must be selected\./);
     expect(putSettings).not.toHaveBeenCalled();
   });
 
