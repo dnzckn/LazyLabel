@@ -59,8 +59,8 @@ Python 3.12, synthetic goldens, a simulated acceptance corpus, class names cross
 
 The latency budget holds from the browser: 82-128 ms per click on 12 megapixels, warm.
 
-**One command starts it.** `npm install` in `modernized/`, then `npm start "<folder>"`, serves the
-app and the API from one port. For the AI tools, `npm run ai:setup` installs PyTorch 2.10.0 and SAM
+**One command starts it.** `npm install` in `modernized/`, then `npm start`, serves the app and the
+API from one port, and the app's Open Image Folder chooses the folder. For the AI tools, `npm run ai:setup` installs PyTorch 2.10.0 and SAM
 1 and 2 from `inference/uv.lock`, `npm run ai:models sam2.1-large` fetches a checkpoint and checks
 its hash, and `npm run doctor` checks all of it (`DEPLOYABILITY.md` R6 to R9). Settings live per
 user, in `~/.config/lazylabel/lazylabel-web.db` (R5, `c8fee09`).
@@ -686,7 +686,8 @@ a browser, so the race was the app's, not only the test's.
 
 **R11, the no-install release zip, built 2026-09-27** (the owner: "Build it"). A portable Node, the
 built app and a double-click launcher per OS, from `.github/workflows/release.yml`; the launcher
-shows the system's folder dialog, so nobody types a path. The Windows zip is 39.7 MB, and it started
+showed the system's folder dialog, so nobody typed a path (the app's own Open Image Folder since
+2026-09-29, below). The Windows zip is 39.7 MB, and it started
 from a scratch folder and served the app and `/api/health` (`DEPLOYABILITY.md` R11). The first
 Release waits on a `web-v*` tag; macOS signing and notarisation are not done.
 
@@ -703,6 +704,14 @@ on Windows, macOS and Linux, on the processor, and all three passed (`3afda90`):
 parts, macOS 1.1 GB in one zip, Linux 5.3 GB in three parts. Its first run found the macOS and Linux
 bundles without PyTorch, a copied link that kept pointing at uv's own Python; fixed, and the build now
 checks where PyTorch imports from.
+
+**Open Image Folder, 2026-09-29** (the owner: "when starting the launch.cmd it asked me for a folder
+for images, why is that a part of the launch? in the gui the user should be able to select a folder
+to load"). The launchers ask nothing now: LazyLabel starts with no folder open, and the file panel's
+Open Image Folder, legacy's button, opens one through `POST /api/folder`, with the system's folder
+dialog shown by the API or, where there is no desktop, a typed path. The image open is saved or asked
+about first, a folder opened empties the view, and the inference service follows it (`POST
+/dataset-root`); a deployment's folder stays fixed (`CONTROL_PARITY.md` CP-76, `DEPLOYABILITY.md` R11).
 
 **Recorded differences.** Everything else is written where it belongs, each with its reason: the
 "Not matched" and "Still different" notes in `CONTROL_PARITY.md`, the "Keep" rows in

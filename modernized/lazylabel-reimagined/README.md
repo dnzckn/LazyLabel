@@ -75,7 +75,8 @@ No build script may call npm itself: each nested `npm run` adds a `node_modules\
 PATH for every folder above the package, and four levels took PATH past what cmd.exe reads, so
 `tsc` stopped being found halfway through an install (`api/test/workspace.test.ts` says more).
 
-To run it, from `modernized/`: `npm start "/path/to/your/images"`. That is the launcher,
+To run it, from `modernized/`: `npm start`, then Open Image Folder in the app, or
+`npm start "/path/to/your/images"` to open that folder at start. That is the launcher,
 `api/src/cli.ts`: it checks the Node version, starts the API, which serves the built web app on the
 same port, prints the address and opens the browser. Its options (`--help` lists them) go through
 `lazylabel.cmd` or `lazylabel.sh` beside `package.json`, because PowerShell's npm drops the `--`
@@ -103,7 +104,7 @@ rather than a broken one: everything but SAM prompts and propagation works. To a
 ```
 npm run ai:setup                  # PyTorch 2.10.0, SAM 1 and SAM 2 from inference/uv.lock, into inference/.venv
 npm run ai:models sam2.1-large    # asks, downloads 898 MB, checks the SHA-256, writes manifest.json
-npm start "<folder>"              # now starts the inference service too, and stops it on exit
+npm start                         # now starts the inference service too, and stops it on exit
 ```
 
 `npm run ai:setup` picks PyTorch's CUDA 12.8 build when `nvidia-smi` reports a driver for CUDA

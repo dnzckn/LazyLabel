@@ -18,29 +18,28 @@ its instructions are [further down](#desktop-app-pyqt6-branch-main-pypi-208).
 
 ### Download and run
 
-To annotate by hand you need nothing installed, not even Node.js:
+This is the way to run it: nothing to install, not even Node.js.
 
-1. Download the zip for your computer from the
+1. Download it from the
    [LazyLabel web releases](https://github.com/dnzckn/LazyLabel/releases?q=web-v&expanded=true):
-   `LazyLabel-web-windows-x64.zip`, `LazyLabel-web-macos-arm64.zip` (Apple silicon) or
-   `LazyLabel-web-linux-x64.zip`.
-2. Unzip it and double-click **Start LazyLabel**: `Start LazyLabel.cmd` on Windows,
-   `Start LazyLabel.command` on macOS. On Linux, run `./start-lazylabel.sh` in a terminal.
-3. Choose your folder of images in the dialog. LazyLabel opens in your browser; closing its window
-   stops it.
+   - **to annotate by hand**, the zip for your computer, `LazyLabel-web-windows-x64.zip`,
+     `LazyLabel-web-macos-arm64.zip` (Apple silicon) or `LazyLabel-web-linux-x64.zip`, and unzip it;
+   - **with the AI tools**, `LazyLabel-web-ai-<your computer>` instead. For Windows and Linux it comes
+     in parts, because GitHub takes no file of 2 GB: download every part into one folder and unzip
+     part 1 only. The first start finds the other parts beside it and unpacks them itself.
+2. Double-click **Start LazyLabel**: `Start LazyLabel.cmd` on Windows, `Start LazyLabel.command` on
+   macOS. On Linux, run `./start-lazylabel.sh` in a terminal.
+3. LazyLabel opens in your browser. Click **Open Image Folder**, at the top of the file list, and
+   choose your folder of images. Closing LazyLabel's window stops it.
 
 Each zip carries its own Node.js and serves this computer only. The first time, Windows may ask
 whether to run the launcher (More info, then Run anyway). macOS says it cannot check it, because the
 zip is not yet signed: open System Settings, Privacy & Security, and choose Open Anyway.
 
-**With the AI tools, still with nothing to install:** download `LazyLabel-web-ai-<your computer>`
-from the same releases instead. It carries its own Python, SAM 2.1 (large) for clicks, boxes and
-Sequence propagation, and MobileNetV3 for Find Archetypes, so it is large, and for Windows and
-Linux it comes in parts, because GitHub takes no file of 2 GB. Download every part into one folder,
-unzip part 1 only, and start LazyLabel from it as above: the first start finds the other parts and
-unpacks them itself. It runs on an NVIDIA graphics card when there is one with a current driver,
-and on the processor otherwise; on a Mac, the processor. SAM 1 is not in it; the install from
-source below adds it.
+The AI download carries its own Python, SAM 2.1 (large) for clicks, boxes and Sequence propagation,
+and MobileNetV3 for Find Archetypes, so it is large. It runs on an NVIDIA graphics card when there is
+one with a current driver, and on the processor otherwise; on a Mac, the processor. SAM 1 is not in
+it; the install from source below adds it.
 
 ### From source
 
@@ -53,7 +52,7 @@ later** (the current 22 or 24 LTS). Nothing else: no Python, no compiler, no GPU
 git clone -b main-web https://github.com/dnzckn/LazyLabel.git
 cd LazyLabel\modernized
 npm install
-npm start "C:\path\to\your\images"
+npm start
 ```
 
 **macOS and Linux (bash or zsh):**
@@ -62,13 +61,14 @@ npm start "C:\path\to\your\images"
 git clone -b main-web https://github.com/dnzckn/LazyLabel.git
 cd LazyLabel/modernized
 npm install
-npm start "/path/to/your/images"
+npm start
 ```
 
 `npm install` installs and builds everything, in under a minute. `npm start` prints
-`LazyLabel is running at http://127.0.0.1:8787/` and opens it in your browser: one program, one
-address, the app and its API together. Ctrl+C stops it. Next time, `npm start` alone is enough;
-after a `git pull`, run `npm install` again first.
+`LazyLabel is running at http://127.0.0.1:8787/` and opens it in your browser, where **Open Image
+Folder** chooses your folder of images: one program, one address, the app and its API together.
+Ctrl+C stops it. To open a folder at start, name it: `npm start "C:\path\to\your\images"`. Next
+time, `npm start` alone is enough; after a `git pull`, run `npm install` again first.
 
 **Options** go through the launcher beside `package.json`, which takes them the same way in every
 shell. `--help` lists them all.
@@ -86,9 +86,9 @@ and drops the `--`, so the options reach npm instead. Type `npm.cmd` there for a
 takes options after `--`.)
 
 - **When something is wrong, the launcher says what to do:** a Node.js that is too old, a folder
-  that is not there, a port already in use (it names a free one, or opens the LazyLabel already
-  running for that folder). `npm run doctor "<folder>"` checks everything, the AI tools included,
-  and gives the command that fixes each problem it finds.
+  named that is not there, a port already in use (it names a free one, or opens the LazyLabel
+  already running). `npm run doctor "<folder>"` checks everything, the AI tools included, and gives
+  the command that fixes each problem it finds.
 - **Your settings and hotkeys are kept per user**, in `~/.config/lazylabel/lazylabel-web.db`, the
   desktop app's config folder, so they follow you from folder to folder; the desktop app's own
   settings are brought across once, the first time. Nothing is written into your image folder
@@ -104,7 +104,7 @@ the CPU. From the same `modernized` folder, in any shell:
 ```
 npm run ai:setup
 npm run ai:models sam2.1-large
-npm start "<the folder of your images>"
+npm start
 ```
 
 - `npm run ai:setup` installs PyTorch 2.10.0, SAM 1 and SAM 2 exactly as

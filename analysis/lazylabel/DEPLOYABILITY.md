@@ -614,7 +614,7 @@ When `inference/.venv` exists, it also runs `python -m lazylabel_inference.docto
 
 **A desktop wrapper** (Electron) is **L**, with signing and notarisation cost on every release. Defer it unless the zip proves insufficient. AI would remain an add-on in any case.
 
-**Done 2026-09-27** (`1c38a2d`, `8d8c21a`): `.github/workflows/release.yml` builds `LazyLabel-web-<os>-<arch>.zip` on windows-latest (x64), macos-latest (arm64) and ubuntu-latest (x64) with `scripts/build-release.mjs`: `npm ci` and `npm prune --omit=dev` in a copy of `modernized/`, nodejs.org's Node checked against `SHASUMS256.txt`, only the packages the API loads (workspace links made real folders), a launcher (`Start LazyLabel.cmd`, `Start LazyLabel.command`, `start-lazylabel.sh`) and a `.sha256`. `scripts/release-smoke.mjs` unzips each zip and starts it through its launcher before upload. A `web-v*` tag on a main-web commit publishes a Release with `--latest=false`, so the desktop app keeps Latest; a push to main-web that touches the tooling builds the zips unpublished; `workflow_dispatch` fires only once the file is on the default branch. **"Open Folder" is the system's folder dialog**, shown by the launcher (`--choose-folder`) before the server starts, or a typed path where there is no desktop. There is no endpoint, so decision 3's loopback-only model is unchanged; switching folders inside the running app is not built. Measured on Windows with Node 22.17.0: **39.7 MB zipped**, 102.0 MB in 213 files unzipped (Node 82 MB, the app 21 MB, mostly sharp's libvips). Unzipped outside the repository, its launcher served the app, `/api/health` (`"dataset":"ok"`), six copied images and a sharp thumbnail on port 18800, and stopped. Not run here: the macOS and Linux zips (CI builds and starts them), and a click through the dialog. The zip carries no inference package, so its banner reads "AI tools: off: not in this download (README.txt says how to add them)", not `npm run ai:setup`, which a zip user has no npm to run. Open: macOS signing and notarisation (until then, Open Anyway once; the launcher then clears the folder's quarantine mark), Windows code signing, and the first `web-v` tag.
+**Done 2026-09-27** (`1c38a2d`, `8d8c21a`): `.github/workflows/release.yml` builds `LazyLabel-web-<os>-<arch>.zip` on windows-latest (x64), macos-latest (arm64) and ubuntu-latest (x64) with `scripts/build-release.mjs`: `npm ci` and `npm prune --omit=dev` in a copy of `modernized/`, nodejs.org's Node checked against `SHASUMS256.txt`, only the packages the API loads (workspace links made real folders), a launcher (`Start LazyLabel.cmd`, `Start LazyLabel.command`, `start-lazylabel.sh`) and a `.sha256`. `scripts/release-smoke.mjs` unzips each zip and starts it through its launcher before upload. A `web-v*` tag on a main-web commit publishes a Release with `--latest=false`, so the desktop app keeps Latest; a push to main-web that touches the tooling builds the zips unpublished; `workflow_dispatch` fires only once the file is on the default branch. **"Open Folder" is in the app since 2026-09-29** (`1d52524`, `9d6dce9`, `45ff335`, `e0bafad`), by the owner's words that day: "when starting the launch.cmd it asked me for a folder for images, why is that a part of the launch? in the gui the user should be able to select a folder to load". Until then the launcher showed the system's folder dialog (`--choose-folder`) before the server started, or asked in its window. Now the launchers ask nothing: LazyLabel starts with no folder open and opens the browser, and the file panel's **Open Image Folder**, legacy's button (right_panel.py:112-114), opens one through `POST /api/folder`, which either has the API show the system's folder dialog, "Select Image Folder" as legacy titles it, on the computer it runs on (`LAZYLABEL_FOLDER_CHOICE=dialog`, which the launcher sets on a desktop), or opens a typed path (`path`, where there is no desktop, as over SSH). A deployment's folder stays fixed (`fixed`, the default), so the Docker image cannot be pointed at another folder from a browser. Being an endpoint, it refuses what another web page could send: a body that is not JSON (415), which a cross-site page cannot send without a CORS preflight the API never grants, and a request from another origin (403); the API still listens on loopback by default, as decision 3 has it. The image open is saved, or asked about, before the folder changes; the inference service is pointed at the new folder (`POST /dataset-root`); a folder dropped on the launcher, or named after `npm start`, still opens at start. The smoke test starts the launcher with no folder and opens its images through the endpoint (CONTROL_PARITY.md CP-76). Measured on Windows with Node 22.17.0: **39.7 MB zipped**, 102.0 MB in 213 files unzipped (Node 82 MB, the app 21 MB, mostly sharp's libvips). Unzipped outside the repository, its launcher served the app, `/api/health` (`"dataset":"ok"`), six copied images and a sharp thumbnail on port 18800, and stopped. Not run here: the macOS and Linux zips (CI builds and starts them), and a click through the dialog. The zip carries no inference package, so its banner reads "AI tools: off: not in this download (README.txt says how to add them)", not `npm run ai:setup`, which a zip user has no npm to run. Open: macOS signing and notarisation (until then, Open Anyway once; the launcher then clears the folder's quarantine mark), Windows code signing, and the first `web-v` tag.
 
 ### R12. Small robustness and trust fixes (S)
 
@@ -722,7 +722,7 @@ Prerequisites: Git, and Node.js 22 LTS (22.13 or later) or 24 LTS.
 git clone -b main-web https://github.com/dnzckn/LazyLabel.git
 cd LazyLabel/modernized
 npm install
-npm start "C:\Users\me\Pictures\my-dataset"
+npm start
 ```
 
 `npm install` fetches about 46 MB, installs 244 packages (128 MB) and builds all five packages in
@@ -731,7 +731,8 @@ prints:
 ```
 LazyLabel is running at http://127.0.0.1:8787/ (Ctrl+C to stop)
 ```
-and opens the browser. Settings live in `~/.config/lazylabel/lazylabel-web.db`. Nothing is written
+and opens the browser, where **Open Image Folder** chooses the folder of images (since 2026-09-29;
+`npm start "C:\Users\me\Pictures\my-dataset"` still opens one at start). Settings live in `~/.config/lazylabel/lazylabel-web.db`. Nothing is written
 into the dataset folder except the annotation files you save.
 
 If anything fails: `npm run doctor`.
@@ -744,7 +745,7 @@ otherwise it is CPU).
 ```
 npm run ai:setup
 npm run ai:models sam2.1-large
-npm start "C:\Users\me\Pictures\my-dataset"
+npm start
 ```
 
 - `npm run ai:setup` runs `uv sync` with the `cu128` or `cpu` extra from the lockfile: torch 2.10.0 and SAM 2.
@@ -753,9 +754,9 @@ npm start "C:\Users\me\Pictures\my-dataset"
 
 ### 7.3 Zero-install (after R11)
 
-Download `LazyLabel-web-<os>-<arch>.zip` from the newest `web-v*` GitHub Release, unzip it,
-double-click **Start LazyLabel**, and choose the folder of images in the dialog that opens. The
-browser opens by itself.
+Download `LazyLabel-web-<os>-<arch>.zip` from the newest `web-v*` GitHub Release, unzip it and
+double-click **Start LazyLabel**. The browser opens by itself; click **Open Image Folder** and
+choose the folder of images (since 2026-09-29; the launcher asked for it before then).
 
 With the AI tools (R13): download every part of `LazyLabel-web-ai-<os>-<arch>` into one folder,
 unzip part 1 only, and do the same. The first start unpacks the other parts, then starts the AI
