@@ -272,6 +272,8 @@ Solid colours with black bold text (sequence_widget.py:173-202, 268-305, 517-550
      - The merge, delete and renumber buttons keep their descriptive labels.
      - "What is built" opens from Application Settings as a dialog. "Formats to write" moved into
        Application Settings too, where legacy's Export Formats is.
+     - 2026-09-29: the column is legacy's splitter, its sections sharing the window's height with
+       draggable handles and each list scrolling inside its own section (`CONTROL_PARITY.md` CP-77).
 8. **Section chrome.**
    - A 20px strip header: the text colour at .04, .08 on hover, radius 3, and no card border.
    - Only the Mode card has a border, radius 6. Files: Panel.tsx, styles.css:294-330.
