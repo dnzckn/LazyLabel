@@ -380,8 +380,10 @@ thead th {
 
 /* The whole window, as legacy's is: the three panes, then a status bar pinned below them
    (main_window.py:662-710). Only the panes scroll, each on its own, so the image stays where it is
-   while the file list under it moves. */
+   while the file list under it moves. Positioned, so what is absolutely positioned outside the panes
+   is clipped here too, and the page itself never scrolls. */
 .app {
+  position: relative;
   display: flex;
   flex-direction: column;
   height: 100vh;
@@ -890,8 +892,16 @@ fieldset input[type="text"] {
   grid-template-rows: minmax(0, 1fr);
 }
 
-/* Each pane scrolls on its own, with legacy's 8-pixel margins (control_panel.py:185-187). */
+/* Each pane scrolls on its own, with legacy's 8-pixel margins (control_panel.py:185-187).
+
+   EACH PANE HOLDS WHAT IS ABSOLUTELY POSITIONED INSIDE IT, and clips it. The visually hidden
+   headings and labels are positioned absolutely; with no positioned ancestor they were placed
+   against the page itself, at their place in the pane's content, which no pane's overflow clips.
+   With 86 images listed, the segment table's hidden "Selected" sat 1,500 pixels below the window,
+   and the page grew to hold it: the whole app scrolled up into the empty ground under it (the
+   owner, 2026-09-29: "i'm able to scroll the whole app going off into gray space"). */
 .workspace > * {
+  position: relative;
   min-height: 0;
   overflow: auto;
   padding: 8px;
