@@ -136,6 +136,17 @@ describe("RULE-050: a typed value is clamped when editing finishes", () => {
     expect(saved[1]?.["annotation_size_multiplier"]).toBe(5);
   });
 
+  it("turns 0.05 in Size into 0.1, the rule's own edge case", async () => {
+    // int(0.05 * 10) is 0, and the slider's floor is 1 (annotation_settings_widget.py:129-137).
+    const { saved } = mount({ annotation_size_multiplier: 2 });
+    await waitFor(() => expect(typed("Annotation size").value).toBe("2.0"));
+
+    typeInto("Annotation size", "0.05");
+
+    await waitFor(() => expect(saved).toHaveLength(1));
+    expect(saved[0]?.["annotation_size_multiplier"]).toBe(0.1);
+  });
+
   it("reverts what is not a number, and a fraction in Join, saving nothing", async () => {
     // Legacy's int(text) refuses "2.5" for Join as it refuses "lots" (annotation_settings_widget
     // .py:160-167).
