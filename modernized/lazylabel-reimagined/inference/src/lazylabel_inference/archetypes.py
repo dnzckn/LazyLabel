@@ -279,8 +279,15 @@ def embed(
     """Embed every frame, in batches, as L2-normalized feature rows.
 
     `images` is (dataset key, RGB uint8 array), the same pairing `stage_sequence` takes -- the
-    decode already happened upstream under the API's format allow-list, so nothing here opens a
-    file and SEC-02 is not re-litigated in a second place.
+    decode happens upstream under the API's format allow-list, so nothing here opens a file and
+    SEC-02 is not re-litigated in a second place.
+
+    IN PLACE OF THE ARRAY, A FUNCTION THAT READS IT, which is what the service passes: each frame is
+    then decoded when its batch comes up, shrunk to the model's 224 square and let go, so a
+    sequence of large photos is in memory one at a time. Reading every frame first held them all
+    at once: 86 wedding photos of about 17 MB each, some ten gigabytes decoded, took the inference
+    service down with them on 2026-09-29. A reader that raises is an unreadable frame like any
+    other.
 
     A frame that cannot be turned into a tensor is recorded and skipped; a failure of the MODEL is
     raised. The difference is the point: one bad frame should not lose the other nine hundred, and a
@@ -302,15 +309,18 @@ def embed(
         tensors: list[Any] = []
         batch_keys: list[str] = []
 
-        for key, array in batch:
+        for key, source in batch:
             try:
-                pixels = np.asarray(array)
+                pixels = np.asarray(source() if callable(source) else source)
                 if pixels.ndim != 3 or pixels.shape[2] != 3:
                     raise ValueError(f"expected (height, width, 3) RGB, got shape {pixels.shape}")
-                tensors.append(transform(Image.fromarray(pixels.astype(np.uint8))))
+                # No copy of a frame that is already uint8: a large photo is big enough once.
+                tensors.append(transform(Image.fromarray(pixels.astype(np.uint8, copy=False))))
                 batch_keys.append(key)
             except Exception as cause:
                 unreadable.append((key, str(cause)))
+            finally:
+                pixels = None
 
         if not tensors:
             continue

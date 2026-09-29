@@ -145,6 +145,44 @@ class TestEmbedding:
         assert one_batch.keys == many_batches.keys
         assert np.allclose(one_batch.features, many_batches.features)
 
+    def test_it_reads_each_frame_only_when_its_batch_comes_up(self) -> None:
+        # 86 photos of about 17 MB each, every one decoded before the first was embedded, took the
+        # service down on 2026-09-29. Given readers, a batch's frames are read, embedded and let go
+        # before the next batch is read, so large photos are in memory a batch at a time.
+        events: list[str] = []
+
+        class Logged(ByBrightness):
+            def __call__(self, batch):
+                events.append(f"embed {int(batch.shape[0])}")
+                return super().__call__(batch)
+
+        def reader(key: str, shade: int):
+            def read():
+                events.append(f"read {key}")
+                return frame(shade)
+
+            return read
+
+        images = [(f"f{index}.jpg", reader(f"f{index}.jpg", 20 + index)) for index in range(5)]
+        embedded = embed(images, stand_in(Logged()), batch_size=2)
+
+        assert embedded.keys == tuple(key for key, _ in images)
+        assert events == [
+            "read f0.jpg", "read f1.jpg", "embed 2",
+            "read f2.jpg", "read f3.jpg", "embed 2",
+            "read f4.jpg", "embed 1",
+        ]
+
+    def test_a_reader_that_fails_is_an_unreadable_frame_not_a_failed_request(self) -> None:
+        def broken():
+            raise OSError("the file is not a JPEG after all")
+
+        images = [("good.jpg", frame(20)), ("broken.jpg", broken), ("also-good.jpg", frame(200))]
+        embedded = embed(images, stand_in())
+
+        assert embedded.keys == ("good.jpg", "also-good.jpg")
+        assert embedded.unreadable == (("broken.jpg", "the file is not a JPEG after all"),)
+
     def test_it_batches_rather_than_embedding_everything_at_once(self) -> None:
         # Not cosmetic: a thousand 224x224 frames in one tensor is where a sequence runs a machine
         # out of memory, and the failure looks like the feature being broken.

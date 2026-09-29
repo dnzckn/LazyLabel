@@ -156,7 +156,9 @@ def _archetyper_for(service, models, logger):
             logger.log("info", "loading the archetype embedder", model=entry.name)
             loaded[entry.name] = load_embedder(entry, service.model_dir, device=service.device)
 
-        images = [(key, service.read_image(key)) for key in sequence]
+        # Readers, not pixels: `embed` decodes each frame when it reaches it, so a folder of large
+        # photos is never in memory at once. Every key is still checked against the root here.
+        images = [(key, service.image_reader(key)) for key in sequence]
         return find_archetypes(images, loaded[entry.name])
 
     def _embedder_entry(entries, wanted):

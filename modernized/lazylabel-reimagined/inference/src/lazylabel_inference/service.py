@@ -330,6 +330,16 @@ class InferenceService:
         """
         return self._read_image(self._resolve(image_key))
 
+    def image_reader(self, image_key: str) -> Callable[[], Any]:
+        """`read_image` in two steps: the key is checked against the dataset root now, and the file
+        is read and decoded when the function returned is called.
+
+        Find Archetypes takes these so it can decode a sequence one frame at a time: reading them
+        all first held every frame of a folder of photos in memory at once (`archetypes.embed`).
+        """
+        path = self._resolve(image_key)
+        return lambda: self._read_image(path)
+
     def read_frame(self, image_key: str) -> SourceImage:
         """One frame of a propagation: its RGB pixels, and its own bytes when it is a JPEG.
 

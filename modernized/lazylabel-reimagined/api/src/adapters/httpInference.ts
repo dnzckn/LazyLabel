@@ -30,6 +30,9 @@ import {
   type UnloadResult,
 } from "../ports/inference.js";
 
+/** Find Archetypes' allowance per frame, far above the second or two a large photo takes. */
+export const ARCHETYPE_MS_PER_FRAME = 10_000;
+
 export interface HttpInferenceOptions {
   /** Where the inference service listens, e.g. http://127.0.0.1:8788 */
   readonly baseUrl: string;
@@ -217,6 +220,10 @@ export class HttpInferenceClient implements InferenceClient {
       "/inference/archetypes",
       { sequence, ...(model === undefined ? {} : { model }) },
       correlationId,
+      // Every frame is decoded at its full size, a second or two each for a large photo: 86 photos
+      // of about 17 MB took over two minutes on 2026-09-29, and the common limit cut them off. An
+      // allowance per frame, never less than the common limit.
+      Math.max(this.timeoutMs, sequence.length * ARCHETYPE_MS_PER_FRAME),
     );
     if (response.status !== 200) throw await this.failure(response);
 
@@ -283,9 +290,10 @@ export class HttpInferenceClient implements InferenceClient {
     path: string,
     body: unknown,
     correlationId: string,
+    timeoutMs: number = this.timeoutMs,
   ): Promise<Response> {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), this.timeoutMs);
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
 
     try {
       return await this.doFetch(this.baseUrl + path, {

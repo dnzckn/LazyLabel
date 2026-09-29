@@ -178,4 +178,23 @@ describe("C10: finding archetypes through the API", () => {
 
     expect(response.status).toBe(503);
   });
+
+  it("gives every frame its own allowance, so a folder of large photos is not cut off", async () => {
+    // 86 photos of about 17 MB took over two minutes on 2026-09-29, and the common limit, two
+    // minutes, answered "the inference service could not be reached". Here the common limit is
+    // 30 ms and the service answers in 120 ms: five frames get far longer than that.
+    const slow = (async (_input: unknown, init?: RequestInit) =>
+      new Promise<Response>((resolve, reject) => {
+        const answer = setTimeout(() => resolve(jsonResponse(200, found())), 120);
+        init?.signal?.addEventListener("abort", () => {
+          clearTimeout(answer);
+          reject(new Error("This operation was aborted"));
+        });
+      })) as unknown as typeof globalThis.fetch;
+    const client = new HttpInferenceClient({ baseUrl: "http://inference.test", fetch: slow, timeoutMs: 30 });
+
+    await expect(client.findArchetypes(SEQUENCE, undefined, "c10")).resolves.toMatchObject({
+      suggested: found().suggested,
+    });
+  });
 });
