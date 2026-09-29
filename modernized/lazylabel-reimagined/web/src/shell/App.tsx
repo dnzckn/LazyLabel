@@ -35,6 +35,7 @@ import { processingQuery } from "../workspace/processing.js";
 import { useWorkspace } from "../workspace/WorkspaceProvider.jsx";
 import { clampZoom } from "../canvas/fit.js";
 import { Panel, Workspace } from "./Panel.jsx";
+import { Splitter } from "./Splitter.jsx";
 import { CentreTabs } from "./CentreTabs.jsx";
 import { ModeControls } from "./ModeControls.jsx";
 import { Tabs } from "./Tabs.jsx";
@@ -177,6 +178,9 @@ export function App({ client }: { readonly client: ApiClient }): ReactNode {
    */
   const browser = useRef<DatasetBrowserHandle>(null);
   const step = useCallback((by: 1 | -1) => browser.current?.step(by), []);
+  // Closed to its header, a section of the right-hand column gives its height to the others.
+  const [segmentsClosed, setSegmentsClosed] = useState(false);
+  const [classesClosed, setClassesClosed] = useState(false);
   // Save All writes files the list shows ticks for; it reads them again after (CP-48).
   const [writes, setWrites] = useState(0);
   /*
@@ -640,33 +644,65 @@ export function App({ client }: { readonly client: ApiClient }): ReactNode {
           />
         }
         right={
-          <>
-            <DatasetBrowser
-              ref={browser}
-              onOpenInPair={onOpenInPair}
-              client={client}
-              projectId="default"
-              onListed={setListed}
-              onShown={setShownRows}
-              reviewSegments={reviewFor}
-              range={sequenceRange}
-              root={health?.datasetRoot}
-              written={writes}
-              folderChoice={noDialog && health?.folderChoice === "dialog" ? "path" : health?.folderChoice}
-              onOpenFolder={openFolder}
-              opened={foldersOpened}
-              // Until /health says whether a folder is open, so a start with none shows no empty list.
-              pending={health === null && healthError === null}
-            />
-
-            <Panel title="Segments">
-              <SegmentTable />
-            </Panel>
-            <Panel title="Classes">
-              <ClassTable />
-            </Panel>
-
-          </>
+          // Legacy's right panel: a vertical splitter of the file explorer, the segments and the
+          // classes (right_panel.py:67-201), each keeping its share of the height and scrolling its
+          // own list. Legacy's shares at 1600x900 are 294, 242 and 234 pixels of 770. A section's
+          // minimum keeps its controls, its table's header and about two rows in view, near legacy's
+          // own minimum sizes of 201, 146 and 138.
+          <Splitter
+            storageKey="lazylabel.rightColumn"
+            sections={[
+              {
+                id: "images",
+                label: "Images",
+                share: 0.38,
+                min: 200,
+                content: (
+                  <DatasetBrowser
+                    ref={browser}
+                    onOpenInPair={onOpenInPair}
+                    client={client}
+                    projectId="default"
+                    onListed={setListed}
+                    onShown={setShownRows}
+                    reviewSegments={reviewFor}
+                    range={sequenceRange}
+                    root={health?.datasetRoot}
+                    written={writes}
+                    folderChoice={noDialog && health?.folderChoice === "dialog" ? "path" : health?.folderChoice}
+                    onOpenFolder={openFolder}
+                    opened={foldersOpened}
+                    // Until /health says whether a folder is open, so a start with none shows no empty list.
+                    pending={health === null && healthError === null}
+                  />
+                ),
+              },
+              {
+                id: "segments",
+                label: "Segments",
+                share: 0.31,
+                min: 170,
+                collapsed: segmentsClosed,
+                content: (
+                  <Panel title="Segments" onCollapsedChange={setSegmentsClosed}>
+                    <SegmentTable />
+                  </Panel>
+                ),
+              },
+              {
+                id: "classes",
+                label: "Classes",
+                share: 0.31,
+                min: 150,
+                collapsed: classesClosed,
+                content: (
+                  <Panel title="Classes" onCollapsedChange={setClassesClosed}>
+                    <ClassTable />
+                  </Panel>
+                ),
+              },
+            ]}
+          />
         }
       />
 

@@ -13,7 +13,7 @@
  * recorded for the app as a whole.
  */
 
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 
 export interface PanelProps {
   readonly title: string;
@@ -32,10 +32,22 @@ export interface PanelProps {
    * explanation instead of its children.
    */
   readonly pending?: { readonly phase: string; readonly summary: string };
+  /**
+   * Told whenever the panel closes or opens. A section of the right-hand column closed to its header
+   * gives its share of the column's height to the others (`Splitter.tsx`).
+   */
+  readonly onCollapsedChange?: (collapsed: boolean) => void;
   readonly children?: ReactNode;
 }
 
-export function Panel({ title, initiallyCollapsed, collapseOnLoad, pending, children }: PanelProps): ReactNode {
+export function Panel({
+  title,
+  initiallyCollapsed,
+  collapseOnLoad,
+  pending,
+  onCollapsedChange,
+  children,
+}: PanelProps): ReactNode {
   const [collapsed, setCollapsed] = useState(initiallyCollapsed ?? pending !== undefined);
   /*
    * COLLAPSING HIDES; IT DOES NOT UNMOUNT. It did until 2026-09-23, and collapsing is something
@@ -62,6 +74,14 @@ export function Panel({ title, initiallyCollapsed, collapseOnLoad, pending, chil
     setCollapsed(close);
     if (!close) setOpened(true);
   }, [loaded]);
+
+  // Through a ref, as the load rule is: the caller may hand a new function every render. Before the
+  // browser paints, so a closed section never shows a frame at its open height.
+  const report = useRef(onCollapsedChange);
+  report.current = onCollapsedChange;
+  useLayoutEffect(() => {
+    report.current?.(collapsed);
+  }, [collapsed]);
 
   return (
     <section className="panel">
@@ -110,6 +130,10 @@ export interface WorkspaceProps {
  * fixed window; a browser already reflows, and the grid collapses to a single column on a narrow
  * screen without anything having to be dragged. Resizable panes are a preference, not a
  * capability, and can be added without moving anything that sits inside them.
+ *
+ * Inside the right pane the sections are divided as legacy's are, by dividers the viewer drags
+ * (`Splitter.tsx`): there the split decides whether the file list, the segments and the classes fit
+ * the window together at all.
  */
 export function Workspace({ left, centre, right }: WorkspaceProps): ReactNode {
   return (

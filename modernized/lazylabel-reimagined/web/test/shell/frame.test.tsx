@@ -9,6 +9,7 @@
  *   window).
  * - "double clicking on the image ... makes me select the under the image text". Legacy's window
  *   selects no label's text; only a field's.
+ * - The right-hand column as legacy's splitter: the stylesheet's half of `Splitter.tsx`.
  *
  * jsdom lays nothing out, so these read the stylesheet: loaded into the document where jsdom can
  * say which element positions which, and read as text for the rules themselves.
@@ -120,5 +121,52 @@ describe("no text is selected outside a field", () => {
     for (const rule of setting) {
       expect(rule.style.getPropertyValue("-webkit-user-select")).toBe(rule.style.getPropertyValue("user-select"));
     }
+  });
+});
+
+describe("the right-hand column's splitter", () => {
+  it("fills the pane, which no longer scrolls at a size the sections fit in", () => {
+    expect(ruleFor(".workspace__right")).toMatch(/display:\s*flex;[\s\S]*flex-direction:\s*column;/);
+    const splitter = ruleFor(".splitter");
+    expect(splitter).toMatch(/flex:\s*1;/);
+    expect(splitter).toMatch(/min-height:\s*0;/);
+  });
+
+  it("gives each section its share as its flex-grow factor, down to its minimum", () => {
+    const section = ruleFor(".splitter__section");
+    expect(section).toMatch(/flex:\s*var\(--share\)\s+1\s+0px;/);
+    expect(section).toMatch(/min-height:\s*var\(--min\);/);
+  });
+
+  it("draws a closed section at its header's height, giving up its share", () => {
+    const closed = ruleFor(".splitter__section--collapsed");
+    expect(closed).toMatch(/flex:\s*none;/);
+    expect(closed).toMatch(/min-height:\s*0;/);
+    // After the section's own rule, so it wins.
+    expect(css.indexOf("\n.splitter__section--collapsed {")).toBeGreaterThan(css.indexOf("\n.splitter__section {"));
+  });
+
+  it("scrolls each list inside its section, with the header and the totals held in view", () => {
+    const lists = ruleFor(".dataset__scroll,\n.segments__scroll,\n.classes__scroll");
+    expect(lists).toMatch(/flex:\s*1 1 0px;/);
+    expect(lists).toMatch(/overflow:\s*auto;/);
+    expect(ruleFor(".dataset__scroll thead th,\n.segments__scroll thead th,\n.classes__scroll thead th")).toMatch(
+      /position:\s*sticky;[\s\S]*top:\s*0;/,
+    );
+    expect(ruleFor(".dataset__scroll tfoot th,\n.dataset__scroll tfoot td")).toMatch(/position:\s*sticky;[\s\S]*bottom:\s*0;/);
+  });
+
+  it("draws the divider as legacy's handle: 9 pixels, a bar 3 in from each side, the accent under the pointer", () => {
+    expect(ruleFor(".splitter__handle")).toMatch(/height:\s*9px;[\s\S]*cursor:\s*row-resize;/);
+    const bar = ruleFor(".splitter__handle::before");
+    expect(bar).toMatch(/inset:\s*1px 3px;/);
+    expect(bar).toMatch(/background:\s*var\(--rule\);/);
+    expect(css).toMatch(/\.splitter__handle--dragging::before \{\s*background:\s*var\(--accent\);/);
+  });
+
+  it("goes back to one page-long column on a narrow screen, with nothing to divide", () => {
+    const narrow = css.slice(css.indexOf("@media (max-width: 60rem)"));
+    expect(narrow).toMatch(/\.splitter__handle \{\s*display:\s*none;/);
+    expect(narrow).toMatch(/\.splitter,\n\s*\.splitter__section,[\s\S]*?display:\s*block;/);
   });
 });

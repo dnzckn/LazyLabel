@@ -396,57 +396,60 @@ export function ClassTable(): ReactNode {
       <p className="classes__label">Class Order:</p>
       {/* Legacy's class table (right_panel.py:172-201): the name, then the id, each row in its
           class's colour, and the ACTIVE class -- the one new annotations get -- in bold with a
-          marker (295-314). */}
-      <table className={`classes${drag === null ? "" : " classes--dragging"}`} title={TABLE_TOOLTIP}>
-        <thead>
-          <tr>
-            <th scope="col">Alias</th>
-            <th scope="col">Class ID</th>
-          </tr>
-        </thead>
-        <tbody ref={body}>
-          {shown.map((classId, position) => (
-            <tr
-              key={classId}
-              className={rowClass(classId, position, shown.length, activeClassId, drag)}
-              style={{ backgroundColor: swatch(classId) }}
-              onPointerDown={(event) => pressRow(event, classId)}
-              onClick={(event) => clickRow(event, classId)}
-            >
-              <td
-                className="classes__alias"
-                // The name is the editable cell; the id is not (segment_table_manager.py:352).
-                onDoubleClick={() => {
-                  if (editingId !== classId) setEditing({ image, classId });
-                }}
-              >
-                {editingId === classId ? (
-                  <AliasEditor
-                    classId={classId}
-                    shown={aliasOf(classAliases, classId)}
-                    onClose={(name, backToRow) => closeEditor(classId, name, backToRow)}
-                  />
-                ) : (
-                  aliasOf(classAliases, classId)
-                )}
-              </td>
-              <th scope="row">
-                <button
-                  type="button"
-                  className="classes__use"
-                  data-class-id={classId}
-                  aria-pressed={activeClassId === classId}
-                  aria-label={`Draw new annotations as class ${classId}`}
-                  aria-keyshortcuts="Alt+ArrowUp Alt+ArrowDown F2"
-                  onKeyDown={(event) => keyOnRow(event, classId)}
-                >
-                  {classId}
-                </button>
-              </th>
+          marker (295-314). The rows scroll inside the section, under the header, with Reassign
+          Class IDs below in view; a drag near the edge scrolls them. */}
+      <div className="classes__scroll">
+        <table className={`classes${drag === null ? "" : " classes--dragging"}`} title={TABLE_TOOLTIP}>
+          <thead>
+            <tr>
+              <th scope="col">Alias</th>
+              <th scope="col">Class ID</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody ref={body}>
+            {shown.map((classId, position) => (
+              <tr
+                key={classId}
+                className={rowClass(classId, position, shown.length, activeClassId, drag)}
+                style={{ backgroundColor: swatch(classId) }}
+                onPointerDown={(event) => pressRow(event, classId)}
+                onClick={(event) => clickRow(event, classId)}
+              >
+                <td
+                  className="classes__alias"
+                  // The name is the editable cell; the id is not (segment_table_manager.py:352).
+                  onDoubleClick={() => {
+                    if (editingId !== classId) setEditing({ image, classId });
+                  }}
+                >
+                  {editingId === classId ? (
+                    <AliasEditor
+                      classId={classId}
+                      shown={aliasOf(classAliases, classId)}
+                      onClose={(name, backToRow) => closeEditor(classId, name, backToRow)}
+                    />
+                  ) : (
+                    aliasOf(classAliases, classId)
+                  )}
+                </td>
+                <th scope="row">
+                  <button
+                    type="button"
+                    className="classes__use"
+                    data-class-id={classId}
+                    aria-pressed={activeClassId === classId}
+                    aria-label={`Draw new annotations as class ${classId}`}
+                    aria-keyshortcuts="Alt+ArrowUp Alt+ArrowDown F2"
+                    onKeyDown={(event) => keyOnRow(event, classId)}
+                  >
+                    {classId}
+                  </button>
+                </th>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
 
       <button type="button" onClick={reassign} disabled={!changed} title={REASSIGN_TOOLTIP}>
         Reassign Class IDs

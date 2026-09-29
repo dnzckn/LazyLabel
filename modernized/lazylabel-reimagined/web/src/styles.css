@@ -43,6 +43,9 @@
   --scroll-track: rgb(0 0 0 / 0.063);
   --scroll-thumb: rgb(0 0 0 / 0.251);
   --scroll-thumb-hover: rgb(0 0 0 / 0.314);
+  /* The mark in the middle of a splitter handle, its 3px core and 1px ends, from legacy's pixels. */
+  --handle-mark: rgb(132 135 139);
+  --handle-mark-end: rgb(158 161 166);
   --timeline-ground: rgb(215 215 220);
   --frame-pending: #b9b9be;
   /* The sequence panel's bold labels, per theme (sequence_widget.py:796-823). */
@@ -106,6 +109,8 @@
     --scroll-track: rgb(255 255 255 / 0.063);
     --scroll-thumb: rgb(255 255 255 / 0.188);
     --scroll-thumb-hover: rgb(255 255 255 / 0.271);
+    --handle-mark: rgb(159 162 166);
+    --handle-mark-end: rgb(130 132 135);
     --timeline-ground: rgb(50 50 50);
     --frame-pending: #646464;
     --seq-reference: #ffc107;
@@ -163,6 +168,8 @@
   --scroll-track: rgb(255 255 255 / 0.063);
   --scroll-thumb: rgb(255 255 255 / 0.188);
   --scroll-thumb-hover: rgb(255 255 255 / 0.271);
+  --handle-mark: rgb(159 162 166);
+  --handle-mark-end: rgb(130 132 135);
   --timeline-ground: rgb(50 50 50);
   --frame-pending: #646464;
   --seq-reference: #ffc107;
@@ -916,6 +923,13 @@ fieldset input[type="text"] {
   box-sizing: border-box;
 }
 
+/* Legacy's right panel: its sections share the pane's height through a splitter (`Splitter.tsx`),
+   so the pane scrolls as a whole only in a window too short for their minimums. */
+.workspace__right {
+  display: flex;
+  flex-direction: column;
+}
+
 .workspace__centre {
   border-left: 1px solid var(--rule);
   border-right: 1px solid var(--rule);
@@ -986,6 +1000,150 @@ fieldset input[type="text"] {
   margin: 0;
 }
 
+/* ---- Legacy's right-hand splitter (right_panel.py:67-85; `shell/Splitter.tsx`): the file list,
+   the segments and the classes, each with its share of the pane's height, whatever the window. */
+.splitter {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* A section's share of the height is its flex-grow factor, so a closed one's goes to the others. No
+   overflow of its own: the column menu over the file list opens past its bottom edge. */
+.splitter__section {
+  flex: var(--share) 1 0px;
+  min-height: var(--min);
+  display: flex;
+  flex-direction: column;
+}
+
+.splitter__section--collapsed {
+  flex: none;
+  min-height: 0;
+}
+
+/* QSplitter's handle in legacy's theme: 9px, a 7px bar of the rule colour 3px in from each side,
+   the accent under the pointer, and a small mark in its middle (theme_data.py:18, 21, the
+   horizontal_rule icon; measured on legacy's window). The resize cursor is Qt's SplitVCursor. */
+.splitter__handle {
+  flex: none;
+  position: relative;
+  height: 9px;
+  cursor: row-resize;
+  touch-action: none;
+}
+
+.splitter__handle::before {
+  content: "";
+  position: absolute;
+  inset: 1px 3px;
+  background: var(--rule);
+}
+
+.splitter__handle:not([aria-disabled="true"]):hover::before,
+.splitter__handle--dragging::before {
+  background: var(--accent);
+}
+
+.splitter__handle::after {
+  content: "";
+  position: absolute;
+  top: 4px;
+  left: calc(50% - 2px);
+  width: 5px;
+  height: 1px;
+  background: linear-gradient(
+    to right,
+    var(--handle-mark-end) 1px,
+    var(--handle-mark) 1px 4px,
+    var(--handle-mark-end) 4px
+  );
+}
+
+/* A divider with no open section on one side has nothing to move. */
+.splitter__handle[aria-disabled="true"] {
+  cursor: default;
+}
+
+/* What a section holds fills it: the header, the controls and the footer at their own heights, and
+   the list between them scrolling in what is left. */
+.splitter__section > .dataset-browser,
+.splitter__section > .panel {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.splitter__section > .panel {
+  margin: 0;
+}
+
+.splitter__section--collapsed > .panel {
+  flex: none;
+}
+
+.splitter__section > .panel > .panel__body:not([hidden]) {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* A long list of folders shrinks and scrolls before it pushes the file list out. */
+.splitter__section .crumbs__folders {
+  flex: 0 1 auto;
+  min-height: 1.5em;
+  overflow: auto;
+}
+
+/* The three lists, each scrolling inside its section on the table's own ground, as a QTableView's
+   rows scroll in its viewport, with the header, and the file list's totals, held in view. */
+.dataset__scroll,
+.segments__scroll,
+.classes__scroll {
+  flex: 1 1 0px;
+  min-height: 0;
+  overflow: auto;
+  background: var(--table);
+}
+
+/* A held cell draws its own lines. Collapsed borders stay where the table laid them out, so the rows
+   scrolling under the held header and totals showed through a pixel at their edge; these tables
+   draw each line once instead, from the cell to its right and below it, and the table its left. */
+.dataset__scroll table,
+.segments__scroll table,
+.classes__scroll table {
+  border-collapse: separate;
+  border-spacing: 0;
+  border-left: 1px solid var(--rule);
+}
+
+.dataset__scroll :is(th, td),
+.segments__scroll :is(th, td),
+.classes__scroll :is(th, td) {
+  border-width: 0 1px 1px 0;
+}
+
+.dataset__scroll thead th,
+.segments__scroll thead th,
+.classes__scroll thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+/* With the last row's own line, the totals keep their 2px rule. */
+.dataset__scroll tfoot th,
+.dataset__scroll tfoot td {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  border-top-width: 1px;
+  background: var(--table);
+}
+
 /* One column and one page scroll. The status bar stays in view at the bottom of the window. */
 @media (max-width: 60rem) {
   .app {
@@ -1026,6 +1184,30 @@ fieldset input[type="text"] {
 
   .centre__sequence {
     max-height: none;
+  }
+
+  /* The right-hand sections one after another at their natural heights, the page scrolling them,
+     with nothing to divide. */
+  .workspace__right,
+  .splitter,
+  .splitter__section,
+  .splitter__section > .dataset-browser,
+  .splitter__section > .panel,
+  .splitter__section > .panel > .panel__body:not([hidden]) {
+    display: block;
+    min-height: 0;
+  }
+
+  .splitter__handle {
+    display: none;
+  }
+
+  .splitter__section > .panel {
+    margin-bottom: 6px;
+  }
+
+  .splitter__section .crumbs__folders {
+    overflow: visible;
   }
 
   .status-bar {

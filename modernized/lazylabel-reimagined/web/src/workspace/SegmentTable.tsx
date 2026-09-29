@@ -206,48 +206,51 @@ export function SegmentTable(): ReactNode {
       </label>
 
       {/* Legacy's columns, with the row in its class's colour (segment_table_manager.py:149-152).
-          The Type column is this app's: see the module comment. */}
-      <table className="segments">
-        <thead>
-          <tr>
-            <th scope="col">
-              <span className="visually-hidden">Selected</span>
-            </th>
-            <th scope="col">Segment ID</th>
-            <th scope="col">Class ID</th>
-            <th scope="col">Alias</th>
-            <th scope="col">Type</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map(({ segment, index }) => (
-            <tr
-              key={index}
-              className="class-row"
-              style={{ backgroundColor: swatch(segment) }}
-              aria-selected={selected.includes(index)}
-              onClick={(event) => {
-                if ((event.target as HTMLElement).closest("input") === null) clickRow(event, index);
-              }}
-            >
-              <td>
-                <input
-                  type="checkbox"
-                  checked={selected.includes(index)}
-                  onChange={() => toggleSelected(index)}
-                  aria-label={`Select ${describe(segment, index)}`}
-                />
-              </td>
-              <td>{index + 1}</td>
-              {/* Legacy's "N/A" for an annotation with no class, in both columns
-                  (segment_table_manager.py:125-128). */}
-              <th scope="row">{segment.classId ?? "N/A"}</th>
-              <td>{segment.classId === null ? "N/A" : aliasOf(classAliases, segment.classId)}</td>
-              <td>{segment.type}</td>
+          The Type column is this app's: see the module comment. The rows scroll inside the
+          section, under the header, with the buttons below in view (right_panel.py:140-168). */}
+      <div className="segments__scroll">
+        <table className="segments">
+          <thead>
+            <tr>
+              <th scope="col">
+                <span className="visually-hidden">Selected</span>
+              </th>
+              <th scope="col">Segment ID</th>
+              <th scope="col">Class ID</th>
+              <th scope="col">Alias</th>
+              <th scope="col">Type</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {rows.map(({ segment, index }) => (
+              <tr
+                key={index}
+                className="class-row"
+                style={{ backgroundColor: swatch(segment) }}
+                aria-selected={selected.includes(index)}
+                onClick={(event) => {
+                  if ((event.target as HTMLElement).closest("input") === null) clickRow(event, index);
+                }}
+              >
+                <td>
+                  <input
+                    type="checkbox"
+                    checked={selected.includes(index)}
+                    onChange={() => toggleSelected(index)}
+                    aria-label={`Select ${describe(segment, index)}`}
+                  />
+                </td>
+                <td>{index + 1}</td>
+                {/* Legacy's "N/A" for an annotation with no class, in both columns
+                    (segment_table_manager.py:125-128). */}
+                <th scope="row">{segment.classId ?? "N/A"}</th>
+                <td>{segment.classId === null ? "N/A" : aliasOf(classAliases, segment.classId)}</td>
+                <td>{segment.type}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
 
       {segments.length > 0 && (
         <p role="status">

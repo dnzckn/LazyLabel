@@ -711,81 +711,85 @@ export function DatasetBrowser({
         // does not read as a failure.
         <p>No images in {where}</p>
       ) : (
-        <table
-          className={[
-            "dataset",
-            coloured === null ? "" : "dataset--ranged",
-            dropBefore === null ? "dataset--drop-end" : "",
-          ].filter((name) => name !== "").join(" ")}
-          onDragOver={onDragOver}
-          onDrop={onDrop}
-          onDragLeave={(event) => {
-            if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDropBefore(undefined);
-          }}
-        >
-          <thead>
-            <tr>
-              {/* Legacy's column names (fast_file_manager.py:277-288), each format's suffix in its
-                  tooltip. A click sorts by the column, again turns it around. */}
-              {shown.map((column) => (
-                <th
-                  scope="col"
-                  key={column.id}
-                  title={column.suffix}
-                  data-sort={arrow(column)}
-                  aria-sort={inCustomOrder ? undefined : arrow(column)}
-                >
-                  <button type="button" onClick={() => sortBy(column.id)}>
-                    {column.title}
-                  </button>
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((image) => (
-              <tr
-                key={image.key}
-                data-key={image.key}
-                aria-selected={picked.has(image.key)}
-                className={[rangeClass(image.key), dropBefore === image.key ? "dataset__row--drop" : undefined]
-                  .filter((name) => name !== undefined)
-                  .join(" ") || undefined}
-                draggable
-                onClick={(event) => onRowClick(event, image.key)}
-                onDoubleClick={() => openImage(image)}
-                onContextMenu={(event) => onRowContextMenu(event, image.key)}
-                onDragStart={(event) => onDragStart(event, image.key)}
-                onDragEnd={endDrag}
-              >
+        // The rows scroll here, under the header and over the totals, which stay in view: legacy's
+        // table scrolls inside its splitter pane, its footer under it (fast_file_manager.py:1110).
+        <div className="dataset__scroll">
+          <table
+            className={[
+              "dataset",
+              coloured === null ? "" : "dataset--ranged",
+              dropBefore === null ? "dataset--drop-end" : "",
+            ].filter((name) => name !== "").join(" ")}
+            onDragOver={onDragOver}
+            onDrop={onDrop}
+            onDragLeave={(event) => {
+              if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDropBefore(undefined);
+            }}
+          >
+            <thead>
+              <tr>
+                {/* Legacy's column names (fast_file_manager.py:277-288), each format's suffix in its
+                    tooltip. A click sorts by the column, again turns it around. */}
                 {shown.map((column) => (
-                  <Cell key={column.id} column={column} image={image} />
+                  <th
+                    scope="col"
+                    key={column.id}
+                    title={column.suffix}
+                    data-sort={arrow(column)}
+                    aria-sort={inCustomOrder ? undefined : arrow(column)}
+                  >
+                    <button type="button" onClick={() => sortBy(column.id)}>
+                      {column.title}
+                    </button>
+                  </th>
                 ))}
               </tr>
-            ))}
-          </tbody>
-          {/* Legacy's totals row: how many images, in its words, under Name, and how many have each
-              format, blank for none (fast_file_manager.py:948-959). Hidden rows count. */}
-          <tfoot>
-            <tr>
-              {shown.map((column) => {
-                if (column.kind === "name") {
-                  return (
-                    <th scope="row" key={column.id}>
-                      {ready.images.length} image{ready.images.length === 1 ? "" : "s"} in{" "}
-                      {folderName(ready.folder)}
-                    </th>
-                  );
-                }
-                const count =
-                  column.kind === "format"
-                    ? ready.images.filter((image) => image.sidecars[column.id]).length
-                    : 0;
-                return <td key={column.id}>{count > 0 ? count : ""}</td>;
-              })}
-            </tr>
-          </tfoot>
-        </table>
+            </thead>
+            <tbody>
+              {rows.map((image) => (
+                <tr
+                  key={image.key}
+                  data-key={image.key}
+                  aria-selected={picked.has(image.key)}
+                  className={[rangeClass(image.key), dropBefore === image.key ? "dataset__row--drop" : undefined]
+                    .filter((name) => name !== undefined)
+                    .join(" ") || undefined}
+                  draggable
+                  onClick={(event) => onRowClick(event, image.key)}
+                  onDoubleClick={() => openImage(image)}
+                  onContextMenu={(event) => onRowContextMenu(event, image.key)}
+                  onDragStart={(event) => onDragStart(event, image.key)}
+                  onDragEnd={endDrag}
+                >
+                  {shown.map((column) => (
+                    <Cell key={column.id} column={column} image={image} />
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+            {/* Legacy's totals row: how many images, in its words, under Name, and how many have each
+                format, blank for none (fast_file_manager.py:948-959). Hidden rows count. */}
+            <tfoot>
+              <tr>
+                {shown.map((column) => {
+                  if (column.kind === "name") {
+                    return (
+                      <th scope="row" key={column.id}>
+                        {ready.images.length} image{ready.images.length === 1 ? "" : "s"} in{" "}
+                        {folderName(ready.folder)}
+                      </th>
+                    );
+                  }
+                  const count =
+                    column.kind === "format"
+                      ? ready.images.filter((image) => image.sidecars[column.id]).length
+                      : 0;
+                  return <td key={column.id}>{count > 0 ? count : ""}</td>;
+                })}
+              </tr>
+            </tfoot>
+          </table>
+        </div>
       )}
 
       {menu !== null && menuRows.length > 0 && (

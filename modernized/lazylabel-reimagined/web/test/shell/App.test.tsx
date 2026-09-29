@@ -214,6 +214,50 @@ describe("the application shell", () => {
     expect(screen.getByLabelText("Dataset").textContent).toMatch(/Segments/);
   });
 
+  it("divides the dataset column as legacy's splitter: the file list, Segments, then Classes", async () => {
+    // right_panel.py:67-201. The column was one long scroll until 2026-09-29, when the owner asked
+    // for it "fixed normalized to the height" as the desktop app's is.
+    mount({});
+    await waitFor(() => expect(screen.getByLabelText("Dataset")).toBeTruthy());
+    const dataset = screen.getByLabelText("Dataset");
+    const sections = [...dataset.querySelectorAll<HTMLElement>(".splitter__section")];
+
+    expect(sections).toHaveLength(3);
+    expect(await within(sections[0]!).findByRole("heading", { name: "Images" })).toBeTruthy();
+    expect(within(sections[1]!).getByRole("button", { name: "Segments" })).toBeTruthy();
+    expect(within(sections[2]!).getByRole("button", { name: "Classes" })).toBeTruthy();
+    expect(within(dataset).getAllByRole("separator").map((divider) => divider.getAttribute("aria-label"))).toEqual([
+      "Resize Images and Segments",
+      "Resize Segments and Classes",
+    ]);
+    // Legacy's shares at its default size: 294, 242 and 234 pixels of 770.
+    expect(sections.map((section) => section.style.getPropertyValue("--share"))).toEqual(["38", "31", "31"]);
+  });
+
+  it("gives a section closed to its header's height to the others", async () => {
+    mount({});
+    await waitFor(() => expect(screen.getByLabelText("Dataset")).toBeTruthy());
+    const dataset = screen.getByLabelText("Dataset");
+    const sections = [...dataset.querySelectorAll<HTMLElement>(".splitter__section")];
+    const share = (section: HTMLElement) => Number(section.style.getPropertyValue("--share"));
+
+    fireEvent.click(within(dataset).getByRole("button", { name: "Segments" }));
+
+    expect(sections.map((section) => section.classList.contains("splitter__section--collapsed"))).toEqual([
+      false,
+      true,
+      false,
+    ]);
+    expect(share(sections[0]!) + share(sections[2]!)).toBeCloseTo(100, 3);
+    expect(within(dataset).getAllByRole("separator").map((divider) => divider.getAttribute("aria-label"))).toEqual([
+      "Resize Images and Classes",
+      "Resize Images and Classes",
+    ]);
+
+    fireEvent.click(within(dataset).getByRole("button", { name: "Segments" }));
+    expect(sections.map(share)).toEqual([38, 31, 31]);
+  });
+
   it("shows the hotkey editor from its button", async () => {
     // It used to have a KEY, and that key was `fit_view`. The binding was honest scaffolding when
     // the dispatcher was new -- the first wire through it, proving the path end to end -- and it

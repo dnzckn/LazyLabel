@@ -44,6 +44,19 @@ describe("collapsing", () => {
     render(<Panel title="Classes" initiallyCollapsed><p>inside</p></Panel>);
     expect(screen.queryByText("inside")).toBeNull();
   });
+
+  it("tells its owner whenever it closes and opens, so a closed section gives up its height", () => {
+    // The right-hand column's splitter hands a closed section's share to the others (Splitter.tsx).
+    const told = vi.fn();
+    render(<Panel title="Segments" onCollapsedChange={told}><p>inside</p></Panel>);
+    expect(told).toHaveBeenLastCalledWith(false);
+
+    fireEvent.click(screen.getByRole("button", { name: /Segments/ }));
+    expect(told).toHaveBeenLastCalledWith(true);
+
+    fireEvent.click(screen.getByRole("button", { name: /Segments/ }));
+    expect(told).toHaveBeenLastCalledWith(false);
+  });
 });
 
 /*
