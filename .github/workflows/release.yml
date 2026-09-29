@@ -31,6 +31,7 @@ on:
       - modernized/package-lock.json
       - modernized/lazylabel-reimagined/api/src/cli.ts
       - modernized/lazylabel-reimagined/api/src/launcher.ts
+      - modernized/lazylabel-reimagined/api/src/folderDialog.ts
       - modernized/lazylabel-reimagined/api/src/bundle.ts
       - modernized/scripts/pack_parts.py
       - modernized/lazylabel-reimagined/inference/pyproject.toml
@@ -56,9 +57,6 @@ jobs:
           - os: windows-latest # x64
           - os: macos-latest # arm64, Apple silicon
           - os: ubuntu-latest # x64
-            # A runner has no desktop, so there is no folder dialog: the launcher asks in its window,
-            # and the folder is typed there, on its standard input.
-            smoke: --typed
     defaults:
       run:
         shell: bash
@@ -77,10 +75,12 @@ jobs:
       - name: Build the zip
         run: node modernized/scripts/build-release.mjs --out "$RUNNER_TEMP/release" --work "$RUNNER_TEMP/work"
 
-      # Unzipped into a scratch folder and started through its launcher with a folder of images:
-      # the web app, /api/health, the image list and a thumbnail (the zip's own sharp) must answer.
+      # Unzipped into a scratch folder and started through its launcher with no folder, as a
+      # double-click starts it; the folder of images is then opened as the app's Open Image Folder
+      # opens it, by its path. The web app, /api/health, the image list and a thumbnail (the zip's
+      # own sharp) must answer.
       - name: Unzip it and start it, as a user would
-        run: node modernized/scripts/release-smoke.mjs "$RUNNER_TEMP/release" --dir "$RUNNER_TEMP/smoke" ${{ matrix.smoke }}
+        run: node modernized/scripts/release-smoke.mjs "$RUNNER_TEMP/release" --dir "$RUNNER_TEMP/smoke"
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
@@ -103,7 +103,6 @@ jobs:
             torch: cpu
           - os: ubuntu-latest # x64
             torch: cu128
-            smoke: --typed
     defaults:
       run:
         shell: bash
@@ -143,10 +142,11 @@ jobs:
           df -h "$RUNNER_TEMP"
 
       # Part 1 unzipped as a user unzips it, the other parts left beside it for the launcher to
-      # find and unpack. Then SAM 2.1 must segment a shape from one click and Find Archetypes must
-      # answer, through the app. A runner has no GPU: this is the processor path.
+      # find and unpack. Then, once the folder is opened through the app, SAM 2.1 must segment a
+      # shape from one click and Find Archetypes must answer. A runner has no GPU: this is the
+      # processor path.
       - name: Unzip part 1 and start it, as a user would
-        run: node modernized/scripts/release-smoke.mjs "$RUNNER_TEMP/release" --dir "$RUNNER_TEMP/smoke" --ai ${{ matrix.smoke }}
+        run: node modernized/scripts/release-smoke.mjs "$RUNNER_TEMP/release" --dir "$RUNNER_TEMP/smoke" --ai
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
@@ -194,7 +194,7 @@ jobs:
 
           1. Download the zip for your computer: `windows-x64`, `macos-arm64` (Apple silicon) or `linux-x64`.
           2. Unzip it and double-click **Start LazyLabel** (`Start LazyLabel.cmd` on Windows, `Start LazyLabel.command` on macOS; on Linux run `./start-lazylabel.sh` in a terminal).
-          3. Choose your folder of images. LazyLabel opens in your browser.
+          3. LazyLabel opens in your browser. Click **Open Image Folder** and choose your folder of images.
 
           macOS asks the first time, because the zip is not yet signed: open System Settings, Privacy & Security, and choose Open Anyway. Each zip's SHA-256 is in the `.sha256` file beside it.
 

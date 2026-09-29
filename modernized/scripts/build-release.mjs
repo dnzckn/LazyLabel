@@ -348,22 +348,28 @@ function zipRelease(stage, out) {
   return zip;
 }
 
+/*
+ * The launchers ask nothing: LazyLabel starts with no folder open, and the app's Open Image Folder
+ * chooses one (the owner, 2026-09-29: "when starting the launch.cmd it asked me for a folder for
+ * images, why is that a part of the launch?"). A folder dropped on the launcher or named after it
+ * still opens at start.
+ */
 const WINDOWS_LAUNCHER = `@echo off
-rem LazyLabel, with nothing to install. Double-click this file and choose your folder of images,
-rem or drop the folder onto this file. LazyLabel opens in your browser and runs until this window
-rem is closed. Options go after the folder, as in:
+rem LazyLabel, with nothing to install. Double-click this file: LazyLabel opens in your browser,
+rem where Open Image Folder chooses your folder of images, and runs until this window is closed.
+rem A folder dropped onto this file opens at start. Options go after it, as in:
 rem   "Start LazyLabel.cmd" "C:\\path\\to\\images" --port 8790
 title LazyLabel
-"%~dp0node\\node.exe" "%~dp0${CLI.join("\\")}" --choose-folder %*
+"%~dp0node\\node.exe" "%~dp0${CLI.join("\\")}" %*
 if errorlevel 1 pause
 `;
 
 function posixLauncher(macos) {
   return `#!/bin/sh
-# LazyLabel, with nothing to install. ${macos ? "Double-click this file in the Finder" : "Run ./start-lazylabel.sh in a terminal"}
-# and choose your folder of images, or name the folder after the command. LazyLabel opens in your
-# browser and runs until this window is closed or Ctrl+C is pressed. Options go after the folder,
-# as in: ${macos ? "./Start\\ LazyLabel.command" : "./start-lazylabel.sh"} "/path/to/images" --port 8790
+# LazyLabel, with nothing to install. ${macos ? "Double-click this file in the Finder" : "Run ./start-lazylabel.sh in a terminal"}:
+# LazyLabel opens in your browser, where Open Image Folder chooses your folder of images, and runs
+# until this window is closed or Ctrl+C is pressed. A folder named after the command opens at start.
+# Options go after it, as in: ${macos ? "./Start\\ LazyLabel.command" : "./start-lazylabel.sh"} "/path/to/images" --port 8790
 here=$(cd "$(dirname "$0")" && pwd)
 ${
   macos
@@ -373,7 +379,7 @@ ${
 xattr -dr com.apple.quarantine "$here" 2>/dev/null
 `
     : ""
-}"$here/node/bin/node" "$here/${CLI.join("/")}" --choose-folder "$@"
+}"$here/node/bin/node" "$here/${CLI.join("/")}" "$@"
 status=$?
 if [ "$status" -ne 0 ] && [ -t 0 ]; then
   printf '\\nPress Enter to close this window.'
@@ -393,14 +399,14 @@ Start it
            again. (Or right-click it and choose Open.)
   Linux    Run ./start-lazylabel.sh in a terminal.
 
-Choose your folder of images when LazyLabel asks. It opens in your browser at
-http://127.0.0.1:8787/ and runs until you close its window (or press Ctrl+C in it). You can
-also drop a folder onto the launcher, or name it after the command.
+LazyLabel opens in your browser at http://127.0.0.1:8787/. Click Open Image Folder, at the top of
+the file list, and choose your folder of images. LazyLabel runs until you close its window (or
+press Ctrl+C in it). A folder dropped onto the launcher, or named after the command, opens at start.
 
 Your annotations are saved beside your images, in the files the desktop app reads and writes.
 Settings and hotkeys are kept per user. LazyLabel listens on this computer only.
 
-Options go after the folder: --port <number>, --no-open, --help.
+Options go after the folder, if one is named: --port <number>, --no-open, --help.
 
 The AI tools (SAM) are not in this download. The LazyLabel-web-ai download beside it has them,
 still with nothing to install; or install LazyLabel from the source:
@@ -421,9 +427,9 @@ Start it
            again. (Or right-click it and choose Open.)
   Linux    Run ./start-lazylabel.sh in a terminal.
 
-Choose your folder of images when LazyLabel asks. It opens in your browser at
-http://127.0.0.1:8787/ and runs until you close its window (or press Ctrl+C in it). You can
-also drop a folder onto the launcher, or name it after the command.
+LazyLabel opens in your browser at http://127.0.0.1:8787/. Click Open Image Folder, at the top of
+the file list, and choose your folder of images. LazyLabel runs until you close its window (or
+press Ctrl+C in it). A folder dropped onto the launcher, or named after the command, opens at start.
 
 The AI tools are in this download: SAM 2.1 (large) for clicks, boxes and Sequence propagation,
 and MobileNetV3 for Find Archetypes, with their own Python. They run on an NVIDIA graphics card
@@ -433,7 +439,7 @@ downloaded when LazyLabel runs.
 Your annotations are saved beside your images, in the files the desktop app reads and writes.
 Settings and hotkeys are kept per user. LazyLabel listens on this computer only.
 
-Options go after the folder: --port <number>, --no-open, --help.
+Options go after the folder, if one is named: --port <number>, --no-open, --help.
 
 What is included, and under which licences: THIRD-PARTY-NOTICES.txt.
 `;

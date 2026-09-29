@@ -5,13 +5,14 @@
  * decoded by the zip's own sharp all answer. CI runs it on every zip before uploading it.
  *
  *   node scripts/release-smoke.mjs <zip, or the folder build-release.mjs wrote it to>
- *     [--dir <scratch folder>] [--images <folder of images>] [--port <number>] [--typed]
+ *     [--dir <scratch folder>] [--images <folder of images>] [--port <number>]
  *
- * The images are COPIED into the scratch folder, a generated one when --images is not given, and
- * settings go to a file there (--db), so nothing outside the scratch folder is touched. --typed
- * gives the folder on the launcher's standard input instead of its command line: the question the
- * launcher asks where there is no folder dialog, as on a Linux runner with no desktop. The launcher
- * is stopped afterwards; the scratch folder is left for a look.
+ * The launcher is started with no folder, as a double-click starts it, and asks nothing: the folder
+ * of images is then opened as the app's Open Image Folder opens it, through POST /api/folder, with
+ * the folder's path, which works on a runner with no desktop too. The images are COPIED into the
+ * scratch folder, a generated one when --images is not given, and settings go to a file there (--db),
+ * so nothing outside the scratch folder is touched. The launcher is stopped afterwards; the scratch
+ * folder is left for a look.
  *
  * --ai TAKES THE AI BUNDLE (DEPLOYABILITY.md R12) the way a person gets it: part 1 unzipped, the other
  * parts left beside it, for the launcher to find and unpack on its first start. Then the AI tools
@@ -75,8 +76,8 @@ const port = Number(options.port);
 const db = path.join(scratch, "settings.db");
 const launcher = path.join(unzipped, LAUNCHER);
 if (!existsSync(launcher)) fail(`The zip has no ${LAUNCHER}.`);
-const args = [...(options.typed ? [] : [images]), "--no-open", "--port", String(port), "--db", db];
-console.log(`Starting ${launcher} ${options.typed ? "(folder typed at its question) " : ""}${args.join(" ")}`);
+const args = ["--no-open", "--port", String(port), "--db", db];
+console.log(`Starting ${launcher} ${args.join(" ")}`);
 
 const child = IS_WINDOWS
   ? spawn(process.env["ComSpec"] ?? "cmd.exe", ["/d", "/s", "/c", `"${[launcher, ...args].map(quote).join(" ")}"`], {
@@ -97,7 +98,7 @@ let exited = null;
 child.once("exit", (code) => {
   exited = code;
 });
-if (options.typed) child.stdin.write(`${images}\n`);
+// Nothing is typed: the launcher asks nothing.
 child.stdin.end();
 
 let failure = null;
@@ -110,6 +111,18 @@ try {
   const page = await get(url);
   if (!page.text.includes('<div id="root">')) throw new Error(`${url} did not serve the web app`);
   console.log(`GET /             ${page.status}, the web app (${page.bytes} bytes)`);
+
+  // Started with no folder open, as a double-click starts it.
+  const none = await get(`${url}api/health`);
+  if (!none.text.includes('"dataset":"none"')) throw new Error(`/api/health before a folder was opened said ${none.text}`);
+  console.log(`GET /api/health   ${none.status}, no folder open yet: ${none.text}`);
+
+  // The app's Open Image Folder, with the folder's path: JSON, from the app's own page.
+  const opened = await post(`${url}api/folder`, { path: images }, { origin: new URL(url).origin });
+  if (opened.cancelled !== false || typeof opened.datasetRoot !== "string") {
+    throw new Error(`POST /api/folder answered ${JSON.stringify(opened)}`);
+  }
+  console.log(`POST /api/folder  opened ${opened.datasetRoot}`);
 
   const health = await get(`${url}api/health`);
   if (!health.text.includes('"dataset":"ok"')) throw new Error(`/api/health said ${health.text}`);
@@ -170,10 +183,10 @@ async function checkAi(url) {
   );
 }
 
-async function post(url, body) {
+async function post(url, body, headers = {}) {
   const response = await fetch(url, {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: { "content-type": "application/json", ...headers },
     body: JSON.stringify(body),
     signal: AbortSignal.timeout(900_000),
   });
@@ -183,16 +196,15 @@ async function post(url, body) {
 }
 
 function parseOptions(argv) {
-  const parsed = { port: "18800", typed: false, ai: false };
+  const parsed = { port: "18800", ai: false };
   for (let index = 0; index < argv.length; index += 1) {
     const word = argv[index];
-    if (word === "--typed") parsed.typed = true;
-    else if (word === "--ai") parsed.ai = true;
+    if (word === "--ai") parsed.ai = true;
     else if (["--dir", "--images", "--port"].includes(word) && argv[index + 1] !== undefined) {
       parsed[word.slice(2)] = argv[index + 1];
       index += 1;
     } else if (!word.startsWith("--") && parsed.zip === undefined) parsed.zip = word;
-    else fail(`Usage: node scripts/release-smoke.mjs <zip or folder> [--dir <folder>] [--images <folder>] [--port <n>] [--typed] [--ai]`);
+    else fail(`Usage: node scripts/release-smoke.mjs <zip or folder> [--dir <folder>] [--images <folder>] [--port <n>] [--ai]`);
   }
   if (parsed.zip === undefined) fail("Name the release zip, or the folder build-release.mjs wrote it to.");
   return parsed;
