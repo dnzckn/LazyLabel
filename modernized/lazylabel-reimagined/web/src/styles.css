@@ -185,10 +185,23 @@
   --error-ink: #f5a99c;
 }
 
+/* NO TEXT IS SELECTED BY A CLICK, A DOUBLE-CLICK OR A DRAG, as in legacy's window, whose labels,
+   tables and buttons select none; only a field's text is. On the body, so the dialogs drawn beside
+   the app are covered too, and in this one place. The owner, 2026-09-29: "double clicking on the
+   image ,e.g. to put down to ai point pprompts makes me select the under the image text". */
 body {
   margin: 0;
   background: var(--ground);
   color: var(--ink);
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+input,
+textarea,
+[contenteditable]:not([contenteditable="false"]) {
+  -webkit-user-select: text;
+  user-select: text;
 }
 
 /* Legacy's thin rounded scrollbars (14px, a translucent handle on a translucent track). */
@@ -539,11 +552,6 @@ thead th {
   background: none;
   color: var(--ink);
   text-align: left;
-}
-
-/* A Shift click selects rows, not their text. */
-.dataset tbody {
-  user-select: none;
 }
 
 /* A header sorts by its column. Qt's arrow: down while ascending, up while descending. */
@@ -1281,7 +1289,6 @@ fieldset input[type="text"] {
   font-weight: 700;
   white-space: nowrap;
   cursor: pointer;
-  user-select: none;
 }
 
 .mode-button:hover {
@@ -1523,10 +1530,9 @@ fieldset input[type="text"] {
   margin: 8px 0 2px;
 }
 
-/* A row is clicked, double-clicked and dragged, as legacy's is. None of that should select its text. */
+/* A row is clicked, double-clicked and dragged, as legacy's is. */
 .classes .class-row {
   cursor: pointer;
-  user-select: none;
 }
 
 /* The name's editor, which a double-click opens over the cell as Qt opens a cell's editor. */
@@ -1538,7 +1544,6 @@ fieldset input[type="text"] {
   color: var(--ink);
   font: inherit;
   cursor: text;
-  user-select: text;
 }
 
 /* The id is the row's focusable control: Alt+Up and Alt+Down move the row, F2 edits the name. It
@@ -1776,7 +1781,6 @@ fieldset input[type="text"] {
 .histogram-dialog__canvas {
   min-width: 500px;
   height: 280px;
-  user-select: none;
   touch-action: none;
 }
 
@@ -1911,7 +1915,6 @@ fieldset input[type="text"] {
 .rescale-slider {
   min-width: 200px;
   height: 50px;
-  user-select: none;
   touch-action: none;
 }
 
@@ -1972,7 +1975,6 @@ fieldset input[type="text"] {
   flex: 1;
   min-width: 200px;
   height: 60px;
-  user-select: none;
   touch-action: none;
 }
 
@@ -2575,7 +2577,6 @@ fieldset input[type="text"] {
   width: 100%;
   min-width: 400px;
   height: auto;
-  user-select: none;
 }
 
 .confidence__grip {

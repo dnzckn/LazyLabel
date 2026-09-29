@@ -7,6 +7,8 @@
  *   86 images listed, the segment table's hidden "Selected" sat 1,500 pixels below the window and
  *   the page grew to hold it (measured in headless Chromium: 2,463 pixels of page in a 900-pixel
  *   window).
+ * - "double clicking on the image ... makes me select the under the image text". Legacy's window
+ *   selects no label's text; only a field's.
  *
  * jsdom lays nothing out, so these read the stylesheet: loaded into the document where jsdom can
  * say which element positions which, and read as text for the rules themselves.
@@ -42,6 +44,19 @@ function ruleFor(selector: string): string {
   expect(at, `no \`${selector}\` rule`).toBeGreaterThan(-1);
   const open = css.indexOf("{", at);
   return css.slice(open + 1, css.indexOf("}", open));
+}
+
+/** Every style rule in the sheet, those inside media queries too. */
+function styleRules(): CSSStyleRule[] {
+  const found: CSSStyleRule[] = [];
+  const walk = (rules: CSSRuleList): void => {
+    for (const rule of rules) {
+      if ("cssRules" in rule && !("selectorText" in rule)) walk((rule as CSSMediaRule).cssRules);
+      else if ("selectorText" in rule) found.push(rule as CSSStyleRule);
+    }
+  };
+  walk(sheet!.sheet!.cssRules);
+  return found;
 }
 
 /**
@@ -87,5 +102,23 @@ describe("the page never scrolls", () => {
     expect(app).toMatch(/position:\s*relative;/);
     expect(app).toMatch(/height:\s*100vh;/);
     expect(app).toMatch(/overflow:\s*hidden;/);
+  });
+});
+
+describe("no text is selected outside a field", () => {
+  it("says so once, on the body, and gives fields their text back", () => {
+    const setting = styleRules().filter(
+      (rule) => rule.style.getPropertyValue("user-select") !== "" || rule.style.getPropertyValue("-webkit-user-select") !== "",
+    );
+
+    expect(
+      setting.map((rule) => [rule.selectorText.replace(/\s+/g, " "), rule.style.getPropertyValue("user-select")]),
+    ).toEqual([
+      ["body", "none"],
+      ['input, textarea, [contenteditable]:not([contenteditable="false"])', "text"],
+    ]);
+    for (const rule of setting) {
+      expect(rule.style.getPropertyValue("-webkit-user-select")).toBe(rule.style.getPropertyValue("user-select"));
+    }
   });
 });
