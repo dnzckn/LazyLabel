@@ -784,6 +784,12 @@ fieldset input[type="text"] {
   overflow: hidden;
 }
 
+/* Beside the toggle, plain and muted: the credit legacy's window title carries (main_window.py:648). */
+.status-bar__credit {
+  flex: none;
+  color: var(--muted);
+}
+
 /* The middle, stretched and centred, as legacy's message label is (status_bar.py:119-128). */
 .status-bar__messages {
   flex: 1;

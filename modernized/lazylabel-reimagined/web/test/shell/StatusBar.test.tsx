@@ -45,6 +45,21 @@ function text(): string {
   return screen.getByLabelText("Status").textContent ?? "";
 }
 
+describe("the credit legacy's window title carries (main_window.py:648)", () => {
+  it("names LazyLabel's author beside the day and night toggle, in plain text", () => {
+    // The owner, 2026-09-29: "next to the night / day toggle it should say LazyLabel by Deniz N.
+    // Cakan".
+    render(<StatusBar image={null} health={health()} theme={{ switchesTo: "light", onToggle: () => undefined }} />);
+    const toggle = screen.getByRole("button", { name: "Switch to light theme" });
+    const credit = toggle.nextElementSibling;
+
+    expect(credit?.textContent).toBe("LazyLabel by Deniz N. Cakan");
+    expect(credit?.tagName).toBe("SPAN");
+    expect(credit?.className).toBe("status-bar__credit");
+    expect(screen.queryByRole("link")).toBeNull();
+  });
+});
+
 describe("what is open", () => {
   it("says when nothing is", () => {
     bar();

@@ -258,6 +258,16 @@ describe("the application shell", () => {
     expect(sections.map(share)).toEqual([38, 31, 31]);
   });
 
+  it("says whose LazyLabel it is beside the day and night toggle, as legacy's window title does", async () => {
+    // main_window.py:648, "LazyLabel by Deniz N. Cakan (version ...)". The browser tab keeps its own
+    // title (index.html).
+    mount({});
+    const toggle = await screen.findByRole("button", { name: /^Switch to (dark|light) theme$/ });
+
+    expect(toggle.nextElementSibling?.textContent).toBe("LazyLabel by Deniz N. Cakan");
+    expect(within(screen.getByLabelText("Status")).queryByRole("link")).toBeNull();
+  });
+
   it("shows the hotkey editor from its button", async () => {
     // It used to have a KEY, and that key was `fit_view`. The binding was honest scaffolding when
     // the dispatcher was new -- the first wire through it, proving the path end to end -- and it

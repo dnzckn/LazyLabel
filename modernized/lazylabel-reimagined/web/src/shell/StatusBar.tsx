@@ -88,6 +88,12 @@ export function StatusBar({
         </button>
       )}
 
+      {/* Beside the toggle, the credit legacy's window title carries, "LazyLabel by Deniz N. Cakan
+          (version ...)" (main_window.py:648); the browser tab keeps the page's own title. The
+          owner, 2026-09-29: "next to the night / day toggle it should say LazyLabel by Deniz N.
+          Cakan". */}
+      <span className="status-bar__credit">LazyLabel by Deniz N. Cakan</span>
+
       {/* Legacy's message label: stretched, centred, blank at rest (status_bar.py:119-128). */}
       <span className="status-bar__messages">{message !== null && <NotificationHost />}</span>
 
