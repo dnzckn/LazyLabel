@@ -15,6 +15,7 @@ presented as a successful empty result and the caller cannot tell the difference
 from __future__ import annotations
 
 import json
+import os
 import re
 import uuid
 from dataclasses import dataclass, field
@@ -116,6 +117,10 @@ class Deps:
     """C10, bound the same way and for the same reason: injected so the route is testable without
     a checkpoint. None means no dataset root, and the route says 503."""
     archetyper: Callable[[Any, Any], Any] | None = None
+    """What POST /dataset-root runs when the service started with no dataset root: builds the
+    service, the propagator and the archetyper for that root into these deps, as `build_deps` does
+    at startup. None where nothing can build them, and the route says 503."""
+    open_root: Callable[[Path], None] | None = None
 
 
 _PROPAGATION_JOB = re.compile(r"^/inference/propagations/([^/]+)$")
@@ -159,6 +164,10 @@ def _route(deps: Deps, request: Request) -> Response:
         return _health(deps)
     if path == "/models" and method == "GET":
         return _models(deps)
+
+    # The folder the app has just opened, which the API passes on (its POST /folder).
+    if path == "/dataset-root" and method == "POST":
+        return _dataset_root(deps, request)
 
     # Legacy's model controls (CP-49): Refresh, Load, Unload, and what "Current: …" reports.
     if path == "/inference/models/loaded" and method == "GET":
@@ -215,6 +224,8 @@ def _route(deps: Deps, request: Request) -> Response:
 def _fixed_methods(path: str) -> set[str]:
     if path in ("/health", "/models", "/inference/models/loaded"):
         return {"GET"}
+    if path == "/dataset-root":
+        return {"POST"}
     if path in ("/inference/models/load", "/inference/models/unload", "/inference/models/refresh"):
         return {"POST"}
     if path in ("/inference/embeddings", "/inference/segment"):
@@ -248,6 +259,53 @@ def _service(deps: Deps) -> InferenceService:
             "this service has no dataset root configured, so it cannot read images",
         )
     return deps.service
+
+
+def _dataset_root(deps: Deps, request: Request) -> Response:
+    """The folder of images to read from now on: the one the app has just opened, which the API
+    passes on (its POST /folder), by the owner's request of 2026-09-29, "in the gui the user should
+    be able to select a folder to load". This service reads images itself, from a root of its own,
+    so without it a click after Open Image Folder would be answered from the old folder's image of
+    the same name. A service that started with no root builds its service here (`Deps.open_root`).
+
+    ONLY THE API ASKS, from Node, which names no page. A browser names the page every request comes
+    from, so a request with an Origin is refused (403), and one that is not JSON (415): a page on
+    another site cannot send JSON without a CORS preflight, which this service never answers.
+
+    A RUNNING PROPAGATION IS CANCELLED, the simpler of the two safe answers. A job reads its frames
+    as it reaches them, from whichever root is set then, so one left running would read the rest of
+    its sequence from the new folder under the old folder's names. Cancelled, it keeps the frames it
+    finished, as any cancel does (RULE-063); the app drops its timeline when it opens another folder.
+    The embeddings stay cached: they are keyed on each file's full path, size and modified time
+    (`embeddings.py`), so no image of the new folder can be answered from one of the old.
+    """
+    if "origin" in request.headers:
+        raise HttpError(403, "forbidden", "only the LazyLabel API sets the folder of images")
+    if request.headers.get("content-type", "").split(";")[0].strip().lower() != "application/json":
+        raise HttpError(415, "unsupported_media_type", "the folder is sent as application/json")
+    raw = _body(request).get("path")
+    if not isinstance(raw, str) or not raw.strip():
+        raise HttpError(400, "bad_request", "'path' must name the folder of images")
+    root = Path(raw.strip())
+    if not root.is_absolute():
+        raise HttpError(400, "bad_request", f"{raw} is not a full path to a folder")
+    root = root.resolve()
+    if not root.is_dir():
+        raise HttpError(400, "bad_request", f"{root} is not a folder")
+    if not os.access(root, os.R_OK):
+        raise HttpError(400, "bad_request", f"{root} cannot be read")
+
+    if deps.service is None and deps.open_root is None:
+        raise HttpError(503, "inference_unavailable", "this service cannot open a folder of images")
+    for job in deps.jobs.list():
+        if not job.state.finished:
+            deps.jobs.cancel(job.id)
+    if deps.service is not None:
+        deps.service.set_dataset_root(root)
+    else:
+        deps.open_root(root)  # type: ignore[misc] - checked above
+    deps.logger.log("info", "reading images from another folder", dataset_root=str(root))
+    return _json(200, {"datasetRoot": str(root)})
 
 
 def _inference_error(cause: InferenceError) -> HttpError:

@@ -103,7 +103,9 @@ def build_deps(config, models, logger, manifest_error=None):
     from .service import InferenceService
 
     # None when no root is configured -- the honest state, not a failure. /health and /models still
-    # answer, and they are what an operator installing checkpoints needs before anything else.
+    # answer, and they are what an operator installing checkpoints needs before anything else. It is
+    # also where the launcher starts the service when LazyLabel opens with no folder: the API names
+    # one when the app opens it (POST /dataset-root), and `open_root` builds the service then.
     service = (
         None
         if config.dataset_root is None
@@ -113,12 +115,12 @@ def build_deps(config, models, logger, manifest_error=None):
     )
     if service is None:
         logger.log(
-            "warn",
-            "no dataset root is configured, so the routes that read images will answer 503",
-            hint="set LAZYLABEL_DATASET_ROOT to the folder holding your images",
+            "info",
+            "no dataset root yet, so the routes that read images answer 503 until one is set",
+            hint="LAZYLABEL_DATASET_ROOT names one at startup; the API sets one when the app opens a folder",
         )
 
-    return Deps(
+    deps = Deps(
         models=models,
         model_dir=config.model_dir,
         manifest_path=config.manifest_path,
@@ -134,6 +136,16 @@ def build_deps(config, models, logger, manifest_error=None):
             }
         ),
     )
+
+    def open_root(root):
+        """The service a configured root would have had at startup, for the root set later."""
+        opened = InferenceService(models=models, model_dir=config.model_dir, dataset_root=root)
+        deps.propagator = _propagator_for(opened, models, logger)
+        deps.archetyper = _archetyper_for(opened, models, logger)
+        deps.service = opened
+
+    deps.open_root = open_root
+    return deps
 
 
 def _archetyper_for(service, models, logger):

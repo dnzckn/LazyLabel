@@ -361,6 +361,12 @@ class InferenceService:
         jpeg = blob if found == "jpeg" and path.suffix.lower() in JPEG_SUFFIXES else None
         return SourceImage(pixels=pixels, jpeg=jpeg)
 
+    def set_dataset_root(self, root: Path) -> None:
+        """Read images from another folder from now on: the one the app has opened (POST
+        /dataset-root). A key already resolved keeps the file it named, so an encode under way
+        finishes on the image it began with; the encodings cached stay, keyed on full paths."""
+        self.dataset_root = root
+
     def _resolve(self, image_key: str) -> Path:
         """Turn a dataset-relative key into a path, refusing anything that escapes the root."""
         if not image_key or "\0" in image_key or "\\" in image_key:
@@ -369,9 +375,11 @@ class InferenceService:
         if any(p in (".", "..") for p in parts):
             raise InvalidPromptError(f"refusing the image path {image_key!r}: it walks the tree")
 
-        full = (self.dataset_root / Path(*parts)).resolve()
+        # Read once: the root can change between two reads of it (`set_dataset_root`).
+        root = self.dataset_root
+        full = (root / Path(*parts)).resolve()
         try:
-            full.relative_to(self.dataset_root.resolve())
+            full.relative_to(root.resolve())
         except ValueError:
             raise InvalidPromptError(
                 f"refusing the image path {image_key!r}: it resolves outside the dataset root"

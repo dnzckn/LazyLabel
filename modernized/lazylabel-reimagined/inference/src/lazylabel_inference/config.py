@@ -32,6 +32,9 @@ class Config:
     It was missing entirely until this was noticed -- nothing constructed the service, so every AI
     route answered 503 in production while the whole suite passed. A configuration key that is
     never read has exactly the shape of a function that is never called.
+
+    It is the root at STARTUP. The launcher starts the service with none when LazyLabel opens with
+    no folder, and the API sets one whenever the app opens a folder (POST /dataset-root, `app.py`).
     """
     dataset_root: Path | None = None
 

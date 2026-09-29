@@ -16,7 +16,7 @@ and streaming limits, which is not a wrapper around a function call. That job AP
 
 **A user does not start this service by hand.** From `modernized/`, `npm run ai:setup` installs it
 ([Setting it up](#setting-it-up)), `npm run ai:models sam2.1-large` fetches a checkpoint, and
-`npm start "<folder>"` then runs it beside the app, on the same folder, and stops it with the app
+`npm start` then runs it beside the app, on the folder the app opens, and stops it with the app
 (DEPLOYABILITY.md R6 to R8). By hand, installed as that section shows, from this folder:
 
 ```bash
@@ -31,7 +31,9 @@ $env:LAZYLABEL_MODEL_DIR = "C:\path\to\checkpoints"; $env:LAZYLABEL_DATASET_ROOT
 `LAZYLABEL_MODEL_DIR` must hold a `manifest.json`. `lazylabel-models` writes it, with each
 checkpoint it fetches ([Checkpoints](#checkpoints)); by hand, copy `models/manifest.example.json`
 there and fill in each checkpoint's SHA-256 from `models/manifest.verified.json`.
-`LAZYLABEL_DATASET_ROOT` must be the same folder the API serves.
+`LAZYLABEL_DATASET_ROOT` must be the same folder the API serves. When the app opens another folder,
+the API sets the service's root to it (`POST /dataset-root`, below); the launcher starts the
+service without one when LazyLabel opens with no folder.
 
 To run the differential comparison against the legacy model, which needs a real checkpoint:
 
@@ -172,6 +174,7 @@ and a pre-release newer than the minimum is allowed *and said to be* a pre-relea
 | `POST /inference/segment` | built — points and boxes, SAM 2.1, the mask bounded on the wire |
 | `POST`/`GET /inference/propagations`, `DELETE /inference/propagations/{id}` | built — C11: start a propagation job, read its frames as they arrive, cancel it |
 | `POST /inference/archetypes` | built — C10: which frames of a sequence are worth annotating by hand |
+| `POST /dataset-root` | built — `{ "path": "<folder>" }`: the folder images are read from, which the API sets when the app opens one (its `POST /folder`). Refused with an `Origin` header (403) or a body that is not JSON (415), since only the API calls it; a running propagation is cancelled, keeping its frames |
 
 No route answers 501 any more. While some did, 501 was the honest status: the route existed, its
 contract was fixed in `AI_NATIVE_SPEC.md` section 3, and the implementation was not there yet. A 200
