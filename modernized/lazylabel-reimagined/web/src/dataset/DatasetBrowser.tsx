@@ -23,6 +23,10 @@
  * The image's pixel size comes from the API rather than from the user, now that the image pipeline
  * can read it without decoding the whole file. That matters more than convenience: the text formats
  * store normalized coordinates, so a wrong size silently rescales every polygon.
+ *
+ * OPEN IMAGE FOLDER IS AT ITS TOP, as legacy's is (right_panel.py:112-114, 205): the owner's request
+ * of 2026-09-29, "in the gui the user should be able to select a folder to load". The folder was
+ * chosen before the launch until then. With none open, the button is all the panel shows.
  */
 
 import {
@@ -42,7 +46,7 @@ import {
 
 import type { WireDatasetImage, WireDatasetListing, WireSegment } from "@lazylabel/contracts";
 
-import type { ApiClient } from "../api/client.js";
+import type { ApiClient, FolderChoice, FolderRequest } from "../api/client.js";
 import { useNotifications } from "../notifications/NotificationProvider.jsx";
 import { useSettings } from "../settings/SettingsProvider.jsx";
 import { useWorkspace } from "../workspace/WorkspaceProvider.jsx";
@@ -114,16 +118,45 @@ export interface DatasetBrowserProps {
     /** The timeline's order while it is sorted: the range's rows are shown in it (SP-42). */
     readonly order?: readonly string[] | null;
   } | null;
-  /** The dataset folder's own path on the server, which Copy path puts before a file's key. */
-  readonly root?: string | undefined;
+  /**
+   * The dataset folder's own path on the server, which Copy path puts before a file's key. Null while
+   * no folder is open, when the panel shows Open Image Folder alone; undefined while the server has
+   * not said, as an older one does not.
+   */
+  readonly root?: string | null | undefined;
   /**
    * Changes when annotation files were written other than by the open image's save, as Save All
    * writes them. The list reads the folder's status again, as legacy's does after a save
    * (fast_file_manager.py:611-692); the open image's own saves are seen through the workspace.
    */
   readonly written?: number;
+  /**
+   * How Open Image Folder chooses a folder: the system's dialog, shown by the server, or a typed
+   * path where the server has no desktop to show one on. Legacy's button always shows; here it does
+   * not where the server's folder is fixed, or has not said.
+   */
+  readonly folderChoice?: FolderChoice | undefined;
+  /** Opens another folder, saving or asking about the image left first (`App`), and says how it went. */
+  readonly onOpenFolder?: (request: FolderRequest) => Promise<FolderOutcome>;
+  /**
+   * Changes each time another folder is opened: the list shows its root, read afresh, as legacy's
+   * `setDirectory` shows a folder it is given, every row and none hidden (fast_file_manager.py:1215-1224).
+   */
+  readonly opened?: number;
+  /**
+   * The server has not said yet whether a folder is open (`App`, while /health is on its way).
+   * Nothing is listed until it has, so a start with none open does not flash an empty list.
+   */
+  readonly pending?: boolean;
   readonly ref?: Ref<DatasetBrowserHandle>;
 }
+
+/**
+ * How Open Image Folder went: a folder opened; the dialog closed, which changes nothing; the image
+ * left kept open, its save refused or its question declined; the folder refused, with the reason in
+ * the status bar; or no dialog to show on the server, when the path is typed instead.
+ */
+export type FolderOutcome = "opened" | "cancelled" | "stayed" | "failed" | "no-dialog";
 
 type ListingState =
   | { readonly status: "loading" }
@@ -145,6 +178,10 @@ export function DatasetBrowser({
   range,
   root,
   written,
+  folderChoice,
+  onOpenFolder,
+  opened,
+  pending = false,
   ref,
 }: DatasetBrowserProps): ReactNode {
   const [state, setState] = useState<ListingState>({ status: "loading" });
@@ -238,6 +275,19 @@ export function DatasetBrowser({
     goTo(folder);
   }, [folder, goTo]);
 
+  // Another folder opened: its root, read afresh even when the list was at its root already.
+  const lastOpened = useRef(opened);
+  useEffect(() => {
+    if (lastOpened.current === opened) return;
+    lastOpened.current = opened;
+    goTo("");
+    setGeneration((count) => count + 1);
+  }, [opened, goTo]);
+  /** No folder open yet: nothing to list. */
+  const noFolder = root === null;
+  /** Nothing to list yet either way: no folder, or no word yet whether there is one. */
+  const idle = noFolder || pending;
+
   const stored = storedSort(settings.values["file_manager_sort_order"]);
   const sort = sortKey ?? stored;
 
@@ -258,6 +308,7 @@ export function DatasetBrowser({
     || settings.values["file_manager_show_size"] === true;
 
   useEffect(() => {
+    if (idle) return undefined;
     let cancelled = false;
     setState({ status: "loading" });
 
@@ -277,7 +328,7 @@ export function DatasetBrowser({
     return () => {
       cancelled = true;
     };
-  }, [client, projectId, here, onListed, wantsDetails, generation]);
+  }, [client, projectId, here, onListed, wantsDetails, generation, idle]);
 
   /*
    * AFTER A SAVE, THE FORMAT COLUMNS ARE READ AGAIN, as legacy re-checks a saved image's files
@@ -290,6 +341,7 @@ export function DatasetBrowser({
     const last = lastWrite.current;
     if (last.saveCounts === saveCounts && last.quietWrites === quietWrites && last.written === written) return;
     lastWrite.current = { saveCounts, quietWrites, written };
+    if (idle) return;
     let cancelled = false;
     client
       .listImages(projectId, here, wantsDetails)
@@ -303,7 +355,8 @@ export function DatasetBrowser({
     return () => {
       cancelled = true;
     };
-  }, [client, projectId, here, onListed, wantsDetails, saveCounts, quietWrites, written]);
+    // `opened` too: a reading of the old folder still on its way when another opens is dropped.
+  }, [client, projectId, here, onListed, wantsDetails, saveCounts, quietWrites, written, idle, opened]);
 
   const listing = state.status === "ready" ? state.listing : null;
   const images = listing?.images ?? NO_IMAGES;
@@ -488,14 +541,40 @@ export function DatasetBrowser({
     setSelection((current) => ({ ...current, committed: next.filter((key) => moving.has(key)), extent: [] }));
   };
 
+  // Legacy's button over the list, in every state of it; none where the folder is fixed.
+  const opener =
+    onOpenFolder !== undefined && (folderChoice === "dialog" || folderChoice === "path") ? (
+      <OpenFolder choice={folderChoice} onOpen={onOpenFolder} />
+    ) : null;
+
+  // No folder open yet: the button, and nothing else, as legacy's panel starts.
+  if (noFolder) {
+    return (
+      <section className="dataset-browser">
+        <h2 className="visually-hidden">Images</h2>
+        {opener}
+      </section>
+    );
+  }
+
   // Legacy's words while scanning and on a failure (fast_file_manager.py:1225, main_window.py:7330).
   const where = folderName(here);
-  if (state.status === "loading") return <p>Loading: {where}</p>;
+  if (state.status === "loading") {
+    return (
+      <>
+        {opener}
+        <p>Loading: {where}</p>
+      </>
+    );
+  }
   if (state.status === "failed") {
     return (
-      <p role="alert" className="banner banner--error">
-        Error discovering images: {state.reason}
-      </p>
+      <>
+        {opener}
+        <p role="alert" className="banner banner--error">
+          Error discovering images: {state.reason}
+        </p>
+      </>
     );
   }
 
@@ -534,6 +613,7 @@ export function DatasetBrowser({
   return (
     <section className="dataset-browser">
       <h2 className="visually-hidden">Images</h2>
+      {opener}
 
       <nav className="crumbs" aria-label="Folder">
         <button type="button" onClick={() => goTo("")} disabled={here === ""}>
@@ -719,7 +799,7 @@ export function DatasetBrowser({
             },
             {
               label: menuRows.length === 1 ? "Copy path" : `Copy ${menuRows.length} paths`,
-              run: () => copy(menuRows.map((image) => filePath(root, image.key)).join("\n")),
+              run: () => copy(menuRows.map((image) => filePath(root ?? undefined, image.key)).join("\n")),
             },
             null,
             {
@@ -731,6 +811,73 @@ export function DatasetBrowser({
       )}
       {/* The formats to write are in Application Settings, where legacy's Export Formats is. */}
     </section>
+  );
+}
+
+/**
+ * LEGACY'S OPEN IMAGE FOLDER (right_panel.py:112-114, 205): a plain full-width button over the list,
+ * with its tooltip. With "dialog" it has the server show the system's folder dialog, "Select Image
+ * Folder", on its desktop, as legacy's shows its own (main_window.py:1431-1438); with "path", where
+ * the server has no desktop to show one on, it opens a field for the folder's path, and Open.
+ */
+function OpenFolder({
+  choice,
+  onOpen,
+}: {
+  readonly choice: "dialog" | "path";
+  readonly onOpen: (request: FolderRequest) => Promise<FolderOutcome>;
+}): ReactNode {
+  const [typing, setTyping] = useState(false);
+  const [typed, setTyped] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const open = (request: FolderRequest): void => {
+    setBusy(true);
+    void onOpen(request).then((outcome) => {
+      setBusy(false);
+      if (outcome === "opened") {
+        setTyping(false);
+        setTyped("");
+      }
+      // The server could show no dialog after all: the path is typed instead.
+      if (outcome === "no-dialog") setTyping(true);
+    });
+  };
+  const path = typed.trim();
+
+  return (
+    <>
+      <button
+        type="button"
+        className="dataset__open"
+        title="Open a directory of images"
+        disabled={busy}
+        onClick={() => (choice === "path" ? setTyping((shown) => !shown) : open({ choose: true }))}
+      >
+        Open Image Folder
+      </button>
+      {typing && (
+        <form
+          className="dataset__open-path"
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (path !== "") open({ path });
+          }}
+        >
+          <input
+            type="text"
+            value={typed}
+            placeholder="Folder path"
+            aria-label="Folder path"
+            autoFocus
+            onChange={(event) => setTyped(event.target.value)}
+          />
+          <button type="submit" disabled={busy || path === ""}>
+            Open
+          </button>
+        </form>
+      )}
+    </>
   );
 }
 

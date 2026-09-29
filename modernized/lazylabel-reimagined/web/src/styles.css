@@ -440,6 +440,26 @@ thead th {
   font-weight: normal;
 }
 
+/* Legacy's Open Image Folder: a plain button the width of the file explorer, over the list
+   (right_panel.py:112-114). */
+.dataset__open {
+  display: block;
+  width: 100%;
+  margin: 0 0 4px;
+}
+
+/* The folder's path, where the server has no folder dialog to show: the field, then Open. */
+.dataset__open-path {
+  display: flex;
+  gap: 4px;
+  margin: 0 0 4px;
+}
+
+.dataset__open-path input {
+  flex: 1;
+  min-width: 0;
+}
+
 /* Legacy's file manager header row: search, then the list's controls (fast_file_manager.py:58,
    1143-1213). */
 .dataset__toolbar {

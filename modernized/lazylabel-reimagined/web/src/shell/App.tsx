@@ -14,7 +14,7 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
 import type { WireDatasetImage, WireSegment } from "@lazylabel/contracts";
 
 import { CAPABILITIES } from "../capabilities.js";
-import { DatasetBrowser, type DatasetBrowserHandle } from "../dataset/DatasetBrowser.jsx";
+import { DatasetBrowser, type DatasetBrowserHandle, type FolderOutcome } from "../dataset/DatasetBrowser.jsx";
 import { ExportFormats } from "../dataset/ExportFormats.jsx";
 import { useNotifications } from "../notifications/NotificationProvider.jsx";
 import { OpenImageView } from "../workspace/OpenImageView.jsx";
@@ -46,7 +46,7 @@ import { Dialog } from "./Dialog.jsx";
 import { SettingsEditor } from "../settings/SettingsEditor.jsx";
 import { ResetSettings } from "../settings/ResetSettings.jsx";
 import { useHotkey, useKeyHint } from "../hotkeys/HotkeyProvider.jsx";
-import type { ApiClient, ApiHealth } from "../api/client.js";
+import { ApiError, type ApiClient, type ApiHealth, type FolderRequest } from "../api/client.js";
 
 /** The client already names this shape; re-declaring it here is how the two drift apart. */
 type Health = ApiHealth;
@@ -315,6 +315,73 @@ export function App({ client }: { readonly client: ApiClient }): ReactNode {
     [autoSave, savePair],
   );
 
+  /*
+   * OPEN IMAGE FOLDER, legacy's button over the file list (right_panel.py:112-114, 205;
+   * main_window.py:1431-1438), by the owner's request of 2026-09-29: "in the gui the user should be
+   * able to select a folder to load".
+   *
+   * THE IMAGE OPEN IS LEFT FIRST, as a move to another image leaves it: saved with Auto-Save on
+   * Navigate on, asked about otherwise (`leaveAll`). First, and not once the folder has opened,
+   * because then its key names a file in the new folder: its save would write there, over a
+   * same-named image's files, and "keep my work" could no longer keep the user on it. A refused
+   * save or a declined question keeps everything as it is, and no folder is asked for.
+   *
+   * THEN THE FOLDER, and while its dialog is open the app takes no input, as legacy's modal dialog
+   * blocks its window: an edit made meanwhile would be closed unsaved when the folder opens. Closing
+   * the dialog changes nothing more. Opening one empties the view -- both images closed, the
+   * Sequence timeline gone as leaving its tab takes it, the Multi pair with the images -- and the
+   * file list shows the new folder's root.
+   */
+  const { leaveAll, closeAll } = useWorkspace();
+  const [openingFolder, setOpeningFolder] = useState(false);
+  /** Rises with every folder opened: the file list goes to its root, and the timeline goes. */
+  const [foldersOpened, setFoldersOpened] = useState(0);
+  /** The server could show no folder dialog after all: the path is typed instead. */
+  const [noDialog, setNoDialog] = useState(false);
+  const openFolder = useCallback(
+    async (request: FolderRequest): Promise<FolderOutcome> => {
+      setOpeningFolder(true);
+      try {
+        if (!(await leaveAll())) return "stayed";
+        let answer;
+        try {
+          answer = await client.openFolder(request);
+        } catch (cause) {
+          if (cause instanceof ApiError && cause.code === "no_folder_dialog") {
+            setNoDialog(true);
+            notify({ severity: "warning", message: cause.message });
+            return "no-dialog";
+          }
+          notify({ severity: "error", message: `Could not open the folder: ${cause instanceof Error ? cause.message : String(cause)}` });
+          return "failed";
+        }
+        if (answer.cancelled) return "cancelled";
+        closeAll();
+        setListed([]);
+        setShownRows([]);
+        setArchetypes([]);
+        seenImages.current.clear();
+        runShown.current = null;
+        setHealth((current) =>
+          current === null ? current : { ...current, dataset: "ok", datasetRoot: answer.datasetRoot },
+        );
+        setFoldersOpened((count) => count + 1);
+        notify({ severity: "info", message: `Opened ${answer.datasetRoot ?? ""}` });
+        return "opened";
+      } finally {
+        setOpeningFolder(false);
+      }
+    },
+    [client, closeAll, leaveAll, notify],
+  );
+  useEffect(() => {
+    if (!openingFolder) return undefined;
+    // Keys too: the hotkeys listen on the document, which `inert` does not reach.
+    const block = (event: KeyboardEvent): void => event.stopImmediatePropagation();
+    window.addEventListener("keydown", block, true);
+    return () => window.removeEventListener("keydown", block, true);
+  }, [openingFolder]);
+
   useHotkey("load_next_image", () => (multiView ? stepPair(1) : step(1)));
   useHotkey("load_previous_image", () => (multiView ? stepPair(-1) : step(-1)));
   // Legacy's P toggles Auto-Convert. Registered here, where it is always mounted, rather than in
@@ -328,7 +395,7 @@ export function App({ client }: { readonly client: ApiClient }): ReactNode {
     // take the keystrokes the dialog exists to capture.
     // A <div>, not a second <main>: the image pane is the page's main landmark, and a <main>
     // inside a <main> is invalid and gives a screen reader two regions called main.
-    <div className="app" inert={showHotkeys || showSettings || showAbout}>
+    <div className="app" inert={showHotkeys || showSettings || showAbout || openingFolder}>
       {/* Renders nothing. It asks `onClose` whether closing this tab would lose work, and arms the
           browser's own dialog when it would -- decision 7's last silent path. */}
       <CloseGuard />
@@ -577,6 +644,7 @@ export function App({ client }: { readonly client: ApiClient }): ReactNode {
                 onStatus={setSequenceStatus}
                 onWritten={onWritten}
                 onPropagated={onPropagated}
+                folderOpened={foldersOpened}
                 {...(open === null ? {} : { openKey: open.image.key })}
                 onOpen={(key, segments, built) => {
                   const image = listed.find((entry) => entry.key === key) ?? seenImages.current.get(key);
@@ -606,6 +674,11 @@ export function App({ client }: { readonly client: ApiClient }): ReactNode {
               range={sequenceRange}
               root={health?.datasetRoot}
               written={writes}
+              folderChoice={noDialog && health?.folderChoice === "dialog" ? "path" : health?.folderChoice}
+              onOpenFolder={openFolder}
+              opened={foldersOpened}
+              // Until /health says whether a folder is open, so a start with none shows no empty list.
+              pending={health === null && healthError === null}
             />
 
             <Panel title="Segments">

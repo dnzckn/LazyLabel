@@ -102,8 +102,9 @@ export function StatusBar({
       ) : (
         <>
           {/* Only mentioned when it is a problem. A status bar that always says "dataset: ok"
-              trains the eye to skip the place the word "unreadable" would appear. */}
-          {health.dataset !== "ok" && (
+              trains the eye to skip the place the word "unreadable" would appear. No folder open
+              yet ("none") is not one: the file panel offers Open Image Folder. */}
+          {health.dataset === "unreadable" && (
             <span className="status-bar__item status-bar__item--error">
               Dataset folder unreadable
             </span>

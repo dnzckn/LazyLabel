@@ -57,14 +57,21 @@ export class ApiError extends Error {
  */
 export interface ApiHealth {
   readonly status: string;
+  /** "ok", "unreadable", or "none" while no folder is open yet, which is not a failure. */
   readonly dataset: string;
   /**
-   * The folder the server is pointed at, when it says.
+   * The folder the server is pointed at, when it says: null while none is open.
    *
    * Optional because an older API does not send it, and a banner that read "cannot read undefined"
    * would be worse than one that named nothing.
    */
-  readonly datasetRoot?: string;
+  readonly datasetRoot?: string | null;
+  /**
+   * How the file panel's Open Image Folder chooses a folder (POST /folder): the system's folder
+   * dialog, shown by the server, a typed path, or not at all where the folder is fixed. Absent from
+   * an older API, which cannot open another.
+   */
+  readonly folderChoice?: FolderChoice;
   readonly database: string;
   /**
    * True when the API keeps settings only in memory (`LAZYLABEL_DB=:memory:`): every save succeeds
@@ -79,6 +86,18 @@ export interface ApiHealth {
     /** A GPU's name, "CPU", or "unknown". The server's device, which the browser cannot see. */
     readonly accelerator: string;
   };
+}
+
+/** Who chooses the folder of images: the API's LAZYLABEL_FOLDER_CHOICE. */
+export type FolderChoice = "dialog" | "path" | "fixed";
+
+/** What Open Image Folder asks for: the system's folder dialog, or the folder at a path. */
+export type FolderRequest = { readonly choose: true } | { readonly path: string };
+
+/** The folder open after the request, and whether the dialog was closed, which changes nothing. */
+export interface FolderOpened {
+  readonly datasetRoot: string | null;
+  readonly cancelled: boolean;
 }
 
 export interface WireEmbedRequest {
@@ -221,6 +240,18 @@ export class ApiClient {
     // 503 is a real answer here, not an error: it says the dataset folder is unreadable, which the
     // UI must show as a blocking message naming the path.
     if (response.status === 200 || response.status === 503) return (await response.json()) as never;
+    throw await this.problem(response);
+  }
+
+  /**
+   * Open another folder of images: legacy's Open Image Folder (main_window.py:1431-1438), by the
+   * owner's request of 2026-09-29. `{ choose: true }` has the server show the system's folder
+   * dialog on its desktop and waits while it is open; `{ path }` opens the folder named. JSON, from
+   * this page: the API refuses anything else, so another site's page cannot change the folder.
+   */
+  async openFolder(request: FolderRequest): Promise<FolderOpened> {
+    const response = await this.send("POST", "/folder", request);
+    if (response.status === 200) return (await response.json()) as FolderOpened;
     throw await this.problem(response);
   }
 

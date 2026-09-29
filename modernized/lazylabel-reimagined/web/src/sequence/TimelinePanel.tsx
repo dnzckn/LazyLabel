@@ -168,6 +168,12 @@ export interface TimelinePanelProps {
   readonly onWritten?: (keys: readonly string[]) => void;
   /** A propagation completed: the open frame is loaded again with its new masks, as legacy's is. */
   readonly onPropagated?: () => void;
+  /**
+   * Changes each time Open Image Folder opens another folder (the owner, 2026-09-29). The timeline
+   * goes as leaving the tab takes it, since its frames are keys in the folder no longer open, and
+   * without legacy's exit notice: the status bar says which folder opened.
+   */
+  readonly folderOpened?: number;
 }
 
 /** The Start and End a timeline is built between, and the rows between them when both are set. */
@@ -285,6 +291,7 @@ export function TimelinePanel({
   onRange,
   onWritten,
   onPropagated,
+  folderOpened,
 }: TimelinePanelProps): ReactNode {
   const aiReady = ai === undefined || ai.available;
   // Propagation needs a video-capable model as well as a reachable service.
@@ -784,7 +791,7 @@ export function TimelinePanel({
    *
    * The propagation control goes with the timeline, and a run it was watching stops with it.
    */
-  const discardTimeline = (): void => {
+  const discardTimeline = (announce = true): void => {
     findRun.current += 1;
     setFinding(false);
     setTimeline(null);
@@ -805,7 +812,7 @@ export function TimelinePanel({
     setOwnScores({});
     setPropagated(new Map());
     setCurrent(0);
-    notify({ severity: "info", message: "Timeline cleared. Set new start/end frames." });
+    if (announce) notify({ severity: "info", message: "Timeline cleared. Set new start/end frames." });
   };
   // Leaving the tab runs it, once, when the tab stops showing. Through a ref: it reads this render.
   const discardNow = useRef(discardTimeline);
@@ -816,6 +823,14 @@ export function TimelinePanel({
     wasActive.current = active;
     if (left) discardNow.current();
   }, [active]);
+  // Another folder opened: the timeline goes too, and the image sizes asked of the old folder.
+  const lastFolder = useRef(folderOpened);
+  useEffect(() => {
+    if (lastFolder.current === folderOpened) return;
+    lastFolder.current = folderOpened;
+    sizes.current.clear();
+    discardNow.current(false);
+  }, [folderOpened]);
 
   const currentFrame = shown[current];
   const currentScore = currentFrame === undefined ? undefined : { ...scores, ...ownScores }[current];
@@ -1471,7 +1486,7 @@ export function TimelinePanel({
           type="button"
           className="seq-button seq-button--brown"
           title={"Exit current timeline and select a new range.\nThis will clear all propagation results."}
-          onClick={discardTimeline}
+          onClick={() => discardTimeline()}
         >
           New Timeline
         </button>

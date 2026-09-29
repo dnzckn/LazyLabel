@@ -323,6 +323,18 @@ export interface WorkspaceContextValue {
    * 2026-09-23. Returns whether the side was closed.
    */
   readonly closeSide: (side: SideIndex) => boolean;
+  /**
+   * Leave every open side as a move to another image leaves it, opening nothing: saved first with
+   * Auto-Save on Navigate on (both at once in the Multi view, as a pair move saves them), asked about
+   * otherwise. What Open Image Folder does before the folder changes, since afterwards an image's key
+   * names a file in the new folder. Resolves whether every side may be left.
+   */
+  readonly leaveAll: () => Promise<boolean>;
+  /**
+   * Empty both sides and forget their edits, asking nothing: what Open Image Folder does once the
+   * folder has changed, after `leaveAll` has saved or asked about them.
+   */
+  readonly closeAll: () => void;
   /** Lend the store a side's save, for leaving that side (`LeaveSave`). Returns its withdrawal. */
   readonly registerSave: (side: SideIndex, lend: () => LeaveSave) => () => void;
   /**
@@ -737,13 +749,21 @@ export function WorkspaceProvider({
     for (const waiter of answered) waiter.answer(waiter.saved === true);
   }, [pairWritten]);
 
-  const openImageOn = useCallback(
-    (side: SideIndex, image: WireDatasetImage, options?: OpenOptions) => {
+  /*
+   * A MOVE OUT OF A SIDE: into `image`, or, with null, into no image at all, which is what opening
+   * another folder does to each side before the folder changes (`leaveAll`). Both take the one
+   * leaving step below, the save or the question; `done` hears whether the side was left, once it
+   * has been, for a caller that waits on it.
+   */
+  const moveSide = useCallback(
+    (side: SideIndex, image: WireDatasetImage | null, options?: OpenOptions, done?: (left: boolean) => void) => {
       // The save leaving this side is still being written: go where the user asked LAST, once it is.
       const waiting = leaving.current[side];
       if (waiting !== null) {
+        waiting.done?.(false);
         waiting.image = image;
         waiting.options = options;
+        waiting.done = done;
         return;
       }
 
@@ -770,12 +790,13 @@ export function WorkspaceProvider({
         && autoSaveOn()
         && pairSaver() !== undefined
       ) {
-        const held: Leaving = { image, options, written: false };
+        const held: Leaving = { image, options, written: false, done };
         leaving.current[side] = held;
         void savePair().then((saved) => {
           if (leaving.current[side] !== held) return;
           leaving.current[side] = null;
-          if (saved) openLatest.current(side, held.image, { ...held.options, pairSaved: true });
+          if (saved) moveLatest.current(side, held.image, { ...held.options, pairSaved: true }, held.done);
+          else held.done?.(false);
         });
         return;
       }
@@ -814,7 +835,7 @@ export function WorkspaceProvider({
         && !decision.changed
         && (options?.pairSaved === true
           || options?.keepUnchanged === true
-          || sides[side].open?.image.key === image.key);
+          || (image !== null && sides[side].open?.image.key === image.key));
       const save =
         decision.kind !== "save" || saver === null || unsavedAgain
           ? null
@@ -822,12 +843,13 @@ export function WorkspaceProvider({
             ? saver.save
             : (saver.saveUnchanged ?? null);
       if (save !== null) {
-        const held: Leaving = { image, options, written: false };
+        const held: Leaving = { image, options, written: false, done };
         leaving.current[side] = held;
         void save().then((written) => {
           if (leaving.current[side] !== held) return;
           if (!written) {
             leaving.current[side] = null;
+            held.done?.(false);
             return;
           }
           held.written = true;
@@ -835,7 +857,14 @@ export function WorkspaceProvider({
         });
         return;
       }
-      if (decision.kind === "ask" && !confirmNavigation(`${decision.summary} Open ${image.name} anyway?`)) {
+      const going = image === null ? "Open another folder anyway?" : `Open ${image.name} anyway?`;
+      if (decision.kind === "ask" && !confirmNavigation(`${decision.summary} ${going}`)) {
+        done?.(false);
+        return;
+      }
+      // Left for no image: the caller empties the side once the folder has changed (`closeAll`).
+      if (image === null) {
+        done?.(true);
         return;
       }
 
@@ -914,17 +943,22 @@ export function WorkspaceProvider({
    * rather than assumed: an edit made while the write was in flight leaves the side unsaved, and is
    * then saved too instead of being discarded. Through a ref, so this runs once per written save.
    */
-  const openLatest = useRef(openImageOn);
-  openLatest.current = openImageOn;
+  const moveLatest = useRef(moveSide);
+  moveLatest.current = moveSide;
   useEffect(() => {
     for (const side of SIDES) {
       const held = leaving.current[side];
       if (held === null || !held.written) continue;
       leaving.current[side] = null;
       // Saved once on this move: an image unchanged since is not written a second time.
-      openLatest.current(side, held.image, { ...held.options, keepUnchanged: true });
+      moveLatest.current(side, held.image, { ...held.options, keepUnchanged: true }, held.done);
     }
   }, [leaveWritten]);
+
+  const openImageOn = useCallback(
+    (side: SideIndex, image: WireDatasetImage, options?: OpenOptions) => moveSide(side, image, options),
+    [moveSide],
+  );
 
   const openImage = useCallback(
     (image: WireDatasetImage, options?: OpenOptions) => openImageOn(activeSide, image, options),
@@ -944,11 +978,39 @@ export function WorkspaceProvider({
       updateSide(side, () => EMPTY_SIDE);
       history.clear(sideScope(side));
       // A move this side was saving for would reopen it once the write lands.
+      leaving.current[side]?.done?.(false);
       leaving.current[side] = null;
       return true;
     },
     [confirmNavigation, history, sides, updateSide],
   );
+
+  /*
+   * OPEN IMAGE FOLDER'S TWO HALVES (the owner, 2026-09-29): every side left the way a move leaves it,
+   * through `moveSide` into no image, before the folder changes; then, once it has, both emptied with
+   * nothing asked, since their images are in the folder no longer open. Both sides at once, so a
+   * Multi pair joins the one pair save (`savePair`), as its move does.
+   */
+  const leaveAll = useCallback(
+    (): Promise<boolean> =>
+      Promise.all(
+        SIDES.filter((side) => sides[side].open !== null).map(
+          (side) => new Promise<boolean>((resolve) => moveSide(side, null, undefined, resolve)),
+        ),
+      ).then((left) => left.every(Boolean)),
+    [moveSide, sides],
+  );
+
+  const closeAll = useCallback(() => {
+    for (const side of SIDES) {
+      leaving.current[side]?.done?.(false);
+      leaving.current[side] = null;
+      history.clear(sideScope(side));
+    }
+    setSides([EMPTY_SIDE, EMPTY_SIDE]);
+    setActiveSide(0);
+    setLinkReport(null);
+  }, [history]);
 
   const imageStates = useMemo<readonly [ImageState | null, ImageState | null]>(
     () => [stateOf(sides[0]), stateOf(sides[1])],
@@ -1568,6 +1630,8 @@ export function WorkspaceProvider({
       openImage,
       openImageOn,
       closeSide,
+      leaveAll,
+      closeAll,
       registerSave,
       savePair,
       imageState,
@@ -1628,6 +1692,8 @@ export function WorkspaceProvider({
       fitted,
       clearSelection,
       closeSide,
+      leaveAll,
+      closeAll,
       crop,
       history,
       imageState,
@@ -1863,10 +1929,13 @@ function reportFor(
 
 /** A move waiting for the save leaving its side. Mutable: a later move replaces where it goes. */
 interface Leaving {
-  image: WireDatasetImage;
+  /** Where it goes: an image, or none, for another folder (`leaveAll`). */
+  image: WireDatasetImage | null;
   options: OpenOptions | undefined;
   /** Set once the save has written, for the effect that then makes the move. */
   written: boolean;
+  /** Told whether the side was left, for a caller that waits on it; false when a later move replaces it. */
+  done: ((left: boolean) => void) | undefined;
 }
 
 /** What the save path and the status bar need to know about one side. */
