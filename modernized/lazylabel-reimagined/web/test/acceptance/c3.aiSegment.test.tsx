@@ -122,6 +122,7 @@ function mount(overrides: Partial<ApiClient> = {}, values: Record<string, unknow
         family: "sam2",
         size: "large",
         videoCapable: true,
+        segmenter: true,
         present: true,
         verified: true,
         detail: null,
@@ -165,6 +166,15 @@ function clickImage(x: number, y: number) {
   fireEvent.pointerUp(surface, { button: 0, pointerId: 1, clientX: x, clientY: y });
 }
 
+/**
+ * Choose the model by NAME from the manifest, in legacy's dropdown under "Available Models:".
+ * Legacy matches on a file-name substring, which loads `sam2_hiera_large_tuned.pt` as "tiny".
+ */
+async function chooseModel(): Promise<void> {
+  await screen.findByRole("option", { name: MODEL });
+  fireEvent.change(screen.getByRole("combobox", { name: "Available Models:" }), { target: { value: MODEL } });
+}
+
 /** Steps 1–3: pick an image, choose the model, reach the AI surface. */
 async function readyToPrompt(values: Record<string, unknown> = {}) {
   const handles = mount({}, values);
@@ -172,11 +182,7 @@ async function readyToPrompt(values: Record<string, unknown> = {}) {
   fireEvent.click(screen.getByText("open a"));
   await waitFor(() => expect(screen.getAllByText("a.png").length).toBeGreaterThan(0));
 
-  // The model is chosen by NAME from the manifest. Legacy matches on a file-name substring, which
-  // loads `sam2_hiera_large_tuned.pt` as "tiny".
-  // By ROLE and name rather than by label text: the label also carries the family and size, so an
-  // exact label match would be brittle for no gain.
-  fireEvent.click(await screen.findByRole("radio", { name: new RegExp(MODEL) }));
+  await chooseModel();
   fireEvent.click(screen.getByText("ai tool"));
   await waitFor(() => expect(screen.getByLabelText("AI tool")).toBeTruthy());
 
@@ -330,7 +336,7 @@ describe("RULE-089 through the view: Operate On View segments what is on screen"
     fireEvent.click(screen.getByText("open a"));
     await waitFor(() => expect(screen.getAllByText("a.png").length).toBeGreaterThan(0));
     fireEvent.click(screen.getByText("rescale"));
-    fireEvent.click(await screen.findByRole("radio", { name: new RegExp(MODEL) }));
+    await chooseModel();
 
     fireEvent.click(screen.getByText("ai tool"));
 
@@ -345,7 +351,7 @@ describe("RULE-089 through the view: Operate On View segments what is on screen"
     fireEvent.click(screen.getByText("open a"));
     await waitFor(() => expect(screen.getAllByText("a.png").length).toBeGreaterThan(0));
     fireEvent.click(screen.getByText("rescale"));
-    fireEvent.click(await screen.findByRole("radio", { name: new RegExp(MODEL) }));
+    await chooseModel();
 
     fireEvent.click(screen.getByText("ai tool"));
 

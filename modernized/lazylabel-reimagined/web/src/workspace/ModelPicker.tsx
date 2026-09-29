@@ -7,8 +7,16 @@
  * tiny config around large weights. It does not error; the user just gets worse masks from a model
  * they believe is their fine-tuned large.
  *
- * MODELS THAT CANNOT BE USED ARE STILL SHOWN, disabled, with the reason in the row's tooltip -- the
- * way legacy explains a control it disables. A picker that listed only the working ones makes a
+ * LEGACY'S DROPDOWN, under "Available Models:" with its tooltip (L ui/widgets/model_selection_widget
+ * .py:138-143). It was a list of radio buttons, each with the model's family and size, until the
+ * owner asked on 2026-09-29 for "a drop down to select from available models".
+ *
+ * IT LISTS THE MODELS THAT SEGMENT. The embedder Find Archetypes uses shares the manifest, and was
+ * listed here disabled until the owner asked, the same day, why it was shown ("its just for find
+ * archetypes doenst make sense to show on the left"). Find Archetypes finds it on its own.
+ *
+ * A MODEL THAT CANNOT BE USED IS STILL SHOWN, disabled, with the reason in its tooltip -- the way
+ * legacy explains a control it disables. A picker that listed only the working ones makes a
  * corrupt checkpoint indistinguishable from an absent one -- and the two have different fixes:
  * re-download it, or go and find it.
  *
@@ -21,7 +29,7 @@
  * Models is left out by a recorded decision: a server has no file picker.
  */
 
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from "react";
 
 import { useNotifications } from "../notifications/NotificationProvider.jsx";
 import { useSettings } from "../settings/SettingsProvider.jsx";
@@ -38,6 +46,23 @@ type State =
 /** Installed, matching its hash, and able to answer prompts. */
 export function isUsable(model: WireModelStatus): boolean {
   return model.present && model.verified && model.segmenter;
+}
+
+/**
+ * The models the dropdown lists: every one that segments, usable or not. Not the embedder Find
+ * Archetypes uses, which is no model to segment with -- choosing it failed with "no backend for
+ * family 'embedder'" until 2026-09-23.
+ */
+function segmenters(models: readonly WireModelStatus[]): readonly WireModelStatus[] {
+  return models.filter((model) => model.segmenter !== false);
+}
+
+/**
+ * Why a listed model cannot be used: the reason, not just the fact. "Unavailable" sends a user
+ * looking; "the file is not in the model directory" tells them where to look.
+ */
+function reasonFor(model: WireModelStatus): string {
+  return model.detail ?? (model.present ? "does not match its recorded hash" : "not installed");
 }
 
 /**
@@ -241,6 +266,7 @@ export function ModelPicker({ client }: { readonly client: ApiClient }): ReactNo
   }, [client, notify]);
 
   const usable = state.status === "ready" && state.models.some((model) => model.name === chosen && isUsable(model));
+  const listId = useId();
 
   return (
     <div className="models-section">
@@ -250,8 +276,10 @@ export function ModelPicker({ client }: { readonly client: ApiClient }): ReactNo
         </button>
       </div>
 
-      <p className="models__label">Available Models:</p>
-      <ModelList state={state} chosen={chosen} onChoose={choose} />
+      <label className="models__label" htmlFor={listId}>
+        Available Models:
+      </label>
+      <ModelList id={listId} state={state} chosen={chosen} onChoose={choose} />
 
       {/* Load while nothing is in memory, Unload while something is (model_selection_widget.py:212-215). */}
       <div className="models__buttons">
@@ -280,10 +308,13 @@ export function ModelPicker({ client }: { readonly client: ApiClient }): ReactNo
 }
 
 function ModelList({
+  id,
   state,
   chosen,
   onChoose,
 }: {
+  /** What the "Available Models:" label names. */
+  readonly id: string;
   readonly state: State;
   readonly chosen: string;
   readonly onChoose: (name: string) => void;
@@ -308,48 +339,42 @@ function ModelList({
     );
   }
 
-  if (state.models.length === 0) {
+  const offered = segmenters(state.models);
+  if (offered.length === 0) {
     return <p className="panel__missing">No models available</p>;
   }
 
+  // Each entry is the model's name alone, as legacy's are its file names: the family, size and "no
+  // propagation" printed beside each until 2026-09-29 were detail the owner did not ask for.
+  const listed = offered.some((model) => model.name === chosen);
   return (
-    <ul className="models">
-      {state.models.map((model) => {
-        // An embedder is listed -- an operator installing checkpoints wants to see it verified
-        // -- but it is no model to segment with, and choosing it failed with a message about a
-        // "backend for family 'embedder'" until 2026-09-23.
+    <select
+      id={id}
+      className="models"
+      title="Select a .pth model file to use"
+      value={chosen}
+      onChange={(event) => onChoose(event.currentTarget.value)}
+    >
+      {/* The choice when it is none of these: nothing chosen yet, or a name the list no longer
+          has. Without it the dropdown would show its first model, which the tools do not use. */}
+      {!listed && (
+        <option value={chosen} disabled {...(chosen === "" ? {} : { title: "not one of the available models" })}>
+          {chosen}
+        </option>
+      )}
+      {offered.map((model) => {
         const usable = isUsable(model);
-
         return (
-          <li key={model.name}>
-            <label
-              // The reason, not just the fact. "Unavailable" sends a user looking; "the file is
-              // not in the model directory" tells them where to look.
-              {...(usable
-                ? {}
-                : {
-                    title:
-                      !model.segmenter && model.present && model.verified
-                        ? "Find Archetypes uses this model; it cannot segment"
-                        : (model.detail ?? (model.present ? "does not match its recorded hash" : "not installed")),
-                  })}
-            >
-              <input
-                type="radio"
-                name="ai_model"
-                checked={chosen === model.name}
-                disabled={!usable}
-                onChange={() => onChoose(model.name)}
-              />{" "}
-              {model.name}{" "}
-              <span className="models__detail">
-                {model.family} {model.size}
-                {model.videoCapable ? "" : ", no propagation"}
-              </span>
-            </label>
-          </li>
+          <option
+            key={model.name}
+            value={model.name}
+            disabled={!usable}
+            {...(usable ? {} : { title: reasonFor(model) })}
+          >
+            {model.name}
+          </option>
         );
       })}
-    </ul>
+    </select>
   );
 }

@@ -1392,18 +1392,16 @@ fieldset input[type="text"] {
   min-width: 0;
 }
 
+/* Legacy's model dropdown: 150px at least, at the left of its group (model_selection_widget.py:34,
+   138-143). */
 .models {
-  list-style: none;
-  margin: 0;
-  padding: 0;
+  align-self: flex-start;
+  min-width: 150px;
+  max-width: 100%;
 }
 
-.models__detail {
-  color: var(--muted);
-}
-
-/* Legacy's Model Selection group: Refresh, "Available Models:", the list, Load and Unload, and the
-   "Current: ..." line, stacked (model_selection_widget.py:117-166). */
+/* Legacy's Model Selection group: Refresh, "Available Models:", the dropdown, Load and Unload, and
+   the "Current: ..." line, stacked (model_selection_widget.py:117-166). */
 .models-section {
   display: flex;
   flex-direction: column;

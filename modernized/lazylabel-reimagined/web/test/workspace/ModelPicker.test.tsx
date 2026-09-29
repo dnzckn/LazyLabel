@@ -4,6 +4,10 @@
  * Legacy picks by matching substrings of the file name, so `sam2_hiera_large_tuned.pt` contains
  * `_t` and loads as TINY. It does not error — the user simply gets worse masks from a model they
  * believe is their fine-tuned large. A picker over manifest names cannot do that.
+ *
+ * It is legacy's dropdown since 2026-09-29 (model_selection_widget.py:138-143), of the models that
+ * segment: it was radio buttons, and listed the embedder Find Archetypes uses, until the owner
+ * asked for "a drop down to select from available models".
  */
 
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
@@ -86,6 +90,14 @@ function mount(models: readonly WireModelStatus[] | Error, chosen = "", controls
   };
 }
 
+/** The dropdown, by legacy's label over it (model_selection_widget.py:139). */
+const dropdown = () => screen.getByRole("combobox", { name: "Available Models:" }) as HTMLSelectElement;
+const option = (name: string) => screen.getByRole("option", { name }) as HTMLOptionElement;
+/** A model's entry, once the list has come. */
+const listed = (name: string) => screen.findByRole("option", { name }) as Promise<HTMLOptionElement>;
+/** Pick a model, as a user does from the dropdown. */
+const choose = (name: string) => fireEvent.change(dropdown(), { target: { value: name } });
+
 describe("with no inference service", () => {
   const NONE = "no inference service is configured, so the AI tools are unavailable";
 
@@ -107,19 +119,23 @@ describe("with no inference service", () => {
 });
 
 describe("listing what is installed", () => {
-  it("offers each model by its manifest name", async () => {
+  it("offers each model by its manifest name, in legacy's dropdown with its tooltip", async () => {
     mount([usable("SAM 2.1 large"), usable("SAM 1 huge", { family: "sam1", size: "vit_h" })]);
 
-    expect(await screen.findByRole("radio", { name: /SAM 2.1 large/ })).toBeTruthy();
-    expect(screen.getByRole("radio", { name: /SAM 1 huge/ })).toBeTruthy();
+    expect(await listed("SAM 2.1 large")).toBeTruthy();
+    expect(option("SAM 1 huge")).toBeTruthy();
+    expect(dropdown().title).toBe("Select a .pth model file to use");
+    expect(screen.queryAllByRole("radio")).toHaveLength(0);
   });
 
-  it("says which cannot propagate, rather than promising it", async () => {
-    // A SAM 1-only install is a working install with no propagation, and a model name alone would
-    // promise a feature that is never going to appear.
-    mount([usable("SAM 1 huge", { family: "sam1", videoCapable: false })]);
+  it("names each model alone, with no family, size or propagation beside it", async () => {
+    // The owner, 2026-09-29, of "mobilenet_v3_small, no propagation": the detail the radio rows
+    // printed beside each name made no sense in the panel. Legacy's entries are names alone.
+    mount([usable("SAM 1 huge", { family: "sam1", size: "vit_h", videoCapable: false })]);
 
-    expect(await screen.findByText(/no propagation/)).toBeTruthy();
+    expect((await listed("SAM 1 huge")).textContent).toBe("SAM 1 huge");
+    expect(screen.queryByText(/no propagation/)).toBeNull();
+    expect(screen.queryByText(/vit_h/)).toBeNull();
   });
 
   it("says, in legacy's words, that no model is loaded when nothing is chosen yet", async () => {
@@ -128,22 +144,36 @@ describe("listing what is installed", () => {
     expect(await screen.findByText("Current: No model loaded")).toBeTruthy();
   });
 
+  it("shows nothing chosen while none is, rather than the first model", async () => {
+    // A dropdown with no entry for "none" shows its first, which would name a model the AI tools
+    // do not use.
+    mount([usable("SAM 2.1 large")]);
+    await listed("SAM 2.1 large");
+
+    expect(dropdown().value).toBe("");
+    expect(dropdown().selectedOptions[0]?.textContent).toBe("");
+  });
+
   it("marks the chosen one, and says what is LOADED, not what is chosen", async () => {
     // Legacy's dropdown shows "Default (vit_h)" at start and its line "Current: No model loaded"
     // (model_selection_widget.py:142, 163).
     mount([usable("SAM 2.1 large"), usable("SAM 1 huge")], "SAM 1 huge");
 
-    await waitFor(() =>
-      expect((screen.getByRole("radio", { name: /SAM 1 huge/ }) as HTMLInputElement).checked).toBe(true),
-    );
+    await waitFor(() => expect(dropdown().value).toBe("SAM 1 huge"));
     expect(screen.getByText("Current: No model loaded")).toBeTruthy();
+  });
+
+  it("shows a chosen model the list no longer has as the choice, disabled, with why", async () => {
+    mount([usable("SAM 2.1 large")], "SAM 2 gone");
+
+    await waitFor(() => expect(dropdown().value).toBe("SAM 2 gone"));
+    expect(option("SAM 2 gone").disabled).toBe(true);
+    expect(option("SAM 2 gone").title).toBe("not one of the available models");
   });
 });
 
 describe("models that cannot be used", () => {
-  /** The reason a disabled model gives, which is its row's tooltip, as legacy explains a disabled control. */
-  const reasonFor = (radio: HTMLElement): string | undefined => radio.closest("label")?.title;
-
+  // A disabled model's reason is its tooltip, as legacy explains a control it disables.
   it("shows a corrupt checkpoint, disabled, with its reason", async () => {
     // Present and unverified is the case worth showing: a picker that listed only the working ones
     // makes a corrupt checkpoint indistinguishable from an absent one, and the two have different
@@ -153,46 +183,51 @@ describe("models that cannot be used", () => {
       usable("SAM 1 huge", { verified: false, detail: "sha256 does not match the manifest" }),
     ]);
 
-    const broken = await screen.findByRole("radio", { name: /SAM 1 huge/ });
-    expect((broken as HTMLInputElement).disabled).toBe(true);
-    expect(reasonFor(broken)).toBe("sha256 does not match the manifest");
-    expect(reasonFor(screen.getByRole("radio", { name: /SAM 2.1 large/ }))).toBe("");
+    const broken = await listed("SAM 1 huge");
+    expect(broken.disabled).toBe(true);
+    expect(broken.title).toBe("sha256 does not match the manifest");
+    expect(option("SAM 2.1 large").disabled).toBe(false);
+    expect(option("SAM 2.1 large").title).toBe("");
   });
 
-  it("lists the embedder, but not as a model to segment with", async () => {
-    // It shares the manifest with the SAM checkpoints. Choosing it for the AI tool failed with
-    // "no backend for family 'embedder'" until 2026-09-23.
+  it("leaves out the embedder Find Archetypes uses", async () => {
+    // It shares the manifest with the SAM checkpoints and is no model to segment with: choosing it
+    // failed with "no backend for family 'embedder'" until 2026-09-23, and it was listed disabled
+    // until the owner asked why, on 2026-09-29. Find Archetypes finds it on its own.
     mount([
       usable("SAM 2.1 large"),
       usable("MobileNetV3 small", { family: "embedder", size: "mobilenet_v3_small", segmenter: false, videoCapable: false }),
     ]);
 
-    const embedder = await screen.findByRole("radio", { name: /MobileNetV3 small/ });
-    expect((embedder as HTMLInputElement).disabled).toBe(true);
-    expect(reasonFor(embedder)).toBe("Find Archetypes uses this model; it cannot segment");
+    await listed("SAM 2.1 large");
+    expect(screen.queryByRole("option", { name: /MobileNetV3/ })).toBeNull();
+    expect([...dropdown().options].map((entry) => entry.textContent)).toEqual(["", "SAM 2.1 large"]);
   });
 
   it("shows a missing one too, and says it is missing", async () => {
     mount([usable("SAM 2.1 tiny", { present: false, verified: false, detail: "not in the model directory" })]);
 
-    expect(reasonFor(await screen.findByRole("radio", { name: /SAM 2.1 tiny/ }))).toBe("not in the model directory");
+    expect((await listed("SAM 2.1 tiny")).title).toBe("not in the model directory");
   });
 
   it("falls back to a reason of its own when the service gave none", async () => {
     // "Unavailable" sends a user looking; saying which of the two problems it is tells them where.
-    mount([usable("SAM 1 huge", { verified: false, detail: null })]);
+    mount([
+      usable("SAM 1 huge", { verified: false, detail: null }),
+      usable("SAM 2.1 tiny", { present: false, verified: false, detail: null }),
+    ]);
 
-    expect(reasonFor(await screen.findByRole("radio", { name: /SAM 1 huge/ }))).toBe(
-      "does not match its recorded hash",
-    );
+    expect((await listed("SAM 1 huge")).title).toBe("does not match its recorded hash");
+    expect(option("SAM 2.1 tiny").title).toBe("not installed");
   });
 });
 
 describe("choosing one", () => {
   it("saves the NAME, not a file path", async () => {
     const { saved } = mount([usable("SAM 2.1 large")]);
+    await listed("SAM 2.1 large");
 
-    fireEvent.click(await screen.findByRole("radio", { name: /SAM 2.1 large/ }));
+    choose("SAM 2.1 large");
 
     await waitFor(() => expect(saved).toHaveLength(1));
     expect((saved[0] as { values: Record<string, unknown> }).values["ai_model"]).toBe("SAM 2.1 large");
@@ -204,6 +239,13 @@ describe("when there is nothing to choose from", () => {
     mount([]);
 
     expect(await screen.findByText("No models available")).toBeTruthy();
+  });
+
+  it("says the same when the manifest holds only the embedder", async () => {
+    mount([usable("MobileNetV3 small", { family: "embedder", segmenter: false })]);
+
+    expect(await screen.findByText("No models available")).toBeTruthy();
+    expect(screen.queryByRole("combobox")).toBeNull();
   });
 
   it("reports a failure to list them", async () => {
@@ -287,7 +329,7 @@ describe("legacy's model controls (CONTROL_PARITY.md CP-49)", () => {
 
   it("has legacy's Refresh, Load and Unload, with its tooltips, around the list", async () => {
     mount([usable("SAM 2.1 large")], "SAM 2.1 large");
-    await screen.findByRole("radio", { name: /SAM 2.1 large/ });
+    await listed("SAM 2.1 large");
 
     expect(button("Refresh").title).toBe("Refresh the list of available models");
     expect(screen.getByText("Available Models:")).toBeTruthy();
@@ -298,7 +340,7 @@ describe("legacy's model controls (CONTROL_PARITY.md CP-49)", () => {
 
   it("offers Load while nothing is loaded and Unload while something is", async () => {
     mount([usable("SAM 2.1 large")], "SAM 2.1 large");
-    await screen.findByRole("radio", { name: /SAM 2.1 large/ });
+    await listed("SAM 2.1 large");
     await waitFor(() => expect(button("Load").disabled).toBe(false));
     expect(button("Unload").disabled).toBe(true);
 
@@ -363,9 +405,9 @@ describe("legacy's model controls (CONTROL_PARITY.md CP-49)", () => {
 
   it("a model picked while none is loaded reads Selected", async () => {
     mount([usable("SAM 2.1 large"), usable("SAM 1 huge", { family: "sam1", size: "vit_h" })], "SAM 1 huge");
-    await screen.findByRole("radio", { name: /SAM 2.1 large/ });
+    await listed("SAM 2.1 large");
 
-    fireEvent.click(screen.getByRole("radio", { name: /SAM 2.1 large/ }));
+    choose("SAM 2.1 large");
 
     await waitFor(() => expect(line()).toBe("Selected: SAM 2.1 large"));
   });
@@ -374,7 +416,7 @@ describe("legacy's model controls (CONTROL_PARITY.md CP-49)", () => {
     mount([usable("SAM 2.1 large"), usable("SAM 1 huge", { family: "sam1", size: "vit_h", loaded: true })], "SAM 1 huge");
     await waitFor(() => expect(line()).toBe("Current: SAM 1 huge"));
 
-    fireEvent.click(screen.getByRole("radio", { name: /SAM 2.1 large/ }));
+    choose("SAM 2.1 large");
 
     expect(line()).toBe("Current: SAM 1 huge");
   });
@@ -383,11 +425,11 @@ describe("legacy's model controls (CONTROL_PARITY.md CP-49)", () => {
     const { api } = mount([usable("SAM 2.1 large")], "SAM 2.1 large", {
       refreshModels: async () => [usable("SAM 2.1 large"), usable("SAM 2.1 tiny", { size: "tiny" })],
     });
-    await screen.findByRole("radio", { name: /SAM 2.1 large/ });
+    await listed("SAM 2.1 large");
 
     fireEvent.click(button("Refresh"));
 
-    expect(await screen.findByRole("radio", { name: /SAM 2.1 tiny/ })).toBeTruthy();
+    expect(await listed("SAM 2.1 tiny")).toBeTruthy();
     expect(screen.getByText("Models list refreshed.")).toBeTruthy();
     expect(api.refreshModels).toHaveBeenCalledTimes(1);
   });
@@ -398,12 +440,12 @@ describe("legacy's model controls (CONTROL_PARITY.md CP-49)", () => {
         throw new Error("the manifest is not valid JSON");
       },
     });
-    await screen.findByRole("radio", { name: /SAM 2.1 large/ });
+    await listed("SAM 2.1 large");
 
     fireEvent.click(button("Refresh"));
 
     expect(await screen.findByText("Warning: the manifest is not valid JSON")).toBeTruthy();
-    expect(screen.getByRole("radio", { name: /SAM 2.1 large/ })).toBeTruthy();
+    expect(option("SAM 2.1 large")).toBeTruthy();
   });
 
   it("names a model the first AI use loaded, as legacy's line does", async () => {
@@ -411,7 +453,7 @@ describe("legacy's model controls (CONTROL_PARITY.md CP-49)", () => {
     const { api, answered } = mount([usable("SAM 2.1 large")], "SAM 2.1 large", {
       loadedModels: async () => ["SAM 2.1 large"],
     });
-    await screen.findByRole("radio", { name: /SAM 2.1 large/ });
+    await listed("SAM 2.1 large");
 
     answered();
 
