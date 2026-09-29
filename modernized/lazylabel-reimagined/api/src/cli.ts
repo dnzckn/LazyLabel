@@ -1,13 +1,16 @@
 /**
- * `npm start "<folder>"` from `modernized/`: LazyLabel in one command, on any shell.
+ * `npm start` from `modernized/`: LazyLabel in one command, on any shell.
  *
- * DEPLOYABILITY.md R4. The folder is an argument rather than an environment variable, because
- * `VAR=value cmd` is bash and a positional argument reaches the program intact from PowerShell,
- * cmd and bash alike (measured through npm, 2026-09-26). Everything else has a default, so nothing
- * needs configuring: port 8787 on this computer only, settings in the user's own settings file,
- * the web app from the workspace's build, and the AI tools when they are installed. Options go
- * through `lazylabel.cmd` or `lazylabel.sh` beside `modernized/package.json`, because PowerShell's
- * npm drops the `--` they would need after `npm start`.
+ * DEPLOYABILITY.md R4. With no folder named it starts with none open, and the app's Open Image
+ * Folder chooses one, as legacy starts: the owner's words of 2026-09-29, "why is that a part of the
+ * launch? in the gui the user should be able to select a folder to load". The folder may still be
+ * named, as an argument rather than an environment variable, because `VAR=value cmd` is bash and a
+ * positional argument reaches the program intact from PowerShell, cmd and bash alike (measured
+ * through npm, 2026-09-26). Everything else has a default, so nothing needs configuring: port 8787
+ * on this computer only, settings in the user's own settings file, the web app from the workspace's
+ * build, and the AI tools when they are installed. Options go through `lazylabel.cmd` or
+ * `lazylabel.sh` beside `modernized/package.json`, because PowerShell's npm drops the `--` they
+ * would need after `npm start`.
  *
  * THE AI TOOLS START WITH THE APP (DEPLOYABILITY.md R8) once `npm run ai:setup` has made their
  * environment and `npm run ai:models` has put a model in the per-user folder: the inference service
@@ -26,12 +29,12 @@ import { spawn, spawnSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { createInterface } from "node:readline";
 import { fileURLToPath } from "node:url";
 
 import { startAiService, type AiService } from "./aiService.js";
 import { findParts, missingParts, readBundle, unpackCommand, type Bundle } from "./bundle.js";
 import { ConfigError, loadConfig, type Config } from "./config.js";
+import { folderDialogs } from "./folderDialog.js";
 import { createLogger } from "./http/log.js";
 import { builtWebRoot } from "./http/staticWeb.js";
 import {
@@ -42,18 +45,14 @@ import {
   browserCommand,
   busyPortAdvice,
   describeStartFailure,
-  dialogFolder,
-  folderDialogs,
   folderProblem,
   freePort,
   freePortNear,
   nodeVersionProblem,
   parseArguments,
   sameFolder,
-  typedFolder,
   whatHoldsPort,
   type AiPlan,
-  type FolderDialog,
 } from "./launcher.js";
 
 /** The workspace folder, `modernized/`, four levels above this file in the build (dist/src/cli.js). */
@@ -87,30 +86,32 @@ async function run(): Promise<number | null> {
     return 0;
   }
   if (parsed.kind === "error") return fail(`${parsed.message}\n\n${USAGE}`, 2);
-  const { verbose } = parsed.options;
-  let { env } = parsed.options;
-  if (parsed.options.askForFolder) {
-    const chosen = await askForFolder();
-    if (chosen === null) {
-      return fail(
-        "No folder was chosen, so LazyLabel did not start. Start it again and choose the folder that holds your images.",
-        1,
-      );
-    }
-    env = { ...env, LAZYLABEL_DATASET_ROOT: path.resolve(chosen) };
-  }
+  const { env, verbose } = parsed.options;
   // BROWSER=none is the convention other development servers honour, for a machine with no screen.
   const open = parsed.options.open && process.env["BROWSER"] !== "none";
 
+  /*
+   * WHO CHOOSES THE FOLDER (`config.ts`): the app's Open Image Folder, which shows the system's
+   * folder dialog where this computer has a desktop to show it on, and takes a typed path where it
+   * has none, as over SSH. A choice made in the environment stands.
+   */
+  const folderChoice =
+    (process.env["LAZYLABEL_FOLDER_CHOICE"] ?? "").trim() !== ""
+      ? {}
+      : {
+          LAZYLABEL_FOLDER_CHOICE:
+            folderDialogs(process.platform, process.env, os.homedir()).length > 0 ? "dialog" : "path",
+        };
+
   let config: Config;
   try {
-    config = loadConfig({ ...process.env, ...env });
+    config = loadConfig({ ...process.env, ...folderChoice, ...env });
   } catch (cause) {
     if (cause instanceof ConfigError) return fail(cause.message, 2);
     throw cause;
   }
 
-  const badFolder = folderProblem(config.datasetRoot);
+  const badFolder = config.datasetRoot === null ? null : folderProblem(config.datasetRoot);
   if (badFolder !== null) return fail(badFolder, 1);
 
   if (config.webRoot !== null && builtWebRoot(config.webRoot) === null) {
@@ -178,7 +179,7 @@ async function run(): Promise<number | null> {
   const settings = config.databasePath === ":memory:" ? "in memory, lost when LazyLabel stops" : config.databasePath;
   console.log(
     `\nLazyLabel is running at ${api.url}  (Ctrl+C to stop)\n`
-      + `  images:   ${config.datasetRoot}\n`
+      + `  images:   ${config.datasetRoot ?? "none yet: choose a folder in the app (Open Image Folder)"}\n`
       + `  settings: ${settings}\n`
       + `  AI tools: ${aiState}\n`,
   );
@@ -234,7 +235,8 @@ function unpackParts(bundle: Bundle): void {
 
 /**
  * The inference service `npm run ai:setup` installed, started with the app on a free port and the
- * API's own folder of images, once it says it is listening; or why it is not, in a few words.
+ * API's own folder of images, once it says it is listening; or why it is not, in a few words. With
+ * no folder open it starts with none, and the API points it at the one the app opens.
  */
 async function startAi(
   plan: Extract<AiPlan, { kind: "start" }>,
@@ -252,12 +254,17 @@ async function startAi(
     delete own["PYTHONPATH"];
     own["PYTHONNOUSERSITE"] = "1";
   }
+  delete own["LAZYLABEL_DATASET_ROOT"];
   try {
     return await startAiService({
       command: plan.python,
       args: ["-m", "lazylabel_inference.server"],
       cwd: plan.cwd,
-      env: { ...own, LAZYLABEL_DATASET_ROOT: config.datasetRoot, LAZYLABEL_MODEL_DIR: plan.modelDir },
+      env: {
+        ...own,
+        ...(config.datasetRoot === null ? {} : { LAZYLABEL_DATASET_ROOT: config.datasetRoot }),
+        LAZYLABEL_MODEL_DIR: plan.modelDir,
+      },
       // A bundle's first start reads every library of its Python for the first time, and a virus
       // scanner reads them before that.
       ...(plan.bundled ? { readyTimeoutMs: 180_000 } : {}),
@@ -276,12 +283,20 @@ async function startAi(
 
 /**
  * The port is taken. LazyLabel for this same folder is a second start, so the answer is the first
- * one; anything else gets the command that starts this one on a free port.
+ * one, and so it is for a start that names no folder, since that one opens folders itself; anything
+ * else gets the command that starts this one on a free port.
  */
 async function portTaken(config: Config, open: boolean): Promise<number> {
   const url = appUrl(config.host, config.port);
   const holder = await whatHoldsPort(url);
-  if (holder.kind === "lazylabel" && sameFolder(holder.datasetRoot, config.datasetRoot, process.platform)) {
+  const named = config.datasetRoot;
+  if (holder.kind === "lazylabel" && named === null) {
+    console.log(`LazyLabel is already running, at ${url}`);
+    if (open) openBrowser(url);
+    return 0;
+  }
+  if (holder.kind === "lazylabel" && holder.datasetRoot !== null && named !== null
+    && sameFolder(holder.datasetRoot, named, process.platform)) {
     console.log(`LazyLabel is already running for this folder, at ${url}`);
     if (open) openBrowser(url);
     return 0;
@@ -306,53 +321,6 @@ async function portReserved(config: Config): Promise<number> {
     }),
     1,
   );
-}
-
-/**
- * `--choose-folder` with no folder named (DEPLOYABILITY.md R11): the system's folder dialog, then,
- * where there is none or it was closed, a question in this window. Null when neither gave a folder.
- */
-async function askForFolder(): Promise<string | null> {
-  for (const dialog of folderDialogs(process.platform, process.env, os.homedir())) {
-    const shown = await showDialog(dialog);
-    if (shown === "missing") continue;
-    if (shown !== null) return shown;
-    break;
-  }
-  process.stdout.write(
-    "\nWhich folder of images should LazyLabel open? Type or paste its path, or drag the folder into\n"
-      + "this window, then press Enter. Enter alone stops.\n> ",
-  );
-  return new Promise((resolve) => {
-    const input = createInterface({ input: process.stdin, terminal: false });
-    let answered = false;
-    input.once("line", (line) => {
-      answered = true;
-      input.close();
-      resolve(typedFolder(line, process.platform, os.homedir()));
-    });
-    input.once("close", () => {
-      if (!answered) resolve(null);
-    });
-  });
-}
-
-/** The folder the dialog printed; null when it was closed or failed; "missing" when it is not installed. */
-function showDialog(dialog: FolderDialog): Promise<string | null | "missing"> {
-  return new Promise((resolve) => {
-    let output = "";
-    try {
-      const child = spawn(dialog.command, [...dialog.args], { stdio: ["ignore", "pipe", "ignore"], windowsHide: true });
-      child.stdout.setEncoding("utf8");
-      child.stdout.on("data", (chunk: string) => {
-        output += chunk;
-      });
-      child.once("error", () => resolve("missing"));
-      child.once("close", (code) => resolve(code === 0 ? dialogFolder(output) : null));
-    } catch {
-      resolve("missing");
-    }
-  });
 }
 
 function openBrowser(url: string): void {

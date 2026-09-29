@@ -32,6 +32,34 @@ describe("the dataset root", () => {
   it("is resolved to an absolute path", () => {
     expect(load({}).datasetRoot).toMatch(/images$/);
   });
+
+  it("may be left unset when the folder is chosen in the app, which starts with none open", () => {
+    // The owner, 2026-09-29: "in the gui the user should be able to select a folder to load".
+    expect(loadConfig({ LAZYLABEL_FOLDER_CHOICE: "dialog" } as NodeJS.ProcessEnv).datasetRoot).toBeNull();
+    expect(loadConfig({ LAZYLABEL_FOLDER_CHOICE: "path", LAZYLABEL_DATASET_ROOT: " " } as NodeJS.ProcessEnv).datasetRoot)
+      .toBeNull();
+  });
+});
+
+describe("who chooses the folder", () => {
+  it("is nobody by default: a deployment's folder is fixed, and required", () => {
+    // The Docker image, or main.js with an env file: whoever is in the browser is not at the
+    // server's desk, and must not be handed a way through its disks.
+    expect(load({}).folderChoice).toBe("fixed");
+    expect(() => loadConfig({ LAZYLABEL_FOLDER_CHOICE: "fixed" } as NodeJS.ProcessEnv)).toThrow(
+      /folder holding your images/,
+    );
+  });
+
+  it("is the system's dialog, or a typed path, when the launcher says so", () => {
+    expect(load({ LAZYLABEL_FOLDER_CHOICE: "dialog" }).folderChoice).toBe("dialog");
+    expect(load({ LAZYLABEL_FOLDER_CHOICE: " path " }).folderChoice).toBe("path");
+    expect(load({ LAZYLABEL_FOLDER_CHOICE: "" }).folderChoice).toBe("fixed");
+  });
+
+  it("refuses anything else, quoting it", () => {
+    expect(() => load({ LAZYLABEL_FOLDER_CHOICE: "browse" })).toThrow(/dialog, path or fixed, got "browse"/);
+  });
 });
 
 describe("the port", () => {

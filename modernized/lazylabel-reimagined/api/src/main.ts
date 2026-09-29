@@ -3,27 +3,29 @@
  *
  * `startApi` is shared by two entry points. This file is the one a deployment runs,
  * `node dist/src/main.js` with its configuration in the environment, as the Docker image does.
- * `cli.ts` is the one a person runs, `npm start "<folder>"`, and it reaches this file only after it
- * has checked the Node version, because importing this file loads `node:sqlite`.
+ * `cli.ts` is the one a person runs, `npm start`, and it reaches this file only after it has checked
+ * the Node version, because importing this file loads `node:sqlite`.
  */
 
 import * as fs from "node:fs/promises";
 import type { Server } from "node:http";
 import type { AddressInfo } from "node:net";
+import * as os from "node:os";
 import * as path from "node:path";
 
 import { createApp } from "./app.js";
-import { DirectoryBlobStore } from "./adapters/directoryBlobStore.js";
+import { FolderBlobStore } from "./adapters/folderBlobStore.js";
 import { HttpInferenceClient } from "./adapters/httpInference.js";
 import { SqliteMetadataStore } from "./adapters/sqliteMetadataStore.js";
 import { loadConfig } from "./config.js";
+import { chooseFolder, folderDialogs } from "./folderDialog.js";
 import { createLogger } from "./http/log.js";
 import { builtWebRoot } from "./http/staticWeb.js";
 import { appUrl, describeStartFailure, isEntryPoint } from "./launcher.js";
 import { createServer } from "./server.js";
 import { importFolderSettingsOnce } from "./settings/folderDatabaseImport.js";
 import { importDesktopSettingsOnce } from "./settings/legacyImport.js";
-import type { AppDeps } from "./app.js";
+import type { AppDeps, FolderSwitch } from "./app.js";
 import type { Config } from "./config.js";
 import type { BlobStore } from "./ports/blobStore.js";
 import type { MetadataStore } from "./ports/metadataStore.js";
@@ -48,6 +50,8 @@ export function buildDeps(
     logger: Logger;
     /** Passed in because `healthy` belongs to the DIRECTORY adapter, not to the port. */
     datasetHealthy: () => Promise<boolean>;
+    /** Opening another folder from the app, over the store's `FolderBlobStore` (`startApi`). */
+    folder?: FolderSwitch;
   },
 ): AppDeps {
   /*
@@ -70,10 +74,11 @@ export function buildDeps(
     logger: stores.logger,
     datasetHealthy: stores.datasetHealthy,
     // So a blocking failure can name the folder the operator configured, not just describe it.
-    datasetRoot: config.datasetRoot,
+    ...(config.datasetRoot === null ? {} : { datasetRoot: config.datasetRoot }),
     // So the browser can say that settings will not outlive this process.
     databaseInMemory: config.databasePath === ":memory:",
     ...(inference === undefined ? {} : { inference }),
+    ...(stores.folder === undefined ? {} : { folder: stores.folder }),
   };
 }
 
@@ -91,10 +96,19 @@ export interface RunningApi {
 /**
  * Build everything the configuration names and listen. Rejects with the listen error itself, so an
  * entry point can tell a busy port (`EADDRINUSE`) from everything else, and closes what it opened.
+ *
+ * `chooseFolder` is the system's folder dialog the app's Open Image Folder shows, when the
+ * configuration lets it (`folderDialog.ts`); a test passes its own.
  */
-export async function startApi(config: Config, logger: Logger): Promise<RunningApi> {
-  const blobStore = new DirectoryBlobStore(config.datasetRoot);
-  if (!(await blobStore.healthy())) {
+export async function startApi(
+  config: Config,
+  logger: Logger,
+  options: { readonly chooseFolder?: () => Promise<string | null | "missing"> } = {},
+): Promise<RunningApi> {
+  // The folder open now, which the app's Open Image Folder replaces; none at all until it does, when
+  // none was named (the owner, 2026-09-29).
+  const blobStore = new FolderBlobStore(config.datasetRoot);
+  if (config.datasetRoot !== null && !(await blobStore.healthy())) {
     // Fail at startup, not on the first request. A running API pointed at a folder that is not
     // there answers every listing with "empty", which reads as "you have no images".
     throw new Error(`the dataset root ${config.datasetRoot} is not a readable directory`);
@@ -111,19 +125,18 @@ export async function startApi(config: Config, logger: Logger): Promise<RunningA
   const metadataStore = new SqliteMetadataStore(config.databasePath);
 
   // The per-folder database earlier versions kept, imported once, and first: it is this app's own
-  // record, and it already took in the desktop settings on its own first start. Never fatal.
-  try {
-    await importFolderSettingsOnce({
-      store: metadataStore,
-      databasePath: config.databasePath,
-      datasetRoot: config.datasetRoot,
-      logger,
-    });
-  } catch (cause) {
-    logger.log("error", "the settings kept in this folder could not be imported", {
-      reason: cause instanceof Error ? cause.message : String(cause),
-    });
-  }
+  // record, and it already took in the desktop settings on its own first start. Never fatal. A
+  // folder opened later from the app is looked in too.
+  const importFolderSettings = async (datasetRoot: string): Promise<void> => {
+    try {
+      await importFolderSettingsOnce({ store: metadataStore, databasePath: config.databasePath, datasetRoot, logger });
+    } catch (cause) {
+      logger.log("error", "the settings kept in this folder could not be imported", {
+        reason: cause instanceof Error ? cause.message : String(cause),
+      });
+    }
+  };
+  if (config.datasetRoot !== null) await importFolderSettings(config.datasetRoot);
 
   // Phase 4 exit criterion 3: the desktop app's settings, imported once. Never fatal -- someone
   // whose old settings cannot be read should still get a working app, with the reason logged.
@@ -139,12 +152,26 @@ export async function startApi(config: Config, logger: Logger): Promise<RunningA
     });
   }
 
+  // The file panel's Open Image Folder (`app.ts`, POST /folder).
+  const folder: FolderSwitch = {
+    choice: config.folderChoice,
+    current: () => blobStore.root,
+    open: async (asked) => {
+      const opened = await blobStore.open(asked);
+      await importFolderSettings(opened);
+      logger.log("info", "opened a folder of images", { datasetRoot: opened });
+      return opened;
+    },
+    choose: options.chooseFolder ?? (() => chooseFolder(folderDialogs(process.platform, process.env, os.homedir()))),
+  };
+
   const app = createApp(
     buildDeps(config, {
       blobStore,
       metadataStore,
       logger,
       datasetHealthy: () => blobStore.healthy(),
+      folder,
     }),
   );
 
@@ -170,7 +197,8 @@ export async function startApi(config: Config, logger: Logger): Promise<RunningA
         : `not built, so only the API's routes are served: ${config.webRoot} has no index.html`),
     host: config.host,
     port,
-    datasetRoot: config.datasetRoot,
+    datasetRoot: config.datasetRoot ?? "none yet",
+    folderChoice: config.folderChoice,
     database: config.databasePath,
     // Logged either way: "inference: none" at startup is how an operator learns the AI tools
     // will be unavailable before a user clicks an object and finds out.

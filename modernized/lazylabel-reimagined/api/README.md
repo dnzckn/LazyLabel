@@ -47,7 +47,8 @@ $env:LAZYLABEL_DATASET_ROOT = "C:\path\to\your\images"; npm start
 
 | Variable | Default | What it is |
 |---|---|---|
-| `LAZYLABEL_DATASET_ROOT` | *required* | The folder holding your images. The API refuses to start without it rather than guessing. |
+| `LAZYLABEL_DATASET_ROOT` | *required where the folder is fixed* | The folder holding your images. Where the folder is fixed, the API refuses to start without it rather than guessing; where it is chosen in the app, it is the folder open at start, and without it the app starts with none open (`/health` says `"dataset": "none"`). |
+| `LAZYLABEL_FOLDER_CHOICE` | `fixed` | Whether the file panel's Open Image Folder may open another folder, and how: `dialog`, the system's folder dialog, shown by the API on the computer it runs on; `path`, a folder path typed in the app, for a server with no desktop; `fixed`, never, for a deployment such as the Docker image, whose user is not at the server's desk. The launcher sets `dialog` on a desktop and `path` without one, unless this is set. |
 | `LAZYLABEL_DB` | `~/.config/lazylabel/lazylabel-web.db` | SQLite file for settings, hotkeys and job records. Per user by default, in the desktop app's config folder, so settings follow the user from folder to folder and nothing but annotations is written into a dataset. Until 2026-09-26 the default was `<root>/.lazylabel/lazylabel.db`; such a file's settings are imported once, at startup, while this database holds none, and it is only read. `:memory:` keeps them only while the process runs: the API warns at startup, `/health` reports `databaseInMemory`, and the web app shows a banner, because every save succeeds and none survives a restart. The Docker deployment sets it inside the dataset mount, because a container's home does not persist. |
 | `LAZYLABEL_PORT` | `8787` | |
 | `LAZYLABEL_INFERENCE_URL` | *none* | Where the inference service listens, such as `http://127.0.0.1:8788`. Unset is a supported deployment: every route except SAM prompts, propagation and archetypes works, and those answer 503 with the reason. A value that is not an http or https URL is refused at startup, quoted. |
@@ -57,20 +58,25 @@ $env:LAZYLABEL_DATASET_ROOT = "C:\path\to\your\images"; npm start
 
 ### The launcher
 
-`src/cli.ts` is what a person runs: `npm start "<folder>"` in `modernized/`, or
-`lazylabel.cmd` / `lazylabel.sh` beside it with options (DEPLOYABILITY.md R4). The folder sets
-`LAZYLABEL_DATASET_ROOT`, and `--port`, `--host`, `--db` and `--inference` set `LAZYLABEL_PORT`,
-`LAZYLABEL_HOST`, `LAZYLABEL_DB` and `LAZYLABEL_INFERENCE_URL`, winning over the variables; relative
-paths are taken from where the command was typed. Beyond the API above, it:
+`src/cli.ts` is what a person runs: `npm start` in `modernized/`, or `lazylabel.cmd` /
+`lazylabel.sh` beside it with options (DEPLOYABILITY.md R4). With no folder named it starts with none
+open, and the app's Open Image Folder chooses one; a folder named, `npm start "<folder>"`, sets
+`LAZYLABEL_DATASET_ROOT` and opens at start. `--port`, `--host`, `--db` and `--inference` set
+`LAZYLABEL_PORT`, `LAZYLABEL_HOST`, `LAZYLABEL_DB` and `LAZYLABEL_INFERENCE_URL`, winning over the
+variables; relative paths are taken from where the command was typed. Beyond the API above, it:
 
 - checks the Node version before loading anything that needs `node:sqlite` (22.13 or later, or 23.4
   on the odd line), and hides that module's ExperimentalWarning;
-- refuses a folder that is not there, and a web app that has not been built, saying what to run;
+- sets `LAZYLABEL_FOLDER_CHOICE` to `dialog` where this computer has a folder dialog to show (Windows,
+  macOS, a Linux desktop) and to `path` where it has none, as over SSH, unless it is set already
+  (`src/folderDialog.ts`);
+- refuses a folder named that is not there, and a web app that has not been built, saying what to run;
 - prints the address, the folder, where settings are kept and whether the AI tools are on, then
   opens the browser, unless `--no-open` or `BROWSER=none`;
 - logs warnings and errors but not every request, unless `--verbose`;
-- on a busy port, opens the LazyLabel already serving the same folder, or names a free port and
-  the command that uses it; on a port the system refuses (Windows reserves some ranges), says so;
+- on a busy port, opens the LazyLabel already serving the same folder, or any LazyLabel when this
+  start names no folder, or names a free port and the command that uses it; on a port the system
+  refuses (Windows reserves some ranges), says so;
 - starts the AI tools with the app when they are installed (DEPLOYABILITY.md R8): when there is a
   Python for them and a model manifest, it runs `python -m lazylabel_inference.server` as its
   child, with the same folder of images and a free port from 8788, points the API at it, shows its
@@ -157,7 +163,14 @@ image's seven sidecars, as legacy does when a save finds no segments),
 processed view as 512-pixel tiles; level 0 is the image's own pixels and each level above is the
 one below averaged in 2x2 blocks, the geometry shared with the browser through
 `@lazylabel/contracts`),
-`GET`/`PUT /users/me/settings`, `GET /health`.
+`GET`/`PUT /users/me/settings`, `GET /health`, and `POST /folder`, the file panel's Open Image
+Folder: `{ "choose": true }` shows the system's folder dialog on the API's computer
+(`LAZYLABEL_FOLDER_CHOICE=dialog`), `{ "path": "<folder>" }` opens that folder, and either answers
+`{ datasetRoot, cancelled }`. It is refused where the folder is fixed (403), for a body that is not
+JSON (415, the only POST another site's page can send without a CORS preflight, which this API never
+grants), and from a page of another origin (403); opening a folder drops what was rendered from the
+old one and points the inference service at the new one (its `POST /dataset-root`). `/health` names
+the folder open, `null` while none is, and `folderChoice`.
 
 Every route also answers under `/api`, which is where the browser calls it: the dev server's proxy
 and nginx strip that prefix before forwarding, and when the API serves the web app itself it strips

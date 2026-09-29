@@ -21,15 +21,12 @@ import {
   browserCommand,
   busyPortAdvice,
   describeStartFailure,
-  dialogFolder,
-  folderDialogs,
   folderProblem,
   freePortNear,
   isEntryPoint,
   nodeVersionProblem,
   parseArguments,
   sameFolder,
-  typedFolder,
   whatHoldsPort,
 } from "../src/launcher.js";
 
@@ -87,8 +84,19 @@ describe("the command line", () => {
     expect(launched([], { LAZYLABEL_DATASET_ROOT: "/data" }).env["LAZYLABEL_DATASET_ROOT"]).toBeUndefined();
   });
 
-  it("asks for the folder when there is none", () => {
-    expect(refused([])).toMatch(/Which folder of images\?/);
+  it("launches with no folder when none is named, for the app's Open Image Folder to choose", () => {
+    // It asked, with the system's dialog or in the terminal, before anything started, until the
+    // owner's words of 2026-09-29: "why is that a part of the launch? in the gui the user should be
+    // able to select a folder to load". Legacy starts with no folder open (right_panel.py:112-114).
+    const options = launched([]);
+
+    expect(options.env["LAZYLABEL_DATASET_ROOT"]).toBeUndefined();
+    expect(options.open).toBe(true);
+    expect(launched(["--no-open", "--port", "8790"]).env).toEqual({ LAZYLABEL_PORT: "8790" });
+  });
+
+  it("has no --choose-folder any more, which asked before the launch", () => {
+    expect(refused(["--choose-folder"])).toMatch(/There is no option --choose-folder/);
   });
 
   it("turns each option into the variable the API reads, in both spellings", () => {
@@ -141,20 +149,10 @@ describe("the command line", () => {
     expect(refused(["C:\\my", "images"])).toMatch(/one folder.*quotes/);
   });
 
-  it("asks for the folder itself with --choose-folder, which the release zip's launchers pass", () => {
-    const options = launched(["--choose-folder", "--no-open"]);
+  it("opens a folder dropped on the release zip's launcher, which arrives as its argument", () => {
+    const dropped = launched(["C:\\my images"], {}, "win32");
 
-    expect(options.askForFolder).toBe(true);
-    expect(options.env["LAZYLABEL_DATASET_ROOT"]).toBeUndefined();
-    expect(launched(["pics"]).askForFolder).toBe(false);
-  });
-
-  it("does not ask with --choose-folder when a folder is named, as one dropped on the launcher is", () => {
-    const dropped = launched(["--choose-folder", "C:\\my images"], {}, "win32");
-
-    expect(dropped.askForFolder).toBe(false);
     expect(dropped.env["LAZYLABEL_DATASET_ROOT"]).toBe(path.resolve(HERE, "C:\\my images"));
-    expect(launched(["--choose-folder"], { LAZYLABEL_DATASET_ROOT: "/data" }).askForFolder).toBe(false);
   });
 
   it("explains the option PowerShell's npm swallowed, from the number it left behind", () => {
@@ -281,6 +279,16 @@ describe("a port that is taken", () => {
     expect(await whatHoldsPort(appUrl("127.0.0.1", port))).toEqual({ kind: "lazylabel", datasetRoot: "/data/scans" });
   });
 
+  it("is recognised as LazyLabel with no folder open yet, which its /health says as null", async () => {
+    const port = await serve((url) =>
+      url === "/health"
+        ? { status: 200, body: JSON.stringify({ status: "ok", dataset: "none", datasetRoot: null }) }
+        : { status: 404, body: "{}" },
+    );
+
+    expect(await whatHoldsPort(appUrl("127.0.0.1", port))).toEqual({ kind: "lazylabel", datasetRoot: null });
+  });
+
   it("is another program when /health says anything else", async () => {
     const port = await serve(() => ({ status: 200, body: JSON.stringify({ ok: true }) }));
 
@@ -323,6 +331,19 @@ describe("a port that is taken", () => {
     expect(windows).toContain('.\\lazylabel.cmd "C:\\scans" --port 8789');
     expect(posix).toContain("another LazyLabel, for /elsewhere");
     expect(posix).toContain('./lazylabel.sh "/scans" --port 8789');
+  });
+
+  it("is explained without a folder when neither this start nor the LazyLabel holding it has one", () => {
+    const advice = busyPortAdvice({
+      port: 8787,
+      folder: null,
+      holder: { kind: "lazylabel", datasetRoot: null },
+      freePort: 8789,
+      platform: "linux",
+    });
+
+    expect(advice).toContain("Port 8787 is in use by another LazyLabel. Stop that one");
+    expect(advice).toContain("./lazylabel.sh --port 8789");
   });
 
   it("is explained as reserved when the system refuses it, which Windows does for whole ranges", () => {
@@ -385,46 +406,5 @@ describe("the same folder", () => {
   it("ignores case where the file system does", () => {
     expect(sameFolder("C:\\Data\\Scans", "c:\\data\\scans", "win32")).toBe(true);
     expect(sameFolder("/data/Scans", "/data/scans", "linux")).toBe(false);
-  });
-});
-
-describe("choosing the folder without typing it (DEPLOYABILITY.md R11)", () => {
-  it("is Windows PowerShell's folder dialog on Windows, by its full path, the script encoded whole", () => {
-    const [dialog, ...others] = folderDialogs("win32", { SystemRoot: "C:\\Windows" }, "C:\\Users\\me");
-
-    expect(others).toEqual([]);
-    expect(dialog!.command).toBe("C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe");
-    expect(dialog!.args.slice(0, 4)).toEqual(["-NoProfile", "-NonInteractive", "-STA", "-EncodedCommand"]);
-    const script = Buffer.from(dialog!.args[4]!, "base64").toString("utf16le");
-    expect(script).toContain("System.Windows.Forms.FolderBrowserDialog");
-    expect(script).toContain("UTF8.GetBytes");
-  });
-
-  it("is the Finder's choose folder on macOS", () => {
-    expect(folderDialogs("darwin", {}, "/Users/me")).toEqual([
-      { command: "/usr/bin/osascript", args: ["-e", expect.stringMatching(/^POSIX path of \(choose folder with prompt "[^"]+"\)$/)] },
-    ]);
-  });
-
-  it("is zenity, then kdialog, on a Linux desktop, and none without one", () => {
-    const commands = folderDialogs("linux", { WAYLAND_DISPLAY: "wayland-0" }, "/home/me").map((dialog) => dialog.command);
-
-    expect(commands).toEqual(["zenity", "kdialog"]);
-    expect(folderDialogs("linux", {}, "/home/me")).toEqual([]);
-  });
-
-  it("reads the folder a dialog printed, and none from one that was closed", () => {
-    expect(dialogFolder("/Users/me/Pictures/set/\n")).toBe("/Users/me/Pictures/set/");
-    expect(dialogFolder("C:\\Users\\me\\Pictures")).toBe("C:\\Users\\me\\Pictures");
-    expect(dialogFolder("")).toBeNull();
-  });
-
-  it("reads a folder typed, pasted or dragged into the window, as each terminal delivers it", () => {
-    expect(typedFolder('"C:\\My Pictures\\set"\r', "win32", "C:\\Users\\me")).toBe("C:\\My Pictures\\set");
-    expect(typedFolder("C:\\data\\set", "win32", "C:\\Users\\me")).toBe("C:\\data\\set");
-    expect(typedFolder("/Users/me/My\\ Pictures/set ", "darwin", "/Users/me")).toBe("/Users/me/My Pictures/set");
-    expect(typedFolder("'/home/me/My Pictures/set' ", "linux", "/home/me")).toBe("/home/me/My Pictures/set");
-    expect(typedFolder("~/Pictures", "linux", "/home/me")).toBe("/home/me/Pictures");
-    expect(typedFolder("  ", "linux", "/home/me")).toBeNull();
   });
 });

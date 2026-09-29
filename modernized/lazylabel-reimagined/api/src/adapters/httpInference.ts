@@ -247,6 +247,12 @@ export class HttpInferenceClient implements InferenceClient {
     };
   }
 
+  async setDatasetRoot(root: string, correlationId: string): Promise<void> {
+    // Sent from here, where no browser adds an Origin: the service refuses any request with one.
+    const response = await this.send("POST", "/dataset-root", { path: root }, correlationId);
+    if (response.status !== 200) throw await this.failure(response);
+  }
+
   /**
    * Read a job off the wire, refusing one that is missing what a caller has to branch on.
    *

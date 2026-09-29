@@ -37,6 +37,7 @@ afterAll(() => rm(scratch, { recursive: true, force: true }));
 function config(overrides: Partial<Config> = {}): Config {
   return {
     datasetRoot: images,
+    folderChoice: "fixed",
     databasePath: ":memory:",
     port: 0,
     host: "127.0.0.1",
@@ -90,6 +91,63 @@ describe("starting the API", () => {
     const missing = path.join(scratch, "not here");
 
     await expect(startApi(config({ datasetRoot: missing }), silentLogger)).rejects.toThrow(missing);
+  });
+});
+
+describe("starting with no folder, which the app then opens (the owner, 2026-09-29)", () => {
+  /** POST /api/folder as the app's own page sends it: JSON, from the address the API is served at. */
+  const openFolder = (url: string, body: unknown) =>
+    fetch(new URL("api/folder", url), {
+      method: "POST",
+      headers: { "content-type": "application/json", origin: new URL(url).origin },
+      body: JSON.stringify(body),
+    });
+
+  it("starts with none open, then opens the folder named from the app's own page", async () => {
+    await writeFile(path.join(images, "frame.png"), "");
+    const api = await startApi(config({ datasetRoot: null, folderChoice: "path" }), silentLogger);
+    try {
+      const before = await fetch(new URL("api/health", api.url));
+      expect(before.status).toBe(200);
+      expect(await before.json()).toMatchObject({ dataset: "none", datasetRoot: null, folderChoice: "path" });
+
+      const opened = await openFolder(api.url, { path: images });
+      expect(opened.status).toBe(200);
+      expect(await opened.json()).toEqual({ datasetRoot: images, cancelled: false });
+
+      expect(await (await fetch(new URL("api/health", api.url))).json()).toMatchObject({ dataset: "ok", datasetRoot: images });
+      const listing = (await (await fetch(new URL("api/projects/default/images", api.url))).json()) as {
+        images: { name: string }[];
+      };
+      expect(listing.images.map((image) => image.name)).toEqual(["frame.png"]);
+    } finally {
+      await api.close();
+    }
+  });
+
+  it("shows the dialog it was given for { choose: true }, and never a real one in a test", async () => {
+    const api = await startApi(config({ datasetRoot: null, folderChoice: "dialog" }), silentLogger, {
+      chooseFolder: async () => images,
+    });
+    try {
+      const opened = await openFolder(api.url, { choose: true });
+      expect(await opened.json()).toEqual({ datasetRoot: images, cancelled: false });
+    } finally {
+      await api.close();
+    }
+  });
+
+  it("keeps a deployment's folder fixed", async () => {
+    const api = await startApi(config(), silentLogger);
+    try {
+      expect((await openFolder(api.url, { path: scratch })).status).toBe(403);
+      expect(await (await fetch(new URL("api/health", api.url))).json()).toMatchObject({
+        datasetRoot: images,
+        folderChoice: "fixed",
+      });
+    } finally {
+      await api.close();
+    }
   });
 });
 

@@ -17,6 +17,7 @@ import * as path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { DirectoryBlobStore } from "../../src/adapters/directoryBlobStore.js";
+import { FolderBlobStore } from "../../src/adapters/folderBlobStore.js";
 import { MemoryBlobStore } from "../../src/adapters/memoryBlobStore.js";
 import { InvalidKeyError, RevisionConflictError, type BlobStore } from "../../src/ports/blobStore.js";
 
@@ -40,6 +41,16 @@ const ADAPTERS: readonly Adapter[] = [
         store: new DirectoryBlobStore(root),
         cleanup: () => rm(root, { recursive: true, force: true }),
       };
+    },
+  },
+  {
+    // The store the API runs on since the app can open another folder: a directory, once opened.
+    name: "FolderBlobStore",
+    async create() {
+      const root = await mkdtemp(path.join(tmpdir(), "lazylabel-blob-"));
+      const store = new FolderBlobStore(null);
+      await store.open(root);
+      return { store, cleanup: () => rm(root, { recursive: true, force: true }) };
     },
   },
 ];

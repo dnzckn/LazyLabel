@@ -252,4 +252,11 @@ export interface InferenceClient {
     model: string | undefined,
     correlationId: string,
   ): Promise<ArchetypeResult>;
+
+  /**
+   * Read images from another folder: the one the app has just opened (POST /folder). The service
+   * reads the files itself, so without this a click would be answered from the old folder's image
+   * of the same name.
+   */
+  setDatasetRoot(root: string, correlationId: string): Promise<void>;
 }

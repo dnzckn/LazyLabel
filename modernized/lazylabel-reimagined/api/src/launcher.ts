@@ -19,9 +19,11 @@ import { fileURLToPath } from "node:url";
 
 import { missingParts, missingPartsReason, type Bundle } from "./bundle.js";
 
-export const USAGE = `Usage: npm start "<folder of images>"
-   or: lazylabel.cmd "<folder>" [options]      (Windows: PowerShell or cmd, in modernized/)
-   or: ./lazylabel.sh "<folder>" [options]     (macOS, Linux, Git Bash, in modernized/)
+export const USAGE = `Usage: npm start ["<folder of images>"]
+   or: lazylabel.cmd ["<folder>"] [options]      (Windows: PowerShell or cmd, in modernized/)
+   or: ./lazylabel.sh ["<folder>"] [options]     (macOS, Linux, Git Bash, in modernized/)
+
+With no folder, LazyLabel starts with none open: choose one in the app, with Open Image Folder.
 
 Options:
   --port <number>      the port to serve on (default 8787)
@@ -31,8 +33,6 @@ Options:
                        (default: start the one npm run ai:setup installed, when there is one)
   --no-open            do not open the browser (BROWSER=none does the same)
   --verbose            log every request
-  --choose-folder      with no folder named, ask for one: the system's folder dialog, or a
-                       question in this window where there is none (the release zip's launchers)
   -h, --help           show this
 
 The folder may also come from LAZYLABEL_DATASET_ROOT, and every option from the variable the
@@ -55,8 +55,6 @@ export interface LaunchOptions {
   readonly env: Readonly<Record<string, string>>;
   readonly open: boolean;
   readonly verbose: boolean;
-  /** `--choose-folder` and no folder named anywhere: `cli.ts` asks for one (`folderDialogs`). */
-  readonly askForFolder: boolean;
 }
 
 export type Parsed =
@@ -76,6 +74,12 @@ const VALUED: Readonly<Record<string, string>> = {
  *
  * Relative paths are resolved against `cwd`, which `cli.ts` takes from npm's INIT_CWD: `npm start`
  * runs its script in the package's folder, not the one the user typed the command in.
+ *
+ * THE FOLDER IS OPTIONAL. With none named here or in LAZYLABEL_DATASET_ROOT, LazyLabel starts with
+ * no folder open and the app's Open Image Folder chooses one, as legacy starts (right_panel.py:112-114).
+ * It was asked for before the server started until the owner's words of 2026-09-29: "when starting
+ * the launch.cmd it asked me for a folder for images, why is that a part of the launch? in the gui
+ * the user should be able to select a folder to load".
  */
 export function parseArguments(
   args: readonly string[],
@@ -85,7 +89,6 @@ export function parseArguments(
   const folders: string[] = [];
   let open = true;
   let verbose = false;
-  let chooseFolder = false;
   let optionsEnded = false;
 
   const words = context.platform === "win32" ? repairWindowsQuoting(args) : [...args];
@@ -106,10 +109,6 @@ export function parseArguments(
     }
     if (word === "--verbose") {
       verbose = true;
-      continue;
-    }
-    if (word === "--choose-folder") {
-      chooseFolder = true;
       continue;
     }
 
@@ -135,107 +134,9 @@ export function parseArguments(
 
   if (folders.length > 1) return { kind: "error", message: tooManyFolders(folders, context.platform) };
   const [folder] = folders;
-  let askForFolder = false;
-  if (folder !== undefined) {
-    env["LAZYLABEL_DATASET_ROOT"] = path.resolve(context.cwd, folder);
-  } else if ((context.env["LAZYLABEL_DATASET_ROOT"] ?? "").trim() === "") {
-    if (!chooseFolder) {
-      return {
-        kind: "error",
-        message: "Which folder of images? Name it after npm start, in quotes if it has a space in it.",
-      };
-    }
-    askForFolder = true;
-  }
+  if (folder !== undefined) env["LAZYLABEL_DATASET_ROOT"] = path.resolve(context.cwd, folder);
 
-  return { kind: "launch", options: { env, open, verbose, askForFolder } };
-}
-
-/** A program that shows the system's own folder dialog and prints the folder chosen. */
-export interface FolderDialog {
-  readonly command: string;
-  readonly args: readonly string[];
-}
-
-const DIALOG_TITLE = "Choose the folder of images for LazyLabel";
-
-/**
- * Windows PowerShell 5.1, in every Windows since 10: the Windows Forms folder dialog. Its owner is
- * a form kept on top, or the dialog can open behind the launcher's window. The path goes out as
- * UTF-8 bytes, because the console's own code page would mangle a name outside it.
- */
-const WINDOWS_DIALOG = [
-  "Add-Type -AssemblyName System.Windows.Forms",
-  "$owner = New-Object System.Windows.Forms.Form -Property @{ TopMost = $true; ShowInTaskbar = $false }",
-  "$dialog = New-Object System.Windows.Forms.FolderBrowserDialog",
-  `$dialog.Description = '${DIALOG_TITLE}'`,
-  "$dialog.ShowNewFolderButton = $false",
-  "$dialog.SelectedPath = [Environment]::GetFolderPath('MyPictures')",
-  "if ($dialog.ShowDialog($owner) -eq [System.Windows.Forms.DialogResult]::OK) {",
-  "  $bytes = [System.Text.Encoding]::UTF8.GetBytes($dialog.SelectedPath)",
-  "  $out = [Console]::OpenStandardOutput()",
-  "  $out.Write($bytes, 0, $bytes.Length)",
-  "  $out.Flush()",
-  "}",
-].join("\n");
-
-/**
- * The system's own folder dialogs, in the order to try them, for `--choose-folder` (DEPLOYABILITY.md
- * R11): the release zip's launchers pass it, so nobody has to type a path. The folder is chosen on
- * the user's own desktop BEFORE the server starts, so nothing new listens on the network and the
- * trust model is decision 3's unchanged: one trusted user, the API on loopback. Each dialog prints
- * the folder chosen, and nothing when it is closed. Where there is no desktop there are none, and
- * `cli.ts` asks in its window instead.
- */
-export function folderDialogs(platform: NodeJS.Platform, env: NodeJS.ProcessEnv, home: string): FolderDialog[] {
-  if (platform === "win32") {
-    // The full path, so a powershell.exe earlier on the PATH is never the one run.
-    const system = (env["SystemRoot"] ?? env["SYSTEMROOT"] ?? "").trim() || "C:\\Windows";
-    return [
-      {
-        command: path.win32.join(system, "System32", "WindowsPowerShell", "v1.0", "powershell.exe"),
-        args: [
-          "-NoProfile",
-          "-NonInteractive",
-          "-STA",
-          "-EncodedCommand",
-          Buffer.from(WINDOWS_DIALOG, "utf16le").toString("base64"),
-        ],
-      },
-    ];
-  }
-  if (platform === "darwin") {
-    return [{ command: "/usr/bin/osascript", args: ["-e", `POSIX path of (choose folder with prompt "${DIALOG_TITLE}")`] }];
-  }
-  if ((env["DISPLAY"] ?? "").trim() === "" && (env["WAYLAND_DISPLAY"] ?? "").trim() === "") return [];
-  return [
-    { command: "zenity", args: ["--file-selection", "--directory", `--title=${DIALOG_TITLE}`] },
-    { command: "kdialog", args: ["--getexistingdirectory", home, "--title", DIALOG_TITLE] },
-  ];
-}
-
-/** The folder a dialog printed, or null when it printed none because it was closed. */
-export function dialogFolder(output: string): string | null {
-  const folder = output.replace(/[\r\n]+$/, "");
-  return folder === "" ? null : folder;
-}
-
-/**
- * The folder someone typed, pasted or dragged into the launcher's window, or null for none. A
- * dragged folder arrives quoted when its path has a space in it (cmd, most Linux terminals) or with
- * each space escaped by a backslash (macOS Terminal); both are undone, and a leading ~ is the home
- * folder, as a shell would have it.
- */
-export function typedFolder(line: string, platform: NodeJS.Platform, home: string): string | null {
-  let folder = line.trim();
-  const quote = folder[0];
-  if (folder.length >= 2 && (quote === '"' || quote === "'") && folder.endsWith(quote)) {
-    folder = folder.slice(1, -1);
-  } else if (platform !== "win32") {
-    folder = folder.replace(/\\(.)/g, "$1");
-  }
-  if (platform !== "win32" && (folder === "~" || folder.startsWith("~/"))) folder = `${home}${folder.slice(1)}`;
-  return folder === "" ? null : folder;
+  return { kind: "launch", options: { env, open, verbose } };
 }
 
 function isPort(value: string): boolean {
@@ -343,16 +244,17 @@ export function isEntryPoint(moduleUrl: string, argv1: string | undefined): bool
 }
 
 /**
- * What a running server at `url` says it is: this app, for which folder, or something else. It asks
- * `/health` rather than `/api/health`, which an API from before it served the app did not answer.
+ * What a running server at `url` says it is: this app, for which folder -- null for none open yet --
+ * or something else. It asks `/health` rather than `/api/health`, which an API from before it served
+ * the app did not answer.
  */
 export async function whatHoldsPort(
   url: string,
-): Promise<{ readonly kind: "lazylabel"; readonly datasetRoot: string } | { readonly kind: "other" }> {
+): Promise<{ readonly kind: "lazylabel"; readonly datasetRoot: string | null } | { readonly kind: "other" }> {
   try {
     const response = await fetch(new URL("health", url), { signal: AbortSignal.timeout(2000) });
     const body = (await response.json()) as { readonly datasetRoot?: unknown; readonly dataset?: unknown };
-    if (typeof body.datasetRoot === "string" && typeof body.dataset === "string") {
+    if ((typeof body.datasetRoot === "string" || body.datasetRoot === null) && typeof body.dataset === "string") {
       return { kind: "lazylabel", datasetRoot: body.datasetRoot };
     }
   } catch {
@@ -397,10 +299,11 @@ export function sameFolder(a: string, b: string, platform: NodeJS.Platform): boo
 /** What to tell someone whose port is taken, and the command that starts LazyLabel elsewhere. */
 export function busyPortAdvice(options: {
   readonly port: number;
-  readonly folder: string;
+  /** The folder this start names, or null for none. */
+  readonly folder: string | null;
   /** Who holds it: LazyLabel for another folder, another program, or the system (EACCES). */
   readonly holder:
-    | { readonly kind: "lazylabel"; readonly datasetRoot: string }
+    | { readonly kind: "lazylabel"; readonly datasetRoot: string | null }
     | { readonly kind: "other" }
     | { readonly kind: "reserved" };
   readonly freePort: number | null;
@@ -410,8 +313,8 @@ export function busyPortAdvice(options: {
   const shim = platform === "win32" ? ".\\lazylabel.cmd" : "./lazylabel.sh";
   const why =
     holder.kind === "lazylabel"
-      ? `Port ${port} is in use by another LazyLabel, for ${holder.datasetRoot}. Stop that one with `
-        + "Ctrl+C in its window, or start this one on another port"
+      ? `Port ${port} is in use by another LazyLabel${holder.datasetRoot === null ? "" : `, for ${holder.datasetRoot}`}. `
+        + "Stop that one with Ctrl+C in its window, or start this one on another port"
       : holder.kind === "reserved"
         ? `Port ${port} cannot be used by this user`
           + (platform === "win32"
@@ -419,7 +322,7 @@ export function busyPortAdvice(options: {
             : "")
           + ". Start LazyLabel on another port"
         : `Port ${port} is in use by another program. Start LazyLabel on another port`;
-  return `${why}, from the modernized folder:\n  ${shim} "${folder}" --port ${freePort ?? "<another port>"}`;
+  return `${why}, from the modernized folder:\n  ${shim}${folder === null ? "" : ` "${folder}"`} --port ${freePort ?? "<another port>"}`;
 }
 
 /**

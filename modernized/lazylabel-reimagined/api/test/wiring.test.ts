@@ -75,6 +75,16 @@ describe("building the app's dependencies", () => {
     expect(await deps.datasetHealthy?.()).toBe(false);
   });
 
+  it("passes the folder switch through, and names no folder while none is open", () => {
+    // What the file panel's Open Image Folder reaches (POST /folder); `startApi` builds it.
+    const folder = { choice: "dialog" as const, current: () => null, open: async (asked: string) => asked, choose: async () => null };
+
+    const deps = buildDeps(config({ datasetRoot: null, folderChoice: "dialog" }), { ...stores(), folder });
+
+    expect(deps.folder).toBe(folder);
+    expect(deps).not.toHaveProperty("datasetRoot");
+  });
+
   it("marks a database held in memory, so /health can say settings will not outlive the process", () => {
     expect(buildDeps(config({ databasePath: ":memory:" }), stores()).databaseInMemory).toBe(true);
     expect(buildDeps(config({ databasePath: "/data/.lazylabel/lazylabel.db" }), stores()).databaseInMemory).toBe(false);

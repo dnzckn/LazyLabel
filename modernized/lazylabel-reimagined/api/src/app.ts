@@ -54,6 +54,7 @@ import {
   type InferenceClient,
 } from "./ports/inference.js";
 import type { MetadataStore } from "./ports/metadataStore.js";
+import type { FolderChoice } from "./config.js";
 import { silentLogger, type Logger } from "./http/log.js";
 import { HttpError, badRequest, notFound, payloadTooLarge, unprocessable } from "./http/problem.js";
 import { matchRoute } from "./http/router.js";
@@ -119,6 +120,35 @@ export interface AppDeps {
    * reason and nothing else changes.
    */
   readonly inference?: InferenceClient;
+  /**
+   * Opening another folder of images from the app (POST /folder), and which one is open. Absent, the
+   * folder is `datasetRoot`'s and cannot change, as a server deployment's cannot.
+   */
+  readonly folder?: FolderSwitch;
+}
+
+/**
+ * The file panel's Open Image Folder, on the server's side: the owner's request of 2026-09-29, "in
+ * the gui the user should be able to select a folder to load". `main.ts` builds it over the
+ * `FolderBlobStore` the routes read.
+ */
+export interface FolderSwitch {
+  /** Who chooses the folder (`config.ts`); "fixed" refuses every request to change it. */
+  readonly choice: FolderChoice;
+  /** The folder open now, or null for none yet. */
+  readonly current: () => string | null;
+  /**
+   * Open a folder, named by an absolute path, from the next request on, and take in what it brings.
+   * Resolves with the path resolved; rejects with `FolderUnreadableError` for one that cannot be
+   * opened, and nothing changes then.
+   */
+  readonly open: (folder: string) => Promise<string>;
+  /**
+   * The system's folder dialog on the computer the API runs on, titled as legacy's
+   * (`folderDialog.ts`): the folder chosen, null when it was closed, "missing" when this computer has
+   * none to show. Injected, so that no test opens a real one.
+   */
+  readonly choose: () => Promise<string | null | "missing">;
 }
 
 type Handler = (request: ApiRequest, params: Readonly<Record<string, string>>) => Promise<ApiResponse>;
@@ -132,6 +162,8 @@ export function createApp(deps: AppDeps): App {
 
   const routes: { method: string; pattern: string; handler: Handler }[] = [
     { method: "GET", pattern: "/health", handler: () => health(deps) },
+    // The file panel's Open Image Folder (the owner, 2026-09-29).
+    { method: "POST", pattern: "/folder", handler: (request) => openFolder(deps, request) },
     {
       method: "GET",
       pattern: "/projects/:projectId/images",
@@ -291,20 +323,25 @@ export function createApp(deps: AppDeps): App {
 }
 
 async function health(deps: AppDeps): Promise<ApiResponse> {
+  // Null is no folder open yet, where a launcher with none named starts; undefined is not said.
+  const root = deps.folder === undefined ? deps.datasetRoot : deps.folder.current();
   const [dataset, database, ai] = await Promise.all([
-    deps.datasetHealthy?.() ?? Promise.resolve(true),
+    root === null ? Promise.resolve(true) : (deps.datasetHealthy?.() ?? Promise.resolve(true)),
     deps.metadataStore.healthy(),
     inferenceHealth(deps),
   ]);
 
   // The dataset folder is the source of truth, so losing it is fatal; losing the database costs
   // settings but not annotation work (AI_NATIVE_SPEC.md, failure modes). The status reflects that
-  // difference rather than collapsing both into "unhealthy".
+  // difference rather than collapsing both into "unhealthy". No folder open is neither: nothing is
+  // lost, and the app shows its Open Image Folder rather than an alert.
   const status = dataset ? 200 : 503;
   return json(status, {
     status: dataset ? (database ? "ok" : "degraded") : "unavailable",
-    dataset: dataset ? "ok" : "unreadable",
-    ...(deps.datasetRoot === undefined ? {} : { datasetRoot: deps.datasetRoot }),
+    dataset: root === null ? "none" : dataset ? "ok" : "unreadable",
+    ...(root === undefined ? {} : { datasetRoot: root }),
+    // Whether, and how, the app may open another folder: its Open Image Folder shows accordingly.
+    folderChoice: deps.folder?.choice ?? "fixed",
     database: database ? "ok" : "unavailable",
     // Healthy, and forgetful: nothing saved outlives the process.
     databaseInMemory: deps.databaseInMemory === true,
@@ -317,6 +354,101 @@ async function health(deps: AppDeps): Promise<ApiResponse> {
       ...(ai.available ? [] : [ai.reason ?? "AI tools are unavailable"]),
     ],
   });
+}
+
+/**
+ * THE FILE PANEL'S OPEN IMAGE FOLDER: the owner, 2026-09-29, "in the gui the user should be able to
+ * select a folder to load". Legacy's button (right_panel.py:112-114, 205) shows the system's folder
+ * dialog, "Select Image Folder", and a folder chosen replaces the file list; closing the dialog
+ * changes nothing (main_window.py:1431-1438). `{ "choose": true }` is that dialog, shown by the server
+ * on its own desktop, which the launcher's is (`folderDialog.ts`); `{ "path": "<folder>" }` opens the
+ * folder named, for a server with no desktop to show one on. Either answers
+ * `{ datasetRoot, cancelled }`.
+ *
+ * WHO MAY ASK. This decides which of the user's folders the API serves, so no other web page the
+ * user has open may ask it. A cross-site page's JSON POST needs a CORS preflight, which this API
+ * never grants; the POST a page can send without one cannot be JSON, and is refused here (415). A
+ * browser names the page every POST comes from, and one from another origin is refused (403). A
+ * deployment whose folder is fixed refuses them all (403).
+ *
+ * WHAT OPENING DOES. The store reads the new folder from the next request on; nothing rendered from
+ * the old one may answer for it, since an image of the same name there is another picture; and the
+ * inference service, which reads images itself from a root of its own, is pointed at it. If it cannot
+ * be, the folder opens all the same, with a warning in the log.
+ */
+async function openFolder(deps: AppDeps, request: ApiRequest): Promise<ApiResponse> {
+  const type = (request.headers["content-type"] ?? "").split(";")[0]!.trim().toLowerCase();
+  if (type !== "application/json") {
+    throw new HttpError(415, "unsupported_media_type", "the folder is sent as application/json");
+  }
+  if (!fromOwnPage(request.headers["origin"], request.headers["host"])) {
+    throw new HttpError(403, "forbidden", "a folder is opened only from LazyLabel's own page");
+  }
+  const folder = deps.folder;
+  if (folder === undefined || folder.choice === "fixed") {
+    throw new HttpError(403, "folder_fixed", "this server's folder of images is fixed");
+  }
+
+  const body = parseJsonObject(request.body);
+  let asked: string;
+  if (body["choose"] === true) {
+    if (folder.choice !== "dialog") {
+      throw badRequest("this server shows no folder dialog: send the folder's path");
+    }
+    const chosen = await chooseOnce(folder);
+    if (chosen === "missing") {
+      // The dialog programs are not installed: zenity and kdialog on a Linux desktop without them.
+      throw new HttpError(503, "no_folder_dialog", "no folder dialog could be shown on this computer");
+    }
+    // Closed, which changes nothing, as legacy's does.
+    if (chosen === null) return json(200, { datasetRoot: folder.current(), cancelled: true });
+    asked = chosen;
+  } else if (typeof body["path"] === "string" && body["path"].trim() !== "") {
+    asked = body["path"].trim();
+  } else {
+    throw badRequest('name the folder, as { "path": "<folder>" }, or ask for the dialog, { "choose": true }');
+  }
+
+  const opened = await folder.open(asked);
+  caches.delete(deps);
+  pyramids.delete(deps);
+  if (deps.inference !== undefined) {
+    try {
+      await deps.inference.setDatasetRoot(opened, request.headers["x-correlation-id"] ?? "");
+    } catch (cause) {
+      (deps.logger ?? silentLogger).log("warn", "the AI tools could not be pointed at the folder opened", {
+        datasetRoot: opened,
+        reason: cause instanceof Error ? cause.message : String(cause),
+      });
+    }
+  }
+  return json(200, { datasetRoot: opened, cancelled: false });
+}
+
+/** The folder dialog open now, per app: a second request waits for the same answer rather than a second dialog. */
+const choosing = new WeakMap<FolderSwitch, Promise<string | null | "missing">>();
+
+function chooseOnce(folder: FolderSwitch): Promise<string | null | "missing"> {
+  const open = choosing.get(folder);
+  if (open !== undefined) return open;
+  const asked = folder.choose().finally(() => choosing.delete(folder));
+  choosing.set(folder, asked);
+  return asked;
+}
+
+/**
+ * Whether a request came from this server's own page: no Origin at all, as from a script or the
+ * launcher, or the one the browser reached this server at, which is the Host it sent.
+ */
+function fromOwnPage(origin: string | undefined, host: string | undefined): boolean {
+  if (origin === undefined) return true;
+  if (host === undefined) return false;
+  try {
+    return new URL(origin).host === new URL(`http://${host}`).host;
+  } catch {
+    // "null", from a sandboxed frame or a file, or a Host that is not one.
+    return false;
+  }
 }
 
 /**
@@ -1284,6 +1416,13 @@ function toHttpError(cause: unknown): HttpError {
   // client asked for a path this store will not serve.
   if (cause instanceof Error && cause.name === "InvalidKeyError") {
     return badRequest(cause.message);
+  }
+  // A folder asked for that cannot be opened, and a write with none open (`FolderBlobStore`).
+  if (cause instanceof Error && cause.name === "FolderUnreadableError") {
+    return new HttpError(400, "folder_unreadable", cause.message);
+  }
+  if (cause instanceof Error && cause.name === "NoFolderOpenError") {
+    return new HttpError(409, "no_folder", cause.message);
   }
   // The service's own status is carried through rather than flattened: it distinguishes a bad
   // prompt from an expired handle from a model that will not load, and each needs something

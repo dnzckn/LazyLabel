@@ -11,9 +11,28 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 
+/**
+ * Who chooses the folder of images, from LAZYLABEL_FOLDER_CHOICE: the file panel's Open Image Folder
+ * (`app.ts`, POST /folder), by the owner's request of 2026-09-29, "in the gui the user should be able
+ * to select a folder to load".
+ *
+ *   dialog  the server shows the system's folder dialog, on the computer it runs on, as legacy's
+ *           button does (main_window.py:1431-1438): what the launcher sets on a desktop (`cli.ts`).
+ *   path    the folder's path is typed in the app: what the launcher sets where there is no desktop
+ *           to show a dialog on, such as over SSH.
+ *   fixed   LAZYLABEL_DATASET_ROOT's folder, which cannot change: the default, for a deployment such
+ *           as the Docker image, whose user is not at the server's desk and must not be handed a
+ *           way through its disks.
+ */
+export type FolderChoice = "dialog" | "path" | "fixed";
+
 export interface Config {
-  /** Absolute path of the mounted dataset directory: the blob store's location. */
-  readonly datasetRoot: string;
+  /**
+   * Absolute path of the folder of images open at start: the blob store's location. Null for none
+   * yet, which only a folder that can be chosen in the app allows (`folderChoice`).
+   */
+  readonly datasetRoot: string | null;
+  readonly folderChoice: FolderChoice;
   /**
    * SQLite file for the metadata store, or ":memory:". Per user by default, beside the desktop
    * app's own settings (`~/.config/lazylabel/lazylabel-web.db`), so settings follow the user from
@@ -119,12 +138,23 @@ export class ConfigError extends Error {
   }
 }
 
+/** LAZYLABEL_FOLDER_CHOICE, fixed when unset; anything else is refused at startup, quoted. */
+function folderChoiceFrom(env: NodeJS.ProcessEnv): FolderChoice {
+  const raw = (env["LAZYLABEL_FOLDER_CHOICE"] ?? "").trim();
+  if (raw === "") return "fixed";
+  if (raw === "dialog" || raw === "path" || raw === "fixed") return raw;
+  throw new ConfigError(`LAZYLABEL_FOLDER_CHOICE must be dialog, path or fixed, got ${JSON.stringify(raw)}`);
+}
+
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
-  const datasetRoot = env["LAZYLABEL_DATASET_ROOT"];
-  if (datasetRoot === undefined || datasetRoot.trim() === "") {
+  const folderChoice = folderChoiceFrom(env);
+  const named = env["LAZYLABEL_DATASET_ROOT"];
+  const datasetRoot = named === undefined || named.trim() === "" ? null : path.resolve(named);
+  if (datasetRoot === null && folderChoice === "fixed") {
     // Refuse to start rather than default to the working directory. "Dataset folder unreadable"
     // is a blocking error in the failure-mode table precisely because the alternative — an empty
-    // file list that looks like an empty folder — is indistinguishable from having no work.
+    // file list that looks like an empty folder — is indistinguishable from having no work. A
+    // folder the app can choose starts with none open instead, and says so: /health's "none".
     throw new ConfigError(
       "LAZYLABEL_DATASET_ROOT must name the folder holding your images; the API will not guess",
     );
@@ -136,7 +166,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   }
 
   return {
-    datasetRoot: path.resolve(datasetRoot),
+    datasetRoot,
+    folderChoice,
     // DEPLOYABILITY.md R5. It was `<datasetRoot>/.lazylabel/lazylabel.db`; config.test.ts records
     // why it was and why it changed, and `settings/folderDatabaseImport.ts` brings such a file's
     // settings across once.
