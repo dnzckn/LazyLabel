@@ -186,7 +186,12 @@ jobs:
           merge-multiple: true
 
       # --latest=false: the repository's Latest release stays the desktop app's (v2.0.x).
-      - name: Publish
+      #
+      # --draft: the release is created for a person to look at and publish, with one click on
+      # GitHub's page for it. This step uploads about ten gigabytes, and a public release that stopped
+      # half-way would show half the files to everyone; a draft that stopped half-way shows them to
+      # nobody. The first release is also the first time this step has run.
+      - name: Create the release, as a draft
         run: |
           ls -l release
           cat > notes.md <<'NOTES'
@@ -196,10 +201,22 @@ jobs:
           2. Unzip it and double-click **Start LazyLabel** (`Start LazyLabel.cmd` on Windows, `Start LazyLabel.command` on macOS; on Linux run `./start-lazylabel.sh` in a terminal).
           3. LazyLabel opens in your browser. Click **Open Image Folder** and choose your folder of images.
 
-          macOS asks the first time, because the zip is not yet signed: open System Settings, Privacy & Security, and choose Open Anyway. Each zip's SHA-256 is in the `.sha256` file beside it.
+          The zips are not signed yet. Windows may ask whether to run the launcher: choose More info, then Run anyway. macOS asks the first time: open System Settings, Privacy & Security, and choose Open Anyway. Each zip's SHA-256 is in the `.sha256` file beside it.
 
-          **With the AI tools** (SAM 2.1 for clicks, boxes and Sequence propagation, and Find Archetypes), and still nothing to install: `LazyLabel-web-ai-<your computer>`. It carries its own Python and the models, so it is large, and for Windows and Linux it comes in parts, since GitHub takes no file of 2 GB. Download every part into one folder, unzip part 1 only, and start LazyLabel from it: the first start finds the other parts and unpacks them. On Windows and Linux it runs on an NVIDIA graphics card when there is one, and on the processor otherwise.
+          **With the AI tools** (SAM 2.1 for clicks, boxes and Sequence propagation, and Find Archetypes), and still nothing to install: `LazyLabel-web-ai-<your computer>`. It carries its own Python and the models, so it is large, and for Windows and Linux it comes in parts, since GitHub takes no file of 2 GB. Download every part into one folder, unzip part 1 only, and start LazyLabel from it: the first start finds the other parts and unpacks them. On Windows and Linux it runs on an NVIDIA graphics card when there is one, and on the processor otherwise; a Mac always uses the processor. SAM 1 is not included.
           NOTES
           gh release create "$GITHUB_REF_NAME" release/*.zip release/*.sha256 \
-            --repo "$GITHUB_REPOSITORY" --verify-tag --latest=false \
+            --repo "$GITHUB_REPOSITORY" --verify-tag --latest=false --draft \
             --title "LazyLabel web ${GITHUB_REF_NAME#web-v}" --notes-file notes.md
+
+      # What was uploaded, as an annotation: a job's log needs a signed-in account to read, and a
+      # draft is not listed for anyone who is not signed in. The release just made is the newest one;
+      # a draft cannot be looked up by its tag name, so it is read from the list, and named in it.
+      - name: Say what the draft holds
+        # Only reports: the draft is made by the step before, and a failure here must not mark a
+        # release that was made as failed.
+        continue-on-error: true
+        run: |
+          assets=$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=5" --jq \
+            '.[0] | "\(.tag_name): draft \(.draft), \(.assets | length) files" + (.assets | map("\n\(.name)  \(.size) bytes") | join(""))')
+          echo "::notice title=release draft::$(printf '%s' "$assets" | sed ':a;N;$!ba;s/%/%25/g;s/\r/%0D/g;s/\n/%0A/g')"

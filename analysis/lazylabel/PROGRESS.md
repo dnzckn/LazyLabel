@@ -509,8 +509,10 @@ The engineering the brief names is done. What is left is the owner's to decide. 
 
 1. **Ask the owner before the first Release.** Every pending decision was answered on 2026-09-27
    ("What remains"). Publishing is still theirs to say yes to: pushing a `web-v*` tag makes
-   `release.yml` publish the zips and the AI bundle's parts (R13), and macOS signing and
-   notarisation are not done.
+   `release.yml` create a DRAFT Release holding the zips and the AI bundle's parts (R13), and the
+   owner publishes it with one click on GitHub. A draft because the step had never run and
+   uploads about ten gigabytes: one that stopped half-way is invisible to everyone else. macOS
+   signing and notarisation are not done.
 2. **If R10 is chosen,** build and run the Docker deployment once, so CUTOVER.md's last unticked
    box can be ticked (DEPLOYABILITY.md R10 lists what to fix first).
 
@@ -689,7 +691,8 @@ built app and a double-click launcher per OS, from `.github/workflows/release.ym
 showed the system's folder dialog, so nobody typed a path (the app's own Open Image Folder since
 2026-09-29, below). The Windows zip is 39.7 MB, and it started
 from a scratch folder and served the app and `/api/health` (`DEPLOYABILITY.md` R11). The first
-Release waits on a `web-v*` tag; macOS signing and notarisation are not done.
+Release is made by a `web-v*` tag, as a draft the owner publishes; macOS signing and notarisation
+are not done.
 
 **R13, the AI bundle, built 2026-09-28.** R11's zip with the AI tools in it and nothing to install:
 CPython 3.12.11 (the portable build uv installs) with `inference/uv.lock`'s packages, the inference
