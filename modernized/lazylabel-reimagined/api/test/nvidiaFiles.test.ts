@@ -40,7 +40,7 @@ const WINDOWS = [
 
 /** The shared libraries of the Linux `nvidia-*` wheels the cu128 bundle installs. */
 const LINUX = [
-  "libcublas.so.12", "libcublasLt.so.12", "libcupti.so.12", "libcheckpoint.so", "libnvperf_host.so",
+  "libcublas.so.12", "libcublasLt.so.12", "libnvblas.so.12", "libcupti.so.12", "libcheckpoint.so", "libnvperf_host.so",
   "libnvperf_target.so", "libpcsamplingutil.so", "libnvrtc.so.12", "libnvrtc.alt.so.12",
   "libnvrtc-builtins.so.12.8", "libnvrtc-builtins.alt.so.12.8", "libcudart.so.12", "libcudnn.so.9",
   "libcudnn_adv.so.9", "libcudnn_cnn.so.9", "libcudnn_engines_precompiled.so.9",
@@ -80,7 +80,9 @@ describe("NVIDIA's files in the AI bundles", () => {
 
   it("keeps what the cuDNN, cuSPARSELt, NVSHMEM and NCCL terms cover", () => {
     const { keep } = classify(LINUX);
-    for (const name of ["libcudnn_ops.so.9", "libcusparseLt.so.0", "libnvshmem_host.so.3", "nvshmem_transport_ucx.so.3", "libnccl.so.2"]) {
+    // And nvBLAS, which the CUDA agreement names, and which the first Linux build stopped on because the
+    // rules had not heard of it.
+    for (const name of ["libcudnn_ops.so.9", "libcusparseLt.so.0", "libnvshmem_host.so.3", "nvshmem_transport_ucx.so.3", "libnccl.so.2", "libnvblas.so.12"]) {
       expect(keep).toContain(name);
     }
   });

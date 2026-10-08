@@ -297,6 +297,18 @@ function settleNvidiaFiles(stage) {
       }
     }
   }
+  // NVIDIA's header files, in each package's include folder: the CUDA agreement names some headers
+  // as distributable and not these, and nothing at run time reads any of them. The runtime
+  // libraries are what the bundle needs, and all it carries.
+  let headerFolders = 0;
+  for (const folder of existsSync(nvidia) ? readdirSync(nvidia, { withFileTypes: true }) : []) {
+    const headers = path.join(nvidia, folder.name, "include");
+    if (folder.isDirectory() && existsSync(headers)) {
+      rmSync(headers, { recursive: true, force: true });
+      headerFolders += 1;
+    }
+  }
+
   // Triton, which Linux's PyTorch asks for, carries NVIDIA's developer tools inside it (ptxas,
   // cuobjdump, nvdisasm, CUPTI's static libraries): a developer tool is for internal use unless the
   // CUDA agreement names it distributable, and none of these is named. Only torch.compile uses it,
@@ -314,7 +326,8 @@ function settleNvidiaFiles(stage) {
   }
   const said = `NVIDIA: ${kept} libraries kept, all covered by an NVIDIA agreement; ${removed.length} left out because `
     + `NVIDIA's CUDA agreement does not list them${removed.length > 0 ? `: ${removed.sort().join(", ")}` : ""}`
-    + `${leftOutTriton.length > 0 ? "; Triton left out, with the NVIDIA developer tools inside it" : ""}.`;
+    + `${leftOutTriton.length > 0 ? "; Triton left out, with the NVIDIA developer tools inside it" : ""}`
+    + `${headerFolders > 0 ? `; ${headerFolders} folders of NVIDIA's header files left out` : ""}.`;
   console.log(said);
   notice(said);
 }
@@ -538,7 +551,8 @@ const NOTICES = `LazyLabel web with the AI tools includes other people's work, e
                               python3.12/site-packages/nvidia, each with its licence text in its
                               dist-info folder. NVIDIA's files that its CUDA agreement does not list
                               are left out: CUPTI's profiling helpers, cuSOLVER's multi-GPU library,
-                              and Triton, which carries NVIDIA developer tools.
+                              Triton, which carries NVIDIA developer tools, and NVIDIA's header files.
+                              Only NVIDIA's runtime libraries are included.
   SAM 2                       Apache-2.0, licenses/SAM-2.txt; its cc_torch code BSD-3-Clause,
                               licenses/SAM-2-cc_torch.txt
   Segment Anything            Apache-2.0, segment_anything-*.dist-info

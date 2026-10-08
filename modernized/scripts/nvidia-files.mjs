@@ -8,7 +8,7 @@
  * - The CUDA Toolkit agreement lets an application redistribute only the files its Attachment A
  *   lists, with version numbers or an architecture embedded in a name allowed (cudart64_12.dll for
  *   cudart.dll). The list names cudart, cuFFT and cuFFTW, cuBLAS and cuBLASLt, cuSPARSE, cuSOLVER,
- *   cuRAND, NVRTC and its builtins, nvJitLink, CUPTI, NVTX and cuFile among what PyTorch needs.
+ *   cuRAND, NVRTC and its builtins, nvJitLink, CUPTI, NVTX, cuFile and nvBLAS among what PyTorch needs.
  * - cuDNN, cuSPARSELt and NVSHMEM each have an agreement of their own, and each lets an application
  *   redistribute its runtime files. NCCL is open source.
  * - PyTorch's CUDA packages also carry files none of those name: CUPTI's profiling helpers
@@ -24,7 +24,7 @@ export const NVIDIA_FILE = /^(lib)?(cu[a-z]|nv|nccl)[^/\\]*?(\.dll|\.so(\.[\d.]+
 
 /** The families the agreements above cover. A family followed by another letter is another family. */
 export const NVIDIA_COVERED =
-  /^(lib)?(cudart|cublasLt|cublas|cufftw|cufft|curand|cusolver|cusparseLt|cusparse|cudnn|nvrtc|nvJitLink|cupti|nvToolsExt|nvtx3interop|cufile|nccl|nvshmem)(?![a-z])/i;
+  /^(lib)?(cudart|cublasLt|cublas|cufftw|cufft|curand|cusolver|cusparseLt|cusparse|cudnn|nvrtc|nvJitLink|cupti|nvToolsExt|nvtx3interop|cufile|nvblas|nccl|nvshmem)(?![a-z])/i;
 
 /** What to do with one file's name: "remove" it, "keep" it, "unknown" for NVIDIA's with no agreement named, or "other". */
 export function classifyNvidiaFile(name) {
