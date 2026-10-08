@@ -34,6 +34,7 @@ on:
       - modernized/lazylabel-reimagined/api/src/folderDialog.ts
       - modernized/lazylabel-reimagined/api/src/bundle.ts
       - modernized/scripts/pack_parts.py
+      - modernized/scripts/nvidia-files.mjs
       - modernized/lazylabel-reimagined/inference/pyproject.toml
       - modernized/lazylabel-reimagined/inference/uv.lock
       - modernized/lazylabel-reimagined/inference/models/manifest.verified.json

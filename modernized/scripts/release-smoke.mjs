@@ -26,6 +26,8 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { crc32, deflateSync } from "node:zlib";
 
+import { NVIDIA_NOT_LISTED } from "./nvidia-files.mjs";
+
 const IS_WINDOWS = process.platform === "win32";
 const LAUNCHER = { win32: "Start LazyLabel.cmd", darwin: "Start LazyLabel.command" }[process.platform] ?? "start-lazylabel.sh";
 
@@ -153,6 +155,16 @@ console.log(`\nPASSED: ${LAUNCHER} from ${path.basename(zip)} (${(statSync(zip).
 /** The AI tools, through the app as the web app calls them: a click segmented, archetypes found. */
 async function checkAi(url) {
   if (!log.includes("AI tools: on")) throw new Error("the launcher did not start the AI tools");
+  // The finished bundle, every part unpacked: none of NVIDIA's files its CUDA agreement does not list,
+  // and no Triton, which carries NVIDIA's developer tools (build-release.mjs, settleNvidiaFiles).
+  const stray = [];
+  for (const entry of readdirSync(path.join(unzipped, "python"), { recursive: true, withFileTypes: true })) {
+    if ((entry.isFile() && NVIDIA_NOT_LISTED.test(entry.name)) || (entry.isDirectory() && entry.name === "triton")) {
+      stray.push(path.join(entry.parentPath, entry.name));
+    }
+  }
+  if (stray.length > 0) throw new Error(`the bundle holds files NVIDIA's agreement does not list: ${stray.join(", ")}`);
+  console.log("Bundle: none of NVIDIA's unlisted files, and no Triton");
   const health = JSON.parse((await get(`${url}api/health`)).text);
   if (health.ai?.available !== true) throw new Error(`/api/health says the AI tools are not available: ${JSON.stringify(health.ai)}`);
   console.log(`GET /api/health   ai: ${JSON.stringify(health.ai)}`);

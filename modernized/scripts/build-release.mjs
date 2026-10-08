@@ -46,6 +46,8 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { classifyNvidiaFile } from "./nvidia-files.mjs";
+
 const WORKSPACE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const IS_WINDOWS = process.platform === "win32";
 const OS_NAME = { win32: "windows", darwin: "macos", linux: "linux" }[process.platform];
@@ -214,6 +216,8 @@ function stageAi(source, stage, flavour, modelsFrom) {
     ],
     { env: { UV_PROJECT_ENVIRONMENT: path.join(stage, "python") } },
   );
+  settleNvidiaFiles(stage);
+
   // From the bundle's own site-packages, and from nowhere else.
   const imported = run(
     python,
@@ -244,6 +248,75 @@ function stageAi(source, stage, flavour, modelsFrom) {
   copyFile(path.join(inference, "vendor", "sam2.LICENSE_cctorch"), path.join(stage, "licenses", "SAM-2-cc_torch.txt"));
   writeFileSync(path.join(stage, "THIRD-PARTY-NOTICES.txt"), NOTICES.replace(/\n/g, IS_WINDOWS ? "\r\n" : "\n"));
   return python;
+}
+
+/**
+ * NVIDIA's files in the staged Python, settled against NVIDIA's own agreements (read 2026-10-08).
+ *
+ * The CUDA Toolkit agreement lets an application redistribute only the files its Attachment A
+ * lists, names with version numbers embedded included. cuDNN, cuSPARSELt and NVSHMEM have agreements
+ * of their own that cover their runtime files, and NCCL is open source. PyTorch's CUDA packages
+ * carry a few files none of those name: CUPTI's profiling helpers (nvperf_host, nvperf_target,
+ * libcheckpoint, libpcsamplingutil) and cuSOLVER's multi-GPU library (cusolverMg). LazyLabel uses
+ * none of them, so they are taken out: cuBLAS, cuDNN, cuSOLVER, cuFFT, cuRAND, cuSPARSE, NVRTC and
+ * half-precision attention were run on a GPU without them on 2026-10-08.
+ *
+ * Then EVERY NVIDIA file left must belong to a family those agreements cover, or the build stops.
+ * A newer PyTorch that brings a new library is read before it ships, not after.
+ */
+function settleNvidiaFiles(stage) {
+  const python = path.join(stage, "python");
+  const site = IS_WINDOWS
+    ? path.join(python, "Lib", "site-packages")
+    : path.join(python, "lib", `python${PYTHON_VERSION.split(".").slice(0, 2).join(".")}`, "site-packages");
+  const folders = [path.join(site, "torch", "lib")];
+  const nvidia = path.join(site, "nvidia");
+  if (existsSync(nvidia)) {
+    for (const entry of readdirSync(nvidia, { withFileTypes: true })) {
+      if (!entry.isDirectory()) continue;
+      for (const inner of ["lib", "bin"]) folders.push(path.join(nvidia, entry.name, inner));
+    }
+  }
+
+  const removed = [];
+  const unknown = [];
+  let kept = 0;
+  for (const folder of folders.filter((candidate) => existsSync(candidate))) {
+    for (const entry of readdirSync(folder, { withFileTypes: true })) {
+      if (!entry.isFile()) continue;
+      // Whatever the name starts with: libcheckpoint and libpcsamplingutil do not look like NVIDIA's,
+      // and are (nvidia-files.mjs).
+      const what = classifyNvidiaFile(entry.name);
+      if (what === "remove") {
+        rmSync(path.join(folder, entry.name));
+        removed.push(entry.name);
+      } else if (what === "keep") {
+        kept += 1;
+      } else if (what === "unknown") {
+        unknown.push(path.relative(site, path.join(folder, entry.name)));
+      }
+    }
+  }
+  // Triton, which Linux's PyTorch asks for, carries NVIDIA's developer tools inside it (ptxas,
+  // cuobjdump, nvdisasm, CUPTI's static libraries): a developer tool is for internal use unless the
+  // CUDA agreement names it distributable, and none of these is named. Only torch.compile uses it,
+  // and LazyLabel does not call that, so it is left out of the bundle, and PyTorch runs without it as
+  // it does on Windows, where it is never installed.
+  const triton = [path.join(site, "triton"), ...(existsSync(site) ? readdirSync(site).filter((name) => /^triton-.*\.dist-info$/.test(name)).map((name) => path.join(site, name)) : [])];
+  const leftOutTriton = triton.filter((candidate) => existsSync(candidate));
+  for (const candidate of leftOutTriton) rmSync(candidate, { recursive: true, force: true });
+
+  if (unknown.length > 0) {
+    fail(
+      `NVIDIA files that no agreement read on 2026-10-08 covers: ${unknown.join(", ")}.\n`
+        + "Read NVIDIA's terms for them, then name their family in settleNvidiaFiles.",
+    );
+  }
+  const said = `NVIDIA: ${kept} libraries kept, all covered by an NVIDIA agreement; ${removed.length} left out because `
+    + `NVIDIA's CUDA agreement does not list them${removed.length > 0 ? `: ${removed.sort().join(", ")}` : ""}`
+    + `${leftOutTriton.length > 0 ? "; Triton left out, with the NVIDIA developer tools inside it" : ""}.`;
+  console.log(said);
+  notice(said);
 }
 
 /**
@@ -451,9 +524,21 @@ const NOTICES = `LazyLabel web with the AI tools includes other people's work, e
                               python-build-standalone's build
   PyTorch and torchvision     BSD-3-Clause; in python's site-packages, torch-*.dist-info and
                               torchvision-*.dist-info
-  NVIDIA CUDA libraries       in the Windows and Linux downloads, as PyTorch's CUDA build ships them
-                              (torch/lib, and the nvidia-* packages on Linux), under NVIDIA's licence
-                              in their dist-info folders
+  NVIDIA CUDA libraries       in the Windows and Linux downloads. NVIDIA's own software, not covered
+                              by LazyLabel's licence: used under NVIDIA's agreements, which let an
+                              application ship these files unmodified. cuBLAS, cuFFT, cuRAND, cuSOLVER,
+                              cuSPARSE, the CUDA runtime, NVRTC, nvJitLink, CUPTI, NVTX and cuFile:
+                              CUDA Toolkit EULA, https://docs.nvidia.com/cuda/eula/index.html
+                              cuDNN: https://docs.nvidia.com/deeplearning/cudnn/backend/latest/reference/eula.html
+                              cuSPARSELt (Linux): https://docs.nvidia.com/cuda/cusparselt/license.html
+                              NVSHMEM (Linux): https://docs.nvidia.com/nvshmem/api/latest/sla.html
+                              NCCL (Linux) is BSD-licensed open source.
+                              On Windows they are inside PyTorch's own folder, python/Lib/site-packages/
+                              torch/lib. On Linux they are the nvidia-* packages under python/lib/
+                              python3.12/site-packages/nvidia, each with its licence text in its
+                              dist-info folder. NVIDIA's files that its CUDA agreement does not list
+                              are left out: CUPTI's profiling helpers, cuSOLVER's multi-GPU library,
+                              and Triton, which carries NVIDIA developer tools.
   SAM 2                       Apache-2.0, licenses/SAM-2.txt; its cc_torch code BSD-3-Clause,
                               licenses/SAM-2-cc_torch.txt
   Segment Anything            Apache-2.0, segment_anything-*.dist-info
