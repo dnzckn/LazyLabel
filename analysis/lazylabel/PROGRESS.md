@@ -692,7 +692,8 @@ showed the system's folder dialog, so nobody typed a path (the app's own Open Im
 2026-09-29, below). The Windows zip is 39.7 MB, and it started
 from a scratch folder and served the app and `/api/health` (`DEPLOYABILITY.md` R11). The first
 Release is made by a `web-v*` tag, as a draft the owner publishes; macOS signing and notarisation
-are not done.
+are not done. NVIDIA's terms were read on 2026-10-08 before the first release, and the bundles now leave out the
+NVIDIA files its CUDA agreement does not list, and Triton (`DEPLOYABILITY.md` R13).
 
 **R13, the AI bundle, built 2026-09-28.** R11's zip with the AI tools in it and nothing to install:
 CPython 3.12.11 (the portable build uv installs) with `inference/uv.lock`'s packages, the inference
