@@ -507,12 +507,11 @@ configured, so a green CI run says nothing about them — see `Running the live 
 
 The engineering the brief names is done. What is left is the owner's to decide. In order:
 
-1. **Ask the owner before the first Release.** Every pending decision was answered on 2026-09-27
-   ("What remains"). Publishing is still theirs to say yes to: pushing a `web-v*` tag makes
-   `release.yml` create a DRAFT Release holding the zips and the AI bundle's parts (R13), and the
-   owner publishes it with one click on GitHub. A draft because the step had never run and
-   uploads about ten gigabytes: one that stopped half-way is invisible to everyone else. macOS
-   signing and notarisation are not done.
+1. **The first Release is out: `web-v1.0.0`, published 2026-10-08** from `3ea5300`, 18 files and
+   10.07 GB (R11's three zips and R13's AI bundles). Its three tagged builds are in `DEPLOYABILITY.md`
+   R13, "Releasing". The next one is a new `web-v*` tag, which makes a DRAFT, and the owner says
+   whether to publish it. macOS signing and notarisation are not done, and no one has yet clicked
+   through the folder dialog on macOS or run a bundle on a machine without an NVIDIA card.
 2. **If R10 is chosen,** build and run the Docker deployment once, so CUTOVER.md's last unticked
    box can be ticked (DEPLOYABILITY.md R10 lists what to fix first).
 
@@ -691,9 +690,9 @@ built app and a double-click launcher per OS, from `.github/workflows/release.ym
 showed the system's folder dialog, so nobody typed a path (the app's own Open Image Folder since
 2026-09-29, below). The Windows zip is 39.7 MB, and it started
 from a scratch folder and served the app and `/api/health` (`DEPLOYABILITY.md` R11). The first
-Release is made by a `web-v*` tag, as a draft the owner publishes; macOS signing and notarisation
-are not done. NVIDIA's terms were read on 2026-10-08 before the first release, and the bundles now leave out the
-NVIDIA files its CUDA agreement does not list, and Triton (`DEPLOYABILITY.md` R13).
+Release, `web-v1.0.0`, was published on 2026-10-08; macOS signing and notarisation are not done.
+NVIDIA's terms were read first, and the bundles now leave out the NVIDIA files its CUDA agreement
+does not list, NVIDIA's header files and Triton (`DEPLOYABILITY.md` R13).
 
 **R13, the AI bundle, built 2026-09-28.** R11's zip with the AI tools in it and nothing to install:
 CPython 3.12.11 (the portable build uv installs) with `inference/uv.lock`'s packages, the inference
