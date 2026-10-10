@@ -507,8 +507,12 @@ configured, so a green CI run says nothing about them — see `Running the live 
 
 The engineering the brief names is done. What is left is the owner's to decide. In order:
 
-1. **The first Release is out: `web-v1.0.0`, published 2026-10-08** from `3ea5300`, 18 files and
-   10.07 GB (R11's three zips and R13's AI bundles). Its three tagged builds are in `DEPLOYABILITY.md`
+1. **`web-v1.0.1` is the current Release, published 2026-10-10** from `11e3b91`, 18 files (R11's three zips
+   and R13's AI bundles). It fixes `web-v1.0.0` (2026-10-08, `3ea5300`), whose Load model answered 503
+   until a folder was open. The full loop (unzip, launch with no folder, Load model, Open Image Folder,
+   one SAM click, Space) ran on its release files on Windows (with the Security Warning and the native
+   folder dialog), on Linux under WSL, and on a macOS arm64 runner (quarantined zip, native folder
+   dialog). Its three tagged builds are in `DEPLOYABILITY.md`
    R13, "Releasing". The next one is a new `web-v*` tag, which makes a DRAFT, and the owner says
    whether to publish it. macOS signing and notarisation are not done, and no one has yet clicked
    through the folder dialog on macOS or run a bundle on a machine without an NVIDIA card.
