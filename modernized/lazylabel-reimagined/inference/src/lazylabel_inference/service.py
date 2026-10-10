@@ -47,6 +47,10 @@ from .prompts import (
 )
 
 
+class NoFolderError(InferenceError):
+    """No folder of images is open yet: a model can be loaded, but nothing can be read."""
+
+
 class UnknownHandleError(InferenceError):
     """The embedding handle is not one this service issued, or it has expired."""
 
@@ -116,7 +120,8 @@ class _Reloads:
 class InferenceService:
     models: list[ModelEntry]
     model_dir: Path
-    dataset_root: Path
+    # None until the app opens a folder (POST /dataset-root): models load and unload without one.
+    dataset_root: Path | None
     cache: EmbeddingCache = field(default_factory=EmbeddingCache)
     device: str | None = None
     # Run after a model is dropped. Injectable so a test can see it run without importing torch.
@@ -377,6 +382,8 @@ class InferenceService:
 
         # Read once: the root can change between two reads of it (`set_dataset_root`).
         root = self.dataset_root
+        if root is None:
+            raise NoFolderError("no folder of images is open yet: choose one with Open Image Folder")
         full = (root / Path(*parts)).resolve()
         try:
             full.relative_to(root.resolve())

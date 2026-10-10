@@ -60,14 +60,14 @@ class TestTheServiceIsActuallyBuilt:
 
 
 class TestWithNoDatasetRoot:
-    def test_there_is_no_service_and_that_is_a_real_configuration(
+    def test_the_service_is_built_without_a_folder_and_that_is_a_real_configuration(
         self, tmp_path: pathlib.Path
     ) -> None:
-        # Not a failure to start. An operator installing checkpoints needs /health and /models
-        # before anything else can work, and refusing to start would hide both.
+        # Not a failure to start. The release starts with no folder open, and a model loads without
+        # one: Load model answered 503 on 2026-10-10 when there was no service at all.
         deps = build_deps(config(tmp_path, root=None), [], Logger())
 
-        assert deps.service is None
+        assert deps.service is not None and deps.service.dataset_root is None
 
     def test_health_still_answers(self, tmp_path: pathlib.Path) -> None:
         deps = build_deps(config(tmp_path, root=None), [], Logger())
@@ -80,11 +80,23 @@ class TestWithNoDatasetRoot:
         deps = build_deps(config(tmp_path, root=None), [], Logger())
 
         response = create_app(deps)(
-            Request(method="POST", path="/inference/embeddings", body=b'{"image":"a.png","model":"SAM 2.1 large"}')
+            Request(method="POST", path="/inference/archetypes", body=b'{"sequence":["a.png","b.png"]}')
         )
 
         assert response.status == 503
-        assert "dataset root" in response.body
+        assert "no folder" in response.body
+
+    def test_loading_a_model_needs_no_folder(self, tmp_path: pathlib.Path) -> None:
+        # The owner's first run of the release: open the app, press Load, no folder yet. The model
+        # is refused for what it is (not in this manifest), never for the folder.
+        deps = build_deps(config(tmp_path, root=None), [], Logger())
+
+        response = create_app(deps)(
+            Request(method="POST", path="/inference/models/load", body=b'{"model":"SAM 2.1 large"}')
+        )
+
+        assert "no folder" not in response.body
+        assert "dataset root" not in response.body
 
 
 class TestReadingItFromTheEnvironment:
@@ -133,8 +145,6 @@ class TestPropagationIsWiredNow:
         # A propagation reads a whole sequence, so with nowhere to read from there is nothing to
         # run. The route says so rather than starting a job that could never produce a frame.
         deps = build_deps(config(tmp_path, root=None), [], Logger())
-
-        assert deps.propagator is None
 
         response = create_app(deps)(
             Request(

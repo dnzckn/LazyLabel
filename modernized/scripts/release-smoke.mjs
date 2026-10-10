@@ -119,6 +119,16 @@ try {
   if (!none.text.includes('"dataset":"none"')) throw new Error(`/api/health before a folder was opened said ${none.text}`);
   console.log(`GET /api/health   ${none.status}, no folder open yet: ${none.text}`);
 
+  // Load model, with no folder open yet: the first thing a person presses in the AI download, and it
+  // answered 503 "no dataset root" in web-v1.0.0 (2026-10-10).
+  if (options.ai) {
+    const listed = JSON.parse((await get(`${url}api/inference/models`)).text);
+    const segmenter = (Array.isArray(listed) ? listed : listed.models ?? []).find((model) => model.segmenter && model.present);
+    if (segmenter === undefined) throw new Error(`no model to load: ${JSON.stringify(listed)}`);
+    const loaded = await post(`${url}api/inference/models/load`, { model: segmenter.name });
+    console.log(`POST /api/inference/models/load   ${segmenter.name} loaded with no folder open: ${JSON.stringify(loaded)}`);
+  }
+
   // The app's Open Image Folder, with the folder's path: JSON, from the app's own page.
   const opened = await post(`${url}api/folder`, { path: images }, { origin: new URL(url).origin });
   if (opened.cancelled !== false || typeof opened.datasetRoot !== "string") {

@@ -144,7 +144,7 @@ class TestReadingTheNewFolder:
         # Where the launcher starts it when LazyLabel opens with no folder.
         _, second = folders
         deps = build_deps(config(tmp_path, None), [ENTRY], Logger(sink=lambda _line: None))
-        assert deps.service is None
+        assert deps.service is not None and deps.service.dataset_root is None
         assert call(deps, "/inference/embeddings", {"image": "a.png", "model": "m"})[0] == 503
 
         status, _ = call(deps, "/dataset-root", {"path": str(second)})

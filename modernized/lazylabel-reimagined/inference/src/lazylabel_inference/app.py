@@ -44,6 +44,7 @@ from .jobs import (
 from .archetypes import TooFewFrames
 from .propagation import PropagationRequest, ReferenceObject
 from .service import (
+    NoFolderError,
     ImageUnreadableError,
     InferenceService,
     UnknownHandleError,
@@ -261,6 +262,12 @@ def _service(deps: Deps) -> InferenceService:
     return deps.service
 
 
+def _needs_a_folder(deps: Deps) -> None:
+    """A sequence is read from the open folder: with none open, say so now, not frame by frame."""
+    if deps.service is not None and deps.service.dataset_root is None:
+        raise HttpError(503, "no_folder", "no folder of images is open yet: choose one with Open Image Folder")
+
+
 def _dataset_root(deps: Deps, request: Request) -> Response:
     """The folder of images to read from now on: the one the app has just opened, which the API
     passes on (its POST /folder), by the owner's request of 2026-09-29, "in the gui the user should
@@ -325,6 +332,8 @@ def _inference_error(cause: InferenceError) -> HttpError:
         return HttpError(409, "image_not_set", str(cause))
     if isinstance(cause, ModelNotLoadedError):
         return HttpError(503, "model_unavailable", str(cause))
+    if isinstance(cause, NoFolderError):
+        return HttpError(503, "no_folder", str(cause))
     return HttpError(500, "prediction_failed", str(cause))
 
 
@@ -528,6 +537,7 @@ def _frames_to_cover(wanted: PropagationRequest) -> int:
 
 def _start_propagation(deps: Deps, request: Request) -> Response:
     wanted = _propagation_request(_body(request))
+    _needs_a_folder(deps)
 
     if deps.propagator is None:
         # The same 503 the prompt routes give, and for the same reason: the route exists and the
@@ -620,6 +630,7 @@ def _archetypes(deps: Deps, request: Request) -> Response:
     would be good for -- half the clusters is not half the suggestions, it is a different set.
     """
     body = _body(request)
+    _needs_a_folder(deps)
 
     raw = body.get("sequence")
     if not isinstance(raw, list) or not raw:
