@@ -508,8 +508,8 @@ configured, so a green CI run says nothing about them — see `Running the live 
 The engineering the brief names is done. What is left is the owner's to decide. In order:
 
 1. **`web-v1.0.1` is the current Release, published 2026-10-10** from `11e3b91`, 18 files (R11's three zips
-   and R13's AI bundles). It fixes `web-v1.0.0` (2026-10-08, `3ea5300`), whose Load model answered 503
-   until a folder was open. The full loop (unzip, launch with no folder, Load model, Open Image Folder,
+   and R13's AI bundles). It is the only web Release: `web-v1.0.0` (2026-10-08, `3ea5300`) answered Load model with 503
+   until a folder was open, and the owner had it deleted, release and tag, on 2026-10-10 so nobody downloads it. The full loop (unzip, launch with no folder, Load model, Open Image Folder,
    one SAM click, Space) ran on its release files on Windows (with the Security Warning and the native
    folder dialog), on Linux under WSL, and on a macOS arm64 runner (quarantined zip, native folder
    dialog). Its three tagged builds are in `DEPLOYABILITY.md`
